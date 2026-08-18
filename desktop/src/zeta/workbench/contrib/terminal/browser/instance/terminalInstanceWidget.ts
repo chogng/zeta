@@ -5,6 +5,8 @@ import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecy
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
+import { h } from "../../../../../base/browser/dom.js";
+import { observeResize } from "../../../../../base/browser/observer.js";
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
 export class TerminalInstanceWidget extends DisposableOwner {
@@ -16,7 +18,7 @@ export class TerminalInstanceWidget extends DisposableOwner {
 
   constructor(readonly instance: ITerminalInstance, ownerDocument: Document, themeService: IThemeService) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-terminal-instance";
     this.element.hidden = true;
     this.terminal = new Terminal({
@@ -51,12 +53,7 @@ export class TerminalInstanceWidget extends DisposableOwner {
       }
     }));
     this.element.dataset.state = instance.state;
-    const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.fit());
-      observer.observe(this.element);
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeResize(this.element, () => this.fit()));
   }
 
   setVisible(visible: boolean): void {

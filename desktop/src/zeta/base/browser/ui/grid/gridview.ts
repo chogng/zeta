@@ -4,6 +4,7 @@ import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../
 import { type Sash, type SashPresentation } from "../sash/sash.js";
 import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
 import { assertChildIndex, assertDimension, assertInsertionIndex, descriptorNode, descriptorSizing, deserializeGridViewDescriptor, isSerializableView, normalizeDescriptor, normalizeRootDescriptor, orthogonal, replaceDescriptorNode, splitLocation, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor, validateDescriptor, validateSerializedGridViewDescriptor, validateViewConstraints } from "./gridviewDescriptor.js";
+import { h } from "../../dom.js";
 
 export { type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridviewDescriptor.js";
 
@@ -318,7 +319,7 @@ export class GridView extends DisposableOwner {
     options: GridViewOptions = {},
   ) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-grid zeta-grid-view";
     this.sashPresentation = options.sashPresentation;
     this._edgeSnapping = options.edgeSnapping ?? false;

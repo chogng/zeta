@@ -154,9 +154,11 @@ test("desktop commands are available from the command palette", async () => {
   let folderOpens = 0;
   services.set(IWorkspaceOpenService, {
     canOpenFolder: true,
+    canOpenWorkspace: true,
     async openFolder() {
       folderOpens += 1;
     },
+    async openWorkspace() {},
     async pickFolder() {
       return undefined;
     },

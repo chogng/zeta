@@ -6,7 +6,9 @@ test("build modes share one default Workbench profile", () => {
   assert.equal(defaultWorkbenchProfile.id, "default");
   assert.equal(defaultWorkbenchProfile.label, "Workbench");
   assert.equal("productId" in defaultWorkbenchProfile, false);
-  assert.equal(defaultWorkbenchProfile.layout.auxiliarybar.visible, true);
+  assert.equal(defaultWorkbenchProfile.layout.sidebar.visible, false);
+  assert.equal(defaultWorkbenchProfile.layout.auxiliarybar.visible, false);
+  assert.equal(defaultWorkbenchProfile.layout.panel.visible, false);
   assert.equal(defaultWorkbenchProfile.composition.panel, "zeta.panel.terminal");
 });
 

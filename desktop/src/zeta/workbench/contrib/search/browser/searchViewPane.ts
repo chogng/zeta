@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../platform/search/common/search.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -36,18 +36,18 @@ export class SearchViewPane extends ViewPane {
     this.searchService = searchService;
     this.contentElement.classList.add("zeta-search");
     const document = options.ownerDocument;
-    const form = document.createElement("form");
+    const form = h(document, "form");
     form.className = "zeta-search-form";
     this.queryInput = input(document, {
       className: "zeta-search-query",
       placeholder: "Search",
       ariaLabel: "Search workspace",
     });
-    this.submitButton = document.createElement("button");
+    this.submitButton = h(document, "button");
     this.submitButton.type = "submit";
     this.submitButton.className = "zeta-search-submit";
     this.submitButton.textContent = "Search";
-    const toggles = document.createElement("div");
+    const toggles = h(document, "div");
     toggles.className = "zeta-search-toggles";
     const caseSensitive = this.own(checkbox(
       document,
@@ -57,7 +57,7 @@ export class SearchViewPane extends ViewPane {
     this.caseSensitiveInput = caseSensitive.input;
     const regex = this.own(checkbox(document, toggles, "Use Regex"));
     this.regexInput = regex.input;
-    const filters = document.createElement("div");
+    const filters = h(document, "div");
     filters.className = "zeta-search-filters";
     this.includeInput = input(document, {
       className: "zeta-search-filter",
@@ -77,12 +77,12 @@ export class SearchViewPane extends ViewPane {
       toggles,
       filters,
     );
-    this.statusElement = document.createElement("div");
+    this.statusElement = h(document, "div");
     this.statusElement.className = "zeta-search-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");
     this.statusElement.textContent = "Type a query and press Enter.";
-    this.resultsElement = document.createElement("ul");
+    this.resultsElement = h(document, "ul");
     this.resultsElement.className = "zeta-search-results";
     this.resultsElement.setAttribute("role", "tree");
     this.contentElement.append(
@@ -200,18 +200,18 @@ export class SearchViewPane extends ViewPane {
     for (const match of matches) {
       let group = this.groups.get(match.path);
       if (!group) {
-        const item = document.createElement("li");
+        const item = h(document, "li");
         item.className = "zeta-search-file";
         item.setAttribute("role", "treeitem");
         item.setAttribute("aria-expanded", "true");
-        const heading = document.createElement("div");
+        const heading = h(document, "div");
         heading.className = "zeta-search-file-heading";
-        const path = document.createElement("span");
+        const path = h(document, "span");
         path.className = "zeta-search-file-path";
         path.textContent = match.path;
-        const count = document.createElement("span");
+        const count = h(document, "span");
         count.className = "zeta-search-file-count";
-        const resultList = document.createElement("ul");
+        const resultList = h(document, "ul");
         resultList.className = "zeta-search-file-matches";
         resultList.setAttribute("role", "group");
         heading.append(path, count);
@@ -239,7 +239,7 @@ function input(
     readonly ariaLabel: string;
   },
 ): HTMLInputElement {
-  const element = document.createElement("input");
+  const element = h(document, "input");
   element.type = "text";
   element.className = options.className;
   element.placeholder = options.placeholder;
@@ -274,13 +274,13 @@ function renderMatch(
   document: Document,
   match: WorkspaceSearchMatch,
 ): HTMLLIElement {
-  const item = document.createElement("li");
+  const item = h(document, "li");
   item.className = "zeta-search-match";
   item.setAttribute("role", "treeitem");
-  const line = document.createElement("span");
+  const line = h(document, "span");
   line.className = "zeta-search-line-number";
   line.textContent = String(match.lineNumber);
-  const preview = document.createElement("code");
+  const preview = h(document, "code");
   preview.className = "zeta-search-preview";
   appendHighlightedPreview(
     document,
@@ -301,17 +301,15 @@ function appendHighlightedPreview(
   let offset = 0;
   for (const range of normalizedRanges(ranges, text.length)) {
     if (range.start > offset) {
-      container.append(document.createTextNode(
-        text.slice(offset, range.start),
-      ));
+      container.append(createText(document, text.slice(offset, range.start)));
     }
-    const mark = document.createElement("mark");
+    const mark = h(document, "mark");
     mark.textContent = text.slice(range.start, range.end);
     container.append(mark);
     offset = range.end;
   }
   if (offset < text.length) {
-    container.append(document.createTextNode(text.slice(offset)));
+    container.append(createText(document, text.slice(offset)));
   }
 }
 

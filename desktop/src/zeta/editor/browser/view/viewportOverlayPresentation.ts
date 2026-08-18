@@ -1,4 +1,4 @@
-import { reset } from "../../../base/browser/dom.js";
+import { reset, h } from "../../../base/browser/dom.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
@@ -54,7 +54,7 @@ export function projectAsterSelectionOverlays(context: ViewportOverlayContext, c
     if (domGeometry?.selectionIndexes.has(rectangle.selectionIndex)) continue;
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-selection";
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
@@ -64,7 +64,7 @@ export function projectAsterSelectionOverlays(context: ViewportOverlayContext, c
   for (const rectangle of domGeometry?.selections ?? []) {
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-selection";
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
     element.style.left = `${rectangle.left}px`;
@@ -75,7 +75,7 @@ export function projectAsterSelectionOverlays(context: ViewportOverlayContext, c
     if (domGeometry?.caretIndexes.has(rectangle.selectionIndex)) continue;
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-caret";
     element.classList.toggle("primary", rectangle.primary);
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
@@ -85,7 +85,7 @@ export function projectAsterSelectionOverlays(context: ViewportOverlayContext, c
   for (const rectangle of domGeometry?.carets ?? []) {
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-caret";
     element.classList.toggle("primary", rectangle.primary);
     element.dataset.selectionIndex = String(rectangle.selectionIndex);
@@ -213,7 +213,7 @@ export function projectAsterDecorationOverlays(context: ViewportOverlayContext, 
     if (domRectangles?.get(rectangle.id)) continue;
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-decoration";
     element.classList.add(rectangle.presentation);
     element.dataset.decorationId = String(rectangle.id);
@@ -228,7 +228,7 @@ export function projectAsterDecorationOverlays(context: ViewportOverlayContext, 
     for (const rectangle of geometry) {
       const line = context.renderedLines.get(rectangle.visualLineIndex);
       if (!line) continue;
-      const element = ownerDocument.createElement("div");
+      const element = h(ownerDocument, "div");
       element.className = "aster-editor-decoration";
       element.classList.add(decoration.presentation);
       element.dataset.decorationId = String(decoration.id);
@@ -300,7 +300,7 @@ export function projectAsterCompositionOverlay(context: ViewportOverlayContext, 
   for (const rectangle of rectangles) {
     const line = context.renderedLines.get(rectangle.visualLineIndex);
     if (!line) continue;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "aster-editor-composition";
     element.style.left = `${rectangle.left}px`;
     element.style.width = `${rectangle.width}px`;

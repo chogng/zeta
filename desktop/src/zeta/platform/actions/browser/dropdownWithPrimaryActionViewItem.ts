@@ -1,5 +1,5 @@
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem, type DropdownMenuActions } from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../base/common/actions.js";
@@ -37,12 +37,12 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
     container.classList.add("zeta-dropdown-with-primary-action-view-item");
     container.classList.toggle("disabled", !this.action.enabled);
 
-    const primaryContainer = container.ownerDocument.createElement("div");
+    const primaryContainer = h(container.ownerDocument, "div");
     primaryContainer.className = "zeta-dropdown-with-primary-primary";
     primaryContainer.classList.toggle("icon", this.action.icon !== undefined);
     this.primaryItem.render(primaryContainer);
 
-    const dropdownContainer = container.ownerDocument.createElement("div");
+    const dropdownContainer = h(container.ownerDocument, "div");
     dropdownContainer.className = "zeta-dropdown-with-primary-dropdown";
     this.dropdownItem.render(dropdownContainer);
 

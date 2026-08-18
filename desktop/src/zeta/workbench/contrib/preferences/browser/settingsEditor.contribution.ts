@@ -106,7 +106,9 @@ const unavailableWorkspaceTrustService: IWorkspaceTrustService = {
 
 const unavailableWorkspaceOpenService: IWorkspaceOpenService = {
   canOpenFolder: false,
+  canOpenWorkspace: false,
   openFolder: () => Promise.reject(new Error("Folder picking is unavailable.")),
+  openWorkspace: () => Promise.reject(new Error("Workspace opening is unavailable.")),
   pickFolder: () => Promise.reject(new Error("Folder picking is unavailable.")),
 };
 

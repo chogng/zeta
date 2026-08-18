@@ -1,4 +1,4 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, isElement, stopEvent } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
@@ -47,16 +47,16 @@ export class OutputViewPane extends ViewPane {
     this.autoScroll = storageService?.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true) ?? true;
     this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Output actions", highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
     this.titleActions.element.classList.add("zeta-toolbar", "zeta-output-title-actions");
-    const filterBar = options.ownerDocument.createElement("div");
+    const filterBar = h(options.ownerDocument, "div");
     filterBar.className = "zeta-output-filter-bar";
-    this.filterInput = options.ownerDocument.createElement("input");
+    this.filterInput = h(options.ownerDocument, "input");
     this.filterInput.className = "zeta-output-filter-input";
     this.filterInput.type = "search";
     this.filterInput.placeholder = "Filter Output (prefix with ! to exclude)";
     this.filterInput.setAttribute("aria-label", "Filter Output");
     this.filterInput.value = this.filters.text;
     filterBar.append(this.filterInput);
-    this.content = options.ownerDocument.createElement("div");
+    this.content = h(options.ownerDocument, "div");
     this.content.className = "zeta-output-content";
     this.content.setAttribute("role", "log");
     this.content.setAttribute("aria-live", "off");
@@ -106,7 +106,7 @@ export class OutputViewPane extends ViewPane {
     const rendered = filtered.slice(-MaximumRenderedEntries);
     const rows: HTMLElement[] = [];
     if (rendered.length < filtered.length) {
-      const notice = this.element.ownerDocument.createElement("div");
+      const notice = h(this.element.ownerDocument, "div");
       notice.className = "zeta-output-truncation";
       notice.textContent = `${(filtered.length - rendered.length).toLocaleString()} earlier matching entries are not rendered.`;
       rows.push(notice);
@@ -117,7 +117,7 @@ export class OutputViewPane extends ViewPane {
   }
 
   private renderEntry(entry: IOutputEntry): HTMLElement {
-    const row = this.element.ownerDocument.createElement("div");
+    const row = h(this.element.ownerDocument, "div");
     row.className = `zeta-output-row ${entry.severity}`;
     row.dataset.sequence = String(entry.sequence);
     if (entry.category) row.dataset.category = entry.category;
@@ -127,7 +127,7 @@ export class OutputViewPane extends ViewPane {
     let offset = 0;
     for (const link of links) {
       row.append(entry.text.slice(offset, link.startIndex));
-      const anchor = row.ownerDocument.createElement("a");
+      const anchor = h(row.ownerDocument, "a");
       anchor.className = "zeta-output-link";
       anchor.href = link.resource.toString();
       anchor.textContent = link.label;
@@ -143,14 +143,14 @@ export class OutputViewPane extends ViewPane {
   }
 
   private renderEmpty(message: string): void {
-    const empty = this.element.ownerDocument.createElement("div");
+    const empty = h(this.element.ownerDocument, "div");
     empty.className = "zeta-output-empty";
     empty.textContent = message;
     this.content.replaceChildren(empty);
   }
 
   private openLink(event: MouseEvent): void {
-    const target = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>(".zeta-output-link") : null;
+    const target = isElement(event.target) ? event.target.closest<HTMLAnchorElement>(".zeta-output-link") : null;
     const resourceValue = target?.dataset.resource;
     if (!target || !resourceValue || !this.editorService) return;
     stopEvent(event);

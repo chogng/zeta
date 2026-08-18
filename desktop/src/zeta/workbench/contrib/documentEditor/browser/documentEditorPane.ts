@@ -13,6 +13,7 @@ import type { ITextFileService } from "../../../services/textfile/common/textFil
 import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Workbench-only services that complement one document editor. */
 export interface EditorPaneOptions extends EditorWidgetOptions {
@@ -40,7 +41,7 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("Document editor pane has already been created");
-    const container = parent.ownerDocument.createElement("div");
+    const container = h(parent.ownerDocument, "div");
     container.className = "zeta-structured-editor-pane";
     parent.append(container);
     this.container = container;

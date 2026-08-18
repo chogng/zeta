@@ -1,5 +1,5 @@
 import "./statusbarItem.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
 import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/ui/hover/hoverDelegate.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
@@ -26,12 +26,12 @@ export class StatusbarEntryItem extends DisposableOwner {
   ) {
     super();
     this.id = id;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     element.className = "zeta-statusbar-item";
     element.dataset.statusbarItemId = id;
     this.element = element;
 
-    const labelElement = ownerDocument.createElement("a");
+    const labelElement = h(ownerDocument, "a");
     labelElement.className = "zeta-statusbar-item-label";
     labelElement.setAttribute("role", "button");
     labelElement.tabIndex = -1;
@@ -145,7 +145,7 @@ export class StatusbarEntryItem extends DisposableOwner {
     if (segmentsEqual(previousSegments, segments)) return;
     this.clearSegments();
     for (const segment of segments) {
-      const segmentElement = this.labelElement.ownerDocument.createElement("span");
+      const segmentElement = h(this.labelElement.ownerDocument, "span");
       segmentElement.className = "zeta-statusbar-item-segment";
       if (segment.icon) appendIcon(segment.icon, segmentElement);
       if (segment.text) segmentElement.append(segment.text);
@@ -181,7 +181,7 @@ export class StatusbarEntryItem extends DisposableOwner {
       this.textNode.data = text;
       return;
     }
-    this.textNode = this.labelElement.ownerDocument.createTextNode(text);
+    this.textNode = createText(this.labelElement.ownerDocument, text);
     this.labelElement.append(this.textNode);
   }
 }

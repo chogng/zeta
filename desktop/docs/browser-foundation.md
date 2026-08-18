@@ -1,8 +1,24 @@
 # Browser foundation
 
+> 状态：Current。本文是 Desktop Renderer 浏览器基座的职责与依赖方向说明。
+
 `src/zeta/base/browser` contains browser-runtime capabilities shared by UI,
 platform, and workbench code. It intentionally does not provide a universal
 DOM component base class.
+
+## 快速理解
+
+Zeta 采用与 VS Code 相同的两层 DOM 思路，但所有创建、观察和调度都绑定到元素所属的
+`Document` 或 `Window`，不依赖隐式全局对象。静态结构使用 `h()`，由可观察状态直接驱动的
+结构使用 `createReactiveDom()` 返回的 `n.div()`、`n.elem()`、`n.svg()` 和
+`n.svgElem()`。
+
+| 场景 | 当前入口 | 生命周期 | 是否应该直接调用原生创建 API |
+| --- | --- | --- | --- |
+| 一次性静态结构 | `h()`、`svg()` 或 `createDom()` | DOM owner 管理节点 | ❌ |
+| 可观察状态驱动的 class、属性、样式或 children | `n.div()`、`n.elem()` | `LiveElement` 或 owner 的 `DisposableStore` | ❌ |
+| DOM 基座实现自身 | `dom.ts`、`reactiveDom.ts` | 基座实现负责 | ✅ |
+| 不可信 HTML | `domSanitize.ts` | 调用方拥有返回的 fragment | ❌，必须先清洗 |
 
 ## Dependency direction
 
@@ -21,13 +37,14 @@ from UI, platform, or workbench modules.
 
 | Module | Responsibility |
 | --- | --- |
-| `dom.ts` | Disposable native listeners and small DOM primitives |
+| `dom.ts` | Disposable listeners, cross-realm guards, static HTML/SVG construction, text, and fragments |
+| `../common/observable.ts` | Transactions, settable/derived/event-backed observables, and owned reactions |
 | `window.ts` | Main/auxiliary window identity, registration, and lookup |
 | `focus.ts` | Active-element lookup, tracking, restoration, Tab order, and focus containment |
 | `geometry.ts` | DOM dimensions and viewport/page coordinate measurement |
 | `../common/layout.ts` | Pure, DOM-independent anchored layout calculation |
-| `observer.ts` | Disposable Resize, Mutation, and Intersection observers |
-| `scheduler.ts` | Idle work, animation-frame coalescing, measure/modify order |
+| `observer.ts` | Disposable, owner-window-aware Resize, Mutation, and Intersection observers |
+| `scheduler.ts` | Window-scoped timeouts/intervals, idle work, animation-frame coalescing, and measure/modify order |
 | `keyboardEvent.ts` | Stable keyboard-event representation |
 | `../common/keybindings.ts` | Logical/physical chords, sequences, and OS resolution |
 | `../common/keybindingParser.ts` | External keybinding string parsing |
@@ -37,10 +54,35 @@ from UI, platform, or workbench modules.
 | `dnd.ts` | Drag depth and DataTransfer helpers |
 | `fileAccess.ts` | Browser file picking, object URLs, and downloads |
 | `fullscreen.ts` | Fullscreen state and lifecycle |
-| `domBuilder.ts` | Explicit-Document HTML and SVG construction |
-| `reactiveDom.ts` | Bindings for snapshot-plus-event readable state |
+| `reactiveDom.ts` | Document-bound `n.*` projection over the canonical observable graph |
 | `domStylesheets.ts` | Disposable and multi-window dynamic stylesheets |
 | `aria.ts` | Per-document ARIA live announcements |
+
+## DOM construction model
+
+`h()` and `n.*` are both long-term APIs; neither is a compatibility stage for the other.
+
+| API | Use when | Returns | Update model |
+| --- | --- | --- | --- |
+| `h(ownerDocument, tag, ...)` | Structure is created once and later changes are imperative component behavior | The typed native element | No reaction |
+| `createDom(ownerDocument)` | One construction scope creates many nodes in the same document | A document-bound callable factory | No reaction |
+| `createReactiveDom(ownerDocument)` | Class, attributes, primitive properties, dataset, style, or children are `IObservable` values | A lazy `ReactiveElement` | One owned reaction for the tree |
+
+Static `h()` returns the element directly and uses a typed `ref` callback when a nested element must be
+captured. Zeta deliberately does not copy VS Code's string selector plus `@name` result-map protocol:
+direct typed elements and callbacks are easier to refactor, and invalid attribute/property categories stay
+visible to TypeScript. Children may be nested arrays and may contain nodes, strings, numbers, or empty
+sentinels. Style values are CSS text; both camel-case and CSS property names are accepted, and numeric
+lengths require explicit units.
+
+Reactive trees are inert descriptions until `keepUpdated(store)` or `toLiveElement()` is called. The owner
+must dispose that lifetime. Nested reactive elements share the root reaction, and `IObservable` remains the
+only reactive state protocol. The deleted `domBuilder.ts` and the old `ReadableValue` binding helpers must
+not be reintroduced as parallel construction or state systems.
+
+`observer.ts` groups resize targets by owner window, so an auxiliary-window element is observed with that
+window's constructor. `scheduler.ts` likewise accepts an explicit window, coalesces work per window, orders
+layout reads before writes, and falls back to a window timer when animation frames are unavailable.
 
 ## Overlay boundaries
 
@@ -242,10 +284,13 @@ the resolver, contribution, or command layers.
   listeners or timers.
 - Every listener, observer, scheduler, and temporary URL returns or owns an
   `IDisposable`.
-- Keep one-line native DOM operations native unless a wrapper enforces
-  lifecycle, cross-window, compatibility, or accessibility semantics.
+- Production Renderer code creates HTML, SVG, text nodes, and fragments through `dom.ts`; raw native
+  construction is restricted to the DOM foundations themselves.
 - Leaf action representations render into a host-owned container. Layout and
   workbench views may expose a structural `element` without sharing a concrete
   DOM base class.
-- Reactive DOM consumes the small `ReadableValue` protocol. It does not create
-  a global event bus or require a framework-specific observable graph.
+- Use `n.*` only when state is already observable or is canonically projected with
+  `observableFromEvent()`. Do not convert ordinary one-shot component behavior into an observable merely
+  to avoid a property assignment.
+- Keep observers, scheduled work, and long-lived event listeners owned by an `IDisposable`; use the target
+  node's window rather than process-global browser constructors or timers.

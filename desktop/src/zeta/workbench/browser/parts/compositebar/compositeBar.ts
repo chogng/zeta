@@ -9,6 +9,8 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { CompositeBarAction, CompositeBarActionViewItem, CompositeBarOverflowViewItem } from "./compositeBarActionViewItem.js";
+import { h } from "../../../../base/browser/dom.js";
+import { observeResize } from "../../../../base/browser/observer.js";
 
 /** Selection of an inactive Composite requested from a CompositeBar. */
 export interface CompositeBarSelectionEvent {
@@ -70,7 +72,7 @@ export class CompositeBar extends DisposableOwner {
     this.contextMenuProvider = options.contextMenuProvider;
     this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
     this.containerFilter = options.containerFilter ?? (() => true);
-    this.element = options.ownerDocument.createElement("section");
+    this.element = h(options.ownerDocument, "section");
     this.element.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
@@ -110,12 +112,7 @@ export class CompositeBar extends DisposableOwner {
     this.own(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
       if (location === this.location) this.render();
     }));
-    const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
-    if (this.overflowEnabled && ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.layout());
-      observer.observe(this.element);
-      this.defer(() => observer.disconnect());
-    }
+    if (this.overflowEnabled) this.own(observeResize(this.element, () => this.layout()));
     this.render();
   }
 

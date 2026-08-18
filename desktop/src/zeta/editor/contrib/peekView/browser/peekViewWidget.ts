@@ -2,6 +2,7 @@ import "./media/peekView.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** A lifecycle-safe preview surface anchored to an editor position. */
 export class PeekViewWidget extends DisposableOwner {
@@ -12,13 +13,13 @@ export class PeekViewWidget extends DisposableOwner {
     super();
     viewport.textModel.offsetAt(anchor);
     const document = viewport.element.ownerDocument;
-    this.element = document.createElement("section");
+    this.element = h(document, "section");
     this.element.className = "aster-editor-peek-view";
     this.element.hidden = true;
-    const header = document.createElement("header");
+    const header = h(document, "header");
     header.className = "aster-editor-peek-view-header";
     header.textContent = title;
-    this.body = document.createElement("div");
+    this.body = h(document, "div");
     this.body.className = "aster-editor-peek-view-body";
     this.element.append(header, this.body);
     viewport.element.append(this.element);

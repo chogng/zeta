@@ -6,6 +6,7 @@ import type { IContextKeyService } from "../../../../../platform/contextkey/comm
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
+import type { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
@@ -14,6 +15,8 @@ import { TerminalTabsLayout } from "./terminalTabsLayout.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
 import { TerminalTitleActions } from "./terminalTitleActions.js";
 import "./media/terminal.css";
+import { h } from "../../../../../base/browser/dom.js";
+import { observeResize } from "../../../../../base/browser/observer.js";
 
 const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 
@@ -31,7 +34,7 @@ export class TerminalViewPane extends ViewPane {
   private creating = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService) {
+  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
     super(options);
     this.defer(() => {
       this.disposed = true;
@@ -53,7 +56,7 @@ export class TerminalViewPane extends ViewPane {
     }));
 
     this.contentElement.classList.add("zeta-terminal-content");
-    this.statusElement = options.ownerDocument.createElement("div");
+    this.statusElement = h(options.ownerDocument, "div");
     this.statusElement.className = "zeta-terminal-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.hidden = true;
@@ -85,7 +88,7 @@ export class TerminalViewPane extends ViewPane {
       },
     }));
     this.tabList.element.classList.add("zeta-terminal-tabs");
-    this.widgetsElement = options.ownerDocument.createElement("div");
+    this.widgetsElement = h(options.ownerDocument, "div");
     this.widgetsElement.className = "zeta-terminal-widgets";
     this.tabsLayout = this.own(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
     this.contentElement.append(this.statusElement, this.tabsLayout.element);
@@ -106,18 +109,15 @@ export class TerminalViewPane extends ViewPane {
         void this.createTerminal();
       }
     }));
+    this.own(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+      if (workspace.folders.length === 1 && this.terminalService.instances.length === 0) void this.initialize();
+    }));
 
-    const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => {
-        const bounds = this.tabsLayout.element.getBoundingClientRect();
-        this.tabsLayout.layout(bounds.width, bounds.height);
-        this.activeItem()?.widget.fit();
-      });
-      observer.observe(this.tabsLayout.element);
-      observer.observe(this.widgetsElement);
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
+      const bounds = this.tabsLayout.element.getBoundingClientRect();
+      this.tabsLayout.layout(bounds.width, bounds.height);
+      this.activeItem()?.widget.fit();
+    }));
     this.render();
     queueMicrotask(() => {
       if (!this.disposed) void this.initialize();
@@ -133,6 +133,11 @@ export class TerminalViewPane extends ViewPane {
   }
 
   private async initialize(): Promise<void> {
+    if (!this.hasWorkspaceFolder()) {
+      this.titleActions.setProfiles([]);
+      this.setStatus("Open a folder to use the terminal.");
+      return;
+    }
     try {
       const profiles = await this.terminalService.getProfiles();
       if (this.disposed) return;
@@ -146,6 +151,10 @@ export class TerminalViewPane extends ViewPane {
 
   private async createTerminal(profileId?: string): Promise<void> {
     if (this.creating || this.disposed) return;
+    if (!this.hasWorkspaceFolder()) {
+      this.setStatus("Open a folder to use the terminal.");
+      return;
+    }
     this.creating = true;
     this.titleActions.setCreating(true);
     this.setStatus(undefined);
@@ -257,6 +266,10 @@ export class TerminalViewPane extends ViewPane {
   private setStatus(message: string | undefined): void {
     this.statusElement.textContent = message ?? "";
     this.statusElement.hidden = message === undefined;
+  }
+
+  private hasWorkspaceFolder(): boolean {
+    return this.workspaceContext.getWorkspace().folders.length === 1;
   }
 
 }

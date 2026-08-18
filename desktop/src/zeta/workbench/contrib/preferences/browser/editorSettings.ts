@@ -1,5 +1,5 @@
 import "./media/editorSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
@@ -22,10 +22,10 @@ export class EditorSettingsPane extends DisposableOwner {
 
   constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-settings";
 
-    const note = ownerDocument.createElement("p");
+    const note = h(ownerDocument, "p");
     note.className = "zeta-editor-settings-note";
     note.textContent = "Workspace search defaults update immediately. Editor and diff presentation changes apply when that editor is opened.";
     this.element.append(note);
@@ -127,7 +127,7 @@ export class EditorSettingsPane extends DisposableOwner {
     }));
     this.element.append(tree.element);
 
-    this.status = ownerDocument.createElement("p");
+    this.status = h(ownerDocument, "p");
     this.status.className = "zeta-editor-settings-status";
     this.status.setAttribute("role", "status");
     this.status.setAttribute("aria-live", "polite");
@@ -178,10 +178,10 @@ export class EditorSettingsPane extends DisposableOwner {
   }
 
   private createInformationalSetting(label: string, description: string, stateLabel: string): HTMLElement {
-    const setting = this.element.ownerDocument.createElement("div");
+    const setting = h(this.element.ownerDocument, "div");
     setting.className = "zeta-editor-setting zeta-editor-informational-setting";
     setting.append(this.createSettingCopy(label, description));
-    const state = this.element.ownerDocument.createElement("span");
+    const state = h(this.element.ownerDocument, "span");
     state.className = "zeta-editor-setting-state";
     state.textContent = stateLabel;
     setting.append(state);
@@ -195,7 +195,7 @@ export class EditorSettingsPane extends DisposableOwner {
     readonly options: readonly { readonly value: T; readonly label: string }[];
   }): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("div");
+    const setting = h(document, "div");
     setting.className = "zeta-editor-setting zeta-editor-setting-select-row";
     const copy = this.createSettingCopy(options.label, options.description);
     const select = this.own(new SelectBox({
@@ -215,7 +215,7 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private createNumberSetting(key: IConfigurationKey<number>, label: string, description: string, minimum: number, maximum: number): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("div");
+    const setting = h(document, "div");
     setting.className = "zeta-editor-setting";
     const copy = this.createSettingCopy(label, description);
     const input = this.own(new InputBox({
@@ -245,10 +245,10 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private createTextSetting(key: IConfigurationKey<string>, label: string, description: string, placeholder: string): HTMLElement {
     const document = this.element.ownerDocument;
-    const setting = document.createElement("label");
+    const setting = h(document, "label");
     setting.className = "zeta-editor-setting";
     const copy = this.createSettingCopy(label, description);
-    const input = document.createElement("input");
+    const input = h(document, "input");
     input.className = "zeta-editor-setting-text";
     input.type = "text";
     input.placeholder = placeholder;
@@ -261,12 +261,12 @@ export class EditorSettingsPane extends DisposableOwner {
 
   private createSettingCopy(label: string, description: string): HTMLElement {
     const document = this.element.ownerDocument;
-    const copy = document.createElement("span");
+    const copy = h(document, "span");
     copy.className = "zeta-editor-setting-copy";
-    const title = document.createElement("span");
+    const title = h(document, "span");
     title.className = "zeta-editor-setting-title";
     title.textContent = label;
-    const hint = document.createElement("span");
+    const hint = h(document, "span");
     hint.className = "zeta-editor-setting-description";
     hint.textContent = description;
     copy.append(title, hint);

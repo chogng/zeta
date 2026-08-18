@@ -1,9 +1,10 @@
 import { Emitter } from "../../../common/event.js";
 import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
-import { addDisposableListener, isHTMLElement, isNode } from "../../dom.js";
+import { addDisposableListener, isHTMLElement, isNode, h } from "../../dom.js";
 import { getActiveElement, restoreFocus } from "../../focus.js";
 import { getViewport } from "../../geometry.js";
+import { observeResize } from "../../observer.js";
 import { getWindow, mainWindow } from "../../window.js";
 
 export {
@@ -74,7 +75,7 @@ export class ContextView
   constructor(container: HTMLElement = mainWindow.document.body) {
     super();
     const ownerDocument = container.ownerDocument;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-context-view";
@@ -183,13 +184,10 @@ export class ContextView
       () => this.layout(),
       true,
     ));
-    const ResizeObserverConstructor = targetWindow.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.layout());
-      observer.observe(this.element);
-      if (isElementAnchor(options.anchor)) observer.observe(options.anchor);
-      this.visibleListeners.add(toDisposable(() => observer.disconnect()));
-    }
+    this.visibleListeners.add(observeResize(
+      isElementAnchor(options.anchor) ? [this.element, options.anchor] : this.element,
+      () => this.layout(),
+    ));
     return true;
   }
 

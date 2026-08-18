@@ -2,6 +2,7 @@ import { Dimension, type IRectangle } from "../../../base/browser/geometry.js";
 import type { Event } from "../../../base/common/event.js";
 import type { WorkbenchPartId } from "../../services/layout/common/workbenchLayoutService.js";
 import type { WorkbenchPart } from "../part.js";
+import { h } from "../../../base/browser/dom.js";
 
 export interface WorkbenchPartFrameInsets {
   readonly top: number;
@@ -33,7 +34,7 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
     readonly part: WorkbenchPart,
     options: WorkbenchPartViewOptions = {},
   ) {
-    const frame = part.element.ownerDocument.createElement("div");
+    const frame = h(part.element.ownerDocument, "div");
     this.frame = frame;
     frame.className = "zeta-workbench-part-frame";
     frame.append(part.element);

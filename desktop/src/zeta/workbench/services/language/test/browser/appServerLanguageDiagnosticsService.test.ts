@@ -151,3 +151,18 @@ test("App Server diagnostics service treats typed unavailable pulls as unsupport
     console.error = originalConsoleError;
   }
 });
+
+test("App Server diagnostics service waits for a workspace folder before pulling workspace diagnostics", async () => {
+  const events = new FakeServerEvents();
+  const api = new FakeLanguageApi();
+  using workspace = new WorkspaceContextService({ id: "empty-window" });
+  using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+
+  await tick();
+  assert.equal(api.workspaceDiagnosticPulls, 0);
+
+  workspace.updateWorkspace({ id: "workspace", uri: URI.file("C:\\project") });
+  await tick();
+  await tick();
+  assert.ok(api.workspaceDiagnosticPulls > 0);
+});

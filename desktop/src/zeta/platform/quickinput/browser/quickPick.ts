@@ -1,4 +1,4 @@
-import { stopEvent } from "../../../base/browser/dom.js";
+import { stopEvent, h } from "../../../base/browser/dom.js";
 import {
   setAriaAttribute,
   setRole,
@@ -52,7 +52,7 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
     super();
     this.options = options;
     const ownerDocument = options.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-quick-pick";
     setRole(this.element, "dialog");
     setAriaAttribute(this.element, "label", "Quick Pick");

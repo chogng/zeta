@@ -10,6 +10,7 @@ import type { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { type ISessionsLayoutService, type SessionsPartId, type SessionsPartVisibilityChangeEvent, sessionsPartIds } from "../../services/layout/common/sessionsLayoutService.js";
 import { createDefaultSessionsWorkbenchLayoutState, type SessionsWorkbenchLayoutState, SessionsWorkbenchLayoutStateModel } from "./sessionsWorkbenchLayoutState.js";
 import { assertDimension, createSessionsWorkbenchGridDescriptor, parseSessionsPartId, resolveSessionsInitialDimension } from "./sessionsWorkbenchLayoutTopology.js";
+import { h } from "../../../base/browser/dom.js";
 
 const PART_GUTTER = 6;
 
@@ -33,7 +34,7 @@ export class SessionsWorkbenchLayout extends DisposableOwner implements IResizab
   constructor(container: Element, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: SessionsWorkbenchLayoutOptions = {}) {
     super();
     validateParts(parts);
-    this.element = container.ownerDocument.createElement("div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-sessions-workbench-layout";
     container.append(this.element);
     this.defer(() => this.element.remove());

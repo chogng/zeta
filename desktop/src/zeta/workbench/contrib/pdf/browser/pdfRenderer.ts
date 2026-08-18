@@ -1,5 +1,6 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** One rendered PDF page surface with its DOM anchor for annotation overlays. */
 export interface PdfRenderedPage {
@@ -48,12 +49,12 @@ export class PdfJsRenderer implements IPdfRenderer {
         throwIfCancelled(request.signal, "PDF rendering was cancelled");
         const page = await document.getPage(pageNumber);
         const viewport = page.getViewport({ scale: request.scale });
-        const element = request.container.ownerDocument.createElement("div");
+        const element = h(request.container.ownerDocument, "div");
         element.className = "zeta-pdf-page";
         element.dataset.pageNumber = String(pageNumber);
         element.style.width = `${viewport.width}px`;
         element.style.height = `${viewport.height}px`;
-        const canvas = request.container.ownerDocument.createElement("canvas");
+        const canvas = h(request.container.ownerDocument, "canvas");
         canvas.className = "zeta-pdf-page-canvas";
         const pixelRatio = request.container.ownerDocument.defaultView?.devicePixelRatio ?? 1;
         canvas.width = Math.ceil(viewport.width * pixelRatio);

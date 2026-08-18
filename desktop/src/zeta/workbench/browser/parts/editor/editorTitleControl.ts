@@ -7,6 +7,7 @@ import type { IMenuService } from "../../../../platform/actions/common/menuServi
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
@@ -28,7 +29,7 @@ export class EditorTitleControl extends DisposableOwner {
     titleActions?: EditorTitleActions,
   ) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-title-control";
     this.tabs = this.own(new MultiEditorTabsControl(ownerDocument, delegate));
     this.toolbar = this.own(titleActions
@@ -47,12 +48,12 @@ export class EditorTitleControl extends DisposableOwner {
           highlightToggledItems: true,
         },
       ));
-    const tabsAndActions = ownerDocument.createElement("div");
+    const tabsAndActions = h(ownerDocument, "div");
     tabsAndActions.className = "zeta-editor-tabs-and-actions";
     this.element.append(tabsAndActions);
     tabsAndActions.append(this.tabs.element);
 
-    const actions = ownerDocument.createElement("div");
+    const actions = h(ownerDocument, "div");
     actions.className = "zeta-editor-title-actions";
     actions.append(this.toolbar.element);
     tabsAndActions.append(actions);

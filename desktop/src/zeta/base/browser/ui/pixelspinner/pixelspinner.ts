@@ -7,21 +7,22 @@ import {
   setAriaAttribute,
   setRole,
 } from "../aria/aria.js";
+import { h } from "../../dom.js";
 
 /** A compact four-pixel activity indicator with no image asset dependency. */
 export class PixelSpinner extends DisposableOwner {
   readonly element: HTMLSpanElement;
   private step = 0;
 
-  constructor() {
+  constructor(ownerDocument: Document) {
     super();
-    const element = document.createElement("span");
+    const element = h(ownerDocument, "span");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-pixel-spinner";
     setRole(element, "status");
     setAriaAttribute(element, "label", "Loading");
-    element.append(...Array.from({ length: 4 }, () => document.createElement("i")));
+    element.append(...Array.from({ length: 4 }, () => h(ownerDocument, "i")));
     this.own(disposableWindowInterval(
       getWindow(element),
       () => this.render(),

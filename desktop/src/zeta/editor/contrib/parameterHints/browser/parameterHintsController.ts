@@ -1,6 +1,6 @@
 import "./media/parameterHints.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -13,7 +13,7 @@ export class ParameterHintsController extends DisposableOwner {
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster parameter hints failed", error)) {
     super();
-    this.element = viewport.element.ownerDocument.createElement("div");
+    this.element = h(viewport.element.ownerDocument, "div");
     this.element.className = "aster-editor-parameter-hints";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
@@ -62,12 +62,12 @@ export class ParameterHintsController extends DisposableOwner {
 
   private render(hints: LanguageParameterHints): void {
     this.element.replaceChildren(...hints.signatures.map((signature, index) => {
-      const node = this.element.ownerDocument.createElement("div");
+      const node = h(this.element.ownerDocument, "div");
       node.className = `aster-editor-parameter-hints-signature${hints.activeSignature === index ? " active" : ""}`;
       const activeParameter = (hints.activeSignature ?? 0) === index && signature.activeParameter !== undefined ? signature.parameters[signature.activeParameter] : undefined;
       const activeStart = activeParameter ? signature.label.indexOf(activeParameter.label) : -1;
       if (activeParameter && activeStart >= 0) {
-        const parameter = this.element.ownerDocument.createElement("strong");
+        const parameter = h(this.element.ownerDocument, "strong");
         parameter.className = "aster-editor-parameter-hints-parameter active";
         parameter.textContent = activeParameter.label;
         node.append(signature.label.slice(0, activeStart), parameter, signature.label.slice(activeStart + activeParameter.label.length));

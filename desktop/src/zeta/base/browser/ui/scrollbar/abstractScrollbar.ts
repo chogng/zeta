@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { StandardPointerEvent } from "../../mouseEvent.js";
 import {
   DisposableOwner,
@@ -33,8 +33,8 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     this.trackClickBehavior = options.trackClickBehavior;
     this.getMetrics = options.getMetrics;
     this.setPosition = options.setPosition;
-    const track = options.ownerDocument.createElement("div");
-    const thumb = options.ownerDocument.createElement("div");
+    const track = h(options.ownerDocument, "div");
+    const thumb = h(options.ownerDocument, "div");
     this.track = track;
     this.thumb = thumb;
     this.dragListeners = this.own(new ResettableDisposableGroup());

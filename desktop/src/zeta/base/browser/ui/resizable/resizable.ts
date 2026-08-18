@@ -3,6 +3,7 @@ import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
 import { Sash, SashState } from "../sash/sash.js";
+import { h } from "../../dom.js";
 
 /** A control whose geometry is driven by an external container layout. */
 export interface IResizable {
@@ -48,7 +49,7 @@ export class ResizableHTMLElement extends DisposableOwner {
 
   constructor(ownerDocument: Document = document) {
     super();
-    this.domNode = ownerDocument.createElement("div");
+    this.domNode = h(ownerDocument, "div");
     this.domNode.className = "zeta-resizable";
     this.defer(() => this.domNode.remove());
 
@@ -198,7 +199,7 @@ export class Resizable extends DisposableOwner {
 
   constructor(onResize?: (size: IDimension) => void, ownerDocument: Document = document) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-resizable";
     this.element.style.resize = "both";
     this.element.style.overflow = "auto";

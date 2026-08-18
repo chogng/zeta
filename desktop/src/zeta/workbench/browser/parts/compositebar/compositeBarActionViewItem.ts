@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
@@ -72,7 +72,7 @@ export class CompositeBarActionViewItem extends ActionViewItem {
     container.setAttribute("aria-label", options.label);
     if (options.panelId) container.setAttribute("aria-controls", options.panelId);
     this.setupHover(container, this.compositeAction.tooltip);
-    const action = container.ownerDocument.createElement("span");
+    const action = h(container.ownerDocument, "span");
     action.className = "zeta-composite-bar-action";
     const label = this.own(new IconLabel({
       label: options.label,
@@ -133,7 +133,7 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
     container.setAttribute("aria-haspopup", "menu");
     container.setAttribute("aria-expanded", "false");
     this.setupHover(container, this.action.tooltip);
-    const action = container.ownerDocument.createElement("span");
+    const action = h(container.ownerDocument, "span");
     action.className = "zeta-composite-bar-action";
     const label = this.own(new IconLabel({
       label: this.action.label,

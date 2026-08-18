@@ -1,6 +1,6 @@
 import "../../../workbench/contrib/chat/browser/media/chat.css";
 import "./sessionsChatView.css";
-import { addDisposableListener } from "../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IDimension, IRectangle } from "../../../base/browser/geometry.js";
 import { Direction, Grid, Sizing, type IView } from "../../../base/browser/ui/grid/grid.js";
 import { DisposableOwner, setDisposableOwner } from "../../../base/common/lifecycle.js";
@@ -53,7 +53,7 @@ export class SessionsChatView extends DisposableOwner {
     this.commandService = options.commandService;
     this.activateSelection = options.activateSelection;
     this.closeSelection = options.closeSelection;
-    this.element = ownerDocument.createElement("section");
+    this.element = h(ownerDocument, "section");
     this.element.className = "zeta-sessions-chat-view";
     this.empty = new SessionsChatEmptyView(ownerDocument);
     this.grid = this.own(new Grid<SessionsChatGridView>({ type: "leaf", view: this.empty, size: 800 }, ownerDocument, { sashPresentation: { type: "inset", gap: 8 } }));
@@ -144,10 +144,10 @@ class SessionsChatEmptyView implements IView {
   private readonly description: HTMLParagraphElement;
 
   constructor(ownerDocument: Document) {
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-sessions-chat-view-empty";
-    this.heading = ownerDocument.createElement("h2");
-    this.description = ownerDocument.createElement("p");
+    this.heading = h(ownerDocument, "h2");
+    this.description = h(ownerDocument, "p");
     this.element.append(this.heading, this.description);
     this.update("ready", undefined);
   }
@@ -186,17 +186,17 @@ class SessionsChatGridEntry extends DisposableOwner implements IView {
     super();
     const ownerDocument = options.ownerDocument;
     this.selection = options.selection;
-    this.element = ownerDocument.createElement("article");
+    this.element = h(ownerDocument, "article");
     this.element.className = "zeta-sessions-chat-slot";
-    const header = ownerDocument.createElement("div");
+    const header = h(ownerDocument, "div");
     header.className = "zeta-sessions-chat-slot-header";
-    const activate = ownerDocument.createElement("button");
+    const activate = h(ownerDocument, "button");
     activate.type = "button";
     activate.className = "zeta-sessions-chat-slot-title";
-    this.title = ownerDocument.createElement("span");
+    this.title = h(ownerDocument, "span");
     this.title.id = `zeta-sessions-chat-slot-title-${++sessionsChatPaneInstanceId}`;
     activate.append(this.title);
-    const close = ownerDocument.createElement("button");
+    const close = h(ownerDocument, "button");
     close.type = "button";
     close.className = "zeta-sessions-chat-slot-close";
     close.setAttribute("aria-label", "Close visible session");

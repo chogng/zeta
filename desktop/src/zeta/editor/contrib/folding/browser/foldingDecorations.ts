@@ -4,6 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorLineGutterDecoration } from "../../../browser/view/lineGutterDecoration.js";
 import { type EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Owns folding gutter presentation and mirrors every fold-state change. */
 export class FoldingDecorationProvider extends DisposableOwner implements EditorLineGutterDecoration {
@@ -34,7 +35,7 @@ export class FoldingDecorationProvider extends DisposableOwner implements Editor
 
 /** Creates the folding gutter control attached to an Aster rendered line. */
 export function createAsterFoldingDecoration(ownerDocument: Document): HTMLButtonElement {
-  const element = ownerDocument.createElement("button");
+  const element = h(ownerDocument, "button");
   element.className = "aster-editor-fold-toggle";
   element.type = "button";
   element.hidden = true;

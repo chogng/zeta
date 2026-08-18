@@ -18,6 +18,7 @@ import { SessionsAuxiliarybarPart } from "../parts/sessionsAuxiliarybarPart.js";
 import { SessionsPart } from "../parts/sessionsPart.js";
 import { SessionsSidebarPart } from "../parts/sessionsSidebarPart.js";
 import { SessionsTitlebarPart } from "../parts/sessionsTitlebarPart.js";
+import { h } from "../../../base/browser/dom.js";
 
 export interface CodeSessionsWorkbenchOptions {
   readonly ownerDocument: Document;
@@ -40,7 +41,7 @@ export class CodeSessionsWorkbench extends DisposableOwner {
     const ownerDocument = options.ownerDocument;
     const profile = options.profile;
     const runtime = options.runtime;
-    this.element = ownerDocument.createElement("main");
+    this.element = h(ownerDocument, "main");
     this.element.className = "zeta-sessions-window zeta-code-sessions-window";
     let layout: SessionsWorkbenchLayout | undefined;
     let sessionsPart: SessionsPart | undefined;

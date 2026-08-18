@@ -1,12 +1,13 @@
 import { BIBLIOGRAPHY_NODE_TYPE, CITATION_NODE_TYPE, REFERENCE_NODE_TYPE } from "../common/schema.js";
 import { REFERENCE_INDEX_KEY } from "../common/references.js";
 import type { InlineNodeViewFactory, NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Block projections owned by the citation capability. */
 export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freeze({
   [BIBLIOGRAPHY_NODE_TYPE]: context => createWrapper(context, "section", "bibliography", "References"),
   [REFERENCE_NODE_TYPE]: context => {
-    const element = context.previousElement ?? context.ownerDocument.createElement("article");
+    const element = context.previousElement ?? h(context.ownerDocument, "article");
     element.className = "zeta-citation-reference";
     const key = typeof context.node.attrs.key === "string" ? context.node.attrs.key : "";
     element.dataset.referenceKey = key;
@@ -18,7 +19,7 @@ export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freez
 /** Inline projection owned by the citation capability. */
 export const inlineNodeViews: Readonly<Record<string, InlineNodeViewFactory>> = Object.freeze({
   [CITATION_NODE_TYPE]: context => {
-    const element = context.ownerDocument.createElement("span");
+    const element = h(context.ownerDocument, "span");
     const key = typeof context.node.attrs.key === "string" ? context.node.attrs.key : "";
     const explicitLabel = typeof context.node.attrs.label === "string" && context.node.attrs.label.length > 0 ? context.node.attrs.label : undefined;
     const index = context.model.getPluginState(REFERENCE_INDEX_KEY);
@@ -42,7 +43,7 @@ export const inlineNodeViews: Readonly<Record<string, InlineNodeViewFactory>> = 
 });
 
 function createWrapper(context: NodeViewContext, tagName: "section", role: string, label: string): HTMLElement {
-  const element = context.previousElement ?? context.ownerDocument.createElement(tagName);
+  const element = context.previousElement ?? h(context.ownerDocument, tagName);
   element.className = "zeta-citation-" + role;
   element.dataset.citationRole = role;
   element.setAttribute("aria-label", label);

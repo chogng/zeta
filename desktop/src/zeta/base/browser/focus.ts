@@ -11,6 +11,7 @@ import {
   isHTMLElement,
   isNode,
 } from "./dom.js";
+import { disposableWindowTimeout } from "./scheduler.js";
 import {
   type BrowserWindow,
   getWindow,
@@ -345,13 +346,10 @@ class FocusTracker extends DisposableOwner implements IFocusTracker {
   private scheduleRefresh(): void {
     if (this.pendingRefresh.value) return;
     const targetWindow = getWindow(this.target);
-    const handle = targetWindow.setTimeout(() => {
+    this.pendingRefresh.replace(disposableWindowTimeout(targetWindow, () => {
       this.pendingRefresh.clear();
       this.refreshState();
-    }, 0);
-    this.pendingRefresh.replace(toDisposable(() =>
-      targetWindow.clearTimeout(handle)
-    ));
+    }, 0));
   }
 
   private setFocused(focused: boolean): void {

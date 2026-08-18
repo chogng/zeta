@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type GitCommitChangesParams, type GitCommitFileParams, type GitCommitParams, type GitGraphParams, type GitPathsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type GitChangeFileParams, type GitCommitChangesParams, type GitCommitFileParams, type GitCommitParams, type GitGraphParams, type GitPathsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -31,6 +31,11 @@ export function gitIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute
       channel: "zeta:git:commit-file",
       validate: commitFileParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitFile"], params),
+    }),
+    route({
+      channel: "zeta:git:change-file",
+      validate: changeFileParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/changeFile"], params),
     }),
     route({
       channel: "zeta:git:stage",
@@ -124,6 +129,15 @@ function commitFileParams(value: unknown): GitCommitFileParams {
   const path = relativeWorkspacePath(params.path);
   if (!path) throw new Error("path must not be empty");
   return { objectId: objectId(params.objectId), path };
+}
+
+function changeFileParams(value: unknown): GitChangeFileParams {
+  const params = record(value, ["path", "comparison"]);
+  const path = relativeWorkspacePath(params.path);
+  if (!path) throw new Error("path must not be empty");
+  const comparison = string(params.comparison, "comparison");
+  if (comparison !== "staged" && comparison !== "unstaged") throw new Error("comparison must be staged or unstaged");
+  return { path, comparison };
 }
 
 function objectId(value: unknown): string {

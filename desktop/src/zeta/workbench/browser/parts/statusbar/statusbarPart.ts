@@ -1,5 +1,5 @@
 import "./statusbarpart.css";
-import { addDisposableListener, isNode } from "../../../../base/browser/dom.js";
+import { addDisposableListener, isNode, h } from "../../../../base/browser/dom.js";
 import { WorkbenchPart } from "../../part.js";
 import { StatusbarHeight } from "../workbenchPartDimensions.js";
 import { StatusbarEntryItem } from "./statusbarItem.js";
@@ -99,7 +99,7 @@ export class StatusbarPart extends WorkbenchPart {
       const belongsToCompactRun = entry.compactGroup !== undefined && (entries[index - 1]?.compactGroup === entry.compactGroup || entries[index + 1]?.compactGroup === entry.compactGroup);
       if (belongsToCompactRun) {
         if (!compactGroupElement || compactGroupId !== entry.compactGroup) {
-          compactGroupElement = container.ownerDocument.createElement("div");
+          compactGroupElement = h(container.ownerDocument, "div");
           compactGroupElement.className = "zeta-statusbar-compact-group";
           compactGroupElement.dataset.compactGroup = entry.compactGroup;
           compactGroupId = entry.compactGroup;
@@ -172,7 +172,7 @@ export class StatusbarPart extends WorkbenchPart {
 }
 
 function createItemsContainer(ownerDocument: Document, alignment: "left" | "right"): HTMLDivElement {
-  const container = ownerDocument.createElement("div");
+  const container = h(ownerDocument, "div");
   container.className = `zeta-statusbar-items zeta-statusbar-items-${alignment}`;
   return container;
 }

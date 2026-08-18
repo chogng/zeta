@@ -1,5 +1,5 @@
 import "./menubarControl.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
 import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -30,7 +30,7 @@ export class BrowserMenubarControl extends DisposableOwner
   ) {
     super();
     this.contextMenuService = contextMenuService;
-    this.element = ownerDocument.createElement("nav");
+    this.element = h(ownerDocument, "nav");
     this.element.className = "zeta-menubar";
     this.element.setAttribute("aria-label", "Application menu");
     this.defer(() => this.element.remove());

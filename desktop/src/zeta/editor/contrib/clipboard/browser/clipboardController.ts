@@ -1,4 +1,4 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { isWindows } from "../../../../base/common/platform.js";
 import { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy, getEditorClipboardEntries, type EditorClipboardEntry } from "../common/clipboard.js";
@@ -475,7 +475,7 @@ function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): bo
 /** Reduces untrusted HTML to inert deterministic text for Aster paste and drop paths. */
 export function readEditorHtmlText(html: string, ownerDocument: Document): string {
   if (html.length === 0) return "";
-  const template = ownerDocument.createElement("template");
+  const template = h(ownerDocument, "template");
   template.innerHTML = html;
   const parts: string[] = [];
   appendHtmlClipboardText(template.content, parts);

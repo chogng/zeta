@@ -362,23 +362,6 @@
   font-size: var(--zeta-font-size-label2);
 }
 
-.zeta-scm-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 0 8px 8px;
-}
-
-.zeta-scm-branch {
-  flex: 1 1 120px;
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .zeta-scm-remote-actions {
   gap: 4px;
 }
@@ -448,46 +431,60 @@
   width: calc(100% - 16px);
 }
 
-.zeta-scm-status {
-  min-height: 18px;
-  padding: 0 8px 6px;
-  color: color-mix(in srgb, currentColor 70%, transparent);
-  font-size: 12px;
-}
-
 .zeta-scm-changes {
   min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
-}
-
-.zeta-scm-section + .zeta-scm-section {
-  margin-top: 8px;
+  scrollbar-gutter: stable;
 }
 
 .zeta-scm-section-heading {
   display: flex;
+  min-width: 0;
+  min-height: 22px;
   align-items: center;
   margin: 0;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 0 8px 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.zeta-scm-section-heading:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-scm-section-label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zeta-scm-section-count {
-  margin-left: auto;
+  flex: 0 0 auto;
+  min-width: 18px;
   opacity: 0.65;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
-.zeta-scm-section-action {
-  margin-left: 6px;
-  padding: 1px 5px;
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
+.zeta-scm-action-toolbar {
+  flex: 0 0 auto;
+}
+
+.zeta-scm-section-actions,
+.zeta-scm-change-actions {
+  display: none;
+}
+
+.zeta-scm-section-heading:hover > .zeta-scm-section-actions,
+.zeta-scm-section-heading:focus-within > .zeta-scm-section-actions,
+.zeta-scm-change:hover > .zeta-scm-change-actions,
+.zeta-scm-change:focus-within > .zeta-scm-change-actions {
+  display: flex;
 }
 
 .zeta-scm-list {
@@ -498,40 +495,81 @@
 
 .zeta-scm-change {
   display: flex;
-  gap: 8px;
+  min-width: 0;
+  min-height: 22px;
   align-items: center;
-  min-height: 24px;
-  padding: 2px 8px 2px 16px;
+  padding: 0 8px 0 16px;
+  line-height: 22px;
+}
+
+.zeta-scm-change-open {
+  display: flex;
+  min-width: 0;
+  min-height: 22px;
+  flex: 1 1 auto;
+  align-items: center;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .zeta-scm-change:hover {
-  background: color-mix(in srgb, currentColor 7%, transparent);
+  background: var(--zeta-list-hover-background);
 }
 
-.zeta-scm-change-path {
+.zeta-scm-change-open:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-scm-change-open:disabled {
+  cursor: default;
+}
+
+.zeta-scm-change-label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.zeta-scm-change-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 3px;
-}
-
-.zeta-scm-change-action {
-  margin-left: 0;
-  padding: 1px 4px;
-  font-size: 10px;
+.zeta-scm-change-description {
+  min-width: 0;
+  flex: 1 10 auto;
+  overflow: hidden;
+  margin-left: 6px;
+  color: var(--zeta-muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zeta-scm-change-status {
   flex: 0 0 16px;
   width: 16px;
+  margin-left: 4px;
   color: color-mix(in srgb, currentColor 78%, transparent);
   font-weight: 700;
   text-align: center;
+}
+
+.zeta-scm-change-status.status-added,
+.zeta-scm-change-status.status-untracked {
+  color: var(--zeta-success-foreground);
+}
+
+.zeta-scm-change-status.status-deleted,
+.zeta-scm-change-status.status-unmerged {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-scm-change-status.status-modified,
+.zeta-scm-change-status.status-renamed,
+.zeta-scm-change-status.status-copied,
+.zeta-scm-change-status.status-typeChanged {
+  color: var(--zeta-warning-foreground);
 }

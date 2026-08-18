@@ -10,6 +10,7 @@ import type { IViewDescriptorService } from "../../services/views/common/viewDes
 import { CompositePart } from "./compositePart.js";
 import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositebar/compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
+import { h } from "../../../base/browser/dom.js";
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
@@ -65,14 +66,14 @@ export class PaneCompositePart extends CompositePart {
       containerFilter: options.compositeBarContainerFilter,
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
-    this.titleContentElement = options.ownerDocument.createElement("div");
+    this.titleContentElement = h(options.ownerDocument, "div");
     this.titleContentElement.className = "zeta-pane-composite-title-content";
     this.titleContentElement.append(this.compositeBar.element);
-    this.titleActionsSlotElement = options.ownerDocument.createElement("div");
+    this.titleActionsSlotElement = h(options.ownerDocument, "div");
     this.titleActionsSlotElement.className = "zeta-pane-composite-title-actions";
-    this.viewTitleActionsElement = options.ownerDocument.createElement("div");
+    this.viewTitleActionsElement = h(options.ownerDocument, "div");
     this.viewTitleActionsElement.className = "zeta-pane-composite-title-view-actions";
-    this.partTitleActionsElement = options.ownerDocument.createElement("div");
+    this.partTitleActionsElement = h(options.ownerDocument, "div");
     this.partTitleActionsElement.className = "zeta-pane-composite-title-part-actions";
     this.titleActionsSlotElement.append(this.viewTitleActionsElement, this.partTitleActionsElement);
     this.titleElement.append(this.titleContentElement, this.titleActionsSlotElement);

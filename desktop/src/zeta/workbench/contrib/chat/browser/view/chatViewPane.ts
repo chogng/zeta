@@ -11,6 +11,7 @@ import type { IActiveSessionThread, IUntitledChatSession, Session, SessionThread
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -72,12 +73,12 @@ export class ChatViewPane extends ViewPane {
       menuService,
       contextMenuService,
     ));
-    this.paneHost = options.ownerDocument.createElement("div");
+    this.paneHost = h(options.ownerDocument, "div");
     this.paneHost.className = "zeta-chat-pane-host";
-    this.empty = options.ownerDocument.createElement("div");
+    this.empty = h(options.ownerDocument, "div");
     this.empty.className = "zeta-chat-empty zeta-chat-view-empty";
     this.empty.textContent = "Start a new chat to begin.";
-    const body = options.ownerDocument.createElement("div");
+    const body = h(options.ownerDocument, "div");
     body.className = "zeta-chat-body";
     body.append(this.paneHost);
     this.contentElement.append(body);

@@ -39,7 +39,7 @@ export function registerGitViews(
       order: 1,
       canToggleVisibility: false,
       ctorDescriptor: new SyncDescriptor(ScmViewPane, {
-        serviceDependencies: [IGitService],
+        serviceDependencies: [IGitService, IFileIconThemeService, IEditorService],
       }),
     },
     {

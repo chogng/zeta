@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import {
   type AriaAutoComplete,
   type AriaRole,
@@ -48,12 +48,12 @@ export class InputBox extends DisposableOwner {
   constructor(options: InputBoxOptions = {}) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-input-box";
     if (options.presentation === "field") this.element.classList.add("zeta-input-box-field");
     this.defer(() => this.element.remove());
 
-    this.inputElement = ownerDocument.createElement("input");
+    this.inputElement = h(ownerDocument, "input");
     this.inputElement.type = options.type ?? "text";
     this.inputElement.placeholder = options.placeholder ?? "";
     this.inputElement.disabled = options.enabled === false;
@@ -88,7 +88,7 @@ export class InputBox extends DisposableOwner {
     }
 
     this._readOnly = options.readOnly ?? false;
-    this.message = ownerDocument.createElement("div");
+    this.message = h(ownerDocument, "div");
     this.message.id = `zeta-input-message-${inputBoxSequence++}`;
     this.message.className = "zeta-input-box-message";
     setRole(this.message, "alert");

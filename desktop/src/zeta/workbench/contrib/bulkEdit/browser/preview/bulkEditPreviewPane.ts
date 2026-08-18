@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { type BulkEditPreviewEntry, type BulkEditPreviewModel } from "../../common/bulkEdit.js";
@@ -25,17 +25,17 @@ export class BulkEditPreviewPane extends ViewPane {
     super(options);
     this.contentElement.classList.add("zeta-bulk-edit");
     const document = options.ownerDocument;
-    const toolbar = document.createElement("div");
+    const toolbar = h(document, "div");
     toolbar.className = "zeta-bulk-edit-toolbar";
     this.selectAllButton = this.createButton(document, "Select all", "zeta-bulk-edit-select-all");
     this.applyButton = this.createButton(document, "Apply selected", "zeta-bulk-edit-apply");
     this.cancelButton = this.createButton(document, "Cancel", "zeta-bulk-edit-cancel");
     toolbar.append(this.selectAllButton, this.applyButton, this.cancelButton);
-    this.statusElement = document.createElement("div");
+    this.statusElement = h(document, "div");
     this.statusElement.className = "zeta-bulk-edit-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");
-    this.listElement = document.createElement("ul");
+    this.listElement = h(document, "ul");
     this.listElement.className = "zeta-bulk-edit-list";
     this.listElement.setAttribute("aria-label", "Bulk edit preview");
     this.contentElement.append(toolbar, this.statusElement, this.listElement);
@@ -86,7 +86,7 @@ export class BulkEditPreviewPane extends ViewPane {
   }
 
   private createButton(document: Document, label: string, className: string): HTMLButtonElement {
-    const button = document.createElement("button");
+    const button = h(document, "button");
     button.type = "button";
     button.className = className;
     button.textContent = label;
@@ -169,24 +169,24 @@ export class BulkEditPreviewPane extends ViewPane {
 
   private renderEntry(entry: BulkEditPreviewEntry): HTMLLIElement {
     const document = this.element.ownerDocument;
-    const item = document.createElement("li");
+    const item = h(document, "li");
     item.className = `zeta-bulk-edit-entry${entry.error ? " has-error" : ""}`;
-    const header = document.createElement("div");
+    const header = h(document, "div");
     header.className = "zeta-bulk-edit-entry-header";
-    const checkbox = document.createElement("input");
+    const checkbox = h(document, "input");
     checkbox.type = "checkbox";
     checkbox.checked = this.selected.has(entry.index);
     checkbox.disabled = entry.error !== undefined;
     checkbox.dataset.bulkEditIndex = String(entry.index);
     checkbox.setAttribute("aria-label", `Select ${resourceLabel(entry.resource)}`);
-    const kind = document.createElement("span");
+    const kind = h(document, "span");
     kind.className = "zeta-bulk-edit-kind";
     kind.textContent = entry.kind;
-    const resource = document.createElement("span");
+    const resource = h(document, "span");
     resource.className = "zeta-bulk-edit-resource";
     resource.textContent = entry.secondaryResource ? `${resourceLabel(entry.resource)} → ${resourceLabel(entry.secondaryResource)}` : resourceLabel(entry.resource);
     header.append(checkbox, kind, resource);
-    const detail = document.createElement("div");
+    const detail = h(document, "div");
     detail.className = "zeta-bulk-edit-detail";
     detail.textContent = entry.error ?? entry.detail;
     item.append(header, detail);
@@ -196,11 +196,11 @@ export class BulkEditPreviewPane extends ViewPane {
 
   private renderTextChange(before: string, after: string): HTMLElement {
     const document = this.element.ownerDocument;
-    const details = document.createElement("details");
+    const details = h(document, "details");
     details.className = "zeta-bulk-edit-text-change";
-    const summary = document.createElement("summary");
+    const summary = h(document, "summary");
     summary.textContent = "Show text change";
-    const content = document.createElement("pre");
+    const content = h(document, "pre");
     content.textContent = `- ${clipText(before)}\n+ ${clipText(after)}`;
     details.append(summary, content);
     return details;

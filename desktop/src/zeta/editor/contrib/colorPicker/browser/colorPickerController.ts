@@ -1,6 +1,6 @@
 import "./media/colorPicker.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -19,10 +19,10 @@ export class ColorPickerController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Aster color picker dependencies must share a text model");
     const document = viewport.element.ownerDocument;
-    this.element = document.createElement("div");
+    this.element = h(document, "div");
     this.element.className = "aster-editor-color-picker";
     this.element.hidden = true;
-    this.input = document.createElement("input");
+    this.input = h(document, "input");
     this.input.type = "color";
     this.input.setAttribute("aria-label", "Choose color");
     this.element.append(this.input);

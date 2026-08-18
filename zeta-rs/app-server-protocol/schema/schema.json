@@ -4253,6 +4253,22 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/changeFile"
+            },
+            "params": {
+              "$ref": "#/$defs/GitChangeFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/branch/switch"
             },
             "params": {
@@ -7221,6 +7237,22 @@
             },
             "result": {
               "$ref": "#/$defs/GitCommitFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/changeFile"
+            },
+            "result": {
+              "$ref": "#/$defs/GitChangeFileResult"
             }
           },
           "required": [
@@ -11919,6 +11951,48 @@
       },
       "required": [
         "name"
+      ]
+    },
+    "GitChangeFileComparisonDto": {
+      "description": "Selects the two repository states represented by a current SCM resource group.",
+      "type": "string",
+      "enum": [
+        "staged",
+        "unstaged"
+      ]
+    },
+    "GitChangeFileParams": {
+      "description": "Identifies one current repository change and the SCM group that owns it.",
+      "type": "object",
+      "properties": {
+        "comparison": {
+          "$ref": "#/$defs/GitChangeFileComparisonDto"
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 32768,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path",
+        "comparison"
+      ]
+    },
+    "GitChangeFileResult": {
+      "description": "Before/after editor content for one current staged or unstaged change.",
+      "type": "object",
+      "properties": {
+        "modified": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "original": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        }
+      },
+      "required": [
+        "original",
+        "modified"
       ]
     },
     "GitChangeStatusDto": {

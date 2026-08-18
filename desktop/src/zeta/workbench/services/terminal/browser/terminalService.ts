@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionPersistence, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcessService.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { ITerminalCommandStatusEvent, ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
 
 const POLL_DELAY_MILLIS = 35;
@@ -27,7 +28,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   readonly onDidChangeInstances: Event<void> = this._onDidChangeInstances.event;
   readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined> = this._onDidChangeActiveInstance.event;
 
-  constructor(processService: ITerminalProcessService) {
+  constructor(processService: ITerminalProcessService, private readonly workspaceContext: IWorkspaceContextService) {
     super();
     this.processService = processService;
     this.own(processService.onConnectionState((state) => {
@@ -60,10 +61,12 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   }
 
   async getProfiles(): Promise<readonly ITerminalProfile[]> {
+    this.requireWorkspaceFolder();
     return this.processService.listProfiles();
   }
 
   async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
+    this.requireWorkspaceFolder();
     const created = await this.processService.create({
       rows: options.dimensions.rows,
       cols: options.dimensions.cols,
@@ -89,6 +92,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
   }
 
   async relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void> {
+    this.requireWorkspaceFolder();
     if (!this._instances.includes(instance as TerminalInstance)) {
       throw new Error("Terminal must belong to this TerminalService");
     }
@@ -160,6 +164,12 @@ export class TerminalService extends DisposableOwner implements ITerminalService
     }
     for (const instance of this._instances) {
       instance.loseConnection();
+    }
+  }
+
+  private requireWorkspaceFolder(): void {
+    if (this.workspaceContext.getWorkspace().folders.length !== 1) {
+      throw new Error("TerminalUnavailable: Terminal requires one workspace folder");
     }
   }
 }

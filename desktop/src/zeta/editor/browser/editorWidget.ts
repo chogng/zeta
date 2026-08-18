@@ -32,6 +32,7 @@ import type { DocumentCollaborationPresence } from "../common/services/documentC
 import type { DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
+import { h, fragment as createFragment } from "../../base/browser/dom.js";
 
 export interface EditorWidgetOptions {
   readonly onSave?: () => Promise<void | boolean>;
@@ -186,9 +187,9 @@ export class EditorWidget extends DisposableOwner {
         },
       });
     }
-    const container = parent.ownerDocument.createElement("div");
+    const container = h(parent.ownerDocument, "div");
     container.className = "zeta-text-editor-widget-pane";
-    const layoutContainer = parent.ownerDocument.createElement("div");
+    const layoutContainer = h(parent.ownerDocument, "div");
     layoutContainer.className = "zeta-text-editor-widget-layout";
     const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator({ ownerDocument: parent.ownerDocument, onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
@@ -353,7 +354,7 @@ export class EditorWidget extends DisposableOwner {
     }
     const activeNodeIds = new Set<string>();
     const decorations = resolveViewDecorations(model, remotePresenceDecorations(model.document, this.remotePresences));
-    const fragment = container.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(container.ownerDocument);
     for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
     container.replaceChildren(fragment);
     this.outlineNavigator?.setOutline(this.getOutline());
@@ -529,7 +530,7 @@ export class EditorWidget extends DisposableOwner {
       element.replaceChildren();
     }
     const isNew = !textarea;
-    textarea ??= element.ownerDocument.createElement("textarea");
+    textarea ??= h(element.ownerDocument, "textarea");
     textarea.className = "zeta-document-text-input";
     textarea.dataset.blockId = node.id;
     textarea.readOnly = this.isReadOnly();
@@ -601,7 +602,7 @@ export class EditorWidget extends DisposableOwner {
     if (!editor) {
       this.embeddedEditors.get(node.id)?.dispose();
       this.embeddedEditors.delete(node.id);
-      const createdEditor = element.ownerDocument.createElement("div");
+      const createdEditor = h(element.ownerDocument, "div");
       editor = createdEditor;
       createdEditor.className = "zeta-document-rich-text-input";
       createdEditor.dataset.blockId = node.id;
@@ -630,7 +631,7 @@ export class EditorWidget extends DisposableOwner {
   }
 
   private renderInlineContent(editor: HTMLDivElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
-    const fragment = editor.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(editor.ownerDocument);
     for (const child of node.content) {
       if (child.text !== undefined) {
         const linkMark = child.marks.find(mark => mark.type === "link");
@@ -649,7 +650,7 @@ export class EditorWidget extends DisposableOwner {
           const to = offsets[index + 1] ?? child.text.length;
           if (to < from) continue;
           const activeDecorations = localDecorations.filter(decoration => decoration.from < start + to && decoration.to > start + from).map(decoration => decoration.decoration);
-          const run = editor.ownerDocument.createElement(linkMark ? "a" : "span");
+          const run = h(editor.ownerDocument, linkMark ? "a" : "span");
           run.className = "zeta-document-inline-run";
           run.dataset.textNodeId = child.id;
           for (const mark of child.marks) run.classList.add(`zeta-document-mark-${mark.type}`);
@@ -665,11 +666,11 @@ export class EditorWidget extends DisposableOwner {
         continue;
       }
       if (child.type === "hardBreak") {
-        fragment.append(editor.ownerDocument.createElement("br"));
+        fragment.append(h(editor.ownerDocument, "br"));
         continue;
       }
       if (child.type === "image") {
-        const image = editor.ownerDocument.createElement("img");
+        const image = h(editor.ownerDocument, "img");
         image.className = "zeta-document-inline-image";
         image.dataset.inlineNodeId = child.id;
         image.draggable = false;
@@ -1419,7 +1420,7 @@ export class EditorWidget extends DisposableOwner {
   }
 
   private renderChildren(element: HTMLElement, node: DocumentNode, model: DocumentModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): void {
-    const fragment = element.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(element.ownerDocument);
     for (const child of node.content) fragment.append(this.renderNode(child, model, previousElements, activeNodeIds, decorations));
     element.replaceChildren(fragment);
   }
@@ -1427,7 +1428,7 @@ export class EditorWidget extends DisposableOwner {
   private reuseElement(node: DocumentNode, previousElements: Map<string, HTMLElement>, document: Document, tagName: string): HTMLElement {
     const previous = previousElements.get(node.id);
     if (previous?.tagName.toLowerCase() === tagName) return previous;
-    return document.createElement(tagName);
+    return h(document, tagName);
   }
 
   private requireContainer(): HTMLDivElement {
@@ -1542,7 +1543,7 @@ export class EditorWidget extends DisposableOwner {
 }
 
 function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): HTMLElement {
-  const element = ownerDocument.createElement("span");
+  const element = h(ownerDocument, "span");
   element.className = "zeta-document-inline-node";
   const label = node.attrs.label;
   element.textContent = typeof label === "string" && label.length > 0 ? label : `[${node.type}]`;

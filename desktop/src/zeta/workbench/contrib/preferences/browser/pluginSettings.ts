@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 import "./media/connectorSettings.css";
@@ -14,7 +14,7 @@ export class PluginSettingsPane extends DisposableOwner {
 
   constructor(private readonly document: Document, private readonly plugins: IPluginService) {
     super();
-    this.element = document.createElement("div");
+    this.element = h(document, "div");
     this.element.className = "zeta-integration-settings";
     this.own(plugins.onDidChange(() => void this.reload()));
     void this.reload();
@@ -23,7 +23,7 @@ export class PluginSettingsPane extends DisposableOwner {
 
   private async reload(): Promise<void> {
     const loadGeneration = ++this.loadGeneration;
-    const loading = this.document.createElement("p");
+    const loading = h(this.document, "p");
     loading.className = "zeta-settings-message";
     loading.textContent = "Loading installed plugins…";
     this.element.replaceChildren(loading);
@@ -39,14 +39,14 @@ export class PluginSettingsPane extends DisposableOwner {
   private render(catalog: PluginCatalogView): void {
     this.rows.clear();
     if (catalog.packages.length === 0) {
-      const empty = this.document.createElement("p");
+      const empty = h(this.document, "p");
       empty.className = "zeta-settings-message";
       empty.textContent = "No legacy plugins are installed. Discover new packages in Marketplace.";
       this.element.replaceChildren(empty);
       return;
     }
-    const fragment = this.document.createDocumentFragment();
-    const introduction = this.document.createElement("p");
+    const fragment = createFragment(this.document);
+    const introduction = h(this.document, "p");
     introduction.className = "zeta-settings-message";
     introduction.textContent = "Plugin installation is managed in Marketplace. This section controls activation and grants for existing Plugin packages.";
     fragment.append(introduction);
@@ -55,17 +55,17 @@ export class PluginSettingsPane extends DisposableOwner {
   }
 
   private pluginCard(catalog: PluginCatalogView, plugin: PluginPackageView): HTMLElement {
-    const card = this.document.createElement("section");
+    const card = h(this.document, "section");
     card.className = "zeta-integration-card";
-    const heading = this.document.createElement("div");
+    const heading = h(this.document, "div");
     heading.className = "zeta-integration-heading";
-    const title = this.document.createElement("h4");
+    const title = h(this.document, "h4");
     title.textContent = `${plugin.id} · ${plugin.version}`;
-    const state = this.document.createElement("span");
+    const state = h(this.document, "span");
     state.className = `zeta-integration-state is-${plugin.effective ? "connected" : "disconnected"}`;
     state.textContent = status(plugin);
     heading.append(title, state);
-    const feedback = this.document.createElement("p");
+    const feedback = h(this.document, "p");
     feedback.className = "zeta-integration-feedback";
     feedback.setAttribute("role", "status");
     card.append(heading);
@@ -79,7 +79,7 @@ export class PluginSettingsPane extends DisposableOwner {
   }
 
   private action(label: string, invoke: () => Promise<void>, feedback: HTMLElement, danger = false): HTMLButtonElement {
-    const button = this.document.createElement("button");
+    const button = h(this.document, "button");
     button.type = "button";
     button.className = `zeta-theme-action${danger ? " is-danger" : ""}`;
     button.textContent = label;

@@ -395,6 +395,8 @@ test("ScmViewPane groups App Server Git status", async () => {
   let stagedPaths: readonly string[] | undefined;
   let committedMessage: string | undefined;
   let statusListener: ((status: GitStatus) => void) | undefined;
+  const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged" }> = [];
+  const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
   const first: GitStatus = {
     streamInstanceId: "git-stream-1",
     revision: 1,
@@ -407,7 +409,7 @@ test("ScmViewPane groups App Server Git status", async () => {
     },
     changes: [
       change("staged.ts", "added", "unmodified"),
-      change("working.ts", "unmodified", "modified"),
+      change("src/working.ts", "unmodified", "modified"),
       change("both.ts", "modified", "modified"),
       { ...change("conflict.ts", "unmerged", "unmerged"), conflicted: true },
     ],
@@ -445,6 +447,12 @@ test("ScmViewPane groups App Server Git status", async () => {
       fetch: async () => first,
       pull: async () => first,
       push: async () => first,
+      changeFile: async (path: string, comparison: "staged" | "unstaged") => {
+        changeFileRequests.push({ path, comparison });
+        return comparison === "staged"
+          ? { original: { kind: "text" as const, text: "head\n" }, modified: { kind: "text" as const, text: "index\n" } }
+          : { original: { kind: "text" as const, text: "index\n" }, modified: { kind: "text" as const, text: "worktree\n" } };
+      },
       onDidChangeStatus: (listener: (status: GitStatus) => void) => {
         statusListener = listener;
         const dispose = () => {
@@ -461,11 +469,13 @@ test("ScmViewPane groups App Server Git status", async () => {
       id: "zeta.git",
       title: "Changes",
       ownerDocument: browser.window.document,
-    }, gitService);
+    }, gitService, testFileIconThemeService(), testEditorService(opened));
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
-    assert.equal(pane.element.querySelector(".zeta-scm-branch")?.textContent, "main ↑2 ↓1");
+    assert.equal(pane.element.querySelector(".zeta-scm-branch"), null);
+    assert.equal(pane.element.querySelector(".zeta-scm-summary"), null);
+    assert.ok(pane.element.querySelector(".zeta-scm-status")?.classList.contains("zeta-aria-live"));
     assert.deepEqual(
       [...pane.element.querySelectorAll(".zeta-scm-section-heading > span:first-child")].map((element) => element.textContent),
       ["Merge Changes", "Staged Changes", "Changes"],
@@ -475,11 +485,58 @@ test("ScmViewPane groups App Server Git status", async () => {
       ["1", "2", "2"],
     );
 
-    const stage = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage working.ts"]');
+    const workingLabel = [...pane.element.querySelectorAll<HTMLElement>(".zeta-scm-change-label")]
+      .find((element) => element.querySelector(".zeta-icon-label-text")?.textContent === "working.ts");
+    assert.ok(workingLabel);
+    assert.equal(workingLabel.querySelector(".zeta-scm-change-description")?.textContent, "src");
+    assert.equal(workingLabel.querySelector(".zeta-icon-label-icon")?.getAttribute("data-file-icon"), "working.ts");
+    assert.equal(pane.element.querySelector<HTMLButtonElement>('button[aria-label="Merge conflict in conflict.ts"]')?.disabled, true);
+
+    const stagedOpen = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open staged changes for staged.ts"]');
+    assert.ok(stagedOpen);
+    stagedOpen.click();
+    await waitFor(() => opened.length === 1);
+    assert.deepEqual(changeFileRequests[0], { path: "staged.ts", comparison: "staged" });
+    assert.equal(opened[0].input.contentType, "application/vnd.aster.editor-diff");
+    assert.equal(opened[0].input.label, "staged.ts (HEAD) ↔ staged.ts (Index)");
+    assert.equal(opened[0].options?.pinned, false);
+
+    const workingOpen = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Open changes for src/working.ts"]');
+    assert.ok(workingOpen);
+    workingOpen.click();
+    await waitFor(() => opened.length === 2);
+    assert.deepEqual(changeFileRequests[1], { path: "src/working.ts", comparison: "unstaged" });
+    assert.equal(opened[1].input.contentType, "application/vnd.aster.editor-diff");
+    assert.equal(opened[1].input.label, "working.ts (Index) ↔ working.ts (Working Tree)");
+    assert.equal(opened[1].options?.pinned, false);
+
+    workingOpen.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, detail: 2 }));
+    await waitFor(() => opened.length === 3);
+    assert.equal(opened[2].options?.pinned, true);
+
+    const stageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage All Changes"]');
+    const discardAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Discard All Changes"]');
+    assert.equal(stageAll?.dataset.icon, "add");
+    assert.equal(discardAll?.dataset.icon, "discard");
+    assert.ok(stageAll?.querySelector(".zeta-icon"));
+    assert.ok(discardAll?.querySelector(".zeta-icon"));
+    const unstageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Unstage All Changes"]');
+    const unstage = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Unstage staged.ts"]');
+    assert.equal(unstageAll?.dataset.icon, "remove");
+    assert.equal(unstage?.dataset.icon, "remove");
+    assert.ok(unstageAll?.querySelector(".zeta-icon"));
+    assert.ok(unstage?.querySelector(".zeta-icon"));
+
+    const stage = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]');
+    const discard = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Discard src/working.ts"]');
     assert.ok(stage);
+    assert.equal(stage.dataset.icon, "add");
+    assert.equal(discard?.dataset.icon, "discard");
+    assert.ok(stage.querySelector(".zeta-icon"));
+    assert.ok(discard?.querySelector(".zeta-icon"));
     stage.click();
     await waitFor(() => stagedPaths !== undefined);
-    assert.deepEqual(stagedPaths, ["working.ts"]);
+    assert.deepEqual(stagedPaths, ["src/working.ts"]);
 
     const message = pane.element.querySelector<HTMLTextAreaElement>('[aria-label="Commit message"]');
     const commit = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-commit");
@@ -550,19 +607,21 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
       id: "zeta.git.restart",
       title: "Changes",
       ownerDocument: browser.window.document,
-    }, gitService);
+    }, gitService, testFileIconThemeService(), testEditorService());
     browser.window.document.body.append(pane.element);
-    await waitFor(() => pane.element.querySelector(".zeta-scm-branch")?.textContent === "before");
+    await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
+    assert.equal(pane.element.querySelector(".zeta-scm-branch"), null);
 
     assert.ok(readyListener);
     readyListener();
-    await waitFor(() => pane.element.querySelector(".zeta-scm-branch")?.textContent === "after");
+    await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "No changes.");
     assert.equal(statusRequest, 2);
 
     assert.ok(statusListener);
     statusListener(latePrevious);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(pane.element.querySelector(".zeta-scm-branch")?.textContent, "after");
+    assert.equal(pane.element.querySelector(".zeta-scm-status")?.textContent, "No changes.");
+    assert.equal(pane.element.querySelector('[aria-label="Open changes for before.ts"]'), null);
   } finally {
     browser.window.close();
     for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);

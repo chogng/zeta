@@ -12,6 +12,7 @@ import {
   onDidRegisterWindow,
   onWillUnregisterWindow,
 } from "./window.js";
+import { h } from "./dom.js";
 
 /** A disposable stylesheet attached to one document. */
 export class ManagedStyleSheet extends DisposableOwner {
@@ -22,7 +23,7 @@ export class ManagedStyleSheet extends DisposableOwner {
     cssText = "",
   ) {
     super();
-    const element = ownerDocument.createElement("style");
+    const element = h(ownerDocument, "style");
     this.element = element;
     element.type = "text/css";
     element.media = "screen";
@@ -86,7 +87,7 @@ export function createStyleSheet(
   readonly element: HTMLStyleElement;
   readonly registration: IDisposable;
 } {
-  const element = ownerDocument.createElement("style");
+  const element = h(ownerDocument, "style");
   element.type = "text/css";
   element.media = "screen";
   element.textContent = cssText;

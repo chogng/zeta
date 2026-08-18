@@ -1,6 +1,6 @@
 import "./media/sessionsTitlebarPart.css";
 import "../common/sessionsControls.css";
-import { addDisposableListener } from "../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
@@ -17,16 +17,16 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 
   constructor(ownerDocument: Document, profile: SessionsProfile, viewService: ISessionsViewService, delegate: SessionsTitlebarPartDelegate) {
     super("titlebar", ownerDocument);
-    const returnButton = ownerDocument.createElement("button");
+    const returnButton = h(ownerDocument, "button");
     returnButton.type = "button";
     returnButton.className = "zeta-sessions-button zeta-sessions-titlebar-button";
     returnButton.textContent = "Workbench";
     const backButton = navigationButton(ownerDocument, "←", "Back");
     const forwardButton = navigationButton(ownerDocument, "→", "Forward");
-    const title = ownerDocument.createElement("div");
+    const title = h(ownerDocument, "div");
     title.className = "zeta-sessions-titlebar-title";
     title.textContent = profile.label;
-    const newSession = ownerDocument.createElement("button");
+    const newSession = h(ownerDocument, "button");
     newSession.type = "button";
     newSession.className = "zeta-sessions-button zeta-sessions-titlebar-new-session";
     newSession.textContent = "New session";
@@ -53,7 +53,7 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 }
 
 function navigationButton(ownerDocument: Document, label: string, ariaLabel: string): HTMLButtonElement {
-  const button = ownerDocument.createElement("button");
+  const button = h(ownerDocument, "button");
   button.type = "button";
   button.className = "zeta-sessions-navigation-button";
   button.textContent = label;

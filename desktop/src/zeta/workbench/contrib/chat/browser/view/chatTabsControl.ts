@@ -1,5 +1,6 @@
 import type { TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 export interface ChatTab {
   readonly id: string;
@@ -22,7 +23,7 @@ export abstract class ChatTabsControl extends DisposableOwner {
 
   protected constructor(ownerDocument: Document, presentation: ChatTabsPresentation) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-chat-tabs-control";
     this.element.classList.add(`zeta-chat-tabs-${presentation}`);
     this.defer(() => this.element.remove());

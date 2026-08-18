@@ -6,6 +6,7 @@ import {
 import type {
   IWorkspaceOpenService,
 } from "../../../../services/workspaces/browser/workspaceOpenService.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 /**
  * Files pane shown when the current Workbench has no workspace folders.
@@ -33,7 +34,7 @@ export class EmptyView extends ViewPane {
       this.disposed = true;
     });
 
-    const message = options.ownerDocument.createElement("p");
+    const message = h(options.ownerDocument, "p");
     message.className = "zeta-empty-explorer-message";
     message.textContent = "Open a folder to explore its files.";
     this.openButton = this.own(new Button({
@@ -50,7 +51,7 @@ export class EmptyView extends ViewPane {
     this.openButton.element.classList.add(
       "zeta-empty-explorer-open-folder",
     );
-    this.statusElement = options.ownerDocument.createElement("p");
+    this.statusElement = h(options.ownerDocument, "p");
     this.statusElement.className = "zeta-empty-explorer-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");

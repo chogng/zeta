@@ -7,16 +7,17 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchDto, GitChangeStatusDto, GitCommitChangeDto, GitCommitChangesResult,
-    GitCommitFileContentDto, GitCommitFileResult, GitCommitSummaryDto, GitDiffStatisticsDto,
-    GitGraphResult, GitHeadDto, GitReferenceDto, GitReferenceKindDto, GitRemoteDto,
-    GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusResult,
-    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitBranchDto, GitChangeFileComparisonDto, GitChangeFileResult, GitChangeStatusDto,
+    GitCommitChangeDto, GitCommitChangesResult, GitCommitFileContentDto, GitCommitFileResult,
+    GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult, GitHeadDto, GitReferenceDto,
+    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto,
+    GitRepositoryIdentityDto, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto,
+    GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
-    GitChangeStatus, GitCommitChange, GitGraph, GitGraphCursor, GitHead, GitReferenceKind,
-    GitRemoteProvider, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
+    GitChangeFileComparison, GitChangeStatus, GitCommitChange, GitGraph, GitGraphCursor, GitHead,
+    GitReferenceKind, GitRemoteProvider, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
 };
 use zeta_protocol::StreamInstanceId;
 use zeta_workspace::TrustedWorkspace;
@@ -289,6 +290,31 @@ impl GitRuntime {
             .commit_file(object_id, path)
             .map_err(GitRuntimeError::Service)?;
         Ok(GitCommitFileResult {
+            original: commit_file_content(file.original()),
+            modified: commit_file_content(file.modified()),
+        })
+    }
+
+    pub(super) fn change_file(
+        &self,
+        path: &Path,
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<GitChangeFileResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let file = self
+            .service
+            .change_file(
+                path,
+                match comparison {
+                    GitChangeFileComparisonDto::Staged => GitChangeFileComparison::Staged,
+                    GitChangeFileComparisonDto::Unstaged => GitChangeFileComparison::Unstaged,
+                },
+            )
+            .map_err(GitRuntimeError::Service)?;
+        Ok(GitChangeFileResult {
             original: commit_file_content(file.original()),
             modified: commit_file_content(file.modified()),
         })

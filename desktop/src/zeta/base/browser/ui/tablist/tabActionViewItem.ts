@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
@@ -59,7 +59,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
     container.classList.toggle("preview", item.preview === true);
     if (item.state !== undefined) container.dataset.state = item.state;
 
-    const tab = container.ownerDocument.createElement("button");
+    const tab = h(container.ownerDocument, "button");
     this.tabElement = tab;
     tab.id = item.tabId;
     tab.className = "zeta-tab-label";

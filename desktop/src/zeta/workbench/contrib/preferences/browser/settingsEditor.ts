@@ -1,5 +1,5 @@
 import "./media/settingsEditor.css";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
@@ -95,10 +95,10 @@ export class SettingsEditor extends DisposableOwner {
     this.workspaceTrustService = options.workspaceTrustService;
     this.workspaceOpenService = options.workspaceOpenService;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
-    this.element = options.ownerDocument.createElement("div");
+    this.element = h(options.ownerDocument, "div");
     this.element.className = "zeta-settings-editor";
 
-    const search = options.ownerDocument.createElement("div");
+    const search = h(options.ownerDocument, "div");
     search.className = "zeta-settings-search";
     search.setAttribute("role", "search");
     this.searchInput = this.own(new InputBox({
@@ -111,10 +111,10 @@ export class SettingsEditor extends DisposableOwner {
     this.searchInput.element.classList.add("zeta-settings-search-input");
     search.append(this.searchInput.element);
 
-    const layout = options.ownerDocument.createElement("div");
+    const layout = h(options.ownerDocument, "div");
     layout.className = "zeta-settings-layout";
 
-    const navigation = options.ownerDocument.createElement("nav");
+    const navigation = h(options.ownerDocument, "nav");
     navigation.className = "zeta-settings-sidebar";
     navigation.setAttribute("aria-label", "Settings categories");
     this.navigationScrollable = this.own(new ScrollableElement({
@@ -125,12 +125,12 @@ export class SettingsEditor extends DisposableOwner {
       wheel: { consume: "when-scrolling" },
     }));
     this.navigationScrollable.element.classList.add("zeta-settings-sidebar-scrollable");
-    const navigationList = options.ownerDocument.createElement("ul");
+    const navigationList = h(options.ownerDocument, "ul");
     navigationList.className = "zeta-settings-navigation-list";
     navigationList.id = `${editorId}-navigation`;
     for (const section of SettingsSections) {
-      const item = options.ownerDocument.createElement("li");
-      const button = options.ownerDocument.createElement("button");
+      const item = h(options.ownerDocument, "li");
+      const button = h(options.ownerDocument, "button");
       button.className = "zeta-settings-navigation-item";
       button.type = "button";
       button.dataset.settingsSectionId = section.id;
@@ -145,7 +145,7 @@ export class SettingsEditor extends DisposableOwner {
       item.append(button);
       navigationList.append(item);
     }
-    this.navigationEmpty = options.ownerDocument.createElement("p");
+    this.navigationEmpty = h(options.ownerDocument, "p");
     this.navigationEmpty.className = "zeta-settings-navigation-empty";
     this.navigationEmpty.textContent = "No settings found.";
     this.navigationEmpty.setAttribute("role", "status");
@@ -153,7 +153,7 @@ export class SettingsEditor extends DisposableOwner {
     this.navigationScrollable.append(navigationList, this.navigationEmpty);
     navigation.append(this.navigationScrollable.element);
 
-    this.content = options.ownerDocument.createElement("main");
+    this.content = h(options.ownerDocument, "main");
     this.content.className = "zeta-settings-page";
     this.content.dataset.settingsContainer = "";
     this.content.tabIndex = -1;
@@ -165,14 +165,14 @@ export class SettingsEditor extends DisposableOwner {
       wheel: { consume: "when-scrolling" },
     }));
     this.contentScrollable.element.classList.add("zeta-settings-page-scrollable");
-    const contentInner = options.ownerDocument.createElement("div");
+    const contentInner = h(options.ownerDocument, "div");
     contentInner.className = "zeta-settings-page-inner";
-    this.contentHeading = options.ownerDocument.createElement("h3");
+    this.contentHeading = h(options.ownerDocument, "h3");
     this.contentHeading.id = `${editorId}-section`;
     this.content.setAttribute("aria-labelledby", this.contentHeading.id);
-    this.contentDescription = options.ownerDocument.createElement("p");
+    this.contentDescription = h(options.ownerDocument, "p");
     this.contentDescription.className = "zeta-settings-description";
-    this.sectionContent = options.ownerDocument.createElement("div");
+    this.sectionContent = h(options.ownerDocument, "div");
     this.sectionContent.className = "zeta-settings-section-content";
     this.sectionContent.dataset.settingsSectionContent = "";
     contentInner.append(this.contentHeading, this.contentDescription, this.sectionContent);
@@ -312,7 +312,7 @@ export class SettingsEditor extends DisposableOwner {
   private async renderIndexing(): Promise<void> {
     this.sectionBindings.clear();
     const document = this.element.ownerDocument;
-    const loading = document.createElement("p");
+    const loading = h(document, "p");
     loading.className = "zeta-settings-message";
     loading.textContent = "Loading search settings…";
     this.sectionContent.replaceChildren(loading);
@@ -327,11 +327,11 @@ export class SettingsEditor extends DisposableOwner {
     if (this.settingsService.activeSectionId !== "indexing") return;
     const [codeConfig, toolConfig] = loaded;
 
-    const toolGroup = document.createElement("fieldset");
+    const toolGroup = h(document, "fieldset");
     toolGroup.className = "zeta-indexing-setting";
-    const toolLegend = document.createElement("legend");
+    const toolLegend = h(document, "legend");
     toolLegend.textContent = "Agent tool search";
-    const toolHint = document.createElement("p");
+    const toolHint = h(document, "p");
     toolHint.className = "zeta-theme-setting-hint";
     toolHint.textContent = "Lexical search keeps tool metadata local. Hybrid search sends tool names, descriptions, schemas, and the query to the selected embedding model, then merges that ranking with BM25.";
     const toolEnabled = this.sectionBindings.add(new Checkbox({
@@ -340,19 +340,19 @@ export class SettingsEditor extends DisposableOwner {
       checked: toolConfig.mode === "hybridEmbedding",
     }));
     toolEnabled.element.classList.add("zeta-indexing-toggle");
-    const toolEmbedding = document.createElement("input");
+    const toolEmbedding = h(document, "input");
     toolEmbedding.className = "zeta-settings-text-input";
     toolEmbedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
     toolEmbedding.setAttribute("aria-label", "Tool Search embedding model");
     toolEmbedding.value = toolConfig.embeddingModel ? formatModel(toolConfig.embeddingModel) : "";
     toolEmbedding.disabled = !toolEnabled.checked;
-    const toolStatus = document.createElement("p");
+    const toolStatus = h(document, "p");
     toolStatus.className = "zeta-theme-setting-status";
     toolStatus.setAttribute("role", "status");
     toolStatus.textContent = toolSearchStatusMessage(toolConfig.embeddingStatus);
-    const toolActions = document.createElement("div");
+    const toolActions = h(document, "div");
     toolActions.className = "zeta-theme-json-actions";
-    const toolSave = document.createElement("button");
+    const toolSave = h(document, "button");
     toolSave.className = "zeta-theme-action";
     toolSave.type = "button";
     toolSave.textContent = "Save tool search";
@@ -378,20 +378,20 @@ export class SettingsEditor extends DisposableOwner {
     toolActions.append(toolSave);
     toolGroup.append(toolLegend, toolHint, toolEnabled.element, toolEmbedding, toolStatus, toolActions);
 
-    const group = document.createElement("fieldset");
+    const group = h(document, "fieldset");
     group.className = "zeta-indexing-setting";
-    const legend = document.createElement("legend");
+    const legend = h(document, "legend");
     legend.textContent = "Semantic code search";
-    const hint = document.createElement("p");
+    const hint = h(document, "p");
     hint.className = "zeta-theme-setting-hint";
     hint.textContent = "Zeta keeps chunking, vectors, recall, fusion, and Agent results local. When enabled and authorized, bounded code chunks and search queries are sent to the selected model endpoint.";
-    const providerHeading = document.createElement("h4");
+    const providerHeading = h(document, "h4");
     providerHeading.textContent = "Model endpoint";
-    const provider = document.createElement("input");
+    const provider = h(document, "input");
     provider.className = "zeta-settings-text-input";
     provider.placeholder = "ollama or openai-compatible";
     provider.setAttribute("aria-label", "Semantic model provider");
-    const endpoint = document.createElement("input");
+    const endpoint = h(document, "input");
     endpoint.className = "zeta-settings-text-input";
     endpoint.placeholder = "http://localhost:11434/v1";
     endpoint.setAttribute("aria-label", "Semantic model endpoint URL");
@@ -400,9 +400,9 @@ export class SettingsEditor extends DisposableOwner {
       : "ollama";
     provider.value = configuredProvider;
     endpoint.value = codeConfig.providers[configuredProvider]?.baseUrl ?? (configuredProvider === "ollama" ? "http://localhost:11434/v1" : "");
-    const providerActions = document.createElement("div");
+    const providerActions = h(document, "div");
     providerActions.className = "zeta-theme-json-actions";
-    const providerSave = document.createElement("button");
+    const providerSave = h(document, "button");
     providerSave.className = "zeta-theme-action";
     providerSave.type = "button";
     providerSave.textContent = "Save endpoint";
@@ -412,11 +412,11 @@ export class SettingsEditor extends DisposableOwner {
       checked: codeConfig.semanticCodeIndex.selection.type === "remote",
     }));
     enabled.element.classList.add("zeta-indexing-toggle");
-    const embedding = document.createElement("input");
+    const embedding = h(document, "input");
     embedding.className = "zeta-settings-text-input";
     embedding.placeholder = "provider/model (for example ollama/nomic-embed-text)";
     embedding.setAttribute("aria-label", "Embedding model");
-    const rerank = document.createElement("input");
+    const rerank = h(document, "input");
     rerank.className = "zeta-settings-text-input";
     rerank.placeholder = "Optional openai-compatible/model reranker";
     rerank.setAttribute("aria-label", "Rerank model");
@@ -433,23 +433,23 @@ export class SettingsEditor extends DisposableOwner {
       disabled: !enabled.checked,
     }));
     automaticContext.element.classList.add("zeta-indexing-toggle");
-    const status = document.createElement("p");
+    const status = h(document, "p");
     status.className = "zeta-theme-setting-status";
     status.setAttribute("role", "status");
     status.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized
       ? "The active workspace is authorized for this exact model selection."
       : "The active workspace is not authorized; no source text will be sent.";
-    const progress = document.createElement("p");
+    const progress = h(document, "p");
     progress.className = "zeta-theme-setting-status";
     progress.setAttribute("role", "status");
     progress.textContent = "Semantic index status is loading…";
-    const jobActions = document.createElement("div");
+    const jobActions = h(document, "div");
     jobActions.className = "zeta-theme-json-actions";
-    const cancelJob = document.createElement("button");
+    const cancelJob = h(document, "button");
     cancelJob.className = "zeta-theme-action";
     cancelJob.type = "button";
     cancelJob.textContent = "Cancel indexing";
-    const retryJob = document.createElement("button");
+    const retryJob = h(document, "button");
     retryJob.className = "zeta-theme-action";
     retryJob.type = "button";
     retryJob.textContent = "Retry indexing";
@@ -514,13 +514,13 @@ export class SettingsEditor extends DisposableOwner {
       }).finally(() => { group.disabled = false; });
     }));
     providerActions.append(providerSave);
-    const actions = document.createElement("div");
+    const actions = h(document, "div");
     actions.className = "zeta-theme-json-actions";
-    const save = document.createElement("button");
+    const save = h(document, "button");
     save.className = "zeta-theme-action";
     save.type = "button";
     save.textContent = "Save model selection";
-    const consent = document.createElement("button");
+    const consent = h(document, "button");
     consent.className = "zeta-theme-action";
     consent.type = "button";
     consent.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? "Revoke workspace access" : "Authorize active workspace";
@@ -591,35 +591,35 @@ export class SettingsEditor extends DisposableOwner {
   private renderAppearance(): void {
     this.sectionBindings.clear();
     const document = this.element.ownerDocument;
-    const group = document.createElement("fieldset");
+    const group = h(document, "fieldset");
     group.className = "zeta-theme-setting";
-    const legend = document.createElement("legend");
+    const legend = h(document, "legend");
     legend.textContent = "Color theme";
-    const hint = document.createElement("p");
+    const hint = h(document, "p");
     hint.className = "zeta-theme-setting-hint";
     hint.textContent = "Choose an appearance or keep Zeta synchronized with your operating system.";
-    const options = document.createElement("div");
+    const options = h(document, "div");
     options.className = "zeta-theme-options";
     const preference = this.configurationService.getValue(WorkbenchConfiguration.colorTheme);
     for (const descriptor of themeOptions(this.userThemeService)) {
-      const label = document.createElement("label");
+      const label = h(document, "label");
       label.className = "zeta-theme-option";
       label.dataset.themePreference = descriptor.value;
-      const input = document.createElement("input");
+      const input = h(document, "input");
       input.type = "radio";
       input.name = "zeta-color-theme";
       input.value = descriptor.value;
       input.checked = preference === descriptor.value;
-      const preview = document.createElement("span");
+      const preview = h(document, "span");
       preview.className = "zeta-theme-preview";
       applyThemePreview(preview, descriptor.previewThemes);
       preview.setAttribute("aria-hidden", "true");
-      const copy = document.createElement("span");
+      const copy = h(document, "span");
       copy.className = "zeta-theme-option-copy";
-      const title = document.createElement("span");
+      const title = h(document, "span");
       title.className = "zeta-theme-option-title";
       title.textContent = descriptor.label;
-      const description = document.createElement("span");
+      const description = h(document, "span");
       description.className = "zeta-theme-option-description";
       description.textContent = descriptor.description;
       copy.append(title, description);
@@ -654,14 +654,14 @@ export class SettingsEditor extends DisposableOwner {
       }));
       options.append(label);
     }
-    const status = document.createElement("p");
+    const status = h(document, "p");
     status.className = "zeta-theme-setting-status";
     status.setAttribute("role", "status");
     status.textContent = this.themeMessage;
     if (this.themeMessage) status.classList.add("is-success");
-    const customization = document.createElement("div");
+    const customization = h(document, "div");
     customization.className = "zeta-theme-customization";
-    const customize = document.createElement("button");
+    const customize = h(document, "button");
     customize.className = "zeta-theme-action";
     customize.type = "button";
     customize.disabled = !this.userThemeService.available;
@@ -714,20 +714,20 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderThemeEditor(document: Document, group: HTMLFieldSetElement, status: HTMLParagraphElement, draft: ThemeDraft): HTMLElement {
-    const editor = document.createElement("section");
+    const editor = h(document, "section");
     editor.className = "zeta-theme-json";
-    const heading = document.createElement("h4");
+    const heading = h(document, "h4");
     heading.textContent = draft.kind === "update" ? "Edit user theme JSON" : "New theme from current appearance";
-    const hint = document.createElement("p");
+    const hint = h(document, "p");
     hint.textContent = draft.kind === "update"
       ? "Valid changes preview immediately. Save updates this user theme; change id and label before using Save As."
       : "This is a complete copy of the current Light or Dark theme. Change id, label, and colors, then save it as a new theme.";
-    const textarea = document.createElement("textarea");
+    const textarea = h(document, "textarea");
     textarea.className = "zeta-theme-json-editor";
     textarea.value = draft.source;
     textarea.spellcheck = false;
     textarea.setAttribute("aria-label", "User theme JSON");
-    const actions = document.createElement("div");
+    const actions = h(document, "div");
     actions.className = "zeta-theme-json-actions";
     const preview = (): boolean => {
       draft.source = textarea.value;
@@ -947,32 +947,32 @@ function themeOptions(userThemeService: IUserThemeService): readonly ThemeOption
 
 function renderUserThemeStatus(document: Document, userThemeService: IUserThemeService): HTMLElement | undefined {
   if (!userThemeService.directory && userThemeService.issues.length === 0) return undefined;
-  const container = document.createElement("div");
+  const container = h(document, "div");
   container.className = "zeta-user-theme-status";
   if (userThemeService.directory) {
-    const directory = document.createElement("p");
+    const directory = h(document, "p");
     directory.textContent = `User theme folder: ${userThemeService.directory}`;
     container.append(directory);
   }
   if (userThemeService.issues.length > 0) {
-    const heading = document.createElement("p");
+    const heading = h(document, "p");
     heading.textContent = "Some user themes could not be loaded:";
-    const list = document.createElement("ul");
+    const list = h(document, "ul");
     for (const issue of userThemeService.issues) {
-      const item = document.createElement("li");
+      const item = h(document, "li");
       item.textContent = `${issue.file}: ${issue.message}`;
       list.append(item);
     }
     container.append(heading, list);
   }
-  const restart = document.createElement("p");
+  const restart = h(document, "p");
   restart.textContent = "Themes saved here are available immediately. Restart Zeta after external file changes.";
   container.append(restart);
   return container;
 }
 
 function themeAction(document: Document, label: string): HTMLButtonElement {
-  const button = document.createElement("button");
+  const button = h(document, "button");
   button.className = "zeta-theme-action";
   button.type = "button";
   button.textContent = label;

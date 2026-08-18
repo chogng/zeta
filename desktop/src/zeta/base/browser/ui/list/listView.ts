@@ -1,7 +1,8 @@
-import { addDisposableListener, isNode } from "../../dom.js";
+import { addDisposableListener, isNode, h } from "../../dom.js";
 import { DataTransfers } from "../../dnd.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
+import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from "../dnd/dnd.js";
 import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListDragTargetSector as DragTargetSector } from "./list.js";
@@ -31,7 +32,7 @@ export class ListView<T> extends DisposableOwner {
   constructor(private readonly options: ListViewOptions<T>) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-list";
     this.element.id = `zeta-list-${listSequence++}`;
     setRole(this.element, options.role ?? "listbox");
@@ -52,7 +53,7 @@ export class ListView<T> extends DisposableOwner {
       const itemId = this.itemId(item, index);
       if (seen.has(itemId)) throw new TypeError(`Duplicate List item ID: ${itemId}`);
       seen.add(itemId);
-      const row = this.element.ownerDocument.createElement("div");
+      const row = h(this.element.ownerDocument, "div");
       row.className = "zeta-list-row";
       row.id = `${this.element.id}-item-${encodeURIComponent(itemId)}`;
       row.dataset.index = String(index);
@@ -155,8 +156,8 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
   private feedbackIndexes: readonly number[] = [];
   private feedbackPosition: DragOverPosition = ListDragOverPosition.Over;
   private sourceRow: HTMLElement | undefined;
-  private dragLeaveTimer: number | undefined;
-  private autoScrollHandle: number | undefined;
+  private readonly dragLeave = this.own(new DisposableSlot<IDisposable>());
+  private readonly autoScroll = this.own(new DisposableSlot<IDisposable>());
   private dragPointerY: number | undefined;
 
   constructor(private readonly view: ListView<T>, private readonly dnd: ListDragAndDrop<T>, private readonly getDragElements: (item: T, index: number) => readonly T[]) {
@@ -224,10 +225,10 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
       this.finishDragLeave(event);
       return;
     }
-    this.dragLeaveTimer = ownerWindow.setTimeout(() => {
-      this.dragLeaveTimer = undefined;
+    this.dragLeave.replace(disposableWindowTimeout(ownerWindow, () => {
+      this.dragLeave.clear();
       this.finishDragLeave(event);
-    }, 100);
+    }, 100));
   }
 
   private finishDragLeave(event: DragEvent): void {
@@ -331,7 +332,7 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
 
   private updateAutoScroll(event: DragEvent): void {
     this.dragPointerY = event.clientY;
-    if (!Number.isFinite(this.dragPointerY) || this.autoScrollHandle !== undefined) return;
+    if (!Number.isFinite(this.dragPointerY) || this.autoScroll.value) return;
     this.scheduleAutoScroll();
   }
 
@@ -339,7 +340,7 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
     const ownerWindow = this.view.element.ownerDocument.defaultView;
     if (!ownerWindow) return;
     const callback = () => {
-      this.autoScrollHandle = undefined;
+      this.autoScroll.clear();
       const pointerY = this.dragPointerY;
       const element = this.view.element;
       const rect = element.getBoundingClientRect();
@@ -352,23 +353,16 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
       element.scrollTop += Math.max(-14, Math.min(14, delta));
       this.scheduleAutoScroll();
     };
-    this.autoScrollHandle = typeof ownerWindow.requestAnimationFrame === "function" ? ownerWindow.requestAnimationFrame(callback) : ownerWindow.setTimeout(callback, 16);
+    this.autoScroll.replace(scheduleAtNextAnimationFrame(ownerWindow, callback));
   }
 
   private stopAutoScroll(): void {
-    const ownerWindow = this.view.element.ownerDocument.defaultView;
-    if (this.autoScrollHandle !== undefined && ownerWindow) {
-      if (typeof ownerWindow.cancelAnimationFrame === "function") ownerWindow.cancelAnimationFrame(this.autoScrollHandle);
-      ownerWindow.clearTimeout(this.autoScrollHandle);
-    }
-    this.autoScrollHandle = undefined;
+    this.autoScroll.clear();
     this.dragPointerY = undefined;
   }
 
   private cancelDragLeave(): void {
-    const ownerWindow = this.view.element.ownerDocument.defaultView;
-    if (this.dragLeaveTimer !== undefined && ownerWindow) ownerWindow.clearTimeout(this.dragLeaveTimer);
-    this.dragLeaveTimer = undefined;
+    this.dragLeave.clear();
   }
 
   private clearActiveSession(): void { if (activeListDragSession?.source === this) activeListDragSession = undefined; }

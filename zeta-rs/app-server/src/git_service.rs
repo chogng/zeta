@@ -4,14 +4,15 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitBranch, GitClient, GitCommitChange, GitCommitFile, GitCommitRequest, GitCommitSummary,
-    GitError, GitGraph, GitGraphCursor, GitPathspecSet, GitRepository, GitRepositorySnapshot,
-    GitTextDiffLimits, GitTextDiffSnapshot,
+    GitBranch, GitChangeFile, GitChangeFileComparison, GitChangeStatus, GitClient, GitCommitChange,
+    GitCommitFile, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitGraphCursor,
+    GitPathspecSet, GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_COMMIT_FILE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_CHANGE_FILE_BYTES: usize = 2 * 1024 * 1024;
 const RECENT_COMMIT_LIMIT: NonZeroUsize = NonZeroUsize::new(50).expect("history limit is non-zero");
 
 pub(crate) struct GitServiceCommit {
@@ -206,6 +207,59 @@ impl GitService {
                     original_path,
                     MAX_COMMIT_FILE_BYTES,
                 )
+                .await
+                .map_err(GitServiceError::Git)
+        })
+    }
+
+    pub(crate) fn change_file(
+        &self,
+        workspace_path: &Path,
+        comparison: GitChangeFileComparison,
+    ) -> Result<GitChangeFile, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let workspace_prefix = self
+                .workspace
+                .root()
+                .relative_to_existing_ancestor(repository.worktree_root())
+                .map_err(|_| GitServiceError::Boundary)?;
+            let repository_path = workspace_prefix.join(workspace_path);
+            let snapshot = self
+                .client
+                .snapshot(&repository)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let change = snapshot
+                .changes()
+                .iter()
+                .find(|change| change.path() == repository_path)
+                .filter(|change| match comparison {
+                    GitChangeFileComparison::Staged => {
+                        change.index_status() != GitChangeStatus::Unmodified
+                    }
+                    GitChangeFileComparison::Unstaged => {
+                        change.worktree_status() != GitChangeStatus::Unmodified
+                    }
+                })
+                .ok_or(GitServiceError::CommitChangeNotFound)?;
+            let comparison_status = match comparison {
+                GitChangeFileComparison::Staged => change.index_status(),
+                GitChangeFileComparison::Unstaged => change.worktree_status(),
+            };
+            if matches!(
+                comparison_status,
+                GitChangeStatus::Renamed | GitChangeStatus::Copied
+            ) && change
+                .original_path()
+                .is_some_and(|path| path.strip_prefix(&workspace_prefix).is_err())
+            {
+                return Err(GitServiceError::Boundary);
+            }
+            self.client
+                .change_file(&repository, change, comparison, MAX_CHANGE_FILE_BYTES)
                 .await
                 .map_err(GitServiceError::Git)
         })

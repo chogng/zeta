@@ -13,6 +13,7 @@ import { type IDiffComputationService } from "../../../../editor/common/diff/dif
 import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
 import { type TextModelReference, type ITextModelService } from "../../../../editor/common/services/textModelService.js";
 import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export interface DiffEditorPaneOptions {
   readonly modelService: ITextModelService;
@@ -54,7 +55,7 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
-    const container = parent.ownerDocument.createElement("div");
+    const container = h(parent.ownerDocument, "div");
     container.className = "aster-diff-editor-pane";
     parent.append(container);
     this.container = container;

@@ -263,6 +263,34 @@ pub struct GitCommitFileResult {
     pub modified: GitCommitFileContentDto,
 }
 
+/// Selects the two repository states represented by a current SCM resource group.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum GitChangeFileComparisonDto {
+    Staged,
+    Unstaged,
+}
+
+/// Identifies one current repository change and the SCM group that owns it.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitChangeFileParams {
+    #[schemars(length(min = 1, max = 32768))]
+    pub path: String,
+    pub comparison: GitChangeFileComparisonDto,
+}
+
+/// Before/after editor content for one current staged or unstaged change.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitChangeFileResult {
+    pub original: GitCommitFileContentDto,
+    pub modified: GitCommitFileContentDto,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {

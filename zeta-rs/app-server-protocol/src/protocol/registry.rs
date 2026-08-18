@@ -178,14 +178,14 @@ use crate::protocol::fs::{
     FsWriteFileResult,
 };
 use crate::protocol::git::{
-    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto,
-    GitCommitChangeDto, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileContentDto,
-    GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult,
-    GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphParams, GitGraphResult, GitHeadDto,
-    GitHistoryResult, GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto,
-    GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto,
-    GitStatusChanged, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult,
-    GitUpstreamDto,
+    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeFileComparisonDto,
+    GitChangeFileParams, GitChangeFileResult, GitChangeStatusDto, GitCommitChangeDto,
+    GitCommitChangesParams, GitCommitChangesResult, GitCommitFileContentDto, GitCommitFileParams,
+    GitCommitFileResult, GitCommitParams, GitCommitResult, GitCommitSummaryDto,
+    GitDiffStatisticsDto, GitGraphParams, GitGraphResult, GitHeadDto, GitHistoryResult,
+    GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto, GitRemoteDto,
+    GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusChanged,
+    GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
@@ -1389,6 +1389,11 @@ client_methods! {
         response: GitCommitFileResult,
         serialization: GlobalSharedRead,
     },
+    GitChangeFile => "git/changeFile" {
+        params: GitChangeFileParams,
+        response: GitChangeFileResult,
+        serialization: GlobalSharedRead,
+    },
     GitBranchSwitch => "git/branch/switch" {
         params: GitBranchSwitchParams,
         response: GitOperationResult,
@@ -2391,6 +2396,9 @@ typescript_bindings! {
     GitCommitFileParams,
     GitCommitFileContentDto,
     GitCommitFileResult,
+    GitChangeFileComparisonDto,
+    GitChangeFileParams,
+    GitChangeFileResult,
     GitBranchSwitchParams,
     GitTextDiffDto,
     GitDiffStatisticsDto,

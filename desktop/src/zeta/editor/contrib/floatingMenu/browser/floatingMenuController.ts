@@ -2,6 +2,7 @@ import "./media/floatingMenu.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export interface FloatingMenuAction { readonly label: string; readonly run: () => void | Promise<void>; }
 
@@ -12,7 +13,7 @@ export class FloatingMenuController extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, actions: readonly FloatingMenuAction[] = [], private readonly onError: (error: unknown) => void = error => console.error("Aster floating menu failed", error)) {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Aster floating menu dependencies must share a text model");
-    this.element = viewport.element.ownerDocument.createElement("div");
+    this.element = h(viewport.element.ownerDocument, "div");
     this.element.className = "aster-editor-floating-menu";
     this.element.hidden = true;
     viewport.element.append(this.element);
@@ -26,7 +27,7 @@ export class FloatingMenuController extends DisposableOwner {
     const selection = this.selections.selections.primary;
     if (selection.range.empty || actions.length === 0) { this.element.hidden = true; return; }
     this.element.replaceChildren(...actions.map(action => {
-      const button = this.element.ownerDocument.createElement("button");
+      const button = h(this.element.ownerDocument, "button");
       button.type = "button";
       button.textContent = action.label;
       button.addEventListener("click", () => { try { const result = action.run(); if (result && typeof (result as Promise<void>).then === "function") void (result as Promise<void>).catch(this.onError); } catch (error) { this.onError(error); } });

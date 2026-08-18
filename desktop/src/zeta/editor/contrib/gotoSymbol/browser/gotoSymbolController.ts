@@ -1,5 +1,5 @@
 import "./media/gotoSymbol.css";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -18,17 +18,17 @@ export class GotoSymbolController extends DisposableOwner {
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster goto symbol failed", error)) {
     super();
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-goto-symbol";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Go to Symbol");
-    this.queryInput = ownerDocument.createElement("input");
+    this.queryInput = h(ownerDocument, "input");
     this.queryInput.className = "aster-editor-goto-symbol-input";
     this.queryInput.type = "search";
     this.queryInput.placeholder = "Type a symbol name";
     this.queryInput.setAttribute("aria-label", "Symbol query");
-    this.list = ownerDocument.createElement("div");
+    this.list = h(ownerDocument, "div");
     this.list.className = "aster-editor-goto-symbol-list";
     this.list.setAttribute("role", "listbox");
     this.element.append(this.queryInput, this.list);
@@ -73,7 +73,7 @@ export class GotoSymbolController extends DisposableOwner {
   private render(): void {
     this.itemListeners.clear();
     this.list.replaceChildren(...this.matches.map((match, index) => {
-      const item = this.list.ownerDocument.createElement("button");
+      const item = h(this.list.ownerDocument, "button");
       item.className = "aster-editor-goto-symbol-item";
       item.type = "button";
       item.setAttribute("role", "option");

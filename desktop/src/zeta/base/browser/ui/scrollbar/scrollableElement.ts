@@ -1,5 +1,6 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { StandardWheelEvent } from "../../mouseEvent.js";
+import { observeResize } from "../../observer.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import type { ScrollbarAxis } from "./abstractScrollbar.js";
@@ -83,9 +84,9 @@ export class ScrollableElement extends DisposableOwner {
     this.options = resolveScrollableElementOptions(options);
     this.onScrollOption = options.onScroll;
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
-    const viewport = ownerDocument.createElement("div");
-    const content = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
+    const viewport = h(ownerDocument, "div");
+    const content = h(ownerDocument, "div");
     viewport.id = `zeta-scrollable-${nextScrollableId++}`;
     const horizontal = this.own(new HorizontalScrollbar({
       ownerDocument,
@@ -103,7 +104,7 @@ export class ScrollableElement extends DisposableOwner {
       setPosition: (position) =>
         this.setAxisPosition("vertical", position),
     }));
-    const corner = ownerDocument.createElement("div");
+    const corner = h(ownerDocument, "div");
     this.element = element;
     this.scrollableElement = viewport;
     this.contentElement = content;
@@ -153,13 +154,7 @@ export class ScrollableElement extends DisposableOwner {
       this.handleContainerKeydown(event),
     ));
 
-    const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.layout());
-      observer.observe(element);
-      observer.observe(content);
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeResize([element, content], () => this.layout()));
     this.layout();
   }
 

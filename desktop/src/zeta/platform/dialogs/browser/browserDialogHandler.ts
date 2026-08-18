@@ -4,10 +4,7 @@ import {
   getActiveElement,
   restoreFocus,
 } from "../../../base/browser/focus.js";
-import {
-  addDisposableListener,
-  isHTMLElement,
-} from "../../../base/browser/dom.js";
+import { addDisposableListener, isHTMLElement, h } from "../../../base/browser/dom.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import {
   type DialogRequest,
@@ -86,22 +83,22 @@ function createDialogContent(
   ownerDocument: Document,
   request: DialogRequest,
 ): IDialogContent {
-  const element = ownerDocument.createElement("div");
+  const element = h(ownerDocument, "div");
   element.className = "zeta-dialog-content";
 
-  const message = ownerDocument.createElement("p");
+  const message = h(ownerDocument, "p");
   message.className = "zeta-dialog-message";
   message.textContent = request.message;
   element.append(message);
 
   if (request.detail) {
-    const detail = ownerDocument.createElement("p");
+    const detail = h(ownerDocument, "p");
     detail.className = "zeta-dialog-detail";
     detail.textContent = request.detail;
     element.append(detail);
   }
 
-  const actions = ownerDocument.createElement("footer");
+  const actions = h(ownerDocument, "footer");
   actions.className = "zeta-dialog-actions";
   element.append(actions);
   return { element, actions };

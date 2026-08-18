@@ -4,6 +4,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { DocumentTextStyleAttributes, DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export type FormattingContext = "none" | "text" | "code";
 
@@ -50,7 +51,7 @@ export class FormattingContribution extends DisposableOwner {
 
   constructor(private readonly options: FormattingContributionOptions) {
     super();
-    const element = options.ownerDocument.createElement("div");
+    const element = h(options.ownerDocument, "div");
     element.className = "zeta-structured-format-toolbar";
     element.hidden = true;
     element.setAttribute("role", "group");
@@ -68,7 +69,7 @@ export class FormattingContribution extends DisposableOwner {
     inlineActions.element.addEventListener("mousedown", event => event.preventDefault());
     this.inlineActions = inlineActions;
 
-    const typographyControls = options.ownerDocument.createElement("div");
+    const typographyControls = h(options.ownerDocument, "div");
     typographyControls.className = "zeta-structured-format-typography-controls";
     typographyControls.setAttribute("role", "group");
     typographyControls.setAttribute("aria-label", "Font and size");
@@ -115,7 +116,7 @@ export class FormattingContribution extends DisposableOwner {
     documentActions.element.addEventListener("mousedown", event => event.preventDefault());
     this.documentActions = documentActions;
 
-    const codeContext = options.ownerDocument.createElement("div");
+    const codeContext = h(options.ownerDocument, "div");
     codeContext.className = "zeta-structured-format-code-context";
     codeContext.textContent = "Code block · Text editor";
     codeContext.setAttribute("role", "status");
@@ -165,16 +166,16 @@ function createAction(id: string, label: string, tooltip: string, icon: IAction[
 }
 
 function createSelectControl(ownerDocument: Document, label: string, ariaLabel: string, options: readonly { readonly value: string; readonly label: string }[]): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement } {
-  const element = ownerDocument.createElement("label");
+  const element = h(ownerDocument, "label");
   element.className = "zeta-structured-format-select-control";
-  const text = ownerDocument.createElement("span");
+  const text = h(ownerDocument, "span");
   text.className = "zeta-structured-format-select-label";
   text.textContent = label;
-  const select = ownerDocument.createElement("select");
+  const select = h(ownerDocument, "select");
   select.className = "zeta-structured-format-select";
   select.setAttribute("aria-label", ariaLabel);
   for (const option of options) {
-    const optionElement = ownerDocument.createElement("option");
+    const optionElement = h(ownerDocument, "option");
     optionElement.value = option.value;
     optionElement.textContent = option.label;
     select.append(optionElement);

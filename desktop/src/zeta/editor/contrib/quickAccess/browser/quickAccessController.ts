@@ -1,6 +1,6 @@
 import "./media/gotoLineWidget.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseAsterGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
@@ -33,19 +33,19 @@ export class GotoLineController extends DisposableOwner {
       throw new TypeError("Aster Go to Line dependencies must share one text model");
     }
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-goto-line-widget";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Go to Line or Column");
-    this.input = ownerDocument.createElement("input");
+    this.input = h(ownerDocument, "input");
     this.input.className = "aster-editor-goto-line-input";
     this.input.type = "text";
     this.input.placeholder = "Line[:Column]";
     this.input.setAttribute("aria-label", "Line number and optional column");
     this.input.autocomplete = "off";
     this.input.spellcheck = false;
-    this.status = ownerDocument.createElement("span");
+    this.status = h(ownerDocument, "span");
     this.status.className = "aster-editor-goto-line-status";
     this.status.setAttribute("aria-live", "polite");
     this.element.append(this.input, this.status);

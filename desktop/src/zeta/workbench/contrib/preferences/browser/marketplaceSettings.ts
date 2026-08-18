@@ -1,5 +1,5 @@
 import "./media/marketplaceSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
@@ -30,23 +30,23 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   constructor(private readonly document: Document, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string) {
     super();
     this.selectedPackageType = fixedPackageType;
-    this.element = document.createElement("section");
+    this.element = h(document, "section");
     this.element.className = "zeta-package-marketplace";
-    const toolbar = document.createElement("form");
+    const toolbar = h(document, "form");
     toolbar.className = "zeta-package-marketplace-toolbar";
-    const searchControl = document.createElement("div");
+    const searchControl = h(document, "div");
     searchControl.className = "zeta-package-marketplace-search-control";
     appendIcon(lxiconsLibrary.search, searchControl);
-    this.input = document.createElement("input");
+    this.input = h(document, "input");
     this.input.type = "search";
     this.input.placeholder = fixedPackageType === "language" ? "Search language extensions" : "Search Plugins, Skills, MCPs…";
     this.input.setAttribute("aria-label", "Search Marketplace");
     searchControl.append(this.input);
-    const search = document.createElement("button");
+    const search = h(document, "button");
     search.type = "submit";
     search.textContent = "Browse Marketplace";
     toolbar.append(searchControl, search);
-    const filters = document.createElement("div");
+    const filters = h(document, "div");
     filters.className = "zeta-package-marketplace-filters";
     this.filterTabs = fixedPackageType ? undefined : this.own(new TabList<string>({
       ownerDocument: document,
@@ -63,10 +63,10 @@ export class MarketplaceSettingsPane extends DisposableOwner {
       filters.append(this.filterTabs.element);
       this.updateFilterState();
     }
-    this.status = document.createElement("p");
+    this.status = h(document, "p");
     this.status.className = "zeta-package-marketplace-status";
     this.status.setAttribute("role", "status");
-    this.results = document.createElement("div");
+    this.results = h(document, "div");
     this.results.className = "zeta-package-marketplace-results";
     this.own(addDisposableListener(toolbar, "submit", (event: SubmitEvent) => {
       event.preventDefault();
@@ -129,15 +129,15 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   }
 
   private emptyState(): HTMLElement {
-    const empty = this.document.createElement("div");
+    const empty = h(this.document, "div");
     empty.className = "zeta-package-marketplace-empty-state";
-    const heading = this.document.createElement("h4");
+    const heading = h(this.document, "h4");
     heading.textContent = this.selectedPackageType ? `No ${this.selectedPackageType} packages found` : "Explore Marketplace packages";
-    const description = this.document.createElement("p");
+    const description = h(this.document, "p");
     description.textContent = this.query
       ? "Try a different search or clear the current filters."
       : "Install Plugins, Skills, MCP servers, language support, and themes from the signed catalog.";
-    const reset = this.document.createElement("button");
+    const reset = h(this.document, "button");
     reset.type = "button";
     reset.textContent = "Clear filters";
     this.own(addDisposableListener(reset, "click", () => {
@@ -152,37 +152,37 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   }
 
   private packageCard(summary: MarketplacePackageSummary, details: MarketplacePackageDetails | undefined, installed: readonly MarketplaceInstalledPackage[]): HTMLElement {
-    const card = this.document.createElement("article");
+    const card = h(this.document, "article");
     card.className = "zeta-package-marketplace-card";
-    const heading = this.document.createElement("h4");
+    const heading = h(this.document, "h4");
     heading.textContent = summary.displayName;
-    const description = this.document.createElement("p");
+    const description = h(this.document, "p");
     description.className = "zeta-package-marketplace-description";
     description.textContent = summary.description;
-    const metadata = this.document.createElement("p");
+    const metadata = h(this.document, "p");
     metadata.className = "zeta-package-marketplace-metadata";
     metadata.textContent = `${summary.id} · ${summary.version} · ${summary.packageType}${details ? ` · ${details.license}` : ""}`;
-    const provenance = this.document.createElement("p");
+    const provenance = h(this.document, "p");
     provenance.className = "zeta-package-marketplace-metadata";
     provenance.textContent = details?.upstream?.registry === "officialMcp"
       ? `Listed in the official MCP Registry · ${details.upstream.name}@${details.upstream.version}`
       : details?.source === "official"
         ? "Marketplace official package"
         : "Third-party package";
-    const capabilities = this.document.createElement("ul");
+    const capabilities = h(this.document, "ul");
     capabilities.className = "zeta-package-marketplace-capabilities";
     for (const capability of details?.capabilities ?? []) {
-      const item = this.document.createElement("li");
+      const item = h(this.document, "li");
       item.textContent = `${capability.kind}: ${capability.id}`;
       capabilities.append(item);
     }
     const active = installed.find(candidate => candidate.package.id === summary.id && candidate.package.version === summary.version);
-    const actions = this.document.createElement("div");
+    const actions = h(this.document, "div");
     actions.className = "zeta-package-marketplace-actions";
-    const lifecycle = this.document.createElement("span");
+    const lifecycle = h(this.document, "span");
     lifecycle.className = "zeta-package-marketplace-lifecycle";
     lifecycle.textContent = active ? (active.state === "installed" ? "Installed · activation is separate" : "Removal pending") : "Available";
-    const action = this.document.createElement("button");
+    const action = h(this.document, "button");
     action.type = "button";
     action.textContent = active ? "Uninstall" : "Install";
     action.disabled = active?.state === "pendingRemoval";

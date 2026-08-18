@@ -52,6 +52,13 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
     });
     this.defer(() => subscription.dispose());
+    this.own(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+      if (nextWorkspace.folders.length === 1) {
+        this.queueWorkspaceDiagnostics();
+      } else {
+        this.clearWorkspaceDiagnostics();
+      }
+    }));
     this.defer(() => {
       this.alive = false;
       for (const entry of this.entries.values()) {
@@ -171,7 +178,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private queueWorkspaceDiagnostics(): void {
-    if (this.workspaceDiagnosticsQueued) return;
+    if (this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
     this.workspaceDiagnosticsQueued = true;
     queueMicrotask(() => {
       this.workspaceDiagnosticsQueued = false;
@@ -180,10 +187,11 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private async refreshWorkspaceDiagnostics(): Promise<void> {
+    if (!this.hasWorkspaceFolder()) return;
     const next = new Map<string, LanguageDiagnosticSnapshot>();
     let supported = false;
     for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
-      if (!this.alive) return;
+      if (!this.alive || !this.hasWorkspaceFolder()) return;
       try {
         const report = await this.api.workspaceDiagnostics({ languageId });
         if (!report.supported) continue;
@@ -216,6 +224,21 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       changed.set(key, snapshot.resource);
     }
     for (const resource of changed.values()) this.changeEmitter.fire(resource);
+  }
+
+  private clearWorkspaceDiagnostics(): void {
+    const changed: URI[] = [];
+    for (const key of this.workspaceServerKeys) {
+      const resource = this.serverSnapshots.get(key)?.resource;
+      if (resource) changed.push(resource);
+      this.serverSnapshots.delete(key);
+    }
+    this.workspaceServerKeys.clear();
+    for (const resource of changed) this.changeEmitter.fire(resource);
+  }
+
+  private hasWorkspaceFolder(): boolean {
+    return this.workspace.getWorkspace().folders.length === 1;
   }
 
   private release(key: string, entry: LanguageDocumentEntry): void {

@@ -2,6 +2,7 @@ import "./media/editorpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
+import { observeElementSize } from "../../../../base/browser/observer.js";
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -26,6 +27,7 @@ import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
+import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -40,6 +42,8 @@ export interface IEditorPart {
   openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane>;
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
+  setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void;
+  setWelcomeVisible(visible: boolean): void;
   saveActiveEditor(): Promise<void>;
   setContent(content: Element): void;
   splitActiveGroupHorizontal(): Promise<void>;
@@ -72,6 +76,8 @@ export interface IEditorPartOptions {
     readonly menuService: IMenuService;
     readonly contextMenuProvider: IContextMenuProvider;
   };
+  readonly welcome?: EditorWelcomeOptions;
+  readonly welcomeVisible?: boolean;
   readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
 }
 
@@ -82,6 +88,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
   private readonly _groups: EditorGroupHost[] = [];
   private _activeGroup: EditorGroup;
   private readonly tabDragAndDrop: EditorTabDragAndDropController;
+  private welcomeRecentProjects: readonly IEditorWelcomeProject[];
   private dimension = Dimension.Zero;
   private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 
@@ -114,10 +121,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
       createLineGutterDecorations: options.createLineGutterDecorations,
       titleActions: options.titleActions,
+      welcome: options.welcome,
+      welcomeVisible: options.welcomeVisible,
       ...(options.saveAsResource ? {
         onSave: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => this.saveEditor(group, input, pane),
       } : {}),
     };
+    this.welcomeRecentProjects = options.welcome?.recentProjects ?? [];
     this.saveAsResource = options.saveAsResource;
     this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
       this.dropEditor(event);
@@ -131,20 +141,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
     this._activeGroup = initial.group;
     this.splitView.addView(initial.view);
     this.contentElement.append(this.splitView.element);
-    const ResizeObserverConstructor =
-      ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(([entry]) => {
-        if (!entry) return;
-        const borderBox = entry.borderBoxSize[0];
-        this.layout({
-          width: borderBox?.inlineSize ?? entry.contentRect.width,
-          height: borderBox?.blockSize ?? entry.contentRect.height,
-        });
-      });
-      observer.observe(this.contentElement, { box: "border-box" });
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeElementSize(this.contentElement, size => this.layout(size)));
   }
 
   get groups(): readonly IEditorGroup[] {
@@ -186,6 +183,15 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
   closeEditor(input: EditorInput): void {
     this._activeGroup.closeEditor(input);
+  }
+
+  setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
+    this.welcomeRecentProjects = projects;
+    for (const { group } of this._groups) group.setWelcomeRecentProjects(projects);
+  }
+
+  setWelcomeVisible(visible: boolean): void {
+    for (const { group } of this._groups) group.setWelcomeVisible(visible);
   }
 
   async saveActiveEditor(): Promise<void> {
@@ -243,6 +249,9 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
     group = this.own(new EditorGroup({
       ownerDocument: this.element.ownerDocument,
       ...this.groupOptions,
+      ...(this.groupOptions.welcome ? {
+        welcome: { ...this.groupOptions.welcome, recentProjects: this.welcomeRecentProjects },
+      } : {}),
       onDidActivate: () => {
         this._activeGroup = group;
       },

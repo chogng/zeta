@@ -3,6 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorContribution.
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 
@@ -39,7 +40,7 @@ export class CodeLensController extends DisposableOwner {
     for (const lens of this.lenses) {
       const command = lens.command;
       if (!command) continue;
-      const element = this.viewport.element.ownerDocument.createElement("button");
+      const element = h(this.viewport.element.ownerDocument, "button");
       element.type = "button";
       element.className = "aster-editor-codelens";
       element.textContent = command.title;

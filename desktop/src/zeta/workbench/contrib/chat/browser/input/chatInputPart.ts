@@ -1,5 +1,5 @@
 import "./chatInputPart.css";
-import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { ButtonActionViewItem, type ActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { AnchorPosition, ContextView, ContextViewFocusRestore } from "../../../../../base/browser/ui/contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
@@ -57,17 +57,17 @@ export class ChatInputPart extends DisposableOwner {
   constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
     super();
     this.delegate = delegate;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-chat-input-part";
-    this.status = ownerDocument.createElement("div");
+    this.status = h(ownerDocument, "div");
     this.status.className = "zeta-chat-status";
     this.status.setAttribute("role", "status");
-    this.interaction = ownerDocument.createElement("div");
+    this.interaction = h(ownerDocument, "div");
     this.interaction.className = "zeta-chat-interaction";
     this.interaction.setAttribute("aria-live", "polite");
-    this.inputContainer = ownerDocument.createElement("form");
+    this.inputContainer = h(ownerDocument, "form");
     this.inputContainer.className = "zeta-chat-input-container";
-    const editorHost = ownerDocument.createElement("div");
+    const editorHost = h(ownerDocument, "div");
     editorHost.className = "zeta-chat-input-editor-host";
     this.input = this.own(ChatInputEditors.create({
       container: editorHost,
@@ -251,9 +251,9 @@ export class ChatInputPart extends DisposableOwner {
     const request = interaction.request;
     switch (request.type) {
       case "approval": {
-        const reason = this.element.ownerDocument.createElement("p");
+        const reason = h(this.element.ownerDocument, "p");
         reason.textContent = request.request.reason;
-        const actions = this.element.ownerDocument.createElement("div");
+        const actions = h(this.element.ownerDocument, "div");
         actions.className = "zeta-chat-interaction-actions";
         const decline = this.interactionButton("Decline");
         const approve = this.interactionButton("Approve once", true);
@@ -270,13 +270,13 @@ export class ChatInputPart extends DisposableOwner {
         break;
       }
       case "userInput": {
-        const form = this.element.ownerDocument.createElement("form");
+        const form = h(this.element.ownerDocument, "form");
         form.className = "zeta-chat-interaction-form";
         const inputs = new Map<string, HTMLInputElement | HTMLSelectElement>();
         for (const question of request.request.questions) {
-          const label = this.element.ownerDocument.createElement("label");
+          const label = h(this.element.ownerDocument, "label");
           label.textContent = question.question;
-          const input = question.options && !question.allowFreeForm ? this.questionSelect(question.options) : this.element.ownerDocument.createElement("input");
+          const input = question.options && !question.allowFreeForm ? this.questionSelect(question.options) : h(this.element.ownerDocument, "input");
           input.required = true;
           input.name = question.id;
           label.append(input);
@@ -305,7 +305,7 @@ export class ChatInputPart extends DisposableOwner {
   }
 
   private interactionButton(label: string, primary = false): HTMLButtonElement {
-    const button = this.element.ownerDocument.createElement("button");
+    const button = h(this.element.ownerDocument, "button");
     button.type = "button";
     button.textContent = label;
     button.className = primary ? "zeta-chat-send-button" : "zeta-chat-secondary-button";
@@ -313,9 +313,9 @@ export class ChatInputPart extends DisposableOwner {
   }
 
   private questionSelect(options: readonly { readonly label: string }[]): HTMLSelectElement {
-    const select = this.element.ownerDocument.createElement("select");
+    const select = h(this.element.ownerDocument, "select");
     for (const option of options) {
-      const element = this.element.ownerDocument.createElement("option");
+      const element = h(this.element.ownerDocument, "option");
       element.value = option.label;
       element.textContent = option.label;
       select.append(element);
@@ -412,7 +412,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
     button.querySelector(".zeta-button-label")?.classList.add("zeta-chat-input-mode-action-label");
     button.setAttribute("aria-haspopup", "menu");
     button.setAttribute("aria-expanded", "false");
-    const indicator = container.ownerDocument.createElement("span");
+    const indicator = h(container.ownerDocument, "span");
     indicator.className = "zeta-dropdown-menu-indicator zeta-chat-input-mode-indicator";
     appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
     button.append(indicator);

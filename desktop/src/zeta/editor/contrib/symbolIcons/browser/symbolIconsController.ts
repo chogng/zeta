@@ -2,6 +2,7 @@ import "./media/symbolIcons.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/documentSymbols.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Projects document-symbol kinds into small, feature-owned gutter icons. */
 export class SymbolIconsController extends DisposableOwner {
@@ -33,7 +34,7 @@ export class SymbolIconsController extends DisposableOwner {
     for (const symbol of flatten(this.symbols)) {
       const line = this.viewport.element.querySelector<HTMLElement>(`.aster-editor-line[data-logical-line-index="${symbol.selectionRange.start.lineIndex}"]`);
       if (!line) continue;
-      const icon = this.viewport.element.ownerDocument.createElement("span");
+      const icon = h(this.viewport.element.ownerDocument, "span");
       icon.className = "aster-editor-symbol-icon";
       icon.textContent = symbolIcon(symbol.kind);
       icon.title = symbol.detail ? `${symbol.name}: ${symbol.detail}` : symbol.name;

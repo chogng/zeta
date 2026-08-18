@@ -1,9 +1,4 @@
-import {
-  DisposableOwner,
-  DisposableSlot,
-  type IDisposable,
-  toDisposable,
-} from "../common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, type IDisposable, toDisposable } from "../common/lifecycle.js";
 
 export interface WindowIdleOptions {
   readonly timeoutMs?: number;
@@ -18,6 +13,7 @@ interface ScheduledAnimationFrame {
 interface AnimationFrameQueue {
   frame: number | undefined;
   tasks: ScheduledAnimationFrame[];
+  currentTasks: ScheduledAnimationFrame[] | undefined;
 }
 
 const animationFrameQueues = new WeakMap<Window, AnimationFrameQueue>();
@@ -36,23 +32,56 @@ export function scheduleAtNextAnimationFrame(
   };
   queue.tasks.push(task);
   if (queue.frame === undefined) {
-    queue.frame = targetWindow.requestAnimationFrame(() => {
+    const flush = (): void => {
       queue.frame = undefined;
       const tasks = queue.tasks;
       queue.tasks = [];
-      tasks.sort((left, right) => right.priority - left.priority);
-      for (const scheduled of tasks) {
-        if (scheduled.cancelled) continue;
-        try {
-          scheduled.callback();
-        } catch (error) {
-          targetWindow.queueMicrotask(() => {
-            throw error;
-          });
+      queue.currentTasks = tasks;
+      try {
+        while (tasks.length > 0) {
+          tasks.sort((left, right) => right.priority - left.priority);
+          const scheduled = tasks.shift();
+          if (!scheduled || scheduled.cancelled) continue;
+          try {
+            scheduled.callback();
+          } catch (error) {
+            targetWindow.queueMicrotask(() => {
+              throw error;
+            });
+          }
         }
+      } finally {
+        queue.currentTasks = undefined;
       }
-    });
+    };
+    queue.frame = typeof targetWindow.requestAnimationFrame === "function"
+      ? targetWindow.requestAnimationFrame(flush)
+      : targetWindow.setTimeout(flush, 16);
   }
+  return toDisposable(() => {
+    task.cancelled = true;
+  });
+}
+
+/**
+ * Runs during the current animation-frame flush when possible, otherwise
+ * schedules the callback for the next frame.
+ */
+export function runAtThisOrScheduleAtNextAnimationFrame(
+  targetWindow: Window,
+  callback: () => void,
+  priority = 0,
+): IDisposable {
+  const queue = getAnimationFrameQueue(targetWindow);
+  if (!queue.currentTasks) {
+    return scheduleAtNextAnimationFrame(targetWindow, callback, priority);
+  }
+  const task: ScheduledAnimationFrame = {
+    callback,
+    priority,
+    cancelled: false,
+  };
+  queue.currentTasks.push(task);
   return toDisposable(() => {
     task.cancelled = true;
   });
@@ -94,11 +123,17 @@ export function runWhenWindowIdle(
     return toDisposable(() => idleWindow.cancelIdleCallback?.(handle));
   }
 
-  const started = performance.now();
+  const started = targetWindow.performance.now();
   const handle = targetWindow.setTimeout(() => callback({
     didTimeout: options.timeoutMs !== undefined,
-    timeRemaining: () => Math.max(0, 50 - (performance.now() - started)),
+    timeRemaining: () => Math.max(0, 50 - (targetWindow.performance.now() - started)),
   }), options.timeoutMs ?? 0);
+  return toDisposable(() => targetWindow.clearTimeout(handle));
+}
+
+/** Schedules one cancellable timeout scoped to a particular browser window. */
+export function disposableWindowTimeout(targetWindow: Window, callback: () => void, delayMs: number): IDisposable {
+  const handle = targetWindow.setTimeout(callback, delayMs);
   return toDisposable(() => targetWindow.clearTimeout(handle));
 }
 
@@ -148,7 +183,7 @@ function getAnimationFrameQueue(
 ): AnimationFrameQueue {
   let queue = animationFrameQueues.get(targetWindow);
   if (!queue) {
-    queue = { frame: undefined, tasks: [] };
+    queue = { frame: undefined, tasks: [], currentTasks: undefined };
     animationFrameQueues.set(targetWindow, queue);
   }
   return queue;

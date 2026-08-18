@@ -1,20 +1,25 @@
 import "./media/inlineProgress.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { observableValue } from "../../../../base/common/observable.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Provides a reusable inline progress presentation for asynchronous editor requests. */
 export class InlineProgressController extends DisposableOwner {
   private readonly element: HTMLDivElement;
+  private readonly label = observableValue(this, "");
   private active = 0;
 
   constructor(private readonly viewport: EditorViewport) {
     super();
-    this.element = viewport.element.ownerDocument.createElement("div");
-    this.element.className = "aster-editor-inline-progress";
-    this.element.hidden = true;
-    this.element.setAttribute("role", "status");
-    this.element.setAttribute("aria-live", "polite");
+    const n = createReactiveDom(viewport.element.ownerDocument);
+    const view = this.own(n.div({
+      className: "aster-editor-inline-progress",
+      attributes: { role: "status", "aria-live": "polite" },
+      properties: { hidden: this.label.map(label => label.length === 0) },
+    }, this.label).toLiveElement());
+    this.element = view.element;
     viewport.element.append(this.element);
     this.defer(() => this.element.remove());
   }
@@ -22,9 +27,8 @@ export class InlineProgressController extends DisposableOwner {
   async run<T>(label: string, task: Promise<T>): Promise<T> {
     if (typeof label !== "string" || label.trim().length === 0) throw new TypeError("Aster inline progress label must be non-empty");
     const token = ++this.active;
-    this.element.textContent = label.trim();
-    this.element.hidden = false;
-    try { return await task; } finally { if (token === this.active) this.element.hidden = true; }
+    this.label.set(label.trim());
+    try { return await task; } finally { if (token === this.active) this.label.set(""); }
   }
 }
 

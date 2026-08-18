@@ -3,6 +3,7 @@ import { IContextKeyService } from "../../../../platform/contextkey/common/conte
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
@@ -26,7 +27,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(TerminalViewPane, {
-      serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService],
+      serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService, IWorkspaceContextService],
     }),
   }]);
 }

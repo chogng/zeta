@@ -288,7 +288,9 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   };
   const workspaceOpenService = {
     canOpenFolder: true,
+    canOpenWorkspace: true,
     openFolder: async () => {},
+    openWorkspace: async () => {},
     pickFolder: async () => "/workspaces/new",
   };
   disposables.add(new SettingsEditorContribution({

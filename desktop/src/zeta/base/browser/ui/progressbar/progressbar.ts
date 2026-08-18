@@ -1,12 +1,13 @@
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import { h } from "../../dom.js";
 
 /** A determinate or indeterminate progress indicator. */
 export class ProgressBar extends DisposableOwner {
   readonly element: HTMLProgressElement;
 
-  constructor() {
+  constructor(ownerDocument: Document) {
     super();
-    const element = document.createElement("progress");
+    const element = h(ownerDocument, "progress");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-progress-bar";

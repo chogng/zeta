@@ -1,6 +1,7 @@
 import "./media/hover.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type HoverService, type LanguageHover } from "../common/hover.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -9,16 +10,16 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 export class HoverController extends DisposableOwner {
   private readonly element: HTMLDivElement;
   private request: AbortController | undefined;
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private readonly timer = this.own(new DisposableSlot<IDisposable>());
 
   constructor(private readonly viewport: EditorViewport, private readonly service: HoverService, private readonly languageId: string) {
     super();
-    this.element = viewport.element.ownerDocument.createElement("div");
+    this.element = h(viewport.element.ownerDocument, "div");
     this.element.className = "aster-editor-hover";
     this.element.hidden = true;
     this.element.setAttribute("role", "tooltip");
     viewport.element.append(this.element);
-    this.defer(() => this.element.remove());
+    this.defer(() => { this.cancelRequest(); this.element.remove(); });
     this.own(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.schedule(event)));
     this.own(addDisposableListener(viewport.element, "pointerleave", () => this.hide()));
     this.own(addDisposableListener(viewport.element, "scroll", () => this.hide()));
@@ -32,11 +33,13 @@ export class HoverController extends DisposableOwner {
       return;
     }
     this.cancelRequest();
-    if (this.timer !== undefined) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      this.timer = undefined;
+    this.timer.clear();
+    const targetWindow = this.element.ownerDocument.defaultView;
+    if (!targetWindow) return;
+    this.timer.replace(disposableWindowTimeout(targetWindow, () => {
+      this.timer.clear();
       void this.show(target.position);
-    }, 300);
+    }, 300));
   }
 
   private async show(position: TextPosition): Promise<void> {
@@ -52,7 +55,7 @@ export class HoverController extends DisposableOwner {
 
   private render(hover: LanguageHover, position: TextPosition): void {
     this.element.replaceChildren(...hover.contents.map(content => {
-      const node = this.element.ownerDocument.createElement("div");
+      const node = h(this.element.ownerDocument, "div");
       node.className = "aster-editor-hover-content";
       node.textContent = typeof content === "string" ? content : content.value;
       return node;
@@ -68,10 +71,7 @@ export class HoverController extends DisposableOwner {
 
   private hide(): void {
     this.cancelRequest();
-    if (this.timer !== undefined) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-    }
+    this.timer.clear();
     this.element.hidden = true;
     this.element.replaceChildren();
   }

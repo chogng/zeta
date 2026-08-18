@@ -1,6 +1,7 @@
 import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { appendIcon } from "../icon/icon.js";
+import { h } from "../../dom.js";
 
 /** Construction inputs for a semantic icon and text label. */
 export interface IconLabelOptions {
@@ -28,12 +29,12 @@ export class IconLabel extends DisposableOwner {
       );
     }
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("span");
+    const element = h(ownerDocument, "span");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-icon-label";
     if (options.title) element.title = options.title;
-    this.iconElement = ownerDocument.createElement("span");
+    this.iconElement = h(ownerDocument, "span");
     this.iconElement.className = "zeta-icon-label-icon";
     this.iconElement.setAttribute("aria-hidden", "true");
     this.iconElement.classList.toggle(
@@ -45,7 +46,7 @@ export class IconLabel extends DisposableOwner {
     } else {
       options.renderIcon?.(this.iconElement);
     }
-    this.labelElement = ownerDocument.createElement("span");
+    this.labelElement = h(ownerDocument, "span");
     this.labelElement.className = "zeta-icon-label-text";
     this.labelElement.textContent = options.label;
     element.append(this.iconElement, this.labelElement);

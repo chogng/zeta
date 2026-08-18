@@ -2,6 +2,7 @@ import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } fro
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
+import { h } from "../../dom.js";
 
 export interface KeybindingLabelOptions {
   readonly keybinding: ResolvedKeybinding;
@@ -21,7 +22,7 @@ export class KeybindingLabel extends DisposableOwner {
     super();
     const ownerDocument = options.ownerDocument ?? document;
     this._keybinding = options.keybinding;
-    this.element = ownerDocument.createElement("span");
+    this.element = h(ownerDocument, "span");
     this.defer(() => this.element.remove());
     this.element.className = `zeta-keybinding-label zeta-keybinding-label-${options.presentation ?? "plain"}`;
     this.render();
@@ -40,7 +41,7 @@ export class KeybindingLabel extends DisposableOwner {
     const ownerDocument = this.element.ownerDocument;
     const parts = getKeybindingLabelParts(this._keybinding);
     this.element.replaceChildren(...parts.map((part) => {
-      const token = ownerDocument.createElement("kbd");
+      const token = h(ownerDocument, "kbd");
       token.textContent = part.label;
       setAriaAttribute(token, "label", part.ariaLabel);
       return token;

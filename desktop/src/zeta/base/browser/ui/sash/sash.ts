@@ -1,5 +1,6 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { ManagedStyleSheet } from "../../domStylesheets.js";
+import { disposableWindowTimeout } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
 import { type IDisposable, DisposableSlot, DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
 
@@ -106,7 +107,7 @@ export class Sash extends DisposableOwner {
     presentation: SashPresentation = undefined,
   ) {
     super();
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = `zeta-sash zeta-sash-${orientation}`;
@@ -301,12 +302,9 @@ export class Sash extends DisposableOwner {
       return;
     }
     const targetWindow = getWindow(this.element);
-    const handle = targetWindow.setTimeout(() => {
+    this.hoverTimer.replace(disposableWindowTimeout(targetWindow, () => {
       this.element.classList.add("zeta-sash-hover");
-    }, delay);
-    this.hoverTimer.replace(toDisposable(() => {
-      targetWindow.clearTimeout(handle);
-    }));
+    }, delay));
   }
 
   private endHover(fromLinkedSash = false): void {
@@ -354,7 +352,7 @@ export class Sash extends DisposableOwner {
     resources.clear();
     this.element.classList.remove(stateClass);
     if (!orthogonalSash || this.state === SashState.Disabled || orthogonalSash.state === SashState.Disabled) return;
-    const handle = this.element.ownerDocument.createElement("div");
+    const handle = h(this.element.ownerDocument, "div");
     handle.className = `zeta-sash-orthogonal-handle zeta-sash-orthogonal-handle-${edge}`;
     this.element.append(handle);
     this.element.classList.add(stateClass);

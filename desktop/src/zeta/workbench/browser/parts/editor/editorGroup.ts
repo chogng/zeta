@@ -1,6 +1,6 @@
 import { DragAndDropObserver } from "../../../../base/browser/dnd.js";
 import { DndCssClasses } from "../../../../base/browser/ui/dnd/dnd.js";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
@@ -22,6 +22,7 @@ import { extractExternalEditorInputs } from "./editorDropData.js";
 import { EditorPaneRegistry } from "./editorRegistry.js";
 import type { IEditorTabDragAndDrop, EditorTabDropPosition } from "./editorTabDragAndDrop.js";
 import { EditorGroupWatermark } from "./editorGroupWatermark.js";
+import { EditorWelcome, type EditorWelcomeOptions, type IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
@@ -43,6 +44,8 @@ export interface IEditorGroup {
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
   replaceEditor(input: EditorInput, replacement: EditorInput): Promise<void>;
+  setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void;
+  setWelcomeVisible(visible: boolean): void;
   setContent(content: Element): void;
   layout(dimension: IDimension): void;
   focus(): void;
@@ -70,6 +73,8 @@ export interface EditorGroupOptions {
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
   readonly titleActions?: EditorTitleActions;
+  readonly welcome?: EditorWelcomeOptions;
+  readonly welcomeVisible?: boolean;
   readonly onDidActivate?: () => void;
   readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
@@ -107,8 +112,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
   private readonly createLineGutterDecorations: ((resource: URI) => readonly EditorLineGutterDecoration[]) | undefined;
   private readonly titleControl: EditorTitleControl;
-  private readonly watermarkElement: HTMLElement;
+  private readonly welcome: EditorWelcome;
+  private readonly welcomeElement: HTMLElement;
   private readonly entries: EditorGroupEntry[] = [];
+  private welcomeVisible: boolean;
   private activeEntry: EditorGroupEntry | undefined;
   private ordinaryContent: Element | undefined;
   private dimension: IDimension = Dimension.Zero;
@@ -134,7 +141,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.onOpenLocation = options.onOpenLocation;
     this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
     this.createLineGutterDecorations = options.createLineGutterDecorations;
-    this.element = options.ownerDocument.createElement("section");
+    this.element = h(options.ownerDocument, "section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
     this.own(new DragAndDropObserver(this.element, {
@@ -178,18 +185,26 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       },
       options.titleActions,
     ));
-    this.contentElement = options.ownerDocument.createElement("div");
+    this.contentElement = h(options.ownerDocument, "div");
     this.contentElement.className = "zeta-editor-group-content";
-    const watermark = options.keybindingService
+    const shortcuts = options.keybindingService
       ? this.own(new EditorGroupWatermark(
         options.ownerDocument,
         options.keybindingService,
       ))
       : undefined;
-    this.watermarkElement = watermark?.element ??
-      options.ownerDocument.createElement("div");
-    this.watermarkElement.classList.add("zeta-editor-group-watermark");
-    this.contentElement.append(this.watermarkElement);
+    const welcomeOptions: EditorWelcomeOptions = {
+      ...options.welcome,
+      ...(shortcuts ? { shortcuts: shortcuts.element } : {}),
+    };
+    this.welcome = this.own(new EditorWelcome(
+      options.ownerDocument,
+      welcomeOptions,
+    ));
+    this.welcomeElement = this.welcome.element;
+    this.welcomeVisible = options.welcomeVisible ?? true;
+    this.welcomeElement.hidden = !this.welcomeVisible;
+    this.contentElement.append(this.welcomeElement);
     this.element.append(
       this.titleControl.element,
       this.contentElement,
@@ -365,6 +380,16 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.closeEditor(input);
   }
 
+  setWelcomeRecentProjects(projects: readonly IEditorWelcomeProject[]): void {
+    this.welcome.setRecentProjects(projects);
+  }
+
+  setWelcomeVisible(visible: boolean): void {
+    if (this.welcomeVisible === visible) return;
+    this.welcomeVisible = visible;
+    this.renderContent();
+  }
+
   getEditorInsertionIndex(target: EditorInput | undefined, position: EditorTabDropPosition): number {
     if (!target) return this.entries.length;
     const index = this.entries.findIndex(
@@ -455,9 +480,9 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     if (this.ordinaryContent) {
       children.push(this.ordinaryContent);
     } else {
-      this.watermarkElement.hidden = this.entries.length > 0;
+      this.welcomeElement.hidden = !this.welcomeVisible || this.entries.length > 0;
       children.push(
-        this.watermarkElement,
+        this.welcomeElement,
         ...this.entries.map(({ paneInstance }) => paneInstance.element),
       );
     }
@@ -538,7 +563,7 @@ class EditorPaneInstance extends DisposableOwner {
       ownerDocument.defaultView?.AbortController ?? AbortController;
     const abortController = new AbortControllerConstructor();
     this.signal = abortController.signal;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.id = this.panelId;
     this.element.className = "zeta-editor-pane-host";
     this.element.setAttribute("role", "tabpanel");

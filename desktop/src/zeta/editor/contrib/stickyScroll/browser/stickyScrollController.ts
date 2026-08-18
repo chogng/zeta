@@ -4,6 +4,7 @@ import { TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Projects folding ancestors above the viewport as an accessible sticky header stack. */
 export class StickyScrollController extends DisposableOwner {
@@ -12,7 +13,7 @@ export class StickyScrollController extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
     super();
     if (folding.model !== viewport.textModel) throw new TypeError("Aster sticky scroll dependencies must share a text model");
-    this.element = viewport.element.ownerDocument.createElement("div");
+    this.element = h(viewport.element.ownerDocument, "div");
     this.element.className = "aster-editor-sticky-scroll";
     this.element.setAttribute("aria-label", "Sticky section headers");
     viewport.element.append(this.element);
@@ -29,7 +30,7 @@ export class StickyScrollController extends DisposableOwner {
     if (!first) { this.element.hidden = true; return; }
     const entries = buildStickyScrollEntries(this.viewport.textModel, first.logicalLineIndex, this.folding.regions);
     this.element.replaceChildren(...entries.map(entry => {
-      const button = this.element.ownerDocument.createElement("button");
+      const button = h(this.element.ownerDocument, "button");
       button.type = "button";
       button.className = "aster-editor-sticky-scroll-item";
       button.style.paddingLeft = `${8 + entry.depth * 12}px`;

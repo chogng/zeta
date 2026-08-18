@@ -203,6 +203,81 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
   dom.window.close();
 });
 
+test("EditorPart renders the project welcome page and dispatches available cards", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  let openFolderCount = 0;
+  const editor = new EditorPart(dom.window.document, {
+    registry: new EditorPaneRegistry(),
+    welcome: {
+      productName: "Zeta",
+      actions: {
+        openFolder: () => {
+          openFolderCount += 1;
+        },
+      },
+      recentProjects: [{ name: "zeta", path: "~/Desktop" }],
+    },
+  });
+  dom.window.document.body.append(editor.element);
+
+  const welcome = editor.element.querySelector<HTMLElement>(
+    ".zeta-editor-group-welcome",
+  );
+  assert.ok(welcome);
+  assert.match(welcome.textContent ?? "", /ZETA/);
+  assert.match(welcome.textContent ?? "", /Recent projects/);
+  assert.deepEqual(
+    [...welcome.querySelectorAll<HTMLButtonElement>(".zeta-editor-group-welcome-card")]
+      .map((card) => card.textContent),
+    ["Open folder", "Clone repo", "Connect via SSH", "Connect GitHub↗"],
+  );
+  const cards = welcome.querySelectorAll<HTMLButtonElement>(
+    ".zeta-editor-group-welcome-card",
+  );
+  assert.equal(cards[0]?.disabled, false);
+  assert.equal(cards[1]?.disabled, true);
+  cards[0]?.click();
+  assert.equal(openFolderCount, 1);
+
+  editor.setWelcomeVisible(false);
+  assert.equal(welcome.hidden, true);
+  editor.setWelcomeVisible(true);
+  assert.equal(welcome.hidden, false);
+
+  editor.dispose();
+  dom.window.close();
+});
+
+test("EditorPart updates Recent projects and expands the complete list", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const editor = new EditorPart(dom.window.document, {
+    registry: new EditorPaneRegistry(),
+    welcome: {
+      recentProjects: Array.from({ length: 6 }, (_, index) => ({
+        name: `project-${index + 1}`,
+        path: `/workspaces/project-${index + 1}`,
+      })),
+    },
+  });
+  dom.window.document.body.append(editor.element);
+
+  const welcome = editor.element.querySelector<HTMLElement>(".zeta-editor-group-welcome");
+  assert.ok(welcome);
+  assert.equal(welcome.querySelectorAll(".zeta-editor-group-welcome-recent-item").length, 5);
+  const viewAll = welcome.querySelector<HTMLButtonElement>(".zeta-editor-group-welcome-view-all");
+  assert.equal(viewAll?.textContent, "View all (6)");
+  viewAll?.click();
+  assert.equal(welcome.querySelectorAll(".zeta-editor-group-welcome-recent-item").length, 6);
+  assert.equal(welcome.querySelector<HTMLButtonElement>(".zeta-editor-group-welcome-view-all")?.textContent, "Show less");
+
+  editor.setWelcomeRecentProjects([{ name: "new-project", path: "/workspaces/new-project" }]);
+  assert.equal(welcome.querySelectorAll(".zeta-editor-group-welcome-recent-item").length, 1);
+  assert.equal(welcome.querySelector<HTMLButtonElement>(".zeta-editor-group-welcome-view-all")?.disabled, true);
+
+  editor.dispose();
+  dom.window.close();
+});
+
 test("EditorPart saves the active pane through the editor contract", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const registry = new EditorPaneRegistry();

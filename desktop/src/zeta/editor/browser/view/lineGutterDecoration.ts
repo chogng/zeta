@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
+import { h } from "../../../base/browser/dom.js";
 
 export const EDITOR_GUTTER_SLOT_WIDTH = 20;
 
@@ -27,10 +28,10 @@ export class CompositeEditorLineGutterDecoration extends DisposableOwner impleme
   get width(): number { return this.decorations.length * EDITOR_GUTTER_SLOT_WIDTH; }
 
   create(ownerDocument: Document): HTMLElement {
-    const root = ownerDocument.createElement("span");
+    const root = h(ownerDocument, "span");
     root.className = "aster-editor-feature-gutter";
     for (const decoration of this.decorations) {
-      const slot = ownerDocument.createElement("span");
+      const slot = h(ownerDocument, "span");
       slot.className = "aster-editor-feature-gutter-slot";
       slot.append(decoration.create(ownerDocument));
       root.append(slot);

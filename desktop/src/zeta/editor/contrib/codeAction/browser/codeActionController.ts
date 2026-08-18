@@ -1,5 +1,5 @@
 import "./media/codeAction.css";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -24,7 +24,7 @@ export class CodeActionController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Aster code action dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-code-action";
     this.element.hidden = true;
     this.element.setAttribute("role", "menu");
@@ -66,7 +66,7 @@ export class CodeActionController extends DisposableOwner {
   private render(): void {
     this.actionListeners.clear();
     this.element.replaceChildren(...this.actions.map((action, index) => {
-      const button = this.element.ownerDocument.createElement("button");
+      const button = h(this.element.ownerDocument, "button");
       button.type = "button";
       button.setAttribute("role", "menuitem");
       button.textContent = action.disabledReason ? `${action.title} (${action.disabledReason})` : action.title;

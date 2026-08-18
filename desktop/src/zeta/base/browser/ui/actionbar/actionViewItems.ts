@@ -2,7 +2,7 @@ import { Separator, type IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { assertDefined } from "../../../common/types.js";
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type ButtonOptions } from "../button/button.js";
 import type { AnchorPosition } from "../contextview/contextview.js";
@@ -125,8 +125,8 @@ export class LabelActionViewItem extends ActionViewItem {
     if (this.button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    const button = container.ownerDocument.createElement("button");
-    const label = container.ownerDocument.createElement("span");
+    const button = h(container.ownerDocument, "button");
+    const label = h(container.ownerDocument, "span");
     button.className = "zeta-action-label";
     button.type = "button";
     button.disabled = !this.action.enabled;
@@ -139,7 +139,7 @@ export class LabelActionViewItem extends ActionViewItem {
     }
     const icon = this.options.icon ?? this.action.icon;
     if (icon) {
-      const iconContainer = container.ownerDocument.createElement("span");
+      const iconContainer = h(container.ownerDocument, "span");
       iconContainer.className = "zeta-action-label-icon";
       appendIcon(icon, iconContainer);
       button.append(iconContainer);

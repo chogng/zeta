@@ -432,8 +432,9 @@ test("Workbench layout applies the shared profile defaults", () => {
   assert.equal(harness.layout.getPartSize("sidebar").width, 220);
   assert.equal(harness.layout.getPartSize("auxiliarybar").width, 380);
   assert.equal(harness.layout.getPartSize("panel").height, 200);
-  assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
-  assert.equal(harness.layout.isPartVisible("sidebar"), true);
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
+  assert.equal(harness.layout.isPartVisible("sidebar"), false);
+  assert.equal(harness.layout.isPartVisible("panel"), false);
 
   harness.disposables.dispose();
   dom.window.close();
@@ -528,6 +529,38 @@ test("Workbench layout restores scoped state through the storage service", async
 
   otherWorkspace.disposables.dispose();
   otherWorkspaceStorage.dispose();
+  dom.window.close();
+});
+
+test("Workbench layout re-applies the active workspace state after storage switches", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>", {
+    url: "https://zeta.test",
+  });
+  const storage = new BrowserStorageService({
+    ownerWindow: dom.window as unknown as Window,
+    applicationId: "code",
+    workspaceId: "workspace-a",
+    backend: dom.window.localStorage,
+    flushInterval: 0,
+  });
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_000, 700),
+    storageService: storage,
+  });
+  harness.layout.layout(new Dimension(1_000, 700));
+  harness.layout.hidePart("auxiliarybar");
+  await storage.flush(WillSaveStateReason.SHUTDOWN);
+
+  storage.switchWorkspace("workspace-b");
+  harness.layout.restoreWorkspaceState();
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), true);
+
+  storage.switchWorkspace("workspace-a");
+  harness.layout.restoreWorkspaceState();
+  assert.equal(harness.layout.isPartVisible("auxiliarybar"), false);
+
+  harness.disposables.dispose();
+  storage.dispose();
   dom.window.close();
 });
 

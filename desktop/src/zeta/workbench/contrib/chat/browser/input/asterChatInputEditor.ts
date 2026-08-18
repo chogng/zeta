@@ -1,5 +1,5 @@
 import "./asterChatInputEditor.css";
-import { addDisposableListener, stopEvent } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../editor/browser/view/visualLineProjection.js";
@@ -36,7 +36,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 
   constructor(options: ChatInputEditorOptions) {
     super();
-    this.element = options.container.ownerDocument.createElement("div");
+    this.element = h(options.container.ownerDocument, "div");
     this.element.className = "zeta-chat-input-editor";
     this.element.style.height = `${this.height}px`;
     options.container.append(this.element);

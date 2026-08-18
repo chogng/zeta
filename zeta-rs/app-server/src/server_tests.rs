@@ -4009,6 +4009,70 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
 }
 
 #[test]
+fn git_change_file_rpc_preserves_head_index_and_worktree_sides() {
+    let root = std::env::temp_dir().join(format!(
+        "zeta-app-server-git-change-file-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    run_git(&root, &["init"]);
+    run_git(&root, &["config", "user.name", "Zeta Test"]);
+    run_git(&root, &["config", "user.email", "zeta@example.test"]);
+    std::fs::write(root.join("tracked.txt"), "from head\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    run_git(&root, &["commit", "-m", "initial"]);
+    std::fs::write(root.join("tracked.txt"), "from index\n").unwrap();
+    run_git(&root, &["add", "tracked.txt"]);
+    std::fs::write(root.join("tracked.txt"), "from working tree\n").unwrap();
+
+    let server = server()
+        .with_git_root(trusted_workspace(
+            &root,
+            WorkspaceCapability::InspectRepository,
+        ))
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let staged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":2,
+            "method":"git/changeFile",
+            "params":{"path":"tracked.txt","comparison":"staged"}
+        }),
+    );
+    assert!(staged.get("error").is_none(), "{staged}");
+    assert_eq!(staged["result"]["original"]["text"], "from head\n");
+    assert_eq!(staged["result"]["modified"]["text"], "from index\n");
+
+    let unstaged = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"git/changeFile",
+            "params":{"path":"tracked.txt","comparison":"unstaged"}
+        }),
+    );
+    assert!(unstaged.get("error").is_none(), "{unstaged}");
+    assert_eq!(unstaged["result"]["original"]["text"], "from index\n");
+    assert_eq!(
+        unstaged["result"]["modified"]["text"],
+        "from working tree\n"
+    );
+
+    drop(server);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn git_watcher_publishes_external_workspace_changes() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-git-watch-{}-{}",

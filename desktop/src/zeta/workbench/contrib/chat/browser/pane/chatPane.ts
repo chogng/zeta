@@ -10,6 +10,7 @@ import type { SkillReference } from "../../../../../platform/skills/common/skill
 import { ChatInputPart } from "../input/chatInputPart.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends DisposableOwner {
@@ -21,7 +22,7 @@ export class ChatPane extends DisposableOwner {
 
   constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.id = panelId;
     this.element.className = "zeta-chat";
     this.element.setAttribute("role", "tabpanel");

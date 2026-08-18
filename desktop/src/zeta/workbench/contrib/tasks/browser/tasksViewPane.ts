@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
@@ -22,10 +22,10 @@ export class TasksViewPane extends ViewPane {
     this.contentElement.classList.add("zeta-tasks");
     this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Tasks actions" }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    this.statusElement = options.ownerDocument.createElement("div");
+    this.statusElement = h(options.ownerDocument, "div");
     this.statusElement.className = "zeta-tasks-status";
     this.statusElement.setAttribute("role", "status");
-    this.listElement = options.ownerDocument.createElement("ul");
+    this.listElement = h(options.ownerDocument, "ul");
     this.listElement.className = "zeta-tasks-list";
     this.listElement.setAttribute("aria-label", "Workspace tasks");
     this.contentElement.append(this.statusElement, this.listElement);
@@ -91,19 +91,19 @@ export class TasksViewPane extends ViewPane {
   }
 
   private renderTask(task: IWorkspaceTask, index: number): HTMLLIElement {
-    const item = this.element.ownerDocument.createElement("li");
+    const item = h(this.element.ownerDocument, "li");
     item.className = "zeta-task";
-    const button = this.element.ownerDocument.createElement("button");
+    const button = h(this.element.ownerDocument, "button");
     button.type = "button";
     button.className = "zeta-tasks-run";
     button.dataset.taskIndex = String(index);
-    const label = this.element.ownerDocument.createElement("span");
+    const label = h(this.element.ownerDocument, "span");
     label.className = "zeta-task-label";
     label.textContent = task.label;
-    const source = this.element.ownerDocument.createElement("span");
+    const source = h(this.element.ownerDocument, "span");
     source.className = "zeta-task-source";
     source.textContent = `${task.group} · ${task.source}`;
-    const command = this.element.ownerDocument.createElement("code");
+    const command = h(this.element.ownerDocument, "code");
     command.className = "zeta-task-command";
     command.textContent = task.command;
     button.append(label, source, command);
@@ -112,9 +112,9 @@ export class TasksViewPane extends ViewPane {
   }
 
   private renderRun(run: ITaskRun): HTMLLIElement {
-    const item = this.element.ownerDocument.createElement("li");
+    const item = h(this.element.ownerDocument, "li");
     item.className = `zeta-task-run ${run.status}`;
-    const button = this.element.ownerDocument.createElement("button");
+    const button = h(this.element.ownerDocument, "button");
     button.type = "button";
     button.className = "zeta-task-run-button";
     button.dataset.terminalId = run.terminal.id;

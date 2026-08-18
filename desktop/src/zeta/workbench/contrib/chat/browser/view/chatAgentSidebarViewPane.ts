@@ -2,6 +2,7 @@ import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views
 import type { Session, SessionThread } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { type AgentTreeNode, projectAgentTree } from "./chatAgentTree.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 /** Projects durable Session Thread lineage as the Workbench Agent tree. */
 export class ChatAgentSidebarViewPane extends ViewPane {
@@ -25,7 +26,7 @@ export class ChatAgentSidebarViewPane extends ViewPane {
     const content = this.contentElement;
     content.replaceChildren();
     if (sessions.length === 0) {
-      const empty = content.ownerDocument.createElement("p");
+      const empty = h(content.ownerDocument, "p");
       empty.className = "zeta-chat-agent-sidebar-empty";
       empty.textContent = "No agent sessions yet.";
       content.append(empty);
@@ -37,19 +38,19 @@ export class ChatAgentSidebarViewPane extends ViewPane {
   }
 
   private createSessionTree(session: Session, activeSessionId: string | undefined, activeThreadId: string | undefined): HTMLElement {
-    const group = this.contentElement.ownerDocument.createElement("section");
+    const group = h(this.contentElement.ownerDocument, "section");
     group.className = "zeta-chat-agent-session";
     group.dataset.sessionId = session.sessionId;
-    const heading = this.contentElement.ownerDocument.createElement("h3");
+    const heading = h(this.contentElement.ownerDocument, "h3");
     heading.className = "zeta-chat-agent-session-title";
     heading.textContent = session.title;
-    const tree = this.contentElement.ownerDocument.createElement("div");
+    const tree = h(this.contentElement.ownerDocument, "div");
     tree.className = "zeta-chat-agent-tree";
     tree.setAttribute("role", "tree");
     tree.setAttribute("aria-label", `${session.title} agents`);
     const nodes = projectAgentTree(session);
     if (nodes.length === 0) {
-      const empty = this.contentElement.ownerDocument.createElement("span");
+      const empty = h(this.contentElement.ownerDocument, "span");
       empty.className = "zeta-chat-agent-session-detail";
       empty.textContent = session.status;
       tree.append(empty);
@@ -61,7 +62,7 @@ export class ChatAgentSidebarViewPane extends ViewPane {
   }
 
   private appendNode(container: HTMLElement, session: Session, node: AgentTreeNode, depth: number, activeSessionId: string | undefined, activeThreadId: string | undefined): void {
-    const button = this.contentElement.ownerDocument.createElement("button");
+    const button = h(this.contentElement.ownerDocument, "button");
     button.className = "zeta-chat-agent-thread";
     button.type = "button";
     button.dataset.threadId = node.thread.threadId;
@@ -74,15 +75,15 @@ export class ChatAgentSidebarViewPane extends ViewPane {
     const selected = session.sessionId === activeSessionId && node.thread.threadId === activeThreadId;
     button.classList.toggle("checked", selected);
     button.setAttribute("aria-selected", String(selected));
-    const marker = this.contentElement.ownerDocument.createElement("span");
+    const marker = h(this.contentElement.ownerDocument, "span");
     marker.className = "zeta-chat-agent-thread-marker";
     marker.setAttribute("aria-hidden", "true");
-    const text = this.contentElement.ownerDocument.createElement("span");
+    const text = h(this.contentElement.ownerDocument, "span");
     text.className = "zeta-chat-agent-thread-text";
-    const title = this.contentElement.ownerDocument.createElement("span");
+    const title = h(this.contentElement.ownerDocument, "span");
     title.className = "zeta-chat-agent-thread-title";
     title.textContent = node.thread.title ?? defaultThreadTitle(session, node.thread);
-    const detail = this.contentElement.ownerDocument.createElement("span");
+    const detail = h(this.contentElement.ownerDocument, "span");
     detail.className = "zeta-chat-agent-session-detail";
     detail.textContent = threadDetail(node.thread);
     text.append(title, detail);

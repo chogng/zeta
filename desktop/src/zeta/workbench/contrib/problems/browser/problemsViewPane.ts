@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
@@ -43,9 +43,9 @@ export class ProblemsViewPane extends ViewPane {
     super(options);
     this.contentElement.classList.add("zeta-problems");
     const document = options.ownerDocument;
-    const controls = document.createElement("div");
+    const controls = h(document, "div");
     controls.className = "zeta-problems-controls";
-    this.filterInput = document.createElement("input");
+    this.filterInput = h(document, "input");
     this.filterInput.type = "text";
     this.filterInput.className = "zeta-problems-filter";
     this.filterInput.placeholder = "Filter problems";
@@ -63,11 +63,11 @@ export class ProblemsViewPane extends ViewPane {
     };
     this.titleActions = this.own(new ActionBar({ ownerDocument: document, ariaLabel: "Problems actions", actions: [focusFilterAction] }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    const severityControls = document.createElement("div");
+    const severityControls = h(document, "div");
     severityControls.className = "zeta-problems-severities";
     severityControls.setAttribute("aria-label", "Problem severities");
     for (const severity of severities) {
-      const button = document.createElement("button");
+      const button = h(document, "button");
       button.type = "button";
       button.className = `zeta-problems-severity ${severity} checked`;
       button.textContent = severityLabels[severity];
@@ -77,11 +77,11 @@ export class ProblemsViewPane extends ViewPane {
       this.own(addDisposableListener(button, "click", () => this.toggleSeverity(severity)));
     }
     controls.append(this.filterInput, severityControls);
-    this.statusElement = document.createElement("div");
+    this.statusElement = h(document, "div");
     this.statusElement.className = "zeta-problems-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");
-    this.resultsElement = document.createElement("ul");
+    this.resultsElement = h(document, "ul");
     this.resultsElement.className = "zeta-problems-results";
     this.resultsElement.setAttribute("aria-label", "Problems");
     this.contentElement.append(controls, this.statusElement, this.resultsElement);
@@ -123,21 +123,21 @@ export class ProblemsViewPane extends ViewPane {
 
   private renderGroup(resource: URI, problems: readonly ProblemEntry[], indexes: ReadonlyMap<ProblemEntry, number>): HTMLLIElement {
     const document = this.element.ownerDocument;
-    const group = document.createElement("li");
+    const group = h(document, "li");
     group.className = "zeta-problems-file";
-    const heading = document.createElement("div");
+    const heading = h(document, "div");
     heading.className = "zeta-problems-file-heading";
-    const name = document.createElement("span");
+    const name = h(document, "span");
     name.className = "zeta-problems-file-name";
     name.textContent = resourceName(resource);
-    const path = document.createElement("span");
+    const path = h(document, "span");
     path.className = "zeta-problems-file-path";
     path.textContent = resourceParent(resource);
-    const count = document.createElement("span");
+    const count = h(document, "span");
     count.className = "zeta-problems-file-count";
     count.textContent = String(problems.length);
     heading.append(name, path, count);
-    const rows = document.createElement("ul");
+    const rows = h(document, "ul");
     rows.className = "zeta-problems-file-items";
     rows.append(...problems.map(problem => this.renderProblem(problem, indexes.get(problem)!)));
     group.append(heading, rows);
@@ -146,23 +146,23 @@ export class ProblemsViewPane extends ViewPane {
 
   private renderProblem(entry: ProblemEntry, index: number): HTMLLIElement {
     const document = this.element.ownerDocument;
-    const item = document.createElement("li");
+    const item = h(document, "li");
     item.className = `zeta-problems-item ${entry.diagnostic.severity}`;
-    const button = document.createElement("button");
+    const button = h(document, "button");
     button.type = "button";
     button.className = "zeta-problems-item-button";
     button.dataset.problemIndex = String(index);
     button.title = `${entry.diagnostic.message} — ${resourceName(entry.resource)}:${entry.diagnostic.range.start.lineIndex + 1}:${entry.diagnostic.range.start.columnIndex + 1}`;
-    const marker = document.createElement("span");
+    const marker = h(document, "span");
     marker.className = "zeta-problems-marker";
     marker.setAttribute("aria-hidden", "true");
-    const message = document.createElement("span");
+    const message = h(document, "span");
     message.className = "zeta-problems-message";
     message.textContent = entry.diagnostic.message;
-    const source = document.createElement("span");
+    const source = h(document, "span");
     source.className = "zeta-problems-source";
     source.textContent = diagnosticSource(entry.diagnostic);
-    const location = document.createElement("span");
+    const location = h(document, "span");
     location.className = "zeta-problems-location";
     location.textContent = `[Ln ${entry.diagnostic.range.start.lineIndex + 1}, Col ${entry.diagnostic.range.start.columnIndex + 1}]`;
     button.append(marker, message, source, location);

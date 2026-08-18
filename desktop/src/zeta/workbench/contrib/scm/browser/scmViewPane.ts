@@ -1,21 +1,31 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
+import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
+import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
+import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import type { GitChangeStatus, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { URI } from "../../../../base/common/uri.js";
+import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
 import { gitErrorMessage } from "./scmError.js";
 
 type GitChangeSide = "index" | "worktree";
 type GitPathAction = "stage" | "unstage" | "discard";
 
+const inactiveContextMenuProvider = { showContextMenu(): void {} };
+
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
   private readonly gitService: IGitService;
-  private readonly branchElement: HTMLDivElement;
   private readonly commitInput: HTMLTextAreaElement;
   private readonly commitButton: HTMLButtonElement;
   private readonly statusElement: HTMLDivElement;
   private readonly changesElement: HTMLDivElement;
+  private readonly renderedChanges = this.own(new ResettableDisposableGroup());
   private status: GitStatus | undefined;
   private readonly retiredStreamInstanceIds = new Set<string>();
   private revision = 0;
@@ -23,20 +33,14 @@ export class ScmViewPane extends ViewPane {
   private unavailable = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, gitService: IGitService) {
+  constructor(options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService) {
     super(options);
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm");
     const document = options.ownerDocument;
-    const summary = document.createElement("div");
-    summary.className = "zeta-scm-summary";
-    this.branchElement = document.createElement("div");
-    this.branchElement.className = "zeta-scm-branch";
-    this.branchElement.textContent = "Loading repository…";
-    summary.append(this.branchElement);
-    const commitForm = document.createElement("form");
+    const commitForm = h(document, "form");
     commitForm.className = "zeta-scm-commit-form";
-    this.commitInput = document.createElement("textarea");
+    this.commitInput = h(document, "textarea");
     this.commitInput.className = "zeta-scm-commit-input";
     this.commitInput.name = "commitMessage";
     this.commitInput.rows = 2;
@@ -53,14 +57,14 @@ export class ScmViewPane extends ViewPane {
     this.commitButton.classList.add("zeta-scm-commit");
     this.commitButton.type = "submit";
     commitForm.append(this.commitInput, this.commitButton);
-    this.statusElement = document.createElement("div");
-    this.statusElement.className = "zeta-scm-status";
+    this.statusElement = h(document, "div");
+    this.statusElement.className = "zeta-scm-status zeta-aria-live";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");
     this.statusElement.textContent = "Reading Git status…";
-    this.changesElement = document.createElement("div");
+    this.changesElement = h(document, "div");
     this.changesElement.className = "zeta-scm-changes";
-    this.contentElement.append(summary, commitForm, this.statusElement, this.changesElement);
+    this.contentElement.append(commitForm, this.statusElement, this.changesElement);
     this.own(addDisposableListener(commitForm, "submit", (event) => {
       event.preventDefault();
       void this.commit();
@@ -72,9 +76,11 @@ export class ScmViewPane extends ViewPane {
         void this.commit();
       }
     }));
-    this.own(addDisposableListener(this.changesElement, "click", (event) => this.onChangeAction(event)));
     this.own(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
     this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
+    this.own(this.fileIconThemeService.onDidFileIconThemeChange(() => {
+      if (this.status) this.renderStatus(this.status);
+    }));
     this.defer(() => {
       this.disposed = true;
       this.revision += 1;
@@ -120,26 +126,16 @@ export class ScmViewPane extends ViewPane {
     }
   }
 
-  private onChangeAction(event: Event): void {
-    const target = event.target;
-    const HTMLElementConstructor = this.element.ownerDocument.defaultView?.HTMLElement;
-    if (!HTMLElementConstructor || !(target instanceof HTMLElementConstructor) || this.busy) return;
-    const button = target.closest<HTMLButtonElement>("button[data-scm-action]");
-    if (!button || !this.changesElement.contains(button)) return;
-    const action = button.dataset.scmAction as GitPathAction | "stageAll" | "unstageAll";
-    const paths = button.dataset.scmPaths
-      ? parseActionPaths(button.dataset.scmPaths)
-      : button.dataset.scmPath
-      ? [button.dataset.scmPath]
-      : [];
-    if (paths.length === 0) return;
+  private requestPathAction(action: GitPathAction, paths: readonly string[]): void {
+    if (this.busy || paths.length === 0) return;
     if (action === "discard") {
+      const target = paths.length === 1 ? paths[0] : `${paths.length} working-tree files`;
       const confirmed = this.element.ownerDocument.defaultView?.confirm(
-        `Discard working-tree changes in ${paths[0]}? This cannot be undone.`,
+        `Discard changes in ${target}? This cannot be undone.`,
       ) === true;
       if (!confirmed) return;
     }
-    void this.runPathAction(action === "stageAll" ? "stage" : action === "unstageAll" ? "unstage" : action, paths);
+    void this.runPathAction(action, paths);
   }
 
   private async runPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
@@ -182,8 +178,7 @@ export class ScmViewPane extends ViewPane {
     }
     this.status = status;
     this.unavailable = false;
-    this.branchElement.textContent = headLabel(status.head);
-    this.branchElement.title = headTitle(status.head);
+    this.renderedChanges.clear();
     this.changesElement.replaceChildren();
     const conflicts = status.changes.filter((change) => change.conflicted);
     const staged = status.changes.filter((change) => !change.conflicted && change.indexStatus !== "unmodified");
@@ -192,42 +187,155 @@ export class ScmViewPane extends ViewPane {
       ? "No changes."
       : `${status.changes.length} changed ${status.changes.length === 1 ? "file" : "files"}`;
     this.statusElement.textContent = announcement ? `${announcement} ${summary}` : summary;
-    this.appendSection("Merge Changes", conflicts, "worktree", "stageAll");
-    this.appendSection("Staged Changes", staged, "index", "unstageAll");
-    this.appendSection("Changes", working, "worktree", "stageAll");
+    this.appendSection("Merge Changes", conflicts, "worktree");
+    this.appendSection("Staged Changes", staged, "index");
+    this.appendSection("Changes", working, "worktree");
     this.updateCommandState();
   }
 
-  private appendSection(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide, action: "stageAll" | "unstageAll"): void {
+  private appendSection(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide): void {
     if (changes.length === 0) return;
     const document = this.element.ownerDocument;
-    const section = document.createElement("section");
+    const section = h(document, "section");
     section.className = "zeta-scm-section";
-    const heading = document.createElement("h3");
+    const heading = h(document, "h3");
     heading.className = "zeta-scm-section-heading";
-    const label = document.createElement("span");
+    heading.tabIndex = 0;
+    const label = h(document, "span");
+    label.className = "zeta-scm-section-label";
     label.textContent = title;
-    const count = document.createElement("span");
+    const actions = this.renderActionToolbar(
+      sectionActions(title, changes, side).map((action) => this.pathAction(action.id, action.label, action.action, action.paths)),
+      `${title} actions`,
+    );
+    actions.classList.add("zeta-scm-section-actions");
+    const count = h(document, "span");
     count.className = "zeta-scm-section-count";
     count.textContent = String(changes.length);
-    const all = commandButton(document, action === "stageAll" ? "Stage All" : "Unstage All", `${action === "stageAll" ? "Stage" : "Unstage"} all ${title.toLowerCase()}`);
-    all.classList.add("zeta-scm-section-action");
-    all.dataset.scmAction = action;
-    all.dataset.scmPaths = JSON.stringify([...new Set(changes.flatMap(changePaths))]);
-    heading.append(label, count, all);
-    const list = document.createElement("ul");
+    heading.append(label, actions, count);
+    const list = h(document, "ul");
     list.className = "zeta-scm-list";
-    for (const change of changes) list.append(renderChange(document, change, side));
+    for (const change of changes) list.append(this.renderChange(change, side));
     section.append(heading, list);
     this.changesElement.append(section);
+  }
+
+  private renderChange(change: GitRepositoryChange, side: GitChangeSide): HTMLLIElement {
+    const document = this.element.ownerDocument;
+    const item = h(document, "li");
+    item.className = "zeta-scm-change";
+    const name = basename(change.path);
+    const parentPath = dirname(change.path);
+    const fileLabel = this.renderedChanges.add(new IconLabel({
+      label: name,
+      ownerDocument: document,
+      reserveIconSpace: true,
+      renderIcon: (container) => this.fileIconThemeService.renderFileIcon(repositoryFileUri(this.status?.workspacePath, change.path), container),
+      title: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
+    }));
+    fileLabel.element.classList.add("zeta-scm-change-label");
+    if (parentPath) {
+      const description = h(document, "span");
+      description.className = "zeta-scm-change-description";
+      description.textContent = parentPath;
+      fileLabel.element.append(description);
+    }
+    const open = h(document, "button");
+    open.type = "button";
+    open.className = "zeta-scm-change-open";
+    open.setAttribute("aria-label", `Open ${side === "index" ? "staged changes" : "changes"} for ${change.path}`);
+    open.append(fileLabel.element);
+    if (change.conflicted) {
+      open.disabled = true;
+      open.setAttribute("aria-label", `Merge conflict in ${change.path}`);
+    } else {
+      this.renderedChanges.add(addDisposableListener(open, "click", (event) => {
+        if ((event as MouseEvent).detail > 1) return;
+        void this.openChange(change, side, false);
+      }));
+      this.renderedChanges.add(addDisposableListener(open, "dblclick", () => {
+        void this.openChange(change, side, true);
+      }));
+    }
+    const actions = side === "index"
+      ? [this.pathAction(`scm.change.unstage.${change.path}`, `Unstage ${change.path}`, "unstage", changePaths(change))]
+      : [
+        ...(isDiscardable(change) ? [this.pathAction(`scm.change.discard.${change.path}`, `Discard ${change.path}`, "discard", [change.path])] : []),
+        this.pathAction(`scm.change.stage.${change.path}`, `Stage ${change.path}`, "stage", changePaths(change)),
+      ];
+    const toolbar = this.renderActionToolbar(actions, `Actions for ${change.path}`);
+    toolbar.classList.add("zeta-scm-change-actions");
+    const status = side === "index" ? change.indexStatus : change.worktreeStatus;
+    const badge = h(document, "span");
+    badge.className = `zeta-scm-change-status status-${status}`;
+    badge.textContent = statusCode(status);
+    badge.title = statusLabel(status);
+    item.append(open, toolbar, badge);
+    return item;
+  }
+
+  private async openChange(change: GitRepositoryChange, side: GitChangeSide, pinned: boolean): Promise<void> {
+    const status = this.status;
+    if (!status) return;
+    const comparison: GitChangeFileComparison = side === "index" ? "staged" : "unstaged";
+    try {
+      const file = await this.gitService.changeFile(change.path, comparison);
+      if (this.disposed) return;
+      const originalPath = changeOriginalPath(change, comparison);
+      const [originalState, modifiedState] = comparison === "staged"
+        ? ["HEAD", "Index"] as const
+        : ["Index", "Working Tree"] as const;
+      const original = changeEditorInput(file.original, changeFileUri(status, comparison, originalPath, "original"), `${basename(originalPath)} (${originalState})`);
+      const modified = changeEditorInput(file.modified, changeFileUri(status, comparison, change.path, "modified"), `${basename(change.path)} (${modifiedState})`);
+      if (original && modified) {
+        await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), { pinned });
+      } else if (modified) {
+        await this.editorService.openEditor(modified, { pinned });
+      } else if (original) {
+        await this.editorService.openEditor(original, { pinned });
+      }
+    } catch (error) {
+      if (!this.disposed) this.statusElement.textContent = gitErrorMessage(error);
+    }
+  }
+
+  private pathAction(id: string, label: string, action: GitPathAction, paths: readonly string[]): IAction {
+    return {
+      id,
+      label,
+      tooltip: label,
+      icon: action === "stage" ? lxiconsLibrary.add : action === "unstage" ? lxiconsLibrary.remove : lxiconsLibrary.discard,
+      enabled: true,
+      checked: undefined,
+      run: () => this.requestPathAction(action, paths),
+    };
+  }
+
+  private renderActionToolbar(actions: readonly IAction[], ariaLabel: string): HTMLDivElement {
+    const toolbar = this.renderedChanges.add(new ToolBar({
+      ownerDocument: this.element.ownerDocument,
+      contextMenuProvider: inactiveContextMenuProvider,
+      ariaLabel,
+    }));
+    toolbar.setActions(actions);
+    toolbar.element.classList.add("zeta-scm-action-toolbar");
+    for (const button of toolbar.element.querySelectorAll<HTMLButtonElement>("button")) {
+      button.classList.add("zeta-scm-action-button");
+      const item = button.closest<HTMLElement>(".zeta-action-view-item");
+      const action = actions.find((candidate) => candidate.id === item?.dataset.actionId);
+      if (action) {
+        button.setAttribute("aria-label", action.label);
+        if (action.icon) button.dataset.icon = action.icon.id;
+      }
+    }
+    return toolbar.element;
   }
 
   private renderError(error: unknown, revision: number): void {
     if (this.disposed || revision !== this.revision) return;
     this.status = undefined;
     this.unavailable = true;
-    this.branchElement.textContent = "Source Control unavailable";
-    this.branchElement.removeAttribute("title");
+    this.renderedChanges.clear();
     this.changesElement.replaceChildren();
     this.statusElement.textContent = gitErrorMessage(error);
     this.updateCommandState();
@@ -242,90 +350,77 @@ export class ScmViewPane extends ViewPane {
     const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
     this.commitButton.disabled = this.busy || !hasStagedChanges;
     this.commitInput.disabled = this.busy || this.unavailable;
-    for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-command")) {
+    for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-action-button")) {
       button.disabled = this.busy;
     }
   }
-}
-
-function commandButton(document: Document, text: string, ariaLabel: string): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "zeta-scm-command";
-  button.textContent = text;
-  button.setAttribute("aria-label", ariaLabel);
-  return button;
-}
-
-function renderChange(document: Document, change: GitRepositoryChange, side: GitChangeSide): HTMLLIElement {
-  const item = document.createElement("li");
-  item.className = "zeta-scm-change";
-  const path = document.createElement("span");
-  path.className = "zeta-scm-change-path";
-  path.textContent = change.originalPath ? `${change.originalPath} → ${change.path}` : change.path;
-  path.title = path.textContent;
-  const actions = document.createElement("span");
-  actions.className = "zeta-scm-change-actions";
-  if (side === "index") {
-    actions.append(changeAction(document, "unstage", changePaths(change), "Unstage"));
-  } else {
-    actions.append(changeAction(document, "stage", changePaths(change), "Stage"));
-    if (!change.conflicted && ["modified", "deleted", "typeChanged"].includes(change.worktreeStatus)) {
-      actions.append(changeAction(document, "discard", [change.path], "Discard"));
-    }
-  }
-  const status = side === "index" ? change.indexStatus : change.worktreeStatus;
-  const badge = document.createElement("span");
-  badge.className = `zeta-scm-change-status status-${status}`;
-  badge.textContent = statusCode(status);
-  badge.title = statusLabel(status);
-  item.append(path, actions, badge);
-  return item;
-}
-
-function changeAction(document: Document, action: GitPathAction, paths: readonly string[], label: string): HTMLButtonElement {
-  const button = commandButton(document, label, `${label} ${paths[0]}`);
-  button.classList.add("zeta-scm-change-action");
-  button.dataset.scmAction = action;
-  button.dataset.scmPaths = JSON.stringify(paths);
-  return button;
 }
 
 function changePaths(change: GitRepositoryChange): string[] {
   return change.originalPath ? [change.originalPath, change.path] : [change.path];
 }
 
-function parseActionPaths(value: string): string[] {
-  try {
-    const paths: unknown = JSON.parse(value);
-    return Array.isArray(paths) && paths.every((path) => typeof path === "string") ? paths : [];
-  } catch {
-    return [];
-  }
+function isDiscardable(change: GitRepositoryChange): boolean {
+  return !change.conflicted && ["modified", "deleted", "typeChanged"].includes(change.worktreeStatus);
 }
 
-function headLabel(head: GitHead): string {
-  switch (head.type) {
-    case "branch": return `${head.name}${upstreamDistance(head.upstream)}`;
-    case "detached": return `Detached at ${head.objectId.slice(0, 7)}`;
-    case "unborn": return head.name;
+function sectionActions(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide): readonly { readonly id: string; readonly label: string; readonly action: GitPathAction; readonly paths: readonly string[] }[] {
+  if (side === "index") {
+    return [{ id: "scm.section.unstageAll", label: "Unstage All Changes", action: "unstage", paths: uniquePaths(changes.flatMap(changePaths)) }];
   }
+  const actions = [];
+  const discardable = changes.filter(isDiscardable).map((change) => change.path);
+  if (discardable.length > 0) actions.push({ id: "scm.section.discardAll", label: "Discard All Changes", action: "discard" as const, paths: uniquePaths(discardable) });
+  actions.push({ id: `scm.section.stageAll.${title === "Merge Changes" ? "merge" : "changes"}`, label: title === "Merge Changes" ? "Stage All Merge Changes" : "Stage All Changes", action: "stage" as const, paths: uniquePaths(changes.flatMap(changePaths)) });
+  return actions;
 }
 
-function headTitle(head: GitHead): string {
-  switch (head.type) {
-    case "branch": return head.upstream ? `${head.name} tracks ${head.upstream.name}` : head.name;
-    case "detached": return `Detached HEAD ${head.objectId}`;
-    case "unborn": return `${head.name} has no commits`;
-  }
+function uniquePaths(paths: readonly string[]): string[] {
+  return [...new Set(paths)];
 }
 
-function upstreamDistance(upstream: Extract<GitHead, { type: "branch" }>["upstream"]): string {
-  if (!upstream) return "";
-  const parts = [];
-  if (upstream.ahead > 0) parts.push(`↑${upstream.ahead}`);
-  if (upstream.behind > 0) parts.push(`↓${upstream.behind}`);
-  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
+function basename(path: string): string {
+  return path.replaceAll("\\", "/").split("/").at(-1) ?? path;
+}
+
+function dirname(path: string): string {
+  const normalized = path.replaceAll("\\", "/");
+  const separator = normalized.lastIndexOf("/");
+  return separator < 0 ? "" : normalized.slice(0, separator);
+}
+
+function repositoryFileUri(workspacePath: string | undefined, path: string): URI {
+  const normalizedPath = path.replaceAll("\\", "/").replace(/^\/+/, "");
+  const normalizedWorkspace = workspacePath?.replaceAll("\\", "/").replace(/\/+$/, "");
+  if (normalizedWorkspace && (normalizedWorkspace.startsWith("/") || /^[A-Za-z]:\//.test(normalizedWorkspace))) {
+    return URI.file(`${normalizedWorkspace}/${normalizedPath}`);
+  }
+  return URI.parse(`file:///${normalizedPath.split("/").map(encodeURIComponent).join("/")}`);
+}
+
+function changeOriginalPath(change: GitRepositoryChange, comparison: GitChangeFileComparison): string {
+  const status = comparison === "staged" ? change.indexStatus : change.worktreeStatus;
+  return status === "renamed" || status === "copied" ? change.originalPath ?? change.path : change.path;
+}
+
+function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string) {
+  if (content.kind === "binary") return undefined;
+  return {
+    resource,
+    label,
+    readOnly: true,
+    initialText: content.kind === "missing" ? "" : content.text,
+  };
+}
+
+function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, path: string, side: "original" | "modified"): URI {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const query = new URLSearchParams({
+    side,
+    stream: status.streamInstanceId,
+    revision: String(status.revision),
+  });
+  return URI.parse(`git-change:/${comparison}/${encodedPath}?${query}`);
 }
 
 function statusCode(status: GitChangeStatus): string {

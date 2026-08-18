@@ -19,6 +19,8 @@ mod text_diff;
 
 pub use client::GitClient;
 pub use client::GitExecutionLimits;
+pub use content::GitChangeFile;
+pub use content::GitChangeFileComparison;
 pub use content::GitFileRevision;
 pub use error::GitError;
 pub use error::GitResult;

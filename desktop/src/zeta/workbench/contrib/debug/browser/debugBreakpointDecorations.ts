@@ -4,6 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
 import { type IDebugService } from "../../../services/debug/common/debugService.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Workbench-owned projection of Debug breakpoints into the editor's generic gutter slot. */
 export class DebugBreakpointDecorationProvider extends DisposableOwner implements EditorLineGutterDecoration {
@@ -16,7 +17,7 @@ export class DebugBreakpointDecorationProvider extends DisposableOwner implement
   }
 
   create(ownerDocument: Document): HTMLElement {
-    const button = ownerDocument.createElement("button");
+    const button = h(ownerDocument, "button");
     button.className = "zeta-debug-breakpoint-gutter";
     button.type = "button";
     button.addEventListener("click", () => {

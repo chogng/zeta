@@ -3,6 +3,7 @@ import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { IQuickPickItem } from "../common/quickInput.js";
+import { h } from "../../../base/browser/dom.js";
 
 export interface QuickInputListActiveChangeEvent<TItem> {
   readonly item: TItem | undefined;
@@ -29,7 +30,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
   constructor(ownerDocument: Document) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-quick-pick-list";
     this.defer(() => this.element.remove());
 
@@ -39,7 +40,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
       renderItem: (item) => this.renderItem(item),
     }));
     this.list.element.classList.add("zeta-quick-pick-list-items");
-    this.empty = ownerDocument.createElement("div");
+    this.empty = h(ownerDocument, "div");
     this.empty.className = "zeta-quick-pick-empty";
     setRole(this.empty, "status");
     this.empty.textContent = "No matching results";
@@ -106,11 +107,11 @@ export class QuickInputList<TItem extends IQuickPickItem>
 
   private renderItem(item: TItem): HTMLDivElement {
     const ownerDocument = this.element.ownerDocument;
-    const content = ownerDocument.createElement("div");
+    const content = h(ownerDocument, "div");
     content.className = "zeta-quick-pick-row-content";
-    const text = ownerDocument.createElement("span");
+    const text = h(ownerDocument, "span");
     text.className = "zeta-quick-pick-row-text";
-    const label = ownerDocument.createElement("span");
+    const label = h(ownerDocument, "span");
     label.className = "zeta-quick-pick-row-label";
     label.textContent = item.label;
     text.append(label);
@@ -128,7 +129,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
     );
     content.append(text);
     if (item.keybinding) {
-      const keybinding = ownerDocument.createElement("kbd");
+      const keybinding = h(ownerDocument, "kbd");
       keybinding.className = "zeta-quick-pick-row-keybinding";
       keybinding.textContent = item.keybinding;
       content.append(keybinding);
@@ -201,7 +202,7 @@ function appendOptionalText(
   ownerDocument: Document,
 ): void {
   if (!value) return;
-  const element = ownerDocument.createElement("span");
+  const element = h(ownerDocument, "span");
   element.className = className;
   element.textContent = value;
   container.append(element);

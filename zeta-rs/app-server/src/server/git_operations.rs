@@ -6,9 +6,9 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchListResult, GitBranchSwitchParams, GitCommitChangesParams, GitCommitFileParams,
-    GitCommitParams, GitCommitResult as GitCommitResultDto, GitGraphParams, GitHistoryResult,
-    GitOperationResult, GitPathsParams,
+    GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitCommitChangesParams,
+    GitCommitFileParams, GitCommitParams, GitCommitResult as GitCommitResultDto, GitGraphParams,
+    GitHistoryResult, GitOperationResult, GitPathsParams,
 };
 use zeta_git::GitError;
 
@@ -74,6 +74,19 @@ impl AppServer {
             &self
                 .git_runtime_service()?
                 .commit_file(&params.object_id, &path)
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_change_file(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitChangeFileParams = decode(value)?;
+        let path = workspace_paths(vec![params.path])?
+            .pop()
+            .expect("validated change file path");
+        result(
+            &self
+                .git_runtime_service()?
+                .change_file(&path, params.comparison)
                 .map_err(git_error)?,
         )
     }

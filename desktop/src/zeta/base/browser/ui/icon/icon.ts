@@ -1,5 +1,6 @@
 import { type Icon, type IconDefinition, resolveIconDefinition } from "../../../common/icon.js";
 import { setAriaAttribute } from "../aria/aria.js";
+import { h } from "../../dom.js";
 
 const iconPrototypesByDocument = new WeakMap<Document, Map<IconDefinition, SVGElement>>();
 
@@ -22,7 +23,7 @@ function iconPrototype(icon: Icon, document: Document): SVGElement {
     return existing;
   }
 
-  const template = document.createElement("template");
+  const template = h(document, "template");
   template.innerHTML = definition().trim();
   const candidate = template.content.firstElementChild;
   if (template.content.childElementCount !== 1 || candidate?.namespaceURI !== "http://www.w3.org/2000/svg") {

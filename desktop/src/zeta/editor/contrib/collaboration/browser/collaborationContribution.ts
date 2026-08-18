@@ -8,6 +8,7 @@ import type { DocumentCollaborationInvite } from "../../../common/services/docum
 import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationTarget } from "../../../common/services/documentCollaborationService.js";
+import { h, fragment as createFragment } from "../../../../base/browser/dom.js";
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
 
@@ -45,7 +46,7 @@ export class CollaborationContribution extends DisposableOwner {
 
   constructor(private readonly options: CollaborationContributionOptions) {
     super();
-    const element = options.ownerDocument.createElement("div");
+    const element = h(options.ownerDocument, "div");
     element.className = "zeta-document-collaboration-toolbar";
     element.hidden = true;
     element.setAttribute("role", "group");
@@ -60,34 +61,34 @@ export class CollaborationContribution extends DisposableOwner {
     }));
     this.toolbar.element.classList.add("zeta-document-collaboration-actions");
     this.toolbar.element.addEventListener("mousedown", event => event.preventDefault());
-    const status = options.ownerDocument.createElement("span");
+    const status = h(options.ownerDocument, "span");
     status.className = "zeta-document-collaboration-status";
     status.setAttribute("role", "status");
     this.status = status;
-    const invitation = options.ownerDocument.createElement("div");
+    const invitation = h(options.ownerDocument, "div");
     invitation.className = "zeta-document-collaboration-invitation";
     invitation.hidden = true;
     invitation.setAttribute("role", "group");
     invitation.setAttribute("aria-label", "Collaboration invitation");
     this.invitation = invitation;
-    const invitationToken = options.ownerDocument.createElement("pre");
+    const invitationToken = h(options.ownerDocument, "pre");
     invitationToken.className = "zeta-document-collaboration-invitation-token";
     invitationToken.tabIndex = 0;
     invitationToken.setAttribute("aria-label", "Invitation credentials");
     this.invitationToken = invitationToken;
-    const dismissInvitation = options.ownerDocument.createElement("button");
+    const dismissInvitation = h(options.ownerDocument, "button");
     dismissInvitation.className = "zeta-document-collaboration-invitation-dismiss";
     dismissInvitation.type = "button";
     dismissInvitation.textContent = "Dismiss";
     dismissInvitation.addEventListener("click", () => this.clearInvitation());
     invitation.append(invitationToken, dismissInvitation);
-    const members = options.ownerDocument.createElement("div");
+    const members = h(options.ownerDocument, "div");
     members.className = "zeta-document-collaboration-members";
     members.hidden = true;
     members.setAttribute("role", "group");
     members.setAttribute("aria-label", "Collaboration members");
     this.members = members;
-    const memberList = options.ownerDocument.createElement("div");
+    const memberList = h(options.ownerDocument, "div");
     memberList.className = "zeta-document-collaboration-member-list";
     memberList.setAttribute("role", "list");
     this.memberList = memberList;
@@ -220,33 +221,33 @@ export class CollaborationContribution extends DisposableOwner {
 
   private renderMembers(members: readonly DocumentCollaborationMember[]): void {
     const document = this.options.ownerDocument;
-    const fragment = document.createDocumentFragment();
+    const fragment = createFragment(document);
     if (members.length === 0) {
-      const empty = document.createElement("div");
+      const empty = h(document, "div");
       empty.className = "zeta-document-collaboration-members-empty";
       empty.setAttribute("role", "listitem");
       empty.textContent = "No active collaborators";
       fragment.append(empty);
     }
     for (const member of members) {
-      const item = document.createElement("div");
+      const item = h(document, "div");
       item.className = "zeta-document-collaboration-member";
       item.setAttribute("role", "listitem");
       item.dataset.principalId = member.principalId;
-      const identity = document.createElement("span");
+      const identity = h(document, "span");
       identity.className = "zeta-document-collaboration-member-identity";
       identity.textContent = member.displayName;
-      const details = document.createElement("span");
+      const details = h(document, "span");
       details.className = "zeta-document-collaboration-member-details";
       details.textContent = `${member.role} · ${member.principalId}`;
-      const actions = document.createElement("span");
+      const actions = h(document, "span");
       actions.className = "zeta-document-collaboration-member-actions";
-      const rotate = document.createElement("button");
+      const rotate = h(document, "button");
       rotate.type = "button";
       rotate.textContent = "Rotate token";
       rotate.addEventListener("click", () => this.rotateMemberAccessToken(member));
       actions.append(rotate);
-      const revoke = document.createElement("button");
+      const revoke = h(document, "button");
       revoke.type = "button";
       revoke.textContent = "Revoke";
       if (member.principalId === this.principalId) {

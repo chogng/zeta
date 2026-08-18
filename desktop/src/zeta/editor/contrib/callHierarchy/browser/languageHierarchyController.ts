@@ -1,4 +1,4 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -63,7 +63,7 @@ export class LanguageHierarchyController extends DisposableOwner {
   private showSessions(anchor: TextPosition, sessions: readonly HierarchySession[]): void {
     this.closePeek();
     const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
-    const body = widget.element.ownerDocument.createElement("div");
+    const body = h(widget.element.ownerDocument, "div");
     body.className = "aster-editor-language-hierarchy";
     widget.setBody(body);
     for (const session of sessions) for (const root of session.roots) body.append(this.createNode(widget, session, root, [], defaultDirection(session.kind)));
@@ -79,16 +79,16 @@ export class LanguageHierarchyController extends DisposableOwner {
 
   private createNode(widget: PeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection): HTMLElement {
     const document = widget.element.ownerDocument;
-    const node = document.createElement("section");
+    const node = h(document, "section");
     node.className = "aster-editor-language-hierarchy-node";
-    const row = document.createElement("div");
+    const row = h(document, "div");
     row.className = "aster-editor-language-hierarchy-row";
-    const open = document.createElement("button");
+    const open = h(document, "button");
     open.type = "button";
     open.className = "aster-editor-language-hierarchy-item";
     open.textContent = item.detail ? `${item.name} — ${item.detail}` : item.name;
     open.title = resourceLabel(item.resource);
-    const expand = document.createElement("button");
+    const expand = h(document, "button");
     expand.type = "button";
     expand.className = "aster-editor-language-hierarchy-expand";
     expand.textContent = directionLabel(direction);
@@ -99,7 +99,7 @@ export class LanguageHierarchyController extends DisposableOwner {
     this.peek.add(addDisposableListener(expand, "click", () => void this.expand(node, widget, session, item, ancestors, direction, expand)));
     if (ancestors.some(ancestor => hierarchyIdentity(ancestor) === hierarchyIdentity(item))) expand.disabled = true;
     if (session.kind === "call" || session.kind === "type") {
-      const alternate = document.createElement("button");
+      const alternate = h(document, "button");
       alternate.type = "button";
       alternate.className = "aster-editor-language-hierarchy-expand";
       const alternateDirection = oppositeDirection(direction);
@@ -117,7 +117,7 @@ export class LanguageHierarchyController extends DisposableOwner {
       const items = await session.query(item, direction);
       const existing = node.querySelector(":scope > .aster-editor-language-hierarchy-children");
       existing?.remove();
-      const children = widget.element.ownerDocument.createElement("div");
+      const children = h(widget.element.ownerDocument, "div");
       children.className = "aster-editor-language-hierarchy-children";
       if (items.length === 0) {
         children.textContent = `No ${directionLabel(direction).toLowerCase()}.`;

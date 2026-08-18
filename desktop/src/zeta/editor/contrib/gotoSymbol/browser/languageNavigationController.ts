@@ -1,4 +1,4 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -75,11 +75,11 @@ export class LanguageNavigationController extends DisposableOwner {
   private showPeek(kind: LanguageNavigationKind, anchor: TextPosition, locations: readonly LanguageLocation[]): void {
     this.closePeek();
     const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
-    const list = widget.element.ownerDocument.createElement("div");
+    const list = h(widget.element.ownerDocument, "div");
     list.className = "aster-editor-language-locations";
     list.setAttribute("role", "listbox");
     for (const location of locations) {
-      const button = widget.element.ownerDocument.createElement("button");
+      const button = h(widget.element.ownerDocument, "button");
       button.type = "button";
       button.setAttribute("role", "option");
       button.className = "aster-editor-language-location";

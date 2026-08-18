@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
@@ -53,7 +53,7 @@ export class ScmGraphViewPane extends ViewPane {
     super({ ...options, headerActionsVisibility: "whenExpanded" });
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm-secondary-pane");
-    this.graphElement = options.ownerDocument.createElement("div");
+    this.graphElement = h(options.ownerDocument, "div");
     this.graphElement.className = "zeta-scm-graph";
     this.graphElement.setAttribute("role", "status");
     this.graphElement.setAttribute("aria-live", "polite");
@@ -62,9 +62,7 @@ export class ScmGraphViewPane extends ViewPane {
       if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - LoadAhead) void this.loadMore();
     }));
     this.contentElement.append(this.graphElement);
-    if (options.ownerDocument.defaultView?.ResizeObserver) {
-      this.own(observeElementSize(this.graphElement, () => this.renderRows()));
-    }
+    this.own(observeElementSize(this.graphElement, () => this.renderRows()));
     this.own(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
     this.actions = this.own(new ScmGraphTitleActions({
       ownerDocument: options.ownerDocument,
@@ -111,10 +109,10 @@ export class ScmGraphViewPane extends ViewPane {
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       const document = this.graphElement.ownerDocument;
-      const message = document.createElement("p");
+      const message = h(document, "p");
       message.className = "zeta-scm-empty";
       message.textContent = gitErrorMessage(error);
-      const retry = document.createElement("button");
+      const retry = h(document, "button");
       retry.className = "zeta-scm-command";
       retry.type = "button";
       retry.textContent = "Retry";
@@ -142,12 +140,12 @@ export class ScmGraphViewPane extends ViewPane {
     const children: HTMLElement[] = remotes ? [remotes] : [];
     this.list = undefined;
     if (graph.commits.length === 0) {
-      const empty = this.graphElement.ownerDocument.createElement("p");
+      const empty = h(this.graphElement.ownerDocument, "p");
       empty.className = "zeta-scm-empty";
       empty.textContent = "No commits yet.";
       children.push(empty);
     } else {
-      this.list = this.graphElement.ownerDocument.createElement("ol");
+      this.list = h(this.graphElement.ownerDocument, "ol");
       this.list.className = "zeta-scm-graph-list";
       this.list.setAttribute("role", "tree");
       children.push(this.list);
@@ -200,7 +198,7 @@ export class ScmGraphViewPane extends ViewPane {
   }
 
   private renderSpacer(height: number): HTMLLIElement {
-    const spacer = this.graphElement.ownerDocument.createElement("li");
+    const spacer = h(this.graphElement.ownerDocument, "li");
     spacer.className = "zeta-scm-graph-spacer";
     spacer.setAttribute("aria-hidden", "true");
     spacer.style.height = `${height}px`;
@@ -208,15 +206,15 @@ export class ScmGraphViewPane extends ViewPane {
   }
 
   private renderMore(): HTMLDivElement {
-    const container = this.graphElement.ownerDocument.createElement("div");
+    const container = h(this.graphElement.ownerDocument, "div");
     container.className = "zeta-scm-graph-load-more";
     if (this.moreError) {
-      const error = this.graphElement.ownerDocument.createElement("span");
+      const error = h(this.graphElement.ownerDocument, "span");
       error.className = "zeta-scm-empty";
       error.textContent = this.moreError;
       container.append(error);
     }
-    const button = this.graphElement.ownerDocument.createElement("button");
+    const button = h(this.graphElement.ownerDocument, "button");
     button.className = "zeta-scm-command";
     button.type = "button";
     button.disabled = this.loading;
@@ -285,7 +283,7 @@ export class ScmGraphViewPane extends ViewPane {
 
   private renderCommit(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[], graph: SVGSVGElement): HTMLLIElement {
     const document = this.graphElement.ownerDocument;
-    const item = document.createElement("li");
+    const item = h(document, "li");
     item.className = "zeta-scm-graph-commit";
     const current = headObjectId(head) === commit.objectId;
     const merge = commit.parentObjectIds.length > 1;
@@ -308,19 +306,19 @@ export class ScmGraphViewPane extends ViewPane {
       anchorPosition: AnchorPosition.Below,
       gap: 8,
     }));
-    const details = document.createElement("span");
+    const details = h(document, "span");
     details.className = "zeta-scm-graph-details";
-    const subject = document.createElement("span");
+    const subject = h(document, "span");
     subject.className = "zeta-scm-graph-subject";
     subject.textContent = commit.subject;
     details.append(subject);
     const visibleReferences = commitReferences(commit, head, references);
     if (visibleReferences.length > 0) details.append(this.renderReferenceLabels(visibleReferences));
-    const metadata = document.createElement("span");
+    const metadata = h(document, "span");
     metadata.className = "zeta-scm-graph-metadata";
     const date = new Date(commit.timestampSeconds * 1_000);
     metadata.textContent = `${commit.objectId.slice(0, 7)} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-    const row = document.createElement("div");
+    const row = h(document, "div");
     row.className = "zeta-scm-graph-row";
     row.append(graph, details, metadata);
     item.append(row);
@@ -339,15 +337,15 @@ export class ScmGraphViewPane extends ViewPane {
   }
 
   private renderReferenceLabels(references: readonly GitReference[]): HTMLSpanElement {
-    const container = this.graphElement.ownerDocument.createElement("span");
+    const container = h(this.graphElement.ownerDocument, "span");
     container.className = "zeta-scm-graph-label-container";
     container.setAttribute("aria-label", "Git references");
     for (const reference of references) {
-      const label = this.graphElement.ownerDocument.createElement("span");
+      const label = h(this.graphElement.ownerDocument, "span");
       label.className = `zeta-scm-graph-label ${reference.current ? "head" : reference.kind === "remoteBranch" ? "remote" : "local"}`;
       label.dataset.icon = reference.kind === "remoteBranch" ? "cloud" : "git-branch";
       appendIcon(reference.kind === "remoteBranch" ? lxiconsLibrary.cloud : lxiconsLibrary.gitBranch, label);
-      const text = this.graphElement.ownerDocument.createElement("span");
+      const text = h(this.graphElement.ownerDocument, "span");
       text.className = "zeta-scm-graph-label-description";
       text.textContent = reference.name;
       label.append(text);
@@ -359,11 +357,11 @@ export class ScmGraphViewPane extends ViewPane {
 
   private renderRemotes(graph: GraphPage): HTMLDivElement | undefined {
     if (graph.remotes.length === 0) return undefined;
-    const container = this.graphElement.ownerDocument.createElement("div");
+    const container = h(this.graphElement.ownerDocument, "div");
     container.className = "zeta-scm-graph-remotes";
     container.setAttribute("aria-label", "Git remotes");
     for (const remote of graph.remotes) {
-      const label = this.graphElement.ownerDocument.createElement("span");
+      const label = h(this.graphElement.ownerDocument, "span");
       label.className = "zeta-scm-graph-remote";
       label.textContent = remote.identity ? `${remoteLabel(remote.identity.provider)} · ${remote.identity.owner}/${remote.identity.repository} · ${remote.name}` : remote.name;
       label.title = remote.identity ? `${remote.identity.host}/${remote.identity.owner}/${remote.identity.repository}` : `Git remote ${remote.name}`;
@@ -374,18 +372,18 @@ export class ScmGraphViewPane extends ViewPane {
 
   private renderCommitChanges(commit: GitCommitSummary, expanded: ExpandedCommit): HTMLUListElement {
     const document = this.graphElement.ownerDocument;
-    const list = document.createElement("ul");
+    const list = h(document, "ul");
     list.className = "zeta-scm-graph-changes";
     if (expanded.state !== "ready" || expanded.result.changes.length === 0) {
-      const state = document.createElement("li");
+      const state = h(document, "li");
       state.className = `zeta-scm-graph-change-state ${expanded.state}`;
       state.textContent = expanded.state === "loading" ? "Loading changed files…" : expanded.state === "error" ? expanded.message : "No changed files.";
       list.append(state);
       return list;
     }
     for (const change of expanded.result.changes) {
-      const row = document.createElement("li");
-      const button = document.createElement("button");
+      const row = h(document, "li");
+      const button = h(document, "button");
       button.className = "zeta-scm-graph-change";
       button.type = "button";
       button.title = `Open ${change.path} from ${commit.objectId.slice(0, 7)}`;
@@ -400,12 +398,12 @@ export class ScmGraphViewPane extends ViewPane {
       }));
       fileLabel.element.classList.add("zeta-scm-graph-change-label");
       if (parentPath) {
-        const description = document.createElement("span");
+        const description = h(document, "span");
         description.className = "zeta-scm-graph-change-description";
         description.textContent = parentPath;
         fileLabel.element.append(description);
       }
-      const status = document.createElement("span");
+      const status = h(document, "span");
       status.className = `zeta-scm-graph-change-status ${change.status}`;
       status.textContent = changeStatusLabel(change.status);
       button.append(fileLabel.element, status);
@@ -470,12 +468,12 @@ export class ScmGraphViewPane extends ViewPane {
 
   private renderCommitHover(commit: GitCommitSummary): HTMLDivElement {
     const document = this.graphElement.ownerDocument;
-    const hover = document.createElement("div");
+    const hover = h(document, "div");
     hover.className = "zeta-scm-graph-hover";
-    const subject = document.createElement("div");
+    const subject = h(document, "div");
     subject.className = "zeta-scm-graph-hover-subject";
     subject.textContent = commit.subject;
-    const metadata = document.createElement("div");
+    const metadata = h(document, "div");
     metadata.className = "zeta-scm-graph-hover-metadata";
     metadata.textContent = `${commit.objectId} · ${new Date(commit.timestampSeconds * 1_000).toLocaleString()}`;
     hover.append(subject, metadata);

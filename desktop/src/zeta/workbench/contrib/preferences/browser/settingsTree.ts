@@ -2,6 +2,7 @@ import "./media/settingsTree.css";
 import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export interface SettingsTreeOptions<T> {
   readonly ownerDocument: Document;
@@ -49,7 +50,7 @@ export class SettingsTree<T> extends DisposableOwner {
     super();
     this.options = options;
     this.model = options.model;
-    this.element = options.ownerDocument.createElement("div");
+    this.element = h(options.ownerDocument, "div");
     this.element.className = `zeta-settings-tree ${options.rootClassName}`;
     this.own(options.model.onDidChange(() => this.render()));
     this.defer(() => {
@@ -123,12 +124,12 @@ export class SettingsTree<T> extends DisposableOwner {
 
   private createGroup(group: SettingsTreeGroup): RenderedSettingsGroup<T> {
     const document = this.element.ownerDocument;
-    const element = document.createElement("section");
+    const element = h(document, "section");
     element.className = this.options.groupClassName;
-    const heading = document.createElement("h4");
-    const description = document.createElement("p");
+    const heading = h(document, "h4");
+    const description = h(document, "p");
     description.className = this.options.groupDescriptionClassName;
-    const items = document.createElement("div");
+    const items = h(document, "div");
     items.className = this.options.itemsClassName;
     element.append(heading, description, items);
     return { kind: "group", element, heading, description, items, group };

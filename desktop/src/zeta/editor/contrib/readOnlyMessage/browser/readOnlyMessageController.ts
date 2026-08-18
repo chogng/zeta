@@ -1,7 +1,8 @@
 import "./media/readOnlyMessage.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
+import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 export interface ReadOnlyMessageControllerOptions {
@@ -13,7 +14,7 @@ export interface ReadOnlyMessageControllerOptions {
 export class ReadOnlyMessageController extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly durationMs: number;
-  private hideTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly hideTimer = this.own(new DisposableSlot<IDisposable>());
 
   constructor(
     input: HTMLTextAreaElement,
@@ -32,17 +33,14 @@ export class ReadOnlyMessageController extends DisposableOwner {
       throw new RangeError("Aster read-only message duration must be a non-negative safe integer");
     }
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-read-only-message";
     this.element.hidden = true;
     this.element.textContent = message;
     this.element.setAttribute("role", "status");
     this.element.setAttribute("aria-live", "polite");
     viewport.element.append(this.element);
-    this.defer(() => {
-      if (this.hideTimer !== undefined) clearTimeout(this.hideTimer);
-      this.element.remove();
-    });
+    this.defer(() => this.element.remove());
     this.own(addDisposableListener(input, "keydown", event => {
       if (event.defaultPrevented || event.isComposing || !isMutationKey(event)) return;
       stopEvent(event);
@@ -66,22 +64,21 @@ export class ReadOnlyMessageController extends DisposableOwner {
   show(): void {
     this.element.hidden = false;
     this.element.classList.add("visible");
-    if (this.hideTimer !== undefined) clearTimeout(this.hideTimer);
+    this.hideTimer.clear();
     if (this.durationMs === 0) {
       this.hide();
       return;
     }
-    this.hideTimer = setTimeout(() => {
-      this.hideTimer = undefined;
+    const targetWindow = this.element.ownerDocument.defaultView;
+    if (!targetWindow) return;
+    this.hideTimer.replace(disposableWindowTimeout(targetWindow, () => {
+      this.hideTimer.clear();
       this.hide();
-    }, this.durationMs);
+    }, this.durationMs));
   }
 
   hide(): void {
-    if (this.hideTimer !== undefined) {
-      clearTimeout(this.hideTimer);
-      this.hideTimer = undefined;
-    }
+    this.hideTimer.clear();
     this.element.hidden = true;
     this.element.classList.remove("visible");
   }

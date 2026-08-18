@@ -1,5 +1,5 @@
 import "./media/modalEditorPart.css";
-import { addDisposableListener, isHTMLElement, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../../../base/browser/dom.js";
 import { focusFirst, restoreFocus, trapTabFocus } from "../../../../base/browser/focus.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -34,19 +34,19 @@ export class ModalEditorPart extends DisposableOwner {
     super();
     this.focusContent = options.focusContent;
     const ownerDocument = options.container.ownerDocument;
-    this.host = ownerDocument.createElement("div");
+    this.host = h(ownerDocument, "div");
     this.host.className = "zeta-modal-editor-host";
     this.host.hidden = true;
 
-    this.element = ownerDocument.createElement("section");
+    this.element = h(ownerDocument, "section");
     this.element.className = "zeta-modal-editor";
     this.element.tabIndex = -1;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-modal", "true");
 
-    const header = ownerDocument.createElement("header");
+    const header = h(ownerDocument, "header");
     header.className = "zeta-modal-editor-header";
-    const heading = ownerDocument.createElement("h2");
+    const heading = h(ownerDocument, "h2");
     heading.className = "zeta-modal-editor-title";
     heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
     heading.textContent = options.title;
@@ -61,7 +61,7 @@ export class ModalEditorPart extends DisposableOwner {
     closeButton.element.classList.add("zeta-modal-editor-close");
     header.append(heading, closeButton.element);
 
-    const content = ownerDocument.createElement("div");
+    const content = h(ownerDocument, "div");
     content.className = "zeta-modal-editor-content";
     content.append(options.content);
     this.element.append(header, content);

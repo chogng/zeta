@@ -3,6 +3,7 @@ import type { IUntitledChatSession } from "../../services/sessions/common/sessio
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
+import { h } from "../../../base/browser/dom.js";
 
 /** Typed Session and Thread context for the active Sessions Workbench slot. */
 export class SessionsAuxiliarybarPart extends WorkbenchPart {
@@ -22,7 +23,7 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
 
   private render(): void {
     const content = this.contentElement;
-    const heading = content.ownerDocument.createElement("h2");
+    const heading = h(content.ownerDocument, "h2");
     heading.textContent = "Session context";
     const selection = this.viewService.activeSelection;
     if (selection?.kind === "session") {
@@ -40,7 +41,7 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
       content.replaceChildren(heading, contextList(content.ownerDocument, untitledContext(selection.session)));
       return;
     }
-    const state = content.ownerDocument.createElement("p");
+    const state = h(content.ownerDocument, "p");
     state.className = "zeta-sessions-context-empty";
     state.textContent = this.sessionService.state === "loading" ? "Loading sessions…" : this.sessionService.error ?? "No active session.";
     content.replaceChildren(heading, state);
@@ -56,12 +57,12 @@ function untitledContext(session: IUntitledChatSession): ReadonlyArray<readonly 
 }
 
 function contextList(ownerDocument: Document, rows: ReadonlyArray<readonly [string, string]>): HTMLDListElement {
-  const list = ownerDocument.createElement("dl");
+  const list = h(ownerDocument, "dl");
   list.className = "zeta-sessions-context-list";
   for (const [label, value] of rows) {
-    const term = ownerDocument.createElement("dt");
+    const term = h(ownerDocument, "dt");
     term.textContent = label;
-    const detail = ownerDocument.createElement("dd");
+    const detail = h(ownerDocument, "dd");
     detail.textContent = value;
     detail.title = value;
     list.append(term, detail);

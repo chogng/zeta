@@ -1,4 +1,5 @@
 import { Dimension, getClientArea, type IDimension } from "../../../base/browser/geometry.js";
+import { observeElementSize } from "../../../base/browser/observer.js";
 import { type BrowserWindow, getWindow } from "../../../base/browser/window.js";
 import { type Event, Emitter } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
@@ -51,19 +52,7 @@ export class BrowserLayoutService
     this.focusPrimary = options.focus ?? (() => undefined);
     this.dimension = getClientArea(this.root);
 
-    const ResizeObserverConstructor = this.targetWindow.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(([entry]) => {
-        if (!entry) return;
-        const borderBox = entry.borderBoxSize[0];
-        this.layout(new Dimension(
-          borderBox?.inlineSize ?? entry.contentRect.width,
-          borderBox?.blockSize ?? entry.contentRect.height,
-        ));
-      });
-      observer.observe(this.root, { box: "border-box" });
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeElementSize(this.root, size => this.layout(size)));
   }
 
   get mainContainerDimension(): IDimension {

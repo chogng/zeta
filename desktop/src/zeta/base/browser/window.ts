@@ -140,7 +140,7 @@ function isDocument(value: unknown): value is Document {
   return typeof value === "object" &&
     value !== null &&
     "nodeType" in value &&
-    (value as Node).nodeType === Node.DOCUMENT_NODE;
+    (value as Node).nodeType === 9;
 }
 
 class WindowRegistrationLifecycle extends DisposableOwner {

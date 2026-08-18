@@ -1,9 +1,5 @@
 import "./media/quickInput.css";
-import {
-  addDisposableListener,
-  isHTMLElement,
-  stopEvent,
-} from "../../../../base/browser/dom.js";
+import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import {
   BrowserQuickPick,
@@ -48,7 +44,7 @@ export class WorkbenchQuickInputService
     this.layoutService = options.layoutService;
     this.inQuickInput =
       InQuickInputContext.bindTo(options.contextKeyService);
-    this.host = this.ownerDocument.createElement("div");
+    this.host = h(this.ownerDocument, "div");
     this.host.className = "zeta-quick-input-host";
     this.host.hidden = true;
     container.append(this.host);

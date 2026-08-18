@@ -188,6 +188,7 @@ test("capability IPC validators reject malformed input", () => {
   const gitCommit = routes.find((route) => route.channel === "zeta:git:commit")!;
   const gitCommitChanges = routes.find((route) => route.channel === "zeta:git:commit-changes")!;
   const gitCommitFile = routes.find((route) => route.channel === "zeta:git:commit-file")!;
+  const gitChangeFile = routes.find((route) => route.channel === "zeta:git:change-file")!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -476,8 +477,12 @@ test("capability IPC validators reject malformed input", () => {
   const objectId = "a".repeat(40);
   assert.deepEqual(gitCommitChanges.validate({ objectId }), { objectId });
   assert.deepEqual(gitCommitFile.validate({ objectId, path: "src/main.ts" }), { objectId, path: "src/main.ts" });
+  assert.deepEqual(gitChangeFile.validate({ path: "src/main.ts", comparison: "staged" }), { path: "src/main.ts", comparison: "staged" });
+  assert.deepEqual(gitChangeFile.validate({ path: "src/main.ts", comparison: "unstaged" }), { path: "src/main.ts", comparison: "unstaged" });
   assert.throws(() => gitCommitChanges.validate({ objectId: "HEAD" }), /objectId/);
   assert.throws(() => gitCommitFile.validate({ objectId, path: "../outside.ts" }), /workspace root/);
+  assert.throws(() => gitChangeFile.validate({ path: "../outside.ts", comparison: "staged" }), /workspace root/);
+  assert.throws(() => gitChangeFile.validate({ path: "src/main.ts", comparison: "head" }), /staged or unstaged/);
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

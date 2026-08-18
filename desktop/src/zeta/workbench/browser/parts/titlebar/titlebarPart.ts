@@ -6,6 +6,7 @@ import type { IContextMenuService } from "../../../../platform/contextview/brows
 import { WorkbenchPart } from "../../part.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Inputs shared by web and Electron titlebar factories. */
 export interface ITitlebarPartFactoryOptions {
@@ -52,7 +53,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
         { presentation: "inherit-foreground" },
       ),
     );
-    const leftActionsElement = options.ownerDocument.createElement("div");
+    const leftActionsElement = h(options.ownerDocument, "div");
     leftActionsElement.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
     leftActionsElement.append(this.leftActions.element);
     this.titleElement.append(leftActionsElement);
@@ -60,7 +61,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
       this.menubar.element.classList.add("zeta-titlebar-interactive-region");
       this.titleElement.append(this.menubar.element);
     }
-    const actionsElement = options.ownerDocument.createElement("div");
+    const actionsElement = h(options.ownerDocument, "div");
     actionsElement.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
     actionsElement.append(this.actions.element);
     this.contentElement.append(actionsElement);

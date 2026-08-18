@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
@@ -66,7 +66,7 @@ export class ActionBar extends DisposableOwner {
   constructor(options: ActionBarOptions = {}) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
@@ -110,7 +110,7 @@ export class ActionBar extends DisposableOwner {
   }
 
   add(action: IAction): ActionViewItem {
-    const container = this.element.ownerDocument.createElement("div");
+    const container = h(this.element.ownerDocument, "div");
     container.className = "zeta-action-view-item";
     container.classList.toggle("icon", action.icon !== undefined);
     container.dataset.actionId = action.id;

@@ -3,12 +3,14 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
-import type { GitCommitChanges, GitCommitFile, GitCommitResult, GitCommitSummary, GraphPage, GraphQuery, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import type { GitChangeFile, GitChangeFileComparison, GitCommitChanges, GitCommitFile, GitCommitResult, GitCommitSummary, GraphPage, GraphQuery, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
 
 export interface GitServiceOptions {
   readonly api: IGitApi;
   readonly appServerApi: IAppServerApi;
   readonly eventApi: IServerEventApi;
+  readonly workspaceContext: IWorkspaceContextService;
 }
 
 /** App Server-backed implementation of the frontend Git service. */
@@ -20,29 +22,35 @@ export class GitService extends DisposableOwner implements IGitService {
   readonly onDidChangeStatus = this._onDidChangeStatus.event;
   readonly onDidBecomeReady = this._onDidBecomeReady.event;
 
-  constructor(options: GitServiceOptions) {
+  constructor(private readonly options: GitServiceOptions) {
     super();
     this.api = options.api;
     const events = options.eventApi.subscribe((event) => {
-      if (event.method === "git/statusChanged") this._onDidChangeStatus.fire(toGitStatus(event.params.status));
+      if (event.method === "git/statusChanged" && this.hasWorkspaceFolder()) this._onDidChangeStatus.fire(toGitStatus(event.params.status));
     });
     this.defer(() => events.dispose());
     const connection = options.appServerApi.onConnectionState((state) => {
-      if (state === "ready") this._onDidBecomeReady.fire();
+      if (state === "ready" && this.hasWorkspaceFolder()) this._onDidBecomeReady.fire();
     });
     this.defer(() => connection.dispose());
+    this.own(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+      if (workspace.folders.length === 1) this._onDidBecomeReady.fire();
+    }));
   }
 
   async status(): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus(await this.api.status());
   }
 
   async history(): Promise<readonly GitCommitSummary[]> {
+    this.requireWorkspaceFolder();
     const result = await this.api.history();
     return result.commits.map((commit) => ({ ...commit }));
   }
 
   async graph(query: GraphQuery): Promise<GraphPage> {
+    this.requireWorkspaceFolder();
     const result = await this.api.graph({ limit: query.limit, ...(query.cursor ? { cursor: query.cursor } : {}) });
     return {
       commits: result.commits.map((commit) => ({ ...commit, parentObjectIds: [...commit.parentObjectIds] })),
@@ -57,6 +65,7 @@ export class GitService extends DisposableOwner implements IGitService {
   }
 
   async commitChanges(objectId: string): Promise<GitCommitChanges> {
+    this.requireWorkspaceFolder();
     const result = await this.api.commitChanges({ objectId });
     return {
       parentObjectId: result.parentObjectId ?? undefined,
@@ -65,37 +74,59 @@ export class GitService extends DisposableOwner implements IGitService {
   }
 
   async commitFile(objectId: string, path: string): Promise<GitCommitFile> {
+    this.requireWorkspaceFolder();
     const result = await this.api.commitFile({ objectId, path });
     return { original: { ...result.original }, modified: { ...result.modified } };
   }
 
+  async changeFile(path: string, comparison: GitChangeFileComparison): Promise<GitChangeFile> {
+    this.requireWorkspaceFolder();
+    const result = await this.api.changeFile({ path, comparison });
+    return { original: { ...result.original }, modified: { ...result.modified } };
+  }
+
   async stage(paths: readonly string[]): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.stage({ paths: [...paths] })).status);
   }
 
   async unstage(paths: readonly string[]): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.unstage({ paths: [...paths] })).status);
   }
 
   async discardWorktree(paths: readonly string[]): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.discardWorktree({ paths: [...paths] })).status);
   }
 
   async commit(message: string): Promise<GitCommitResult> {
+    this.requireWorkspaceFolder();
     const result = await this.api.commit({ message });
     return { objectId: result.objectId, status: toGitStatus(result.status) };
   }
 
   async fetch(): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.fetch()).status);
   }
 
   async pull(): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.pull()).status);
   }
 
   async push(): Promise<GitStatus> {
+    this.requireWorkspaceFolder();
     return toGitStatus((await this.api.push()).status);
+  }
+
+  private hasWorkspaceFolder(): boolean {
+    return this.options.workspaceContext.getWorkspace().folders.length === 1;
+  }
+
+  private requireWorkspaceFolder(): void {
+    if (!this.hasWorkspaceFolder()) throw new Error("GitUnavailable: Git requires one workspace folder");
   }
 }
 

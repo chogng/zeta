@@ -98,6 +98,13 @@ export interface GitCommitFile {
   readonly modified: GitCommitFileContent;
 }
 
+export type GitChangeFileComparison = "staged" | "unstaged";
+
+export interface GitChangeFile {
+  readonly original: GitCommitFileContent;
+  readonly modified: GitCommitFileContent;
+}
+
 /** Describes one bounded page of Git graph history requested by a frontend consumer. */
 export interface GraphQuery {
   readonly limit: number;
@@ -118,6 +125,7 @@ export interface IGitService {
   graph(query: GraphQuery): Promise<GraphPage>;
   commitChanges(objectId: string): Promise<GitCommitChanges>;
   commitFile(objectId: string, path: string): Promise<GitCommitFile>;
+  changeFile(path: string, comparison: GitChangeFileComparison): Promise<GitChangeFile>;
   stage(paths: readonly string[]): Promise<GitStatus>;
   unstage(paths: readonly string[]): Promise<GitStatus>;
   discardWorktree(paths: readonly string[]): Promise<GitStatus>;

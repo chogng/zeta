@@ -1,7 +1,7 @@
 import { Emitter } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
-import { addDisposableListener, isHTMLElement, stopEvent } from "../../dom.js";
+import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import type { IContextViewProvider } from "../contextview/contextview.js";
@@ -50,7 +50,7 @@ export class SelectBox extends DisposableOwner {
   constructor(options: SelectBoxOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    const list = ownerDocument.createElement("div");
+    const list = h(ownerDocument, "div");
     this.list = list;
     selectBoxId += 1;
     list.id = `zeta-select-box-list-${selectBoxId}`;
@@ -187,7 +187,7 @@ export class SelectBox extends DisposableOwner {
   private renderOptions(): void {
     const ownerDocument = this.list.ownerDocument;
     const elements = this._options.map((option, index) => {
-      const element = ownerDocument.createElement("div");
+      const element = h(ownerDocument, "div");
       element.id = `${this.list.id}-option-${index}`;
       element.className = "zeta-select-box-option";
       element.dataset.index = String(index);
@@ -198,17 +198,17 @@ export class SelectBox extends DisposableOwner {
         element.classList.add("zeta-select-box-option-disabled");
         setAriaAttribute(element, "disabled", true);
       }
-      const label = ownerDocument.createElement("span");
+      const label = h(ownerDocument, "span");
       label.className = "zeta-select-box-option-label";
       label.textContent = option.label;
       element.append(label);
       if (option.description) {
-        const description = ownerDocument.createElement("span");
+        const description = h(ownerDocument, "span");
         description.className = "zeta-select-box-option-description";
         description.textContent = option.description;
         element.append(description);
       }
-      const check = ownerDocument.createElement("span");
+      const check = h(ownerDocument, "span");
       check.className = "zeta-select-box-option-check";
       setAriaAttribute(check, "hidden", true);
       appendIcon(lxiconsLibrary.check, check);

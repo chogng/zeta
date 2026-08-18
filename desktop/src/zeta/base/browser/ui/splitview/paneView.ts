@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { trackFocus } from "../../focus.js";
 import { appendIcon } from "../icon/icon.js";
 import type { Event } from "../../../common/event.js";
@@ -44,7 +44,7 @@ export class PaneView extends DisposableOwner {
   constructor(options: PaneViewOptions) {
     super();
     const { id, title, ownerDocument } = options;
-    const element = ownerDocument.createElement("section");
+    const element = h(ownerDocument, "section");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-pane-view";
@@ -53,27 +53,27 @@ export class PaneView extends DisposableOwner {
     this.id = id;
     this.headerActionsVisibility = options.headerActionsVisibility ?? "always";
 
-    this.headerElement = ownerDocument.createElement("div");
+    this.headerElement = h(ownerDocument, "div");
     this.headerElement.className = "zeta-pane-view-header";
-    this.headerButton = ownerDocument.createElement("button");
+    this.headerButton = h(ownerDocument, "button");
     this.headerButton.className = "zeta-pane-view-header-button";
     this.headerButton.type = "button";
-    const twistyContainer = ownerDocument.createElement("span");
+    const twistyContainer = h(ownerDocument, "span");
     twistyContainer.className = "zeta-pane-view-header-twisty-container";
     twistyContainer.setAttribute("aria-hidden", "true");
     const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, twistyContainer);
     collapsedIcon.classList.add("zeta-pane-view-collapsed-icon");
     const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, twistyContainer);
     expandedIcon.classList.add("zeta-pane-view-expanded-icon");
-    this.titleElement = ownerDocument.createElement("h3");
+    this.titleElement = h(ownerDocument, "h3");
     this.titleElement.className = "zeta-pane-view-header-title";
     this.titleElement.textContent = title;
     this.headerButton.append(twistyContainer, this.titleElement);
-    this.headerActionsElement = ownerDocument.createElement("div");
+    this.headerActionsElement = h(ownerDocument, "div");
     this.headerActionsElement.className = "zeta-pane-view-header-actions";
     this.headerElement.append(this.headerButton, this.headerActionsElement);
 
-    this.contentElement = ownerDocument.createElement("div");
+    this.contentElement = h(ownerDocument, "div");
     this.contentElement.className = "zeta-pane-view-content";
     this.contentElement.id = `zeta-pane-view-content-${encodeURIComponent(id)}`;
     this.headerButton.setAttribute("aria-controls", this.contentElement.id);

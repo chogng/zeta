@@ -2,6 +2,7 @@ import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
 import type { IChatListItem } from "./chatListItems.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
 export class ChatListWidget extends DisposableOwner {
@@ -55,12 +56,12 @@ export class ChatListWidget extends DisposableOwner {
   }
 
   private renderItem(item: IChatListItem): HTMLElement {
-    const article = this.element.ownerDocument.createElement("article");
+    const article = h(this.element.ownerDocument, "article");
     article.className = `zeta-chat-item zeta-chat-item-${item.type}`;
     article.dataset.itemId = item.id;
     if (item.transient) article.dataset.transient = "true";
     if (item.isError) article.classList.add("error");
-    const label = this.element.ownerDocument.createElement("div");
+    const label = h(this.element.ownerDocument, "div");
     label.className = "zeta-chat-item-label";
     label.textContent = itemLabel(item);
     article.append(label);
@@ -72,7 +73,7 @@ export class ChatListWidget extends DisposableOwner {
       }));
       article.append(markdown.element);
     } else {
-      const content = this.element.ownerDocument.createElement("pre");
+      const content = h(this.element.ownerDocument, "pre");
       content.textContent = item.text;
       article.append(content);
     }

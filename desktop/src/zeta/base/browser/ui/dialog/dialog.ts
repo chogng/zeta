@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import {
   focusFirst,
@@ -23,16 +23,16 @@ export class Dialog extends DisposableOwner {
   constructor(options: DialogOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("dialog");
+    const element = h(ownerDocument, "dialog");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-dialog";
-    const heading = ownerDocument.createElement("h2");
+    const heading = h(ownerDocument, "h2");
     heading.className = "zeta-dialog-title";
     heading.id = `zeta-dialog-title-${nextDialogId++}`;
     heading.textContent = options.title;
     setAriaAttribute(element, "labelledby", heading.id);
-    const body = ownerDocument.createElement("div");
+    const body = h(ownerDocument, "div");
     body.className = "zeta-dialog-body";
     if (typeof options.content === "string") {
       body.textContent = options.content;

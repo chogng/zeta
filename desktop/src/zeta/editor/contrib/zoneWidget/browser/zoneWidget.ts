@@ -2,6 +2,7 @@ import "./media/zoneWidget.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { h } from "../../../../base/browser/dom.js";
 
 export interface ZoneWidgetOptions { readonly anchor: TextPosition; readonly createContent: (document: Document) => HTMLElement; readonly className?: string; }
 
@@ -13,7 +14,7 @@ export class ZoneWidget extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport, options: ZoneWidgetOptions) {
     super();
     viewport.textModel.offsetAt(options.anchor);
-    this.element = viewport.element.ownerDocument.createElement("div");
+    this.element = h(viewport.element.ownerDocument, "div");
     this.element.className = `aster-editor-zone-widget${options.className ? ` ${options.className}` : ""}`;
     this.content = options.createContent(viewport.element.ownerDocument);
     this.element.append(this.content);

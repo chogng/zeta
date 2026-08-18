@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
@@ -20,22 +20,22 @@ export class DebugConsoleViewPane extends ViewPane {
     this.contentElement.classList.add("zeta-debug-console");
     this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Debug Console actions" }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    this.sessionSelect = options.ownerDocument.createElement("select");
+    this.sessionSelect = h(options.ownerDocument, "select");
     this.sessionSelect.className = "zeta-debug-console-session";
     this.sessionSelect.setAttribute("aria-label", "Debug Console session");
-    this.output = options.ownerDocument.createElement("pre");
+    this.output = h(options.ownerDocument, "pre");
     this.output.className = "zeta-debug-console-output";
     this.output.tabIndex = 0;
     this.output.setAttribute("role", "log");
     this.output.setAttribute("aria-label", "Debug Console output");
-    this.form = options.ownerDocument.createElement("form");
+    this.form = h(options.ownerDocument, "form");
     this.form.className = "zeta-debug-console-form";
-    this.input = options.ownerDocument.createElement("input");
+    this.input = h(options.ownerDocument, "input");
     this.input.type = "text";
     this.input.placeholder = "Evaluate expression";
     this.input.setAttribute("aria-label", "Debug Console expression");
     this.form.append(this.input);
-    this.status = options.ownerDocument.createElement("div");
+    this.status = h(options.ownerDocument, "div");
     this.status.className = "zeta-debug-console-status";
     this.status.setAttribute("role", "status");
     this.contentElement.append(this.sessionSelect, this.output, this.form, this.status);
@@ -83,7 +83,7 @@ export class DebugConsoleViewPane extends ViewPane {
 }
 
 function option(document: Document, value: string, label: string): HTMLOptionElement {
-  const element = document.createElement("option");
+  const element = h(document, "option");
   element.value = value;
   element.textContent = label;
   return element;

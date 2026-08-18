@@ -2,7 +2,7 @@ import { Emitter } from "../../../common/event.js";
 import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
-import { addDisposableListener, stopEvent } from "../../dom.js";
+import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 import { appendIcon } from "../icon/icon.js";
@@ -51,12 +51,12 @@ export class Dropdown extends DisposableOwner {
     this.options = options;
     this.content = options.content;
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-dropdown";
 
-    const button = ownerDocument.createElement("button");
+    const button = h(ownerDocument, "button");
     this.button = button;
     button.className = "zeta-dropdown-button";
     button.type = "button";
@@ -66,11 +66,11 @@ export class Dropdown extends DisposableOwner {
       setAriaAttribute(button, "label", options.ariaLabel);
     }
 
-    const label = ownerDocument.createElement("span");
+    const label = h(ownerDocument, "span");
     this.label = label;
     label.className = "zeta-dropdown-label";
     label.textContent = options.label;
-    const indicator = ownerDocument.createElement("span");
+    const indicator = h(ownerDocument, "span");
     indicator.className = "zeta-dropdown-indicator";
     appendIcon(options.indicator ?? lxiconsLibrary.dropdownIndicator, indicator);
     setAriaAttribute(indicator, "hidden", true);

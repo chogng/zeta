@@ -1,8 +1,9 @@
-import { addDisposableListener, isNode, stopEvent } from "../../dom.js";
+import { addDisposableListener, isNode, stopEvent, h } from "../../dom.js";
+import { disposableWindowTimeout } from "../../scheduler.js";
 import type { ListDragAndDrop, ListDragData } from "../list/list.js";
 import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeTwistieState } from "./tree.js";
 
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
@@ -45,7 +46,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
   private readonly stickyContainer: HTMLDivElement | undefined;
   private sourceItems: readonly TNode[] = [];
   private findCandidates: readonly TNode[] = [];
-  private autoExpandTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly autoExpandTimer = this.own(new DisposableSlot<IDisposable>());
   private autoExpandId: string | undefined;
 
   readonly onPointer: Event<TreePointerEvent<TNode>> = this._onPointer.event;
@@ -88,7 +89,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
     this.element.classList.add("zeta-tree", `zeta-tree-indent-guides-${options.indentGuides ?? "none"}`);
     if (options.indent !== undefined) this.element.style.setProperty("--zeta-tree-indent", `${options.indent}px`);
     if (options.enableStickyScroll) {
-      this.stickyContainer = this.element.ownerDocument.createElement("div");
+      this.stickyContainer = h(this.element.ownerDocument, "div");
       this.stickyContainer.className = "zeta-tree-sticky-container";
       this.stickyContainer.setAttribute("aria-hidden", "true");
       this.element.append(this.stickyContainer);
@@ -100,7 +101,6 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
     this.own(this.list.onDidChangeFocus(({ item, browserEvent }) => this._onDidChangeFocus.fire({ element: item, browserEvent })));
     this.own(this.list.onDidChangeSelection(({ items, browserEvent }) => this._onDidChangeSelection.fire({ elements: items, browserEvent })));
     this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
-    this.defer(() => this.clearAutoExpand());
   }
 
   get items(): readonly TNode[] { return this.list.items; }
@@ -162,21 +162,21 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
     row.classList.toggle("collapsed", node.collapsible && !this.isExpanded(node));
     row.classList.toggle("find-match", this.findController?.isMatch(node) ?? false);
     row.style.paddingLeft = treeRowPadding(node.depth);
-    const inner = document.createElement("span");
+    const inner = h(document, "span");
     inner.className = "zeta-tree-row-inner";
-    const indent = document.createElement("span");
+    const indent = h(document, "span");
     indent.className = "zeta-tree-indent";
     indent.setAttribute("aria-hidden", "true");
     for (let index = 1; index < node.depth; index += 1) {
-      const guide = document.createElement("span");
+      const guide = h(document, "span");
       guide.className = "zeta-tree-indent-guide";
       indent.append(guide);
     }
-    const twistie = document.createElement("span");
+    const twistie = h(document, "span");
     twistie.className = "zeta-tree-twistie";
     twistie.setAttribute("aria-hidden", "true");
     this.options.renderTwistie?.(node, { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed }, twistie);
-    const contents = document.createElement("span");
+    const contents = h(document, "span");
     contents.className = "zeta-tree-contents";
     contents.append(this.options.renderElement(node));
     inner.append(indent, twistie, contents);
@@ -308,16 +308,17 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
     this.clearAutoExpand();
     if (!node?.collapsible || !node.collapsed) return;
     this.autoExpandId = node.id;
-    this.autoExpandTimer = setTimeout(() => {
-      this.autoExpandTimer = undefined;
+    const targetWindow = this.element.ownerDocument.defaultView;
+    if (!targetWindow) return;
+    this.autoExpandTimer.replace(disposableWindowTimeout(targetWindow, () => {
+      this.autoExpandTimer.clear();
       this.autoExpandId = undefined;
       this._onDidRequestCollapseChange.fire({ element: node, expanded: true, browserEvent });
-    }, 500);
+    }, 500));
   }
 
   private clearAutoExpand(): void {
-    if (this.autoExpandTimer !== undefined) clearTimeout(this.autoExpandTimer);
-    this.autoExpandTimer = undefined;
+    this.autoExpandTimer.clear();
     this.autoExpandId = undefined;
   }
 

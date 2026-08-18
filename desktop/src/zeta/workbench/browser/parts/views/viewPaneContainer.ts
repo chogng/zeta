@@ -4,6 +4,7 @@ import type { IInstantiationService } from "../../../../platform/instantiation/c
 import { FocusedViewContext } from "../../../common/contextkeys.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Construction inputs for one browser view container. */
 export interface ViewPaneContainerOptions {
@@ -38,7 +39,7 @@ export class ViewPaneContainer extends DisposableOwner {
   constructor(options: ViewPaneContainerOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-view-pane-container";

@@ -65,7 +65,7 @@ import {
   IThemeService,
   ThemeService,
 } from "../../platform/theme/common/themeService.js";
-import { type IAnyWorkspaceIdentifier, IWorkspaceContextService, workbenchStateFromWorkspaceIdentifier } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspaceIdentifier } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import {
   type WorkbenchContributionHost,
@@ -93,6 +93,8 @@ import {
   IWorkspaceOpenService,
   WorkspaceOpenService,
 } from "../services/workspaces/browser/workspaceOpenService.js";
+import { RecentWorkspacesService } from "../services/workspaces/browser/recentWorkspacesService.js";
+import { IRecentWorkspacesService } from "../services/workspaces/common/recentWorkspacesService.js";
 import {
   IViewDescriptorService,
   ViewDescriptorService,
@@ -152,6 +154,7 @@ import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexServ
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
+import { ISettingsService } from "../services/preferences/common/settings.js";
 import { AppServerWorkspaceTrustService } from "../services/workspaces/browser/appServerWorkspaceTrustService.js";
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
@@ -195,6 +198,7 @@ import { createWorkbenchProfile, type WorkbenchProfile } from "./workbenchProfil
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
+import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -248,6 +252,7 @@ export class Workbench extends DisposableOwner {
   private readonly workspaceContext: WorkspaceContextService;
   private readonly storage: BrowserStorageService;
   private readonly editor: EditorPart;
+  private readonly workbenchLayout: WorkbenchLayout;
   private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
   private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
   private readonly workbenchWindow: WorkbenchWindow;
@@ -287,10 +292,8 @@ export class Workbench extends DisposableOwner {
     if (nativeHostApi) {
       services.set(INativeHostService, nativeHostApi);
     }
-    services.set(
-      IWorkspaceOpenService,
-      new WorkspaceOpenService(nativeHostApi),
-    );
+    const workspaceOpenService = new WorkspaceOpenService(nativeHostApi);
+    services.set(IWorkspaceOpenService, workspaceOpenService);
     const workspaceContext = this.own(new WorkspaceContextService(workspace));
     this.workspaceContext = workspaceContext;
     services.set(IWorkspaceContextService, workspaceContext);
@@ -343,9 +346,9 @@ export class Workbench extends DisposableOwner {
       IWorkspaceSearchService,
       new BrowserWorkspaceSearchService(api.workspaceSearch),
     );
-    const terminalService = this.own(new TerminalService(api.terminal));
+    const terminalService = this.own(new TerminalService(api.terminal, workspaceContext));
     services.set(ITerminalService, terminalService);
-    const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events }));
+    const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
     services.set(IGitService, gitService);
     const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
     services.set(IChatService, chatService);
@@ -395,6 +398,8 @@ export class Workbench extends DisposableOwner {
     this.workbenchWindow = workbenchWindow;
     this.storage = storage;
     services.set(IStorageService, storage);
+    const recentWorkspaces = this.own(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
+    services.set(IRecentWorkspacesService, recentWorkspaces);
     this.own(lifecycleService.onWillShutdown(event => {
       event.join(workingCopyBackupTracker.flush(), "working-copy backup flush");
       event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
@@ -524,6 +529,13 @@ export class Workbench extends DisposableOwner {
         menuId: MenuId.AgentSidebarTitle,
       },
     }));
+    const welcomeRecentProjects = () => recentWorkspaces.recentWorkspaces.map(project => ({
+      name: project.name,
+      path: project.path,
+      ...(workspaceOpenService.canOpenWorkspace ? {
+        onOpen: () => recentWorkspaces.openWorkspace(project.root),
+      } : {}),
+    }));
     const editor = this.own(new EditorPart(ownerDocument, {
       configurationService: configuration,
       keybindingService: keybindings,
@@ -549,6 +561,18 @@ export class Workbench extends DisposableOwner {
       titleActions: {
         menuService: menus,
         contextMenuProvider: contextMenus,
+      },
+      welcomeVisible: workbenchState === WorkbenchState.EMPTY,
+      welcome: {
+        productName: product.name,
+        recentProjects: welcomeRecentProjects(),
+        actions: {
+          openFolder: workspaceOpenService.canOpenFolder
+            ? () => workspaceOpenService.openFolder()
+            : undefined,
+          connectViaSsh: () => commands.executeCommand(ConnectToRemoteCommandId),
+          connectGitHub: () => services.get(ISettingsService).open("connectors"),
+        },
       },
     }));
     services.set(IEditorPart, editor);
@@ -622,6 +646,9 @@ export class Workbench extends DisposableOwner {
       },
     }));
     this.editor = editor;
+    this.own(recentWorkspaces.onDidChange(() => {
+      editor.setWelcomeRecentProjects(welcomeRecentProjects());
+    }));
     const panelCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
@@ -684,6 +711,7 @@ export class Workbench extends DisposableOwner {
       storageService: storage,
     }));
     workbenchLayout = layout;
+    this.workbenchLayout = layout;
     services.set(IWorkbenchLayoutService, layout);
     this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
     // Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
@@ -820,10 +848,11 @@ export class Workbench extends DisposableOwner {
     this.workingCopyBackups.switchWorkspace(workspace.id);
     await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
     this.storage.switchWorkspace(workspace.id);
-    this.workbenchWindow.setWorkbenchState(
-      workbenchStateFromWorkspaceIdentifier(workspace),
-    );
+    const nextWorkbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
+    this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
     this.workspaceContext.updateWorkspace(workspace);
+    this.editor.setWelcomeVisible(nextWorkbenchState === WorkbenchState.EMPTY);
+    this.workbenchLayout.restoreWorkspaceState();
     await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
   }
 }

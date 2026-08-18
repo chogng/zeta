@@ -2,6 +2,7 @@ import "./media/part.css";
 import { type IDimension } from "../../base/browser/geometry.js";
 import { Emitter, type Event } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { h } from "../../base/browser/dom.js";
 
 /**
  * Base class for a persistent visual region in the browser workbench shell.
@@ -20,14 +21,14 @@ export abstract class WorkbenchPart extends DisposableOwner {
 
   protected constructor(id: string, ownerDocument: Document) {
     super();
-    const element = ownerDocument.createElement("section");
+    const element = h(ownerDocument, "section");
     this.element = element;
     this.defer(() => element.remove());
     element.className = `zeta-workbench-part zeta-workbench-${id}`;
     element.dataset.part = id;
-    this.titleElement = ownerDocument.createElement("div");
+    this.titleElement = h(ownerDocument, "div");
     this.titleElement.className = "zeta-workbench-part-title";
-    this.contentElement = ownerDocument.createElement("div");
+    this.contentElement = h(ownerDocument, "div");
     this.contentElement.className = "zeta-workbench-part-content";
     element.append(this.titleElement, this.contentElement);
   }

@@ -1,6 +1,6 @@
 import "./media/rename.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -20,14 +20,14 @@ export class RenameController extends DisposableOwner {
     super();
     if (viewport.textModel !== selections.textModel) throw new TypeError("Aster rename dependencies must share one text model");
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-rename";
     this.element.hidden = true;
-    this.input = ownerDocument.createElement("input");
+    this.input = h(ownerDocument, "input");
     this.input.className = "aster-editor-rename-input";
     this.input.type = "text";
     this.input.setAttribute("aria-label", "New symbol name");
-    this.status = ownerDocument.createElement("span");
+    this.status = h(ownerDocument, "span");
     this.status.className = "aster-editor-rename-status";
     this.status.setAttribute("aria-live", "polite");
     this.element.append(this.input, this.status);

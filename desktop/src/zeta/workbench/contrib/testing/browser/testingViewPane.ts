@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { type ITestProfile, type ITestRun, type ITestingService } from "../../../services/testing/common/testingService.js";
 import { type ITerminalService } from "../../../services/terminal/common/terminal.js";
 import { type IViewsService } from "../../../services/views/browser/viewsService.js";
@@ -17,15 +17,15 @@ export class TestingViewPane extends ViewPane {
   constructor(options: IViewPaneOptions, private readonly testingService: ITestingService, private readonly terminalService: ITerminalService, private readonly viewsService: IViewsService) {
     super(options);
     this.contentElement.classList.add("zeta-testing");
-    const controls = options.ownerDocument.createElement("div");
+    const controls = h(options.ownerDocument, "div");
     controls.className = "zeta-testing-controls";
     const runAll = button(options.ownerDocument, "Run All", "zeta-testing-run-all");
     const refresh = button(options.ownerDocument, "Refresh", "zeta-testing-refresh");
     controls.append(runAll, refresh);
-    this.statusElement = options.ownerDocument.createElement("div");
+    this.statusElement = h(options.ownerDocument, "div");
     this.statusElement.className = "zeta-testing-status";
     this.statusElement.setAttribute("role", "status");
-    this.profilesElement = options.ownerDocument.createElement("ul");
+    this.profilesElement = h(options.ownerDocument, "ul");
     this.profilesElement.className = "zeta-testing-list";
     this.profilesElement.setAttribute("aria-label", "Test profiles");
     this.contentElement.append(controls, this.statusElement, this.profilesElement);
@@ -79,14 +79,14 @@ export class TestingViewPane extends ViewPane {
 }
 
 function renderProfile(document: Document, profile: ITestProfile, index: number): HTMLLIElement {
-  const item = document.createElement("li");
+  const item = h(document, "li");
   item.className = "zeta-testing-profile";
   const run = button(document, "Run", "zeta-testing-run");
   run.dataset.profileIndex = String(index);
-  const label = document.createElement("span");
+  const label = h(document, "span");
   label.className = "zeta-testing-label";
   label.textContent = profile.label;
-  const detail = document.createElement("span");
+  const detail = h(document, "span");
   detail.className = "zeta-testing-detail";
   detail.textContent = profile.detail ?? profile.source;
   item.append(run, label, detail);
@@ -94,7 +94,7 @@ function renderProfile(document: Document, profile: ITestProfile, index: number)
 }
 
 function renderRun(document: Document, run: ITestRun, index: number): HTMLLIElement {
-  const item = document.createElement("li");
+  const item = h(document, "li");
   item.className = `zeta-testing-result ${run.status}`;
   const open = button(document, `${run.profile.label} — ${run.status}`, "zeta-testing-run-result");
   open.dataset.runIndex = String(index);
@@ -103,7 +103,7 @@ function renderRun(document: Document, run: ITestRun, index: number): HTMLLIElem
 }
 
 function button(document: Document, label: string, className: string): HTMLButtonElement {
-  const element = document.createElement("button");
+  const element = h(document, "button");
   element.type = "button";
   element.className = className;
   element.textContent = label;

@@ -1,6 +1,7 @@
 import "./diffEditorWidget.css";
-import { addDisposableListener, reset, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, fragment as createFragment, h, isHTMLElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
+import { observeResize } from "../../../../base/browser/observer.js";
 import { getWindow } from "../../../../base/browser/window.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
@@ -57,10 +58,10 @@ export class DiffEditorWidget extends DisposableOwner {
     this.showInlineChanges = options.showInlineChanges ?? true;
     this.loopChanges = options.loopChanges ?? true;
     this.currentDiff = this.model.diff;
-    this.element = ownerDocument.createElement("div");
-    this.contentElement = ownerDocument.createElement("div");
-    this.rowsElement = ownerDocument.createElement("div");
-    this.accessibilityStatusElement = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
+    this.contentElement = h(ownerDocument, "div");
+    this.rowsElement = h(ownerDocument, "div");
+    this.accessibilityStatusElement = h(ownerDocument, "div");
     this.element.className = "aster-diff-editor";
     this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
     if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
@@ -81,14 +82,9 @@ export class DiffEditorWidget extends DisposableOwner {
     this.own(addDisposableListener(this.element, "scroll", () => this.project()));
     this.own(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
     this.own(this.model.onDidChange(() => this.refresh()));
-    const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(([entry]) => {
-        if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
-      });
-      observer.observe(this.element);
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeResize(this.element, ([entry]) => {
+      if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
+    }));
     this.layout(getClientArea(this.element));
   }
 
@@ -200,7 +196,7 @@ export class DiffEditorWidget extends DisposableOwner {
     const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
     const endRow = Math.min(rows.length, firstVisibleRow + visibleRowCount + this.overscanRowCount);
     if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow) return;
-    const fragment = this.element.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(this.element.ownerDocument);
     for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
       const row = rows[rowIndex]!;
       fragment.append(createDiffRow(this.element.ownerDocument, row, this.model.original, this.model.modified, this.lineHeight, rowIndex === this.activeChangeRow, this.showInlineChanges));
@@ -213,7 +209,7 @@ export class DiffEditorWidget extends DisposableOwner {
 }
 
 function createDiffRow(ownerDocument: Document, row: LineDiffRow, original: DiffModel["original"], modified: DiffModel["modified"], lineHeight: number, active: boolean, showInlineChanges: boolean): HTMLDivElement {
-  const element = ownerDocument.createElement("div");
+  const element = h(ownerDocument, "div");
   element.className = `aster-diff-editor-row ${row.kind}`;
   element.classList.toggle("active", active);
   element.style.height = `${lineHeight}px`;
@@ -232,12 +228,12 @@ function diffRowLocation(row: LineDiffRow): string {
 }
 
 function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: LineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly DiffRange[], showInlineChanges: boolean): HTMLDivElement {
-  const cell = ownerDocument.createElement("div");
+  const cell = h(ownerDocument, "div");
   cell.className = `aster-diff-editor-cell ${side}`;
-  const number = ownerDocument.createElement("span");
+  const number = h(ownerDocument, "span");
   number.className = "aster-diff-editor-line-number";
   number.textContent = lineIndex === undefined ? "" : String(lineIndex + 1);
-  const content = ownerDocument.createElement("span");
+  const content = h(ownerDocument, "span");
   content.className = "aster-diff-editor-line-content";
   if (text === undefined) {
     cell.classList.add("missing");
@@ -253,11 +249,11 @@ function createDiffCell(ownerDocument: Document, side: "original" | "modified", 
 }
 
 function projectDiffText(ownerDocument: Document, target: HTMLElement, text: string, changes: readonly DiffRange[], changedKind: LineDiffKind): void {
-  const fragment = ownerDocument.createDocumentFragment();
+  const fragment = createFragment(ownerDocument);
   let previousEnd = 0;
   for (const change of changes) {
     fragment.append(text.slice(previousEnd, change.startColumn));
-    const changed = ownerDocument.createElement("span");
+    const changed = h(ownerDocument, "span");
     changed.className = `aster-diff-editor-inline ${changedKind}`;
     changed.textContent = text.slice(change.startColumn, change.endColumn);
     fragment.append(changed);
@@ -268,7 +264,7 @@ function projectDiffText(ownerDocument: Document, target: HTMLElement, text: str
 }
 
 function validateOptions(options: DiffEditorWidgetOptions): void {
-  if (!options || typeof options !== "object" || !isHtmlElement(options.container)) {
+  if (!options || typeof options !== "object" || !isHTMLElement(options.container)) {
     throw new TypeError("Diff editor widget requires a browser container");
   }
   if (!options.model || typeof options.model !== "object") {
@@ -285,11 +281,4 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
   if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError("Diff editor widget overscan row count must be a non-negative safe integer");
   const ownerWindow = getWindow(options.container);
   if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error("Diff editor widget container must belong to its owner window");
-}
-
-function isHtmlElement(value: unknown): value is HTMLElement {
-  if (!value || typeof value !== "object" || !("ownerDocument" in value)) return false;
-  const ownerDocument = (value as Node).ownerDocument;
-  const HTMLElementConstructor = ownerDocument?.defaultView?.HTMLElement;
-  return HTMLElementConstructor !== undefined && value instanceof HTMLElementConstructor;
 }

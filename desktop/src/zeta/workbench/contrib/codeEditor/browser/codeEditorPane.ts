@@ -1,5 +1,5 @@
 import "./media/editorPane.css";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -116,7 +116,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("EditorPane has already been created");
-    const container = parent.ownerDocument.createElement("div");
+    const container = h(parent.ownerDocument, "div");
     container.className = "aster-editor-pane";
     parent.append(container);
     this.container = container;

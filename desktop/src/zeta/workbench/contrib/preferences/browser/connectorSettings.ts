@@ -1,5 +1,5 @@
 import "./media/connectorSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 
@@ -11,7 +11,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
 
   constructor(private readonly document: Document, private readonly connectors: IConnectorService) {
     super();
-    this.element = document.createElement("div");
+    this.element = h(document, "div");
     this.element.className = "zeta-integration-settings";
     this.own(connectors.onDidChange(() => void this.reload()));
     void this.reload();
@@ -20,7 +20,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
 
   private async reload(): Promise<void> {
     const loadGeneration = ++this.loadGeneration;
-    const loading = this.document.createElement("p");
+    const loading = h(this.document, "p");
     loading.className = "zeta-settings-message";
     loading.textContent = "Loading connectors…";
     this.element.replaceChildren(loading);
@@ -36,32 +36,32 @@ export class ConnectorSettingsPane extends DisposableOwner {
   private render(catalog: ConnectorCatalogView): void {
     this.rows.clear();
     if (catalog.connectors.length === 0) {
-      const empty = this.document.createElement("p");
+      const empty = h(this.document, "p");
       empty.className = "zeta-settings-message";
       empty.textContent = "No active plugin contributes a Connector.";
       this.element.replaceChildren(empty);
       return;
     }
-    const fragment = this.document.createDocumentFragment();
+    const fragment = createFragment(this.document);
     for (const connector of catalog.connectors) fragment.append(this.connectorCard(catalog.generation, connector));
     this.element.replaceChildren(fragment);
   }
 
   private connectorCard(catalogGeneration: number, connector: ConnectorView): HTMLElement {
-    const card = this.document.createElement("section");
+    const card = h(this.document, "section");
     card.className = "zeta-integration-card";
-    const heading = this.document.createElement("div");
+    const heading = h(this.document, "div");
     heading.className = "zeta-integration-heading";
-    const title = this.document.createElement("h4");
+    const title = h(this.document, "h4");
     title.textContent = connector.displayName;
-    const state = this.document.createElement("span");
+    const state = h(this.document, "span");
     state.className = `zeta-integration-state is-${connector.state.status}`;
     state.textContent = stateLabel(connector.state);
     heading.append(title, state);
-    const description = this.document.createElement("p");
+    const description = h(this.document, "p");
     description.className = "zeta-connector-description";
     description.textContent = connector.description;
-    const feedback = this.document.createElement("p");
+    const feedback = h(this.document, "p");
     feedback.className = "zeta-integration-feedback";
     feedback.setAttribute("role", "status");
     card.append(heading, description);
@@ -75,13 +75,13 @@ export class ConnectorSettingsPane extends DisposableOwner {
   }
 
   private connectForm(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLFormElement {
-    const form = this.document.createElement("form");
+    const form = h(this.document, "form");
     form.className = "zeta-connector-connect-form";
     const accountId = input(this.document, "Account ID", "External account identity");
     const accountName = input(this.document, "Account name", "Account display name");
     const token = input(this.document, "API token", "API token", "password");
     token.autocomplete = "off";
-    const submit = this.document.createElement("button");
+    const submit = h(this.document, "button");
     submit.type = "submit";
     submit.className = "zeta-theme-action";
     submit.textContent = connector.state.status === "reauthorizationRequired" ? "Reconnect" : "Connect";
@@ -113,7 +113,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
   }
 
   private disconnectButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-    const button = this.document.createElement("button");
+    const button = h(this.document, "button");
     button.type = "button";
     button.className = "zeta-theme-action is-danger";
     button.textContent = "Disconnect";
@@ -132,7 +132,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
   }
 
   private oauthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-    const button = this.document.createElement("button");
+    const button = h(this.document, "button");
     button.type = "button";
     button.className = "zeta-theme-action";
     button.textContent = connector.state.status === "reauthorizationRequired" ? "Reconnect with OAuth" : "Connect with OAuth";
@@ -151,7 +151,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
   }
 
   private refreshOAuthButton(connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-    const button = this.document.createElement("button");
+    const button = h(this.document, "button");
     button.type = "button";
     button.className = "zeta-theme-action";
     button.textContent = "Refresh authorization";
@@ -170,7 +170,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
   }
 
   private revokeOAuthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-    const button = this.document.createElement("button");
+    const button = h(this.document, "button");
     button.type = "button";
     button.className = "zeta-theme-action is-danger";
     button.textContent = "Revoke access";
@@ -190,7 +190,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
 }
 
 function input(document: Document, placeholder: string, ariaLabel: string, type = "text"): HTMLInputElement {
-  const element = document.createElement("input");
+  const element = h(document, "input");
   element.className = "zeta-settings-text-input";
   element.type = type;
   element.placeholder = placeholder;

@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { SlashCommandCatalog } from "../../common/slashCommands.js";
@@ -72,7 +72,7 @@ class TextareaChatInputEditor extends DisposableOwner implements IChatInputEdito
 
   constructor(options: ChatInputEditorOptions) {
     super();
-    this.element = options.container.ownerDocument.createElement("textarea");
+    this.element = h(options.container.ownerDocument, "textarea");
     this.element.className = "zeta-chat-textarea-input";
     this.element.rows = 3;
     this.element.placeholder = options.placeholder;

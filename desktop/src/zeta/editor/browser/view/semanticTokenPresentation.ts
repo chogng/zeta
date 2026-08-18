@@ -1,4 +1,4 @@
-import { reset } from "../../../base/browser/dom.js";
+import { reset, h, fragment as createFragment, text as createText } from "../../../base/browser/dom.js";
 import { type Event } from "../../../base/common/event.js";
 import { combinedDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
@@ -154,7 +154,7 @@ export function projectAsterSemanticTokenLine(
     return;
   }
   const ownerDocument = element.ownerDocument;
-  const fragment = ownerDocument.createDocumentFragment();
+  const fragment = createFragment(ownerDocument);
   const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
   for (let index = 0; index + 1 < boundaries.length; index += 1) {
     const startColumn = boundaries[index]!;
@@ -162,10 +162,10 @@ export function projectAsterSemanticTokenLine(
     const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
     const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
     if (!token && !bracket) {
-      fragment.append(ownerDocument.createTextNode(lineText.slice(startColumn, endColumn)));
+      fragment.append(createText(ownerDocument, lineText.slice(startColumn, endColumn)));
       continue;
     }
-    const tokenElement = ownerDocument.createElement("span");
+    const tokenElement = h(ownerDocument, "span");
     tokenElement.className = "aster-editor-token";
     if (token?.presentation) tokenElement.classList.add(token.presentation);
     for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);

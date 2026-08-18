@@ -1,6 +1,7 @@
 import { Emitter } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import { addDisposableListener, isNode } from "../../dom.js";
+import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable } from "../../../common/lifecycle.js";
+import { addDisposableListener, isNode, h } from "../../dom.js";
+import { disposableWindowTimeout } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
@@ -122,7 +123,7 @@ export class Hover extends DisposableOwner {
     this.hideTimer.clear();
     if (this.visible || this.enabled?.() === false) return;
     const ownerDocument = this.element.ownerDocument;
-    const tooltip = ownerDocument.createElement("div");
+    const tooltip = h(ownerDocument, "div");
     hoverId += 1;
     tooltip.id = `zeta-hover-${hoverId}`;
     tooltip.className = "zeta-hover";
@@ -218,7 +219,7 @@ export class Hover extends DisposableOwner {
         ? this.delayMs()
         : this.delayMs,
     );
-    this.showTimer.replace(windowTimeout(
+    this.showTimer.replace(disposableWindowTimeout(
       getWindow(this.element),
       () => {
         this.showTimer.clear();
@@ -236,7 +237,7 @@ export class Hover extends DisposableOwner {
       !this.visible ||
       this.hideTimer.value
     ) return;
-    this.hideTimer.replace(windowTimeout(
+    this.hideTimer.replace(disposableWindowTimeout(
       getWindow(this.element),
       () => {
         this.hideTimer.clear();
@@ -300,13 +301,4 @@ export class Hover extends DisposableOwner {
     this.restoreDescription();
     if (wasVisible) this._onDidHide.fire();
   }
-}
-
-function windowTimeout(
-  targetWindow: Window,
-  callback: () => void,
-  delayMs: number,
-): IDisposable {
-  const handle = targetWindow.setTimeout(callback, delayMs);
-  return toDisposable(() => targetWindow.clearTimeout(handle));
 }

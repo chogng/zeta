@@ -1,6 +1,6 @@
 import "./sessionsControls.css";
 import "./sessionsList.css";
-import { addDisposableListener } from "../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
@@ -19,15 +19,15 @@ export class SessionsList extends DisposableOwner {
     super();
     this.sessionService = sessionService;
     this.viewService = viewService;
-    this.element = ownerDocument.createElement("section");
+    this.element = h(ownerDocument, "section");
     this.element.className = "zeta-sessions-list";
-    this.heading = ownerDocument.createElement("h2");
+    this.heading = h(ownerDocument, "h2");
     this.heading.textContent = title;
-    this.newSessionButton = ownerDocument.createElement("button");
+    this.newSessionButton = h(ownerDocument, "button");
     this.newSessionButton.type = "button";
     this.newSessionButton.className = "zeta-sessions-button zeta-sessions-primary-button";
     this.newSessionButton.textContent = newSessionLabel;
-    this.list = ownerDocument.createElement("div");
+    this.list = h(ownerDocument, "div");
     this.list.className = "zeta-sessions-list-items";
     this.element.append(this.heading, this.newSessionButton, this.list);
     this.own(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
@@ -63,7 +63,7 @@ export class SessionsList extends DisposableOwner {
       items.push(button);
     }
     if (items.length === 0) {
-      const empty = ownerDocument.createElement("p");
+      const empty = h(ownerDocument, "p");
       empty.className = "zeta-sessions-empty";
       empty.textContent = this.sessionService.state === "loading"
         ? "Loading sessions…"
@@ -75,7 +75,7 @@ export class SessionsList extends DisposableOwner {
 }
 
 function sessionButton(ownerDocument: Document, title: string, selected: boolean): HTMLButtonElement {
-  const button = ownerDocument.createElement("button");
+  const button = h(ownerDocument, "button");
   button.type = "button";
   button.className = "zeta-sessions-list-item";
   button.classList.toggle("selected", selected);

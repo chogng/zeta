@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
@@ -10,7 +10,7 @@ export class DiagnosticHoverController extends DisposableOwner {
   constructor(private readonly viewport: EditorViewport) {
     super();
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-diagnostic-hover";
     this.element.hidden = true;
     this.element.setAttribute("role", "tooltip");

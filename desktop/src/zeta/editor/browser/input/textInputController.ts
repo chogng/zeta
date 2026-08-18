@@ -1,4 +1,4 @@
-import { addDisposableListener, stopEvent } from "../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
@@ -200,7 +200,7 @@ export class TextInputController extends DisposableOwner {
     this.languageEditing = options.languageEditing ? this.own(options.languageEditing) : options.language ? this.own(languageEditingFactory!(viewport.textModel, selectionController, options.language, options.indentation)) : undefined;
     this.wordPattern = options.wordPattern ?? (options.language ? () => options.language!.configurations.getLanguageConfiguration(options.language!.languageId).wordPattern : undefined);
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("textarea");
+    this.element = h(ownerDocument, "textarea");
     this.element.className = "aster-editor-input";
     this.element.tabIndex = -1;
     this.element.spellcheck = false;

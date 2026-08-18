@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h, text as createText } from "../../dom.js";
 
 export interface ToggleOptions {
   readonly ownerDocument?: Document;
@@ -32,22 +32,22 @@ export class Toggle extends DisposableOwner {
       ? { label: optionsOrLabel, checked, onChange }
       : optionsOrLabel;
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("label");
+    const element = h(ownerDocument, "label");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-toggle";
 
-    const input = ownerDocument.createElement("input");
+    const input = h(ownerDocument, "input");
     this.input = input;
     input.type = "checkbox";
     input.checked = options.checked ?? false;
     input.disabled = options.disabled === true;
     if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
     element.append(input);
-    const content = options.content ?? (options.label ? ownerDocument.createTextNode(options.label) : undefined);
+    const content = options.content ?? (options.label ? createText(ownerDocument, options.label) : undefined);
     if (content) {
       if (options.contentPlacement === "before-control") {
-        const contentElement = ownerDocument.createElement("span");
+        const contentElement = h(ownerDocument, "span");
         this.contentElement = contentElement;
         contentElement.className = "zeta-toggle-content";
         contentElement.append(content);
@@ -120,7 +120,7 @@ export class Switch extends Toggle {
     super(optionsOrLabel, checked, onChange);
     this.element.classList.add("zeta-switch");
     this.input.setAttribute("role", "switch");
-    const track = this.element.ownerDocument.createElement("span");
+    const track = h(this.element.ownerDocument, "span");
     this.track = track;
     track.className = "zeta-switch-track";
     track.setAttribute("aria-hidden", "true");

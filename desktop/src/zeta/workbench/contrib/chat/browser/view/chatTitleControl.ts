@@ -8,6 +8,7 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
 import { MultiChatTabsControl } from "./multiChatTabsControl.js";
 import type { PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 /** Owns Chat's title content and action projections. */
 export class ChatTitleControl extends DisposableOwner {
@@ -34,7 +35,7 @@ export class ChatTitleControl extends DisposableOwner {
     ));
     layoutToolbar.element.setAttribute("aria-label", "Chat layout");
     layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
-    this.actionsElement = ownerDocument.createElement("div");
+    this.actionsElement = h(ownerDocument, "div");
     this.actionsElement.className = "zeta-chat-title-actions";
     this.actionsElement.append(toolbar.element, layoutToolbar.element);
     this.defer(() => this.actionsElement.remove());

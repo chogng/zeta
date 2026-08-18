@@ -3,14 +3,15 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import type { IConfigurationChangeEvent, IConfigurationService } from "../../../../../platform/configuration/common/configurationService.js";
+import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../../../platform/configuration/common/configurationService.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
+import { ListConfiguration } from "../../../../../platform/list/common/listConfiguration.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
-test("ExplorerViewPane renders, expands, and opens workspace files", async () => {
+test("ExplorerViewPane opens workspace files on single click", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
   const installedGlobals = installDomGlobals(browser);
   const root = URI.file("C:\\project");
@@ -90,7 +91,8 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
   const configurationChanges = new Emitter<IConfigurationChangeEvent>();
   const configurationService: IConfigurationService = {
     onDidChangeConfiguration: configurationChanges.event,
-    getValue: (key) => key.defaultValue,
+    getValue: <T>(key: IConfigurationKey<T>) =>
+      (key === ListConfiguration.openMode ? "doubleClick" : key.defaultValue) as T,
     updateValue: async () => {},
     resetValue: async () => {},
     reload: async () => {},
@@ -127,9 +129,11 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       },
       {
         canOpenFolder: true,
+        canOpenWorkspace: true,
         openFolder: async () => {
           folderOpens += 1;
         },
+        openWorkspace: async () => {},
         pickFolder: async () => undefined,
       },
     );

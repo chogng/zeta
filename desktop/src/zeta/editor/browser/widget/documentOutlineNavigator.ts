@@ -1,6 +1,7 @@
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { DocumentNodeId } from "../../common/model/document.js";
 import type { DocumentOutline } from "../../common/model/documentOutline.js";
+import { h, fragment as createFragment } from "../../../base/browser/dom.js";
 
 export interface DocumentOutlineNavigatorOptions {
   readonly ownerDocument: Document;
@@ -14,14 +15,14 @@ export class DocumentOutlineNavigator extends DisposableOwner {
 
   constructor(private readonly options: DocumentOutlineNavigatorOptions) {
     super();
-    const element = options.ownerDocument.createElement("nav");
+    const element = h(options.ownerDocument, "nav");
     element.className = "zeta-document-outline";
     element.hidden = true;
     element.setAttribute("aria-label", "Document outline");
-    const title = options.ownerDocument.createElement("div");
+    const title = h(options.ownerDocument, "div");
     title.className = "zeta-document-outline-title";
     title.textContent = "Outline";
-    const list = options.ownerDocument.createElement("ol");
+    const list = h(options.ownerDocument, "ol");
     list.className = "zeta-document-outline-list";
     element.append(title, list);
     this.element = element;
@@ -32,11 +33,11 @@ export class DocumentOutlineNavigator extends DisposableOwner {
   setOutline(outline: DocumentOutline): void {
     this.list.replaceChildren();
     this.element.hidden = outline.length === 0;
-    const fragment = this.options.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(this.options.ownerDocument);
     for (const entry of outline) {
-      const item = this.options.ownerDocument.createElement("li");
+      const item = h(this.options.ownerDocument, "li");
       item.className = "zeta-document-outline-item";
-      const button = this.options.ownerDocument.createElement("button");
+      const button = h(this.options.ownerDocument, "button");
       button.type = "button";
       button.className = "zeta-document-outline-entry";
       button.dataset.nodeId = entry.nodeId;

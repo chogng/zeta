@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../dom.js";
+import { addDisposableListener, h } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import { DisposableOwner, DisposableSlot } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
@@ -34,7 +34,7 @@ export class Button extends DisposableOwner {
     const ownerDocument = options.ownerDocument ?? document;
     this.hoverGroupId = options.hoverGroupId;
     this.hoverAnchorPosition = options.hoverAnchorPosition;
-    const element = ownerDocument.createElement("button");
+    const element = h(ownerDocument, "button");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-button";

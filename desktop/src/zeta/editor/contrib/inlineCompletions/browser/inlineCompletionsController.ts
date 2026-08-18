@@ -1,6 +1,6 @@
 import "./media/inlineCompletions.css";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
@@ -16,7 +16,7 @@ export class InlineCompletionsController extends DisposableOwner {
 
   constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster inline completion failed", error)) {
     super();
-    const element = this.element = viewport.element.ownerDocument.createElement("span");
+    const element = this.element = h(viewport.element.ownerDocument, "span");
     element.className = "aster-editor-inline-completion";
     element.hidden = true;
     viewport.element.append(element);

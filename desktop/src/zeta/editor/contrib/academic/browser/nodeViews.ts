@@ -1,5 +1,6 @@
 import { ACADEMIC_NODE_TYPES } from "../common/schema.js";
 import type { NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Browser projections for Academic wrapper nodes; child editing stays editor-owned. */
 export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freeze({
@@ -9,7 +10,7 @@ export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freez
 });
 
 function createWrapper(context: NodeViewContext, tagName: "header" | "section", role: string, label?: string): HTMLElement {
-  const element = context.previousElement ?? context.ownerDocument.createElement(tagName);
+  const element = context.previousElement ?? h(context.ownerDocument, tagName);
   element.className = "zeta-academic-" + role;
   element.dataset.academicRole = role;
   if (label) element.setAttribute("aria-label", label);

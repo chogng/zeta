@@ -1,5 +1,5 @@
 import { type IAction, Separator, SubmenuAction } from "../../../common/actions.js";
-import { addDisposableListener, isNode } from "../../dom.js";
+import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
@@ -23,7 +23,7 @@ function prependMenuLeadingSlot(
   button: HTMLButtonElement,
   checked: boolean | undefined,
 ): void {
-  const slot = button.ownerDocument.createElement("span");
+  const slot = h(button.ownerDocument, "span");
   slot.className = "zeta-menu-leading-slot";
   slot.setAttribute("aria-hidden", "true");
   const icon = button.querySelector<SVGElement>(":scope > .zeta-icon");
@@ -140,7 +140,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
     this.button.element.setAttribute("role", "menuitem");
     this.button.element.setAttribute("aria-haspopup", "menu");
     this.button.element.setAttribute("aria-expanded", "false");
-    const indicator = ownerDocument.createElement("span");
+    const indicator = h(ownerDocument, "span");
     indicator.className = "zeta-submenu-indicator";
     appendIcon(lxiconsLibrary.submenuIndicator, indicator);
     this.button.element.append(indicator);
@@ -230,7 +230,7 @@ export class Menu extends DisposableOwner {
   constructor(options: MenuOptions) {
     super();
     const ownerDocument = options.ownerDocument ?? document;
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-menu";
@@ -249,7 +249,7 @@ export class Menu extends DisposableOwner {
       if (item instanceof SubmenuMenuActionViewItem) {
         this.submenus.push(item);
       }
-      const container = ownerDocument.createElement("div");
+      const container = h(ownerDocument, "div");
       container.className = "zeta-action-view-item";
       container.dataset.actionId = action.id;
       container.setAttribute("role", "presentation");

@@ -4,6 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */
 export class InlayHintsController extends DisposableOwner {
@@ -36,7 +37,7 @@ export class InlayHintsController extends DisposableOwner {
     for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-inlay-hint")]) element.remove();
     const scroll = this.viewport.viewportLayout.scrollPosition;
     for (const hint of this.hints) {
-      const element = this.viewport.element.ownerDocument.createElement("span");
+      const element = h(this.viewport.element.ownerDocument, "span");
       element.className = "aster-editor-inlay-hint";
       element.textContent = typeof hint.label === "string" ? hint.label : hint.label.map(part => part.value).join("");
       const coordinates = this.viewport.getPositionContentCoordinates(hint.position);

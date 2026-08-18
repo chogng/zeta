@@ -11,6 +11,7 @@ import type { WorkbenchProfile } from "../workbenchProfile.js";
 import { createDefaultWorkbenchLayoutState, parseWorkbenchLayoutState, type WorkbenchLayoutState, WorkbenchLayoutStateModel } from "./workbenchLayoutState.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 import { assertDimension, createWorkbenchGridDescriptor, parseWorkbenchPartId, resolveInitialDimension } from "./workbenchLayoutTopology.js";
+import { h } from "../../../base/browser/dom.js";
 
 const WINDOW_LEFT_EDGE_INSET = 6;
 const WINDOW_RIGHT_EDGE_INSET = 8;
@@ -50,7 +51,7 @@ export class WorkbenchLayout
   ) {
     super();
     validateParts(parts);
-    this.element = container.ownerDocument.createElement("div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-workbench-layout";
     container.append(this.element);
     this.defer(() => this.element.remove());
@@ -144,6 +145,12 @@ export class WorkbenchLayout
   restoreState(value: unknown): void {
     const state = parseWorkbenchLayoutState(value);
     this.applyState(state);
+    this.saveState();
+  }
+
+  /** Re-applies the layout state from the currently selected storage workspace. */
+  restoreWorkspaceState(): void {
+    this.applyState(this.stateModel.state);
     this.saveState();
   }
 

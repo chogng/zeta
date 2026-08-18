@@ -2,6 +2,7 @@ import type { IDimension } from "../../../base/browser/geometry.js";
 import type { Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "./embeddedTextEditor.js";
+import { h } from "../../../base/browser/dom.js";
 
 /**
  * A document `textBlock` projection backed by the line-oriented editor.
@@ -23,7 +24,7 @@ export class TextEditorWidget extends DisposableOwner implements IEmbeddedTextEd
 
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("Text editor widget has already been created");
-    const container = parent.ownerDocument.createElement("div");
+    const container = h(parent.ownerDocument, "div");
     container.className = "zeta-document-embedded-text-editor";
     parent.append(container);
     this.container = container;

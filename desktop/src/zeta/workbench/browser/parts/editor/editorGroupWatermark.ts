@@ -1,8 +1,10 @@
+import "./media/editorGroupWatermark.css";
 import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, type IDisposable, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandId } from "../../../../platform/commands/common/commands.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** One command presented while an editor group has no active editor. */
 export interface IEditorGroupWatermarkEntry {
@@ -53,8 +55,8 @@ export class EditorGroupWatermark extends DisposableOwner {
   ) {
     super();
     this.keybindingService = keybindingService;
-    this.element = ownerDocument.createElement("div");
-    this.element.className = "zeta-editor-group-watermark";
+    this.element = h(ownerDocument, "div");
+    this.element.className = "zeta-editor-group-watermark-shortcuts";
     this.element.setAttribute("aria-label", "Editor shortcuts");
     this.defer(() => this.element.remove());
     this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
@@ -73,9 +75,9 @@ export class EditorGroupWatermark extends DisposableOwner {
           this.keybindingService.lookupKeybinding(entry.command);
         if (!keybinding) return [];
 
-        const row = ownerDocument.createElement("div");
+        const row = h(ownerDocument, "div");
         row.className = "zeta-editor-group-watermark-entry";
-        const label = ownerDocument.createElement("span");
+        const label = h(ownerDocument, "span");
         label.className = "zeta-editor-group-watermark-label";
         label.textContent = entry.label;
         const shortcut = this.rendered.add(new KeybindingLabel({

@@ -1,5 +1,5 @@
 import "./media/completionWidget.css";
-import { addDisposableListener, reset, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
@@ -42,7 +42,7 @@ export class CompletionWidget extends DisposableOwner {
     this.previousAriaHasPopup = inputElement.getAttribute("aria-haspopup");
     this.previousAriaActiveDescendant = inputElement.getAttribute("aria-activedescendant");
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.id = this.widgetId;
     this.element.className = "aster-editor-completion";
     this.element.setAttribute("role", "listbox");
@@ -131,14 +131,14 @@ export class CompletionWidget extends DisposableOwner {
       return;
     }
     const ownerDocument = this.element.ownerDocument;
-    const fragment = ownerDocument.createDocumentFragment();
+    const fragment = createFragment(ownerDocument);
     for (let index = 0; index < state.items.length; index += 1) {
       const item = state.items[index]!;
-      const option = ownerDocument.createElement("div");
-      const kind = ownerDocument.createElement("span");
-      const label = ownerDocument.createElement("span");
-      const detail = ownerDocument.createElement("span");
-      const documentation = ownerDocument.createElement("span");
+      const option = h(ownerDocument, "div");
+      const kind = h(ownerDocument, "span");
+      const label = h(ownerDocument, "span");
+      const detail = h(ownerDocument, "span");
+      const documentation = h(ownerDocument, "span");
       const focused = index === state.selectedIndex;
       const resolving = focused && state.detailsStatus === LanguageCompletionDetailsStatus.Loading;
       option.id = `${this.widgetId}-option-${index}`;
@@ -190,9 +190,8 @@ export class CompletionWidget extends DisposableOwner {
 
   private readOptionIndex(event: MouseEvent): number | undefined {
     const target = event.target;
-    const ElementConstructor = this.element.ownerDocument.defaultView?.Element;
-    if (!ElementConstructor || !(target instanceof ElementConstructor)) return undefined;
-    const option = (target as Element).closest<HTMLElement>(".aster-editor-completion-option");
+    if (!isElement(target)) return undefined;
+    const option = target.closest<HTMLElement>(".aster-editor-completion-option");
     if (!option || !this.element.contains(option)) return undefined;
     const index = Number(option.dataset.completionIndex);
     return Number.isSafeInteger(index) ? index : undefined;

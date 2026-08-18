@@ -1,4 +1,5 @@
 import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
+import { h } from "../../../base/browser/dom.js";
 
 export interface RenderedLine {
   readonly element: HTMLDivElement;
@@ -14,16 +15,16 @@ export interface RenderedLine {
 
 /** Creates one reusable virtual-line DOM subtree owned by Aster. */
 export function createAsterRenderedLine(ownerDocument: Document, lineIndex: number, gutterDecoration: EditorLineGutterDecoration | undefined): RenderedLine {
-  const element = ownerDocument.createElement("div");
-  const numberElement = ownerDocument.createElement("span");
-  const featureGutterElement = gutterDecoration?.create(ownerDocument) ?? ownerDocument.createElement("span");
+  const element = h(ownerDocument, "div");
+  const numberElement = h(ownerDocument, "span");
+  const featureGutterElement = gutterDecoration?.create(ownerDocument) ?? h(ownerDocument, "span");
   if (!gutterDecoration) featureGutterElement.hidden = true;
-  const diagnosticElement = ownerDocument.createElement("span");
-  const textElement = ownerDocument.createElement("span");
-  const indentationElement = ownerDocument.createElement("div");
-  const decorationElement = ownerDocument.createElement("div");
-  const compositionElement = ownerDocument.createElement("div");
-  const selectionElement = ownerDocument.createElement("div");
+  const diagnosticElement = h(ownerDocument, "span");
+  const textElement = h(ownerDocument, "span");
+  const indentationElement = h(ownerDocument, "div");
+  const decorationElement = h(ownerDocument, "div");
+  const compositionElement = h(ownerDocument, "div");
+  const selectionElement = h(ownerDocument, "div");
   element.className = "aster-editor-line";
   element.dataset.lineIndex = String(lineIndex);
   numberElement.className = "aster-editor-line-number";

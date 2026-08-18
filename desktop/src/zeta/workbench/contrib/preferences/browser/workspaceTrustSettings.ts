@@ -1,5 +1,5 @@
 import "./media/workspaceTrustSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import type { IWorkspaceTrustService, WorkspaceTrustEntry, WorkspaceTrustSnapshot } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
@@ -12,7 +12,7 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
 
   constructor(ownerDocument: Document, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-workspace-trust-settings";
     this.defer(() => { this.active = false; });
     void this.load();
@@ -20,7 +20,7 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
 
   private async load(): Promise<void> {
     const document = this.element.ownerDocument;
-    const loading = document.createElement("p");
+    const loading = h(document, "p");
     loading.className = "zeta-settings-message";
     loading.textContent = "Loading Workspace Trust decisions…";
     this.element.replaceChildren(loading);
@@ -38,17 +38,17 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
 
   private render(snapshot: WorkspaceTrustSnapshot): void {
     const document = this.element.ownerDocument;
-    const intro = document.createElement("p");
+    const intro = h(document, "p");
     intro.className = "zeta-workspace-trust-intro";
     intro.textContent = "Trusted folders can run terminals, Git mutations, tasks, and executable workspace configuration. Removing a decision returns the folder to Restricted Mode until you decide again.";
 
-    const note = document.createElement("p");
+    const note = h(document, "p");
     note.className = "zeta-workspace-trust-note";
     note.textContent = "Trust checks use the folder's opaque canonical identity. The path shown here is display metadata only.";
 
-    const toolbar = document.createElement("div");
+    const toolbar = h(document, "div");
     toolbar.className = "zeta-workspace-trust-toolbar";
-    const addFolder = document.createElement("button");
+    const addFolder = h(document, "button");
     addFolder.className = "zeta-theme-action";
     addFolder.type = "button";
     addFolder.textContent = "Add Folder…";
@@ -57,10 +57,10 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
       ? "Trust a folder"
       : "Folder picking is unavailable in this host";
 
-    const list = document.createElement("div");
+    const list = h(document, "div");
     list.className = "zeta-workspace-trust-list";
     if (snapshot.entries.length === 0) {
-      const empty = document.createElement("p");
+      const empty = h(document, "p");
       empty.className = "zeta-workspace-trust-empty";
       empty.textContent = "No explicit Workspace Trust decisions have been saved.";
       list.append(empty);
@@ -85,7 +85,7 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
       if (this.active) await this.load();
     } catch (error) {
       if (!this.active) return;
-      const failure = this.element.ownerDocument.createElement("p");
+      const failure = h(this.element.ownerDocument, "p");
       failure.className = "zeta-workspace-trust-error";
       failure.textContent = error instanceof Error ? `Unable to add trusted folder: ${error.message}` : "Unable to add trusted folder.";
       list.append(failure);
@@ -96,24 +96,24 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
 
   private renderEntry(entry: WorkspaceTrustEntry, revision: number, list: HTMLElement): HTMLElement {
     const document = this.element.ownerDocument;
-    const item = document.createElement("article");
+    const item = h(document, "article");
     item.className = "zeta-workspace-trust-entry";
-    const copy = document.createElement("div");
+    const copy = h(document, "div");
     copy.className = "zeta-workspace-trust-entry-copy";
-    const path = document.createElement("h4");
+    const path = h(document, "h4");
     path.textContent = entry.root ?? "Unknown folder (legacy trust record)";
     path.title = entry.root ?? entry.workspace;
-    const status = document.createElement("p");
+    const status = h(document, "p");
     status.className = `zeta-workspace-trust-status ${entry.setting}`;
     status.textContent = entry.setting === "trusted" ? "Trusted" : "Restricted";
-    const identity = document.createElement("p");
+    const identity = h(document, "p");
     identity.className = "zeta-workspace-trust-identity";
     identity.textContent = entry.workspace;
     copy.append(path, status, identity);
 
-    const actions = document.createElement("div");
+    const actions = h(document, "div");
     actions.className = "zeta-workspace-trust-entry-actions";
-    const forget = document.createElement("button");
+    const forget = h(document, "button");
     forget.className = "zeta-theme-action";
     forget.type = "button";
     forget.textContent = entry.setting === "trusted" ? "Revoke Trust" : "Forget Decision";
@@ -142,7 +142,7 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
     } catch (error) {
       button.disabled = false;
       item.removeAttribute("aria-busy");
-      const failure = this.element.ownerDocument.createElement("p");
+      const failure = h(this.element.ownerDocument, "p");
       failure.className = "zeta-workspace-trust-error";
       failure.textContent = error instanceof Error ? `Unable to revoke trust: ${error.message}` : "Unable to revoke trust.";
       list.append(failure);

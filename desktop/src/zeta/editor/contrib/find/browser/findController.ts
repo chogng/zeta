@@ -1,5 +1,5 @@
 import "./media/findWidget.css";
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -68,24 +68,24 @@ export class FindController extends DisposableOwner {
       throw new TypeError("Aster find dependencies must share one text model");
     }
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "aster-editor-find-widget";
     this.element.hidden = true;
     this.element.setAttribute("role", "dialog");
     this.element.setAttribute("aria-label", "Find and replace");
 
-    const findRow = ownerDocument.createElement("div");
+    const findRow = h(ownerDocument, "div");
     findRow.className = "aster-editor-find-row";
     this.replaceToggle = createButton(ownerDocument, "Toggle replace", "›");
     this.replaceToggle.classList.add("aster-editor-find-replace-toggle");
-    this.searchInput = ownerDocument.createElement("input");
+    this.searchInput = h(ownerDocument, "input");
     this.searchInput.className = "aster-editor-find-input";
     this.searchInput.type = "text";
     this.searchInput.placeholder = "Find";
     this.searchInput.setAttribute("aria-label", "Find");
     this.searchInput.autocomplete = "off";
     this.searchInput.spellcheck = false;
-    this.resultLabel = ownerDocument.createElement("span");
+    this.resultLabel = h(ownerDocument, "span");
     this.resultLabel.className = "aster-editor-find-result";
     this.resultLabel.setAttribute("aria-live", "polite");
     this.matchCaseButton = createToggleButton(ownerDocument, "Match case", "Aa");
@@ -97,12 +97,12 @@ export class FindController extends DisposableOwner {
     const closeButton = createButton(ownerDocument, "Close find", "×");
     findRow.append(this.replaceToggle, this.searchInput, this.resultLabel, this.matchCaseButton, this.wholeWordButton, this.regularExpressionButton, this.findInSelectionButton, previousButton, nextButton, closeButton);
 
-    this.replaceRow = ownerDocument.createElement("div");
+    this.replaceRow = h(ownerDocument, "div");
     this.replaceRow.className = "aster-editor-replace-row";
     this.replaceRow.hidden = true;
-    const replaceSpacer = ownerDocument.createElement("span");
+    const replaceSpacer = h(ownerDocument, "span");
     replaceSpacer.className = "aster-editor-replace-spacer";
-    this.replaceInput = ownerDocument.createElement("input");
+    this.replaceInput = h(ownerDocument, "input");
     this.replaceInput.className = "aster-editor-find-input";
     this.replaceInput.type = "text";
     this.replaceInput.placeholder = "Replace";
@@ -417,7 +417,7 @@ export class FindController extends DisposableOwner {
 }
 
 function createButton(ownerDocument: Document, label: string, text: string): HTMLButtonElement {
-  const button = ownerDocument.createElement("button");
+  const button = h(ownerDocument, "button");
   button.className = "aster-editor-find-button";
   button.type = "button";
   button.title = label;

@@ -1,5 +1,5 @@
 import "./media/generalSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { SelectBox } from "../../../../base/browser/ui/selectbox/selectbox.js";
 import { Checkbox, Toggle } from "../../../../base/browser/ui/toggle/toggle.js";
@@ -21,7 +21,7 @@ export class GeneralSettingsPane extends DisposableOwner {
 
   constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-general-settings";
     const model = this.own(new SettingsTreeModel<HTMLElement>());
     model.setChildren([
@@ -63,7 +63,7 @@ export class GeneralSettingsPane extends DisposableOwner {
       renderItem: (item) => item.value,
     }));
     this.element.append(tree.element);
-    this.status = ownerDocument.createElement("p");
+    this.status = h(ownerDocument, "p");
     this.status.className = "zeta-general-settings-status";
     this.status.setAttribute("role", "status");
     this.status.setAttribute("aria-live", "polite");
@@ -113,7 +113,7 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private createSelectSetting<T extends string>(options: { readonly key: IConfigurationKey<T>; readonly label: string; readonly description: string; readonly options: readonly { readonly value: T; readonly label: string }[] }): HTMLElement {
-    const setting = this.element.ownerDocument.createElement("div");
+    const setting = h(this.element.ownerDocument, "div");
     setting.className = "zeta-general-setting";
     const select = this.own(new SelectBox({
       options: options.options,
@@ -131,9 +131,9 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private createNumberSetting(key: IConfigurationKey<number>, label: string, description: string, minimum: number, maximum: number): HTMLElement {
-    const setting = this.element.ownerDocument.createElement("label");
+    const setting = h(this.element.ownerDocument, "label");
     setting.className = "zeta-general-setting";
-    const input = this.element.ownerDocument.createElement("input");
+    const input = h(this.element.ownerDocument, "input");
     input.className = "zeta-general-setting-control";
     input.type = "number";
     input.min = String(minimum);
@@ -155,12 +155,12 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private createSettingCopy(label: string, description: string): HTMLElement {
-    const copy = this.element.ownerDocument.createElement("span");
+    const copy = h(this.element.ownerDocument, "span");
     copy.className = "zeta-general-setting-copy";
-    const title = this.element.ownerDocument.createElement("span");
+    const title = h(this.element.ownerDocument, "span");
     title.className = "zeta-general-setting-title";
     title.textContent = label;
-    const hint = this.element.ownerDocument.createElement("span");
+    const hint = h(this.element.ownerDocument, "span");
     hint.className = "zeta-general-setting-description";
     hint.textContent = description;
     copy.append(title, hint);

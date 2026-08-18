@@ -8,6 +8,7 @@ import type { ISessionsManagementService } from "../../services/sessions/common/
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
 import { SessionsChatView } from "../common/sessionsChatView.js";
+import { h } from "../../../base/browser/dom.js";
 
 export interface SessionsPartOptions {
   readonly ownerDocument: Document;
@@ -31,10 +32,10 @@ export class SessionsPart extends WorkbenchPart {
   constructor(options: SessionsPartOptions) {
     super("sessions", options.ownerDocument);
     const ownerDocument = options.ownerDocument;
-    const header = ownerDocument.createElement("div");
+    const header = h(ownerDocument, "div");
     header.className = "zeta-sessions-surface-header";
-    this.heading = ownerDocument.createElement("h1");
-    this.description = ownerDocument.createElement("p");
+    this.heading = h(ownerDocument, "h1");
+    this.description = h(ownerDocument, "p");
     header.append(this.heading, this.description);
     this.chat = this.own(new SessionsChatView({
       ownerDocument,

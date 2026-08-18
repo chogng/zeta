@@ -4,6 +4,7 @@ import {
   type IDisposable,
 } from "../../../common/lifecycle.js";
 import { scheduleAtNextAnimationFrame } from "../../scheduler.js";
+import { h } from "../../dom.js";
 
 export type AriaRole =
   | "alert"
@@ -93,7 +94,7 @@ export class AriaLiveRegion extends DisposableOwner {
 
   constructor(ownerDocument: Document) {
     super();
-    this.root = ownerDocument.createElement("div");
+    this.root = h(ownerDocument, "div");
     this.root.className = "zeta-aria-live";
     this.polite = [
       this.createRegion(ownerDocument, "polite"),
@@ -158,7 +159,7 @@ export class AriaLiveRegion extends DisposableOwner {
     ownerDocument: Document,
     priority: AriaLivePriority,
   ): HTMLDivElement {
-    const region = ownerDocument.createElement("div");
+    const region = h(ownerDocument, "div");
     region.className = priority === "assertive"
       ? "zeta-aria-alert"
       : "zeta-aria-status";

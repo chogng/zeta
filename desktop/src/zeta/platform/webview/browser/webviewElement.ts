@@ -1,6 +1,4 @@
-import {
-  addDisposableListener,
-} from "../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import {
   Emitter,
   type Event,
@@ -62,7 +60,7 @@ export class WebviewElement extends DisposableOwner {
 
     const instanceId = `webview_${++webviewInstanceCounter}`;
     this.channel = `zeta-webview:${instanceId}`;
-    const element = options.ownerDocument.createElement("iframe");
+    const element = h(options.ownerDocument, "iframe");
     this.element = element;
     element.name = instanceId;
     element.className = "zeta-webview";

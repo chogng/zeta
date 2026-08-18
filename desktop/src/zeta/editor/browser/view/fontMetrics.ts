@@ -1,4 +1,4 @@
-/**
+import { h } from "../../../base/browser/dom.js";/**
  * Measures rendered Aster line text for the current browser font.
  *
  * Implementations must be ready to measure immediately. `refresh` returns
@@ -143,7 +143,7 @@ function createCanvasContext(
   ownerDocument: Document,
 ): CanvasRenderingContext2D | undefined {
   try {
-    return ownerDocument.createElement("canvas").getContext("2d") ?? undefined;
+    return h(ownerDocument, "canvas").getContext("2d") ?? undefined;
   } catch {
     return undefined;
   }

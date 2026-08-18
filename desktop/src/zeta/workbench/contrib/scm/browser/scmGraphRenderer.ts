@@ -1,4 +1,5 @@
 import type { GitCommitSummary } from "../../../services/git/common/gitService.js";
+import { svg as createSvgElement } from "../../../../base/browser/dom.js";
 
 const SvgNamespace = "http://www.w3.org/2000/svg";
 const LaneHeight = 22;
@@ -72,7 +73,7 @@ export function createRows(commits: readonly GitCommitSummary[], state: GraphSta
 
 /** Renders one SCM history swimlane row with a stable color for each branch lane. */
 export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind, expandedHeight = LaneHeight): SVGSVGElement {
-  const svg = document.createElementNS(SvgNamespace, "svg");
+  const svg = createSvgElement(document, "svg");
   svg.classList.add("zeta-scm-graph-graph", kind);
   svg.setAttribute("aria-hidden", "true");
   const inputIndex = row.inputSwimlanes.findIndex((lane) => lane.objectId === row.commit.objectId);
@@ -123,7 +124,7 @@ export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind
 }
 
 function appendPath(svg: SVGSVGElement, data: string, colorIndex: number): void {
-  const path = svg.ownerDocument.createElementNS(SvgNamespace, "path");
+  const path = createSvgElement(svg.ownerDocument, "path");
   path.classList.add("zeta-scm-graph-path");
   path.dataset.laneColor = String(colorIndex);
   path.setAttribute("d", data);
@@ -145,7 +146,7 @@ function appendNode(svg: SVGSVGElement, index: number, kind: GraphNodeKind, colo
 }
 
 function appendCircle(svg: SVGSVGElement, index: number, radius: number, part: "inner" | "outer" | "single", colorIndex: number): void {
-  const circle = svg.ownerDocument.createElementNS(SvgNamespace, "circle");
+  const circle = createSvgElement(svg.ownerDocument, "circle");
   circle.classList.add("zeta-scm-graph-node", part);
   circle.dataset.laneColor = String(colorIndex);
   circle.setAttribute("cx", `${LaneWidth * (index + 1)}`);

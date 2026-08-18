@@ -1,5 +1,5 @@
 import "./media/sectionOverviewSettings.css";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
 import { SettingsTree } from "./settingsTree.js";
@@ -240,24 +240,24 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
 
   private renderItem(item: OverviewItem, ownerDocument: Document, settingsService: ISettingsService): HTMLElement {
     const document = ownerDocument;
-    const element = document.createElement("article");
+    const element = h(document, "article");
     element.className = "zeta-settings-overview-item";
-    const copy = document.createElement("div");
+    const copy = h(document, "div");
     copy.className = "zeta-settings-overview-copy";
-    const headingRow = document.createElement("div");
+    const headingRow = h(document, "div");
     headingRow.className = "zeta-settings-overview-heading";
-    const title = document.createElement("h5");
+    const title = h(document, "h5");
     title.textContent = item.title;
-    const status = document.createElement("span");
+    const status = h(document, "span");
     status.className = `zeta-settings-overview-status ${item.tone}`;
     status.textContent = item.status;
     headingRow.append(title, status);
-    const description = document.createElement("p");
+    const description = h(document, "p");
     description.textContent = item.description;
     copy.append(headingRow, description);
     element.append(copy);
     if (item.targetSectionId) {
-      const action = document.createElement("button");
+      const action = h(document, "button");
       action.type = "button";
       action.className = "zeta-settings-overview-action";
       action.textContent = item.actionLabel ?? "Open settings";

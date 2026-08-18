@@ -1,15 +1,34 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { URI } from "../../../../../base/common/uri.js";
 import type { ITerminalProcessCreateOptions, ITerminalProcessReadResult, ITerminalProcessService, TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminalProcessService.js";
 import { TerminalService } from "../../../../../workbench/services/terminal/browser/terminalService.js";
 import type { ITerminalInstance } from "../../../../../workbench/services/terminal/common/terminal.js";
+import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 
 const DEFAULT_PROFILE = {
   profileId: "command-prompt",
   title: "Command Prompt",
   isDefault: true,
 } as const;
+
+test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {
+  const processService = new TestTerminalProcessService([]);
+  using workspace = new WorkspaceContextService({ id: "empty-window" });
+  using service = new TerminalService(processService, workspace);
+
+  await assert.rejects(service.getProfiles(), /TerminalUnavailable/);
+  await assert.rejects(service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } }), /TerminalUnavailable/);
+  assert.equal(processService.profileListCalls, 0);
+  assert.equal(processService.createCalls.length, 0);
+
+  workspace.updateWorkspace({ id: "workspace", uri: URI.file("/workspace") });
+  assert.deepEqual(await service.getProfiles(), [DEFAULT_PROFILE]);
+  await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } });
+  assert.equal(processService.profileListCalls, 1);
+  assert.equal(processService.createCalls.length, 1);
+});
 
 test("TerminalService exposes event-driven instances over the process service", async () => {
   const processService = new TestTerminalProcessService([
@@ -41,7 +60,7 @@ test("TerminalService exposes event-driven instances over the process service", 
       exitCode: 0,
     }),
   ]);
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const output: Uint8Array[] = [];
   const commandStatuses: string[] = [];
   let createdInstance: ITerminalInstance | undefined;
@@ -74,7 +93,7 @@ test("TerminalService exposes event-driven instances over the process service", 
 
 test("TerminalService batches input, coalesces resize, and releases terminals", async () => {
   const processService = new TestTerminalProcessService([]);
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const instance = await service.createTerminal({
     dimensions: { rows: 20, cols: 60 },
     profile: { type: "profile", profileId: "command-prompt" },
@@ -100,7 +119,7 @@ test("TerminalService batches input, coalesces resize, and releases terminals", 
 
 test("TerminalService keeps multiple instances and safely relaunches after a crash", async () => {
   const processService = new TestTerminalProcessService([]);
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const first = await service.createTerminal({
     dimensions: { rows: 24, cols: 80 },
     profile: { type: "default" },
@@ -137,7 +156,7 @@ test("TerminalService resumes reconnectable terminals from their existing output
   const processService = new TestTerminalProcessService([
     readResult({ nextSequence: 4, nextCommandSequence: 2 }),
   ], "reconnectable");
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const instance = await service.createTerminal({
     dimensions: { rows: 24, cols: 80 },
     profile: { type: "default" },
@@ -175,7 +194,7 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
   const processService = new TestTerminalProcessService([
     readResult({ nextSequence: 1 }),
   ], "reconnectable");
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const instance = await service.createTerminal({
     dimensions: { rows: 24, cols: 80 },
     profile: { type: "default" },
@@ -198,7 +217,7 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 
 test("TerminalService renumbers only concurrently open terminals", async () => {
   const processService = new TestTerminalProcessService([]);
-  using service = new TerminalService(processService);
+  using service = new TerminalService(processService, folderWorkspaceContext());
   const first = await service.createTerminal({
     dimensions: { rows: 24, cols: 80 },
     profile: { type: "default" },
@@ -224,6 +243,7 @@ test("TerminalService renumbers only concurrently open terminals", async () => {
 });
 
 class TestTerminalProcessService implements ITerminalProcessService {
+  profileListCalls = 0;
   readonly createCalls: ITerminalProcessCreateOptions[] = [];
   readonly writeCalls: Array<{ terminalId: string; data: string }> = [];
   readonly resizeCalls: Array<{ terminalId: string; rows: number; cols: number }> = [];
@@ -236,6 +256,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
   constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") {}
 
   async listProfiles() {
+    this.profileListCalls += 1;
     return [DEFAULT_PROFILE];
   }
 
@@ -283,6 +304,10 @@ class TestTerminalProcessService implements ITerminalProcessService {
     this.connectionState = state;
     for (const listener of this.connectionListeners) listener(state);
   }
+}
+
+function folderWorkspaceContext(): WorkspaceContextService {
+  return new WorkspaceContextService({ id: "workspace", uri: URI.file("/workspace") });
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {

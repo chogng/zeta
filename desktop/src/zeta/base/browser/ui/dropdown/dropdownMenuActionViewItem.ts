@@ -2,7 +2,7 @@ import type {
   IActionContextMenuOptions,
   IContextMenuProvider,
 } from "../../contextmenu.js";
-import { addDisposableListener, stopEvent } from "../../dom.js";
+import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import type { IAction } from "../../../common/actions.js";
 import { Emitter } from "../../../common/event.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
@@ -55,7 +55,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     container.classList.add("zeta-dropdown-menu-action-view-item");
     button.element.setAttribute("aria-haspopup", "menu");
     button.element.setAttribute("aria-expanded", "false");
-    const indicator = container.ownerDocument.createElement("span");
+    const indicator = h(container.ownerDocument, "span");
     indicator.className = "zeta-dropdown-menu-indicator";
     appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
     button.element.append(indicator);

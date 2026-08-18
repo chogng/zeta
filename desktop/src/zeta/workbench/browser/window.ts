@@ -15,6 +15,7 @@ import {
   workbenchStateToContextValue,
 } from "../common/contextkeys.js";
 import { type IWorkbenchHostService, type WorkbenchTextDownload } from "../services/host/common/workbenchHostService.js";
+import { h } from "../../base/browser/dom.js";
 
 export interface WorkbenchWindowOptions {
   readonly root: HTMLElement;
@@ -86,7 +87,7 @@ export class WorkbenchWindow
     if (!this.targetWindow) throw new Error("Text download requires a browser window");
     const targetWindow = this.targetWindow as Window & typeof globalThis;
     const url = targetWindow.URL.createObjectURL(new targetWindow.Blob([download.content], { type: download.mediaType }));
-    const anchor = this.ownerDocument.createElement("a");
+    const anchor = h(this.ownerDocument, "a");
     anchor.href = url;
     anchor.download = download.fileName;
     anchor.click();

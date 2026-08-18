@@ -1,5 +1,3 @@
-import { getWindow } from "./window.js";
-
 export interface IDimension {
   readonly width: number;
   readonly height: number;
@@ -41,7 +39,7 @@ export interface IPosition {
 export interface IRectangle extends IPosition, IDimension {}
 
 export function getClientArea(element: HTMLElement): Dimension {
-  const targetWindow = getWindow(element);
+  const targetWindow = getOwnerWindow(element);
   if (element === targetWindow.document.body) {
     const viewport = targetWindow.visualViewport;
     return new Dimension(
@@ -66,7 +64,7 @@ export function getDomNodePagePosition(
   element: HTMLElement,
 ): IRectangle {
   const bounds = element.getBoundingClientRect();
-  const targetWindow = getWindow(element);
+  const targetWindow = getOwnerWindow(element);
   return {
     left: bounds.left + targetWindow.scrollX,
     top: bounds.top + targetWindow.scrollY,
@@ -76,7 +74,7 @@ export function getDomNodePagePosition(
 }
 
 export function getContentSize(element: HTMLElement): Dimension {
-  const style = getWindow(element).getComputedStyle(element);
+  const style = getOwnerWindow(element).getComputedStyle(element);
   return new Dimension(
     element.offsetWidth -
       pixels(style.borderLeftWidth) -
@@ -92,7 +90,7 @@ export function getContentSize(element: HTMLElement): Dimension {
 }
 
 export function getTotalSize(element: HTMLElement): Dimension {
-  const style = getWindow(element).getComputedStyle(element);
+  const style = getOwnerWindow(element).getComputedStyle(element);
   return new Dimension(
     element.offsetWidth +
       pixels(style.marginLeft) +
@@ -105,4 +103,10 @@ export function getTotalSize(element: HTMLElement): Dimension {
 
 function pixels(value: string): number {
   return Number.parseFloat(value) || 0;
+}
+
+function getOwnerWindow(element: HTMLElement): Window {
+  const targetWindow = element.ownerDocument.defaultView;
+  if (!targetWindow) throw new Error("DOM geometry requires an element with an owning window");
+  return targetWindow;
 }

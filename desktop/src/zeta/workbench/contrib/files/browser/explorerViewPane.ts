@@ -13,6 +13,7 @@ import type { IHoverService } from "../../../../platform/hover/common/hoverServi
 import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
+import { h } from "../../../../base/browser/dom.js";
 
 interface ExplorerNode {
   readonly resource: URI;
@@ -74,6 +75,7 @@ export class ExplorerViewPane extends ViewPane {
       indentGuides: "always",
       expandOnlyOnTwistieClick: false,
       identityProvider: { getId: (node) => node.resource.toString() },
+      openOnSingleClick: true,
       onWillRender: () => this.renderedLabels.clear(),
       renderElement: (node) => this.renderTreeElement(node),
       renderTwistie: (node, state, container) =>
@@ -152,10 +154,10 @@ export class ExplorerViewPane extends ViewPane {
 
   private render(): void {
     const document = this.element.ownerDocument;
-    const surface = document.createElement("div");
+    const surface = h(document, "div");
     surface.className = "zeta-explorer-scroll-content";
     if (!this.root) {
-      const status = document.createElement("div");
+      const status = h(document, "div");
       status.className = "zeta-explorer-status";
       status.setAttribute("role", "status");
       status.textContent = this.error ?? "Loading files…";
@@ -164,7 +166,7 @@ export class ExplorerViewPane extends ViewPane {
       return;
     }
     if (this.error) {
-      const error = document.createElement("div");
+      const error = h(document, "div");
       error.className = "zeta-explorer-status zeta-explorer-error";
       error.setAttribute("role", "alert");
       error.textContent = this.error;
@@ -176,7 +178,7 @@ export class ExplorerViewPane extends ViewPane {
 
   private renderTreeElement(node: ExplorerNode): HTMLElement {
     const document = this.element.ownerDocument;
-    const content = document.createElement("span");
+    const content = h(document, "span");
     content.className = `zeta-explorer-row-content zeta-explorer-${node.kind}`;
     const label = this.renderedLabels.add(new IconLabel({
       label: node.name,

@@ -3,7 +3,7 @@ import {
   type IDisposable,
   toDisposable,
 } from "../common/lifecycle.js";
-import { addDisposableListener } from "./dom.js";
+import { addDisposableListener, h } from "./dom.js";
 import { mainWindow } from "./window.js";
 
 export type FileSelection = "single" | "multiple";
@@ -21,7 +21,7 @@ export function pickFiles(
   options: FilePickerOptions = {},
 ): Promise<readonly File[] | undefined> {
   const ownerDocument = options.document ?? mainWindow.document;
-  const input = ownerDocument.createElement("input");
+  const input = h(ownerDocument, "input");
   input.type = "file";
   input.hidden = true;
   input.multiple = options.selection === "multiple";
@@ -76,7 +76,7 @@ export function triggerDownload(
   const objectUrl = source instanceof Blob
     ? URL.createObjectURL(source)
     : undefined;
-  const link = ownerDocument.createElement("a");
+  const link = h(ownerDocument, "a");
   link.download = name;
   link.href = objectUrl ?? source.toString();
   link.rel = "noopener";

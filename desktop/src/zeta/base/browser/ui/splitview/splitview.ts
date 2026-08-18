@@ -2,6 +2,7 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { type IDisposable, DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
 import { Sash, type SashDragEvent, type SashPresentation } from "../sash/sash.js";
 import { findFirstSnapIndex, getSashState, solveSashResize, type SplitViewResizeItem } from "./splitviewResize.js";
+import { h } from "../../dom.js";
 
 export type SplitViewOrientation = "horizontal" | "vertical";
 export type SplitViewLayoutPriority = "low" | "normal" | "high";
@@ -88,7 +89,7 @@ export class SplitView extends DisposableOwner {
     private readonly options: SplitViewOptions = {},
   ) {
     super();
-    const element = ownerDocument.createElement("div");
+    const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = `zeta-split-view zeta-split-view-${orientation}`;
@@ -169,7 +170,7 @@ export class SplitView extends DisposableOwner {
     }
     validateViewConstraints(view);
     const resolved = this.resolveSizing(sizing);
-    const container = this.element.ownerDocument.createElement("div");
+    const container = h(this.element.ownerDocument, "div");
     container.className = "zeta-split-view-pane";
     container.classList.toggle("zeta-split-view-pane-overflow-visible", view.paneOverflow === "visible");
     container.append(view.element);

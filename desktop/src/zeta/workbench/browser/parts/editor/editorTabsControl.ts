@@ -1,6 +1,7 @@
 import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
+import { h } from "../../../../base/browser/dom.js";
 
 /** One open Editor presented by an EditorTabsControl. */
 export interface EditorTabDescriptor {
@@ -28,7 +29,7 @@ export abstract class EditorTabsControl extends DisposableOwner {
 
   protected constructor(ownerDocument: Document) {
     super();
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-tabs-control";
     this.defer(() => this.element.remove());
   }

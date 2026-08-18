@@ -14,6 +14,7 @@
   flex: 1 1 auto;
   align-items: center;
   gap: 2px;
+  padding: 0 var(--zeta-composite-bar-content-inset);
   overflow: hidden;
 }
 
@@ -50,6 +51,8 @@
 .zeta-composite-bar > .zeta-action-bar > .zeta-composite-bar-item {
   position: relative;
   flex: 0 0 auto;
+  height: var(--zeta-tab-height);
+  min-height: var(--zeta-tab-height);
   border: 0;
   border-radius: 4px;
   color: var(--zeta-composite-bar-inactive-foreground);
@@ -67,7 +70,6 @@
 }
 
 .zeta-composite-bar-label > .zeta-action-bar {
-  padding: 0 var(--zeta-composite-bar-content-inset);
   font-size: var(--zeta-font-size-body1);
   line-height: 20px;
 }
@@ -84,6 +86,7 @@
 
 .zeta-composite-bar-item.checked {
   color: var(--zeta-composite-bar-foreground);
+  background: var(--zeta-tab-list-active-background);
 }
 
 .zeta-composite-bar-action {

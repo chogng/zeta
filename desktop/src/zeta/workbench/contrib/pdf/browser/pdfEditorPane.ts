@@ -1,4 +1,4 @@
-import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/geometry.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
@@ -83,7 +83,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
   create(parent: HTMLElement): void {
     if (this.container) throw new ReferenceError("PDF editor pane has already been created");
     const ownerDocument = parent.ownerDocument;
-    const container = ownerDocument.createElement("div");
+    const container = h(ownerDocument, "div");
     container.className = "zeta-pdf-editor";
     container.setAttribute("role", "region");
     container.setAttribute("aria-label", "PDF reader");
@@ -96,33 +96,33 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
     }));
     toolbar.element.classList.add("zeta-pdf-editor-toolbar");
 
-    const content = ownerDocument.createElement("div");
+    const content = h(ownerDocument, "div");
     content.className = "zeta-pdf-editor-content";
-    const pages = ownerDocument.createElement("div");
+    const pages = h(ownerDocument, "div");
     pages.className = "zeta-pdf-pages";
     pages.tabIndex = 0;
     pages.setAttribute("aria-label", "PDF pages");
-    const sidebar = ownerDocument.createElement("aside");
+    const sidebar = h(ownerDocument, "aside");
     sidebar.className = "zeta-pdf-annotation-sidebar";
     sidebar.setAttribute("aria-label", "PDF annotations");
 
-    const heading = ownerDocument.createElement("h2");
+    const heading = h(ownerDocument, "h2");
     heading.className = "zeta-pdf-annotation-heading";
     heading.textContent = "Annotations";
-    const colorLabel = ownerDocument.createElement("label");
+    const colorLabel = h(ownerDocument, "label");
     colorLabel.className = "zeta-pdf-annotation-field";
     colorLabel.textContent = "Color";
-    const colorInput = ownerDocument.createElement("input");
+    const colorInput = h(ownerDocument, "input");
     colorInput.className = "zeta-pdf-annotation-color";
     colorInput.type = "color";
     colorInput.value = this.color;
     colorInput.setAttribute("aria-label", "Annotation color");
     colorLabel.append(colorInput);
 
-    const annotationTextLabel = ownerDocument.createElement("label");
+    const annotationTextLabel = h(ownerDocument, "label");
     annotationTextLabel.className = "zeta-pdf-annotation-field";
     annotationTextLabel.textContent = "New note";
-    const annotationText = ownerDocument.createElement("textarea");
+    const annotationText = h(ownerDocument, "textarea");
     annotationText.className = "zeta-pdf-annotation-text";
     annotationText.rows = 4;
     annotationText.maxLength = 10_000;
@@ -130,11 +130,11 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
     annotationText.setAttribute("aria-label", "Annotation note");
     annotationTextLabel.append(annotationText);
 
-    const annotationList = ownerDocument.createElement("div");
+    const annotationList = h(ownerDocument, "div");
     annotationList.className = "zeta-pdf-annotation-list";
     annotationList.setAttribute("role", "listbox");
     annotationList.setAttribute("aria-label", "Saved annotations");
-    const status = ownerDocument.createElement("div");
+    const status = h(ownerDocument, "div");
     status.className = "zeta-pdf-annotation-status";
     status.setAttribute("role", "status");
     sidebar.append(heading, colorLabel, annotationTextLabel, annotationList, status);
@@ -306,7 +306,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
       annotationText.value = selectedNote?.text ?? this.noteDraft;
     }
     annotationList.replaceChildren(...this.annotationModel.annotations.map((annotation, index) => {
-      const item = annotationList.ownerDocument.createElement("button");
+      const item = h(annotationList.ownerDocument, "button");
       item.className = "zeta-pdf-annotation-list-item";
       item.type = "button";
       item.setAttribute("role", "option");
@@ -325,13 +325,13 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
     if (!renderResult) return;
     for (const page of renderResult.pages) {
       page.element.querySelector(".zeta-pdf-annotation-layer")?.remove();
-      const layer = page.element.ownerDocument.createElement("div");
+      const layer = h(page.element.ownerDocument, "div");
       layer.className = "zeta-pdf-annotation-layer";
       layer.dataset.annotationMode = this.mode;
       for (const annotation of this.annotationModel.annotations) {
         if (annotation.page !== page.pageNumber) continue;
         if (annotation.kind === "highlight") {
-          const element = page.element.ownerDocument.createElement("div");
+          const element = h(page.element.ownerDocument, "div");
           element.className = "zeta-pdf-annotation-highlight";
           element.classList.toggle("selected", annotation.id === this.selectedAnnotationId);
           positionRect(element, annotation.rect);
@@ -341,7 +341,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
           const element = createInk(page.element.ownerDocument, annotation.points, annotation.color, annotation.id === this.selectedAnnotationId);
           layer.append(element);
         } else {
-          const marker = page.element.ownerDocument.createElement("button");
+          const marker = h(page.element.ownerDocument, "button");
           marker.className = "zeta-pdf-annotation-note";
           marker.type = "button";
           marker.title = annotation.text || "Note";
@@ -377,7 +377,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
       return;
     }
     if (this.mode === "highlight") {
-      const preview = layer.ownerDocument.createElement("div");
+      const preview = h(layer.ownerDocument, "div");
       preview.className = "zeta-pdf-annotation-highlight zeta-pdf-annotation-preview";
       preview.style.backgroundColor = withAlpha(this.color, 0.38);
       positionRect(preview, { ...point, width: 0.001, height: 0.001 });
@@ -518,12 +518,12 @@ function positionRect(element: HTMLElement, rect: PdfAnnotationRect): void {
 }
 
 function createInk(ownerDocument: Document, points: readonly PdfAnnotationPoint[], color: string, selected: boolean): SVGSVGElement {
-  const ink = ownerDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const ink = createSvgElement(ownerDocument, "svg");
   ink.classList.add("zeta-pdf-annotation-ink");
   ink.classList.toggle("selected", selected);
   ink.setAttribute("viewBox", "0 0 1 1");
   ink.setAttribute("preserveAspectRatio", "none");
-  const path = ownerDocument.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  const path = createSvgElement(ownerDocument, "polyline");
   path.setAttribute("fill", "none");
   path.setAttribute("stroke", color);
   path.setAttribute("stroke-linecap", "round");

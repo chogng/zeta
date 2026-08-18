@@ -1,8 +1,5 @@
 import { marked } from "marked";
-import {
-  addDisposableListener,
-  reset,
-} from "./dom.js";
+import { addDisposableListener, reset, h } from "./dom.js";
 import {
   type HtmlSanitizerConfig,
   sanitizeHtmlToFragment,
@@ -100,7 +97,7 @@ export class MarkdownElement extends DisposableOwner {
     this.ownerDocument = options.ownerDocument;
     this.breaks = options.breaks ?? false;
     this.linkHandler = options.linkHandler;
-    this.element = options.ownerDocument.createElement("div");
+    this.element = h(options.ownerDocument, "div");
     this.element.className = "zeta-markdown";
     this.own(addDisposableListener<MouseEvent>(
       this.element,
@@ -184,7 +181,7 @@ export function sanitizeMarkdownHtmlToString(
   const fragment = sanitizeMarkdownHtmlToFragment(options, rawHtml);
   const checkboxControls = new DisposableStore();
   upgradeMarkdownCheckboxes(fragment, options.ownerDocument, checkboxControls);
-  const container = options.ownerDocument.createElement("div");
+  const container = h(options.ownerDocument, "div");
   container.append(fragment);
   try {
     return container.innerHTML;

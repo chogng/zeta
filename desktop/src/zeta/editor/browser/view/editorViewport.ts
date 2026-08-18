@@ -1,6 +1,7 @@
 import "../media/editorViewport.css";
-import { addDisposableListener, reset } from "../../../base/browser/dom.js";
+import { addDisposableListener, reset, h, fragment as createFragment } from "../../../base/browser/dom.js";
 import { getClientArea } from "../../../base/browser/geometry.js";
+import { observeResize } from "../../../base/browser/observer.js";
 import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
 import { type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
@@ -163,15 +164,15 @@ export class EditorViewport extends DisposableOwner {
     super();
     const ownerDocument = options.container.ownerDocument;
     this.model = options.model;
-    this.element = ownerDocument.createElement("div");
-    this.contentElement = ownerDocument.createElement("div");
-    this.linesElement = ownerDocument.createElement("div");
-    this.textMetricsElement = ownerDocument.createElement("span");
-    this.accessibilityStatusElement = ownerDocument.createElement("div");
-    this.overviewRulerElement = ownerDocument.createElement("div");
-    this.minimapElement = ownerDocument.createElement("div");
-    this.minimapCanvasElement = ownerDocument.createElement("canvas");
-    this.minimapViewportElement = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
+    this.contentElement = h(ownerDocument, "div");
+    this.linesElement = h(ownerDocument, "div");
+    this.textMetricsElement = h(ownerDocument, "span");
+    this.accessibilityStatusElement = h(ownerDocument, "div");
+    this.overviewRulerElement = h(ownerDocument, "div");
+    this.minimapElement = h(ownerDocument, "div");
+    this.minimapCanvasElement = h(ownerDocument, "canvas");
+    this.minimapViewportElement = h(ownerDocument, "div");
     this.selectionController = options.selectionController;
     this.semanticTokenSource = options.semanticTokenSource;
     this.bracketColorizationSource = options.bracketColorizationSource;
@@ -370,12 +371,7 @@ export class EditorViewport extends DisposableOwner {
       }));
     }
 
-    const ResizeObserverConstructor = ownerDocument.defaultView?.ResizeObserver;
-    if (ResizeObserverConstructor) {
-      const observer = new ResizeObserverConstructor(() => this.layout());
-      observer.observe(this.element);
-      this.defer(() => observer.disconnect());
-    }
+    this.own(observeResize(this.element, () => this.layout()));
 
     this.project(viewport.layout);
     this.layout();
@@ -718,7 +714,7 @@ export class EditorViewport extends DisposableOwner {
 
     const ownerDocument = this.element.ownerDocument;
     const semanticTokens = this.resolveSemanticTokenRange(layout.renderLines);
-    const fragment = ownerDocument.createDocumentFragment();
+    const fragment = createFragment(ownerDocument);
     const next = new Map<number, RenderedLine>();
     for (
       let visualLineIndex = layout.renderLines.startLineIndex;
@@ -790,7 +786,7 @@ export class EditorViewport extends DisposableOwner {
       if (!visualLine?.firstForLogicalLine) continue;
       const text = this.model.getLineContent(visualLine.logicalLineIndex);
       for (const guide of createAsterIndentationGuides(text, this.indentation.tabSize)) {
-        const element = this.element.ownerDocument.createElement("span");
+        const element = h(this.element.ownerDocument, "span");
         element.className = "aster-editor-indent-guide";
         element.dataset.indentLevel = String(guide.level);
         element.style.left = `${this.textLeft + this.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
@@ -878,9 +874,9 @@ export class EditorViewport extends DisposableOwner {
       this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
       this.model.lineCount,
     );
-    const fragment = this.element.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(this.element.ownerDocument);
     for (const marker of markers) {
-      const element = this.element.ownerDocument.createElement("span");
+      const element = h(this.element.ownerDocument, "span");
       element.className = "aster-editor-overview-marker";
       element.classList.add(marker.presentation);
       element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
@@ -902,14 +898,14 @@ export class EditorViewport extends DisposableOwner {
     this.minimapViewportElement.style.top = `${layout.scrollPosition.top / contentHeight * 100}%`;
     this.minimapViewportElement.style.height = `${Math.max(2, layout.viewportSize.height / contentHeight * 100)}%`;
     if (this.renderedMinimapRevision === this.minimapRevision) return;
-    const fragment = this.element.ownerDocument.createDocumentFragment();
+    const fragment = createFragment(this.element.ownerDocument);
     const rows = createMinimapRows(this.model);
     const gpuRenderer = this.minimapGpuRenderer;
     if (gpuRenderer?.isAvailable) {
       gpuRenderer.setRows(rows, this.model.lineCount);
     } else {
       for (const row of rows) {
-        const marker = this.element.ownerDocument.createElement("span");
+        const marker = h(this.element.ownerDocument, "span");
         marker.className = "aster-editor-minimap-row";
         marker.style.top = `${row.startLineIndex / this.model.lineCount * 100}%`;
         marker.style.height = `${Math.max(1, (row.endLineIndexExclusive - row.startLineIndex) / this.model.lineCount * 100)}%`;
@@ -921,7 +917,7 @@ export class EditorViewport extends DisposableOwner {
       this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
       this.model.lineCount,
     )) {
-      const element = this.element.ownerDocument.createElement("span");
+      const element = h(this.element.ownerDocument, "span");
       element.className = "aster-editor-minimap-diagnostic-marker";
       element.classList.add(marker.presentation);
       element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
