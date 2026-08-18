@@ -5,7 +5,6 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
-  readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
   readonly id?: string;
   readonly location?: ViewContainerLocation;
@@ -22,9 +21,8 @@ export class SidebarPart extends PaneCompositePart {
   override get minimumWidth(): number { return 180; }
   override get maximumWidth(): number { return 600; }
 
-  constructor(options: SidebarPartOptions) {
-    super({
-      ownerDocument: options.ownerDocument,
+  constructor(container: HTMLElement, options: SidebarPartOptions) {
+    super(container, {
       viewDescriptorService: options.viewDescriptorService,
       id: options.id ?? "sidebar",
       location: options.location ?? ViewContainerLocation.Sidebar,

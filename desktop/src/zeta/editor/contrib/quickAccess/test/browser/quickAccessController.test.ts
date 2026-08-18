@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -31,7 +32,7 @@ test("Go to Line previews locally, accepts a line and column, and cancels withou
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 40 });
-  const editorInput = dom.window.document.createElement("textarea");
+  const editorInput = h(dom.window.document, "textarea");
   container.append(editorInput);
   using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Linux });
 
@@ -61,7 +62,7 @@ test("Go to Line uses Command+G on macOS", () => {
   using model = new TextModel("zero\none");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  const editorInput = dom.window.document.createElement("textarea");
+  const editorInput = h(dom.window.document, "textarea");
   container.append(editorInput);
   using controller = new GotoLineController(editorInput, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
 

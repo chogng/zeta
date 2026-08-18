@@ -1,5 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { disposableWindowInterval } from "../../../../base/browser/scheduler.js";
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../platform/storage/common/storage.js";
 
 interface StoredEntry {
@@ -64,15 +66,12 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
       this.entries.set(scope, this.load(scope));
     }
 
-    const handleStorage = (event: StorageEvent) => this.handleStorageEvent(event);
-    this.ownerWindow.addEventListener("storage", handleStorage);
-    this.defer(() => this.ownerWindow.removeEventListener("storage", handleStorage));
+    this.own(addDisposableListener(this.ownerWindow, "storage", (event: StorageEvent) => this.handleStorageEvent(event)));
 
     if (flushInterval > 0) {
-      const timer = this.ownerWindow.setInterval(() => {
+      this.own(disposableWindowInterval(this.ownerWindow, () => {
         void this.flush(WillSaveStateReason.PERIODIC);
-      }, flushInterval);
-      this.defer(() => this.ownerWindow.clearInterval(timer));
+      }, flushInterval));
     }
     this.defer(() => {
       void this.flush(WillSaveStateReason.SHUTDOWN);

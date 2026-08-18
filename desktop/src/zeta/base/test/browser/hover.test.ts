@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><html><body><main></main><button id='target' title='Native title'>Target</button></body></html>");
 Object.defineProperties(globalThis, {
@@ -79,7 +80,7 @@ test("Hover skips empty content and sticky persistence requires explicit dismiss
 
 test("Hover closes an in-flight ContextView when target layout disposes it", () => {
   const container = requiredElement<HTMLElement>("main");
-  const target = environment.window.document.createElement("button");
+  const target = h(environment.window.document, "button");
   container.append(target);
   const contextView = new ContextView(container);
   contextView.element.getBoundingClientRect = () => rectangle(0, 0, 120, 40);
@@ -98,7 +99,7 @@ test("Hover closes an in-flight ContextView when target layout disposes it", () 
   assert.equal(contextView.visible, false);
   assert.doesNotThrow(() => contextView.show({
     anchor: rectangle(40, 80, 0, 0),
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
   }));
   assert.equal(contextView.visible, true);
 

@@ -7,7 +7,6 @@ import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../comm
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeTwistieState } from "./tree.js";
 
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -59,13 +58,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
   readonly onDidActivate: Event<TreeActivateEvent<TNode>> = this._onDidActivate.event;
   readonly onDidChangeFind: Event<TreeFindResult<TNode>> = this._onDidChangeFind.event;
 
-  constructor(options: AbstractTreeOptions<T, TNode>) {
+  constructor(container: HTMLElement, options: AbstractTreeOptions<T, TNode>) {
     super();
     this.options = options;
     validateIndent(options.indent);
     this.findController = options.keyboardNavigationLabelProvider ? new TreeFindController({ labelProvider: options.keyboardNavigationLabelProvider, mode: options.findMode ?? "highlight", matchType: options.findMatchType ?? "fuzzy" }) : undefined;
-    this.list = this.own(new List<TNode>({
-      ownerDocument: options.ownerDocument,
+    this.list = this.own(new List<TNode>(container, {
       ariaLabel: options.ariaLabel,
       role: "tree",
       loopNavigation: false,

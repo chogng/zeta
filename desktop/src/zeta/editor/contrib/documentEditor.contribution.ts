@@ -6,8 +6,7 @@ registerEditorContribution({
   id: "editor.contrib.documentFormatting",
   install: context => {
     if (context.kind !== "document") return;
-    context.setFormattingContribution(new FormattingContribution({
-      ownerDocument: context.ownerDocument,
+    context.setFormattingContribution(new FormattingContribution(context.container, {
       documentActions: context.documentActions,
       onToggleMark: context.onToggleMark,
       onSetTextStyle: context.onSetTextStyle,
@@ -21,8 +20,7 @@ registerEditorContribution({
   id: "editor.contrib.collaboration",
   install: context => {
     if (context.kind !== "document") return;
-    context.setCollaborationContribution(new CollaborationContribution({
-      ownerDocument: context.ownerDocument,
+    context.setCollaborationContribution(new CollaborationContribution(context.container, {
       onStart: context.onStartCollaboration,
       onStop: context.onStopCollaboration,
       onInvite: context.onInviteCollaborator,

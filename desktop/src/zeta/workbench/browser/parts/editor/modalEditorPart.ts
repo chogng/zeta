@@ -51,11 +51,10 @@ export class ModalEditorPart extends DisposableOwner {
     heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
     heading.textContent = options.title;
     this.element.setAttribute("aria-labelledby", heading.id);
-    const closeButton = this.own(new Button({
+    const closeButton = this.own(new Button(header, {
       label: `Close ${options.title}`,
       title: `Close ${options.title}`,
       icon: lxiconsLibrary.close,
-      ownerDocument,
       onClick: () => this.requestClose(),
     }));
     closeButton.element.classList.add("zeta-modal-editor-close");

@@ -15,8 +15,9 @@ export class SessionsTitlebarPart extends WorkbenchPart {
   override get minimumHeight(): number { return 46; }
   override get maximumHeight(): number { return 46; }
 
-  constructor(ownerDocument: Document, profile: SessionsProfile, viewService: ISessionsViewService, delegate: SessionsTitlebarPartDelegate) {
-    super("titlebar", ownerDocument);
+  constructor(container: HTMLElement, profile: SessionsProfile, viewService: ISessionsViewService, delegate: SessionsTitlebarPartDelegate) {
+    super(container, "titlebar");
+    const ownerDocument = container.ownerDocument;
     const returnButton = h(ownerDocument, "button");
     returnButton.type = "button";
     returnButton.className = "zeta-sessions-button zeta-sessions-titlebar-button";

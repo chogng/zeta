@@ -15,8 +15,8 @@ export interface PartTitleProjection {
 export abstract class ViewPane extends PaneView implements IView {
   private visible = true;
 
-  protected constructor(options: IViewPaneOptions) {
-    super(options);
+  protected constructor(container: HTMLElement, options: IViewPaneOptions) {
+    super(container, options);
     this.element.classList.add("zeta-view-pane");
     this.element.dataset.viewId = options.id;
   }

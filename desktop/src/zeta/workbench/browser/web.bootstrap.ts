@@ -1,6 +1,8 @@
 import { URI } from "../../base/common/uri.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { connectViteDevRendererApi, type ViteDevRendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
+import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
+import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
 import { startWebWorkbench } from "./web.factory.js";
 import type { WorkbenchProfile } from "./workbenchProfile.js";
 
@@ -25,7 +27,10 @@ async function startBrowserWorkbenchAsync(product: ProductConfiguration, profile
   }
   let disposeConnectedHost: (() => void) | undefined;
   try {
-    const connected = await connectViteDevRendererApi(hot, {}, rendererCapabilities);
+    const connected = await connectViteDevRendererApi(hot, {
+      openerService: new BrowserOpenerService(window),
+      clipboardService: new BrowserClipboardService(window.navigator.clipboard),
+    }, {}, rendererCapabilities);
     globalThis.zetaWebWorkbenchHost = {
       api: connected.api,
       workspace: Object.freeze({

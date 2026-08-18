@@ -11,8 +11,8 @@ export abstract class CompositePart extends WorkbenchPart {
   private readonly composites = new Map<string, PaneComposite>();
   private activeComposite: PaneComposite | undefined;
 
-  protected constructor(id: string, ownerDocument: Document) {
-    super(id, ownerDocument);
+  protected constructor(container: HTMLElement, id: string) {
+    super(container, id);
     this.contentElement.classList.add("zeta-composite-content");
     this.defer(() => this.composites.clear());
   }

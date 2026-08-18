@@ -63,12 +63,10 @@ class MenuActionViewItem extends ButtonActionViewItem {
       this.button.element.removeAttribute("aria-pressed");
     }
     if (!this.keybinding) return;
-    const label = this.own(new KeybindingLabel({
+    const label = this.own(new KeybindingLabel(this.button.element, {
       keybinding: this.keybinding,
-      ownerDocument: container.ownerDocument,
     }));
     label.element.classList.add("zeta-menu-keybinding");
-    this.button.element.append(label.element);
   }
 
   protected override runAction(): unknown {
@@ -118,9 +116,8 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
     this.contextView = this.own(new ContextView(
       this.contextViewContainer ?? ownerDocument.body,
     ));
-    this.menu = this.own(new Menu({
+    this.menu = this.own(new Menu(this.contextView.element, {
       actions: this.submenuAction.actions,
-      ownerDocument,
       contextViewContainer: this.contextViewContainer,
       layer: this.submenuLayer,
       getKeybinding: this.getKeybinding,
@@ -204,7 +201,6 @@ function createMenuActionViewItem(
 
 export interface MenuOptions {
   readonly actions: readonly IAction[];
-  readonly ownerDocument?: Document;
   readonly contextViewContainer?: HTMLElement;
   readonly onDidSelect?: () => void;
   readonly onDidRequestClose?: () => void;
@@ -227,14 +223,15 @@ export class Menu extends DisposableOwner {
   private readonly entries: MenuEntry[] = [];
   private focusedEntry: MenuEntry | undefined;
 
-  constructor(options: MenuOptions) {
+  constructor(container: HTMLElement, options: MenuOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-menu";
     element.setAttribute("role", "menu");
+    container.append(element);
 
     for (const action of options.actions) {
       const item = this.own(

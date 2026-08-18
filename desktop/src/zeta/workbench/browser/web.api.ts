@@ -23,7 +23,7 @@ export interface IWebWorkbenchConstructionOptions {
   readonly api: IRendererHost;
   readonly profile: WorkbenchProfile;
   readonly workspace?: IAnyWorkspaceIdentifier;
-  readonly container: HTMLElement | null;
+  readonly container: HTMLElement;
 }
 
 /** Lifecycle facade returned to a Web Workbench embedder. */

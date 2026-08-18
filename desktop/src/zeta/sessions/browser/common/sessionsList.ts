@@ -15,8 +15,9 @@ export class SessionsList extends DisposableOwner {
   private readonly sessionService: ISessionsManagementService;
   private readonly viewService: ISessionsViewService;
 
-  constructor(ownerDocument: Document, sessionService: ISessionsManagementService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
+  constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.sessionService = sessionService;
     this.viewService = viewService;
     this.element = h(ownerDocument, "section");
@@ -30,6 +31,7 @@ export class SessionsList extends DisposableOwner {
     this.list = h(ownerDocument, "div");
     this.list.className = "zeta-sessions-list-items";
     this.element.append(this.heading, this.newSessionButton, this.list);
+    container.append(this.element);
     this.own(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
     this.own(viewService.onDidChange(() => this.render()));
     this.render();

@@ -84,7 +84,7 @@ export interface IEditorPartOptions {
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
   private readonly splitView: SplitView;
-  private readonly groupOptions: Omit<EditorGroupOptions, "ownerDocument" | "onDidActivate" | "dragAndDrop">;
+  private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
   private readonly _groups: EditorGroupHost[] = [];
   private _activeGroup: EditorGroup;
   private readonly tabDragAndDrop: EditorTabDragAndDropController;
@@ -96,10 +96,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
   override get minimumHeight(): number { return 119; }
 
   constructor(
-    ownerDocument: Document,
+    container: HTMLElement,
     options: IEditorPartOptions = {},
   ) {
-    super("editor", ownerDocument);
+    super(container, "editor");
+    const ownerDocument = container.ownerDocument;
     this.titleElement.remove();
     this.element.setAttribute("aria-label", "Editor");
     this.groupOptions = {
@@ -133,14 +134,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       this.dropEditor(event);
     });
     this.splitView = this.own(new SplitView(
+      this.contentElement,
       "horizontal",
-      ownerDocument,
     ));
     const initial = this.createGroup();
     this._groups.push(initial);
     this._activeGroup = initial.group;
     this.splitView.addView(initial.view);
-    this.contentElement.append(this.splitView.element);
     this.own(observeElementSize(this.contentElement, size => this.layout(size)));
   }
 
@@ -246,8 +246,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
   private createGroup(): EditorGroupHost {
     let group: EditorGroup;
-    group = this.own(new EditorGroup({
-      ownerDocument: this.element.ownerDocument,
+    group = this.own(new EditorGroup(this.contentElement, {
       ...this.groupOptions,
       ...(this.groupOptions.welcome ? {
         welcome: { ...this.groupOptions.welcome, recentProjects: this.welcomeRecentProjects },

@@ -6,6 +6,7 @@ import { ContextKeyService } from "../../../../platform/contextkey/common/contex
 import { type IConfigurationChangeEvent, type IConfigurationKey, type IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED } from "../../../../platform/accessibility/common/accessibility.js";
 import { AccessibilityService } from "../../../../platform/accessibility/browser/accessibilityService.js";
+import { h } from "../../../../base/browser/dom.js";
 
 class TestConfigurationService implements IConfigurationService {
   private readonly changeEmitter = new Emitter<IConfigurationChangeEvent>();
@@ -50,12 +51,11 @@ class TestConfigurationService implements IConfigurationService {
 
 test("accessibility service projects screen-reader support and context state", () => {
   const environment = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
-  const root = environment.window.document.createElement("main");
+  const root = h(environment.window.document, "main");
   environment.window.document.body.append(root);
   using configuration = new TestConfigurationService();
   using contextKeys = new ContextKeyService();
   using service = new AccessibilityService({
-    ownerDocument: environment.window.document,
     root,
     contextKeyService: contextKeys,
     configurationService: configuration,
@@ -78,12 +78,11 @@ test("accessibility service projects screen-reader support and context state", (
 
 test("accessibility service applies reduction and link presentation policies", async () => {
   const environment = new JSDOM("<!doctype html><html><body></body></html>", { pretendToBeVisual: true });
-  const root = environment.window.document.createElement("main");
+  const root = h(environment.window.document, "main");
   environment.window.document.body.append(root);
   using configuration = new TestConfigurationService();
   using contextKeys = new ContextKeyService();
   using service = new AccessibilityService({
-    ownerDocument: environment.window.document,
     root,
     contextKeyService: contextKeys,
     configurationService: configuration,

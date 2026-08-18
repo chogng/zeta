@@ -33,11 +33,11 @@ export class ScmViewPane extends ViewPane {
   private unavailable = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService) {
+    super(container, options);
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm");
-    const document = options.ownerDocument;
+    const document = container.ownerDocument;
     const commitForm = h(document, "form");
     commitForm.className = "zeta-scm-commit-form";
     this.commitInput = h(document, "textarea");
@@ -46,11 +46,10 @@ export class ScmViewPane extends ViewPane {
     this.commitInput.rows = 2;
     this.commitInput.placeholder = "Message (Ctrl+Enter to commit)";
     this.commitInput.setAttribute("aria-label", "Commit message");
-    const commitButton = this.own(new Button({
+    const commitButton = this.own(new Button(commitForm, {
       label: "Commit",
       icon: lxiconsLibrary.check,
       contentAlignment: "labelCentered",
-      ownerDocument: document,
       title: "Commit staged changes",
     }));
     this.commitButton = commitButton.element;
@@ -224,11 +223,13 @@ export class ScmViewPane extends ViewPane {
     const document = this.element.ownerDocument;
     const item = h(document, "li");
     item.className = "zeta-scm-change";
+    const open = h(document, "button");
+    open.type = "button";
+    open.className = "zeta-scm-change-open";
     const name = basename(change.path);
     const parentPath = dirname(change.path);
-    const fileLabel = this.renderedChanges.add(new IconLabel({
+    const fileLabel = this.renderedChanges.add(new IconLabel(open, {
       label: name,
-      ownerDocument: document,
       reserveIconSpace: true,
       renderIcon: (container) => this.fileIconThemeService.renderFileIcon(repositoryFileUri(this.status?.workspacePath, change.path), container),
       title: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
@@ -240,9 +241,6 @@ export class ScmViewPane extends ViewPane {
       description.textContent = parentPath;
       fileLabel.element.append(description);
     }
-    const open = h(document, "button");
-    open.type = "button";
-    open.className = "zeta-scm-change-open";
     open.setAttribute("aria-label", `Open ${side === "index" ? "staged changes" : "changes"} for ${change.path}`);
     open.append(fileLabel.element);
     if (change.conflicted) {
@@ -312,8 +310,8 @@ export class ScmViewPane extends ViewPane {
   }
 
   private renderActionToolbar(actions: readonly IAction[], ariaLabel: string): HTMLDivElement {
-    const toolbar = this.renderedChanges.add(new ToolBar({
-      ownerDocument: this.element.ownerDocument,
+    const host = h(this.element.ownerDocument, "div");
+    const toolbar = this.renderedChanges.add(new ToolBar(host, {
       contextMenuProvider: inactiveContextMenuProvider,
       ariaLabel,
     }));

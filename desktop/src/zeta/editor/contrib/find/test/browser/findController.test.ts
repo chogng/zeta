@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -187,7 +188,7 @@ function createFixture(text: string, anchor = TextPosition.at(0, 0), active = an
     decorationSources: [createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
   });
   viewport.layout({ width: 600, height: 120 });
-  const editorInput = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const editorInput = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(editorInput);
   const find = new FindController(editorInput, viewport, selections, decorations, options);
   return {

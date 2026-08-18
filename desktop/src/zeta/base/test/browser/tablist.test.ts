@@ -10,8 +10,7 @@ const customCloseIcon = register("tablist-test-close", () => '<svg viewBox="0 0 
 test("TabList owns manual selection semantics and roving focus", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const activations: string[] = [];
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Documents",
     onActivate: (value: string) => activations.push(value),
   });
@@ -84,8 +83,7 @@ test("TabList owns manual selection semantics and roving focus", () => {
 
 test("TabList exposes its ActionBar edge treatment as a presentation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList<string>({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList<string>(dom.window.document.body, {
     ariaLabel: "Inset tabs",
     presentation: "inset",
     onActivate: () => undefined,
@@ -97,8 +95,7 @@ test("TabList exposes its ActionBar edge treatment as a presentation", () => {
 
 test("TabList reveals the selected tab when horizontal content overflows", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Overflowing tabs",
     onActivate: () => undefined,
   });
@@ -130,8 +127,7 @@ test("TabList reveals the selected tab when horizontal content overflows", () =>
 
 test("TabList can opt its items into native drag-source presentation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Draggable tabs",
     draggable: true,
     onActivate: () => undefined,
@@ -150,8 +146,7 @@ test("TabList forwards ActionBar drag positions using tab values", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const drops: Array<{ target: string | undefined; position: string }> = [];
   let dragging = false;
-  const tabList = new TabList<string>({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList<string>(dom.window.document.body, {
     ariaLabel: "Reorderable tabs",
     draggable: true,
     dragAndDrop: {
@@ -188,8 +183,7 @@ test("TabList forwards ActionBar drag positions using tab values", () => {
 test("TabList renders IconLabel content, custom actions, and its standard close action", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const closed: string[] = [];
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Editors",
     onActivate: () => undefined,
     onClose: (value: string) => closed.push(value),
@@ -251,8 +245,7 @@ test("TabList renders IconLabel content, custom actions, and its standard close 
 
 test("TabList supports vertical ActionBar navigation and scrolling", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Terminal instances",
     orientation: "vertical",
     onActivate: () => undefined,
@@ -272,8 +265,7 @@ test("TabList supports vertical ActionBar navigation and scrolling", () => {
 
 test("TabList rejects ambiguous item and selection identities", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tabList = new TabList({
-    ownerDocument: dom.window.document,
+  const tabList = new TabList(dom.window.document.body, {
     ariaLabel: "Tabs",
     onActivate: () => undefined,
   });

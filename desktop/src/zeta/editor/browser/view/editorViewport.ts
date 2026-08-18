@@ -323,7 +323,6 @@ export class EditorViewport extends DisposableOwner {
     }));
     this.own(new MinimapNavigationController(
       this.minimapElement,
-      ownerDocument,
       () => this.viewport.layout,
       position => this.scrollTo(position),
     ));

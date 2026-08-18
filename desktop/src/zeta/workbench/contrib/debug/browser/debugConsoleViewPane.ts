@@ -15,27 +15,27 @@ export class DebugConsoleViewPane extends ViewPane {
   private readonly input: HTMLInputElement;
   private readonly status: HTMLDivElement;
 
-  constructor(options: IViewPaneOptions, private readonly consoleService: IDebugConsoleService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly consoleService: IDebugConsoleService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-debug-console");
-    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Debug Console actions" }));
+    this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Debug Console actions" }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    this.sessionSelect = h(options.ownerDocument, "select");
+    this.sessionSelect = h(container.ownerDocument, "select");
     this.sessionSelect.className = "zeta-debug-console-session";
     this.sessionSelect.setAttribute("aria-label", "Debug Console session");
-    this.output = h(options.ownerDocument, "pre");
+    this.output = h(container.ownerDocument, "pre");
     this.output.className = "zeta-debug-console-output";
     this.output.tabIndex = 0;
     this.output.setAttribute("role", "log");
     this.output.setAttribute("aria-label", "Debug Console output");
-    this.form = h(options.ownerDocument, "form");
+    this.form = h(container.ownerDocument, "form");
     this.form.className = "zeta-debug-console-form";
-    this.input = h(options.ownerDocument, "input");
+    this.input = h(container.ownerDocument, "input");
     this.input.type = "text";
     this.input.placeholder = "Evaluate expression";
     this.input.setAttribute("aria-label", "Debug Console expression");
     this.form.append(this.input);
-    this.status = h(options.ownerDocument, "div");
+    this.status = h(container.ownerDocument, "div");
     this.status.className = "zeta-debug-console-status";
     this.status.setAttribute("role", "status");
     this.contentElement.append(this.sessionSelect, this.output, this.form, this.status);

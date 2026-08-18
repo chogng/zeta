@@ -6,6 +6,7 @@ import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationServic
 import { ConfigurationsRegistry } from "../../../configuration/common/configurationRegistry.js";
 import { WorkbenchObjectTree, type ResourceOpenEvent } from "../../browser/listService.js";
 import { ListConfiguration, type ListOpenMode } from "../../common/listConfiguration.js";
+import { h } from "../../../../base/browser/dom.js";
 
 interface TestItem {
   readonly id: string;
@@ -21,13 +22,12 @@ test("Platform List owns and validates the shared open-mode configuration", () =
 test("WorkbenchObjectTree derives preview, pinned, and side-by-side open intent", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   using configuration = new TestConfigurationService();
-  using tree = new WorkbenchObjectTree<TestItem>({
-    ownerDocument: dom.window.document,
+  using tree = new WorkbenchObjectTree<TestItem>(dom.window.document.body, {
     ariaLabel: "Resources",
     configurationService: configuration,
     modelOptions: { identityProvider: { getId: (item) => item.id } },
     renderElement: (item) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = item.id;
       return label;
     },

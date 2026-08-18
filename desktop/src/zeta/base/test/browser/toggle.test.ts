@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Checkbox, Switch, Toggle } from "../../browser/ui/toggle/toggle.js";
+import { h } from "../../browser/dom.js";
 
 test("Toggle and Checkbox expose shared native boolean state", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const changes: boolean[] = [];
-  using checkbox = new Checkbox({
-    ownerDocument: dom.window.document,
+  using checkbox = new Checkbox(dom.window.document.body, {
     label: "Underline links",
     onChange: checked => changes.push(checked),
   });
@@ -30,12 +30,10 @@ test("Toggle and Checkbox expose shared native boolean state", () => {
 
 test("Switch projects the shared state as a switch control", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  using toggle = new Toggle({
-    ownerDocument: dom.window.document,
+  using toggle = new Toggle(dom.window.document.body, {
     ariaLabel: "Generic toggle",
   });
-  using switchControl = new Switch({
-    ownerDocument: dom.window.document,
+  using switchControl = new Switch(dom.window.document.body, {
     ariaLabel: "Reduce motion",
     checked: true,
   });
@@ -56,10 +54,9 @@ test("Switch projects the shared state as a switch control", () => {
 
 test("Toggle can place its content before the control", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const content = dom.window.document.createElement("span");
+  const content = h(dom.window.document, "span");
   content.textContent = "Minimap";
-  using switchControl = new Switch({
-    ownerDocument: dom.window.document,
+  using switchControl = new Switch(dom.window.document.body, {
     ariaLabel: "Minimap",
     content,
     contentPlacement: "before-control",

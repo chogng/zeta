@@ -11,7 +11,7 @@ test("Debug Console renders retained output, evaluates expressions, and exposes 
   try {
     const { DebugConsoleViewPane } = await import("../../browser/debugConsoleViewPane.js");
     using consoleService = new FakeDebugConsoleService();
-    using view = new DebugConsoleViewPane({ id: "zeta.debugConsole.test", title: "Debug Console", ownerDocument: browser.window.document }, consoleService);
+    using view = new DebugConsoleViewPane(browser.window.document.body, { id: "zeta.debugConsole.test", title: "Debug Console" }, consoleService);
     browser.window.document.body.append(view.element);
     assert.equal(view.element.querySelector(".zeta-debug-console-output")?.textContent, "ready\n");
 

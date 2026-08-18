@@ -17,12 +17,11 @@ export class MultiChatTabsControl extends ChatTabsControl {
   private draggedTabId: string | undefined;
   private nextTabId = 0;
 
-  constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation) {
-    super(ownerDocument, presentation);
+  constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, presentation: ChatTabsPresentation) {
+    super(container, presentation);
     this.idPrefix = idPrefix;
     this.element.classList.add("zeta-multi-chat-tabs-control");
-    this.tabList = this.own(new TabList({
-      ownerDocument,
+    this.tabList = this.own(new TabList(this.element, {
       ariaLabel: "Open chats",
       presentation: "inset",
       draggable: true,
@@ -42,7 +41,6 @@ export class MultiChatTabsControl extends ChatTabsControl {
       onActivate: (tabId) => delegate.selectTab(tabId),
       onClose: (tabId) => delegate.closeTab(tabId),
     }));
-    this.element.append(this.tabList.element);
   }
 
   setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {

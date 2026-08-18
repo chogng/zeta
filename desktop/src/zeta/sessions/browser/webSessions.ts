@@ -1,4 +1,5 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
@@ -11,13 +12,15 @@ export function startBrowserSessions(product: ProductConfiguration, profile: Ses
   installBaseUiStyles();
   const sessions = new DisposableStore();
   const host = globalThis.zetaWebWorkbenchHost;
+  const container = host?.container ?? document.querySelector<HTMLElement>("#app");
+  if (!container) throw new Error("Sessions renderer requires an #app container");
   sessions.add(startSessionsWorkbench({
     product,
     profile,
     api: host?.api ?? createDisconnectedRendererApi(),
     createContextMenuService: createBrowserWorkbenchContextMenuService,
-    container: host?.container ?? document.querySelector<HTMLElement>("#app"),
+    container,
   }));
-  window.addEventListener("pagehide", () => sessions.dispose(), { once: true });
+  sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
   return sessions;
 }

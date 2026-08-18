@@ -5,7 +5,6 @@ import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from "
 import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
 
 export interface IndexTreeOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -74,12 +73,11 @@ export class IndexTree<T> extends DisposableOwner {
   readonly onDidChangeSelection: Event<IndexTreeSelectionEvent<T>> = this._onDidChangeSelection.event;
   readonly onDidChangeCollapseState: Event<IndexTreeCollapseStateChangeEvent<T>> = this._onDidChangeCollapseState.event;
 
-  constructor(rootElement: T, options: IndexTreeOptions<T>) {
+  constructor(container: HTMLElement, rootElement: T, options: IndexTreeOptions<T>) {
     super();
     const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
     this.model = this.own(new IndexTreeModel(rootElement, options.modelOptions));
-    this.tree = this.own(new AbstractTree({
-      ownerDocument: options.ownerDocument,
+    this.tree = this.own(new AbstractTree(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,

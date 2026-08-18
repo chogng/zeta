@@ -2,9 +2,7 @@ import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDe
 import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
 import type { IConnectorApi } from "../common/connectorApi.js";
-import { BrowserClipboardService } from "../../clipboard/browser/browserClipboardService.js";
 import type { IClipboardService } from "../../clipboard/common/clipboardService.js";
-import { BrowserOpenerService } from "../../opener/browser/browserOpenerService.js";
 import type { IOpenerService } from "../../opener/common/openerService.js";
 
 export interface BrowserConnectorHostServices {
@@ -23,11 +21,11 @@ export function createDisconnectedConnectorApi(unavailable: UnavailableOperation
   };
 }
 
-export function createViteDevConnectorApi(connection: ViteDevAppServerConnection, hostServices?: BrowserConnectorHostServices): IConnectorApi {
+export function createViteDevConnectorApi(connection: ViteDevAppServerConnection, hostServices: BrowserConnectorHostServices): IConnectorApi {
   return {
     list: () => viteDevRequest(connection, "connector/list", {}),
     connectApiToken: params => viteDevRequest(connection, "connector/connect/apiToken", params),
-    connectOAuth: params => connectDeviceOAuth(connection, params, hostServices ?? browserConnectorHostServices()),
+    connectOAuth: params => connectDeviceOAuth(connection, params, hostServices),
     disconnect: params => viteDevRequest(connection, "connector/disconnect", params),
     refreshOAuth: async connectorId => { await viteDevRequest(connection, "connector/oauth/refresh", { connectorId }); },
     revokeOAuth: params => viteDevRequest(connection, "connector/oauth/revoke", params),
@@ -56,8 +54,4 @@ async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params
   } finally {
     if (!completed) await viteDevRequest(connection, "connector/connect/oauth/device/cancel", { flowId: started.flowId }).catch(() => undefined);
   }
-}
-
-function browserConnectorHostServices(): BrowserConnectorHostServices {
-  return { openerService: new BrowserOpenerService(window), clipboardService: new BrowserClipboardService(navigator.clipboard) };
 }

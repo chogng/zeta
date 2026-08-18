@@ -4,7 +4,6 @@ import {
 import { MarkdownPreview } from "../../../../platform/markdown/browser/markdownPreview.js";
 
 export interface MarkdownDocumentViewOptions {
-  readonly ownerDocument: Document;
   readonly markdown?: string;
   readonly title?: string;
   readonly openLink: (href: string) => void | Promise<void>;
@@ -23,11 +22,10 @@ export class MarkdownDocumentView extends DisposableOwner {
 
   readonly element: HTMLIFrameElement;
 
-  constructor(options: MarkdownDocumentViewOptions) {
+  constructor(container: HTMLElement, options: MarkdownDocumentViewOptions) {
     super();
     this.openLink = options.openLink;
-    this.preview = this.own(new MarkdownPreview({
-      ownerDocument: options.ownerDocument,
+    this.preview = this.own(new MarkdownPreview(container, {
       markdown: options.markdown,
       title: options.title,
     }));

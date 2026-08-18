@@ -6,6 +6,7 @@ import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../.
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configurationService.js";
 import type { IContextMenuService } from "../../../contextview/browser/contextMenu.js";
+import { h } from "../../../../base/browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><html><body><main><button id='first'>First</button><button id='second'>Second</button></main></body></html>");
 Object.defineProperties(globalThis, {
@@ -85,11 +86,11 @@ test("HoverService coordinates grouped Hovers and context menus", async () => {
 
 test("HoverService suppresses replacement Hovers until the pointer moves after activation", async () => {
   const container = requiredElement<HTMLElement>("main");
-  const previousTarget = environment.window.document.createElement("button");
+  const previousTarget = h(environment.window.document, "button");
   previousTarget.textContent = "Previous Action";
   container.append(previousTarget);
   previousTarget.getBoundingClientRect = () => rectangle(20, 100, 100, 24);
-  const target = environment.window.document.createElement("button");
+  const target = h(environment.window.document, "button");
   target.textContent = "Action";
   container.append(target);
   target.getBoundingClientRect = () => rectangle(140, 100, 80, 24);
@@ -112,7 +113,7 @@ test("HoverService suppresses replacement Hovers until the pointer moves after a
   assert.equal(previousHover.visible, false);
   assert.equal(hover.visible, false);
 
-  const replacementTarget = environment.window.document.createElement("button");
+  const replacementTarget = h(environment.window.document, "button");
   replacementTarget.textContent = "Replacement Action";
   container.append(replacementTarget);
   replacementTarget.getBoundingClientRect = () => rectangle(140, 100, 80, 24);

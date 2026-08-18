@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -37,7 +38,7 @@ test("Block comment shortcut toggles the active language pair locally", () => {
   });
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 20 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new BlockCommentController(input, viewport, selections, { languageId: "typescript", configurations });
 
@@ -58,7 +59,7 @@ test("Block comment shortcut leaves languages without a block pair alone", () =>
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using configurations = new LanguageConfigurationRegistry();
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new BlockCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
   const toggle = keydown(dom.window, "a", { shiftKey: true, altKey: true });

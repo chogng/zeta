@@ -28,7 +28,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 
   try {
     const { ProblemsViewPane } = await import("../../../../../workbench/contrib/problems/browser/problemsViewPane.js");
-    using pane = new ProblemsViewPane({ id: "zeta.problems", title: "Problems", ownerDocument: browser.window.document }, diagnostics, editorService);
+    using pane = new ProblemsViewPane(browser.window.document.body, { id: "zeta.problems", title: "Problems" }, diagnostics, editorService);
     browser.window.document.body.append(pane.element);
     const titleActions = pane.partTitleProjection?.actions;
     assert.ok(titleActions);

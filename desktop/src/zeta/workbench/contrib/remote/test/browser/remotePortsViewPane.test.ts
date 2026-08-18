@@ -17,7 +17,7 @@ test("Remote Ports renders Main-owned tunnel state changes", async () => {
   using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
   try {
     const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-    using pane = new RemotePortsViewPane({ id: "zeta.ports.test", title: "Ports", ownerDocument: browser.window.document }, tunnels, remoteAgent);
+    using pane = new RemotePortsViewPane(browser.window.document.body, { id: "zeta.ports.test", title: "Ports" }, tunnels, remoteAgent);
     browser.window.document.body.append(pane.element);
     const titleActions = pane.partTitleProjection?.actions;
     assert.ok(titleActions);
@@ -57,7 +57,7 @@ test("Remote Ports forwards and stops ports through the tunnel service", async (
   using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
   try {
     const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-    using pane = new RemotePortsViewPane({ id: "zeta.ports.actions.test", title: "Ports", ownerDocument: browser.window.document }, tunnels, remoteAgent);
+    using pane = new RemotePortsViewPane(browser.window.document.body, { id: "zeta.ports.actions.test", title: "Ports" }, tunnels, remoteAgent);
     browser.window.document.body.append(pane.element);
     const input = pane.element.querySelector<HTMLInputElement>(".zeta-remote-ports-input")!;
     input.value = "3000";
@@ -88,7 +88,7 @@ test("Remote Ports enables forwarding only for a connected SSH workspace", async
   using remoteAgent = new TestRemoteAgentService({ kind: "local", generation: 1 }, "connected");
   try {
     const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-    using pane = new RemotePortsViewPane({ id: "zeta.ports.connection.test", title: "Ports", ownerDocument: browser.window.document }, tunnels, remoteAgent);
+    using pane = new RemotePortsViewPane(browser.window.document.body, { id: "zeta.ports.connection.test", title: "Ports" }, tunnels, remoteAgent);
     browser.window.document.body.append(pane.element);
     assert.equal(pane.element.querySelector<HTMLInputElement>(".zeta-remote-ports-input")?.disabled, true);
     assert.match(pane.element.querySelector(".zeta-remote-ports-status")?.textContent ?? "", /SSH Remote Workspace/);
@@ -113,7 +113,7 @@ test("Remote Ports does not let an initial list overwrite a newer tunnel event",
   using remoteAgent = new TestRemoteAgentService({ kind: "ssh", generation: 1, authority: "ssh+work-server", host: "work-server" }, "connected");
   try {
     const { RemotePortsViewPane } = await import("../../browser/remotePortsViewPane.js");
-    using pane = new RemotePortsViewPane({ id: "zeta.ports.race.test", title: "Ports", ownerDocument: browser.window.document }, tunnels, remoteAgent);
+    using pane = new RemotePortsViewPane(browser.window.document.body, { id: "zeta.ports.race.test", title: "Ports" }, tunnels, remoteAgent);
     browser.window.document.body.append(pane.element);
     tunnels.upsert(tunnel("new", 4300, 3003, "open"));
     resolveInitialList([]);

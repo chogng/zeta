@@ -19,10 +19,12 @@ export class GeneralSettingsPane extends DisposableOwner {
   private readonly controls = new Map<string, GeneralControl>();
   private readonly status: HTMLParagraphElement;
 
-  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
+  constructor(container: HTMLElement, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-general-settings";
+    container.append(this.element);
     const model = this.own(new SettingsTreeModel<HTMLElement>());
     model.setChildren([
       this.createGroup("accessibility", "Accessibility", "Adapt interaction and presentation to accessibility needs.", [
@@ -53,8 +55,7 @@ export class GeneralSettingsPane extends DisposableOwner {
         this.createNumberSetting(SashConfiguration.hoverDelay, "Resize handle hover delay", "Milliseconds before resize handles show hover feedback.", MinimumSashHoverDelay, MaximumSashHoverDelay),
       ]),
     ]);
-    const tree = this.own(new SettingsTree({
-      ownerDocument,
+    const tree = this.own(new SettingsTree(this.element, {
       model,
       rootClassName: "zeta-general-settings-tree",
       groupClassName: "zeta-general-settings-group",
@@ -62,7 +63,6 @@ export class GeneralSettingsPane extends DisposableOwner {
       itemsClassName: "zeta-general-settings-list",
       renderItem: (item) => item.value,
     }));
-    this.element.append(tree.element);
     this.status = h(ownerDocument, "p");
     this.status.className = "zeta-general-settings-status";
     this.status.setAttribute("role", "status");
@@ -99,8 +99,8 @@ export class GeneralSettingsPane extends DisposableOwner {
 
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
     const copy = this.createSettingCopy(label, description);
-    const checkbox = this.own(new Checkbox({
-      ownerDocument: this.element.ownerDocument,
+    const host = h(this.element.ownerDocument, "span");
+    const checkbox = this.own(new Checkbox(host, {
       ariaLabel: label,
       content: copy,
       contentPlacement: "before-control",
@@ -115,9 +115,8 @@ export class GeneralSettingsPane extends DisposableOwner {
   private createSelectSetting<T extends string>(options: { readonly key: IConfigurationKey<T>; readonly label: string; readonly description: string; readonly options: readonly { readonly value: T; readonly label: string }[] }): HTMLElement {
     const setting = h(this.element.ownerDocument, "div");
     setting.className = "zeta-general-setting";
-    const select = this.own(new SelectBox({
+    const select = this.own(new SelectBox(setting, {
       options: options.options,
-      ownerDocument: this.element.ownerDocument,
       ariaLabel: options.label,
       presentation: "field",
       contextViewProvider: this.contextViewProvider,

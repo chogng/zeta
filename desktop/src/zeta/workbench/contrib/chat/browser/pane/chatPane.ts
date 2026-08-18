@@ -20,15 +20,17 @@ export class ChatPane extends DisposableOwner {
   private readonly inputPart: ChatInputPart;
   private submittedMessage = false;
 
-  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
+  constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.id = panelId;
     this.element.className = "zeta-chat";
     this.element.setAttribute("role", "tabpanel");
     this.element.hidden = true;
+    container.append(this.element);
     this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
-    this.listWidget = this.own(new ChatListWidget(ownerDocument));
+    this.listWidget = this.own(new ChatListWidget(this.element));
     const inputDelegate: ChatInputDelegate = {
       send: (text, skills) => this.send(text, skills),
       executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
@@ -36,7 +38,7 @@ export class ChatPane extends DisposableOwner {
       selectModel: (model) => this.model.selectModel(model),
       resolveInteraction: (response) => this.model.resolveInteraction(response),
     };
-    this.inputPart = this.own(new ChatInputPart(ownerDocument, inputDelegate, contextMenuService, contextViewService));
+    this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
     this.element.append(this.listWidget.element, this.inputPart.element);
     this.own(this.model.onDidChange(() => this.render()));
     this.defer(() => this.element.remove());

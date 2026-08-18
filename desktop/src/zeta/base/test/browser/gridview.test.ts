@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IRectangle } from "../../browser/geometry.js";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -34,7 +35,7 @@ class TestView {
     readonly minimumHeight = 0,
     readonly maximumHeight = Number.POSITIVE_INFINITY,
   ) {
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
     this.element.dataset.viewId = id;
   }
 
@@ -48,7 +49,7 @@ test("GridView adds and removes leaves by GridLocation", () => {
   const left = new TestView(dom.window.document, "left", 100);
   const editor = new TestView(dom.window.document, "editor", 100);
   const panel = new TestView(dom.window.document, "panel", 100);
-  const gridview = new GridView({
+  const gridview = new GridView(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -56,7 +57,7 @@ test("GridView adds and removes leaves by GridLocation", () => {
       { type: "leaf", view: left, size: 200 },
       { type: "leaf", view: editor, size: 400 },
     ],
-  }, dom.window.document);
+  });
   gridview.layout(600, 400);
 
   gridview.addView(panel, { type: "split", index: 1 }, [1, 1]);
@@ -79,7 +80,7 @@ test("GridView moves siblings while preserving their sizes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const left = new TestView(dom.window.document, "left");
   const editor = new TestView(dom.window.document, "editor");
-  const gridview = new GridView({
+  const gridview = new GridView(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -87,7 +88,7 @@ test("GridView moves siblings while preserving their sizes", () => {
       { type: "leaf", view: left, size: 200 },
       { type: "leaf", view: editor, size: 400 },
     ],
-  }, dom.window.document);
+  });
   gridview.layout(600, 400);
 
   gridview.moveView([], 0, 1);
@@ -105,7 +106,7 @@ test("GridView removes an empty nested branch", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const nested = new TestView(dom.window.document, "nested");
   const editor = new TestView(dom.window.document, "editor");
-  const gridview = new GridView({
+  const gridview = new GridView(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -120,7 +121,7 @@ test("GridView removes an empty nested branch", () => {
       },
       { type: "leaf", view: editor, size: 400 },
     ],
-  }, dom.window.document);
+  });
   gridview.layout(600, 400);
 
   gridview.removeView([0, 0]);

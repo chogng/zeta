@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -27,8 +28,8 @@ type SessionsPartId = import("../../../sessions/services/layout/browser/sessions
 type WorkbenchPartInstance = import("../../../workbench/browser/part.js").WorkbenchPart;
 
 class TestSessionsPart extends WorkbenchPart {
-  constructor(readonly id: SessionsPartId, ownerDocument: Document) {
-    super(id, ownerDocument);
+  constructor(readonly id: SessionsPartId, container: HTMLElement) {
+    super(container, id);
   }
 
   override get minimumWidth(): number {
@@ -47,12 +48,12 @@ class TestSessionsPart extends WorkbenchPart {
 }
 
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
-  return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument)]));
+  return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
 
 test("Sessions layout owns a fixed Sessions-first Part topology", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const container = dom.window.document.createElement("main");
+  const container = h(dom.window.document, "main");
   dom.window.document.body.append(container);
   const parts = createParts(dom.window.document);
   const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
@@ -75,7 +76,7 @@ test("Sessions layout owns a fixed Sessions-first Part topology", () => {
 
 test("Sessions layout only permits the optional auxiliary Part to hide", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const container = dom.window.document.createElement("main");
+  const container = h(dom.window.document, "main");
   dom.window.document.body.append(container);
   const parts = createParts(dom.window.document);
   const layout = new SessionsWorkbenchLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
@@ -99,7 +100,7 @@ test("Sessions layout only permits the optional auxiliary Part to hide", () => {
 
 test("Sessions layout validates its complete Part set", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const container = dom.window.document.createElement("main");
+  const container = h(dom.window.document, "main");
   const parts = createParts(dom.window.document);
   parts.delete("auxiliarybar");
 
@@ -120,7 +121,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
     flushInterval: 0,
   });
   const firstStorage = createStorage();
-  const firstContainer = dom.window.document.createElement("main");
+  const firstContainer = h(dom.window.document, "main");
   const firstParts = createParts(dom.window.document);
   const first = new SessionsWorkbenchLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
   first.layout(new Dimension(1_100, 700));
@@ -133,7 +134,7 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
   firstStorage.dispose();
 
   const restoredStorage = createStorage();
-  const restoredContainer = dom.window.document.createElement("main");
+  const restoredContainer = h(dom.window.document, "main");
   const restoredParts = createParts(dom.window.document);
   const restored = new SessionsWorkbenchLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
   restored.layout(new Dimension(1_100, 700));

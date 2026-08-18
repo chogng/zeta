@@ -102,11 +102,12 @@ export class Sash extends DisposableOwner {
   private _linkedSash: Sash | undefined;
 
   constructor(
+    container: HTMLElement,
     readonly orientation: SashOrientation,
-    ownerDocument: Document = document,
     presentation: SashPresentation = undefined,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
@@ -120,6 +121,7 @@ export class Sash extends DisposableOwner {
     element.setAttribute("aria-orientation", orientation);
     element.setAttribute("aria-disabled", "false");
     element.tabIndex = 0;
+    container.append(element);
     this.dragListeners = this.own(new ResettableDisposableGroup());
     this.hoverTimer = this.own(new DisposableSlot<IDisposable>());
     this.orthogonalStartListener = this.own(new DisposableSlot<IDisposable>());

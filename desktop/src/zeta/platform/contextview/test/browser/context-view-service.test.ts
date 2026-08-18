@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../base/browser/dom.js";
 
 const environment = new JSDOM(
   "<!doctype html><html><head></head><body><main></main></body></html>",
@@ -26,7 +27,7 @@ test("context view service hosts overlays inside its Workbench container", () =>
   const container = environment.window.document.querySelector("main");
   assert.ok(container);
   const service = new BrowserContextViewService(container);
-  const content = environment.window.document.createElement("div");
+  const content = h(environment.window.document, "div");
   content.textContent = "Menu";
 
   assert.equal(

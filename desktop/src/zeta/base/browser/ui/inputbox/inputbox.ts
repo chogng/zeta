@@ -14,7 +14,6 @@ export interface InputBoxOptions {
   readonly placeholder?: string;
   readonly type?: "text" | "number" | "password" | "search";
   readonly presentation?: "default" | "field";
-  readonly ownerDocument?: Document;
   readonly readOnly?: boolean;
   readonly enabled?: boolean;
   readonly ariaLabel?: string;
@@ -45,9 +44,9 @@ export class InputBox extends DisposableOwner {
   readonly onDidBlur: Event<void> = this._onDidBlur.event;
   readonly onKeyDown: Event<KeyboardEvent> = this._onKeyDown.event;
 
-  constructor(options: InputBoxOptions = {}) {
+  constructor(container: HTMLElement, options: InputBoxOptions = {}) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-input-box";
     if (options.presentation === "field") this.element.classList.add("zeta-input-box-field");
@@ -94,6 +93,7 @@ export class InputBox extends DisposableOwner {
     setRole(this.message, "alert");
     this.message.hidden = true;
     this.element.append(this.inputElement, this.message);
+    container.append(this.element);
     this.syncReadOnly();
     this.own(IME.onDidChange(() => this.syncReadOnly()));
     this.own(addDisposableListener(

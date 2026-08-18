@@ -6,7 +6,6 @@ import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, t
 import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
 
 export interface ObjectTreeOptions<TNode> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -94,13 +93,12 @@ export class ObjectTree<TNode> extends DisposableOwner {
   readonly onDidActivate: Event<ObjectTreeActivateEvent<TNode>> = this._onDidActivate.event;
   readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
 
-  constructor(options: ObjectTreeOptions<TNode>) {
+  constructor(container: HTMLElement, options: ObjectTreeOptions<TNode>) {
     super();
     const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
     this.onWillRender = options.onWillRender;
     this.model = this.own(new ObjectTreeModel(options.modelOptions));
-    this.tree = this.own(new AbstractTree({
-      ownerDocument: options.ownerDocument,
+    this.tree = this.own(new AbstractTree(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,
@@ -237,7 +235,6 @@ export interface CompressibleKeyboardNavigationLabelProvider<T> {
 }
 
 export interface CompressibleObjectTreeOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -300,12 +297,11 @@ export class CompressibleObjectTree<T> extends DisposableOwner {
   readonly onDidChangeSelection: Event<CompressibleTreeSelectionChangeEvent<T>> = this._onDidChangeSelection.event;
   readonly onDidChangeCollapseState: Event<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }> = this._onDidChangeCollapseState.event;
 
-  constructor(private readonly options: CompressibleObjectTreeOptions<T>) {
+  constructor(container: HTMLElement, private readonly options: CompressibleObjectTreeOptions<T>) {
     super();
     const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
     this.model = this.own(new CompressibleObjectTreeModel(options.modelOptions));
-    this.tree = this.own(new AbstractTree({
-      ownerDocument: options.ownerDocument,
+    this.tree = this.own(new AbstractTree(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,

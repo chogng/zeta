@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { JSDOM } from "jsdom";
-import {
-  AriaLiveRegion,
-  setAriaAttribute,
-  setRole,
-} from "../../browser/ui/aria/aria.js";
+import { JSDOM, type DOMWindow } from "jsdom";
+import { scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
+import { AriaLiveRegion, setAriaAttribute, setRole } from "../../browser/ui/aria/aria.js";
 
 test("ARIA helpers set, preserve false, and remove semantic attributes", () => {
   const dom = new JSDOM("<!doctype html><body><button></button></body>");
@@ -68,10 +65,8 @@ test("AriaLiveRegion announces repeated status and alert messages", async () => 
   dom.window.close();
 });
 
-function nextAnimationFrame(targetWindow: {
-  requestAnimationFrame(callback: FrameRequestCallback): number;
-}): Promise<void> {
+function nextAnimationFrame(targetWindow: DOMWindow): Promise<void> {
   return new Promise((resolve) => {
-    targetWindow.requestAnimationFrame(() => resolve());
+    scheduleAtNextAnimationFrame(targetWindow as unknown as Window, resolve);
   });
 }

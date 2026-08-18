@@ -25,7 +25,6 @@ export interface ActionBarDragAndDrop {
 }
 
 export interface ActionBarOptions {
-  readonly ownerDocument?: Document;
   readonly actions?: readonly IAction[];
   readonly ariaLabel?: string;
   readonly ariaRole?: "toolbar" | "tablist";
@@ -63,13 +62,14 @@ export class ActionBar extends DisposableOwner {
   private dropTarget: HTMLElement | undefined;
   private dropPosition: ActionBarDropPosition | undefined;
 
-  constructor(options: ActionBarOptions = {}) {
+  constructor(container: HTMLElement, options: ActionBarOptions = {}) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-action-bar";
+    container.append(element);
     this.orientation = options.orientation ?? "horizontal";
     element.classList.add(this.orientation);
     element.classList.toggle("highlight-toggled", options.highlightToggledItems === true);

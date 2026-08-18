@@ -113,8 +113,7 @@ test("Markdown task lists use the shared Checkbox presentation", () => {
 
 test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
   const dom = createDom();
-  const preview = new MarkdownPreview({
-    ownerDocument: dom.window.document,
+  const preview = new MarkdownPreview(dom.window.document.body, {
     markdown: [
       "# Preview",
       "",
@@ -127,7 +126,6 @@ test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
       "[unsafe](javascript:alert(1))",
     ].join("\n"),
   });
-  dom.window.document.body.append(preview.element);
 
   assert.match(preview.element.srcdoc, /<h1>Preview<\/h1>/);
   assert.match(preview.element.srcdoc, /<table>/);
@@ -146,11 +144,9 @@ test("MarkdownPreview sanitizes content before creating iframe srcdoc", () => {
 
 test("MarkdownPreview validates iframe link messages before emitting", () => {
   const dom = createDom();
-  const preview = new MarkdownPreview({
-    ownerDocument: dom.window.document,
+  const preview = new MarkdownPreview(dom.window.document.body, {
     markdown: "[safe](https://example.com/docs)",
   });
-  dom.window.document.body.append(preview.element);
   const links: string[] = [];
   const registration = preview.onDidOpenLink((href) => links.push(href));
   const channel = preview.element.getAttribute(
@@ -200,14 +196,12 @@ test("MarkdownPreview validates iframe link messages before emitting", () => {
 test("workbench Markdown document view owns link policy and updates", () => {
   const dom = createDom();
   const links: string[] = [];
-  const view = new MarkdownDocumentView({
-    ownerDocument: dom.window.document,
+  const view = new MarkdownDocumentView(dom.window.document.body, {
     markdown: "# Initial",
     openLink: (href) => {
       links.push(href);
     },
   });
-  dom.window.document.body.append(view.element);
   const channel = view.element.getAttribute("data-zeta-webview-channel");
   assert.ok(channel);
   assert.ok(view.element.contentWindow);

@@ -6,7 +6,6 @@ import type { ListAccessibilityProvider, ListDragAndDrop } from "./list.js";
 import { ListView } from "./listView.js";
 
 export interface ListOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly role?: "listbox" | "tree";
   readonly loopNavigation?: boolean;
@@ -67,11 +66,10 @@ export class List<T> extends DisposableOwner {
   readonly onDidAccept: Event<ListAcceptEvent<T>> = this._onDidAccept.event;
   readonly onDidScroll: Event<number>;
 
-  constructor(private readonly options: ListOptions<T>) {
+  constructor(container: HTMLElement, private readonly options: ListOptions<T>) {
     super();
     this.loopNavigation = options.loopNavigation ?? true;
-    this.view = this.own(new ListView({
-      ownerDocument: options.ownerDocument,
+    this.view = this.own(new ListView(container, {
       ariaLabel: options.ariaLabel,
       role: options.role,
       domFocusable: options.domFocusable,

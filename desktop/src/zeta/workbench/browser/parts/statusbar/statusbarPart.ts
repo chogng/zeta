@@ -18,10 +18,11 @@ export class StatusbarPart extends WorkbenchPart {
   override get maximumHeight(): number { return StatusbarHeight; }
 
   constructor(
+    container: HTMLElement,
     statusbarService: IStatusbarService,
-    ownerDocument: Document,
   ) {
-    super("statusbar", ownerDocument);
+    super(container, "statusbar");
+    const ownerDocument = container.ownerDocument;
     this.statusbarService = statusbarService;
     this.titleElement.remove();
     this.contentElement.remove();
@@ -83,7 +84,7 @@ export class StatusbarPart extends WorkbenchPart {
       if (item) {
         item.update(entry.entry);
       } else {
-        item = new StatusbarEntryItem(entry.id, entry.entry, container.ownerDocument);
+        item = new StatusbarEntryItem(container, entry.id, entry.entry);
         this.items.set(entry.id, item);
       }
       item.setCompactNeighbors({

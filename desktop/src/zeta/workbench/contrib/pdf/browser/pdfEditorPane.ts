@@ -88,11 +88,10 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
     container.setAttribute("role", "region");
     container.setAttribute("aria-label", "PDF reader");
 
-    const toolbar = this.own(new ToolBar({
+    const toolbar = this.own(new ToolBar(container, {
       ariaLabel: "PDF annotation actions",
       contextMenuProvider: noSecondaryContextMenuProvider,
       highlightToggledItems: true,
-      ownerDocument,
     }));
     toolbar.element.classList.add("zeta-pdf-editor-toolbar");
 

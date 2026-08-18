@@ -47,22 +47,18 @@ export class ResizableHTMLElement extends DisposableOwner {
   private deltaX = 0;
   private deltaY = 0;
 
-  constructor(ownerDocument: Document = document) {
+  constructor(container: HTMLElement) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.domNode = h(ownerDocument, "div");
     this.domNode.className = "zeta-resizable";
     this.defer(() => this.domNode.remove());
 
-    this.northSash = this.own(new Sash("horizontal", ownerDocument));
-    this.eastSash = this.own(new Sash("vertical", ownerDocument));
-    this.southSash = this.own(new Sash("horizontal", ownerDocument));
-    this.westSash = this.own(new Sash("vertical", ownerDocument));
-    this.domNode.append(
-      this.northSash.element,
-      this.eastSash.element,
-      this.southSash.element,
-      this.westSash.element,
-    );
+    container.append(this.domNode);
+    this.northSash = this.own(new Sash(this.domNode, "horizontal"));
+    this.eastSash = this.own(new Sash(this.domNode, "vertical"));
+    this.southSash = this.own(new Sash(this.domNode, "horizontal"));
+    this.westSash = this.own(new Sash(this.domNode, "vertical"));
 
     this.connectSash(this.northSash, "north");
     this.connectSash(this.eastSash, "east");
@@ -197,13 +193,15 @@ export class ResizableHTMLElement extends DisposableOwner {
 export class Resizable extends DisposableOwner {
   readonly element: HTMLDivElement;
 
-  constructor(onResize?: (size: IDimension) => void, ownerDocument: Document = document) {
+  constructor(container: HTMLElement, onResize?: (size: IDimension) => void) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-resizable";
     this.element.style.resize = "both";
     this.element.style.overflow = "auto";
     this.defer(() => this.element.remove());
+    container.append(this.element);
     this.own(observeElementSize(this.element, (size) => onResize?.(size)));
   }
 }

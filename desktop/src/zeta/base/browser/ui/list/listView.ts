@@ -8,7 +8,6 @@ import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndD
 import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListDragTargetSector as DragTargetSector } from "./list.js";
 
 export interface ListViewOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly role?: "listbox" | "tree";
   readonly domFocusable?: boolean;
@@ -29,9 +28,9 @@ export class ListView<T> extends DisposableOwner {
 
   readonly onDidScroll: Event<number> = this._onDidScroll.event;
 
-  constructor(private readonly options: ListViewOptions<T>) {
+  constructor(container: HTMLElement, private readonly options: ListViewOptions<T>) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-list";
     this.element.id = `zeta-list-${listSequence++}`;
@@ -39,6 +38,7 @@ export class ListView<T> extends DisposableOwner {
     if (options.ariaLabel) setAriaAttribute(this.element, "label", options.ariaLabel);
     if (options.domFocusable === true) this.element.tabIndex = 0;
     this.element.style.overflow = "auto";
+    container.append(this.element);
     this.defer(() => this.element.remove());
     this.own(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
     if (options.dnd) this.own(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));

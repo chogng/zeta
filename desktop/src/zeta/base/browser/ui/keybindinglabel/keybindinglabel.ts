@@ -6,7 +6,6 @@ import { h } from "../../dom.js";
 
 export interface KeybindingLabelOptions {
   readonly keybinding: ResolvedKeybinding;
-  readonly ownerDocument?: Document;
   readonly presentation?: KeybindingLabelPresentation;
 }
 
@@ -18,13 +17,14 @@ export class KeybindingLabel extends DisposableOwner {
   readonly element: HTMLSpanElement;
   private _keybinding: ResolvedKeybinding;
 
-  constructor(options: KeybindingLabelOptions) {
+  constructor(container: HTMLElement, options: KeybindingLabelOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     this._keybinding = options.keybinding;
     this.element = h(ownerDocument, "span");
     this.defer(() => this.element.remove());
     this.element.className = `zeta-keybinding-label zeta-keybinding-label-${options.presentation ?? "plain"}`;
+    container.append(this.element);
     this.render();
   }
 

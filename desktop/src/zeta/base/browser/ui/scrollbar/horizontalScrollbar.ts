@@ -6,8 +6,8 @@ import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
 
 /** Horizontal track and thumb behavior owned by a scrollable element. */
 export class HorizontalScrollbar extends AbstractScrollbar {
-  constructor(options: AbstractScrollbarOptions) {
-    super("horizontal", options);
+  constructor(container: HTMLElement, options: AbstractScrollbarOptions) {
+    super(container, "horizontal", options);
   }
 
   protected override applyThumbMetrics(

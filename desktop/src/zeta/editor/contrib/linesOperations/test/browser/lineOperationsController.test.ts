@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -39,7 +40,7 @@ test("Line operation shortcuts duplicate and delete through Aster commands", () 
     selectionController: selections,
   });
   viewport.layout({ width: 200, height: 60 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineOperationsController(input, viewport, selections);
 
@@ -62,7 +63,7 @@ test("Line operation shortcuts insert blank lines above and below selected group
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineOperationsController(input, viewport, selections);
 
@@ -91,7 +92,7 @@ test("Line operation shortcuts move selected lines without duplicating them", ()
     selectionController: selections,
   });
   viewport.layout({ width: 200, height: 60 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineOperationsController(input, viewport, selections);
 
@@ -115,7 +116,7 @@ test("Line operation controller rejects cross-model wiring and leaves unrelated 
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineOperationsController(input, viewport, selections);
   const unrelated = keydown(dom.window, "ArrowDown", { altKey: true, ctrlKey: true });

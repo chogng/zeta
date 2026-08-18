@@ -30,17 +30,17 @@ export class RemotePortsViewPane extends ViewPane {
   private error: string | undefined;
   private activeConnectionIdentity: string | undefined;
 
-  constructor(options: IViewPaneOptions, private readonly tunnelService: IRemoteTunnelService, private readonly remoteAgentService: IRemoteAgentService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly tunnelService: IRemoteTunnelService, private readonly remoteAgentService: IRemoteAgentService) {
+    super(container, options);
     this.activeConnectionIdentity = remoteConnectionIdentity(remoteAgentService.connection);
     this.contentElement.classList.add("zeta-remote-ports");
-    this.formElement = h(options.ownerDocument, "form");
+    this.formElement = h(container.ownerDocument, "form");
     this.formElement.className = "zeta-remote-ports-form";
-    const label = h(options.ownerDocument, "label");
+    const label = h(container.ownerDocument, "label");
     label.className = "zeta-remote-ports-label";
     label.htmlFor = `${options.id}-remote-port`;
     label.textContent = "Remote port";
-    this.portInput = h(options.ownerDocument, "input");
+    this.portInput = h(container.ownerDocument, "input");
     this.portInput.id = label.htmlFor;
     this.portInput.className = "zeta-remote-ports-input";
     this.portInput.type = "number";
@@ -49,21 +49,21 @@ export class RemotePortsViewPane extends ViewPane {
     this.portInput.step = "1";
     this.portInput.placeholder = "3000";
     this.portInput.required = true;
-    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Ports actions" }));
+    this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Ports actions" }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    this.forwardButton = h(options.ownerDocument, "button");
+    this.forwardButton = h(container.ownerDocument, "button");
     this.forwardButton.className = "zeta-remote-ports-forward";
     this.forwardButton.type = "submit";
     this.forwardButton.textContent = "Forward Port";
-    this.stopAllButton = h(options.ownerDocument, "button");
+    this.stopAllButton = h(container.ownerDocument, "button");
     this.stopAllButton.className = "zeta-remote-ports-stop-all";
     this.stopAllButton.type = "button";
     this.stopAllButton.textContent = "Stop All";
     this.formElement.append(label, this.portInput, this.forwardButton, this.stopAllButton);
-    this.statusElement = h(options.ownerDocument, "div");
+    this.statusElement = h(container.ownerDocument, "div");
     this.statusElement.className = "zeta-remote-ports-status";
     this.statusElement.setAttribute("role", "status");
-    this.listElement = h(options.ownerDocument, "ul");
+    this.listElement = h(container.ownerDocument, "ul");
     this.listElement.className = "zeta-remote-ports-list";
     this.listElement.setAttribute("aria-label", "Forwarded ports");
     this.contentElement.append(this.formElement, this.statusElement, this.listElement);

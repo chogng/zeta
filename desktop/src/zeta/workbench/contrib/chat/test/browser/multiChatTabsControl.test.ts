@@ -7,7 +7,7 @@ import { MultiChatTabsControl } from "../../browser/view/multiChatTabsControl.js
 test("MultiChatTabsControl moves the dragged tab through its delegate", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const moves: Array<{ source: string; target: string | undefined; position: string }> = [];
-  const control = new MultiChatTabsControl(dom.window.document, "chat", {
+  const control = new MultiChatTabsControl(dom.window.document.body, "chat", {
     selectTab: () => undefined,
     closeTab: () => undefined,
     moveTab: (source, target, position) => moves.push({ source, target, position }),

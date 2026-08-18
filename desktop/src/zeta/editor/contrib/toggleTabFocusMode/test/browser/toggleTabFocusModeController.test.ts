@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -25,7 +26,7 @@ test("Tab focus mode exposes state through Aster-owned data and an accessibility
   const container = dom.window.document.querySelector<HTMLElement>("main")!;
   using model = new TextModel("text");
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new ToggleTabFocusModeController(input, viewport);
 

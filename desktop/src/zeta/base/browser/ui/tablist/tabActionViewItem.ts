@@ -69,12 +69,10 @@ export class TabActionViewItem<T> extends ActionViewItem {
     tab.setAttribute("aria-label", item.ariaLabel ?? item.label);
     if (item.panelId) tab.setAttribute("aria-controls", item.panelId);
     this.setupHover(tab, this.tabAction.tooltip);
-    const label = this.own(new IconLabel({
+    const label = this.own(new IconLabel(tab, {
       label: item.label,
       icon: item.icon,
-      ownerDocument: container.ownerDocument,
     }));
-    tab.append(label.element);
     container.append(tab);
 
     this.own(addDisposableListener(tab, "click", (event) => {
@@ -96,8 +94,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
       ...(this.onClose ? [closeTabAction(item, this.onClose, this.closeActionIcon)] : []),
     ];
     if (actions.length > 0) {
-      const actionBar = this.own(new ActionBar({
-        ownerDocument: container.ownerDocument,
+      const actionBar = this.own(new ActionBar(container, {
         actions,
         ariaLabel: item.actions?.ariaLabel ?? `${item.label} actions`,
       }));
@@ -109,7 +106,6 @@ export class TabActionViewItem<T> extends ActionViewItem {
         }
         closeActionContainer.classList.add("zeta-tab-close-action");
       }
-      container.append(actionBar.element);
     }
   }
 

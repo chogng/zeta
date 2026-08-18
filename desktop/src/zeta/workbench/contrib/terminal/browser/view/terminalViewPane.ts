@@ -34,8 +34,8 @@ export class TerminalViewPane extends ViewPane {
   private creating = false;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
+    super(container, options);
     this.defer(() => {
       this.disposed = true;
     });
@@ -43,8 +43,7 @@ export class TerminalViewPane extends ViewPane {
     this.themeService = themeService;
     this.element.classList.add("zeta-terminal-view");
     this.headerElement.remove();
-    this.titleActions = this.own(new TerminalTitleActions({
-      ownerDocument: options.ownerDocument,
+    this.titleActions = this.own(new TerminalTitleActions(this.headerActionsElement, {
       menuService,
       contextMenuService,
       contextKeyService,
@@ -56,12 +55,11 @@ export class TerminalViewPane extends ViewPane {
     }));
 
     this.contentElement.classList.add("zeta-terminal-content");
-    this.statusElement = h(options.ownerDocument, "div");
+    this.statusElement = h(container.ownerDocument, "div");
     this.statusElement.className = "zeta-terminal-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.hidden = true;
-    this.tabList = this.own(new TabList({
-      ownerDocument: options.ownerDocument,
+    this.tabList = this.own(new TabList(this.contentElement, {
       ariaLabel: "Terminal instances",
       orientation: "vertical",
       draggable: true,
@@ -88,7 +86,7 @@ export class TerminalViewPane extends ViewPane {
       },
     }));
     this.tabList.element.classList.add("zeta-terminal-tabs");
-    this.widgetsElement = h(options.ownerDocument, "div");
+    this.widgetsElement = h(container.ownerDocument, "div");
     this.widgetsElement.className = "zeta-terminal-widgets";
     this.tabsLayout = this.own(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
     this.contentElement.append(this.statusElement, this.tabsLayout.element);
@@ -205,11 +203,10 @@ export class TerminalViewPane extends ViewPane {
     if (this.items.has(instance)) return;
     const item = this.own(new TerminalViewItem(
       instance,
-      new TerminalInstanceWidget(instance, this.element.ownerDocument, this.themeService),
+      new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
       () => this.render(),
     ));
     this.items.set(instance, item);
-    this.widgetsElement.append(item.widget.element);
   }
 
   private removeInstance(instance: ITerminalInstance): void {

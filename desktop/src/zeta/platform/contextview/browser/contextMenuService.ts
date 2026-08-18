@@ -63,9 +63,8 @@ export class BrowserContextMenuService extends DisposableOwner
     this.active = true;
     this.shown = false;
     this.onHide = options.onHide;
-    const menu = new Menu({
+    const menu = new Menu(this.contextViewService.container, {
       actions,
-      ownerDocument: this.contextViewService.container.ownerDocument,
       contextViewContainer: this.contextViewService.container,
       layer: 10,
       getKeybinding: (action) =>

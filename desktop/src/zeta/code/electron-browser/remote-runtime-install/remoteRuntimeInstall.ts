@@ -1,4 +1,6 @@
 import type { RemoteRuntimeInstallProgressState } from "../../../platform/remote/common/remoteRuntimeInstallProgress.js";
+import { addDisposableListener } from "../../../base/browser/dom.js";
+import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { createRemoteRuntimeInstallProgressApi } from "../../../platform/remote/electron-browser/remoteRuntimeInstallProgressApi.js";
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
@@ -6,25 +8,21 @@ import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ThemeService } from "../../../platform/theme/common/themeService.js";
 
 const api = createRemoteRuntimeInstallProgressApi();
+const resources = new DisposableStore();
 const preferredColorScheme = window.matchMedia("(prefers-color-scheme: light)");
-const themeService = new ThemeService(preferredColorScheme.matches ? lightColorTheme : darkColorTheme);
-const themeBinding = bindColorTheme(themeService, document.documentElement);
+const themeService = resources.add(new ThemeService(preferredColorScheme.matches ? lightColorTheme : darkColorTheme));
+resources.add(bindColorTheme(themeService, document.documentElement));
 const host = requiredElement("remote-install-host", HTMLParagraphElement);
 const stage = requiredElement("remote-install-stage", HTMLParagraphElement);
 const progress = requiredElement("remote-install-progress", HTMLProgressElement);
 const detail = requiredElement("remote-install-detail", HTMLParagraphElement);
 const cancel = requiredElement("remote-install-cancel", HTMLButtonElement);
 
-const subscription = api.onDidChange(render);
+resources.add(api.onDidChange(render));
 const updateColorScheme = (): void => themeService.setColorTheme(preferredColorScheme.matches ? lightColorTheme : darkColorTheme);
-preferredColorScheme.addEventListener("change", updateColorScheme);
-window.addEventListener("beforeunload", () => {
-  preferredColorScheme.removeEventListener("change", updateColorScheme);
-  subscription.dispose();
-  themeBinding.dispose();
-  themeService.dispose();
-}, { once: true });
-cancel.addEventListener("click", () => {
+resources.add(addDisposableListener(preferredColorScheme, "change", updateColorScheme));
+resources.add(addDisposableListener(window, "beforeunload", () => resources.dispose(), { once: true }));
+resources.add(addDisposableListener(cancel, "click", () => {
   cancel.disabled = true;
   cancel.textContent = "Cancelling…";
   void api.cancel().catch(error => {
@@ -33,7 +31,7 @@ cancel.addEventListener("click", () => {
     cancel.disabled = false;
     cancel.textContent = "Try Again";
   });
-});
+}));
 
 render(await api.getState());
 

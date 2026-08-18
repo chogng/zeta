@@ -8,7 +8,6 @@ import {
 } from "../../../base/common/lifecycle.js";
 
 export interface WebviewElementOptions {
-  readonly ownerDocument: Document;
   readonly title?: string;
   readonly initialHtml?: string;
 }
@@ -51,16 +50,17 @@ export class WebviewElement extends DisposableOwner {
   readonly element: HTMLIFrameElement;
   readonly onDidMessage: Event<unknown> = this._onDidMessage.event;
 
-  constructor(options: WebviewElementOptions) {
+  constructor(container: HTMLElement, options: WebviewElementOptions = {}) {
     super();
-    const targetWindow = options.ownerDocument.defaultView;
+    const ownerDocument = container.ownerDocument;
+    const targetWindow = ownerDocument.defaultView;
     if (!targetWindow) {
       throw new Error("WebviewElement requires a document with a window");
     }
 
     const instanceId = `webview_${++webviewInstanceCounter}`;
     this.channel = `zeta-webview:${instanceId}`;
-    const element = h(options.ownerDocument, "iframe");
+    const element = h(ownerDocument, "iframe");
     this.element = element;
     element.name = instanceId;
     element.className = "zeta-webview";
@@ -82,6 +82,7 @@ export class WebviewElement extends DisposableOwner {
       this.channel,
       validateHtml(options.initialHtml ?? ""),
     );
+    container.append(element);
 
     this.own(addDisposableListener<MessageEvent>(
       targetWindow,

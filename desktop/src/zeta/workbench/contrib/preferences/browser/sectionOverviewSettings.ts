@@ -220,14 +220,14 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
 export class SectionOverviewSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
 
-  constructor(ownerDocument: Document, sectionId: string, settingsService: ISettingsService) {
+  constructor(container: HTMLElement, sectionId: string, settingsService: ISettingsService) {
     super();
+    const ownerDocument = container.ownerDocument;
     const groups = SectionOverviewContent[sectionId];
     if (!groups) throw new RangeError(`No Settings overview content is registered for '${sectionId}'`);
     const model = this.own(new SettingsTreeModel<OverviewItem>());
     model.setChildren(groups.map((group) => this.groupNode(sectionId, group)));
-    const tree = this.own(new SettingsTree({
-      ownerDocument,
+    const tree = this.own(new SettingsTree(container, {
       model,
       rootClassName: "zeta-section-overview-settings",
       groupClassName: "zeta-settings-overview-group",

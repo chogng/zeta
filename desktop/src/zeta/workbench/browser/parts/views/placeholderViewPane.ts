@@ -8,10 +8,11 @@ import { h } from "../../../../base/browser/dom.js";
 export class PlaceholderViewPane extends ViewPane {
   constructor(
     message: string,
+    container: HTMLElement,
     options: IViewPaneOptions,
   ) {
-    super(options);
-    const placeholder = h(options.ownerDocument, "p");
+    super(container, options);
+    const placeholder = h(container.ownerDocument, "p");
     placeholder.className = "zeta-view-pane-placeholder";
     placeholder.textContent = message;
     this.contentElement.append(placeholder);

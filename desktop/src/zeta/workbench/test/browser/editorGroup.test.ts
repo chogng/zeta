@@ -20,8 +20,8 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
       canOpen: () => EditorPaneMatch.Default,
       create: () => new TestEditorPane(),
     });
-    const source = new EditorGroup({ ownerDocument: dom.window.document, registry });
-    const target = new EditorGroup({ ownerDocument: dom.window.document, registry });
+    const source = new EditorGroup(dom.window.document.body, { registry });
+    const target = new EditorGroup(dom.window.document.body, { registry });
     const first = input("first");
     const second = input("second");
     await source.openEditor(first);

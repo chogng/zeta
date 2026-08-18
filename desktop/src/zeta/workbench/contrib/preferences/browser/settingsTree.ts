@@ -5,7 +5,6 @@ import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, Settings
 import { h } from "../../../../base/browser/dom.js";
 
 export interface SettingsTreeOptions<T> {
-  readonly ownerDocument: Document;
   readonly model: SettingsTreeModel<T>;
   readonly rootClassName: string;
   readonly groupClassName: string;
@@ -46,12 +45,13 @@ export class SettingsTree<T> extends DisposableOwner {
   private readonly options: SettingsTreeOptions<T>;
   private readonly rendered = new Map<string, RenderedSettingsNode<T>>();
 
-  constructor(options: SettingsTreeOptions<T>) {
+  constructor(container: HTMLElement, options: SettingsTreeOptions<T>) {
     super();
     this.options = options;
     this.model = options.model;
-    this.element = h(options.ownerDocument, "div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = `zeta-settings-tree ${options.rootClassName}`;
+    container.append(this.element);
     this.own(options.model.onDidChange(() => this.render()));
     this.defer(() => {
       for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);

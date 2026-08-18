@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -30,7 +31,7 @@ test("Cursor undo restores macOS multi-cursor history without changing text", ()
   using model = new TextModel("one\ntwo");
   using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   container.append(input);
   using controller = new CursorUndoController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
   selections.setCursorSelections(TextSelectionSet.withPrimary([

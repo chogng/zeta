@@ -5,8 +5,7 @@ import { InputBox } from "../../browser/ui/inputbox/inputbox.js";
 
 test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const inputBox = new InputBox({
-    ownerDocument: dom.window.document,
+  const inputBox = new InputBox(dom.window.document.body, {
     placeholder: "Search",
     ariaLabel: "Search commands",
   });
@@ -49,8 +48,7 @@ test("InputBox exposes value, keyboard, focus, and selection behavior", () => {
 
 test("InputBox owns enabled, read-only, and validation accessibility state", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const inputBox = new InputBox({
-    ownerDocument: dom.window.document,
+  const inputBox = new InputBox(dom.window.document.body, {
     enabled: false,
     readOnly: true,
   });
@@ -79,8 +77,7 @@ test("InputBox owns enabled, read-only, and validation accessibility state", () 
 
 test("InputBox supports numeric field presentation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const inputBox = new InputBox({
-    ownerDocument: dom.window.document,
+  const inputBox = new InputBox(dom.window.document.body, {
     type: "number",
     presentation: "field",
   });

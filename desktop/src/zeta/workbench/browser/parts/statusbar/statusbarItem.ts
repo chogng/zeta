@@ -20,16 +20,18 @@ export class StatusbarEntryItem extends DisposableOwner {
   private entry: IStatusbarEntry | undefined;
 
   constructor(
+    container: HTMLElement,
     id: string,
     entry: IStatusbarEntry,
-    ownerDocument: Document,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.id = id;
     const element = h(ownerDocument, "div");
     element.className = "zeta-statusbar-item";
     element.dataset.statusbarItemId = id;
     this.element = element;
+    container.append(element);
 
     const labelElement = h(ownerDocument, "a");
     labelElement.className = "zeta-statusbar-item-label";

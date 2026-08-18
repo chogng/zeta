@@ -15,7 +15,7 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
   try {
     const { DebugViewPane } = await import("../../browser/debugViewPane.js");
     using debug = new FakeDebugService();
-    using view = new DebugViewPane({ id: "zeta.debug.test", title: "Debug", ownerDocument: browser.window.document }, debug, editor);
+    using view = new DebugViewPane(browser.window.document.body, { id: "zeta.debug.test", title: "Debug" }, debug, editor);
     browser.window.document.body.append(view.element);
     debug.activate(debug.sessions[0]!);
     await waitFor(() => view.element.querySelectorAll(".zeta-debug-frame").length === 1);
@@ -53,7 +53,7 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
   try {
     const { DebugViewPane } = await import("../../browser/debugViewPane.js");
     using debug = new FakeDebugService({ name: "main.ts", path: "/srv/project/src/main.ts", resource });
-    using view = new DebugViewPane({ id: "zeta.debug.remote.test", title: "Debug", ownerDocument: browser.window.document }, debug, editor);
+    using view = new DebugViewPane(browser.window.document.body, { id: "zeta.debug.remote.test", title: "Debug" }, debug, editor);
     browser.window.document.body.append(view.element);
     debug.activate(debug.sessions[0]!);
     await waitFor(() => view.element.querySelectorAll(".zeta-debug-frame").length === 1);

@@ -12,7 +12,6 @@ export interface ViewPaneContainerOptions {
   readonly model: IViewContainerModel;
   readonly instantiationService: IInstantiationService;
   readonly contextKeyService: IContextKeyService;
-  readonly ownerDocument?: Document;
   readonly onDidFailCreateView?: (
     error: unknown,
     viewId: string,
@@ -36,14 +35,15 @@ export class ViewPaneContainer extends DisposableOwner {
   private readonly _panes = new Map<string, ViewPaneItem>();
   private visible = true;
 
-  constructor(options: ViewPaneContainerOptions) {
+  constructor(container: HTMLElement, options: ViewPaneContainerOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-view-pane-container";
     element.dataset.viewContainerId = options.viewContainer.id;
+    container.append(element);
     this.id = options.viewContainer.id;
     this.viewContainer = options.viewContainer;
     this.model = options.model;
@@ -144,10 +144,10 @@ export class ViewPaneContainer extends DisposableOwner {
   private createView(descriptor: IViewDescriptor): ViewPane {
     const view = this.instantiationService.createInstance(
       descriptor.ctorDescriptor,
+      this.element,
       {
         id: descriptor.id,
         title: descriptor.title,
-        ownerDocument: this.element.ownerDocument,
         collapsed: descriptor.collapsed,
       },
     );

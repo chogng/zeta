@@ -57,6 +57,13 @@ class FakeDocument {
   }
 }
 
+function fakeContainer(ownerDocument: FakeDocument): HTMLElement {
+  return {
+    ownerDocument,
+    append: () => undefined,
+  } as unknown as HTMLElement;
+}
+
 function dispatchMessage(
   target: EventTarget,
   source: unknown,
@@ -76,8 +83,7 @@ const {
 
 test("webview element creates an opaque-origin sandbox document", () => {
   const ownerDocument = new FakeDocument();
-  const webview = new WebviewElement({
-    ownerDocument: ownerDocument as unknown as Document,
+  const webview = new WebviewElement(fakeContainer(ownerDocument), {
     title: "Markdown preview",
     initialHtml: "<h1>Preview</h1>",
   });
@@ -113,9 +119,7 @@ test("webview element creates an opaque-origin sandbox document", () => {
 
 test("webview messages require the owned iframe source and channel", () => {
   const ownerDocument = new FakeDocument();
-  const webview = new WebviewElement({
-    ownerDocument: ownerDocument as unknown as Document,
-  });
+  const webview = new WebviewElement(fakeContainer(ownerDocument));
   const messages: unknown[] = [];
   const registration = webview.onDidMessage((message) =>
     messages.push(message));
@@ -146,9 +150,7 @@ test("webview messages require the owned iframe source and channel", () => {
 
 test("webview host messaging and content replacement stop after disposal", () => {
   const ownerDocument = new FakeDocument();
-  const webview = new WebviewElement({
-    ownerDocument: ownerDocument as unknown as Document,
-  });
+  const webview = new WebviewElement(fakeContainer(ownerDocument));
 
   assert.equal(webview.postMessage({ type: "update" }), true);
   assert.deepEqual(ownerDocument.iframe.contentWindow.messages, [{

@@ -16,9 +16,8 @@ test("Menu renders submenu actions with the shared SVG indicator", async () => {
     import("../../common/actions.js"),
     import("../../browser/ui/menu/menu.js"),
   ]);
-  const menu = new Menu({
+  const menu = new Menu(dom.window.document.body, {
     actions: [new SubmenuAction("test.submenu", "More", [])],
-    ownerDocument: dom.window.document,
   });
   dom.window.document.body.append(menu.element);
 
@@ -50,7 +49,7 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
     value: dom.window.Node,
   });
   const { Menu } = await import("../../browser/ui/menu/menu.js");
-  const menu = new Menu({
+  const menu = new Menu(dom.window.document.body, {
     actions: ["first", "second", "third"].map((id) => ({
       id,
       label: id,
@@ -58,7 +57,6 @@ test("Menu projects one focused item for keyboard and pointer navigation", async
       enabled: true,
       run(): void {},
     })),
-    ownerDocument: dom.window.document,
   });
   dom.window.document.body.append(menu.element);
   const items = [...menu.element.querySelectorAll<HTMLElement>(

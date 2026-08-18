@@ -18,6 +18,7 @@ const packageTypeFilters = [
 /** Generic package discovery and installation surface backed only by Marketplace business APIs. */
 export class MarketplaceSettingsPane extends DisposableOwner {
   readonly element: HTMLElement;
+  private readonly document: Document;
   private readonly input: HTMLInputElement;
   private readonly status: HTMLParagraphElement;
   private readonly results: HTMLDivElement;
@@ -27,29 +28,30 @@ export class MarketplaceSettingsPane extends DisposableOwner {
   private reloadGeneration = 0;
   private isDisposed = false;
 
-  constructor(private readonly document: Document, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string) {
+  constructor(container: HTMLElement, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string) {
     super();
+    this.document = container.ownerDocument;
     this.selectedPackageType = fixedPackageType;
-    this.element = h(document, "section");
+    this.element = h(this.document, "section");
     this.element.className = "zeta-package-marketplace";
-    const toolbar = h(document, "form");
+    container.append(this.element);
+    const toolbar = h(this.document, "form");
     toolbar.className = "zeta-package-marketplace-toolbar";
-    const searchControl = h(document, "div");
+    const searchControl = h(this.document, "div");
     searchControl.className = "zeta-package-marketplace-search-control";
     appendIcon(lxiconsLibrary.search, searchControl);
-    this.input = h(document, "input");
+    this.input = h(this.document, "input");
     this.input.type = "search";
     this.input.placeholder = fixedPackageType === "language" ? "Search language extensions" : "Search Plugins, Skills, MCPs…";
     this.input.setAttribute("aria-label", "Search Marketplace");
     searchControl.append(this.input);
-    const search = h(document, "button");
+    const search = h(this.document, "button");
     search.type = "submit";
     search.textContent = "Browse Marketplace";
     toolbar.append(searchControl, search);
-    const filters = h(document, "div");
+    const filters = h(this.document, "div");
     filters.className = "zeta-package-marketplace-filters";
-    this.filterTabs = fixedPackageType ? undefined : this.own(new TabList<string>({
-      ownerDocument: document,
+    this.filterTabs = fixedPackageType ? undefined : this.own(new TabList<string>(filters, {
       ariaLabel: "Marketplace package types",
       onActivate: (packageType) => {
         const nextPackageType = packageType || undefined;
@@ -63,10 +65,10 @@ export class MarketplaceSettingsPane extends DisposableOwner {
       filters.append(this.filterTabs.element);
       this.updateFilterState();
     }
-    this.status = h(document, "p");
+    this.status = h(this.document, "p");
     this.status.className = "zeta-package-marketplace-status";
     this.status.setAttribute("role", "status");
-    this.results = h(document, "div");
+    this.results = h(this.document, "div");
     this.results.className = "zeta-package-marketplace-results";
     this.own(addDisposableListener(toolbar, "submit", (event: SubmitEvent) => {
       event.preventDefault();

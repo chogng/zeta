@@ -28,7 +28,7 @@ test("bulk edit preview applies only the selected valid entries", async () => {
 
   try {
     const { BulkEditPreviewPane } = await import("../../browser/preview/bulkEditPreviewPane.js");
-    using pane = new BulkEditPreviewPane({ id: "zeta.bulkEditPreview", title: "Refactor Preview", ownerDocument: browser.window.document });
+    using pane = new BulkEditPreviewPane(browser.window.document.body, { id: "zeta.bulkEditPreview", title: "Refactor Preview" });
     browser.window.document.body.append(pane.element);
     const pending = pane.setInput(model, new AbortController().signal);
     const checkboxes = [...pane.element.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
@@ -62,7 +62,7 @@ test("disposing a bulk edit preview settles the pending approval", async () => {
 
   try {
     const { BulkEditPreviewPane } = await import("../../browser/preview/bulkEditPreviewPane.js");
-    const pane = new BulkEditPreviewPane({ id: "zeta.bulkEditPreview", title: "Refactor Preview", ownerDocument: browser.window.document });
+    const pane = new BulkEditPreviewPane(browser.window.document.body, { id: "zeta.bulkEditPreview", title: "Refactor Preview" });
     const pending = pane.setInput(model, new AbortController().signal);
     pane.dispose();
     assert.equal(await pending, undefined);
@@ -96,7 +96,7 @@ test("bulk edit preview keeps resource operations linked to dependent text edits
 
   try {
     const { BulkEditPreviewPane } = await import("../../browser/preview/bulkEditPreviewPane.js");
-    using pane = new BulkEditPreviewPane({ id: "zeta.bulkEditPreview", title: "Refactor Preview", ownerDocument: browser.window.document });
+    using pane = new BulkEditPreviewPane(browser.window.document.body, { id: "zeta.bulkEditPreview", title: "Refactor Preview" });
     const pending = pane.setInput(model, new AbortController().signal);
     const createCheckbox = pane.element.querySelectorAll<HTMLInputElement>("input[type=checkbox]")[0]!;
     createCheckbox.checked = false;

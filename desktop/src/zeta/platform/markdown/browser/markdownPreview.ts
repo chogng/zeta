@@ -16,7 +16,6 @@ import {
 } from "../../webview/browser/webviewElement.js";
 
 export interface MarkdownPreviewOptions {
-  readonly ownerDocument: Document;
   readonly markdown?: string;
   readonly title?: string;
 }
@@ -113,11 +112,10 @@ export class MarkdownPreview extends DisposableOwner {
   readonly element: HTMLIFrameElement;
   readonly onDidOpenLink: Event<string> = this._onDidOpenLink.event;
 
-  constructor(options: MarkdownPreviewOptions) {
+  constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
     super();
-    this.ownerDocument = options.ownerDocument;
-    this.webview = this.own(new WebviewElement({
-      ownerDocument: options.ownerDocument,
+    this.ownerDocument = container.ownerDocument;
+    this.webview = this.own(new WebviewElement(container, {
       title: options.title ?? "Markdown preview",
     }));
     this.element = this.webview.element;

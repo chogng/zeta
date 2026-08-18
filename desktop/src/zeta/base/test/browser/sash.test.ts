@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -25,7 +26,7 @@ test("Sash settings are scoped to a subtree and clean up their projection", () =
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const root = dom.window.document.querySelector("main");
   assert.ok(root);
-  const sash = dom.window.document.createElement("div");
+  const sash = h(dom.window.document, "div");
   sash.className = "zeta-sash";
   root.append(sash);
 
@@ -93,7 +94,7 @@ test("Sash applies configured hover feedback and active drag state", () => {
     hoverFeedbackSize: 4,
     hoverDelay: 0,
   });
-  using sash = new Sash("vertical", dom.window.document);
+  using sash = new Sash(dom.window.document.body, "vertical");
   root.append(sash.element);
 
   sash.element.dispatchEvent(new dom.window.MouseEvent("pointerenter"));
@@ -116,7 +117,7 @@ test("Sash applies configured hover feedback and active drag state", () => {
 
 test("Sash projects directional and disabled interaction states", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  using sash = new Sash("vertical", dom.window.document);
+  using sash = new Sash(dom.window.document.body, "vertical");
   dom.window.document.body.append(sash.element);
   let starts = 0;
   sash.onDidStart(() => starts += 1);
@@ -139,8 +140,8 @@ test("Sash projects directional and disabled interaction states", () => {
 
 test("Sash corner handles drag both orthogonal separators", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  using horizontal = new Sash("horizontal", dom.window.document);
-  using vertical = new Sash("vertical", dom.window.document);
+  using horizontal = new Sash(dom.window.document.body, "horizontal");
+  using vertical = new Sash(dom.window.document.body, "vertical");
   dom.window.document.body.append(horizontal.element, vertical.element);
   const horizontalDeltas: number[] = [];
   const verticalDeltas: number[] = [];
@@ -163,7 +164,7 @@ test("Sash corner handles drag both orthogonal separators", () => {
   assert.equal(resets, 2);
   vertical.state = SashState.Disabled;
   assert.equal(horizontal.element.querySelector(".zeta-sash-orthogonal-handle-start"), null);
-  using sameOrientation = new Sash("horizontal", dom.window.document);
+  using sameOrientation = new Sash(dom.window.document.body, "horizontal");
   assert.throws(() => horizontal.orthogonalEndSash = sameOrientation, /different orientations/);
 
   dom.window.close();
@@ -175,8 +176,8 @@ test("Sash forwards drag, hover, and reset to a linked Sash", () => {
   assert.ok(root);
   using binding = new SashSettingsBinding(root);
   binding.update({ dragAreaSize: 4, hoverFeedbackSize: 4, hoverDelay: 0 });
-  using first = new Sash("vertical", dom.window.document);
-  using second = new Sash("vertical", dom.window.document);
+  using first = new Sash(dom.window.document.body, "vertical");
+  using second = new Sash(dom.window.document.body, "vertical");
   root.append(first.element, second.element);
   first.linkedSash = second;
   second.linkedSash = first;
@@ -209,7 +210,7 @@ test("Sash forwards drag, hover, and reset to a linked Sash", () => {
   first.element.dispatchEvent(new dom.window.MouseEvent("dblclick", { bubbles: true }));
   assert.equal(resets, 2);
 
-  using horizontal = new Sash("horizontal", dom.window.document);
+  using horizontal = new Sash(dom.window.document.body, "horizontal");
   assert.throws(() => first.linkedSash = horizontal, /same orientation/);
   dom.window.close();
 });

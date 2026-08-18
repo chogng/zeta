@@ -1,10 +1,11 @@
 import "./media/settingsEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
+import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
 import { InputBox } from "../../../../base/browser/ui/inputbox/inputbox.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
-import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { ColorId, darkColorTheme, type IColorTheme, lightColorTheme } from "../../../../platform/theme/common/colorTheme.js";
@@ -32,7 +33,6 @@ import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./secti
 import { WorkspaceTrustSettingsPane } from "./workspaceTrustSettings.js";
 
 export interface SettingsEditorOptions {
-  readonly ownerDocument: Document;
   readonly contextViewProvider: IContextViewProvider;
   readonly configurationService: IConfigurationService;
   readonly dialogService: IDialogService;
@@ -79,7 +79,7 @@ export class SettingsEditor extends DisposableOwner {
   private themeDraft: ThemeDraft | undefined;
   private themeMessage = "";
 
-  constructor(options: SettingsEditorOptions) {
+  constructor(container: HTMLElement, options: SettingsEditorOptions) {
     super();
     this.configurationService = options.configurationService;
     this.contextViewProvider = options.contextViewProvider;
@@ -94,15 +94,16 @@ export class SettingsEditor extends DisposableOwner {
     this.marketplaceService = options.marketplaceService;
     this.workspaceTrustService = options.workspaceTrustService;
     this.workspaceOpenService = options.workspaceOpenService;
+    const ownerDocument = container.ownerDocument;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
-    this.element = h(options.ownerDocument, "div");
+    this.element = h(ownerDocument, "div");
     this.element.className = "zeta-settings-editor";
+    container.append(this.element);
 
-    const search = h(options.ownerDocument, "div");
+    const search = h(ownerDocument, "div");
     search.className = "zeta-settings-search";
     search.setAttribute("role", "search");
-    this.searchInput = this.own(new InputBox({
-      ownerDocument: options.ownerDocument,
+    this.searchInput = this.own(new InputBox(search, {
       type: "search",
       placeholder: "Search settings",
       ariaLabel: "Search settings",
@@ -111,26 +112,25 @@ export class SettingsEditor extends DisposableOwner {
     this.searchInput.element.classList.add("zeta-settings-search-input");
     search.append(this.searchInput.element);
 
-    const layout = h(options.ownerDocument, "div");
+    const layout = h(ownerDocument, "div");
     layout.className = "zeta-settings-layout";
 
-    const navigation = h(options.ownerDocument, "nav");
+    const navigation = h(ownerDocument, "nav");
     navigation.className = "zeta-settings-sidebar";
     navigation.setAttribute("aria-label", "Settings categories");
-    this.navigationScrollable = this.own(new ScrollableElement({
-      ownerDocument: options.ownerDocument,
+    this.navigationScrollable = this.own(new ScrollableElement(navigation, {
       direction: "vertical",
       vertical: "auto",
       tabIndex: -1,
       wheel: { consume: "when-scrolling" },
     }));
     this.navigationScrollable.element.classList.add("zeta-settings-sidebar-scrollable");
-    const navigationList = h(options.ownerDocument, "ul");
+    const navigationList = h(ownerDocument, "ul");
     navigationList.className = "zeta-settings-navigation-list";
     navigationList.id = `${editorId}-navigation`;
     for (const section of SettingsSections) {
-      const item = h(options.ownerDocument, "li");
-      const button = h(options.ownerDocument, "button");
+      const item = h(ownerDocument, "li");
+      const button = h(ownerDocument, "button");
       button.className = "zeta-settings-navigation-item";
       button.type = "button";
       button.dataset.settingsSectionId = section.id;
@@ -145,7 +145,7 @@ export class SettingsEditor extends DisposableOwner {
       item.append(button);
       navigationList.append(item);
     }
-    this.navigationEmpty = h(options.ownerDocument, "p");
+    this.navigationEmpty = h(ownerDocument, "p");
     this.navigationEmpty.className = "zeta-settings-navigation-empty";
     this.navigationEmpty.textContent = "No settings found.";
     this.navigationEmpty.setAttribute("role", "status");
@@ -153,26 +153,25 @@ export class SettingsEditor extends DisposableOwner {
     this.navigationScrollable.append(navigationList, this.navigationEmpty);
     navigation.append(this.navigationScrollable.element);
 
-    this.content = h(options.ownerDocument, "main");
+    this.content = h(ownerDocument, "main");
     this.content.className = "zeta-settings-page";
     this.content.dataset.settingsContainer = "";
     this.content.tabIndex = -1;
-    this.contentScrollable = this.own(new ScrollableElement({
-      ownerDocument: options.ownerDocument,
+    this.contentScrollable = this.own(new ScrollableElement(this.content, {
       direction: "vertical",
       vertical: "auto",
       tabIndex: -1,
       wheel: { consume: "when-scrolling" },
     }));
     this.contentScrollable.element.classList.add("zeta-settings-page-scrollable");
-    const contentInner = h(options.ownerDocument, "div");
+    const contentInner = h(ownerDocument, "div");
     contentInner.className = "zeta-settings-page-inner";
-    this.contentHeading = h(options.ownerDocument, "h3");
+    this.contentHeading = h(ownerDocument, "h3");
     this.contentHeading.id = `${editorId}-section`;
     this.content.setAttribute("aria-labelledby", this.contentHeading.id);
-    this.contentDescription = h(options.ownerDocument, "p");
+    this.contentDescription = h(ownerDocument, "p");
     this.contentDescription.className = "zeta-settings-description";
-    this.sectionContent = h(options.ownerDocument, "div");
+    this.sectionContent = h(ownerDocument, "div");
     this.sectionContent.className = "zeta-settings-section-content";
     this.sectionContent.dataset.settingsSectionContent = "";
     contentInner.append(this.contentHeading, this.contentDescription, this.sectionContent);
@@ -262,49 +261,49 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderConnectors(): void {
-    const pane = new ConnectorSettingsPane(this.element.ownerDocument, this.connectorService);
+    const pane = new ConnectorSettingsPane(this.sectionContent, this.connectorService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderGeneral(): void {
-    const pane = new GeneralSettingsPane(this.element.ownerDocument, this.configurationService, this.contextViewProvider);
+    const pane = new GeneralSettingsPane(this.sectionContent, this.configurationService, this.contextViewProvider);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderOverview(sectionId: string): void {
-    const pane = new SectionOverviewSettingsPane(this.element.ownerDocument, sectionId, this.settingsService);
+    const pane = new SectionOverviewSettingsPane(this.sectionContent, sectionId, this.settingsService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderEditor(): void {
-    const pane = new EditorSettingsPane(this.element.ownerDocument, this.configurationService, this.contextViewProvider);
+    const pane = new EditorSettingsPane(this.sectionContent, this.configurationService, this.contextViewProvider);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderPlugins(): void {
-    const pane = new PluginSettingsPane(this.element.ownerDocument, this.pluginService);
+    const pane = new PluginSettingsPane(this.sectionContent, this.pluginService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderLanguages(): void {
-    const pane = new MarketplaceSettingsPane(this.element.ownerDocument, this.marketplaceService, "language");
+    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService, "language");
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderMarketplace(): void {
-    const pane = new MarketplaceSettingsPane(this.element.ownerDocument, this.marketplaceService);
+    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderWorkspaceTrust(): void {
-    const pane = new WorkspaceTrustSettingsPane(this.element.ownerDocument, this.workspaceTrustService, this.workspaceOpenService, this.dialogService);
+    const pane = new WorkspaceTrustSettingsPane(this.sectionContent, this.workspaceTrustService, this.workspaceOpenService, this.dialogService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
@@ -334,8 +333,7 @@ export class SettingsEditor extends DisposableOwner {
     const toolHint = h(document, "p");
     toolHint.className = "zeta-theme-setting-hint";
     toolHint.textContent = "Lexical search keeps tool metadata local. Hybrid search sends tool names, descriptions, schemas, and the query to the selected embedding model, then merges that ranking with BM25.";
-    const toolEnabled = this.sectionBindings.add(new Checkbox({
-      ownerDocument: document,
+    const toolEnabled = this.sectionBindings.add(new Checkbox(toolGroup, {
       label: "Use hybrid embedding search",
       checked: toolConfig.mode === "hybridEmbedding",
     }));
@@ -406,8 +404,7 @@ export class SettingsEditor extends DisposableOwner {
     providerSave.className = "zeta-theme-action";
     providerSave.type = "button";
     providerSave.textContent = "Save endpoint";
-    const enabled = this.sectionBindings.add(new Checkbox({
-      ownerDocument: document,
+    const enabled = this.sectionBindings.add(new Checkbox(group, {
       label: "Use an embedding/rerank model endpoint",
       checked: codeConfig.semanticCodeIndex.selection.type === "remote",
     }));
@@ -426,8 +423,7 @@ export class SettingsEditor extends DisposableOwner {
     }
     embedding.disabled = !enabled.checked;
     rerank.disabled = !enabled.checked;
-    const automaticContext = this.sectionBindings.add(new Checkbox({
-      ownerDocument: document,
+    const automaticContext = this.sectionBindings.add(new Checkbox(group, {
       label: "Automatically add verified code excerpts to the first Agent request",
       checked: codeConfig.semanticCodeIndex.automaticContext === "firstInvocation",
       disabled: !enabled.checked,
@@ -459,7 +455,9 @@ export class SettingsEditor extends DisposableOwner {
       retryJob.disabled = !codeConfig.semanticCodeIndex.activeWorkspaceAuthorized || indexStatus.semantic.state === "syncing";
     };
     let polling = true;
-    let timer: number | undefined;
+    const timer = this.sectionBindings.add(new DisposableSlot<IDisposable>());
+    const targetWindow = document.defaultView;
+    this.sectionBindings.defer(() => polling = false);
     const poll = (): void => {
       void this.codeIndexService.status().then(indexStatus => {
         if (!polling || this.settingsService.activeSectionId !== "indexing") return;
@@ -467,13 +465,9 @@ export class SettingsEditor extends DisposableOwner {
       }).catch(() => {
         if (polling) progress.textContent = "Unable to read semantic index progress.";
       }).finally(() => {
-        if (polling) timer = window.setTimeout(poll, 750);
+        if (polling && targetWindow) timer.replace(disposableWindowTimeout(targetWindow, poll, 750));
       });
     };
-    this.sectionBindings.add(toDisposable(() => {
-      polling = false;
-      if (timer !== undefined) window.clearTimeout(timer);
-    }));
     this.sectionBindings.add(addDisposableListener(cancelJob, "click", () => {
       cancelJob.disabled = true;
       void this.codeIndexService.cancel().then(updateJobStatus).catch(() => { progress.textContent = "Unable to cancel semantic indexing."; });

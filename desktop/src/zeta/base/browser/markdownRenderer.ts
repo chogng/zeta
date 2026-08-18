@@ -202,8 +202,8 @@ function upgradeMarkdownCheckboxes(
   for (const input of fragment.querySelectorAll<HTMLInputElement>(
     'input[type="checkbox"]',
   )) {
-    const checkbox = owner.add(new Checkbox({
-      ownerDocument,
+    const detachedHost = h(ownerDocument, "span");
+    const checkbox = owner.add(new Checkbox(detachedHost, {
       checked: input.checked,
       disabled: input.disabled,
     }));

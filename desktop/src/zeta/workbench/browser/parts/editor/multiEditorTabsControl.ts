@@ -12,11 +12,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
   private readonly tabList: TabList<EditorInput>;
   private previewedInput: EditorInput | undefined;
 
-  constructor(ownerDocument: Document, delegate: EditorTabsDelegate) {
-    super(ownerDocument);
+  constructor(container: HTMLElement, delegate: EditorTabsDelegate) {
+    super(container);
     this.element.classList.add("zeta-multi-editor-tabs-control");
-    this.tabList = this.own(new TabList({
-      ownerDocument,
+    this.tabList = this.own(new TabList(this.element, {
       ariaLabel: "Open editors",
       presentation: "inset",
       draggable: true,
@@ -55,7 +54,6 @@ export class MultiEditorTabsControl extends EditorTabsControl {
       onActivate: (input) => delegate.activate(input),
       onClose: (input) => delegate.close(input),
     }));
-    this.element.append(this.tabList.element);
   }
 
   setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void {

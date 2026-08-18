@@ -39,6 +39,7 @@ import {
 import {
   ShowAllCommandsCommandId,
 } from "../../../../../workbench/contrib/quickaccess/browser/commandsQuickAccess.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 test("Show All Commands is not exposed in the titlebar", () => {
   const titlebarCommandIds = MenusRegistry.getMenuItems(MenuId.TitleBar)
@@ -69,7 +70,7 @@ test("QuickInputList owns filtering, looping focus, and acceptance", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   installDomGlobals(dom);
   const list = new QuickInputList<{ label: string }>(
-    dom.window.document,
+    dom.window.document.body,
   );
   dom.window.document.body.append(list.element);
   const activeLabels: (string | undefined)[] = [];
@@ -117,7 +118,7 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
   installDomGlobals(dom);
   const container = dom.window.document.querySelector("main");
   assert.ok(container);
-  const focusTarget = dom.window.document.createElement("button");
+  const focusTarget = h(dom.window.document, "button");
   focusTarget.textContent = "Restore focus";
   container.append(focusTarget);
   focusTarget.focus();

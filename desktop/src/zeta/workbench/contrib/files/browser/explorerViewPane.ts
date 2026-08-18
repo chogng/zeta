@@ -38,6 +38,7 @@ export class ExplorerViewPane extends ViewPane {
   private workspaceGeneration = 0;
 
   constructor(
+    container: HTMLElement,
     options: IViewPaneOptions,
     fileService: IFileService,
     workspaceContextService: IWorkspaceContextService,
@@ -46,7 +47,7 @@ export class ExplorerViewPane extends ViewPane {
     hoverService: IHoverService,
     configurationService: IConfigurationService,
   ) {
-    super(options);
+    super(container, options);
     this.fileService = fileService;
     this.workspaceContextService = workspaceContextService;
     this.editorService = editorService;
@@ -55,21 +56,18 @@ export class ExplorerViewPane extends ViewPane {
     this.element.classList.add("zeta-explorer-view-pane");
     this.headerElement.classList.add("zeta-explorer-title");
     this.contentElement.classList.add("zeta-explorer");
-    this.scrollable = this.own(new ScrollableElement({
-      ownerDocument: options.ownerDocument,
+    this.scrollable = this.own(new ScrollableElement(this.contentElement, {
       ariaLabel: "Workspace files",
       direction: "vertical",
       vertical: "auto",
     }));
-    this.contentElement.append(this.scrollable.element);
-    this.tree = this.own(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>({
+    this.tree = this.own(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>(this.scrollable.contentElement, {
       hasChildren: (node) => node.kind === FileKind.Directory,
       getChildren: async (node) => {
         const entries = await this.fileService.readDirectory(node.resource);
         return entries.map(explorerNode).sort(compareExplorerNodes);
       },
     }, {
-      ownerDocument: options.ownerDocument,
       ariaLabel: "Workspace files",
       configurationService,
       indentGuides: "always",
@@ -180,7 +178,7 @@ export class ExplorerViewPane extends ViewPane {
     const document = this.element.ownerDocument;
     const content = h(document, "span");
     content.className = `zeta-explorer-row-content zeta-explorer-${node.kind}`;
-    const label = this.renderedLabels.add(new IconLabel({
+    const label = this.renderedLabels.add(new IconLabel(content, {
       label: node.name,
       renderIcon: node.kind === FileKind.Directory
         ? undefined
@@ -190,7 +188,6 @@ export class ExplorerViewPane extends ViewPane {
             container,
           );
         },
-      ownerDocument: document,
       reserveIconSpace: node.kind !== FileKind.Directory,
     }));
     this.renderedLabels.add(this.hoverService.setupHover({
@@ -201,7 +198,6 @@ export class ExplorerViewPane extends ViewPane {
         : undefined,
       groupId: "explorer.items",
     }));
-    content.append(label.element);
     return content;
   }
 

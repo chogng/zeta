@@ -21,10 +21,10 @@ export class BulkEditPreviewPane extends ViewPane {
   private selected = new Set<number>();
   private activePreview: ActivePreview | undefined;
 
-  constructor(options: IViewPaneOptions) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions) {
+    super(container, options);
     this.contentElement.classList.add("zeta-bulk-edit");
-    const document = options.ownerDocument;
+    const document = container.ownerDocument;
     const toolbar = h(document, "div");
     toolbar.className = "zeta-bulk-edit-toolbar";
     this.selectAllButton = this.createButton(document, "Select all", "zeta-bulk-edit-select-all");

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../browser/dom.js";
 
 test("SelectBox owns its unfold trigger and trailing selected check inside a themed ContextView", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>", { pretendToBeVisual: true });
@@ -26,14 +27,13 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
   ]);
   const host = dom.window.document.querySelector<HTMLElement>("main")!;
   const contextView = new ContextView(host);
-  const selectBox = new SelectBox({
+  const selectBox = new SelectBox(dom.window.document.body, {
     options: [
       { value: "auto", label: "Auto" },
       { value: "on", label: "On" },
       { value: "off", label: "Off" },
     ],
     selectedValue: "auto",
-    ownerDocument: dom.window.document,
     ariaLabel: "Screen reader optimization",
     contextViewProvider: contextView,
   });
@@ -42,7 +42,7 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
   const button = selectBox.element.querySelector<HTMLButtonElement>(".zeta-select-box-button")!;
   button.getBoundingClientRect = () => ({ width: 192 } as DOMRect);
   const indicator = selectBox.element.querySelector<HTMLElement>(".zeta-dropdown-indicator")!;
-  const expectedIndicator = dom.window.document.createElement("span");
+  const expectedIndicator = h(dom.window.document, "span");
   appendIcon(lxiconsLibrary.unfold, expectedIndicator);
   assert.equal(indicator.innerHTML, expectedIndicator.innerHTML);
 
@@ -54,7 +54,7 @@ test("SelectBox owns its unfold trigger and trailing selected check inside a the
   assert.equal(list.style.getPropertyValue("--dropdown-trigger-width"), "192px");
   const selected = list.querySelector<HTMLElement>(".zeta-select-box-option-selected")!;
   const check = selected.querySelector<HTMLElement>(":scope > .zeta-select-box-option-check")!;
-  const expectedCheck = dom.window.document.createElement("span");
+  const expectedCheck = h(dom.window.document, "span");
   appendIcon(lxiconsLibrary.check, expectedCheck);
   assert.equal(selected.lastElementChild, check);
   assert.equal(check.innerHTML, expectedCheck.innerHTML);

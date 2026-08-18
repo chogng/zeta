@@ -94,10 +94,10 @@ test("SearchViewPane submits typed filters and groups highlighted matches", asyn
       "../../../../../workbench/contrib/search/browser/searchViewPane.js"
     );
     using pane = new SearchViewPane(
+      browser.window.document.body,
       {
         id: "zeta.search",
         title: "Search",
-        ownerDocument: browser.window.document,
       },
       service,
     );
@@ -171,7 +171,7 @@ test("SearchViewPane applies configured query defaults and result limits", async
 
   try {
     const { SearchViewPane } = await import("../../../../../workbench/contrib/search/browser/searchViewPane.js");
-    using pane = new SearchViewPane({ id: "zeta.search", title: "Search", ownerDocument: browser.window.document }, service, configuration);
+    using pane = new SearchViewPane(browser.window.document.body, { id: "zeta.search", title: "Search" }, service, configuration);
     browser.window.document.body.append(pane.element);
     input(pane.element, "Search workspace").value = "Needle";
     const checkboxes = pane.element.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');

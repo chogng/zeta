@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../base/browser/dom.js";
 
 test("toolbar submenu items retain toolbar button semantics", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -38,7 +39,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
     },
   );
   assert.ok(item);
-  const container = dom.window.document.createElement("div");
+  const container = h(dom.window.document, "div");
   dom.window.document.body.append(container);
 
   item.render(container);
@@ -81,9 +82,8 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
   let primaryRuns = 0;
   const primaryAction = { ...testAction("new"), run: () => primaryRuns++ };
   const dropdownAction = testAction("select-profile");
-  using toolbar = new ToolBar({
+  using toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider,
-    ownerDocument: dom.window.document,
     actionViewItemProvider: (item, options) => new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction("cmd")], contextMenuProvider, options),
   });
   toolbar.setActions([primaryAction]);
@@ -159,7 +159,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
   const menus = new MenuService(commands, contexts);
   const action = menus.getMenuActions(menuId)[0]?.[1][0];
   assert.ok(action);
-  const toolbar = new WorkbenchToolBar({ showContextMenu() {} }, dom.window.document);
+  const toolbar = new WorkbenchToolBar(dom.window.document.body, { showContextMenu() {} });
   toolbar.setActions([action]);
   dom.window.document.body.append(toolbar.element);
 
@@ -226,6 +226,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
     | import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions
     | undefined;
   const toolbar = new MenuWorkbenchToolBar(
+    dom.window.document.body,
     menus,
     {
       showContextMenu(options) {
@@ -233,7 +234,6 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
       },
     },
     menuId,
-    dom.window.document,
   );
   dom.window.document.body.append(toolbar.element);
 
@@ -293,10 +293,10 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
   }));
   const contexts = registrations.add(new ContextKeyService());
   const toolbar = new MenuWorkbenchToolBar(
+    dom.window.document.body,
     new MenuService(new CommandService(new ServiceCollection()), contexts),
     { showContextMenu() {} },
     menuId,
-    dom.window.document,
   );
   dom.window.document.body.append(toolbar.element);
 
@@ -354,10 +354,10 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
   }));
   const contexts = registrations.add(new ContextKeyService());
   const toolbar = new MenuWorkbenchToolBar(
+    dom.window.document.body,
     new MenuService(new CommandService(new ServiceCollection()), contexts),
     { showContextMenu() {} },
     menuId,
-    dom.window.document,
   );
   dom.window.document.body.append(toolbar.element);
   const slot = toolbar.element.querySelector<HTMLElement>(`[data-action-id='${actionId}']`);
@@ -443,9 +443,8 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
     if ((event.target as HTMLElement).closest(".zeta-menu")) openingOrder.push("focus");
   });
   let cleared = 0;
-  using toolbar = new ToolBar({
+  using toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: contextMenus,
-    ownerDocument: dom.window.document,
     moreActionsPlacement: { beforeActionId: "maximize" },
   });
   toolbar.setActions(

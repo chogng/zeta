@@ -13,8 +13,8 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
   override get minimumWidth(): number { return 220; }
   override get maximumWidth(): number { return 460; }
 
-  constructor(ownerDocument: Document, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
-    super("auxiliarybar", ownerDocument);
+  constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
+    super(container, "auxiliarybar");
     this.sessionService = sessionService;
     this.viewService = viewService;
     this.own(viewService.onDidChange(() => this.render()));

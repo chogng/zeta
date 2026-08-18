@@ -7,6 +7,7 @@ import { TextSelection, TextSelectionSet } from "../../../../common/core/selecti
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -74,7 +75,7 @@ test("Line operations controller validates model ownership and indentation optio
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   assert.throws(() => new LineOperationsController(input, viewport, otherSelections), /must share one text model/);
   assert.throws(() => new LineOperationsController(input, viewport, selections, {
     indentation: { tabSize: 0 },

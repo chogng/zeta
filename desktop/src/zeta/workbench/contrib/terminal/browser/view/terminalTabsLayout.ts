@@ -1,4 +1,5 @@
 import { SplitView, type ISplitViewView } from "../../../../../base/browser/ui/splitview/splitview.js";
+import { h } from "../../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 
 const TerminalTabsListSizes = {
@@ -22,7 +23,8 @@ export class TerminalTabsLayout extends DisposableOwner {
   constructor(widgetsElement: HTMLElement, tabsElement: HTMLElement) {
     super();
     this.tabsElement = tabsElement;
-    this.splitView = this.own(new SplitView("horizontal", widgetsElement.ownerDocument));
+    const host = h(widgetsElement.ownerDocument, "div");
+    this.splitView = this.own(new SplitView(host, "horizontal"));
     this.element = this.splitView.element;
     this.element.classList.add("zeta-terminal-tabs-layout");
     this.splitView.addView(splitViewItem(widgetsElement, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, "high"), { type: "distribute" });

@@ -36,7 +36,8 @@ test("opens a local Chat tab before the backend session request settles", () => 
   const layoutService = new VisibleAuxiliarybarLayoutService();
   using contextViewService = new BrowserContextViewService(document.body);
   using view = new ChatViewPane(
-    { id: "workbench.chat", title: "Chat", ownerDocument: document },
+    document.body,
+    { id: "workbench.chat", title: "Chat" },
     unavailableChatService(),
     sessionService,
     emptyMenuService(),

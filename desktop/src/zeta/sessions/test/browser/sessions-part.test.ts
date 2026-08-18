@@ -120,8 +120,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
     onDidExecuteCommand: commandEvents.event,
     async executeCommand() { throw new Error("No commands registered"); },
   };
-  const part = new SessionsPart({
-    ownerDocument: dom.window.document,
+  const part = new SessionsPart(dom.window.document.body, {
     sessionService,
     chatService,
     contextMenuService,
@@ -133,7 +132,6 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
   const updatePart = (): void => part.updateVisibleSelections(viewService.visibleSelections, viewService.activeSelection);
   const partListener = viewService.onDidChange(updatePart);
   updatePart();
-  dom.window.document.body.append(part.element);
 
   assert.equal(part.element.dataset.part, "sessions");
   assert.equal(part.element.querySelector(".zeta-sessions-surface-header h1")?.textContent, "New code session");

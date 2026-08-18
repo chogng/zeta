@@ -9,7 +9,6 @@ import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
 export type ScrollbarAxis = "horizontal" | "vertical";
 
 export interface AbstractScrollbarOptions {
-  readonly ownerDocument: Document;
   readonly viewport: HTMLElement;
   readonly trackClickBehavior: "jump" | "page";
   readonly getMetrics: () => ScrollbarAxisMetrics;
@@ -26,6 +25,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
   private readonly dragListeners: ResettableDisposableGroup;
 
   protected constructor(
+    container: HTMLElement,
     axis: ScrollbarAxis,
     options: AbstractScrollbarOptions,
   ) {
@@ -33,8 +33,8 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     this.trackClickBehavior = options.trackClickBehavior;
     this.getMetrics = options.getMetrics;
     this.setPosition = options.setPosition;
-    const track = h(options.ownerDocument, "div");
-    const thumb = h(options.ownerDocument, "div");
+    const track = h(container.ownerDocument, "div");
+    const thumb = h(container.ownerDocument, "div");
     this.track = track;
     this.thumb = thumb;
     this.dragListeners = this.own(new ResettableDisposableGroup());
@@ -49,6 +49,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     track.setAttribute("aria-valuemin", "0");
     thumb.className = "zeta-scrollbar-thumb";
     track.append(thumb);
+    container.append(track);
 
     this.own(addDisposableListener(
       track,

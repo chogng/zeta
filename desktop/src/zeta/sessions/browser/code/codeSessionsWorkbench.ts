@@ -21,7 +21,6 @@ import { SessionsTitlebarPart } from "../parts/sessionsTitlebarPart.js";
 import { h } from "../../../base/browser/dom.js";
 
 export interface CodeSessionsWorkbenchOptions {
-  readonly ownerDocument: Document;
   readonly profile: SessionsProfile;
   readonly runtime: SessionsRuntime;
   readonly sessionsWindowApi?: ISessionsWindowApi;
@@ -36,13 +35,14 @@ export class CodeSessionsWorkbench extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly layoutService: BrowserLayoutService;
 
-  constructor(options: CodeSessionsWorkbenchOptions) {
+  constructor(container: HTMLElement, options: CodeSessionsWorkbenchOptions) {
     super();
-    const ownerDocument = options.ownerDocument;
+    const ownerDocument = container.ownerDocument;
     const profile = options.profile;
     const runtime = options.runtime;
     this.element = h(ownerDocument, "main");
     this.element.className = "zeta-sessions-window zeta-code-sessions-window";
+    container.append(this.element);
     let layout: SessionsWorkbenchLayout | undefined;
     let sessionsPart: SessionsPart | undefined;
     const layoutService = this.own(new BrowserLayoutService({
@@ -54,19 +54,17 @@ export class CodeSessionsWorkbench extends DisposableOwner {
     const configurationService = this.own(new WorkbenchConfigurationService({ api: options.configurationApi }));
     const interactionServices = this.own(new WorkbenchInteractionServices({
       services: runtime.services,
-      ownerDocument,
       layoutService,
       configurationService,
       keybindingsResourceApi: options.keybindingsResourceApi,
       createContextMenuService: options.createContextMenuService,
     }));
-    const titlebar = this.own(new SessionsTitlebarPart(ownerDocument, profile, runtime.view, {
-      returnToWorkbench: () => returnToWorkbench(profile.workbenchRelativePath, options.sessionsWindowApi),
+    const titlebar = this.own(new SessionsTitlebarPart(this.element, profile, runtime.view, {
+      returnToWorkbench: () => returnToWorkbench(profile.workbenchRelativePath, options.sessionsWindowApi, ownerDocument.location),
       focusSessions: () => sessionsPart?.focus(),
     }));
-    const sidebar = this.own(new SessionsSidebarPart(ownerDocument, runtime.sessions, runtime.view));
-    sessionsPart = this.own(new SessionsPart({
-      ownerDocument,
+    const sidebar = this.own(new SessionsSidebarPart(this.element, runtime.sessions, runtime.view));
+    sessionsPart = this.own(new SessionsPart(this.element, {
       sessionService: runtime.sessions,
       chatService: runtime.chat,
       contextMenuService: interactionServices.contextMenuService,
@@ -78,7 +76,7 @@ export class CodeSessionsWorkbench extends DisposableOwner {
     const updateSessionsPart = (): void => sessionsPart?.updateVisibleSelections(runtime.view.visibleSelections, runtime.view.activeSelection);
     this.own(runtime.view.onDidChange(updateSessionsPart));
     updateSessionsPart();
-    const auxiliarybar = this.own(new SessionsAuxiliarybarPart(ownerDocument, runtime.sessions, runtime.view));
+    const auxiliarybar = this.own(new SessionsAuxiliarybarPart(this.element, runtime.sessions, runtime.view));
     const parts = new Map<SessionsPartId, WorkbenchPart>([
       ["titlebar", titlebar],
       ["sidebar", sidebar],

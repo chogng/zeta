@@ -84,7 +84,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 
   try {
     const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+    using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
 
@@ -183,7 +183,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 
   try {
     const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.pagination.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+    using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.pagination.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-graph-list") !== null);
     const list = pane.element.querySelector(".zeta-scm-graph-list");
@@ -249,7 +249,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 
   try {
     const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.virtualized.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
+    using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.virtualized.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
     const graph = pane.element.querySelector<HTMLElement>(".zeta-scm-graph");
     assert.ok(graph);
     Object.defineProperty(graph, "clientHeight", { configurable: true, value: 100 });
@@ -331,7 +331,7 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 
   try {
     const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-    using pane = new ScmGraphViewPane({ id: "zeta.gitGraph.changes.test", title: "Graph", ownerDocument: browser.window.document }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
+    using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.changes.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-graph-commit") !== null);
 
@@ -374,7 +374,7 @@ test("ScmAgentReviewViewPane exposes an explicit empty state", async () => {
 
   try {
     const { ScmAgentReviewViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmAgentReviewViewPane.js");
-    using pane = new ScmAgentReviewViewPane({ id: "zeta.gitAgentReview.test", title: "Agent Review", ownerDocument: browser.window.document });
+    using pane = new ScmAgentReviewViewPane(browser.window.document.body, { id: "zeta.gitAgentReview.test", title: "Agent Review" });
     assert.equal(pane.element.querySelector(".zeta-scm-empty")?.textContent, "No agent changes to review.");
     const findIssues = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-find-issues");
     assert.ok(findIssues);
@@ -465,10 +465,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 
   try {
     const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
-    using pane = new ScmViewPane({
+    using pane = new ScmViewPane(browser.window.document.body, {
       id: "zeta.git",
       title: "Changes",
-      ownerDocument: browser.window.document,
     }, gitService, testFileIconThemeService(), testEditorService(opened));
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
@@ -603,10 +602,9 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 
   try {
     const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
-    using pane = new ScmViewPane({
+    using pane = new ScmViewPane(browser.window.document.body, {
       id: "zeta.git.restart",
       title: "Changes",
-      ownerDocument: browser.window.document,
     }, gitService, testFileIconThemeService(), testEditorService());
     browser.window.document.body.append(pane.element);
     await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);

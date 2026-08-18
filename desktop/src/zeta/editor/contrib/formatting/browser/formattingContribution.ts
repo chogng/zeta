@@ -24,7 +24,6 @@ export interface FormattingState {
 }
 
 export interface FormattingContributionOptions {
-  readonly ownerDocument: Document;
   readonly documentActions: readonly FormattingDocumentAction[];
   readonly onToggleMark: (markType: "strong" | "em") => void;
   readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
@@ -49,19 +48,20 @@ export class FormattingContribution extends DisposableOwner {
   private readonly fontFamily: HTMLSelectElement;
   private readonly fontSize: HTMLSelectElement;
 
-  constructor(private readonly options: FormattingContributionOptions) {
+  constructor(container: HTMLElement, private readonly options: FormattingContributionOptions) {
     super();
-    const element = h(options.ownerDocument, "div");
+    const ownerDocument = container.ownerDocument;
+    const element = h(ownerDocument, "div");
     element.className = "zeta-structured-format-toolbar";
     element.hidden = true;
     element.setAttribute("role", "group");
     element.setAttribute("aria-label", "Document formatting");
     this.element = element;
+    container.append(element);
     this.defer(() => element.remove());
 
-    const inlineActions = this.own(new ToolBar({
+    const inlineActions = this.own(new ToolBar(element, {
       contextMenuProvider: emptyFormattingContextMenuProvider,
-      ownerDocument: options.ownerDocument,
       ariaLabel: "Text formatting",
       highlightToggledItems: true,
     }));
@@ -69,12 +69,12 @@ export class FormattingContribution extends DisposableOwner {
     inlineActions.element.addEventListener("mousedown", event => event.preventDefault());
     this.inlineActions = inlineActions;
 
-    const typographyControls = h(options.ownerDocument, "div");
+    const typographyControls = h(ownerDocument, "div");
     typographyControls.className = "zeta-structured-format-typography-controls";
     typographyControls.setAttribute("role", "group");
     typographyControls.setAttribute("aria-label", "Font and size");
     this.typographyControls = typographyControls;
-    const fontFamily = createSelectControl(options.ownerDocument, "Font", "Font family", [
+    const fontFamily = createSelectControl(ownerDocument, "Font", "Font family", [
       { value: "", label: "Default" },
       { value: "sans", label: "Sans serif" },
       { value: "serif", label: "Serif" },
@@ -90,7 +90,7 @@ export class FormattingContribution extends DisposableOwner {
       options.onSetTextStyle({ fontFamily: value as DocumentTextStyleFontFamily });
     });
     this.fontFamily = fontFamily.select;
-    const fontSize = createSelectControl(options.ownerDocument, "Size", "Font size", [
+    const fontSize = createSelectControl(ownerDocument, "Size", "Font size", [
       { value: "", label: "Default" },
       ...[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map(value => ({ value: String(value), label: `${value}` })),
     ]);
@@ -106,9 +106,8 @@ export class FormattingContribution extends DisposableOwner {
     this.fontSize = fontSize.select;
     typographyControls.append(fontFamily.element, fontSize.element);
 
-    const documentActions = this.own(new ToolBar({
+    const documentActions = this.own(new ToolBar(element, {
       contextMenuProvider: emptyFormattingContextMenuProvider,
-      ownerDocument: options.ownerDocument,
       ariaLabel: "Document structure",
       highlightToggledItems: true,
     }));
@@ -116,7 +115,7 @@ export class FormattingContribution extends DisposableOwner {
     documentActions.element.addEventListener("mousedown", event => event.preventDefault());
     this.documentActions = documentActions;
 
-    const codeContext = h(options.ownerDocument, "div");
+    const codeContext = h(ownerDocument, "div");
     codeContext.className = "zeta-structured-format-code-context";
     codeContext.textContent = "Code block · Text editor";
     codeContext.setAttribute("role", "status");

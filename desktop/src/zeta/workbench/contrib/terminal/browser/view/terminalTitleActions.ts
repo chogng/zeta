@@ -24,7 +24,6 @@ const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>("termina
 const TerminalActiveInstanceStateContext = new RawContextKey<ITerminalInstance["state"] | "none">("terminalActiveInstanceState", "none");
 
 export interface TerminalTitleActionsOptions {
-  readonly ownerDocument: Document;
   readonly menuService: IMenuService;
   readonly contextMenuService: IContextMenuService;
   readonly contextKeyService: IContextKeyService;
@@ -47,7 +46,7 @@ export class TerminalTitleActions extends DisposableOwner {
   private profiles: readonly ITerminalProfile[] = [];
   private activeInstance: ITerminalInstance | undefined;
 
-  constructor(options: TerminalTitleActionsOptions) {
+  constructor(container: HTMLElement, options: TerminalTitleActionsOptions) {
     super();
     this.createTerminal = options.createTerminal;
     this.creatingContext = TerminalCreatingContext.bindTo(options.contextKeyService);
@@ -62,10 +61,10 @@ export class TerminalTitleActions extends DisposableOwner {
     });
     this.registerCommandsAndMenu(options);
     this.toolbar = this.own(new MenuWorkbenchToolBar(
+      container,
       options.menuService,
       options.contextMenuService,
       MenuId.TerminalTitle,
-      options.ownerDocument,
       {
         ariaLabel: "Terminal actions",
         highlightToggledItems: true,

@@ -28,14 +28,15 @@ export class QuickInputList<TItem extends IQuickPickItem>
     Event<QuickInputListActiveChangeEvent<TItem>> =
       this._onDidChangeActive.event;
 
-  constructor(ownerDocument: Document) {
+  constructor(container: HTMLElement) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-quick-pick-list";
     this.defer(() => this.element.remove());
+    container.append(this.element);
 
-    this.list = this.own(new List<TItem>({
-      ownerDocument,
+    this.list = this.own(new List<TItem>(this.element, {
       ariaLabel: "Quick Pick results",
       renderItem: (item) => this.renderItem(item),
     }));

@@ -47,25 +47,25 @@ export class DebugViewPane extends ViewPane {
   private refreshGeneration = 0;
   private error: string | undefined;
 
-  constructor(options: IViewPaneOptions, private readonly debug: IDebugService, private readonly editor: IEditorService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly debug: IDebugService, private readonly editor: IEditorService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-debug");
-    const controls = h(options.ownerDocument, "div");
+    const controls = h(container.ownerDocument, "div");
     controls.className = "zeta-debug-controls";
-    this.configurationsElement = select(options.ownerDocument, "Debug configuration");
-    this.sessionsElement = select(options.ownerDocument, "Active debug session");
-    controls.append(this.configurationsElement, this.sessionsElement, ...[button(options.ownerDocument, "Start", "start"), button(options.ownerDocument, "Continue", "continue"), button(options.ownerDocument, "Pause", "pause"), button(options.ownerDocument, "Restart", "restart"), button(options.ownerDocument, "Over", "stepOver"), button(options.ownerDocument, "Into", "stepInto"), button(options.ownerDocument, "Out", "stepOut"), button(options.ownerDocument, "Stop", "stop"), button(options.ownerDocument, "Stop All", "stopAll")]);
-    this.statusElement = h(options.ownerDocument, "div");
+    this.configurationsElement = select(container.ownerDocument, "Debug configuration");
+    this.sessionsElement = select(container.ownerDocument, "Active debug session");
+    controls.append(this.configurationsElement, this.sessionsElement, ...[button(container.ownerDocument, "Start", "start"), button(container.ownerDocument, "Continue", "continue"), button(container.ownerDocument, "Pause", "pause"), button(container.ownerDocument, "Restart", "restart"), button(container.ownerDocument, "Over", "stepOver"), button(container.ownerDocument, "Into", "stepInto"), button(container.ownerDocument, "Out", "stepOut"), button(container.ownerDocument, "Stop", "stop"), button(container.ownerDocument, "Stop All", "stopAll")]);
+    this.statusElement = h(container.ownerDocument, "div");
     this.statusElement.className = "zeta-debug-status";
     this.statusElement.setAttribute("role", "status");
-    this.threadsElement = select(options.ownerDocument, "Debug thread");
+    this.threadsElement = select(container.ownerDocument, "Debug thread");
     this.threadsElement.classList.add("zeta-debug-thread-select");
-    this.stackElement = section(options.ownerDocument, "Call Stack", "zeta-debug-stack");
-    this.variablesElement = section(options.ownerDocument, "Variables", "zeta-debug-variables");
-    this.watchElement = section(options.ownerDocument, "Watch", "zeta-debug-watch");
-    [this.watchForm, this.watchInput] = inputForm(options.ownerDocument, "Add watch expression", "Add");
-    this.exceptionsElement = section(options.ownerDocument, "Exception Breakpoints", "zeta-debug-exceptions");
-    this.breakpointsElement = section(options.ownerDocument, "Breakpoints", "zeta-debug-breakpoints");
+    this.stackElement = section(container.ownerDocument, "Call Stack", "zeta-debug-stack");
+    this.variablesElement = section(container.ownerDocument, "Variables", "zeta-debug-variables");
+    this.watchElement = section(container.ownerDocument, "Watch", "zeta-debug-watch");
+    [this.watchForm, this.watchInput] = inputForm(container.ownerDocument, "Add watch expression", "Add");
+    this.exceptionsElement = section(container.ownerDocument, "Exception Breakpoints", "zeta-debug-exceptions");
+    this.breakpointsElement = section(container.ownerDocument, "Breakpoints", "zeta-debug-breakpoints");
     this.contentElement.append(controls, this.statusElement, this.threadsElement, this.stackElement, this.variablesElement, this.watchElement, this.watchForm, this.exceptionsElement, this.breakpointsElement);
     this.own(addDisposableListener(controls, "click", event => this.control(event)));
     this.own(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
@@ -285,7 +285,7 @@ function heading(document: Document, label: string): HTMLLIElement { const eleme
 function itemButton(document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement { const item = h(document, "li"); const action = h(document, "button"); action.type = "button"; action.className = className; action.classList.toggle("selected", selected); action.textContent = label; action.dataset[dataName] = String(index); item.append(action); return item; }
 function variableItem(document: Document, row: DebugVariableRow, index: number): HTMLLIElement { const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  "; const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`; const item = itemButton(document, label, "zeta-debug-variable", "variableIndex", index); const action = item.firstElementChild as HTMLButtonElement; action.style.paddingInlineStart = `${6 + row.depth * 14}px`; action.disabled = row.variablesReference <= 0 && row.value === undefined; return item; }
 function watchItem(document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement { const item = h(document, "li"); const value = h(document, "span"); value.className = "zeta-debug-watch-value"; value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`; const remove = button(document, "Remove", "removeWatch"); remove.className = "zeta-debug-watch-remove"; remove.dataset.watchIndex = String(index); item.append(value, remove); return item; }
-function exceptionItem(owner: ResettableDisposableGroup, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox({ ownerDocument: document, label, checked })); control.element.classList.add("zeta-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; item.append(control.element); return item; }
+function exceptionItem(owner: ResettableDisposableGroup, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("zeta-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
 function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement { const item = itemButton(document, `${breakpoint.resource.path.split("/").at(-1)}:${breakpoint.lineNumber}`, "zeta-debug-breakpoint", "breakpointIndex", index); const remove = button(document, "Remove", "removeBreakpoint"); remove.className = "zeta-debug-breakpoint-remove"; item.append(remove); return item; }
 function inputForm(document: Document, label: string, action: string): [HTMLFormElement, HTMLInputElement] { const form = h(document, "form"); form.className = "zeta-debug-input-form"; const input = h(document, "input"); input.type = "text"; input.setAttribute("aria-label", label); const submit = h(document, "button"); submit.type = "submit"; submit.textContent = action; form.append(input, submit); return [form, input]; }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }

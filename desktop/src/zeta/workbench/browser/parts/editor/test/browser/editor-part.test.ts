@@ -36,6 +36,7 @@ import {
 import {
   EditorPaneRegistry,
 } from "../../../../../../workbench/browser/parts/editor/editorRegistry.js";
+import { h } from "../../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -147,7 +148,7 @@ test("EditorPart passes Workbench file services to pane factories", async () => 
       return new TestEditorPane("zeta.editor.text-service-test");
     },
   });
-  const editor = new EditorPart(dom.window.document, {
+  const editor = new EditorPart(dom.window.document.body, {
     registry,
     fileService,
     textFileService,
@@ -179,7 +180,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
     label: "Open Editor",
     command: "test.openEditor",
   });
-  const editor = new EditorPart(dom.window.document, {
+  const editor = new EditorPart(dom.window.document.body, {
     keybindingService: keybindings,
     registry,
   });
@@ -206,7 +207,7 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 test("EditorPart renders the project welcome page and dispatches available cards", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   let openFolderCount = 0;
-  const editor = new EditorPart(dom.window.document, {
+  const editor = new EditorPart(dom.window.document.body, {
     registry: new EditorPaneRegistry(),
     welcome: {
       productName: "Zeta",
@@ -250,7 +251,7 @@ test("EditorPart renders the project welcome page and dispatches available cards
 
 test("EditorPart updates Recent projects and expands the complete list", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const editor = new EditorPart(dom.window.document, {
+  const editor = new EditorPart(dom.window.document.body, {
     registry: new EditorPaneRegistry(),
     welcome: {
       recentProjects: Array.from({ length: 6 }, (_, index) => ({
@@ -287,7 +288,7 @@ test("EditorPart saves the active pane through the editor contract", async () =>
     ".save",
     () => pane,
   ));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
 
   await editor.openEditor(input("C:\\project\\document.save"));
   await editor.saveActiveEditor();
@@ -311,7 +312,7 @@ test("EditorPart opens cross-resource language targets and reveals their selecti
       return trackPane(panes, "zeta.editor.navigation-test");
     },
   });
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   await editor.openEditor(input("C:\\project\\main.ts"));
   const target = URI.file("C:\\project\\target.ts");
   const range = TextRange.from(TextPosition.at(4, 1), TextPosition.at(4, 8));
@@ -341,7 +342,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     ".md",
     () => trackPane(panes, "zeta.editor.textEditorWidget"),
   ));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   dom.window.document.body.append(editor.element);
 
   const typescript = input("C:\\project\\main.ts");
@@ -448,7 +449,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     1,
   );
 
-  const content = dom.window.document.createElement("div");
+  const content = h(dom.window.document, "div");
   content.textContent = "Welcome";
   editor.setContent(content);
   assert.equal(editor.activePane, undefined);
@@ -469,7 +470,7 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
     ".ts",
     () => trackPane(panes, "aster.editor.code"),
   ));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   dom.window.document.body.append(editor.element);
   const first = input("C:\\project\\first.ts");
   const second = input("C:\\project\\second.ts");
@@ -502,7 +503,7 @@ test("EditorPart opens beside the active group without stealing caller focus", a
   const registry = new EditorPaneRegistry();
   const panes: TestEditorPane[] = [];
   registry.register(descriptor("aster.editor.code", ".ts", () => trackPane(panes, "aster.editor.code")));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   dom.window.document.body.append(editor.element);
   const sourceInput = input("C:\\project\\source.ts");
   const previewInput = input("C:\\project\\preview.ts");
@@ -553,7 +554,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
   using contextKeys = new ContextKeyService();
   using commands = new CommandService(services);
   const menus = new MenuService(commands, contextKeys);
-  const editor = new EditorPart(dom.window.document, {
+  const editor = new EditorPart(dom.window.document.body, {
     registry,
     titleActions: {
       menuService: menus,
@@ -638,7 +639,7 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
       return pane;
     },
   ));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   dom.window.document.body.append(editor.element);
   const workingInput = input("C:\\project\\document.ok");
   const workingPane = await editor.openEditor(workingInput);
@@ -670,10 +671,10 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
       return pane;
     },
   ));
-  const editor = new EditorPart(dom.window.document, { registry });
+  const editor = new EditorPart(dom.window.document.body, { registry });
   dom.window.document.body.append(editor.element);
   const opening = editor.openEditor(input("C:\\project\\document.slow"));
-  const content = dom.window.document.createElement("div");
+  const content = h(dom.window.document, "div");
   content.textContent = "Replacement";
   editor.setContent(content);
   assert.equal(slowPane?.inputSignal?.aborted, true);
@@ -709,7 +710,7 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
   }
 
   create(parent: HTMLElement): void {
-    const element = parent.ownerDocument.createElement("div");
+    const element = h(parent.ownerDocument, "div");
     element.textContent = this.id;
     parent.append(element);
   }

@@ -1,6 +1,8 @@
 import { lxiconsLibrary } from "../../../base/common/lxiconsLibrary.js";
 import { Action2, MenuId, registerAction2 } from "../../../platform/actions/common/actions.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
+import { ILayoutService } from "../../../platform/layout/common/layoutService.js";
+import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { navigateToSessionsPage } from "./sessionNavigation.js";
 
 export type SessionsTitlebarDestination =
@@ -25,11 +27,11 @@ export function registerSessionsTitlebarEntry(actionId: string, title: string, d
       });
     }
 
-    override run(): void | Promise<void> {
+    override run(accessor: ServicesAccessor): void | Promise<void> {
       if (destination.kind === "window") {
         return destination.sessionsWindowApi.openSessionsWindow();
       }
-      navigateToSessionsPage(destination.relativePath);
+      navigateToSessionsPage(destination.relativePath, accessor.get(ILayoutService).activeContainer.ownerDocument.location);
     }
   });
 }

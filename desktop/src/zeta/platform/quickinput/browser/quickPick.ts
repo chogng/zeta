@@ -15,7 +15,6 @@ import type {
 import { QuickInputList } from "./quickInputList.js";
 
 export interface BrowserQuickPickOptions {
-  readonly ownerDocument: Document;
   readonly onShow: (quickPick: IBrowserQuickPickHost) => void;
   readonly onHide: (quickPick: IBrowserQuickPickHost) => void;
   readonly onDispose: (quickPick: IBrowserQuickPickHost) => void;
@@ -48,10 +47,10 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
     this._onDidChangeValue.event;
   readonly onDidHide: Event<void> = this._onDidHide.event;
 
-  constructor(options: BrowserQuickPickOptions) {
+  constructor(host: HTMLElement, options: BrowserQuickPickOptions) {
     super();
     this.options = options;
-    const ownerDocument = options.ownerDocument;
+    const ownerDocument = host.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-quick-pick";
     setRole(this.element, "dialog");
@@ -62,9 +61,8 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
       this.element.remove();
     });
 
-    this.list = this.own(new QuickInputList<TItem>(ownerDocument));
-    this.inputBox = this.own(new InputBox({
-      ownerDocument,
+    this.list = this.own(new QuickInputList<TItem>(this.element));
+    this.inputBox = this.own(new InputBox(this.element, {
       type: "search",
       ariaLabel: "Quick Pick",
       role: "combobox",

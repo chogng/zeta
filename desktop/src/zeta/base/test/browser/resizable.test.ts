@@ -26,7 +26,7 @@ const { bindResizableLayout, ResizableHTMLElement } = await import(
 
 test("ResizableHTMLElement constrains and positions its edge sashes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const resizable = new ResizableHTMLElement(dom.window.document);
+  const resizable = new ResizableHTMLElement(dom.window.document.body);
   dom.window.document.body.append(resizable.domNode);
   resizable.minSize = new Dimension(80, 60);
   resizable.maxSize = new Dimension(300, 200);
@@ -65,7 +65,7 @@ test("ResizableHTMLElement constrains and positions its edge sashes", () => {
 
 test("ResizableHTMLElement reports edge drag lifecycle", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const resizable = new ResizableHTMLElement(dom.window.document);
+  const resizable = new ResizableHTMLElement(dom.window.document.body);
   dom.window.document.body.append(resizable.domNode);
   resizable.layout(100, 200);
   resizable.enableSashes(false, true, false, false);

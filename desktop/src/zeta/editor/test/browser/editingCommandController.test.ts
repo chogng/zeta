@@ -6,6 +6,7 @@ import { EditorSelectionController } from "../../common/cursor/editorSelectionCo
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { h } from "../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -84,7 +85,7 @@ test("editing shortcuts reject dependencies from different text models", () => {
     textMeasurer: new FixedTextMeasurer(),
     selectionController: selections,
   });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   assert.throws(() => new EditingCommandController(input, viewport, otherSelections), /must share one text model/);
   dom.window.close();
 });

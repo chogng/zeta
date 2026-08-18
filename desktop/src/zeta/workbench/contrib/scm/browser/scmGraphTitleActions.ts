@@ -16,7 +16,6 @@ const GitGraphRefreshCommandId = "zeta.git.graph.refresh";
 const GitGraphBusyContext = new RawContextKey<boolean>("gitGraphBusy", false);
 
 export interface ScmGraphTitleActionsOptions {
-  readonly ownerDocument: Document;
   readonly gitService: IGitService;
   readonly menuService: IMenuService;
   readonly contextMenuService: IContextMenuService;
@@ -30,16 +29,16 @@ export class ScmGraphTitleActions extends DisposableOwner {
   private readonly toolbar: MenuWorkbenchToolBar;
   private readonly busyContext: IContextKey<boolean>;
 
-  constructor(private readonly options: ScmGraphTitleActionsOptions) {
+  constructor(container: HTMLElement, private readonly options: ScmGraphTitleActionsOptions) {
     super();
     this.busyContext = GitGraphBusyContext.bindTo(options.contextKeyService);
     this.defer(() => this.busyContext.reset());
     this.registerCommandsAndMenu();
     this.toolbar = this.own(new MenuWorkbenchToolBar(
+      container,
       options.menuService,
       options.contextMenuService,
       MenuId.GitGraphTitle,
-      options.ownerDocument,
       { ariaLabel: "Git graph actions" },
     ));
     this.element = this.toolbar.element;

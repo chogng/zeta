@@ -53,7 +53,6 @@ export interface IEditorGroup {
 
 /** Construction inputs for one independently navigable EditorGroup. */
 export interface EditorGroupOptions {
-  readonly ownerDocument: Document;
   readonly registry: EditorPaneRegistry;
   readonly configurationService?: IConfigurationService;
   readonly keybindingService?: IKeybindingService;
@@ -122,8 +121,9 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private openSequence = 0;
   private pendingPane: EditorPaneInstance | undefined;
 
-  constructor(options: EditorGroupOptions) {
+  constructor(container: HTMLElement, options: EditorGroupOptions) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.registry = options.registry;
     this.configurationService = options.configurationService;
     this.fileService = options.fileService;
@@ -141,9 +141,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.onOpenLocation = options.onOpenLocation;
     this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
     this.createLineGutterDecorations = options.createLineGutterDecorations;
-    this.element = h(options.ownerDocument, "section");
+    this.element = h(ownerDocument, "section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
+    container.append(this.element);
     this.own(new DragAndDropObserver(this.element, {
       onDragOver: (event) => {
         if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
@@ -166,7 +167,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       }));
     }
     this.titleControl = this.own(new EditorTitleControl(
-      options.ownerDocument,
+      this.element,
       {
         activate: (input) => {
           this.activateEntry(this.requireEntry(input), true);
@@ -185,11 +186,11 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       },
       options.titleActions,
     ));
-    this.contentElement = h(options.ownerDocument, "div");
+    this.contentElement = h(ownerDocument, "div");
     this.contentElement.className = "zeta-editor-group-content";
     const shortcuts = options.keybindingService
       ? this.own(new EditorGroupWatermark(
-        options.ownerDocument,
+        this.contentElement,
         options.keybindingService,
       ))
       : undefined;
@@ -198,13 +199,12 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       ...(shortcuts ? { shortcuts: shortcuts.element } : {}),
     };
     this.welcome = this.own(new EditorWelcome(
-      options.ownerDocument,
+      this.contentElement,
       welcomeOptions,
     ));
     this.welcomeElement = this.welcome.element;
     this.welcomeVisible = options.welcomeVisible ?? true;
     this.welcomeElement.hidden = !this.welcomeVisible;
-    this.contentElement.append(this.welcomeElement);
     this.element.append(
       this.titleControl.element,
       this.contentElement,
@@ -252,7 +252,6 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 
     let createdPane: IEditorPane | undefined;
     const pane = descriptor.create({
-      ownerDocument: this.element.ownerDocument,
       input,
       configurationService: this.configurationService,
       fileService: this.fileService,
@@ -283,12 +282,11 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       );
     }
     const paneInstance = new EditorPaneInstance(
+      this.contentElement,
       pane,
-      this.element.ownerDocument,
     );
     setDisposableOwner(paneInstance, this);
     this.pendingPane = paneInstance;
-    this.contentElement.append(paneInstance.element);
     try {
       pane.create(paneInstance.element);
       paneInstance.setVisible(EditorPaneVisibility.Hidden);
@@ -552,10 +550,11 @@ class EditorPaneInstance extends DisposableOwner {
   readonly tabId: string;
 
   constructor(
+    container: HTMLElement,
     readonly pane: IEditorPane,
-    ownerDocument: Document,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     const id = ++editorPaneId;
     this.panelId = `zeta-editor-pane-${id}`;
     this.tabId = `zeta-editor-tab-${id}`;
@@ -568,6 +567,7 @@ class EditorPaneInstance extends DisposableOwner {
     this.element.className = "zeta-editor-pane-host";
     this.element.setAttribute("role", "tabpanel");
     this.element.setAttribute("aria-labelledby", this.tabId);
+    container.append(this.element);
     this.defer(() => this.element.remove());
     this.own(pane);
     this.defer(() => pane.clearInput());

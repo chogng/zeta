@@ -14,11 +14,11 @@ export class MinimapNavigationController extends DisposableOwner {
 
   constructor(
     private readonly element: HTMLElement,
-    ownerDocument: Document,
     private readonly readLayout: () => EditorViewportLayout,
     private readonly scrollTo: (position: EditorScrollPosition) => void,
   ) {
     super();
+    const ownerDocument = element.ownerDocument;
     this.own(addDisposableListener<PointerEvent>(element, "pointerdown", event => this.begin(event)));
     this.own(addDisposableListener<PointerEvent>(ownerDocument, "pointermove", event => this.move(event)));
     this.own(addDisposableListener<PointerEvent>(ownerDocument, "pointerup", event => this.end(event)));

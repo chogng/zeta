@@ -9,17 +9,15 @@ test("ViewPane title chevron tracks collapsed state", async () => {
   try {
     const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
     class TestViewPane extends ViewPane {
-      constructor(options: IViewPaneOptions) {
-        super(options);
+      constructor(container: HTMLElement, options: IViewPaneOptions) {
+        super(container, options);
       }
     }
-    using pane = new TestViewPane({
+    using pane = new TestViewPane(dom.window.document.body, {
       id: "test.pane",
       title: "Test Pane",
-      ownerDocument: dom.window.document,
       collapsed: true,
     });
-    dom.window.document.body.append(pane.element);
 
     const title = pane.element.querySelector(".zeta-pane-view-header-title");
     const button = pane.element.querySelector<HTMLButtonElement>(".zeta-pane-view-header-button");

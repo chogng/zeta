@@ -1,4 +1,6 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { addDisposableListener } from "../../base/browser/dom.js";
+import { DisposableStore } from "../../base/common/lifecycle.js";
 import {
   DisposableTracker,
   installDisposableTracker,
@@ -43,7 +45,7 @@ export async function startElectronWorkbench(
     product,
     profile,
     api,
-    container: document.querySelector<HTMLElement>("#app"),
+    container: document.querySelector<HTMLElement>("#app") ?? document.body,
     workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
     configurationApi: api.configuration,
     keybindingsResourceApi: api.keybindings,
@@ -58,13 +60,15 @@ export async function startElectronWorkbench(
       api.nativeMenubar,
     ),
   });
+  const lifecycle = new DisposableStore();
   const workspaceSubscription = api.workspace.onDidChange((workspace) => {
     void applyWorkspaceChange(workbench, workspace);
   });
-  window.addEventListener("pagehide", () => {
+  lifecycle.defer(() => workspaceSubscription.dispose());
+  lifecycle.add(addDisposableListener(window, "pagehide", () => {
     void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
       try {
-        workspaceSubscription.dispose();
+        lifecycle.dispose();
         workbench.dispose();
         userThemes.dispose();
         disposableTracker?.assertNoLeaks();
@@ -72,7 +76,7 @@ export async function startElectronWorkbench(
         tracking?.[Symbol.dispose]();
       }
     });
-  }, { once: true });
+  }, { once: true }));
 }
 
 async function applyWorkspaceChange(workbench: Workbench, workspace: unknown): Promise<void> {

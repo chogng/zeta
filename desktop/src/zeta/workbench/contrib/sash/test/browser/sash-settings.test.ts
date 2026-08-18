@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -111,7 +112,7 @@ function assertSashStyles(
 }
 
 function appendSash(root: HTMLElement): HTMLDivElement {
-  const sash = root.ownerDocument.createElement("div");
+  const sash = h(root.ownerDocument, "div");
   sash.className = "zeta-sash";
   root.append(sash);
   return sash;

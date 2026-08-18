@@ -29,7 +29,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
     rust.append({ severity: "warning", text: "check failed" });
     typescript.append({ severity: "log", text: "server ready" });
     const { OutputViewPane } = await import("../../../../../workbench/contrib/output/browser/outputViewPane.js");
-    using pane = new OutputViewPane({ id: "zeta.output.test", title: "Output", ownerDocument: browser.window.document }, output, contextMenus);
+    using pane = new OutputViewPane(browser.window.document.body, { id: "zeta.output.test", title: "Output" }, output, contextMenus);
     const titleActions = pane.partTitleProjection?.actions;
     assert.ok(titleActions);
     browser.window.document.body.append(pane.element, titleActions);
@@ -76,7 +76,7 @@ test("Tasks projects its refresh action into the Panel title", async () => {
   const terminals = { instances: [] } as unknown as ITerminalService;
   try {
     const { TasksViewPane } = await import("../../../../../workbench/contrib/tasks/browser/tasksViewPane.js");
-    using pane = new TasksViewPane({ id: "zeta.tasks.test", title: "Tasks", ownerDocument: browser.window.document }, tasks, views, terminals);
+    using pane = new TasksViewPane(browser.window.document.body, { id: "zeta.tasks.test", title: "Tasks" }, tasks, views, terminals);
     const titleActions = pane.partTitleProjection?.actions;
     assert.ok(titleActions);
     browser.window.document.body.append(pane.element, titleActions);

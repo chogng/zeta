@@ -58,7 +58,6 @@ export interface IEditorPane extends IDisposable {
 }
 
 export interface EditorPaneCreationOptions {
-  readonly ownerDocument: Document;
   /** The input used to choose a profile-specific pane implementation. */
   readonly input?: EditorInput;
   readonly configurationService?: IConfigurationService;

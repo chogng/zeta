@@ -6,7 +6,6 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
-  readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
   readonly contextMenuProvider?: IContextMenuProvider;
   readonly titleActions?: PaneCompositeTitleActions;
@@ -16,9 +15,8 @@ export interface PanelPartOptions {
 export class PanelPart extends PaneCompositePart {
   override get minimumHeight(): number { return 80; }
 
-  constructor(options: PanelPartOptions) {
-    super({
-      ownerDocument: options.ownerDocument,
+  constructor(container: HTMLElement, options: PanelPartOptions) {
+    super(container, {
       viewDescriptorService: options.viewDescriptorService,
       id: "panel",
       location: ViewContainerLocation.Panel,

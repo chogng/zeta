@@ -6,13 +6,16 @@ import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorSer
 /** Settings-owned projection of Connector catalog and credential actions. */
 export class ConnectorSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
+  private readonly document: Document;
   private readonly rows = this.own(new ResettableDisposableGroup());
   private loadGeneration = 0;
 
-  constructor(private readonly document: Document, private readonly connectors: IConnectorService) {
+  constructor(container: HTMLElement, private readonly connectors: IConnectorService) {
     super();
-    this.element = h(document, "div");
+    this.document = container.ownerDocument;
+    this.element = h(this.document, "div");
     this.element.className = "zeta-integration-settings";
+    container.append(this.element);
     this.own(connectors.onDidChange(() => void this.reload()));
     void this.reload();
     this.defer(() => this.element.remove());

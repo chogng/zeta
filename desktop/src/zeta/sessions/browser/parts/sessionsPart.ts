@@ -11,7 +11,6 @@ import { SessionsChatView } from "../common/sessionsChatView.js";
 import { h } from "../../../base/browser/dom.js";
 
 export interface SessionsPartOptions {
-  readonly ownerDocument: Document;
   readonly sessionService: ISessionsManagementService;
   readonly chatService: IChatService;
   readonly contextMenuService: IContextMenuService;
@@ -29,16 +28,15 @@ export class SessionsPart extends WorkbenchPart {
 
   override get minimumWidth(): number { return 420; }
 
-  constructor(options: SessionsPartOptions) {
-    super("sessions", options.ownerDocument);
-    const ownerDocument = options.ownerDocument;
+  constructor(container: HTMLElement, options: SessionsPartOptions) {
+    super(container, "sessions");
+    const ownerDocument = container.ownerDocument;
     const header = h(ownerDocument, "div");
     header.className = "zeta-sessions-surface-header";
     this.heading = h(ownerDocument, "h1");
     this.description = h(ownerDocument, "p");
     header.append(this.heading, this.description);
-    this.chat = this.own(new SessionsChatView({
-      ownerDocument,
+    this.chat = this.own(new SessionsChatView(this.contentElement, {
       chatService: options.chatService,
       sessionService: options.sessionService,
       contextMenuService: options.contextMenuService,
@@ -47,7 +45,7 @@ export class SessionsPart extends WorkbenchPart {
       activateSelection: options.activateSelection,
       closeSelection: options.closeSelection,
     }));
-    this.contentElement.append(header, this.chat.element);
+    this.contentElement.prepend(header);
     this.updateVisibleSelections([], undefined);
   }
 

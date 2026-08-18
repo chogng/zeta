@@ -17,15 +17,15 @@ export class TasksViewPane extends ViewPane {
   private refreshing = false;
   private error: string | undefined;
 
-  constructor(options: IViewPaneOptions, private readonly taskService: ITaskService, private readonly viewsService: IViewsService, private readonly terminalService: ITerminalService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly taskService: ITaskService, private readonly viewsService: IViewsService, private readonly terminalService: ITerminalService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-tasks");
-    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Tasks actions" }));
+    this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Tasks actions" }));
     this.titleActions.element.classList.add("zeta-toolbar");
-    this.statusElement = h(options.ownerDocument, "div");
+    this.statusElement = h(container.ownerDocument, "div");
     this.statusElement.className = "zeta-tasks-status";
     this.statusElement.setAttribute("role", "status");
-    this.listElement = h(options.ownerDocument, "ul");
+    this.listElement = h(container.ownerDocument, "ul");
     this.listElement.className = "zeta-tasks-list";
     this.listElement.setAttribute("aria-label", "Workspace tasks");
     this.contentElement.append(this.statusElement, this.listElement);

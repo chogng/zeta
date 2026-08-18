@@ -29,6 +29,7 @@ import { IViewsService, ViewsService } from "../../../../../workbench/services/v
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -166,10 +167,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     },
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
+    dom.window.document.body,
     {
       id: CHAT_VIEW_ID,
       title: "Chat",
-      ownerDocument: dom.window.document,
     },
     createChatService(api),
     sessions,
@@ -179,7 +180,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     commands,
     layout,
   );
-  const title = dom.window.document.createElement("div");
+  const title = h(dom.window.document, "div");
   title.className = "zeta-pane-composite-title";
   title.append(chatTitleContent(pane), chatTitleActions(pane));
   dom.window.document.body.append(title, pane.element);
@@ -416,7 +417,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 
 test("Empty chat transcripts do not render a redundant placeholder", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  using list = new ChatListWidget(dom.window.document);
+  using list = new ChatListWidget(dom.window.document.body);
 
   list.render([]);
 
@@ -458,10 +459,10 @@ test("an empty Session list opens an untitled session and persists it on its fir
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
+    dom.window.document.body,
     {
       id: CHAT_VIEW_ID,
       title: "Chat",
-      ownerDocument: dom.window.document,
     },
     createChatService(api),
     sessions,
@@ -558,10 +559,10 @@ test("the New Chat slash command opens an untitled session", async () => {
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
+    dom.window.document.body,
     {
       id: CHAT_VIEW_ID,
       title: "Chat",
-      ownerDocument: dom.window.document,
     },
     createChatService(fake.api),
     sessions,
@@ -631,10 +632,10 @@ test("failed first send keeps the untitled session and its input draft", async (
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
+    dom.window.document.body,
     {
       id: CHAT_VIEW_ID,
       title: "Chat",
-      ownerDocument: dom.window.document,
     },
     createChatService(fake.api),
     sessions,
@@ -703,10 +704,10 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     showContextMenu: () => undefined,
   } as unknown as IContextMenuService;
   using pane = new ChatViewPane(
+    dom.window.document.body,
     {
       id: CHAT_VIEW_ID,
       title: "Chat",
-      ownerDocument: dom.window.document,
     },
     createChatService(api),
     sessions,

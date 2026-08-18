@@ -12,6 +12,7 @@ import { WorkspacePdfDocumentLoader } from "../../../../../workbench/contrib/pdf
 import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from "../../../../../workbench/contrib/pdf/browser/pdfRenderer.js";
 import { matchPdfEditor } from "../../../../../workbench/contrib/pdf/browser/pdfEditorInput.js";
 import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 test("PDF editor matching selects only application/pdf and .pdf resources", () => {
   assert.equal(matchPdfEditor(input("paper.PDF")), EditorPaneMatch.Default);
@@ -159,9 +160,9 @@ class TestRenderer implements IPdfRenderer {
 
   async render(request: PdfRenderRequest): Promise<IPdfRenderResult> {
     this.requests.push(request);
-    const page = request.container.ownerDocument.createElement("div");
+    const page = h(request.container.ownerDocument, "div");
     page.className = "zeta-pdf-page";
-    const canvas = request.container.ownerDocument.createElement("canvas");
+    const canvas = h(request.container.ownerDocument, "canvas");
     canvas.className = "zeta-pdf-page-canvas";
     page.append(canvas);
     request.container.append(page);

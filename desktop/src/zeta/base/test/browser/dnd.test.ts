@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DragAndDropObserver } from "../../browser/dnd.js";
+import { h } from "../../browser/dom.js";
 
 test("DragAndDropObserver normalizes nested targets and enables the native drop", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const target = dom.window.document.createElement("div");
-  const child = dom.window.document.createElement("span");
+  const target = h(dom.window.document, "div");
+  const child = h(dom.window.document, "span");
   target.append(child);
   const events: string[] = [];
   const observer = new DragAndDropObserver(target, {

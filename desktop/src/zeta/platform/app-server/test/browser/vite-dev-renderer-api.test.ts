@@ -4,6 +4,11 @@ import { APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
 
+const connectorHostServices = {
+  openerService: { openExternal: async () => undefined },
+  clipboardService: { writeText: async () => undefined },
+};
+
 class FakeHotContext implements ViteDevHotContext {
   private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
   readonly requests: Array<Record<string, unknown>> = [];
@@ -70,7 +75,7 @@ class FakeHotContext implements ViteDevHotContext {
 
 test("connects, initializes, maps renderer requests, and disposes the Vite bridge", async () => {
   const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot);
+  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
   assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
   assert.equal(await connected.api.appServer.getConnectionState(), "ready");
   assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
@@ -82,7 +87,7 @@ test("connects, initializes, maps renderer requests, and disposes the Vite bridg
 
 test("delivers App Server notifications and reports bridge closure", async () => {
   const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot);
+  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
   const notifications: ServerNotification[] = [];
   const states: string[] = [];
   connected.api.events.subscribe((notification) => notifications.push(notification));
@@ -98,7 +103,7 @@ test("delivers App Server notifications and reports bridge closure", async () =>
 
 test("routes bounded syntax analysis through the connected renderer host", async () => {
   const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot);
+  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
 
   const result = await connected.api.syntax.analyze({
     language: "rust",

@@ -28,9 +28,9 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 
   readonly onDidOpen: Event<ResourceOpenEvent<T>>;
 
-  constructor(options: WorkbenchObjectTreeOptions<T>) {
+  constructor(container: HTMLElement, options: WorkbenchObjectTreeOptions<T>) {
     const { configurationService, openOnSingleClick, ...treeOptions } = options;
-    super(treeOptions);
+    super(container, treeOptions);
     this.navigator = this.own(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
     this.onDidOpen = this.navigator.onDidOpen;
   }
@@ -44,9 +44,9 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 
   readonly onDidOpen: Event<ResourceOpenEvent<T>>;
 
-  constructor(dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchAsyncDataTreeOptions<T>) {
+  constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchAsyncDataTreeOptions<T>) {
     const { configurationService, openOnSingleClick, ...treeOptions } = options;
-    super(dataSource, treeOptions);
+    super(container, dataSource, treeOptions);
     this.navigator = this.own(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
     this.onDidOpen = this.navigator.onDidOpen;
   }

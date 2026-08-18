@@ -44,6 +44,7 @@ export class ChatViewPane extends ViewPane {
   private viewDisposed = false;
 
   constructor(
+    container: HTMLElement,
     options: IViewPaneOptions,
     chatService: IChatService,
     sessionService: ISessionsManagementService,
@@ -53,7 +54,7 @@ export class ChatViewPane extends ViewPane {
     commandService: ICommandService,
     private readonly layoutService: IWorkbenchLayoutService,
   ) {
-    super(options);
+    super(container, options);
     this.chatService = chatService;
     this.sessionService = sessionService;
     this.contextMenuService = contextMenuService;
@@ -63,7 +64,7 @@ export class ChatViewPane extends ViewPane {
     this.contentElement.classList.add("zeta-chat-view");
     const viewId = `zeta-chat-view-${++chatViewInstanceId}`;
     this.titleControl = this.own(new ChatTitleControl(
-      options.ownerDocument,
+      this.element,
       viewId,
       {
         selectTab: (tabId) => this.selectTab(tabId),
@@ -73,12 +74,12 @@ export class ChatViewPane extends ViewPane {
       menuService,
       contextMenuService,
     ));
-    this.paneHost = h(options.ownerDocument, "div");
+    this.paneHost = h(container.ownerDocument, "div");
     this.paneHost.className = "zeta-chat-pane-host";
-    this.empty = h(options.ownerDocument, "div");
+    this.empty = h(container.ownerDocument, "div");
     this.empty.className = "zeta-chat-empty zeta-chat-view-empty";
     this.empty.textContent = "Start a new chat to begin.";
-    const body = h(options.ownerDocument, "div");
+    const body = h(container.ownerDocument, "div");
     body.className = "zeta-chat-body";
     body.append(this.paneHost);
     this.contentElement.append(body);
@@ -118,7 +119,7 @@ export class ChatViewPane extends ViewPane {
       let pane = this.panes.get(paneId);
       if (!pane) {
         pane = new ChatPane(
-          this.element.ownerDocument,
+          this.paneHost,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
           this.chatService,
           { kind: "untitled", session: untitledSession },
@@ -143,7 +144,7 @@ export class ChatViewPane extends ViewPane {
       let pane = this.panes.get(paneId);
       if (!pane) {
         pane = new ChatPane(
-          this.element.ownerDocument,
+          this.paneHost,
           `zeta-chat-pane-${++chatPaneInstanceId}`,
           this.chatService,
           { kind: "session", active: selection },

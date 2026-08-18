@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../base/browser/dom.js";
 
 const mainEnvironment = new JSDOM(
   "<!doctype html><html><head></head><body></body></html>",
@@ -33,7 +34,7 @@ test(
   "WorkbenchWindow owns root identity and secondary document integration",
   async () => {
     const mainStyle =
-      mainEnvironment.window.document.createElement("style");
+      h(mainEnvironment.window.document, "style");
     mainStyle.dataset.source = "main";
     mainStyle.textContent = ".from-main { color: red; }";
     mainEnvironment.window.document.head.append(mainStyle);
@@ -71,7 +72,7 @@ test(
     );
 
     const nextStyle =
-      mainEnvironment.window.document.createElement("style");
+      h(mainEnvironment.window.document, "style");
     nextStyle.dataset.source = "next";
     mainEnvironment.window.document.head.append(nextStyle);
     await new Promise((resolve) => globalThis.setTimeout(resolve, 0));

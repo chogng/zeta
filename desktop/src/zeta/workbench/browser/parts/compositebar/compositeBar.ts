@@ -19,7 +19,6 @@ export interface CompositeBarSelectionEvent {
 
 /** Construction inputs for a location-specific Composite selector. */
 export interface CompositeBarOptions {
-  readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
   readonly location: ViewContainerLocation;
   readonly ariaLabel: string;
@@ -64,7 +63,7 @@ export class CompositeBar extends DisposableOwner {
   readonly onDidSelectComposite: Event<CompositeBarSelectionEvent> =
     this._onDidSelectComposite.event;
 
-  constructor(options: CompositeBarOptions) {
+  constructor(container: HTMLElement, options: CompositeBarOptions) {
     super();
     const presentation = options.presentation ?? "icon";
     this.viewDescriptorService = options.viewDescriptorService;
@@ -72,13 +71,13 @@ export class CompositeBar extends DisposableOwner {
     this.contextMenuProvider = options.contextMenuProvider;
     this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
     this.containerFilter = options.containerFilter ?? (() => true);
-    this.element = h(options.ownerDocument, "section");
+    this.element = h(container.ownerDocument, "section");
     this.element.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
+    container.append(this.element);
     this.defer(() => this.element.remove());
-    this.actionBar = this.own(new ActionBar({
-      ownerDocument: options.ownerDocument,
+    this.actionBar = this.own(new ActionBar(this.element, {
       ariaLabel: options.ariaLabel,
       ariaRole: "tablist",
       actionViewItemProvider: (action): ActionViewItem => {
@@ -105,7 +104,6 @@ export class CompositeBar extends DisposableOwner {
         },
       },
     }));
-    this.element.append(this.actionBar.element);
     this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
       this.render();
     }));

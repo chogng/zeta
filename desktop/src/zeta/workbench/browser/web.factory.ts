@@ -59,7 +59,8 @@ export function startWebWorkbench(
     profile,
     workspace: host?.workspace,
     container: host?.container ??
-      document.querySelector<HTMLElement>("#app"),
+      document.querySelector<HTMLElement>("#app") ??
+      document.body,
   });
   workbench.add(instance);
   workbench.add(addDisposableListener(window, "pagehide", () => {

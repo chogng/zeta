@@ -14,8 +14,9 @@ export class PixelSpinner extends DisposableOwner {
   readonly element: HTMLSpanElement;
   private step = 0;
 
-  constructor(ownerDocument: Document) {
+  constructor(container: HTMLElement) {
     super();
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "span");
     this.element = element;
     this.defer(() => element.remove());
@@ -23,6 +24,7 @@ export class PixelSpinner extends DisposableOwner {
     setRole(element, "status");
     setAriaAttribute(element, "label", "Loading");
     element.append(...Array.from({ length: 4 }, () => h(ownerDocument, "i")));
+    container.append(element);
     this.own(disposableWindowInterval(
       getWindow(element),
       () => this.render(),

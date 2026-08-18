@@ -22,10 +22,9 @@ const { PaneView } = await import("../../browser/ui/splitview/paneView.js");
 
 test("PaneView owns titled collapse semantics and its stable visual state", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const pane = new PaneView({
+  const pane = new PaneView(dom.window.document.body, {
     id: "test-pane",
     title: "Test Pane",
-    ownerDocument: dom.window.document,
     collapsed: true,
   });
   dom.window.document.body.append(pane.element);

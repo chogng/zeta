@@ -8,8 +8,8 @@ import { h } from "../../../../../base/browser/dom.js";
 export class ChatAgentSidebarViewPane extends ViewPane {
   private readonly sessionService: ISessionsManagementService;
 
-  constructor(options: IViewPaneOptions, sessionService: ISessionsManagementService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, sessionService: ISessionsManagementService) {
+    super(container, options);
     this.sessionService = sessionService;
     this.contentElement.classList.add("zeta-chat-agent-sidebar-view");
     this.own(sessionService.onDidChange(() => this.render()));

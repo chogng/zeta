@@ -48,7 +48,6 @@ export interface TabListDragAndDrop<T> {
 
 /** Construction inputs for a manually activated TabList. */
 export interface TabListOptions<T> {
-  readonly ownerDocument: Document;
   readonly ariaLabel: string;
   readonly presentation?: TabListPresentation;
   readonly orientation?: ActionBarOrientation;
@@ -72,7 +71,7 @@ export class TabList<T> extends DisposableOwner {
   private readonly scrollable: ScrollableElement;
   private readonly activate: (value: T) => void;
 
-  constructor(options: TabListOptions<T>) {
+  constructor(container: HTMLElement, options: TabListOptions<T>) {
     super();
     this.activate = options.onActivate;
     const onClose = options.onClose;
@@ -99,8 +98,11 @@ export class TabList<T> extends DisposableOwner {
         onDragEnd: () => dragAndDrop.onDragEnd(),
       }
       : undefined;
-    this.actionBar = this.own(new ActionBar({
-      ownerDocument: options.ownerDocument,
+    const scrollableOptions = orientation === "vertical"
+      ? { direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
+      : { direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
+    this.scrollable = this.own(new ScrollableElement(container, scrollableOptions));
+    this.actionBar = this.own(new ActionBar(this.scrollable.contentElement, {
       ariaLabel: options.ariaLabel,
       ariaRole: "tablist",
       orientation,
@@ -112,16 +114,11 @@ export class TabList<T> extends DisposableOwner {
         return new TabActionViewItem(action, onClose, closeActionIcon, options.draggable === true);
       },
     }));
-    const scrollableOptions = orientation === "vertical"
-      ? { ownerDocument: options.ownerDocument, direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
-      : { ownerDocument: options.ownerDocument, direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
-    this.scrollable = this.own(new ScrollableElement(scrollableOptions));
     this.scrollable.element.classList.add("zeta-tab-list");
     this.scrollable.element.classList.add(`zeta-tab-list-${presentation}`);
     this.scrollable.contentElement.classList.add(
       "zeta-tab-list-scroll-content",
     );
-    this.scrollable.append(this.actionBar.element);
     this.element = this.scrollable.element;
   }
 

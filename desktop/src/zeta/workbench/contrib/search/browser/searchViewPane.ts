@@ -28,14 +28,15 @@ export class SearchViewPane extends ViewPane {
   private disposed = false;
 
   constructor(
+    container: HTMLElement,
     options: IViewPaneOptions,
     searchService: IWorkspaceSearchService,
     private readonly configurationService?: IConfigurationService,
   ) {
-    super(options);
+    super(container, options);
     this.searchService = searchService;
     this.contentElement.classList.add("zeta-search");
-    const document = options.ownerDocument;
+    const document = container.ownerDocument;
     const form = h(document, "form");
     form.className = "zeta-search-form";
     this.queryInput = input(document, {
@@ -254,12 +255,10 @@ function checkbox(
   parent: HTMLElement,
   text: string,
 ): Checkbox {
-  const control = new Checkbox({
-    ownerDocument: document,
+  const control = new Checkbox(parent, {
     label: text,
   });
   control.element.classList.add("zeta-search-toggle");
-  parent.append(control.element);
   return control;
 }
 

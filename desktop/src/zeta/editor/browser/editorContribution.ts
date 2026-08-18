@@ -93,7 +93,7 @@ export interface DocumentCollaborationContribution extends IDisposable {
 /** Stable document-model mount point exposed to the same flat contribution registry. */
 export interface DocumentEditorContributionContext {
   readonly kind: "document";
-  readonly ownerDocument: Document;
+  readonly container: HTMLElement;
   readonly documentActions: readonly { readonly id: string; readonly label: string }[];
   readonly onToggleMark: (markType: "strong" | "em") => void;
   readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;

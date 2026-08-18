@@ -5,7 +5,6 @@ import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } fr
 import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from "./tree.js";
 
 export interface DataTreeOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -41,10 +40,9 @@ export class DataTree<TInput, T> extends DisposableOwner {
   readonly onDidChangeSelection: Event<ObjectTreeSelectionChangeEvent<T>>;
   readonly onDidChangeCollapseState: Event<ObjectTreeCollapseStateChangeEvent<T>>;
 
-  constructor(private readonly dataSource: TreeDataSource<TInput, T>, private readonly options: DataTreeOptions<T>) {
+  constructor(container: HTMLElement, private readonly dataSource: TreeDataSource<TInput, T>, private readonly options: DataTreeOptions<T>) {
     super();
-    this.tree = this.own(new ObjectTree<T>({
-      ownerDocument: options.ownerDocument,
+    this.tree = this.own(new ObjectTree<T>(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,

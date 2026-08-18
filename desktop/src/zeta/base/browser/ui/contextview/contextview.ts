@@ -5,7 +5,7 @@ import { addDisposableListener, isHTMLElement, isNode, h } from "../../dom.js";
 import { getActiveElement, restoreFocus } from "../../focus.js";
 import { getViewport } from "../../geometry.js";
 import { observeResize } from "../../observer.js";
-import { getWindow, mainWindow } from "../../window.js";
+import { getWindow } from "../../window.js";
 
 export {
   AnchorAlignment,
@@ -72,7 +72,7 @@ export class ContextView
   private restoreFocusTo: HTMLElement | undefined;
   private options: ContextViewOptions | undefined;
 
-  constructor(container: HTMLElement = mainWindow.document.body) {
+  constructor(container: HTMLElement) {
     super();
     const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");

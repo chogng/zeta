@@ -24,7 +24,7 @@ export interface SessionsWorkbenchOptions {
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
-  readonly container: HTMLElement | null;
+  readonly container: HTMLElement;
 }
 
 /** Standalone product Sessions host that intentionally does not construct WorkbenchLayout. */
@@ -37,7 +37,6 @@ export class SessionsWorkbench extends DisposableOwner {
       throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.productId}', not '${options.product.id}'`);
     }
     const container = options.container;
-    if (!container) throw new Error("Sessions renderer requires an #app container");
     const ownerWindow = container.ownerDocument.defaultView;
     if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
     this.own(bindSessionsTheme(container));
@@ -52,8 +51,7 @@ export class SessionsWorkbench extends DisposableOwner {
       profileId: options.profile.id,
     }));
     runtime.services.set(IStorageService, storage);
-    const sessions = this.createCodeSessions({
-      ownerDocument: container.ownerDocument,
+    const sessions = this.createCodeSessions(container, {
       profile: options.profile,
       runtime,
       sessionsWindowApi: options.sessionsWindowApi,
@@ -68,11 +66,11 @@ export class SessionsWorkbench extends DisposableOwner {
     this.defer(() => this.element.remove());
   }
 
-  private createCodeSessions(options: CodeSessionsWorkbenchOptions): CodeSessionsWorkbench {
+  private createCodeSessions(container: HTMLElement, options: CodeSessionsWorkbenchOptions): CodeSessionsWorkbench {
     if (options.profile.id !== "code-sessions") {
       throw new TypeError(`Unsupported Code Sessions profile '${options.profile.id}'`);
     }
-    return this.own(new CodeSessionsWorkbench(options));
+    return this.own(new CodeSessionsWorkbench(container, options));
   }
 }
 

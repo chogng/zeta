@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><html><head></head><body></body></html>");
 Object.defineProperty(globalThis, "window", { configurable: true, value: browserEnvironment.window });
@@ -12,7 +13,7 @@ const { BrowserLayoutService } = await import("../../browser/layoutService.js");
 
 test("BrowserLayoutService publishes root geometry and container offsets", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const root = dom.window.document.createElement("main");
+  const root = h(dom.window.document, "main");
   dom.window.document.body.append(root);
   const primaryWindow = dom.window as unknown as Window;
   let focused = 0;
@@ -63,7 +64,7 @@ test("BrowserLayoutService publishes root geometry and container offsets", () =>
 
 test("BrowserLayoutService rejects invalid dimensions", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const root = dom.window.document.createElement("main");
+  const root = h(dom.window.document, "main");
   const service = new BrowserLayoutService({ root });
 
   assert.throws(() => service.layout(new Dimension(-1, 10)), RangeError);

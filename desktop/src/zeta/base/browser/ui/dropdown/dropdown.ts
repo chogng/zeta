@@ -14,7 +14,6 @@ export type DropdownContentWidth = "intrinsic" | "at-least-trigger";
 export interface DropdownOptions {
   readonly label: string;
   readonly content: DropdownContent;
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly anchorAlignment?: AnchorAlignment;
   readonly anchorPosition?: AnchorPosition;
@@ -46,15 +45,16 @@ export class Dropdown extends DisposableOwner {
   private readonly options: DropdownOptions;
   private _visible = false;
 
-  constructor(options: DropdownOptions) {
+  constructor(container: HTMLElement, options: DropdownOptions) {
     super();
     this.options = options;
     this.content = options.content;
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = "zeta-dropdown";
+    container.append(element);
 
     const button = h(ownerDocument, "button");
     this.button = button;

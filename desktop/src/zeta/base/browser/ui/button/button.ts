@@ -11,7 +11,6 @@ export type ButtonContentAlignment = "groupCentered" | "labelCentered";
 
 export interface ButtonOptions {
   label: string;
-  ownerDocument?: Document;
   icon?: Icon;
   contentAlignment?: ButtonContentAlignment;
   title?: string;
@@ -29,9 +28,9 @@ export class Button extends DisposableOwner {
   private readonly hoverGroupId: string | undefined;
   private readonly hoverAnchorPosition: AnchorPosition | undefined;
 
-  constructor(options: ButtonOptions) {
+  constructor(container: HTMLElement, options: ButtonOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     this.hoverGroupId = options.hoverGroupId;
     this.hoverAnchorPosition = options.hoverAnchorPosition;
     const element = h(ownerDocument, "button");
@@ -40,14 +39,13 @@ export class Button extends DisposableOwner {
     element.className = "zeta-button";
     element.classList.toggle("label-centered", options.contentAlignment === "labelCentered");
     element.type = "button";
-    const content = this.own(new IconLabel({
+    const content = this.own(new IconLabel(element, {
       label: options.label,
       icon: options.icon,
-      ownerDocument,
     }));
     content.element.classList.add("zeta-button-content");
     content.labelElement.classList.add("zeta-button-label");
-    element.append(content.element);
+    container.append(element);
     this.setTitle(options.title);
     element.disabled = options.enabled === false;
     if (options.checked !== undefined) {

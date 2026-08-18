@@ -8,6 +8,7 @@ import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -34,7 +35,7 @@ test("Remove-brackets shortcut mutates through an isolated Aster transaction", (
   using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
   viewport.layout({ width: 200, height: 60 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new BracketEditingController(input, viewport, selections, matcher);
 
@@ -58,7 +59,7 @@ test("Bracket editing controller rejects cross-model wiring and preserves unsupp
   using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
   using otherMatcher = new LanguageBracketMatcher(other, "typescript", configurations);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new BracketEditingController(input, viewport, selections, matcher);
   const unsupported = keydown(dom.window, "Backspace", { ctrlKey: true });

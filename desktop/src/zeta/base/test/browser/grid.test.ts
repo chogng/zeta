@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IRectangle } from "../../browser/geometry.js";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -40,7 +41,7 @@ class TestGridView {
     readonly maximumHeight = Number.POSITIVE_INFINITY,
     readonly snap = false,
   ) {
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
   }
 
   layout(bounds: IRectangle): void {
@@ -73,7 +74,7 @@ test("Grid lays out a nested SplitView tree in two dimensions", () => {
   const session = new TestGridView(dom.window.document, 120, Infinity, 36, 36);
   const editor = new TestGridView(dom.window.document, 120, Infinity, 84);
   const right = new TestGridView(dom.window.document, 100, 600);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -90,7 +91,7 @@ test("Grid lays out a nested SplitView tree in two dimensions", () => {
       },
       { type: "leaf", view: right, size: 200 },
     ],
-  }, dom.window.document);
+  });
 
   grid.layout(800, 600);
 
@@ -123,7 +124,7 @@ test("Grid keeps hidden leaves mounted and restores their pixel size", () => {
   const left = new TestGridView(dom.window.document, 100, 600);
   const editor = new TestGridView(dom.window.document, 120, Infinity);
   const right = new TestGridView(dom.window.document, 100, 600);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -132,7 +133,7 @@ test("Grid keeps hidden leaves mounted and restores their pixel size", () => {
       { type: "leaf", view: editor, size: 400 },
       { type: "leaf", view: right, size: 200 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
 
   grid.setViewVisible(left, false);
@@ -158,7 +159,7 @@ test("Grid wires nested SplitView intersections as corner sashes", () => {
   const top = new TestGridView(dom.window.document, 100, 600, 100, 600);
   const bottom = new TestGridView(dom.window.document, 100, 600, 100, 600);
   const right = new TestGridView(dom.window.document, 100, 600, 100, 600);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -175,7 +176,7 @@ test("Grid wires nested SplitView intersections as corner sashes", () => {
       },
       { type: "leaf", view: right, size: 200 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
   const horizontalSash = grid.element.querySelector<HTMLElement>(".zeta-sash-horizontal");
   assert.ok(horizontalSash);
@@ -199,7 +200,7 @@ test("Grid wires nested SplitView intersections as corner sashes", () => {
 test("Grid recursively projects inherited boundary sashes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const view = () => new TestGridView(dom.window.document, 50, 1_000, 50, 1_000);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -232,7 +233,7 @@ test("Grid recursively projects inherited boundary sashes", () => {
       },
       { type: "leaf", view: view(), size: 100 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
   const horizontalSashes = [...grid.element.querySelectorAll<HTMLElement>(".zeta-sash-horizontal")];
   assert.equal(horizontalSashes.length, 2);
@@ -265,12 +266,12 @@ test("Grid links aligned sashes in a 2 by 2 layout", () => {
       { type: "leaf" as const, view: right, size: 400 },
     ],
   });
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "vertical",
     size: 600,
     children: [row(topLeft, topRight), row(bottomLeft, bottomRight)],
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
   const handle = grid.element.querySelector<HTMLElement>(".zeta-sash-vertical .zeta-sash-orthogonal-handle-end");
   assert.ok(handle);
@@ -291,7 +292,7 @@ test("Grid edge snapping allows collapse but gates outer-edge restore", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const sidebar = new TestGridView(dom.window.document, 100, 400, 0, Infinity, true);
   const editor = new TestGridView(dom.window.document, 100, Infinity);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -299,7 +300,7 @@ test("Grid edge snapping allows collapse but gates outer-edge restore", () => {
       { type: "leaf", view: sidebar, size: 100 },
       { type: "leaf", view: editor, size: 500 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(600, 300);
   assert.equal(grid.edgeSnapping, false);
   const sash = grid.element.querySelector<HTMLElement>(".zeta-sash");
@@ -321,7 +322,7 @@ test("Grid resets a visible sash by distributing its sibling sizes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const left = new TestGridView(dom.window.document, 100, 600);
   const right = new TestGridView(dom.window.document, 100, 600);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -329,7 +330,7 @@ test("Grid resets a visible sash by distributing its sibling sizes", () => {
       { type: "leaf", view: left, size: 200 },
       { type: "leaf", view: right, size: 400 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(600, 400);
   const sash = grid.element.querySelector<HTMLElement>(".zeta-sash");
   assert.ok(sash);
@@ -347,7 +348,7 @@ test("Grid resets only the views adjacent to the selected sash", () => {
   const left = new TestGridView(dom.window.document, 100, 600);
   const middle = new TestGridView(dom.window.document, 100, 600);
   const right = new TestGridView(dom.window.document, 100, 600);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 600,
@@ -356,7 +357,7 @@ test("Grid resets only the views adjacent to the selected sash", () => {
       { type: "leaf", view: middle, size: 300 },
       { type: "leaf", view: right, size: 200 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(600, 400);
   const sashes = grid.element.querySelectorAll<HTMLElement>(":scope > .zeta-split-view > .zeta-sash");
   const secondSash = sashes[1];
@@ -375,7 +376,7 @@ test("Grid rejects duplicate views in its descriptor", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const view = new TestGridView(dom.window.document, 0, Infinity);
   assert.throws(
-    () => new Grid({
+    () => new Grid(dom.window.document.body, {
       type: "branch",
       orientation: "horizontal",
       size: 200,
@@ -383,7 +384,7 @@ test("Grid rejects duplicate views in its descriptor", () => {
         { type: "leaf", view, size: 100 },
         { type: "leaf", view, size: 100 },
       ],
-    }, dom.window.document),
+    }),
     /same view twice/,
   );
   dom.window.close();
@@ -394,7 +395,7 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
   const left = new SerializableTestGridView(dom.window.document, "left", 100, 600);
   const editor = new SerializableTestGridView(dom.window.document, "editor", 120, Infinity);
   const right = new SerializableTestGridView(dom.window.document, "right", 100, 600);
-  const grid = new SerializableGrid({
+  const grid = new SerializableGrid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -403,7 +404,7 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
       { type: "leaf", view: editor, size: 400, priority: "high" },
       { type: "leaf", view: right, size: 200 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(900, 600);
   grid.resizeView(right, { width: 250, height: 600 });
   grid.setViewVisible(left, false);
@@ -411,6 +412,7 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
   const snapshot = grid.serialize();
   const restoredViews = new Map<string, SerializableTestGridView>();
   const restored = SerializableGrid.deserialize(
+    dom.window.document.body,
     snapshot,
     {
       fromJSON: (data) => {
@@ -427,7 +429,6 @@ test("SerializableGrid restores view identity and runtime geometry", () => {
         return view;
       },
     },
-    dom.window.document,
   );
   restored.layout(900, 600);
 

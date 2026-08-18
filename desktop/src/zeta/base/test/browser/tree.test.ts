@@ -10,6 +10,7 @@ import { IndexTreeModel } from "../../browser/ui/tree/indexTreeModel.js";
 import { CompressibleObjectTree, ObjectTree } from "../../browser/ui/tree/objectTree.js";
 import { ObjectTreeModel } from "../../browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../browser/ui/tree/tree.js";
+import { h, svg } from "../../browser/dom.js";
 
 interface TestNode {
   readonly id: string;
@@ -41,11 +42,10 @@ test("IndexTreeModel owns index locations and atomic splice", () => {
 
 test("IndexTree renders splice results through the shared flat AbstractTree", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tree = new IndexTree<TestNode>({ id: "root", label: "Root", expanded: true }, {
-    ownerDocument: dom.window.document,
+  const tree = new IndexTree<TestNode>(dom.window.document.body, { id: "root", label: "Root", expanded: true }, {
     ariaLabel: "Index tree",
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -65,15 +65,14 @@ test("DataTree materializes and refreshes a synchronous data source", () => {
   const first: TestNode = { id: "first", label: "First", expanded: false };
   const second: TestNode = { id: "second", label: "Second", expanded: false };
   const children = new Map<TestNode, readonly TestNode[]>([[root, [group]], [group, [first]], [first, []], [second, []]]);
-  const tree = new DataTree<TestNode, TestNode>({
+  const tree = new DataTree<TestNode, TestNode>(dom.window.document.body, {
     hasChildren: (element) => (children.get(element as TestNode)?.length ?? 0) > 0,
     getChildren: (element) => children.get(element as TestNode) ?? [],
   }, {
-    ownerDocument: dom.window.document,
     identityProvider: { getId: (element) => element.id },
     collapseByDefault: (element) => element === group,
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -96,17 +95,16 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
   const stale: TestNode = { id: "stale", label: "Stale", expanded: false };
   const current: TestNode = { id: "current", label: "Current", expanded: false };
   const pending: Array<(children: readonly TestNode[]) => void> = [];
-  const tree = new AsyncDataTree<TestNode, TestNode>({
+  const tree = new AsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
     hasChildren: (element) => element === root || element === group,
     getChildren: (element) => {
       if (element === root) return [group];
       return new Promise<readonly TestNode[]>((resolve) => pending.push(resolve));
     },
   }, {
-    ownerDocument: dom.window.document,
     identityProvider: { getId: (element) => element.id },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -155,11 +153,10 @@ test("CompressibleObjectTree renders one row per compressed chain", () => {
   const root: TestNode = { id: "root", label: "Root", expanded: false };
   const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
   const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
-  const tree = new CompressibleObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const tree = new CompressibleObjectTree<TestNode>(dom.window.document.body, {
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     renderCompressedElements: (elements) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = elements.map((element) => element.label).join(" / ");
       return label;
     },
@@ -179,14 +176,13 @@ test("CompressibleAsyncDataTree lazily expands compressed branches", async () =>
   const left: TestNode = { id: "left", label: "Left", expanded: false };
   const right: TestNode = { id: "right", label: "Right", expanded: false };
   const children = new Map<TestNode, readonly TestNode[]>([[root, [first]], [first, [middle]], [middle, [left, right]], [left, []], [right, []]]);
-  const tree = new CompressibleAsyncDataTree<TestNode, TestNode>({
+  const tree = new CompressibleAsyncDataTree<TestNode, TestNode>(dom.window.document.body, {
     hasChildren: (element) => (children.get(element as TestNode)?.length ?? 0) > 0,
     getChildren: (element) => children.get(element as TestNode) ?? [],
   }, {
-    ownerDocument: dom.window.document,
     identityProvider: { getId: (node) => node.id },
     renderCompressedElements: (elements) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = elements.map((element) => element.label).join(" / ");
       return label;
     },
@@ -292,12 +288,11 @@ test("ObjectTreeModel filters recursively and sorts every level", () => {
 
 test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const tree = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const tree = new ObjectTree<TestNode>(dom.window.document.body, {
     ariaLabel: "Object tree",
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -345,8 +340,8 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
   assert.deepEqual(collapsed, ["parent:false", "parent:true", "parent:false"]);
   const parentRow = tree.element.querySelector<HTMLElement>("[data-tree-id='parent']");
   assert.ok(parentRow);
-  const parentIcon = dom.window.document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  const parentIconPath = dom.window.document.createElementNS("http://www.w3.org/2000/svg", "path");
+  const parentIcon = svg(dom.window.document, "svg");
+  const parentIconPath = svg(dom.window.document, "path");
   parentIcon.append(parentIconPath);
   parentRow.querySelector(".zeta-tree-contents")?.prepend(parentIcon);
   parentIconPath.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
@@ -429,14 +424,13 @@ test("ObjectTree find filters with ancestors and supports dynamic heights and st
   const group: TestNode = { id: "group", label: "Group", expanded: false };
   const needle: TestNode = { id: "needle", label: "Needle", expanded: false };
   const other: TestNode = { id: "other", label: "Other", expanded: false };
-  const tree = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const tree = new ObjectTree<TestNode>(dom.window.document.body, {
     enableStickyScroll: true,
     keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: (element) => element.label },
     findMode: "filter",
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -463,8 +457,7 @@ test("ObjectTree find filters with ancestors and supports dynamic heights and st
 test("ObjectTree routes HTML drag and drop through hierarchy-aware policy", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const events: string[] = [];
-  const tree = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const tree = new ObjectTree<TestNode>(dom.window.document.body, {
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     dnd: {
       getDragURI: (element) => `zeta://${element.id}`,
@@ -477,7 +470,7 @@ test("ObjectTree routes HTML drag and drop through hierarchy-aware policy", () =
       onDragEnd: () => events.push("end"),
     },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -498,8 +491,7 @@ test("ObjectTree routes HTML drag and drop through hierarchy-aware policy", () =
 test("ObjectTree drag feedback bubbles up without changing the raw drop target", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const events: string[] = [];
-  const tree = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const tree = new ObjectTree<TestNode>(dom.window.document.body, {
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     dnd: {
       getDragURI: (element) => `zeta://${element.id}`,
@@ -510,7 +502,7 @@ test("ObjectTree drag feedback bubbles up without changing the raw drop target",
       drop: (_data, target) => events.push(`drop:${target?.id}`),
     },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },
@@ -536,18 +528,16 @@ test("ObjectTree preserves cross-tree drag origin while projecting domain elemen
   const dom = new JSDOM("<!doctype html><body></body>");
   const observed: string[] = [];
   const renderElement = (element: TestNode) => {
-    const label = dom.window.document.createElement("span");
+    const label = h(dom.window.document, "span");
     label.textContent = element.label;
     return label;
   };
-  const source = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const source = new ObjectTree<TestNode>(dom.window.document.body, {
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     dnd: { getDragURI: (element) => `zeta://${element.id}`, onDragOver: () => false, drop: () => {} },
     renderElement,
   });
-  const target = new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  const target = new ObjectTree<TestNode>(dom.window.document.body, {
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     dnd: {
       getDragURI: (element) => `zeta://${element.id}`,
@@ -577,13 +567,12 @@ test("ObjectTree preserves cross-tree drag origin while projecting domain elemen
 });
 
 function createObjectTree(dom: JSDOM): ObjectTree<TestNode> {
-  return new ObjectTree<TestNode>({
-    ownerDocument: dom.window.document,
+  return new ObjectTree<TestNode>(dom.window.document.body, {
     ariaLabel: "Test tree",
     indentGuides: "always",
     modelOptions: { identityProvider: { getId: (node) => node.id } },
     renderElement: (element) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = element.label;
       return label;
     },

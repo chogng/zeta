@@ -8,7 +8,6 @@ export interface IconLabelOptions {
   readonly label: string;
   readonly icon?: Icon;
   readonly renderIcon?: (container: HTMLSpanElement) => void;
-  readonly ownerDocument?: Document;
   readonly reserveIconSpace?: boolean;
   readonly title?: string;
 }
@@ -21,14 +20,14 @@ export class IconLabel extends DisposableOwner {
   readonly iconElement: HTMLSpanElement;
   readonly labelElement: HTMLSpanElement;
 
-  constructor(options: IconLabelOptions) {
+  constructor(container: HTMLElement, options: IconLabelOptions) {
     super();
     if (options.icon && options.renderIcon) {
       throw new TypeError(
         "IconLabel accepts either a semantic icon or an icon renderer",
       );
     }
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "span");
     this.element = element;
     this.defer(() => element.remove());
@@ -50,5 +49,6 @@ export class IconLabel extends DisposableOwner {
     this.labelElement.className = "zeta-icon-label-text";
     this.labelElement.textContent = options.label;
     element.append(this.iconElement, this.labelElement);
+    container.append(element);
   }
 }

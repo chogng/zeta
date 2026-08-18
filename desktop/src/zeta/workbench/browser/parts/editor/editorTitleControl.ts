@@ -24,39 +24,38 @@ export class EditorTitleControl extends DisposableOwner {
   private readonly toolbar: WorkbenchToolBar;
 
   constructor(
-    ownerDocument: Document,
+    container: HTMLElement,
     delegate: EditorTabsDelegate,
     titleActions?: EditorTitleActions,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-title-control";
-    this.tabs = this.own(new MultiEditorTabsControl(ownerDocument, delegate));
+    container.append(this.element);
+    const tabsAndActions = h(ownerDocument, "div");
+    tabsAndActions.className = "zeta-editor-tabs-and-actions";
+    this.element.append(tabsAndActions);
+    this.tabs = this.own(new MultiEditorTabsControl(tabsAndActions, delegate));
+    const actions = h(ownerDocument, "div");
+    actions.className = "zeta-editor-title-actions";
+    tabsAndActions.append(actions);
     this.toolbar = this.own(titleActions
       ? new MenuWorkbenchToolBar(
+        actions,
         titleActions.menuService,
         titleActions.contextMenuProvider,
         MenuId.EditorTitle,
-        ownerDocument,
         { highlightToggledItems: true },
       )
       : new WorkbenchToolBar(
+        actions,
         emptyEditorToolbarContextMenuProvider,
-        ownerDocument,
         {
           ariaLabel: "Editor actions",
           highlightToggledItems: true,
         },
       ));
-    const tabsAndActions = h(ownerDocument, "div");
-    tabsAndActions.className = "zeta-editor-tabs-and-actions";
-    this.element.append(tabsAndActions);
-    tabsAndActions.append(this.tabs.element);
-
-    const actions = h(ownerDocument, "div");
-    actions.className = "zeta-editor-title-actions";
-    actions.append(this.toolbar.element);
-    tabsAndActions.append(actions);
     this.defer(() => this.element.remove());
   }
 

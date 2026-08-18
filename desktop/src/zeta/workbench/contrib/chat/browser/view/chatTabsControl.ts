@@ -21,11 +21,12 @@ export interface ChatTabsDelegate {
 export abstract class ChatTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
 
-  protected constructor(ownerDocument: Document, presentation: ChatTabsPresentation) {
+  protected constructor(container: HTMLElement, presentation: ChatTabsPresentation) {
     super();
-    this.element = h(ownerDocument, "div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-chat-tabs-control";
     this.element.classList.add(`zeta-chat-tabs-${presentation}`);
+    container.append(this.element);
     this.defer(() => this.element.remove());
   }
 

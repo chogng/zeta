@@ -15,29 +15,30 @@ export class ChatTitleControl extends DisposableOwner {
   private readonly tabs: ChatTabsControl;
   private readonly actionsElement: HTMLDivElement;
 
-  constructor(ownerDocument: Document, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
+  constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
     super();
-    this.tabs = this.own(new MultiChatTabsControl(ownerDocument, idPrefix, delegate, "pane-title"));
+    const ownerDocument = container.ownerDocument;
+    this.tabs = this.own(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
+    this.actionsElement = h(ownerDocument, "div");
+    this.actionsElement.className = "zeta-chat-title-actions";
+    container.append(this.actionsElement);
     const toolbar = this.own(new MenuWorkbenchToolBar(
+      this.actionsElement,
       menuService,
       contextMenuService,
       MenuId.ChatTitle,
-      ownerDocument,
       { hoverAnchorPosition: AnchorPosition.Below },
     ));
     toolbar.element.setAttribute("aria-label", "Chat actions");
     const layoutToolbar = this.own(new MenuWorkbenchToolBar(
+      this.actionsElement,
       menuService,
       contextMenuService,
       MenuId.ChatTitleLayout,
-      ownerDocument,
       { highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
     ));
     layoutToolbar.element.setAttribute("aria-label", "Chat layout");
     layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
-    this.actionsElement = h(ownerDocument, "div");
-    this.actionsElement.className = "zeta-chat-title-actions";
-    this.actionsElement.append(toolbar.element, layoutToolbar.element);
     this.defer(() => this.actionsElement.remove());
   }
 

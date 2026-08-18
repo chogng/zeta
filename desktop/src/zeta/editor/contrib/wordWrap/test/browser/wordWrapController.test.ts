@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -27,7 +28,7 @@ test("Word-wrap shortcut switches Aster's visual projection without editing text
   using model = new TextModel("abcdef");
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
   viewport.layout({ width: 70, height: 40 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new WordWrapController(input, viewport);
 

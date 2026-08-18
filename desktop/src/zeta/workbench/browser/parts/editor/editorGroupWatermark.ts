@@ -50,14 +50,16 @@ export class EditorGroupWatermark extends DisposableOwner {
   private readonly keybindingService: IKeybindingService;
 
   constructor(
-    ownerDocument: Document,
+    container: HTMLElement,
     keybindingService: IKeybindingService,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.keybindingService = keybindingService;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-group-watermark-shortcuts";
     this.element.setAttribute("aria-label", "Editor shortcuts");
+    container.append(this.element);
     this.defer(() => this.element.remove());
     this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
     this.own(
@@ -80,9 +82,8 @@ export class EditorGroupWatermark extends DisposableOwner {
         const label = h(ownerDocument, "span");
         label.className = "zeta-editor-group-watermark-label";
         label.textContent = entry.label;
-        const shortcut = this.rendered.add(new KeybindingLabel({
+        const shortcut = this.rendered.add(new KeybindingLabel(row, {
           keybinding,
-          ownerDocument,
           presentation: "keycap",
         }));
         row.append(label, shortcut.element);

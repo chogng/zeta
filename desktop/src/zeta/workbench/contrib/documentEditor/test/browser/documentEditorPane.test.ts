@@ -19,6 +19,7 @@ import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../
 import { createDocumentPlugin, DocumentPluginKey } from "../../../../../editor/common/model/documentPlugin.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";
 import { createDefaultDocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
 
@@ -31,7 +32,7 @@ function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement
 test("Aster editor migrates plain text and edits a structured paragraph", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Title\nBody");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -61,7 +62,7 @@ test("Aster editor migrates plain text and edits a structured paragraph", async 
 test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   let saveCalls = 0;
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   const pane = new EditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
   pane.create(parent);
   await pane.setInput({ resource: URI.parse("untitled:academic/draft"), initialText: "Draft" }, new AbortController().signal);
@@ -80,7 +81,7 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
 test("Aster refuses a stale conditional save even before a file-change notification arrives", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Initial");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
@@ -100,7 +101,7 @@ test("Aster refuses a stale conditional save even before a file-change notificat
 test("Aster routes block keyboard commands through Aster", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello\nWorld\nAster");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -154,7 +155,7 @@ test("Aster routes block keyboard commands through Aster", async () => {
 test("Aster projects plugin decorations onto rich text runs", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   const key = new DocumentPluginKey<DocumentDecorationSet>("search");
   const plugin = createDocumentPlugin(key, {
@@ -185,7 +186,7 @@ test("Aster projects plugin decorations onto rich text runs", async () => {
 test("Aster commits textarea composition as one Aster transaction", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -216,7 +217,7 @@ test("Aster accepts a schema and custom node view without changing Aster common 
   const schema = createDefaultDocumentSchema();
   const paragraph = schema.createNode("paragraph", { id: "custom-paragraph", content: [schema.createText("Inside callout", { id: "custom-text" })] });
   const document = schema.createDocument([schema.createNode("blockquote", { id: "custom-callout", content: [paragraph] })], "custom-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   let updates = 0;
   let disposals = 0;
@@ -224,7 +225,7 @@ test("Aster accepts a schema and custom node view without changing Aster common 
     schema,
     nodeViews: {
       blockquote: ({ previousElement, renderChildren }) => {
-        const element = previousElement ?? parent.ownerDocument.createElement("aside");
+        const element = previousElement ?? h(parent.ownerDocument, "aside");
         element.className = "custom-callout-view";
         renderChildren(element);
         return {
@@ -266,7 +267,7 @@ test("Aster projects Academic wrappers while editing Aster child blocks", async 
     schema.createNode("abstract", { id: "academic-abstract", content: [schema.createNode("paragraph", { id: "abstract-paragraph", content: [schema.createText("Summary", { id: "abstract-text" })] })] }),
     schema.createNode("section", { id: "academic-section", content: [schema.createNode("heading", { id: "section-heading", content: [schema.createText("Introduction", { id: "section-title-text" })] }), schema.createNode("paragraph", { id: "section-paragraph", content: [schema.createText("Body", { id: "section-body-text" })] })] }),
   ], "academic-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, outlineNavigator: true });
   pane.create(parent);
@@ -312,7 +313,7 @@ test("Aster renders and deletes Academic citation inline nodes", async () => {
   const citation = schema.createNode("citation", { id: "browser-citation", attrs: { key: "smith-2024", label: "[Smith 2024]" } });
   const paragraph = schema.createNode("paragraph", { id: "citation-paragraph", content: [schema.createText("See ", { id: "citation-before" }), citation, schema.createText(" for details", { id: "citation-after" })] });
   const document = schema.createDocument([schema.createNode("title", { id: "citation-title", content: [schema.createNode("heading", { id: "citation-title-heading", content: [schema.createText("Citations", { id: "citation-title-text" })] })] }), schema.createNode("abstract", { id: "citation-abstract", content: [schema.createNode("paragraph", { id: "citation-abstract-paragraph" })] }), schema.createNode("section", { id: "citation-section", content: [schema.createNode("heading", { id: "citation-section-heading", content: [schema.createText("References", { id: "citation-section-text" })] }), paragraph] })], "citation-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews });
   pane.create(parent);
@@ -342,7 +343,7 @@ test("Aster exposes Academic citation insertion as a toolbar action", async () =
   const schema = createAcademicDocumentSchema();
   const paragraph = schema.createNode("paragraph", { id: "toolbar-paragraph", content: [schema.createText("See", { id: "toolbar-text" })] });
   const document = schema.createDocument([paragraph], "toolbar-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: profileNodeViews, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
   pane.create(parent);
@@ -374,7 +375,7 @@ test("Aster renders resolved citations and bibliography references", async () =>
     schema.createNode("section", { content: [schema.createNode("heading", { content: [schema.createText("Body")] }), paragraph] }),
     schema.createNode("bibliography", { content: [reference] }),
   ], "resolved-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, plugins: [createReferenceIndexPlugin()] });
   pane.create(parent);
@@ -398,7 +399,7 @@ test("Aster exposes reference insertion as a citation toolbar action", async () 
   const schema = createAcademicDocumentSchema();
   const paragraph = schema.createNode("paragraph", { id: "reference-toolbar-paragraph", content: [schema.createText("Body")] });
   const document = schema.createDocument([paragraph], "reference-toolbar-document");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), { schema, nodeViews: { ...profileNodeViews, ...citationNodeViews }, inlineNodeViews: citationInlineNodeViews, toolbarActions: citationToolbarActions });
   pane.create(parent);
@@ -420,7 +421,7 @@ test("Aster exposes reference insertion as a citation toolbar action", async () 
 test("Aster uses the Academic empty document through revert", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const schema = createAcademicDocumentSchema();
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles(""), {
     schema,
@@ -450,7 +451,7 @@ test("Aster uses the Academic empty document through revert", async () => {
 
 test("Aster projects read-only inputs without accepting model mutations", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   const pane = new EditorPane(new MemoryTextFiles("Hello"));
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), readOnly: true }, new AbortController().signal);
@@ -474,7 +475,7 @@ test("Aster projects read-only inputs without accepting model mutations", async 
 test("Aster routes text undo and redo through Aster history", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -510,7 +511,7 @@ test("Aster routes text undo and redo through Aster history", async () => {
 test("Aster creates a hard break with Shift+Enter", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -552,7 +553,7 @@ test("Aster deletes a selection spanning a hard break", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -606,7 +607,7 @@ test("Aster renders semantic lists and splits list items", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -649,7 +650,7 @@ test("Aster indents and outdents list items with Tab", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -685,7 +686,7 @@ test("Aster exits an empty list item on the second Enter", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -705,7 +706,7 @@ test("Aster exits an empty list item on the second Enter", async () => {
 test("Aster exposes a block toolbar for block and list formats", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -741,7 +742,7 @@ test("Aster exposes a block toolbar for block and list formats", async () => {
 
 test("Aster formats selected text with persistent typography marks", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles("Hello"));
   pane.create(parent);
@@ -791,7 +792,7 @@ test("Aster formats selected text with persistent typography marks", async () =>
 test("Aster toggles blockquotes and inserts horizontal rules", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Quoted");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -819,7 +820,7 @@ test("Aster toggles blockquotes and inserts horizontal rules", async () => {
 test("Aster navigates table cells with Tab and exposes row and column operations", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Hello");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -895,7 +896,7 @@ test("Aster renders inline image nodes in the rich surface", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -925,7 +926,7 @@ test("Aster renders inline image nodes in the rich surface", async () => {
 test("Aster turns an image clipboard paste into an image node", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
   const files = new MemoryTextFiles("Before");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -969,7 +970,7 @@ test("Aster inserts a pasted image at a rich-text selection", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1041,7 +1042,7 @@ test("Aster renders and edits marked inline runs", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1092,7 +1093,7 @@ test("Aster renders and edits marked inline runs", async () => {
 
 test("Aster carries collapsed mark toggles into later input", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(new MemoryTextFiles("Hello"));
   pane.create(parent);
@@ -1159,7 +1160,7 @@ test("Aster applies, updates, and removes link marks", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1223,7 +1224,7 @@ test("Aster routes rich-text copy and cut through Aster", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1309,7 +1310,7 @@ test("Aster pastes external HTML through a schema-valid structured fragment", as
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1376,7 +1377,7 @@ test("Aster handles whole-document select all, copy, and cut", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1440,7 +1441,7 @@ test("Aster replaces a rich-text selection spanning sibling blocks", async () =>
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1502,7 +1503,7 @@ test("Aster pastes multiline text as structured blocks", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
@@ -1547,7 +1548,7 @@ test("Aster restores serialized blocks and releases its model", async () => {
       marks: [],
     },
   }));
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   using pane = new EditorPane(files);
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
@@ -1582,7 +1583,7 @@ test("Aster delegates text blocks to an embedded line editor", async () => {
     },
   }));
   const factory = new FakeEmbeddedTextEditorFactory();
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   using pane = new EditorPane(files, { embeddedTextEditorFactory: factory });
   pane.create(parent);
   await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
@@ -1601,7 +1602,7 @@ test("Aster delegates text blocks to an embedded line editor", async () => {
 
 test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
   const environment = new JSDOM("<!doctype html><body></body>");
-  const parent = environment.window.document.createElement("main");
+  const parent = h(environment.window.document, "main");
   const previousWindow = (globalThis as typeof globalThis & { window?: Window }).window;
   const previousDocument = (globalThis as typeof globalThis & { document?: Document }).document;
   const previousNode = (globalThis as typeof globalThis & { Node?: typeof Node }).Node;
@@ -1700,7 +1701,7 @@ class FakeEmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEdi
   }
 
   create(parent: HTMLElement): void {
-    const element = parent.ownerDocument.createElement("textarea");
+    const element = h(parent.ownerDocument, "textarea");
     element.value = this.value;
     parent.append(element);
   }

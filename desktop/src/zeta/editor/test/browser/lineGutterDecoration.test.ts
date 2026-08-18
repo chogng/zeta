@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
 import { CompositeEditorLineGutterDecoration, type EditorLineGutterDecoration } from "../../browser/view/lineGutterDecoration.js";
+import { h } from "../../../base/browser/dom.js";
 
 test("gutter decorations compose into independent ordered slots", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
@@ -22,7 +23,7 @@ class TestDecoration implements EditorLineGutterDecoration {
   private readonly emitter = new Emitter<void>();
   readonly onDidChange = this.emitter.event;
   constructor(private readonly label: string) {}
-  create(ownerDocument: Document): HTMLElement { const button = ownerDocument.createElement("button"); button.textContent = this.label; return button; }
+  create(ownerDocument: Document): HTMLElement { const button = h(ownerDocument, "button"); button.textContent = this.label; return button; }
   project(element: HTMLElement, logicalLineIndex: number): void { element.dataset.line = String(logicalLineIndex); }
   dispose(): void { this.emitter.dispose(); }
   [Symbol.dispose](): void { this.dispose(); }

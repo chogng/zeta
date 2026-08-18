@@ -1,4 +1,5 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
+import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
@@ -12,6 +13,8 @@ export function startElectronSessions(product: ProductConfiguration, profile: Se
   installBaseUiStyles();
   const api = createElectronRendererApi();
   const sessions = new DisposableStore();
+  const container = document.querySelector<HTMLElement>("#app");
+  if (!container) throw new Error("Sessions renderer requires an #app container");
   sessions.add(startSessionsWorkbench({
     product,
     profile,
@@ -21,8 +24,8 @@ export function startElectronSessions(product: ProductConfiguration, profile: Se
     configurationApi: api.configuration,
     keybindingsResourceApi: api.keybindings,
     createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
-    container: document.querySelector<HTMLElement>("#app"),
+    container,
   }));
-  window.addEventListener("pagehide", () => sessions.dispose(), { once: true });
+  sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
   return sessions;
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { JSDOM } from "jsdom";
 import { IME } from "../../../../../base/common/ime.js";
 import {
   Keybinding,
@@ -124,6 +125,8 @@ test("when expressions preserve boolean precedence and comparisons", () => {
 
 test("browser service executes chords and restores IME state", async () => {
   using registrations = new DisposableStore();
+  const dom = new JSDOM("<!doctype html><body></body>");
+  registrations.defer(() => dom.window.close());
   const registry = new KeybindingRegistry();
   const commands = new CommandRegistry();
   const contexts = registrations.add(new ContextKeyService());
@@ -149,7 +152,7 @@ test("browser service executes chords and restores IME state", async () => {
   );
   const statusbar = registrations.add(new StatusbarService());
   const service = registrations.add(new WorkbenchKeybindingService({
-    ownerDocument: new EventTarget() as Document,
+    ownerDocument: dom.window.document,
     commandService: new CommandService(new ServiceCollection(), commands),
     contextKeyService: contexts,
     keyboardLayoutService: keyboardLayout,
@@ -185,6 +188,8 @@ test("browser service executes chords and restores IME state", async () => {
 
 test("browser service dispatches Ctrl+Shift+P with a shifted key value", async () => {
   using registrations = new DisposableStore();
+  const dom = new JSDOM("<!doctype html><body></body>");
+  registrations.defer(() => dom.window.close());
   const registry = new KeybindingRegistry();
   const commands = new CommandRegistry();
   const contexts = registrations.add(new ContextKeyService());
@@ -206,7 +211,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
     }),
   );
   const service = registrations.add(new WorkbenchKeybindingService({
-    ownerDocument: new EventTarget() as Document,
+    ownerDocument: dom.window.document,
     commandService: new CommandService(new ServiceCollection(), commands),
     contextKeyService: contexts,
     keyboardLayoutService: keyboardLayout,

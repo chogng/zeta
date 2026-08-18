@@ -19,8 +19,9 @@ export abstract class WorkbenchPart extends DisposableOwner {
   readonly onDidChangeConstraints: Event<void> =
     this._onDidChangeConstraints.event;
 
-  protected constructor(id: string, ownerDocument: Document) {
+  protected constructor(container: HTMLElement, id: string) {
     super();
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "section");
     this.element = element;
     this.defer(() => element.remove());
@@ -31,6 +32,7 @@ export abstract class WorkbenchPart extends DisposableOwner {
     this.contentElement = h(ownerDocument, "div");
     this.contentElement.className = "zeta-workbench-part-content";
     element.append(this.titleElement, this.contentElement);
+    container.append(element);
   }
 
   get minimumWidth(): number { return 0; }

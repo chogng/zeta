@@ -12,11 +12,11 @@ import { h } from "../../../../base/browser/dom.js";
 export interface ITitlebarPartFactoryOptions {
   readonly menuService: IMenuService;
   readonly contextMenuService: IContextMenuService;
-  readonly ownerDocument: Document;
 }
 
 /** Creates the titlebar implementation selected by the current host. */
 export type TitlebarPartFactory = (
+  container: HTMLElement,
   options: ITitlebarPartFactoryOptions,
 ) => BrowserTitlebarPart;
 
@@ -30,51 +30,52 @@ export class BrowserTitlebarPart extends WorkbenchPart {
   override get maximumHeight(): number { return WorkbenchWindowBarHeight; }
 
   constructor(
+    container: HTMLElement,
     options: ITitlebarPartFactoryOptions,
     menubar: IMenubarControl,
   ) {
-    super("titlebar", options.ownerDocument);
+    super(container, "titlebar");
+    const ownerDocument = container.ownerDocument;
     this.menubar = this.own(menubar);
+    const leftActionsElement = h(ownerDocument, "div");
+    leftActionsElement.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
+    this.titleElement.append(leftActionsElement);
     this.leftActions = this.own(
       new MenuWorkbenchToolBar(
+        leftActionsElement,
         options.menuService,
         options.contextMenuService,
         MenuId.TitleBarLeft,
-        options.ownerDocument,
         { presentation: "inherit-foreground" },
       ),
     );
+    const actionsElement = h(ownerDocument, "div");
+    actionsElement.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
+    this.contentElement.append(actionsElement);
     this.actions = this.own(
       new MenuWorkbenchToolBar(
+        actionsElement,
         options.menuService,
         options.contextMenuService,
         MenuId.TitleBar,
-        options.ownerDocument,
         { presentation: "inherit-foreground" },
       ),
     );
-    const leftActionsElement = h(options.ownerDocument, "div");
-    leftActionsElement.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
-    leftActionsElement.append(this.leftActions.element);
-    this.titleElement.append(leftActionsElement);
     if (this.menubar.element) {
       this.menubar.element.classList.add("zeta-titlebar-interactive-region");
       this.titleElement.append(this.menubar.element);
     }
-    const actionsElement = h(options.ownerDocument, "div");
-    actionsElement.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
-    actionsElement.append(this.actions.element);
-    this.contentElement.append(actionsElement);
   }
 }
 
 /** Creates the titlebar used by a regular web workbench. */
-export const createBrowserTitlebarPart: TitlebarPartFactory = (options) =>
+export const createBrowserTitlebarPart: TitlebarPartFactory = (container, options) =>
   new BrowserTitlebarPart(
+    container,
     options,
     new BrowserMenubarControl(
+      container,
       options.menuService,
       options.contextMenuService,
-      options.ownerDocument,
     ),
   );

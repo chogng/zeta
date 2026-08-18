@@ -7,7 +7,6 @@ import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY
 
 /** Inputs required by the browser-independent accessibility policy. */
 export interface AccessibilityServiceOptions {
-  readonly ownerDocument: Document;
   readonly root: HTMLElement;
   readonly contextKeyService: IContextKeyService;
   readonly configurationService: IConfigurationService;
@@ -38,6 +37,7 @@ export class AccessibilityService extends DisposableOwner implements IAccessibil
 
   constructor(options: AccessibilityServiceOptions) {
     super();
+    const ownerDocument = options.root.ownerDocument;
     this.root = options.root;
     this.configurationService = options.configurationService;
     this.accessibilitySupport = options.initialAccessibilitySupport ?? AccessibilitySupport.Unknown;
@@ -47,13 +47,13 @@ export class AccessibilityService extends DisposableOwner implements IAccessibil
     this.systemMotionReduced = false;
     this.systemTransparencyReduced = false;
     this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
-    this.liveRegion = this.own(new AriaLiveRegion(options.ownerDocument));
+    this.liveRegion = this.own(new AriaLiveRegion(ownerDocument));
     this.defer(() => {
       this.accessibilityModeEnabledContext.reset();
       this.root.classList.remove("zeta-reduce-motion", "zeta-enable-motion", "zeta-reduce-transparency", "zeta-underline-links");
     });
 
-    const ownerWindow = options.ownerDocument.defaultView;
+    const ownerWindow = ownerDocument.defaultView;
     const motionMatcher = createMediaMatcher(ownerWindow, "(prefers-reduced-motion: reduce)");
     const transparencyMatcher = createMediaMatcher(ownerWindow, "(prefers-reduced-transparency: reduce)");
     this.systemMotionReduced = motionMatcher?.matches ?? false;

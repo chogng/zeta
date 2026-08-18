@@ -19,8 +19,7 @@ test("ActionViewItem routes its tooltip through the shared action Hover group", 
       return managedHover();
     },
   });
-  using actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  using actionBar = new ActionBar(dom.window.document.body, {
     actions: [action("open")],
     actionViewItemOptions: { hoverAnchorPosition: AnchorPosition.Below },
   });
@@ -48,8 +47,7 @@ test("LabelActionViewItem owns compact icon-and-text action markup", () => {
     enabled: true,
     run: () => runCount++,
   };
-  using actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  using actionBar = new ActionBar(dom.window.document.body, {
     actions: [activeAction],
     actionViewItemProvider: (action) => new LabelActionViewItem(action, {
       label: "cmd",
@@ -75,8 +73,7 @@ test("LabelActionViewItem owns compact icon-and-text action markup", () => {
 
 test("ActionBar enables native drag sources only when its view item opts in", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  using actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  using actionBar = new ActionBar(dom.window.document.body, {
     actions: [action("drag-source"), action("ordinary")],
     actionViewItemProvider: (item) => new LabelActionViewItem(item, {
       draggable: item.id === "drag-source",
@@ -99,8 +96,7 @@ test("ActionBar reports drop targets without enabling ordinary toolbars", () => 
   const dom = new JSDOM("<!doctype html><body></body>");
   const dropped: Array<{ target: string | undefined; position: string }> = [];
   let dragging = false;
-  using actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  using actionBar = new ActionBar(dom.window.document.body, {
     actions: [action("first"), action("second")],
     actionViewItemProvider: (item) => new LabelActionViewItem(item, { draggable: true }),
     dragAndDrop: {
@@ -137,8 +133,7 @@ test("ActionBar keeps insertion feedback continuous across gaps and hides no-op 
   const dom = new JSDOM("<!doctype html><body></body>");
   const dropped: string[] = [];
   let dragging = false;
-  using actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  using actionBar = new ActionBar(dom.window.document.body, {
     actions: [action("first"), action("second"), action("third")],
     actionViewItemProvider: (item) => new LabelActionViewItem(item, { draggable: true }),
     dragAndDrop: {
@@ -180,8 +175,7 @@ test("ActionBar keeps insertion feedback continuous across gaps and hides no-op 
 
 test("ActionBar owns horizontal keyboard navigation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  const actionBar = new ActionBar(dom.window.document.body, {
     actions: [
       action("first"),
       new Separator(),
@@ -226,8 +220,7 @@ test("ActionBar owns horizontal keyboard navigation", () => {
 
 test("ActionBar maps vertical navigation to up and down", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const actionBar = new ActionBar({
-    ownerDocument: dom.window.document,
+  const actionBar = new ActionBar(dom.window.document.body, {
     actions: [action("first"), action("second")],
     orientation: "vertical",
   });

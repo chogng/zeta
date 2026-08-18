@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import {
   isModifierKey,
   StandardKeyboardEvent,
@@ -18,7 +19,6 @@ import {
   DisposableOwner,
   DisposableSlot,
   type IDisposable,
-  toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import type {
   CommandId,
@@ -81,6 +81,7 @@ export class WorkbenchKeybindingService
   extends DisposableOwner
   implements IKeybindingService {
   private readonly ownerDocument: Document;
+  private readonly ownerWindow: Window;
   private readonly commandService: ICommandService;
   private readonly contextKeyService: IContextKeyService;
   private readonly keyboardLayoutService: IKeyboardLayoutService;
@@ -103,6 +104,9 @@ export class WorkbenchKeybindingService
   constructor(options: WorkbenchKeybindingServiceOptions) {
     super();
     this.ownerDocument = options.ownerDocument;
+    const ownerWindow = options.ownerDocument.defaultView;
+    if (!ownerWindow) throw new Error("WorkbenchKeybindingService requires an owner window");
+    this.ownerWindow = ownerWindow;
     this.commandService = options.commandService;
     this.contextKeyService = options.contextKeyService;
     this.keyboardLayoutService = options.keyboardLayoutService;
@@ -260,12 +264,10 @@ export class WorkbenchKeybindingService
       IME.disable();
       this.disabledIme = true;
     }
-    const handle = globalThis.setTimeout(
+    this.chordTimeout.replace(disposableWindowTimeout(
+      this.ownerWindow,
       () => this.leaveChordMode(),
       this.chordTimeoutMs,
-    );
-    this.chordTimeout.replace(toDisposable(() =>
-      globalThis.clearTimeout(handle)
     ));
 
     if (this.statusbarService) {

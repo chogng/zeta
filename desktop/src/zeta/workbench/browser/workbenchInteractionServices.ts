@@ -27,7 +27,6 @@ import type { IStatusbarService } from "../services/statusbar/browser/statusbar.
 
 export interface WorkbenchInteractionServicesOptions {
   readonly services: ServiceCollection;
-  readonly ownerDocument: Document;
   readonly layoutService: ILayoutServiceContract;
   readonly configurationService: IConfigurationServiceContract;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -51,6 +50,9 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 
   constructor(options: WorkbenchInteractionServicesOptions) {
     super();
+    const ownerDocument = options.layoutService.activeContainer.ownerDocument;
+    const ownerWindow = ownerDocument.defaultView;
+    if (!ownerWindow) throw new Error("Workbench interaction services require an owner window");
     const services = options.services;
     services.set(ILayoutService, options.layoutService);
     services.set(IConfigurationService, options.configurationService);
@@ -61,7 +63,7 @@ export class WorkbenchInteractionServices extends DisposableOwner {
     services.set(IContextKeyService, this.contextKeyService);
 
     const keyboardLayoutService = this.own(new BrowserKeyboardLayoutService({
-      navigator: options.ownerDocument.defaultView?.navigator ?? navigator,
+      navigator: ownerWindow.navigator,
     }));
     services.set(IKeyboardLayoutService, keyboardLayoutService);
     const keybindingsResourceService = this.own(new WorkbenchKeybindingsResourceService({
@@ -69,7 +71,7 @@ export class WorkbenchInteractionServices extends DisposableOwner {
     }));
     services.set(IKeybindingsResourceService, keybindingsResourceService);
     this.keybindingService = this.own(new WorkbenchKeybindingService({
-      ownerDocument: options.ownerDocument,
+      ownerDocument,
       commandService: this.commandService,
       contextKeyService: this.contextKeyService,
       keyboardLayoutService,

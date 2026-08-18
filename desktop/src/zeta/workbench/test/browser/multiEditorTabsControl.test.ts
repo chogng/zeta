@@ -12,7 +12,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
   const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
   const previews: EditorInput[] = [];
   let dragging = false;
-  const control = new MultiEditorTabsControl(dom.window.document, {
+  const control = new MultiEditorTabsControl(dom.window.document.body, {
     activate: () => undefined,
     preview: (input) => previews.push(input),
     close: () => undefined,
@@ -29,7 +29,6 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
   const first = input("first");
   const second = input("second");
   control.setEditors([descriptor(first), descriptor(second)], first);
-  dom.window.document.body.append(control.element);
   const tabs = control.element.querySelectorAll<HTMLElement>(".zeta-tab");
   const firstTab = tabs[0];
   const secondTab = tabs[1];
@@ -55,7 +54,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 test("MultiEditorTabsControl forwards external resource drops to the target tab", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const drops: Array<{ target: EditorInput | undefined; position: "before" | "after" }> = [];
-  const control = new MultiEditorTabsControl(dom.window.document, {
+  const control = new MultiEditorTabsControl(dom.window.document.body, {
     activate: () => undefined,
     preview: () => undefined,
     close: () => undefined,
@@ -67,7 +66,6 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
   });
   const target = input("target");
   control.setEditors([descriptor(target)], target);
-  dom.window.document.body.append(control.element);
   const tab = control.element.querySelector<HTMLElement>(".zeta-tab");
   assert.ok(tab);
   tab.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);

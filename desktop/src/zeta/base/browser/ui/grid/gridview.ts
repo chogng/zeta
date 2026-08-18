@@ -28,7 +28,7 @@ interface ParentLink {
 }
 
 interface GridNodeHost {
-  readonly ownerDocument: Document;
+  readonly container: HTMLElement;
   readonly sashPresentation: SashPresentation;
   ownSplitView(splitView: SplitView): SplitView;
   ownEvent(disposable: Disposable): void;
@@ -105,8 +105,8 @@ class BranchNode extends GridNode {
     super(initialSize);
     this.priority = priority;
     this.splitView = host.ownSplitView(new SplitView(
+      host.container,
       orientation,
-      host.ownerDocument,
       { sashPresentation: host.sashPresentation },
     ));
     this.element = this.splitView.element;
@@ -300,30 +300,32 @@ export class GridView extends DisposableOwner {
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
   static deserialize<TView extends ISerializableView>(
+    container: HTMLElement,
     descriptor: SerializedGridViewDescriptor,
     deserializer: IViewDeserializer<TView>,
-    ownerDocument: Document = document,
     options: GridViewOptions = {},
   ): GridView {
     validateSerializedGridViewDescriptor(descriptor);
     return new GridView(
+      container,
       deserializeGridViewDescriptor(descriptor, deserializer),
-      ownerDocument,
       options,
     );
   }
 
   constructor(
+    container: HTMLElement,
     descriptor: GridViewDescriptor<IView>,
-    ownerDocument: Document = document,
     options: GridViewOptions = {},
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-grid zeta-grid-view";
     this.sashPresentation = options.sashPresentation;
     this._edgeSnapping = options.edgeSnapping ?? false;
     this.defer(() => this.element.remove());
+    container.append(this.element);
     this.rebuild(normalizeRootDescriptor(descriptor));
   }
 
@@ -530,7 +532,7 @@ export class GridView extends DisposableOwner {
     this.treeResources.clear();
     this.leaves.clear();
     const host: GridNodeHost = {
-      ownerDocument: this.element.ownerDocument,
+      container: this.element,
       sashPresentation: this.sashPresentation,
       ownSplitView: (splitView) => this.treeResources.add(splitView),
       ownEvent: (disposable) => {

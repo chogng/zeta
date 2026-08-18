@@ -46,16 +46,18 @@ export class EditorWelcome extends DisposableOwner {
   private showAllRecentProjects = false;
 
   constructor(
-    ownerDocument: Document,
+    container: HTMLElement,
     options: EditorWelcomeOptions = {},
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.recentProjects = options.recentProjects ?? [];
     this.element = h(ownerDocument, "section");
     // Keep the old watermark class as a compatibility hook for empty-editor hosts.
     this.element.className = "zeta-editor-group-welcome zeta-editor-group-watermark";
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", "Welcome");
+    container.append(this.element);
     this.defer(() => this.element.remove());
 
     const scroll = h(ownerDocument, "div");

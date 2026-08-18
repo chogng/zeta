@@ -1,8 +1,9 @@
 import { addDisposableListener, h } from "../../dom.js";
 import { StandardWheelEvent } from "../../mouseEvent.js";
 import { observeResize } from "../../observer.js";
+import { disposableWindowTimeout } from "../../scheduler.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
 import type { ScrollbarAxis } from "./abstractScrollbar.js";
 import { HorizontalScrollbar } from "./horizontalScrollbar.js";
 import {
@@ -77,27 +78,25 @@ export class ScrollableElement extends DisposableOwner {
   private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
   private _state = initialState;
   private pendingReveal: Element | undefined;
-  private scrollActivityTimer: number | undefined;
+  private readonly scrollActivityTimeout = this.own(new DisposableSlot<IDisposable>());
 
-  constructor(options: ScrollableElementOptions = {}) {
+  constructor(container: HTMLElement, options: ScrollableElementOptions = {}) {
     super();
     this.options = resolveScrollableElementOptions(options);
     this.onScrollOption = options.onScroll;
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     const viewport = h(ownerDocument, "div");
     const content = h(ownerDocument, "div");
     viewport.id = `zeta-scrollable-${nextScrollableId++}`;
-    const horizontal = this.own(new HorizontalScrollbar({
-      ownerDocument,
+    const horizontal = this.own(new HorizontalScrollbar(element, {
       viewport,
       trackClickBehavior: this.options.trackClickBehavior,
       getMetrics: () => this.axisMetrics("horizontal"),
       setPosition: (position) =>
         this.setAxisPosition("horizontal", position),
     }));
-    const vertical = this.own(new VerticalScrollbar({
-      ownerDocument,
+    const vertical = this.own(new VerticalScrollbar(element, {
       viewport,
       trackClickBehavior: this.options.trackClickBehavior,
       getMetrics: () => this.axisMetrics("vertical"),
@@ -137,11 +136,10 @@ export class ScrollableElement extends DisposableOwner {
       vertical.track,
       corner,
     );
+    container.append(element);
 
     this.defer(() => {
       this.pendingReveal = undefined;
-      const timer = this.scrollActivityTimer;
-      if (timer !== undefined) ownerWindow(element).clearTimeout(timer);
       element.remove();
     });
     this.own(addDisposableListener(viewport, "scroll", () =>
@@ -490,14 +488,11 @@ export class ScrollableElement extends DisposableOwner {
 
   private showScrollbars(): void {
     const targetWindow = ownerWindow(this.element);
-    if (this.scrollActivityTimer !== undefined) {
-      targetWindow.clearTimeout(this.scrollActivityTimer);
-    }
     this.element.classList.add("zeta-scrollbar-scrolling");
-    this.scrollActivityTimer = targetWindow.setTimeout(() => {
+    this.scrollActivityTimeout.replace(disposableWindowTimeout(targetWindow, () => {
+      this.scrollActivityTimeout.clear();
       this.element.classList.remove("zeta-scrollbar-scrolling");
-      this.scrollActivityTimer = undefined;
-    }, 700);
+    }, 700));
   }
 }
 

@@ -43,9 +43,8 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     if (this.button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    const button = this.createButton({
+    const button = this.createButton(container, {
       label: this.action.label,
-      ownerDocument: container.ownerDocument,
       icon: this.action.icon,
       title: this.action.tooltip,
       enabled: this.action.enabled,
@@ -59,7 +58,6 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
     indicator.className = "zeta-dropdown-menu-indicator";
     appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
     button.element.append(indicator);
-    container.append(button.element);
     this.own(addDisposableListener(button.element, "keydown", (event) => {
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
       stopEvent(event);

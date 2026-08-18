@@ -8,8 +8,7 @@ test("Aster collaboration contribution keeps a newly issued invitation available
   const prompts = ["Writer", "viewer"];
   Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
   const invitations: { readonly displayName: string; readonly role: string }[] = [];
-  using contribution = new CollaborationContribution({
-    ownerDocument: environment.window.document,
+  using contribution = new CollaborationContribution(environment.window.document.body, {
     onStart: async () => ({ roomId: "unused", principalId: undefined, canManageMembers: false }),
     onStop: () => undefined,
     onInvite: async (displayName, role) => {
@@ -49,8 +48,7 @@ test("Aster collaboration contribution lets a remote owner inspect, rotate, and 
   Object.defineProperty(environment.window, "confirm", { configurable: true, value: () => true });
   const rotations: string[] = [];
   const revocations: string[] = [];
-  using contribution = new CollaborationContribution({
-    ownerDocument: environment.window.document,
+  using contribution = new CollaborationContribution(environment.window.document.body, {
     onStart: async () => ({ roomId: "unused", principalId: undefined, canManageMembers: false }),
     onStop: () => undefined,
     onInvite: async () => ({ roomId: "aster-room", principalId: "member-1", displayName: "Writer", role: "editor", accessToken: "member-token" }),

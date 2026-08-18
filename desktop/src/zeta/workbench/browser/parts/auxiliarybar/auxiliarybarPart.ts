@@ -5,7 +5,6 @@ import { PaneCompositePart } from "../paneCompositePart.js";
 
 /** Construction inputs for the fixed Auxiliary Bar Pane Composite host. */
 export interface AuxiliarybarPartOptions {
-  readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
 }
 
@@ -20,9 +19,8 @@ export class AuxiliarybarPart extends PaneCompositePart {
   override get minimumWidth(): number { return 180; }
   override get maximumWidth(): number { return 600; }
 
-  constructor(options: AuxiliarybarPartOptions) {
-    super({
-      ownerDocument: options.ownerDocument,
+  constructor(container: HTMLElement, options: AuxiliarybarPartOptions) {
+    super(container, {
       viewDescriptorService: options.viewDescriptorService,
       id: "auxiliarybar",
       location: ViewContainerLocation.AuxiliaryBar,

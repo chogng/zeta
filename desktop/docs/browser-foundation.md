@@ -75,6 +75,13 @@ visible to TypeScript. Children may be nested arrays and may contain nodes, stri
 sentinels. Style values are CSS text; both camel-case and CSS property names are accepted, and numeric
 lengths require explicit units.
 
+Mounted reusable UI takes its host element first and derives the document from `host.ownerDocument`; normal
+option bags do not repeat `ownerDocument`. A document-level service or detached parsing and fragment boundary,
+such as `h()`, `createDom()`, `createReactiveDom()`, or HTML sanitization, receives an explicit `Document`.
+Neither form may fall back to the process-global `document`, because that silently creates nodes in the wrong
+realm for auxiliary windows and makes isolated DOM tests unreliable. Only page bootstrap code selects a
+page-level host from the global document.
+
 Reactive trees are inert descriptions until `keepUpdated(store)` or `toLiveElement()` is called. The owner
 must dispose that lifetime. Nested reactive elements share the root reaction, and `IObservable` remains the
 only reactive state protocol. The deleted `domBuilder.ts` and the old `ReadableValue` binding helpers must

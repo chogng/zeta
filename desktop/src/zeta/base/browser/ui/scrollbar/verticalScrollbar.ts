@@ -6,8 +6,8 @@ import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
 
 /** Vertical track and thumb behavior owned by a scrollable element. */
 export class VerticalScrollbar extends AbstractScrollbar {
-  constructor(options: AbstractScrollbarOptions) {
-    super("vertical", options);
+  constructor(container: HTMLElement, options: AbstractScrollbarOptions) {
+    super(container, "vertical", options);
   }
 
   protected override applyThumbMetrics(

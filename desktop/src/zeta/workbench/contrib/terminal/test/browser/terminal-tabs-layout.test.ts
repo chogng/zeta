@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -30,8 +31,8 @@ test.after(() => {
 
 test("Terminal instance list sash resizes the right column within its bounds", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const widgets = dom.window.document.createElement("main");
-  const tabs = dom.window.document.createElement("aside");
+  const widgets = h(dom.window.document, "main");
+  const tabs = h(dom.window.document, "aside");
   using layout = new TerminalTabsLayout(widgets, tabs);
   dom.window.document.body.append(layout.element);
   layout.layout(1_000, 200);

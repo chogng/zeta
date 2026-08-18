@@ -20,10 +20,12 @@ export class EditorSettingsPane extends DisposableOwner {
   private readonly controls = new Map<string, HTMLInputElement | InputBox | SelectBox | Toggle>();
   private readonly status: HTMLParagraphElement;
 
-  constructor(ownerDocument: Document, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
+  constructor(container: HTMLElement, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-editor-settings";
+    container.append(this.element);
 
     const note = h(ownerDocument, "p");
     note.className = "zeta-editor-settings-note";
@@ -116,8 +118,7 @@ export class EditorSettingsPane extends DisposableOwner {
         this.createToggleSetting(CodeEditorConfiguration.insertFinalNewLine, "Insert final newline", "Ensure non-empty files end with a line feed when saved."),
       ]),
     ]);
-    const tree = this.own(new SettingsTree({
-      ownerDocument,
+    const tree = this.own(new SettingsTree(this.element, {
       model,
       rootClassName: "zeta-editor-settings-tree",
       groupClassName: "zeta-editor-settings-group",
@@ -125,8 +126,6 @@ export class EditorSettingsPane extends DisposableOwner {
       itemsClassName: "zeta-editor-settings-list",
       renderItem: (item) => item.value,
     }));
-    this.element.append(tree.element);
-
     this.status = h(ownerDocument, "p");
     this.status.className = "zeta-editor-settings-status";
     this.status.setAttribute("role", "status");
@@ -164,8 +163,8 @@ export class EditorSettingsPane extends DisposableOwner {
   private createToggleSetting(key: IConfigurationKey<boolean>, label: string, description: string): HTMLElement {
     const document = this.element.ownerDocument;
     const copy = this.createSettingCopy(label, description);
-    const toggle = this.own(new Switch({
-      ownerDocument: document,
+    const host = h(document, "span");
+    const toggle = this.own(new Switch(host, {
       ariaLabel: label,
       content: copy,
       contentPlacement: "before-control",
@@ -198,9 +197,8 @@ export class EditorSettingsPane extends DisposableOwner {
     const setting = h(document, "div");
     setting.className = "zeta-editor-setting zeta-editor-setting-select-row";
     const copy = this.createSettingCopy(options.label, options.description);
-    const select = this.own(new SelectBox({
+    const select = this.own(new SelectBox(setting, {
       options: options.options,
-      ownerDocument: document,
       ariaLabel: options.label,
       presentation: "field",
       contextViewProvider: this.contextViewProvider,
@@ -218,8 +216,7 @@ export class EditorSettingsPane extends DisposableOwner {
     const setting = h(document, "div");
     setting.className = "zeta-editor-setting";
     const copy = this.createSettingCopy(label, description);
-    const input = this.own(new InputBox({
-      ownerDocument: document,
+    const input = this.own(new InputBox(setting, {
       type: "number",
       ariaLabel: label,
       presentation: "field",

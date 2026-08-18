@@ -122,10 +122,10 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
     );
     let folderOpens = 0;
     using emptyView = new EmptyView(
+      browser.window.document.body,
       {
         id: EmptyView.ID,
         title: EmptyView.TITLE,
-        ownerDocument: browser.window.document,
       },
       {
         canOpenFolder: true,
@@ -154,10 +154,10 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
     assert.equal(openFolderButton?.disabled, false);
 
     using pane = new ExplorerViewPane(
+      browser.window.document.body,
       {
         id: "zeta.explorer",
         title: "Explorer",
-        ownerDocument: browser.window.document,
       },
       fileService,
       workspaceContextService,

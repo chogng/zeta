@@ -21,7 +21,6 @@ export interface PaneCompositeTitleActions {
 
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
-  readonly ownerDocument: Document;
   readonly viewDescriptorService: IViewDescriptorService;
   readonly id: string;
   readonly location: ViewContainerLocation;
@@ -52,12 +51,14 @@ export class PaneCompositePart extends CompositePart {
   private compositeBarVisible = true;
   private hasCustomTitleContent = false;
 
-  constructor(options: PaneCompositePartOptions) {
-    super(options.id, options.ownerDocument);
+  constructor(container: HTMLElement, options: PaneCompositePartOptions) {
+    super(container, options.id);
+    const ownerDocument = container.ownerDocument;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.titleElement.classList.add("zeta-pane-composite-title");
-    this.compositeBar = this.own(new CompositeBar({
-      ownerDocument: options.ownerDocument,
+    this.titleContentElement = h(ownerDocument, "div");
+    this.titleContentElement.className = "zeta-pane-composite-title-content";
+    this.compositeBar = this.own(new CompositeBar(this.titleContentElement, {
       viewDescriptorService: options.viewDescriptorService,
       location: options.location,
       ariaLabel: options.viewsAriaLabel,
@@ -66,28 +67,24 @@ export class PaneCompositePart extends CompositePart {
       containerFilter: options.compositeBarContainerFilter,
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
-    this.titleContentElement = h(options.ownerDocument, "div");
-    this.titleContentElement.className = "zeta-pane-composite-title-content";
-    this.titleContentElement.append(this.compositeBar.element);
-    this.titleActionsSlotElement = h(options.ownerDocument, "div");
+    this.titleActionsSlotElement = h(ownerDocument, "div");
     this.titleActionsSlotElement.className = "zeta-pane-composite-title-actions";
-    this.viewTitleActionsElement = h(options.ownerDocument, "div");
+    this.viewTitleActionsElement = h(ownerDocument, "div");
     this.viewTitleActionsElement.className = "zeta-pane-composite-title-view-actions";
-    this.partTitleActionsElement = h(options.ownerDocument, "div");
+    this.partTitleActionsElement = h(ownerDocument, "div");
     this.partTitleActionsElement.className = "zeta-pane-composite-title-part-actions";
     this.titleActionsSlotElement.append(this.viewTitleActionsElement, this.partTitleActionsElement);
     this.titleElement.append(this.titleContentElement, this.titleActionsSlotElement);
 
     if (options.titleActions) {
       const actions = this.own(new MenuWorkbenchToolBar(
+        this.partTitleActionsElement,
         options.titleActions.menuService,
         options.titleActions.contextMenuProvider,
         options.titleActions.menuId,
-        options.ownerDocument,
         { highlightToggledItems: true },
       ));
       actions.element.classList.add("zeta-pane-composite-title-menu-actions");
-      this.partTitleActionsElement.append(actions.element);
     }
 
     this.setCompositeBarVisible(options.compositeBarVisible ?? true);

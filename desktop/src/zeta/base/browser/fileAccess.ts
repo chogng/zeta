@@ -4,12 +4,12 @@ import {
   toDisposable,
 } from "../common/lifecycle.js";
 import { addDisposableListener, h } from "./dom.js";
-import { mainWindow } from "./window.js";
+import type { BrowserWindow } from "./window.js";
 
 export type FileSelection = "single" | "multiple";
 
 export interface FilePickerOptions {
-  readonly document?: Document;
+  readonly ownerDocument: Document;
   readonly accept?: readonly string[];
   readonly selection?: FileSelection;
   readonly directory?: boolean;
@@ -18,9 +18,10 @@ export interface FilePickerOptions {
 
 /** Opens a native browser file picker and resolves undefined when cancelled. */
 export function pickFiles(
-  options: FilePickerOptions = {},
+  options: FilePickerOptions,
 ): Promise<readonly File[] | undefined> {
-  const ownerDocument = options.document ?? mainWindow.document;
+  const ownerDocument = options.ownerDocument;
+  requireOwnerWindow(ownerDocument);
   const input = h(ownerDocument, "input");
   input.type = "file";
   input.hidden = true;
@@ -71,10 +72,11 @@ export function pickFiles(
 export function triggerDownload(
   source: Blob | URL,
   name: string,
-  ownerDocument: Document = mainWindow.document,
+  ownerDocument: Document,
 ): void {
-  const objectUrl = source instanceof Blob
-    ? URL.createObjectURL(source)
+  const targetWindow = requireOwnerWindow(ownerDocument);
+  const objectUrl = isBlob(source)
+    ? targetWindow.URL.createObjectURL(source)
     : undefined;
   const link = h(ownerDocument, "a");
   link.download = name;
@@ -85,19 +87,30 @@ export function triggerDownload(
   link.click();
   link.remove();
   if (objectUrl) {
-    const targetWindow = ownerDocument.defaultView ?? mainWindow;
-    targetWindow.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    targetWindow.setTimeout(() => targetWindow.URL.revokeObjectURL(objectUrl), 0);
   }
 }
 
 /** Creates a temporary object URL with an explicit disposable lifetime. */
-export function createObjectUrl(blob: Blob): {
+export function createObjectUrl(ownerWindow: Window, blob: Blob): {
   readonly url: URL;
   readonly registration: IDisposable;
 } {
-  const value = URL.createObjectURL(blob);
+  const urlApi = (ownerWindow as BrowserWindow).URL;
+  const value = urlApi.createObjectURL(blob);
   return {
-    url: new URL(value),
-    registration: toDisposable(() => URL.revokeObjectURL(value)),
+    url: new urlApi(value),
+    registration: toDisposable(() => urlApi.revokeObjectURL(value)),
   };
+}
+
+function requireOwnerWindow(ownerDocument: Document): BrowserWindow {
+  const ownerWindow = ownerDocument.defaultView;
+  if (!ownerWindow) throw new Error("Browser file access requires an owner window");
+  return ownerWindow as BrowserWindow;
+}
+
+function isBlob(value: Blob | URL): value is Blob {
+  return typeof (value as Blob).arrayBuffer === "function" &&
+    typeof (value as Blob).stream === "function";
 }

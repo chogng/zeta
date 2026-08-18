@@ -16,7 +16,6 @@ import type { SessionsViewSelection } from "../../services/view/common/sessionsV
 let sessionsChatPaneInstanceId = 0;
 
 export interface SessionsChatViewOptions {
-  readonly ownerDocument: Document;
   readonly chatService: IChatService;
   readonly sessionService: ISessionsManagementService;
   readonly contextMenuService: IContextMenuService;
@@ -43,9 +42,9 @@ export class SessionsChatView extends DisposableOwner {
   private readonly activateSelection: (selection: SessionsViewSelection) => void;
   private readonly closeSelection: (selection: SessionsViewSelection) => void;
 
-  constructor(options: SessionsChatViewOptions) {
+  constructor(container: HTMLElement, options: SessionsChatViewOptions) {
     super();
-    const ownerDocument = options.ownerDocument;
+    const ownerDocument = container.ownerDocument;
     this.chatService = options.chatService;
     this.sessionService = options.sessionService;
     this.contextMenuService = options.contextMenuService;
@@ -55,10 +54,10 @@ export class SessionsChatView extends DisposableOwner {
     this.closeSelection = options.closeSelection;
     this.element = h(ownerDocument, "section");
     this.element.className = "zeta-sessions-chat-view";
-    this.empty = new SessionsChatEmptyView(ownerDocument);
-    this.grid = this.own(new Grid<SessionsChatGridView>({ type: "leaf", view: this.empty, size: 800 }, ownerDocument, { sashPresentation: { type: "inset", gap: 8 } }));
+    container.append(this.element);
+    this.empty = new SessionsChatEmptyView(this.element);
+    this.grid = this.own(new Grid<SessionsChatGridView>(this.element, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
     this.grid.element.classList.add("zeta-sessions-chat-grid");
-    this.element.append(this.grid.element);
     this.defer(() => {
       for (const entry of this.entries.values()) entry.dispose();
       this.entries.clear();
@@ -90,7 +89,7 @@ export class SessionsChatView extends DisposableOwner {
       const key = selectionKey(selection);
       let entry = this.entries.get(key);
       if (!entry) {
-        entry = new SessionsChatGridEntry({
+        entry = new SessionsChatGridEntry(this.element, {
           selection,
           chatService: this.chatService,
           sessionService: this.sessionService,
@@ -99,7 +98,6 @@ export class SessionsChatView extends DisposableOwner {
           commandService: this.commandService,
           activateSelection: this.activateSelection,
           closeSelection: this.closeSelection,
-          ownerDocument: this.element.ownerDocument,
         });
         setDisposableOwner(entry, this);
         this.entries.set(key, entry);
@@ -143,12 +141,14 @@ class SessionsChatEmptyView implements IView {
   private readonly heading: HTMLHeadingElement;
   private readonly description: HTMLParagraphElement;
 
-  constructor(ownerDocument: Document) {
+  constructor(container: HTMLElement) {
+    const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-sessions-chat-view-empty";
     this.heading = h(ownerDocument, "h2");
     this.description = h(ownerDocument, "p");
     this.element.append(this.heading, this.description);
+    container.append(this.element);
     this.update("ready", undefined);
   }
 
@@ -182,9 +182,9 @@ class SessionsChatGridEntry extends DisposableOwner implements IView {
   private readonly title: HTMLSpanElement;
   private selection: SessionsViewSelection;
 
-  constructor(options: SessionsChatGridEntryOptions) {
+  constructor(container: HTMLElement, options: SessionsChatGridEntryOptions) {
     super();
-    const ownerDocument = options.ownerDocument;
+    const ownerDocument = container.ownerDocument;
     this.selection = options.selection;
     this.element = h(ownerDocument, "article");
     this.element.className = "zeta-sessions-chat-slot";
@@ -203,7 +203,7 @@ class SessionsChatGridEntry extends DisposableOwner implements IView {
     close.textContent = "×";
     header.append(activate, close);
     this.pane = this.own(new ChatPane(
-      ownerDocument,
+      this.element,
       `zeta-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
       options.chatService,
       options.selection.kind === "session" ? { kind: "session", active: options.selection.active } : { kind: "untitled", session: options.selection.session },

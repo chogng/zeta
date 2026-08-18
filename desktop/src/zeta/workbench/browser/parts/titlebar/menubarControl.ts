@@ -24,30 +24,29 @@ export class BrowserMenubarControl extends DisposableOwner
   readonly element: HTMLElement;
 
   constructor(
+    container: HTMLElement,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
-    ownerDocument: Document,
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.contextMenuService = contextMenuService;
     this.element = h(ownerDocument, "nav");
     this.element.className = "zeta-menubar";
     this.element.setAttribute("aria-label", "Application menu");
+    container.append(this.element);
     this.defer(() => this.element.remove());
 
     this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-    this.button = this.own(new Button({
+    this.button = this.own(new Button(this.element, {
       label: "Application menu",
       title: "Application menu",
       icon: lxiconsLibrary.menu,
-      ownerDocument,
       onClick: () => this.toggleMenu(),
     }));
     this.button.element.classList.add("zeta-menubar-item");
     this.button.element.setAttribute("aria-haspopup", "menu");
     this.button.element.setAttribute("aria-expanded", "false");
-    this.element.append(this.button.element);
-
     this.own(this.menu.onDidChange(() => {
       if (this.active) this.contextMenuService.hideContextMenu();
     }));

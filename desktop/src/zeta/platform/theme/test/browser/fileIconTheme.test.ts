@@ -10,6 +10,7 @@ import {
   lightColorTheme,
 } from "../../common/colorTheme.js";
 import { ThemeService } from "../../common/themeService.js";
+import { h } from "../../../../base/browser/dom.js";
 
 test("Seti resolves names, extensions, languages, and color schemes", () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -73,7 +74,7 @@ function renderIcon(
   document: Document,
   path: string,
 ): HTMLSpanElement {
-  const container = document.createElement("span");
+  const container = h(document, "span");
   fileIconTheme.renderFileIcon(URI.file(path), container);
   return container;
 }

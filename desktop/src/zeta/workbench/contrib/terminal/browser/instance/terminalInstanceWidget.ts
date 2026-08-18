@@ -16,11 +16,12 @@ export class TerminalInstanceWidget extends DisposableOwner {
   private readonly commandDecorations = new Map<string, TerminalCommandDecoration>();
   private visible = false;
 
-  constructor(readonly instance: ITerminalInstance, ownerDocument: Document, themeService: IThemeService) {
+  constructor(container: HTMLElement, readonly instance: ITerminalInstance, themeService: IThemeService) {
     super();
-    this.element = h(ownerDocument, "div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-terminal-instance";
     this.element.hidden = true;
+    container.append(this.element);
     this.terminal = new Terminal({
       allowProposedApi: true,
       allowTransparency: false,

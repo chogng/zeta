@@ -9,7 +9,6 @@ import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 export interface PaneViewOptions {
   readonly id: string;
   readonly title: string;
-  readonly ownerDocument: Document;
   readonly collapsed?: boolean;
   readonly headerActionsVisibility?: PaneViewHeaderActionsVisibility;
 }
@@ -41,9 +40,10 @@ export class PaneView extends DisposableOwner {
   readonly onDidFocus: Event<void>;
   readonly onDidBlur: Event<void>;
 
-  constructor(options: PaneViewOptions) {
+  constructor(container: HTMLElement, options: PaneViewOptions) {
     super();
-    const { id, title, ownerDocument } = options;
+    const { id, title } = options;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "section");
     this.element = element;
     this.defer(() => element.remove());
@@ -78,6 +78,7 @@ export class PaneView extends DisposableOwner {
     this.contentElement.id = `zeta-pane-view-content-${encodeURIComponent(id)}`;
     this.headerButton.setAttribute("aria-controls", this.contentElement.id);
     element.append(this.headerElement, this.contentElement);
+    container.append(element);
     this.collapsed = options.collapsed === true;
     this.renderCollapsedState();
     this.own(addDisposableListener(this.headerButton, "click", () => {

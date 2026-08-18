@@ -23,12 +23,14 @@ import "./titlebarpart.css";
  */
 export class ElectronTitlebarPart extends BrowserTitlebarPart {
   constructor(
+    container: HTMLElement,
     options: ITitlebarPartFactoryOptions,
     nativeMenubar: INativeMenubarApi,
   ) {
     super(
+      container,
       options,
-      new ElectronMenubarControl(options, nativeMenubar),
+      new ElectronMenubarControl(container, options, nativeMenubar),
     );
     this.element.classList.add("zeta-electron-titlebar");
   }
@@ -43,14 +45,15 @@ class ElectronMenubarControl extends DisposableOwner
   readonly element: HTMLElement;
 
   constructor(
+    container: HTMLElement,
     options: ITitlebarPartFactoryOptions,
     nativeMenubar: INativeMenubarApi,
   ) {
     super();
     const browserMenubar = this.own(new BrowserMenubarControl(
+      container,
       options.menuService,
       options.contextMenuService,
-      options.ownerDocument,
     ));
     this.element = browserMenubar.element;
     if (isMacintosh) {
@@ -66,5 +69,5 @@ class ElectronMenubarControl extends DisposableOwner
 export function createElectronTitlebarPartFactory(
   nativeMenubar: INativeMenubarApi,
 ): TitlebarPartFactory {
-  return (options) => new ElectronTitlebarPart(options, nativeMenubar);
+  return (container, options) => new ElectronTitlebarPart(container, options, nativeMenubar);
 }

@@ -18,7 +18,6 @@ export interface SelectOption {
 export interface SelectBoxOptions {
   readonly options: readonly SelectOption[];
   readonly selectedValue?: string;
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly presentation?: SelectBoxPresentation;
   readonly contextViewProvider?: IContextViewProvider;
@@ -47,9 +46,9 @@ export class SelectBox extends DisposableOwner {
   private activeIndex = -1;
   private _enabled = true;
 
-  constructor(options: SelectBoxOptions) {
+  constructor(container: HTMLElement, options: SelectBoxOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const list = h(ownerDocument, "div");
     this.list = list;
     selectBoxId += 1;
@@ -58,10 +57,9 @@ export class SelectBox extends DisposableOwner {
     list.setAttribute("role", "listbox");
     list.tabIndex = -1;
 
-    const dropdown = this.own(new Dropdown({
+    const dropdown = this.own(new Dropdown(container, {
       label: "",
       content: list,
-      ownerDocument,
       ariaLabel: options.ariaLabel,
       gap: 2,
       indicator: lxiconsLibrary.unfold,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { CodeIndexConfigurationSnapshot, SemanticCodeIndexSelection } from "../../../../../platform/codeIndex/common/codeIndexService.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", {
   pretendToBeVisual: true,
@@ -98,15 +99,14 @@ test("Settings tree renders validated group and item identities", () => {
     ],
   }]);
   const disposedItems: string[] = [];
-  const renderer = disposables.add(new SettingsTree({
-    ownerDocument,
+  const renderer = disposables.add(new SettingsTree(ownerDocument.body, {
     model,
     rootClassName: "test-settings-tree",
     groupClassName: "test-settings-group",
     groupDescriptionClassName: "test-settings-group-description",
     itemsClassName: "test-settings-items",
     renderItem: (item) => {
-      const element = ownerDocument.createElement("article");
+      const element = h(ownerDocument, "article");
       element.textContent = item.value;
       return element;
     },
@@ -154,8 +154,8 @@ test("Settings overlay opens, closes, and restores focus", () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
-  const trigger = ownerDocument.createElement("button");
+  const root = h(ownerDocument, "div");
+  const trigger = h(ownerDocument, "button");
   trigger.textContent = "Open";
   root.append(trigger);
   ownerDocument.body.append(root);
@@ -261,7 +261,7 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -334,7 +334,7 @@ test("General settings persist shared interaction preferences", async () => {
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -368,7 +368,7 @@ test("Settings domains without writable services render honest capability overvi
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   disposables.add(new SettingsEditorContribution({
@@ -394,7 +394,7 @@ test("Editor settings render supported controls and persist typed preferences", 
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -462,7 +462,7 @@ test("Connector settings project catalog state and invoke typed connect and disc
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -515,7 +515,7 @@ test("Marketplace settings discover and install through the generic service", as
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -593,7 +593,7 @@ test("Plugin settings project layered authority and send exact-package commands"
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -633,7 +633,7 @@ test("Plugin settings direct package discovery to the generic Marketplace", asyn
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -668,7 +668,7 @@ test("Language settings reuse Marketplace discovery with a language package filt
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -717,7 +717,7 @@ test("Appearance settings persist and dynamically render registered theme prefer
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -772,7 +772,7 @@ test("Appearance edits the resolved Light JSON, previews it, and saves a new the
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
@@ -870,7 +870,7 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
   using disposables = new DisposableStore();
   const ownerDocument = browserEnvironment.window.document;
   ownerDocument.body.replaceChildren();
-  const root = ownerDocument.createElement("div");
+  const root = h(ownerDocument, "div");
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());

@@ -14,18 +14,18 @@ export class TestingViewPane extends ViewPane {
   private error: string | undefined;
   private refreshing = false;
 
-  constructor(options: IViewPaneOptions, private readonly testingService: ITestingService, private readonly terminalService: ITerminalService, private readonly viewsService: IViewsService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly testingService: ITestingService, private readonly terminalService: ITerminalService, private readonly viewsService: IViewsService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-testing");
-    const controls = h(options.ownerDocument, "div");
+    const controls = h(container.ownerDocument, "div");
     controls.className = "zeta-testing-controls";
-    const runAll = button(options.ownerDocument, "Run All", "zeta-testing-run-all");
-    const refresh = button(options.ownerDocument, "Refresh", "zeta-testing-refresh");
+    const runAll = button(container.ownerDocument, "Run All", "zeta-testing-run-all");
+    const refresh = button(container.ownerDocument, "Refresh", "zeta-testing-refresh");
     controls.append(runAll, refresh);
-    this.statusElement = h(options.ownerDocument, "div");
+    this.statusElement = h(container.ownerDocument, "div");
     this.statusElement.className = "zeta-testing-status";
     this.statusElement.setAttribute("role", "status");
-    this.profilesElement = h(options.ownerDocument, "ul");
+    this.profilesElement = h(container.ownerDocument, "ul");
     this.profilesElement.className = "zeta-testing-list";
     this.profilesElement.setAttribute("aria-label", "Test profiles");
     this.contentElement.append(controls, this.statusElement, this.profilesElement);

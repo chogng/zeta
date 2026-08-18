@@ -27,10 +27,11 @@ export interface EditorTabsDelegate {
 export abstract class EditorTabsControl extends DisposableOwner {
   readonly element: HTMLDivElement;
 
-  protected constructor(ownerDocument: Document) {
+  protected constructor(container: HTMLElement) {
     super();
-    this.element = h(ownerDocument, "div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-editor-tabs-control";
+    container.append(this.element);
     this.defer(() => this.element.remove());
   }
 

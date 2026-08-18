@@ -13,14 +13,12 @@ test("Button only installs a Hover for an explicit title", () => {
       return managedHover();
     },
   });
-  using unlabeledHoverButton = new Button({
+  using unlabeledHoverButton = new Button(dom.window.document.body, {
     label: "Save",
-    ownerDocument: dom.window.document,
   });
-  using titledButton = new Button({
+  using titledButton = new Button(dom.window.document.body, {
     label: "Save",
     title: "Save changes",
-    ownerDocument: dom.window.document,
   });
 
   assert.deepEqual(contents, ["Save changes"]);
@@ -31,10 +29,9 @@ test("Button only installs a Hover for an explicit title", () => {
   assert.equal(titledButton.element.hidden, true);
   assert.equal(titledButton.element.classList.contains("hidden"), true);
 
-  using labelCenteredButton = new Button({
+  using labelCenteredButton = new Button(dom.window.document.body, {
     label: "Commit",
     contentAlignment: "labelCentered",
-    ownerDocument: dom.window.document,
   });
   assert.equal(labelCenteredButton.element.classList.contains("label-centered"), true);
 

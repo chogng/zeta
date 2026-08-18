@@ -7,6 +7,7 @@ import type {
 import type {
   IMenubarControl,
 } from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
+import { h } from "../../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -83,7 +84,7 @@ test("titlebar owns a menu-driven actions container", async () => {
     },
     group: "navigation",
   }));
-  const menubarElement = ownerDocument.createElement("nav");
+  const menubarElement = h(ownerDocument, "nav");
   let menubarDisposed = false;
   const menubar: IMenubarControl = {
     element: menubarElement,
@@ -95,12 +96,10 @@ test("titlebar owns a menu-driven actions container", async () => {
       this.dispose();
     },
   };
-  const titlebar = disposables.add(new BrowserTitlebarPart({
+  const titlebar = disposables.add(new BrowserTitlebarPart(ownerDocument.body, {
     menuService,
     contextMenuService,
-    ownerDocument,
   }, menubar));
-  ownerDocument.body.append(titlebar.element);
 
   const actionsContainer = titlebar.element.querySelector(
     ".zeta-workbench-part-content > .zeta-titlebar-actions",
@@ -168,11 +167,10 @@ test("titlebar renders left actions before the application menu", () => {
     },
     group: "navigation",
   }));
-  const menubarElement = ownerDocument.createElement("nav");
-  const titlebar = disposables.add(new BrowserTitlebarPart({
+  const menubarElement = h(ownerDocument, "nav");
+  const titlebar = disposables.add(new BrowserTitlebarPart(ownerDocument.body, {
     menuService,
     contextMenuService,
-    ownerDocument,
   }, {
     element: menubarElement,
     dispose() {
@@ -235,11 +233,10 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
     hideContextMenu() {},
   };
   const menubar = disposables.add(new BrowserMenubarControl(
+    ownerDocument.body,
     menuService,
     menuContextService,
-    ownerDocument,
   ));
-  ownerDocument.body.append(menubar.element);
 
   const button = menubar.element.querySelector("button");
   assert.ok(button);

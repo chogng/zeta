@@ -70,8 +70,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
   using contextKeyService = new ContextKeyService();
   const commandService = new CommandService(new ServiceCollection());
   const menuService = new MenuService(commandService, contextKeyService);
-  using titleActions = new TerminalTitleActions({
-    ownerDocument,
+  using titleActions = new TerminalTitleActions(ownerDocument.body, {
     menuService,
     contextMenuService,
     contextKeyService,

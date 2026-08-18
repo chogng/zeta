@@ -8,6 +8,7 @@ import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/b
 import {
   ContextKeyService,
 } from "../../../platform/contextkey/common/contextkey.js";
+import { h } from "../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -103,9 +104,9 @@ type EditorPartInstance =
 class TestPart extends WorkbenchPart {
   constructor(
     readonly id: WorkbenchPartId,
-    ownerDocument: Document,
+    container: HTMLElement,
   ) {
-    super(id, ownerDocument);
+    super(container, id);
   }
 
   override get minimumWidth(): number {
@@ -148,7 +149,7 @@ function createLayoutHarness(
   readonly layout: WorkbenchLayoutInstance;
 } {
   const disposables = new DisposableStore();
-  const container = existingContainer ?? ownerDocument.createElement("main");
+  const container = existingContainer ?? h(ownerDocument, "main");
   ownerDocument.body.append(container);
   disposables.defer(() => container.remove());
 
@@ -156,8 +157,8 @@ function createLayoutHarness(
   let editor: EditorPartInstance | undefined;
   for (const partId of workbenchPartIds) {
     const part = partId === "editor"
-      ? new EditorPart(ownerDocument)
-      : new TestPart(partId, ownerDocument);
+      ? new EditorPart(container)
+      : new TestPart(partId, container);
     disposables.add(part);
     parts.set(partId, part);
     if (part instanceof EditorPart) editor = part;
@@ -171,7 +172,7 @@ function createLayoutHarness(
 test("Workbench layout hides and restores Parts with context keys", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document);
-  const overlay = dom.window.document.createElement("div");
+  const overlay = h(dom.window.document, "div");
   overlay.className = "persistent-overlay";
   harness.container.append(overlay);
   const contextKeys = new ContextKeyService();
@@ -311,7 +312,7 @@ test("Workbench pane sashes snap closed and remain available for drag restore", 
 
 test("platform layout service drives Workbench Part geometry", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const container = dom.window.document.createElement("main");
+  const container = h(dom.window.document, "main");
   const layoutService = new BrowserLayoutService({ root: container });
   const harness = createLayoutHarness(dom.window.document, {
     initialDimension: layoutService.mainContainerDimension,
@@ -613,8 +614,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
     contextKeyService: contextKeys,
     registry,
   }));
-  const sidebar = disposables.add(new SidebarPart({
-    ownerDocument: dom.window.document,
+  const sidebar = disposables.add(new SidebarPart(dom.window.document.body, {
     viewDescriptorService: viewDescriptors,
   }));
   dom.window.document.body.append(sidebar.element);
@@ -729,19 +729,17 @@ test("Sidebar hosts its Composite Bar before content", () => {
   const searchContainer = viewDescriptors.getViewContainers(
     ViewContainerLocation.Sidebar,
   )[1];
-  const explorerComposite = new PaneComposite({
+  const explorerComposite = new PaneComposite(dom.window.document.body, {
     viewContainer: explorerContainer,
     model: viewDescriptors.getViewContainerModel(explorerContainer.id),
     instantiationService,
     contextKeyService: contextKeys,
-    ownerDocument: dom.window.document,
   });
-  const searchComposite = new PaneComposite({
+  const searchComposite = new PaneComposite(dom.window.document.body, {
     viewContainer: searchContainer,
     model: viewDescriptors.getViewContainerModel(searchContainer.id),
     instantiationService,
     contextKeyService: contextKeys,
-    ownerDocument: dom.window.document,
   });
   sidebar.addComposite(explorerComposite);
   sidebar.addComposite(searchComposite);
@@ -779,8 +777,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
     contextKeyService: contextKeys,
     registry,
   }));
-  const agentSidebar = disposables.add(new SidebarPart({
-    ownerDocument: dom.window.document,
+  const agentSidebar = disposables.add(new SidebarPart(dom.window.document.body, {
     viewDescriptorService: viewDescriptors,
     id: "agentSidebar",
     location: ViewContainerLocation.AgentSidebar,
@@ -835,8 +832,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
     contextKeyService: contextKeys,
     registry,
   }));
-  const panel = disposables.add(new PanelPart({
-    ownerDocument: dom.window.document,
+  const panel = disposables.add(new PanelPart(dom.window.document.body, {
     viewDescriptorService: viewDescriptors,
     titleActions: {
       menuService,
@@ -865,12 +861,11 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 
   const terminalDescriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === "zeta.panel.terminal");
   assert.ok(terminalDescriptor);
-  const terminal = new PaneComposite({
+  const terminal = new PaneComposite(dom.window.document.body, {
     viewContainer: terminalDescriptor,
     model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
     instantiationService: new InstantiationService(),
     contextKeyService: contextKeys,
-    ownerDocument: dom.window.document,
     paneHeaders: "hidden",
     paneLayout: "fill",
   });
@@ -892,12 +887,11 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
   for (const panelId of ["zeta.panel.problems", "zeta.panel.output", "zeta.panel.ports"]) {
     const descriptor = viewDescriptors.getViewContainers(ViewContainerLocation.Panel).find((container) => container.id === panelId);
     assert.ok(descriptor);
-    const composite = new PaneComposite({
+    const composite = new PaneComposite(dom.window.document.body, {
       viewContainer: descriptor,
       model: viewDescriptors.getViewContainerModel(descriptor.id),
       instantiationService: new InstantiationService(),
       contextKeyService: contextKeys,
-      ownerDocument: dom.window.document,
       paneHeaders: "hidden",
       paneLayout: "fill",
     });
@@ -944,8 +938,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
       hideOverflowMenu = () => options.onHide?.(true);
     },
   };
-  const compositeBar = disposables.add(new CompositeBar({
-    ownerDocument: dom.window.document,
+  const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
     viewDescriptorService: viewDescriptors,
     location: ViewContainerLocation.Panel,
     ariaLabel: "Panel views",
@@ -1022,18 +1015,16 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
   const instantiationService = new InstantiationService(
     new ServiceCollection(),
   );
-  const composite = new PaneComposite({
+  const composite = new PaneComposite(dom.window.document.body, {
     viewContainer: descriptor,
     model: viewDescriptors.getViewContainerModel(descriptor.id),
     instantiationService,
     contextKeyService: contextKeys,
-    ownerDocument: dom.window.document,
     paneHeaders: "hidden",
     paneLayout: "fill",
   });
   const auxiliarybar = disposables.add(
-    new AuxiliarybarPart({
-      ownerDocument: dom.window.document,
+    new AuxiliarybarPart(dom.window.document.body, {
       viewDescriptorService: viewDescriptors,
     }),
   );
@@ -1058,12 +1049,12 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 class TestPanelView extends ViewPane {
   private readonly actions: HTMLDivElement;
 
-  constructor(options: IViewPaneOptions) {
-    super(options);
-    this.actions = options.ownerDocument.createElement("div");
+  constructor(container: HTMLElement, options: IViewPaneOptions) {
+    super(container, options);
+    this.actions = h(container.ownerDocument, "div");
     this.actions.setAttribute("role", "toolbar");
     this.actions.setAttribute("aria-label", "Test panel actions");
-    const button = options.ownerDocument.createElement("button");
+    const button = h(container.ownerDocument, "button");
     button.textContent = "Run";
     this.actions.append(button);
   }
@@ -1076,9 +1067,9 @@ class TestPanelView extends ViewPane {
 class ContentProjectionView extends ViewPane {
   private readonly titleContent: HTMLDivElement;
 
-  constructor(options: IViewPaneOptions) {
-    super(options);
-    this.titleContent = options.ownerDocument.createElement("div");
+  constructor(container: HTMLElement, options: IViewPaneOptions) {
+    super(container, options);
+    this.titleContent = h(container.ownerDocument, "div");
     this.titleContent.dataset.projectionOwner = "content";
   }
 
@@ -1090,9 +1081,9 @@ class ContentProjectionView extends ViewPane {
 class ActionsProjectionView extends ViewPane {
   private readonly titleActions: HTMLDivElement;
 
-  constructor(options: IViewPaneOptions) {
-    super(options);
-    this.titleActions = options.ownerDocument.createElement("div");
+  constructor(container: HTMLElement, options: IViewPaneOptions) {
+    super(container, options);
+    this.titleActions = h(container.ownerDocument, "div");
     this.titleActions.dataset.projectionOwner = "actions";
   }
 
@@ -1122,12 +1113,11 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
   }));
   const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
   assert.ok(descriptor);
-  const composite = new PaneComposite({
+  const composite = new PaneComposite(dom.window.document.body, {
     viewContainer: descriptor,
     model: viewDescriptors.getViewContainerModel(descriptor.id),
     instantiationService: new InstantiationService(),
     contextKeyService: contextKeys,
-    ownerDocument: dom.window.document,
   });
 
   assert.throws(
@@ -1153,8 +1143,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
   }
   const contextKeys = disposables.add(new ContextKeyService());
   const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
-  const compositeBar = disposables.add(new CompositeBar({
-    ownerDocument: dom.window.document,
+  const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
     viewDescriptorService: viewDescriptors,
     location: ViewContainerLocation.Panel,
     ariaLabel: "Panel views",

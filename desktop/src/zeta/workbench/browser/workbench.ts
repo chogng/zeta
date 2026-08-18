@@ -1,6 +1,7 @@
 import "./style.js";
 import type { FsChanged } from "../../../../generated/app-server/types.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
+import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import {
   type IDisposable,
   DisposableOwner,
@@ -205,7 +206,7 @@ export interface IStartWorkbenchOptions {
   readonly product: ProductConfiguration;
   readonly profile: WorkbenchProfile;
   readonly api: IRendererHost;
-  readonly container: HTMLElement | null;
+  readonly container: HTMLElement;
   readonly workspace: IAnyWorkspaceIdentifier;
   readonly configurationApi?: IConfigurationApi;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
@@ -233,7 +234,7 @@ export function startWorkbench({
     product,
     profile,
     api,
-    container ?? document.body,
+    container,
     workspace,
     configurationApi,
     keybindingsResourceApi,
@@ -258,6 +259,7 @@ export class Workbench extends DisposableOwner {
   private readonly workbenchWindow: WorkbenchWindow;
   private readonly logService: ILogService;
   private readonly lifecycleService: ILifecycleService;
+  private readonly ownerWindow: Window;
   private workspaceSwitchQueue: Promise<void> = Promise.resolve();
   private disposed = false;
 
@@ -385,6 +387,7 @@ export class Workbench extends DisposableOwner {
     if (!ownerWindow) {
       throw new Error("Workbench requires an owner window");
     }
+    this.ownerWindow = ownerWindow;
     const lifecycleService = this.own(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
     this.lifecycleService = lifecycleService;
     services.set(ILifecycleService, lifecycleService);
@@ -453,7 +456,6 @@ export class Workbench extends DisposableOwner {
     );
     const interactionServices = this.own(new WorkbenchInteractionServices({
       services,
-      ownerDocument,
       layoutService,
       configurationService: configuration,
       keybindingsResourceApi,
@@ -467,14 +469,12 @@ export class Workbench extends DisposableOwner {
     const contextMenus = interactionServices.contextMenuService;
     const accessibilityService = this.own(nativeHostApi
       ? new NativeAccessibilityService({
-        ownerDocument,
         root: workbenchRoot,
         contextKeyService: contextKeys,
         configurationService: configuration,
         nativeHostApi,
       })
       : new AccessibilityService({
-        ownerDocument,
         root: workbenchRoot,
         contextKeyService: contextKeys,
         configurationService: configuration,
@@ -506,17 +506,14 @@ export class Workbench extends DisposableOwner {
     );
     contributions.advance(WorkbenchPhase.BlockStartup);
 
-    const titlebar = this.own(createTitlebarPart({
+    const titlebar = this.own(createTitlebarPart(workbenchRoot, {
       menuService: menus,
       contextMenuService: contextMenus,
-      ownerDocument,
     }));
-    const sidebar = this.own(new SidebarPart({
-      ownerDocument,
+    const sidebar = this.own(new SidebarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
     }));
-    const agentSidebar = this.own(new SidebarPart({
-      ownerDocument,
+    const agentSidebar = this.own(new SidebarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
       id: "agentSidebar",
       location: ViewContainerLocation.AgentSidebar,
@@ -536,7 +533,7 @@ export class Workbench extends DisposableOwner {
         onOpen: () => recentWorkspaces.openWorkspace(project.root),
       } : {}),
     }));
-    const editor = this.own(new EditorPart(ownerDocument, {
+    const editor = this.own(new EditorPart(workbenchRoot, {
       configurationService: configuration,
       keybindingService: keybindings,
       fileService,
@@ -594,12 +591,11 @@ export class Workbench extends DisposableOwner {
         );
       }
       if (!sidebar.getComposite(viewContainer.id)) {
-        sidebar.addComposite(new PaneComposite({
+        sidebar.addComposite(new PaneComposite(sidebar.element, {
           viewContainer,
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
-          ownerDocument,
         }));
       }
       sidebar.showComposite(viewContainer.id);
@@ -621,12 +617,11 @@ export class Workbench extends DisposableOwner {
         );
       }
       if (!agentSidebar.getComposite(viewContainer.id)) {
-        agentSidebar.addComposite(new PaneComposite({
+        agentSidebar.addComposite(new PaneComposite(agentSidebar.element, {
           viewContainer,
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
-          ownerDocument,
         }));
       }
       agentSidebar.showComposite(viewContainer.id);
@@ -635,8 +630,7 @@ export class Workbench extends DisposableOwner {
       assertDefined(composite, `Agent Sidebar Composite is not available: ${viewContainer.id}`);
       return composite;
     };
-    const panel = this.own(new PanelPart({
-      ownerDocument,
+    const panel = this.own(new PanelPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
       contextMenuProvider: contextMenus,
       titleActions: {
@@ -666,12 +660,11 @@ export class Workbench extends DisposableOwner {
         );
       }
       if (!panel.getComposite(viewContainer.id)) {
-        panel.addComposite(new PaneComposite({
+        panel.addComposite(new PaneComposite(panel.element, {
           viewContainer,
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
-          ownerDocument,
           paneHeaders: "hidden",
           paneLayout: "fill",
         }));
@@ -682,8 +675,7 @@ export class Workbench extends DisposableOwner {
       assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
       return composite;
     };
-    const auxiliarybar = this.own(new AuxiliarybarPart({
-      ownerDocument,
+    const auxiliarybar = this.own(new AuxiliarybarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
     }));
     const auxiliaryViewContainer = requiredViewContainer(
@@ -691,10 +683,7 @@ export class Workbench extends DisposableOwner {
       ViewContainerLocation.AuxiliaryBar,
       normalizedProfile.composition.auxiliarybar,
     );
-    const statusbar = this.own(new StatusbarPart(
-      statusbarService,
-      ownerDocument,
-    ));
+    const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
 
     const parts = new Map<WorkbenchPartId, WorkbenchPart>([
       ["titlebar", titlebar],
@@ -726,12 +715,11 @@ export class Workbench extends DisposableOwner {
         );
       }
       if (!auxiliarybar.getComposite(viewContainer.id)) {
-        auxiliarybar.addComposite(new PaneComposite({
+        auxiliarybar.addComposite(new PaneComposite(auxiliarybar.element, {
           viewContainer,
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
-          ownerDocument,
           paneHeaders: "hidden",
           paneLayout: "fill",
         }));
@@ -806,8 +794,7 @@ export class Workbench extends DisposableOwner {
     await this.restoreWorkingCopyBackups(backups, editor);
     if (this.disposed) return;
     contributions.advance(WorkbenchPhase.AfterRestored);
-    const eventuallyTimer = globalThis.setTimeout(() => contributions.advance(WorkbenchPhase.Eventually), 2_000);
-    this.defer(() => globalThis.clearTimeout(eventuallyTimer));
+    this.own(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
   }
 
   private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: EditorPart): Promise<void> {

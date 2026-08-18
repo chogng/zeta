@@ -19,7 +19,6 @@ export interface CollaborationStartResult {
 }
 
 export interface CollaborationContributionOptions {
-  readonly ownerDocument: Document;
   readonly onStart: (roomId: string | undefined, target: DocumentCollaborationTarget) => Promise<CollaborationStartResult>;
   readonly onStop: () => void;
   readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
@@ -44,51 +43,52 @@ export class CollaborationContribution extends DisposableOwner {
   private principalId: string | undefined;
   private canManageMembers = false;
 
-  constructor(private readonly options: CollaborationContributionOptions) {
+  constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions) {
     super();
-    const element = h(options.ownerDocument, "div");
+    const ownerDocument = container.ownerDocument;
+    const element = h(ownerDocument, "div");
     element.className = "zeta-document-collaboration-toolbar";
     element.hidden = true;
     element.setAttribute("role", "group");
     element.setAttribute("aria-label", "Document collaboration");
     this.element = element;
+    container.append(element);
     this.defer(() => element.remove());
-    this.toolbar = this.own(new ToolBar({
-      ownerDocument: options.ownerDocument,
+    this.toolbar = this.own(new ToolBar(element, {
       contextMenuProvider: emptyCollaborationContextMenuProvider,
       ariaLabel: "Document collaboration",
       highlightToggledItems: true,
     }));
     this.toolbar.element.classList.add("zeta-document-collaboration-actions");
     this.toolbar.element.addEventListener("mousedown", event => event.preventDefault());
-    const status = h(options.ownerDocument, "span");
+    const status = h(ownerDocument, "span");
     status.className = "zeta-document-collaboration-status";
     status.setAttribute("role", "status");
     this.status = status;
-    const invitation = h(options.ownerDocument, "div");
+    const invitation = h(ownerDocument, "div");
     invitation.className = "zeta-document-collaboration-invitation";
     invitation.hidden = true;
     invitation.setAttribute("role", "group");
     invitation.setAttribute("aria-label", "Collaboration invitation");
     this.invitation = invitation;
-    const invitationToken = h(options.ownerDocument, "pre");
+    const invitationToken = h(ownerDocument, "pre");
     invitationToken.className = "zeta-document-collaboration-invitation-token";
     invitationToken.tabIndex = 0;
     invitationToken.setAttribute("aria-label", "Invitation credentials");
     this.invitationToken = invitationToken;
-    const dismissInvitation = h(options.ownerDocument, "button");
+    const dismissInvitation = h(ownerDocument, "button");
     dismissInvitation.className = "zeta-document-collaboration-invitation-dismiss";
     dismissInvitation.type = "button";
     dismissInvitation.textContent = "Dismiss";
     dismissInvitation.addEventListener("click", () => this.clearInvitation());
     invitation.append(invitationToken, dismissInvitation);
-    const members = h(options.ownerDocument, "div");
+    const members = h(ownerDocument, "div");
     members.className = "zeta-document-collaboration-members";
     members.hidden = true;
     members.setAttribute("role", "group");
     members.setAttribute("aria-label", "Collaboration members");
     this.members = members;
-    const memberList = h(options.ownerDocument, "div");
+    const memberList = h(ownerDocument, "div");
     memberList.className = "zeta-document-collaboration-member-list";
     memberList.setAttribute("role", "list");
     this.memberList = memberList;
@@ -155,7 +155,7 @@ export class CollaborationContribution extends DisposableOwner {
     }
     const target = this.requestTarget();
     if (!target) return;
-    const entered = this.options.ownerDocument.defaultView?.prompt("Enter a collaboration room ID to join, or leave it blank to create one.", "");
+    const entered = this.element.ownerDocument.defaultView?.prompt("Enter a collaboration room ID to join, or leave it blank to create one.", "");
     if (entered == null) return;
     this.setState("connecting");
     void this.options.onStart(entered.trim() || undefined, target).then(
@@ -169,17 +169,17 @@ export class CollaborationContribution extends DisposableOwner {
   }
 
   private requestTarget(): DocumentCollaborationTarget | undefined {
-    const endpoint = this.options.ownerDocument.defaultView?.prompt("Enter a remote collaboration server URL, or leave it blank to use this renderer's App Server.", "");
+    const endpoint = this.element.ownerDocument.defaultView?.prompt("Enter a remote collaboration server URL, or leave it blank to use this renderer's App Server.", "");
     if (endpoint == null) return undefined;
     if (!endpoint.trim()) return { kind: "appServer" };
-    const bearerToken = this.options.ownerDocument.defaultView?.prompt("Enter the remote collaboration server bearer token.", "");
+    const bearerToken = this.element.ownerDocument.defaultView?.prompt("Enter the remote collaboration server bearer token.", "");
     if (bearerToken == null) return undefined;
     return { kind: "remote", endpoint: endpoint.trim(), bearerToken: bearerToken.trim() };
   }
 
   private createInvite(): void {
     if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
-    const displayName = this.options.ownerDocument.defaultView?.prompt("Enter a collaborator name.", "");
+    const displayName = this.element.ownerDocument.defaultView?.prompt("Enter a collaborator name.", "");
     if (displayName == null) return;
     const role = this.requestInviteRole();
     if (!role) return;
@@ -220,7 +220,7 @@ export class CollaborationContribution extends DisposableOwner {
   }
 
   private renderMembers(members: readonly DocumentCollaborationMember[]): void {
-    const document = this.options.ownerDocument;
+    const document = this.element.ownerDocument;
     const fragment = createFragment(document);
     if (members.length === 0) {
       const empty = h(document, "div");
@@ -281,7 +281,7 @@ export class CollaborationContribution extends DisposableOwner {
 
   private revokeMember(member: DocumentCollaborationMember): void {
     if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers || member.principalId === this.principalId) return;
-    if (this.options.ownerDocument.defaultView?.confirm(`Revoke ${member.displayName}'s room access?`) !== true) return;
+    if (this.element.ownerDocument.defaultView?.confirm(`Revoke ${member.displayName}'s room access?`) !== true) return;
     const roomId = this.roomId;
     const target = this.target;
     void this.options.onRevokeMember(member.principalId).then(
@@ -297,7 +297,7 @@ export class CollaborationContribution extends DisposableOwner {
   }
 
   private requestInviteRole(): DocumentCollaborationRoomRole | undefined {
-    const entered = this.options.ownerDocument.defaultView?.prompt("Enter the collaborator role: owner, editor, or viewer.", "editor");
+    const entered = this.element.ownerDocument.defaultView?.prompt("Enter the collaborator role: owner, editor, or viewer.", "editor");
     if (entered == null) return undefined;
     const role = entered.trim().toLowerCase();
     if (role === "owner" || role === "editor" || role === "viewer") return role;

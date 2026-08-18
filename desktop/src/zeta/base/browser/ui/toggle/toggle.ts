@@ -3,7 +3,6 @@ import { DisposableOwner } from "../../../common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../dom.js";
 
 export interface ToggleOptions {
-  readonly ownerDocument?: Document;
   readonly checked?: boolean;
   readonly disabled?: boolean;
   readonly ariaLabel?: string;
@@ -13,8 +12,6 @@ export interface ToggleOptions {
   readonly onChange?: (checked: boolean) => void;
 }
 
-type ToggleOptionsOrLabel = ToggleOptions | string;
-
 /** A reusable two-state boolean control shared by checkbox and switch presentations. */
 export class Toggle extends DisposableOwner {
   readonly element: HTMLLabelElement;
@@ -23,15 +20,9 @@ export class Toggle extends DisposableOwner {
   private readonly _onDidChange = this.own(new Emitter<boolean>());
   readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
-  constructor(options?: ToggleOptions);
-  constructor(label: string, checked?: boolean, onChange?: (checked: boolean) => void);
-  constructor(optionsOrLabel: ToggleOptionsOrLabel, checked?: boolean, onChange?: (checked: boolean) => void);
-  constructor(optionsOrLabel: ToggleOptionsOrLabel = {}, checked = false, onChange?: (checked: boolean) => void) {
+  constructor(container: HTMLElement, options: ToggleOptions) {
     super();
-    const options: ToggleOptions = typeof optionsOrLabel === "string"
-      ? { label: optionsOrLabel, checked, onChange }
-      : optionsOrLabel;
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "label");
     this.element = element;
     this.defer(() => element.remove());
@@ -60,6 +51,7 @@ export class Toggle extends DisposableOwner {
       this.contentElement = undefined;
     }
     if (options.contentPlacement === "before-control") element.classList.add("zeta-toggle-content-before-control");
+    container.append(element);
 
     this.own(addDisposableListener(input, "change", () => {
       this.syncState();
@@ -102,10 +94,8 @@ export class Toggle extends DisposableOwner {
 
 /** A native checkbox presentation backed by the shared Toggle state model. */
 export class Checkbox extends Toggle {
-  constructor(options?: ToggleOptions);
-  constructor(label: string, checked?: boolean, onChange?: (checked: boolean) => void);
-  constructor(optionsOrLabel: ToggleOptionsOrLabel = {}, checked = false, onChange?: (checked: boolean) => void) {
-    super(optionsOrLabel, checked, onChange);
+  constructor(container: HTMLElement, options: ToggleOptions) {
+    super(container, options);
     this.element.classList.add("zeta-checkbox");
   }
 }
@@ -114,17 +104,15 @@ export class Checkbox extends Toggle {
 export class Switch extends Toggle {
   readonly track: HTMLSpanElement;
 
-  constructor(options?: ToggleOptions);
-  constructor(label: string, checked?: boolean, onChange?: (checked: boolean) => void);
-  constructor(optionsOrLabel: ToggleOptionsOrLabel = {}, checked = false, onChange?: (checked: boolean) => void) {
-    super(optionsOrLabel, checked, onChange);
+  constructor(container: HTMLElement, options: ToggleOptions) {
+    super(container, options);
     this.element.classList.add("zeta-switch");
     this.input.setAttribute("role", "switch");
     const track = h(this.element.ownerDocument, "span");
     this.track = track;
     track.className = "zeta-switch-track";
     track.setAttribute("aria-hidden", "true");
-    const contentPlacement = typeof optionsOrLabel === "string" ? undefined : optionsOrLabel.contentPlacement;
+    const contentPlacement = options.contentPlacement;
     if (contentPlacement === "before-control" && this.contentElement) this.element.append(track);
     else this.element.insertBefore(track, this.input.nextSibling);
     this.syncState();

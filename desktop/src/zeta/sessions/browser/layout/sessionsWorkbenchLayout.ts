@@ -44,12 +44,11 @@ export class SessionsWorkbenchLayout extends DisposableOwner implements IResizab
     const state = this.stateModel.state;
     this.projectFrameInsets(state.auxiliarybar.visible);
     this.grid = this.own(SerializableGrid.deserialize(
+      this.element,
       createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
       { fromJSON: data => this.view(parseSessionsPartId(data)) },
-      container.ownerDocument,
       { sashPresentation: { type: "inset", gap: PART_GUTTER } },
     ));
-    this.element.append(this.grid.element);
     if (options.storageService) this.own(options.storageService.onWillSaveState(() => this.saveState()));
     this.defer(() => this.saveState());
   }

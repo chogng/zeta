@@ -10,10 +10,11 @@ export class WorkspaceTrustSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
   private active = true;
 
-  constructor(ownerDocument: Document, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService) {
+  constructor(container: HTMLElement, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService) {
     super();
-    this.element = h(ownerDocument, "div");
+    this.element = h(container.ownerDocument, "div");
     this.element.className = "zeta-workspace-trust-settings";
+    container.append(this.element);
     this.defer(() => { this.active = false; });
     void this.load();
   }

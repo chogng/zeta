@@ -80,15 +80,14 @@ export class WorkbenchLayout
       initialState.panel.visible,
     );
     this.grid = this.own(SerializableGrid.deserialize(
+      this.element,
       createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
       { fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
-      container.ownerDocument,
       {
         sashPresentation: { type: "inset", gap: PART_GUTTER_SIZE },
         edgeSnapping: true,
       },
     ));
-    this.element.append(this.grid.element);
     this.own(this.grid.onDidChange(() => {
       this.projectPartFrameInsets();
       this.publishPartVisibility();

@@ -40,23 +40,23 @@ export class OutputViewPane extends ViewPane {
   private autoScroll: boolean;
   private titleStateKey = "";
 
-  constructor(options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorService?: IEditorService, private readonly workspaceContextService?: IWorkspaceContextService, private readonly hostService?: IWorkbenchHostService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorService?: IEditorService, private readonly workspaceContextService?: IWorkspaceContextService, private readonly hostService?: IWorkbenchHostService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-output");
     this.filters = this.own(new OutputFilterState(storageService));
     this.autoScroll = storageService?.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true) ?? true;
-    this.titleActions = this.own(new ActionBar({ ownerDocument: options.ownerDocument, ariaLabel: "Output actions", highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+    this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Output actions", highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
     this.titleActions.element.classList.add("zeta-toolbar", "zeta-output-title-actions");
-    const filterBar = h(options.ownerDocument, "div");
+    const filterBar = h(container.ownerDocument, "div");
     filterBar.className = "zeta-output-filter-bar";
-    this.filterInput = h(options.ownerDocument, "input");
+    this.filterInput = h(container.ownerDocument, "input");
     this.filterInput.className = "zeta-output-filter-input";
     this.filterInput.type = "search";
     this.filterInput.placeholder = "Filter Output (prefix with ! to exclude)";
     this.filterInput.setAttribute("aria-label", "Filter Output");
     this.filterInput.value = this.filters.text;
     filterBar.append(this.filterInput);
-    this.content = h(options.ownerDocument, "div");
+    this.content = h(container.ownerDocument, "div");
     this.content.className = "zeta-output-content";
     this.content.setAttribute("role", "log");
     this.content.setAttribute("aria-live", "off");

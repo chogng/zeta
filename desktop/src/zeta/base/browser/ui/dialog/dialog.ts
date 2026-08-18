@@ -11,7 +11,6 @@ let nextDialogId = 1;
 export interface DialogOptions {
   readonly title: string;
   readonly content: Element | string;
-  readonly ownerDocument?: Document;
 }
 
 /** A modal dialog backed by the browser's native dialog element. */
@@ -20,9 +19,9 @@ export class Dialog extends DisposableOwner {
   private resolve: ((result: string) => void) | undefined;
   private shown = false;
 
-  constructor(options: DialogOptions) {
+  constructor(container: HTMLElement, options: DialogOptions) {
     super();
-    const ownerDocument = options.ownerDocument ?? document;
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "dialog");
     this.element = element;
     this.defer(() => element.remove());
@@ -40,6 +39,7 @@ export class Dialog extends DisposableOwner {
       body.append(options.content);
     }
     element.append(heading, body);
+    container.append(element);
     this.own(addDisposableListener(element, "close", () => {
       this.finish(element.returnValue);
     }));

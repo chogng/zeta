@@ -10,7 +10,6 @@ export interface AsyncTreeTwistieState extends TreeTwistieState {
 }
 
 interface AsyncDataTreeCommonOptions<T> {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
@@ -133,9 +132,9 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
   readonly onDidChangeLoadState: Event<AsyncDataTreeLoadStateEvent<T>> = this._onDidChangeLoadState.event;
   readonly onDidError: Event<AsyncDataTreeErrorEvent<T>> = this._onDidError.event;
 
-  constructor(protected readonly dataSource: AsyncTreeDataSource<TInput, T>, protected readonly options: TOptions) {
+  constructor(protected readonly container: HTMLElement, protected readonly dataSource: AsyncTreeDataSource<TInput, T>, protected readonly options: TOptions) {
     super();
-    this.tree = this.own(this.createTree(options));
+    this.tree = this.own(this.createTree(container, options));
     this.element = this.tree.element;
     this.own(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
       const state = this.states.get(this.getId(element));
@@ -148,7 +147,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
     });
   }
 
-  protected abstract createTree(options: TOptions): AsyncTreeView<T>;
+  protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;
 
   getInput(): TInput | undefined { return this.input; }
   get focus(): T | undefined { return this.tree.focus; }
@@ -264,9 +263,8 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
   get onDidChangeSelection(): Event<ObjectTreeSelectionChangeEvent<T>> { return this.tree.onDidChangeSelection as Event<ObjectTreeSelectionChangeEvent<T>>; }
   get onDidChangeCollapseState(): Event<ObjectTreeCollapseStateChangeEvent<T>> { return this.tree.onDidChangeCollapseState as Event<ObjectTreeCollapseStateChangeEvent<T>>; }
 
-  protected createTree(options: AsyncDataTreeOptions<T>): AsyncTreeView<T> {
-    const tree = new ObjectTree<T>({
-      ownerDocument: options.ownerDocument,
+  protected createTree(container: HTMLElement, options: AsyncDataTreeOptions<T>): AsyncTreeView<T> {
+    const tree = new ObjectTree<T>(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,
@@ -298,9 +296,8 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 
   getCompressedTreeNode(element: T): CompressedTreeNode<T> | undefined { return this.tree.getCompressedTreeNode?.(element); }
 
-  protected createTree(options: CompressibleAsyncDataTreeOptions<T>): AsyncTreeView<T> {
-    const tree = new CompressibleObjectTree<T>({
-      ownerDocument: options.ownerDocument,
+  protected createTree(container: HTMLElement, options: CompressibleAsyncDataTreeOptions<T>): AsyncTreeView<T> {
+    const tree = new CompressibleObjectTree<T>(container, {
       ariaLabel: options.ariaLabel,
       indent: options.indent,
       indentGuides: options.indentGuides,

@@ -39,8 +39,7 @@ export class SettingsEditorContribution extends DisposableOwner {
 
   constructor(options: SettingsEditorContributionOptions) {
     super();
-    this.editor = this.own(new SettingsEditor({
-      ownerDocument: options.container.ownerDocument,
+    this.editor = this.own(new SettingsEditor(options.container, {
       contextViewProvider: options.contextViewProvider,
       configurationService: options.configurationService,
       dialogService: options.dialogService,

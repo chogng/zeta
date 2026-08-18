@@ -10,6 +10,7 @@ import { FoldingDecorationProvider } from "../../browser/foldingDecorations.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -48,7 +49,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
     lineGutterDecoration: new FoldingDecorationProvider(folding),
   });
   viewport.layout({ width: 300, height: 60 });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
 
@@ -87,7 +88,7 @@ test("Folding controller routes macOS Command+K chords without accepting Control
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, lineGutterDecoration: new FoldingDecorationProvider(folding) });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
@@ -112,7 +113,7 @@ test("Folding controller collapses and expands every range through Ctrl+K chords
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, lineGutterDecoration: new FoldingDecorationProvider(folding) });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Windows });
   input.dispatchEvent(keyboardEvent(dom.window, "k", { ctrlKey: true }));
@@ -135,7 +136,7 @@ test("Folding controller recursively folds nested regions through platform prefi
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 3 }, { startLineIndex: 2, endLineIndex: 3 }]);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, lineGutterDecoration: new FoldingDecorationProvider(folding) });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
@@ -160,7 +161,7 @@ test("Folding controller creates and removes manual ranges through macOS prefix 
   using folding = new EditorFoldingModel(model);
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, lineGutterDecoration: new FoldingDecorationProvider(folding) });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 
@@ -184,7 +185,7 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
   using hiddenRanges = new EditorHiddenRangeModel(model, folding);
   folding.setRanges([{ startLineIndex: 0, endLineIndex: 5 }, { startLineIndex: 1, endLineIndex: 4 }, { startLineIndex: 2, endLineIndex: 3 }]);
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections, lineVisibilitySource: hiddenRanges, lineGutterDecoration: new FoldingDecorationProvider(folding) });
-  const input = dom.window.document.createElement("textarea") as unknown as HTMLTextAreaElement;
+  const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
   viewport.element.append(input);
   using controller = new FoldingController(input, viewport, selections, folding, { operatingSystem: OperatingSystem.Macintosh });
 

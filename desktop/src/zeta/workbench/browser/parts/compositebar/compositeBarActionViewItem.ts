@@ -74,12 +74,10 @@ export class CompositeBarActionViewItem extends ActionViewItem {
     this.setupHover(container, this.compositeAction.tooltip);
     const action = h(container.ownerDocument, "span");
     action.className = "zeta-composite-bar-action";
-    const label = this.own(new IconLabel({
+    const label = this.own(new IconLabel(action, {
       label: options.label,
       icon: options.icon,
-      ownerDocument: container.ownerDocument,
     }));
-    action.append(label.element);
     container.append(action);
     this.own(addDisposableListener(container, "click", (event) => {
       event.preventDefault();
@@ -135,12 +133,10 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
     this.setupHover(container, this.action.tooltip);
     const action = h(container.ownerDocument, "span");
     action.className = "zeta-composite-bar-action";
-    const label = this.own(new IconLabel({
+    const label = this.own(new IconLabel(action, {
       label: this.action.label,
       icon: this.action.icon,
-      ownerDocument: container.ownerDocument,
     }));
-    action.append(label.element);
     container.append(action);
     this.own(addDisposableListener(container, "click", (event) => {
       event.preventDefault();

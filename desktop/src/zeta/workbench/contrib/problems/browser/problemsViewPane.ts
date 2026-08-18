@@ -39,10 +39,10 @@ export class ProblemsViewPane extends ViewPane {
   private navigationError: string | undefined;
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorService: IEditorService) {
-    super(options);
+  constructor(container: HTMLElement, options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorService: IEditorService) {
+    super(container, options);
     this.contentElement.classList.add("zeta-problems");
-    const document = options.ownerDocument;
+    const document = container.ownerDocument;
     const controls = h(document, "div");
     controls.className = "zeta-problems-controls";
     this.filterInput = h(document, "input");
@@ -61,7 +61,7 @@ export class ProblemsViewPane extends ViewPane {
       checked: undefined,
       run: () => this.filterInput.focus(),
     };
-    this.titleActions = this.own(new ActionBar({ ownerDocument: document, ariaLabel: "Problems actions", actions: [focusFilterAction] }));
+    this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Problems actions", actions: [focusFilterAction] }));
     this.titleActions.element.classList.add("zeta-toolbar");
     const severityControls = h(document, "div");
     severityControls.className = "zeta-problems-severities";
@@ -87,7 +87,7 @@ export class ProblemsViewPane extends ViewPane {
     this.contentElement.append(controls, this.statusElement, this.resultsElement);
     this.own(addDisposableListener(this.filterInput, "input", () => this.render()));
     this.own(addDisposableListener(this.resultsElement, "click", event => {
-      const button = event.target instanceof options.ownerDocument.defaultView!.Element ? event.target.closest<HTMLButtonElement>(".zeta-problems-item-button") : null;
+      const button = event.target instanceof container.ownerDocument.defaultView!.Element ? event.target.closest<HTMLButtonElement>(".zeta-problems-item-button") : null;
       const index = Number(button?.dataset.problemIndex);
       const problem = Number.isSafeInteger(index) ? this.renderedProblems[index] : undefined;
       if (problem) void this.openProblem(problem);

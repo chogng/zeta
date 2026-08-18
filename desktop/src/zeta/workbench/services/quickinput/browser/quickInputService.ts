@@ -76,8 +76,7 @@ export class WorkbenchQuickInputService
 
   createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
     let quickPick: BrowserQuickPick<TItem>;
-    quickPick = new BrowserQuickPick<TItem>({
-      ownerDocument: this.ownerDocument,
+    quickPick = new BrowserQuickPick<TItem>(this.host, {
       onShow: (candidate) => this.show(candidate),
       onHide: (candidate) => this.hide(candidate),
       onDispose: (candidate) => {

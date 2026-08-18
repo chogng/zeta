@@ -25,13 +25,12 @@ export interface WorkbenchToolBarOptions {
  */
 export class WorkbenchToolBar extends ToolBar {
   constructor(
+    container: HTMLElement,
     contextMenuProvider: IContextMenuProvider,
-    ownerDocument: Document = document,
     options: WorkbenchToolBarOptions = {},
   ) {
-    super({
+    super(container, {
       contextMenuProvider,
-      ownerDocument,
       ariaLabel: options.ariaLabel,
       orientation: options.orientation,
       presentation: options.presentation,
@@ -55,13 +54,13 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
   private readonly menu: IMenu & Disposable;
 
   constructor(
+    container: HTMLElement,
     menuService: IMenuService,
     contextMenuProvider: IContextMenuProvider,
     menuId: MenuId,
-    ownerDocument: Document = document,
     options: MenuWorkbenchToolBarOptions = {},
   ) {
-    super(contextMenuProvider, ownerDocument, options);
+    super(container, contextMenuProvider, options);
     this.menuOptions = options.menuOptions;
     const menu = this.own(menuService.createMenu(menuId));
     this.menu = menu;

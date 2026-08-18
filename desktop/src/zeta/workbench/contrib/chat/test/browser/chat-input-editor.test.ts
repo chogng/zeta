@@ -5,6 +5,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../../../../workbench/contrib/chat/browser/input/chatInputEditor.js";
 import { SlashCommandCatalog } from "../../../../../workbench/contrib/chat/common/slashCommands.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const slashCommands = new SlashCommandCatalog([], []);
 
@@ -97,7 +98,7 @@ class FakeChatInputEditor extends DisposableOwner implements IChatInputEditor {
 
   constructor(options: ChatInputEditorOptions) {
     super();
-    this.element = options.container.ownerDocument.createElement("div");
+    this.element = h(options.container.ownerDocument, "div");
     options.container.append(this.element);
     this.defer(() => this.element.remove());
   }

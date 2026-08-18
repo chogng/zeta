@@ -84,15 +84,17 @@ export class SplitView extends DisposableOwner {
   readonly onDidSashReset: Event<number> = this._onDidSashReset.event;
 
   constructor(
+    container: HTMLElement,
     readonly orientation: SplitViewOrientation,
-    ownerDocument: Document = document,
     private readonly options: SplitViewOptions = {},
   ) {
     super();
+    const ownerDocument = container.ownerDocument;
     const element = h(ownerDocument, "div");
     this.element = element;
     this.defer(() => element.remove());
     element.className = `zeta-split-view zeta-split-view-${orientation}`;
+    container.append(element);
     this._startSnappingEnabled = options.startSnappingEnabled ?? true;
     this._endSnappingEnabled = options.endSnappingEnabled ?? true;
   }
@@ -403,8 +405,8 @@ export class SplitView extends DisposableOwner {
 
   private addSash(boundaryIndex: number): void {
     const sash = this.sashes.add(new Sash(
+      this.element,
       this.orientation === "horizontal" ? "vertical" : "horizontal",
-      this.element.ownerDocument,
       this.options.sashPresentation,
     ));
     sash.orthogonalStartSash = this._orthogonalStartSash;

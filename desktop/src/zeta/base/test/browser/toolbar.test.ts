@@ -11,9 +11,8 @@ import { AnchorPosition } from "../../common/layout.js";
 test("ToolBar renders primary actions and trails More Actions", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const contextMenuProvider = new TestContextMenuProvider();
-  const toolbar = new ToolBar({
+  const toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider,
-    ownerDocument: dom.window.document,
     ariaLabel: "Test actions",
   });
   toolbar.setActions(
@@ -47,9 +46,8 @@ test("ToolBar renders primary actions and trails More Actions", () => {
 
 test("ToolBar exposes component-owned foreground presentations", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const toolbar = new ToolBar({
+  const toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: new TestContextMenuProvider(),
-    ownerDocument: dom.window.document,
     presentation: "inherit-foreground",
   });
 
@@ -61,9 +59,8 @@ test("ToolBar exposes component-owned foreground presentations", () => {
 
 test("ToolBar highlights checked actions only when requested", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const toolbar = new ToolBar({
+  const toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: new TestContextMenuProvider(),
-    ownerDocument: dom.window.document,
     highlightToggledItems: true,
   });
   toolbar.setActions([{ ...action("checked"), checked: true }]);
@@ -86,9 +83,8 @@ test("ToolBar applies its hover anchor position to primary and More Actions item
       return managedHover();
     },
   });
-  using toolbar = new ToolBar({
+  using toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: new TestContextMenuProvider(),
-    ownerDocument: dom.window.document,
     hoverAnchorPosition: AnchorPosition.Below,
   });
   toolbar.setActions([action("primary")], [action("secondary")]);
@@ -100,9 +96,8 @@ test("ToolBar applies its hover anchor position to primary and More Actions item
 
 test("ToolBar omits More Actions when secondary actions are empty", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const toolbar = new ToolBar({
+  const toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: new TestContextMenuProvider(),
-    ownerDocument: dom.window.document,
   });
   toolbar.setActions(
     [new Separator(), action("primary"), new Separator()],
@@ -119,9 +114,8 @@ test("ToolBar omits More Actions when secondary actions are empty", () => {
 
 test("ToolBar can place More Actions before a named primary action", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const toolbar = new ToolBar({
+  const toolbar = new ToolBar(dom.window.document.body, {
     contextMenuProvider: new TestContextMenuProvider(),
-    ownerDocument: dom.window.document,
     moreActionsPlacement: { beforeActionId: "maximize" },
   });
   toolbar.setActions(

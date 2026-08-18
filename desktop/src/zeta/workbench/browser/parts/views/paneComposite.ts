@@ -19,8 +19,8 @@ export type PaneLayout = "stack" | "fill";
 export class PaneComposite extends ViewPaneContainer {
   readonly title: string;
 
-  constructor(options: PaneCompositeOptions) {
-    super(options);
+  constructor(container: HTMLElement, options: PaneCompositeOptions) {
+    super(container, options);
     this.title = options.viewContainer.title;
     this.element.classList.add("zeta-pane-composite");
     this.element.classList.toggle("zeta-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");

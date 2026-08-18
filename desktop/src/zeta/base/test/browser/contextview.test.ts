@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { ContextViewHideReason as ContextViewHideReasonValue } from "../../browser/ui/contextview/contextview.js";
+import { h } from "../../browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><html><body><main></main><button id='anchor'>Anchor</button><button id='outside'>Outside</button></body></html>");
 Object.defineProperties(globalThis, {
@@ -29,7 +30,7 @@ test("ContextView positions next to its anchor and flips within the viewport", (
 
   assert.equal(contextView.show({
     anchor,
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
     gap: 4,
   }), true);
 
@@ -51,12 +52,12 @@ test("ContextView reports replacement and outside-pointer hide reasons exactly o
 
   contextView.show({
     anchor,
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
     onHide: (reason) => reasons.push(reason),
   });
   contextView.show({
     anchor,
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
     onHide: (reason) => reasons.push(reason),
   });
   outside.dispatchEvent(new environment.window.MouseEvent("pointerdown", { bubbles: true }));
@@ -75,7 +76,7 @@ test("ContextView restores focus after Escape closes the topmost view", () => {
   const anchor = requiredElement<HTMLButtonElement>("#anchor");
   anchor.getBoundingClientRect = () => rectangle(20, 20, 30, 20);
   anchor.focus();
-  const content = environment.window.document.createElement("button");
+  const content = h(environment.window.document, "button");
   const contextView = new ContextView(container);
   contextView.element.getBoundingClientRect = () => rectangle(0, 0, 100, 80);
   const reasons: ContextViewHideReasonValue[] = [];
@@ -132,7 +133,7 @@ test("ContextView follows anchor and content size changes", () => {
   contextView.element.getBoundingClientRect = () => rectangle(0, 0, viewWidth, 80);
   contextView.show({
     anchor,
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
   });
 
   assert.equal(observers.length, 1);
@@ -166,7 +167,7 @@ test("ContextView hides when a resized element anchor is no longer connected", (
     value: TestResizeObserver,
   });
   const container = requiredElement<HTMLElement>("main");
-  const anchor = environment.window.document.createElement("button");
+  const anchor = h(environment.window.document, "button");
   container.append(anchor);
   anchor.getBoundingClientRect = () => rectangle(40, 40, 30, 20);
   const contextView = new ContextView(container);
@@ -174,7 +175,7 @@ test("ContextView hides when a resized element anchor is no longer connected", (
   const reasons: ContextViewHideReasonValue[] = [];
   contextView.show({
     anchor,
-    content: environment.window.document.createElement("div"),
+    content: h(environment.window.document, "div"),
     onHide: (reason) => reasons.push(reason),
   });
 

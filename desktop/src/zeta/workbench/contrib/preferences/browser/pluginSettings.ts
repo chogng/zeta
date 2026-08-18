@@ -9,13 +9,16 @@ import "./media/connectorSettings.css";
  */
 export class PluginSettingsPane extends DisposableOwner {
   readonly element: HTMLDivElement;
+  private readonly document: Document;
   private readonly rows = this.own(new ResettableDisposableGroup());
   private loadGeneration = 0;
 
-  constructor(private readonly document: Document, private readonly plugins: IPluginService) {
+  constructor(container: HTMLElement, private readonly plugins: IPluginService) {
     super();
-    this.element = h(document, "div");
+    this.document = container.ownerDocument;
+    this.element = h(this.document, "div");
     this.element.className = "zeta-integration-settings";
+    container.append(this.element);
     this.own(plugins.onDidChange(() => void this.reload()));
     void this.reload();
     this.defer(() => this.element.remove());

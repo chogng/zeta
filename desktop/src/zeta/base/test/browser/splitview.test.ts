@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -38,7 +39,7 @@ class TestView {
     readonly maximumSize: number,
     readonly snap = false,
   ) {
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
   }
 
   layout(size: number, offset: number, orthogonalSize: number): void {
@@ -52,7 +53,7 @@ class TestView {
 
 test("SplitView owns constrained pixel sizes and positions", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   const fixed = new TestView(dom.window.document, 35, 35);
   const center = new TestView(dom.window.document, 100, Infinity);
   const side = new TestView(dom.window.document, 180, 600);
@@ -87,7 +88,7 @@ test("SplitView owns constrained pixel sizes and positions", () => {
 
 test("SplitView clamps absolute sash drag deltas without boundary jumps", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 260), 200);
   split.addView(new TestView(dom.window.document, 100, Infinity), 200);
   split.layout(400, 100);
@@ -110,7 +111,7 @@ test("SplitView clamps absolute sash drag deltas without boundary jumps", () => 
 
 test("SplitView retains and restores hidden view size", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   const sidebar = new TestView(dom.window.document, 180, 600);
   const editor = new TestView(dom.window.document, 120, Infinity);
   split.addView(sidebar, 220);
@@ -134,7 +135,7 @@ test("SplitView retains and restores hidden view size", () => {
 
 test("SplitView snaps a leading view closed and restores it from the edge sash", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   const sidebar = new TestView(dom.window.document, 180, 600, true);
   split.addView(sidebar, 220);
   split.addView(new TestView(dom.window.document, 120, Infinity), 580);
@@ -160,7 +161,7 @@ test("SplitView snaps a leading view closed and restores it from the edge sash",
 
 test("SplitView snaps a trailing view closed and restores it from the edge sash", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("vertical", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "vertical");
   const panel = new TestView(dom.window.document, 80, Infinity, true);
   split.addView(new TestView(dom.window.document, 120, Infinity), 500);
   split.addView(panel, 200);
@@ -186,7 +187,7 @@ test("SplitView snaps a trailing view closed and restores it from the edge sash"
 
 test("SplitView sashes support keyboard resizing", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 40, Infinity), 100);
   split.addView(new TestView(dom.window.document, 40, Infinity), 100);
   split.layout(200, 100);
@@ -209,7 +210,7 @@ test("SplitView sashes support keyboard resizing", () => {
 
 test("SplitView Alt-drag resizes the enclosed pane symmetrically", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.addView(new TestView(dom.window.document, 100, 400), 200);
@@ -226,7 +227,7 @@ test("SplitView Alt-drag resizes the enclosed pane symmetrically", () => {
 
 test("SplitView rebases an active drag when Alt changes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.addView(new TestView(dom.window.document, 100, 400), 200);
@@ -250,7 +251,7 @@ test("SplitView rebases an active drag when Alt changes", () => {
 
 test("SplitView keeps a snap sash stable while its view hides and restores", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   dom.window.document.body.append(split.element);
   split.addView(new TestView(dom.window.document, 100, 400, true), 160);
   split.addView(new TestView(dom.window.document, 100, Infinity), 440);
@@ -275,7 +276,7 @@ test("SplitView keeps a snap sash stable while its view hides and restores", () 
 
 test("SplitView keyboard resizing crosses snap boundaries", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 400, true), 100);
   split.addView(new TestView(dom.window.document, 100, Infinity), 500);
   split.layout(600, 200);
@@ -293,7 +294,7 @@ test("SplitView keyboard resizing crosses snap boundaries", () => {
 
 test("SplitView disables a hidden outer snap sash when edge snapping is disabled", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document, { startSnappingEnabled: false });
+  const split = new SplitView(dom.window.document.body, "horizontal", { startSnappingEnabled: false });
   split.addView(new TestView(dom.window.document, 100, 400, true), 140);
   split.addView(new TestView(dom.window.document, 100, Infinity), 460);
   split.layout(600, 200);
@@ -318,7 +319,7 @@ test("SplitView disables a hidden outer snap sash when edge snapping is disabled
 
 test("SplitView uses VS Code trailing snap threshold boundaries", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, Infinity), 500);
   split.addView(new TestView(dom.window.document, 100, 400, true), 100);
   split.layout(600, 200);
@@ -337,7 +338,7 @@ test("SplitView uses VS Code trailing snap threshold boundaries", () => {
 
 test("SplitView emits reset for a visible logical boundary", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.addView(new TestView(dom.window.document, 100, 400), 200);
   split.layout(400, 200);
@@ -353,7 +354,7 @@ test("SplitView emits reset for a visible logical boundary", () => {
 
 test("SplitView resize crosses adjacent constraints into farther panes", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, 300), 150);
   split.addView(new TestView(dom.window.document, 100, 160), 150);
   split.addView(new TestView(dom.window.document, 100, 400), 300);
@@ -371,7 +372,7 @@ test("SplitView resize crosses adjacent constraints into farther panes", () => {
 
 test("SplitView exposes only the sash next to a run of hidden snap views", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   split.addView(new TestView(dom.window.document, 100, Infinity), 400);
   split.addView(new TestView(dom.window.document, 100, 400, true), 200);
   split.addView(new TestView(dom.window.document, 100, 400, true), { type: "invisible", cachedVisibleSize: 200 });
@@ -394,7 +395,7 @@ test("SplitView exposes only the sash next to a run of hidden snap views", () =>
 
 test("SplitView publishes snap visibility after applying the complete resize", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   const observedSizes: number[][] = [];
   class ObservingView extends TestView {
     override setVisible(visible: boolean): void {
@@ -419,7 +420,7 @@ test("SplitView publishes snap visibility after applying the complete resize", (
 
 test("SplitView validates view constraints before mounting", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const split = new SplitView("horizontal", dom.window.document);
+  const split = new SplitView(dom.window.document.body, "horizontal");
   assert.throws(
     () => split.addView(
       new TestView(dom.window.document, 100, 40),

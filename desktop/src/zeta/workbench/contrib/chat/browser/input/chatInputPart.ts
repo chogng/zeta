@@ -54,11 +54,13 @@ export class ChatInputPart extends DisposableOwner {
   private skillCommands: ChatInputState["skillCommands"] = [];
   private mode: ChatInputMode = "agent";
 
-  constructor(ownerDocument: Document, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
+  constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
     super();
+    const ownerDocument = container.ownerDocument;
     this.delegate = delegate;
     this.element = h(ownerDocument, "div");
     this.element.className = "zeta-chat-input-part";
+    container.append(this.element);
     this.status = h(ownerDocument, "div");
     this.status.className = "zeta-chat-status";
     this.status.setAttribute("role", "status");
@@ -75,7 +77,7 @@ export class ChatInputPart extends DisposableOwner {
       ariaLabel: "Chat message",
       slashCommands: this.slashCommands,
     }));
-    this.inputToolbar = this.own(new WorkbenchToolBar(contextMenuService, ownerDocument, {
+    this.inputToolbar = this.own(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
       ariaLabel: "Chat input actions",
       actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService, contextViewService),
     }));
@@ -437,9 +439,8 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
     if (!contextView || this.visible || !this.action.enabled) return;
     const actions = typeof this.selectorAction.actions === "function" ? this.selectorAction.actions() : this.selectorAction.actions;
     if (actions.length === 0) return;
-    const menu = new Menu({
+    const menu = new Menu(contextView.element, {
       actions,
-      ownerDocument: this.button.element.ownerDocument,
       contextViewContainer: this.contextViewService.container,
       layer: 20,
       onDidSelect: () => {

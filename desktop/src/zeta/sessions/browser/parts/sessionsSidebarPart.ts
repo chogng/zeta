@@ -11,10 +11,9 @@ export class SessionsSidebarPart extends WorkbenchPart {
   override get minimumWidth(): number { return 190; }
   override get maximumWidth(): number { return 460; }
 
-  constructor(ownerDocument: Document, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
-    super("sidebar", ownerDocument);
-    this.list = this.own(new SessionsList(ownerDocument, sessionService, viewService, "Sessions", "New session"));
-    this.contentElement.append(this.list.element);
+  constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
+    super(container, "sidebar");
+    this.list = this.own(new SessionsList(this.contentElement, sessionService, viewService, "Sessions", "New session"));
   }
 
   focus(): void { this.list.focus(); }

@@ -14,7 +14,7 @@ import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
 import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
 import { createViteDevSymbolIndexApi } from "../../symbolIndex/browser/symbolIndexApi.js";
-import { createViteDevConnectorApi } from "../../connectors/browser/connectorApi.js";
+import { createViteDevConnectorApi, type BrowserConnectorHostServices } from "../../connectors/browser/connectorApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
 import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
@@ -31,12 +31,12 @@ export interface ConnectedWebRendererApi {
 }
 
 /** Connects a browser Renderer host to the loopback Vite development bridge. */
-export async function connectViteDevRendererApi(hot: ViteDevHotContext, options: ViteDevAppServerConnectionOptions = {}, contributions: readonly ViteDevRendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
+export async function connectViteDevRendererApi(hot: ViteDevHotContext, connectorHostServices: BrowserConnectorHostServices, options: ViteDevAppServerConnectionOptions = {}, contributions: readonly ViteDevRendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
   const connection = new ViteDevAppServerConnection(hot, options);
   try {
     const metadata = await connection.connect();
     return {
-      api: createRendererHost(connection, contributions),
+      api: createRendererHost(connection, connectorHostServices, contributions),
       metadata,
       dispose: () => connection.dispose(),
     };
@@ -46,7 +46,7 @@ export async function connectViteDevRendererApi(hot: ViteDevHotContext, options:
   }
 }
 
-function createRendererHost(connection: ViteDevAppServerConnection, contributions: readonly ViteDevRendererCapabilityContribution[]): IRendererHost {
+function createRendererHost(connection: ViteDevAppServerConnection, connectorHostServices: BrowserConnectorHostServices, contributions: readonly ViteDevRendererCapabilityContribution[]): IRendererHost {
   const appServer = createViteDevAppServerApi(connection);
   const resource = createViteDevResourceApi(connection);
   const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
@@ -73,7 +73,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, contribution
     events: createViteDevServerEventApi(connection),
     codeIndex: createViteDevCodeIndexApi(connection),
     symbolIndex: createViteDevSymbolIndexApi(connection),
-    connectors: createViteDevConnectorApi(connection),
+    connectors: createViteDevConnectorApi(connection, connectorHostServices),
     plugins: createViteDevPluginApi(connection),
     marketplace: createViteDevMarketplaceApi(connection),
     toolSearch: createViteDevToolSearchApi(connection),

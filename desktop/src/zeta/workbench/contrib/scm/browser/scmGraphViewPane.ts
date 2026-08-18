@@ -49,11 +49,11 @@ export class ScmGraphViewPane extends ViewPane {
   private readonly expanded = new Map<string, ExpandedCommit>();
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
-    super({ ...options, headerActionsVisibility: "whenExpanded" });
+  constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
+    super(container, { ...options, headerActionsVisibility: "whenExpanded" });
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm-secondary-pane");
-    this.graphElement = h(options.ownerDocument, "div");
+    this.graphElement = h(container.ownerDocument, "div");
     this.graphElement.className = "zeta-scm-graph";
     this.graphElement.setAttribute("role", "status");
     this.graphElement.setAttribute("aria-live", "polite");
@@ -64,15 +64,13 @@ export class ScmGraphViewPane extends ViewPane {
     this.contentElement.append(this.graphElement);
     this.own(observeElementSize(this.graphElement, () => this.renderRows()));
     this.own(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
-    this.actions = this.own(new ScmGraphTitleActions({
-      ownerDocument: options.ownerDocument,
+    this.actions = this.own(new ScmGraphTitleActions(this.headerActionsElement, {
       gitService,
       menuService,
       contextMenuService,
       contextKeyService,
       refreshGraph: () => this.refresh(),
     }));
-    this.headerActionsElement.append(this.actions.element);
     this.defer(() => {
       this.disposed = true;
     });
@@ -389,9 +387,8 @@ export class ScmGraphViewPane extends ViewPane {
       button.title = `Open ${change.path} from ${commit.objectId.slice(0, 7)}`;
       const name = change.path.split("/").at(-1) ?? change.path;
       const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
-      const fileLabel = this.hovers.add(new IconLabel({
+      const fileLabel = this.hovers.add(new IconLabel(button, {
         label: name,
-        ownerDocument: document,
         reserveIconSpace: true,
         renderIcon: (container) => this.fileIconThemeService.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
         title: change.path,

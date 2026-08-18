@@ -32,27 +32,24 @@ export class BrowserDialogHandler implements IDialogHandler {
     const previousFocus = getActiveElement(ownerDocument);
     try {
       const content = createDialogContent(ownerDocument, request);
-      const dialog = disposables.add(new Dialog({
+      const dialog = disposables.add(new Dialog(this.container, {
         title: request.title ?? defaultTitle(request),
         content: content.element,
-        ownerDocument,
       }));
       dialog.element.dataset.dialogSeverity =
         request.kind === "message" ? request.severity : "question";
 
-      const primaryButton = disposables.add(new Button({
+      const primaryButton = disposables.add(new Button(content.actions, {
         label: request.primaryButton ??
           (request.kind === "confirmation" ? "Confirm" : "OK"),
-        ownerDocument,
         onClick: () => dialog.close(DialogResult.Primary),
       }));
       primaryButton.element.classList.add("zeta-dialog-primary-button");
       content.actions.append(primaryButton.element);
 
       if (request.kind === "confirmation") {
-        const cancelButton = disposables.add(new Button({
+        const cancelButton = disposables.add(new Button(content.actions, {
           label: request.cancelButton ?? "Cancel",
-          ownerDocument,
           onClick: () => dialog.close(DialogResult.Cancel),
         }));
         content.actions.append(cancelButton.element);

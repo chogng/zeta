@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -27,12 +28,11 @@ const { ScrollableElement, Scrollbar } = await import(
 
 test("ScrollableElement exposes a persistent directional content container", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollable = new ScrollableElement({
-    ownerDocument: dom.window.document,
+  const scrollable = new ScrollableElement(dom.window.document.body, {
     direction: "horizontal",
   });
-  const first = dom.window.document.createElement("span");
-  const second = dom.window.document.createElement("span");
+  const first = h(dom.window.document, "span");
+  const second = h(dom.window.document, "span");
   scrollable.replaceChildren(first);
   scrollable.append(second);
   assert.equal(scrollable.contentElement.parentElement, scrollable.scrollableElement);
@@ -66,11 +66,10 @@ test("ScrollableElement exposes a persistent directional content container", () 
 
 test("ScrollableElement reveals a descendant at the nearest horizontal edge", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollable = new ScrollableElement({
-    ownerDocument: dom.window.document,
+  const scrollable = new ScrollableElement(dom.window.document.body, {
     direction: "horizontal",
   });
-  const item = dom.window.document.createElement("span");
+  const item = h(dom.window.document, "span");
   scrollable.append(item);
   dom.window.document.body.append(scrollable.element);
   scrollable.reveal(item);
@@ -87,7 +86,7 @@ test("ScrollableElement reveals a descendant at the nearest horizontal edge", ()
   assert.equal(scrollable.state.left, 100);
   assert.equal(scrollable.state.top, 0);
   assert.throws(
-    () => scrollable.reveal(dom.window.document.createElement("span")),
+    () => scrollable.reveal(h(dom.window.document, "span")),
     /only reveal its descendants/,
   );
   scrollable.dispose();
@@ -96,8 +95,7 @@ test("ScrollableElement reveals a descendant at the nearest horizontal edge", ()
 
 test("Scrollbar owns two-axis state, elements, visibility, and ARIA", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollbar = new Scrollbar({
-    ownerDocument: dom.window.document,
+  const scrollbar = new Scrollbar(dom.window.document.body, {
     ariaLabel: "Scrollable test",
   });
   dom.window.document.body.append(scrollbar.element);
@@ -162,8 +160,7 @@ test("Scrollbar normalizes wheel input and propagates at boundaries", () => {
     readonly previous: { readonly left: number; readonly top: number };
     readonly current: { readonly left: number; readonly top: number };
   }> = [];
-  const scrollbar = new Scrollbar({
-    ownerDocument: dom.window.document,
+  const scrollbar = new Scrollbar(dom.window.document.body, {
     onScroll: (position) => positions.push(position),
   });
   const registration = scrollbar.onDidScroll((event) => {
@@ -238,8 +235,7 @@ test("Scrollbar normalizes wheel input and propagates at boundaries", () => {
 
 test("Scrollbar supports keyboard, track clicks, and thumb dragging", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollbar = new Scrollbar({
-    ownerDocument: dom.window.document,
+  const scrollbar = new Scrollbar(dom.window.document.body, {
     horizontal: "hidden",
     vertical: "visible",
   });
@@ -317,8 +313,7 @@ test("Scrollbar supports keyboard, track clicks, and thumb dragging", () => {
 
 test("Horizontal scrollbar supports keyboard, track clicks, and thumb dragging", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollbar = new Scrollbar({
-    ownerDocument: dom.window.document,
+  const scrollbar = new Scrollbar(dom.window.document.body, {
     direction: "horizontal",
     horizontal: "visible",
   });
@@ -364,8 +359,7 @@ test("Horizontal scrollbar supports keyboard, track clicks, and thumb dragging",
 
 test("Scrollbar can always consume wheel input", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const scrollbar = new Scrollbar({
-    ownerDocument: dom.window.document,
+  const scrollbar = new Scrollbar(dom.window.document.body, {
     wheel: { consume: "always" },
   });
   const viewport = requireElement(

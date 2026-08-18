@@ -13,10 +13,9 @@ export class ChatListWidget extends DisposableOwner {
   private visible = false;
   private shouldFollow = true;
 
-  constructor(ownerDocument: Document) {
+  constructor(container: HTMLElement) {
     super();
-    this.scrollable = this.own(new ScrollableElement({
-      ownerDocument,
+    this.scrollable = this.own(new ScrollableElement(container, {
       direction: "vertical",
       vertical: "auto",
       tabIndex: -1,

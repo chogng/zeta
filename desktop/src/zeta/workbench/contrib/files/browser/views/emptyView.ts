@@ -24,22 +24,22 @@ export class EmptyView extends ViewPane {
   private disposed = false;
 
   constructor(
+    container: HTMLElement,
     options: IViewPaneOptions,
     workspaceOpenService: IWorkspaceOpenService,
   ) {
-    super(options);
+    super(container, options);
     this.workspaceOpenService = workspaceOpenService;
     this.contentElement.classList.add("zeta-empty-explorer");
     this.defer(() => {
       this.disposed = true;
     });
 
-    const message = h(options.ownerDocument, "p");
+    const message = h(container.ownerDocument, "p");
     message.className = "zeta-empty-explorer-message";
     message.textContent = "Open a folder to explore its files.";
-    this.openButton = this.own(new Button({
+    this.openButton = this.own(new Button(this.contentElement, {
       label: "Open Folder",
-      ownerDocument: options.ownerDocument,
       enabled: workspaceOpenService.canOpenFolder,
       title: workspaceOpenService.canOpenFolder
         ? "Open Folder"
@@ -51,7 +51,7 @@ export class EmptyView extends ViewPane {
     this.openButton.element.classList.add(
       "zeta-empty-explorer-open-folder",
     );
-    this.statusElement = h(options.ownerDocument, "p");
+    this.statusElement = h(container.ownerDocument, "p");
     this.statusElement.className = "zeta-empty-explorer-status";
     this.statusElement.setAttribute("role", "status");
     this.statusElement.setAttribute("aria-live", "polite");

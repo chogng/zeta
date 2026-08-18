@@ -5,15 +5,15 @@ import { DragAndDropDataKind } from "../../browser/ui/dnd/dnd.js";
 import { ListDragOverPosition, ListDragTargetSector } from "../../browser/ui/list/list.js";
 import { ListView } from "../../browser/ui/list/listView.js";
 import { List } from "../../browser/ui/list/listWidget.js";
+import { h } from "../../browser/dom.js";
 
 test("ListView owns flat rows and sizing without Widget selection policy", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const view = new ListView<string>({
-    ownerDocument: dom.window.document,
+  const view = new ListView<string>(dom.window.document.body, {
     getId: (item) => item,
     getHeight: () => 24,
     renderItem: (item) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = item;
       return label;
     },
@@ -31,11 +31,10 @@ test("ListView owns flat rows and sizing without Widget selection policy", () =>
 
 test("List renders in its owner document and owns active navigation", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const list = new List<string>({
-    ownerDocument: dom.window.document,
+  const list = new List<string>(dom.window.document.body, {
     ariaLabel: "Choices",
     renderItem: (item) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = item;
       return label;
     },
@@ -65,10 +64,9 @@ test("List renders in its owner document and owns active navigation", () => {
 
 test("List maps mouse interaction to activation and acceptance", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const list = new List<string>({
-    ownerDocument: dom.window.document,
+  const list = new List<string>(dom.window.document.body, {
     renderItem: (item) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = item;
       return label;
     },
@@ -200,12 +198,11 @@ test("List DnD keeps feedback across nested leave events and clears an actual le
   dom.window.close();
 });
 
-function createDndList(dom: JSDOM, callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[0]["dnd"]>, "onDragOver" | "drop"> & Partial<NonNullable<ConstructorParameters<typeof List<string>>[0]["dnd"]>>): List<string> {
-  return new List<string>({
-    ownerDocument: dom.window.document,
+function createDndList(dom: JSDOM, callbacks: Pick<NonNullable<ConstructorParameters<typeof List<string>>[1]["dnd"]>, "onDragOver" | "drop"> & Partial<NonNullable<ConstructorParameters<typeof List<string>>[1]["dnd"]>>): List<string> {
+  return new List<string>(dom.window.document.body, {
     dnd: { getDragURI: (item) => `zeta://${item}`, ...callbacks },
     renderItem: (item) => {
-      const label = dom.window.document.createElement("span");
+      const label = h(dom.window.document, "span");
       label.textContent = item;
       return label;
     },

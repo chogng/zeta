@@ -7,6 +7,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
+import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -43,7 +44,7 @@ test("Line comment shortcut toggles current language comments through one editor
     selectionController: selections,
   });
   viewport.layout({ width: 200, height: 40 });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineCommentController(input, viewport, selections, {
     languageId: "typescript",
@@ -69,7 +70,7 @@ test("Line comment shortcut ignores unsupported languages and invalid wiring", (
   using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
   using configurations = new LanguageConfigurationRegistry();
   using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
-  const input = dom.window.document.createElement("textarea");
+  const input = h(dom.window.document, "textarea");
   container.append(input);
   using controller = new LineCommentController(input, viewport, selections, { languageId: "plaintext", configurations });
   const toggle = keydown(dom.window, "/", { ctrlKey: true });

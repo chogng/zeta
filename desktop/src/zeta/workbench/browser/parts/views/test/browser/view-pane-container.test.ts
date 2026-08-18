@@ -40,12 +40,11 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
       throw new Error("fixed view visibility cannot be changed");
     },
   } satisfies IViewContainerModel;
-  using container = new ViewPaneContainer({
+  using container = new ViewPaneContainer(browserEnvironment.window.document.body, {
     viewContainer,
     model,
     contextKeyService: contextKeys,
     instantiationService: {} as IInstantiationService,
-    ownerDocument: browserEnvironment.window.document,
   });
 
   assert.doesNotThrow(() => container.openView("test.fixed-view"));

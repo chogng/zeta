@@ -165,7 +165,7 @@ export class EditorWidget extends DisposableOwner {
     for (const contribution of getEditorContributions()) {
       contribution.install?.({
         kind: "document",
-        ownerDocument: parent.ownerDocument,
+        container: parent,
         documentActions: [...DEFAULT_DOCUMENT_ACTIONS, ...(this.options.toolbarActions?.map(action => ({ id: action.id, label: action.label })) ?? [])],
         onToggleMark: markType => this.handleTextMarkAction(markType),
         onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
@@ -191,7 +191,7 @@ export class EditorWidget extends DisposableOwner {
     container.className = "zeta-text-editor-widget-pane";
     const layoutContainer = h(parent.ownerDocument, "div");
     layoutContainer.className = "zeta-text-editor-widget-layout";
-    const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator({ ownerDocument: parent.ownerDocument, onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
+    const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(layoutContainer, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
     layoutContainer.append(container);
     parent.append(...[collaborationContribution?.element, formattingContribution?.element, layoutContainer].filter((element): element is HTMLElement => element !== undefined));

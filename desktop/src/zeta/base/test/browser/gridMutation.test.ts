@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IRectangle } from "../../browser/geometry.js";
+import { h } from "../../browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -34,7 +35,7 @@ class TestView {
     readonly minimumHeight = 0,
     readonly maximumHeight = Number.POSITIVE_INFINITY,
   ) {
-    this.element = ownerDocument.createElement("div");
+    this.element = h(ownerDocument, "div");
   }
 
   layout(_bounds: IRectangle): void {}
@@ -59,7 +60,7 @@ test("Grid addresses topology mutations by view identity", () => {
   const editor = new TestView(dom.window.document, 100);
   const panel = new TestView(dom.window.document, 100);
   const auxiliary = new TestView(dom.window.document, 100);
-  const grid = new Grid({
+  const grid = new Grid(dom.window.document.body, {
     type: "branch",
     orientation: "horizontal",
     size: 800,
@@ -67,7 +68,7 @@ test("Grid addresses topology mutations by view identity", () => {
       { type: "leaf", view: left, size: 200 },
       { type: "leaf", view: editor, size: 600 },
     ],
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
 
   grid.addView(panel, Sizing.Split, editor, Direction.Down);
@@ -94,17 +95,18 @@ test("SerializableGrid persists a mutated GridView topology", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const editor = new SerializableTestView(dom.window.document, "editor");
   const panel = new SerializableTestView(dom.window.document, "panel");
-  const grid = new SerializableGrid({
+  const grid = new SerializableGrid(dom.window.document.body, {
     type: "leaf",
     view: editor,
     size: 600,
-  }, dom.window.document);
+  });
   grid.layout(800, 600);
   grid.addView(panel, Sizing.Split, editor, Direction.Down);
 
   const snapshot = grid.serialize();
   const restoredViews = new Map<string, SerializableTestView>();
   const restored = SerializableGrid.deserialize(
+    dom.window.document.body,
     snapshot,
     {
       fromJSON(data) {
@@ -116,7 +118,6 @@ test("SerializableGrid persists a mutated GridView topology", () => {
         return view;
       },
     },
-    dom.window.document,
   );
   restored.layout(800, 600);
 

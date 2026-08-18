@@ -15,7 +15,6 @@ export interface ScrollbarWheelOptions {
 }
 
 interface ScrollableElementBaseOptions {
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   /** Page-level tab order position for the container. Defaults to `0`. */
   readonly tabIndex?: number;

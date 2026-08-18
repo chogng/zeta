@@ -45,8 +45,8 @@ export abstract class ActionViewItem extends DisposableOwner {
   focus(): void {}
 
   /** Creates a Button using the shared delay group for adjacent actions. */
-  protected createButton(options: ButtonOptions): Button {
-    return this.own(new Button({
+  protected createButton(container: HTMLElement, options: ButtonOptions): Button {
+    return this.own(new Button(container, {
       ...options,
       hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
       hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
@@ -76,16 +76,14 @@ export class ButtonActionViewItem extends ActionViewItem {
     if (this._button) {
       throw new Error(`Action view item is already rendered: ${this.action.id}`);
     }
-    this._button = this.createButton({
+    this._button = this.createButton(container, {
       label: this.action.label,
-      ownerDocument: container.ownerDocument,
       icon: this.action.icon,
       title: this.action.tooltip,
       enabled: this.action.enabled,
       checked: this.action.checked,
       onClick: () => this.runAction(),
     });
-    container.append(this._button.element);
   }
 
   override focus(): void {

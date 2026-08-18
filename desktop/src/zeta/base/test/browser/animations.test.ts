@@ -8,10 +8,11 @@ import {
   UI_ANIMATION_DURATION,
   UI_ANIMATION_EASING,
 } from "../../browser/ui/animations/animations.js";
+import { h } from "../../browser/dom.js";
 
 test("UI animations use shared timing and honor reduced motion", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
-  const element = dom.window.document.createElement("button");
+  const element = h(dom.window.document, "button");
   const calls: Array<{ keyframes: unknown; options: unknown }> = [];
   Object.defineProperty(element, "animate", {
     configurable: true,

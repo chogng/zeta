@@ -10,7 +10,6 @@ import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewIt
 
 export interface ToolBarOptions {
   readonly contextMenuProvider: IContextMenuProvider;
-  readonly ownerDocument?: Document;
   readonly ariaLabel?: string;
   readonly orientation?: ActionBarOrientation;
   readonly actionViewItemProvider?: ActionViewItemProvider;
@@ -41,12 +40,11 @@ export class ToolBar extends DisposableOwner {
   private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
   private secondaryActions: readonly IAction[] = [];
 
-  constructor(options: ToolBarOptions) {
+  constructor(container: HTMLElement, options: ToolBarOptions) {
     super();
     this.moreActionsPlacement = options.moreActionsPlacement;
     const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
-    this.actionBar = this.own(new ActionBar({
-      ownerDocument: options.ownerDocument,
+    this.actionBar = this.own(new ActionBar(container, {
       ariaLabel: options.ariaLabel,
       orientation: options.orientation,
       highlightToggledItems: options.highlightToggledItems,

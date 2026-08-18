@@ -10,7 +10,7 @@ test("status bar entries render an icon before their text", () => {
   const document = new JSDOM("<!doctype html><body></body>").window.document;
   using service = new StatusbarService();
   using entry = service.addEntry({ icon: lxiconsLibrary.gitBranch, text: "main", ariaLabel: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
   const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
@@ -40,7 +40,7 @@ test("status bar entries support accessible icon-only presentation", () => {
   const document = new JSDOM("<!doctype html><body></body>").window.document;
   using service = new StatusbarService();
   using entry = service.addEntry({ icon: lxiconsLibrary.remote, text: "", ariaLabel: "App Server ready", tooltip: "Connected" }, { id: "test.remote", alignment: StatusbarAlignment.Left });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
   const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
@@ -64,7 +64,7 @@ test("status bar entries render grouped segments inside one action", () => {
     ],
     ariaLabel: "Errors: 2, Warnings: 1",
   }, { id: "test.problems", alignment: StatusbarAlignment.Left });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
   const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
   const segments = label?.querySelectorAll<HTMLElement>(".zeta-statusbar-item-segment");
@@ -88,7 +88,7 @@ test("status bar entries compact adjacent members of the same group", () => {
   using branch = service.addEntry({ text: "main", run() {} }, { id: "test.branch", alignment: StatusbarAlignment.Left, priority: 2, compactGroup: "git" });
   using sync = service.addEntry({ icon: lxiconsLibrary.sync, text: "2↓ 1↑", run() {} }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
   using problems = service.addEntry({ text: "0" }, { id: "test.problems", alignment: StatusbarAlignment.Left, priority: 0 });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   const branchElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
   const syncElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.sync"]');
   const problemsElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
@@ -131,7 +131,7 @@ test("status bar entry updates retain the item shell and activate commands", () 
   let activations = 0;
   using service = new StatusbarService();
   using entry = service.addEntry({ text: "main", run: () => activations += 1 }, { id: "test.branch", alignment: StatusbarAlignment.Left });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
   const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
   const textNode = label?.firstChild;
@@ -157,7 +157,7 @@ test("status bar items are focused through the part and activate from the keyboa
   using service = new StatusbarService();
   using first = service.addEntry({ text: "first", run: () => activations += 1 }, { id: "test.first", alignment: StatusbarAlignment.Left, priority: 2 });
   using second = service.addEntry({ text: "second", run: () => activations += 1 }, { id: "test.second", alignment: StatusbarAlignment.Left, priority: 1 });
-  using part = new StatusbarPart(service, document);
+  using part = new StatusbarPart(document.body, service);
   document.body.append(part.element);
   const content = part.element;
   const labels = part.element.querySelectorAll<HTMLElement>(".zeta-statusbar-item-label");
@@ -201,7 +201,7 @@ test("status bar item tooltips use the managed statusbar hover group", () => {
   });
   using service = new StatusbarService();
   using entry = service.addEntry({ text: "main", tooltip: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
-  using part = new StatusbarPart(service, dom.window.document);
+  using part = new StatusbarPart(dom.window.document.body, service);
   const label = part.element.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
   assert.ok(label);

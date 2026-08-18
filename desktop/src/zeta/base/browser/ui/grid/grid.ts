@@ -62,17 +62,17 @@ export class Grid<TView extends IView = IView> extends DisposableOwner {
     this.gridview.edgeSnapping = enabled;
   }
 
-  constructor(
-    descriptorOrGridView: GridDescriptor<TView> | GridView,
-    ownerDocument: Document = document,
-    options: GridOptions = {},
-  ) {
+  constructor(gridView: GridView);
+  constructor(container: HTMLElement, descriptor: GridDescriptor<TView>, options?: GridOptions);
+  constructor(containerOrGridView: HTMLElement | GridView, ...descriptorAndOptions: [] | [descriptor: GridDescriptor<TView>, options?: GridOptions]) {
     super();
-    this.gridview = this.own(
-      descriptorOrGridView instanceof GridView
-        ? descriptorOrGridView
-        : new GridView(descriptorOrGridView, ownerDocument, options),
-    );
+    if (containerOrGridView instanceof GridView) {
+      this.gridview = this.own(containerOrGridView);
+    } else {
+      const descriptor = descriptorAndOptions[0];
+      if (!descriptor) throw new TypeError("Grid descriptor is required");
+      this.gridview = this.own(new GridView(containerOrGridView, descriptor, descriptorAndOptions[1] ?? {}));
+    }
     for (const view of this.gridview.getViews()) {
       this.views.add(view as TView);
     }
@@ -167,13 +167,13 @@ export class Grid<TView extends IView = IView> extends DisposableOwner {
 /** A Grid whose view identity and runtime geometry can cross persistence boundaries. */
 export class SerializableGrid<TView extends ISerializableView> extends Grid<TView> {
   static deserialize<TView extends ISerializableView>(
+    container: HTMLElement,
     descriptor: SerializedGridDescriptor,
     deserializer: IViewDeserializer<TView>,
-    ownerDocument: Document = document,
     options: GridOptions = {},
   ): SerializableGrid<TView> {
     return new SerializableGrid(
-      GridView.deserialize(descriptor, deserializer, ownerDocument, options),
+      GridView.deserialize(container, descriptor, deserializer, options),
     );
   }
 
