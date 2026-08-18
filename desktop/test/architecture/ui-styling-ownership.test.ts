@@ -83,10 +83,10 @@ test("ToolBar icon actions use the 22px borderless VS Code geometry", async () =
     /\.zeta-toolbar \.zeta-action-view-item\.icon > \.zeta-button \{[^}]*width: var\(--zeta-toolbar-action-size\);[^}]*border: 0;[^}]*padding: 3px;/s,
   );
   assert.match(tabListCss, /\.zeta-tab-actions \.zeta-action-view-item\.icon \.zeta-button \{[^}]*width: var\(--zeta-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
-  assert.match(compositeBarCss, /\.zeta-composite-bar-overflow > \.zeta-button \{[^}]*width: var\(--zeta-toolbar-action-size\);[^}]*height: var\(--zeta-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
+  assert.match(compositeBarCss, /\.zeta-composite-bar-overflow > \.zeta-composite-bar-action \{[^}]*width: var\(--zeta-toolbar-action-size\);[^}]*height: var\(--zeta-toolbar-action-size\);[^}]*padding: 3px;[^}]*border: 0;/s);
 });
 
-test("TabList owns a stable pointer cursor across labels and action gaps", async () => {
+test("TabList and CompositeBar each own their pointer interaction styling", async () => {
   const sourceRoot = join(process.cwd(), "src", "zeta");
   const tabListCss = await readFile(join(sourceRoot, "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
   const compositeBarCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "compositebar", "compositebar.css"), "utf8");
@@ -96,8 +96,22 @@ test("TabList owns a stable pointer cursor across labels and action gaps", async
   assert.match(tabListCss, /\.zeta-tab\.zeta-dnd-draggable\s*\{[^}]*cursor: pointer;/s);
   assert.match(tabListCss, /\.zeta-tab\.zeta-dnd-draggable:active\s*\{[^}]*cursor: grabbing;/s);
   assert.match(tabListCss, /\.zeta-tab-label\s*\{[^}]*cursor: inherit;/s);
-  assert.doesNotMatch(compositeBarCss, /\.zeta-composite-bar \.zeta-tab-label\s*\{[^}]*cursor:/s);
+  assert.match(compositeBarCss, /\.zeta-composite-bar-item\s*\{[^}]*cursor: pointer;/s);
+  assert.match(compositeBarCss, /\.zeta-composite-bar-item\.zeta-dnd-draggable:active\s*\{[^}]*cursor: grabbing;/s);
+  assert.match(compositeBarCss, /\.zeta-composite-bar-action\s*\{[^}]*cursor: inherit;/s);
+  assert.doesNotMatch(compositeBarCss, /\.zeta-tab(?:\W|$)/);
   assert.doesNotMatch(editorTabsCss, /\.zeta-multi-editor-tabs-control \.zeta-tab-label\s*\{[^}]*cursor:/s);
+});
+
+test("TabList preserves the standard close-action hover background", async () => {
+  const sourceRoot = join(process.cwd(), "src", "zeta");
+  const tabListCss = await readFile(join(sourceRoot, "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
+  const editorTabsCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "editor", "media", "multiEditorTabsControl.css"), "utf8");
+  const chatTabsCss = await readFile(join(sourceRoot, "workbench", "contrib", "chat", "browser", "view", "multiChatTabsControl.css"), "utf8");
+
+  assert.match(tabListCss, /\.zeta-tab-actions \.zeta-action-view-item\.icon \.zeta-button:hover\s*\{[^}]*background: var\(--zeta-toolbar-hover-background\);/s);
+  assert.doesNotMatch(editorTabsCss, /--zeta-tab-list-(?:checked-)?action-hover-background/);
+  assert.doesNotMatch(chatTabsCss, /--zeta-tab-list-(?:checked-)?action-hover-background/);
 });
 
 test("Menubar icon actions hide only their text label", async () => {

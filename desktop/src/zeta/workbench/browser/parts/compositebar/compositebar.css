@@ -6,9 +6,15 @@
   overflow: hidden;
 }
 
-.zeta-composite-bar > .zeta-tab-list {
-  width: auto;
+.zeta-composite-bar > .zeta-action-bar {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
 }
 
 .zeta-composite-bar-overflow {
@@ -17,11 +23,7 @@
   flex: 0 0 var(--zeta-toolbar-action-size);
 }
 
-.zeta-composite-bar-overflow.hidden {
-  display: none;
-}
-
-.zeta-composite-bar-overflow > .zeta-button {
+.zeta-composite-bar-overflow > .zeta-composite-bar-action {
   width: var(--zeta-toolbar-action-size);
   min-width: var(--zeta-toolbar-action-size);
   height: var(--zeta-toolbar-action-size);
@@ -31,13 +33,12 @@
   color: var(--zeta-composite-bar-inactive-foreground);
 }
 
-.zeta-composite-bar-overflow > .zeta-button .zeta-icon {
+.zeta-composite-bar-overflow > .zeta-composite-bar-action .zeta-icon {
   width: 16px;
   height: 16px;
 }
 
-.zeta-composite-bar-overflow .zeta-button-label,
-.zeta-composite-bar-overflow .zeta-dropdown-menu-indicator {
+.zeta-composite-bar-overflow .zeta-icon-label-text {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -46,75 +47,46 @@
   white-space: nowrap;
 }
 
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar {
-  box-sizing: border-box;
-  display: flex;
-  height: 100%;
-  width: 100%;
-  align-items: center;
-  flex-direction: row;
-  gap: 2px;
-}
-
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab {
+.zeta-composite-bar > .zeta-action-bar > .zeta-composite-bar-item {
   position: relative;
   flex: 0 0 auto;
   border: 0;
   border-radius: 4px;
   color: var(--zeta-composite-bar-inactive-foreground);
+  cursor: pointer;
 }
 
-.zeta-composite-bar-icon
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab {
+.zeta-composite-bar-item.zeta-dnd-draggable:active {
+  cursor: grabbing;
+}
+
+.zeta-composite-bar-icon > .zeta-action-bar > .zeta-composite-bar-item {
   width: 24px;
   min-width: 24px;
   padding: 0;
 }
 
-.zeta-composite-bar-label
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar {
-  padding: 0 var(--zeta-tab-list-content-inset);
+.zeta-composite-bar-label > .zeta-action-bar {
+  padding: 0 var(--zeta-composite-bar-content-inset);
   font-size: var(--zeta-font-size-body1);
   line-height: 20px;
 }
 
-.zeta-composite-bar-label
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab {
+.zeta-composite-bar-label > .zeta-action-bar > .zeta-composite-bar-item {
   width: auto;
   min-width: 0;
 }
 
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab:hover
-  > .zeta-tab-label,
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab.checked
-  > .zeta-tab-label {
+.zeta-composite-bar-item:hover > .zeta-composite-bar-action,
+.zeta-composite-bar-item.checked > .zeta-composite-bar-action {
   opacity: 1;
 }
 
-.zeta-composite-bar
-  .zeta-tab-list-scroll-content
-  > .zeta-action-bar
-  > .zeta-tab.checked {
+.zeta-composite-bar-item.checked {
   color: var(--zeta-composite-bar-foreground);
 }
 
-.zeta-composite-bar .zeta-tab-label {
+.zeta-composite-bar-action {
   display: flex;
   width: 100%;
   height: 100%;
@@ -126,20 +98,25 @@
   background: transparent;
   text-decoration: none;
   opacity: 0.6;
+  cursor: inherit;
+  font: inherit;
+  font-weight: var(--zeta-font-weight-semi-bold);
 }
 
-.zeta-composite-bar-icon
-  .zeta-tab.icon
-  > .zeta-tab-label
-  .zeta-icon-label-text {
+.zeta-composite-bar-item:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-composite-bar-icon .zeta-composite-bar-item.icon .zeta-icon-label-text {
   display: none;
 }
 
-.zeta-composite-bar-icon .zeta-tab-label {
+.zeta-composite-bar-icon .zeta-composite-bar-action {
   padding: 0;
 }
 
-.zeta-composite-bar-label .zeta-tab-label {
+.zeta-composite-bar-label .zeta-composite-bar-action {
   width: auto;
 }
 
@@ -148,7 +125,38 @@
   white-space: nowrap;
 }
 
-.zeta-composite-bar .zeta-tab-label .zeta-icon {
+.zeta-composite-bar-action .zeta-icon {
   width: 16px;
   height: 16px;
+}
+
+/* Keep the visual gap inside a Composite action's native drop hit area. */
+.zeta-composite-bar > .zeta-action-bar.zeta-action-bar-dnd.horizontal > .zeta-composite-bar-item:not(:last-child)::after {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: var(--zeta-action-bar-gap);
+  height: 100%;
+  content: "";
+  pointer-events: auto;
+}
+
+.zeta-composite-bar-item.zeta-dnd-drop-before::before,
+.zeta-composite-bar-item.zeta-dnd-drop-after::before {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  width: 2px;
+  height: 100%;
+  content: "";
+  pointer-events: none;
+  background: var(--zeta-focus-border);
+}
+
+.zeta-composite-bar-item.zeta-dnd-drop-before::before {
+  left: -2px;
+}
+
+.zeta-composite-bar-item.zeta-dnd-drop-after::before {
+  right: -2px;
 }

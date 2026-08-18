@@ -7,7 +7,8 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
 import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, Session, SessionThread, ThreadId } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, Session, SessionThread, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 
@@ -29,7 +30,7 @@ interface ChatPaneEntry {
  */
 export class ChatViewPane extends ViewPane {
   private readonly chatService: IChatService;
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly contextMenuService: IContextMenuService;
   private readonly commandService: ICommandService;
   private readonly titleControl: ChatTitleControl;
@@ -44,7 +45,7 @@ export class ChatViewPane extends ViewPane {
   constructor(
     options: IViewPaneOptions,
     chatService: IChatService,
-    sessionService: IWorkbenchSessionService,
+    sessionService: ISessionsManagementService,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
     private readonly contextViewService: IContextViewService,

@@ -80,7 +80,9 @@ Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍由 TypeScript watch 和 nodemon 重启整个 Electron 进程，连续输出使用 300 ms 防抖。
+与 Preload 仍会重启整个 Electron 进程。`build/typescript/watchElectron.mjs` 分别保留两个 TypeScript
+watch program，但只在两边都完成当前编译且为 0 errors 后重启 Electron；任何编译失败都会保留当前
+进程，避免加载同一轮增量编译中的半成品模块图。
 
 完整 Electron 开发命令还会运行 `build/serverHost/watch.mjs`。Rust 源码或 Cargo manifest 变化后，它先完成
 `zeta-server-host` 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App

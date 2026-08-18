@@ -5,7 +5,7 @@ import { createUuid } from "../../../../base/common/uuid.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
-import type { SessionId, ThreadId } from "../../sessions/common/sessionService.js";
+import type { SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
 
 export interface ChatServiceOptions {

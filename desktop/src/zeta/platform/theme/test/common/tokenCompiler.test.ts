@@ -10,8 +10,8 @@ test("design token compiler emits deterministic validated artifacts", () => {
   const second = compileDesignTokenArtifacts();
   assert.deepEqual(first, second);
   const manifest = JSON.parse(first.manifest) as { colors: unknown[]; sizes: unknown[] };
-  assert.equal(manifest.colors.length, 152);
-  assert.equal(manifest.sizes.length, 26);
+  assert.equal(manifest.colors.length, 153);
+  assert.equal(manifest.sizes.length, 27);
   assert.match(first.catalog, /Generated design token catalog/);
   assert.equal(parseUserColorTheme(first.userThemeTemplate).id, "my-custom-theme");
 });

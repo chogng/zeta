@@ -1,31 +1,14 @@
-import {
-  IFileService,
-} from "../../../../platform/files/common/files.js";
-import {
-  ContextKeyExpr,
-} from "../../../../platform/contextkey/common/contextkey.js";
-import {
-  SyncDescriptor,
-} from "../../../../platform/instantiation/common/instantiation.js";
-import {
-  IWorkspaceContextService,
-} from "../../../../platform/workspace/common/workspace.js";
-import {
-  WorkspaceFolderCountContext,
-} from "../../../common/contextkeys.js";
-import {
-  type WorkbenchViewRegistry,
-  WorkbenchViewContainerId,
-  ViewsRegistry,
-} from "../../../common/views.js";
-import {
-  IWorkspaceOpenService,
-} from "../../../services/workspaces/browser/workspaceOpenService.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
+import { IFileService } from "../../../../platform/files/common/files.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
-import {
-  IFileIconThemeService,
-} from "../../../../platform/theme/browser/fileIconThemeService.js";
+import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import { WorkspaceFolderCountContext } from "../../../common/contextkeys.js";
+import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
+import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { ExplorerViewPane } from "./explorerViewPane.js";
 import { EmptyView } from "./views/emptyView.js";
 import "./media/explorer.css";
@@ -50,6 +33,7 @@ export function registerFilesViews(
           IEditorService,
           IFileIconThemeService,
           IHoverService,
+          IConfigurationService,
         ],
       }),
     },

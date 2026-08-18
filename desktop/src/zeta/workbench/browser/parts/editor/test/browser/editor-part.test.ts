@@ -66,6 +66,7 @@ const {
 const { SplitEditorHorizontalCommandId } = await import(
   "../../../../../../workbench/browser/parts/editor/editorActions.js"
 );
+const { BrowserEditorService } = await import("../../../../../../workbench/services/editor/browser/browserEditorService.js");
 await import(
   "../../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
@@ -304,6 +305,12 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     "horizontal",
   );
   assert.equal(
+    titleControl?.querySelector(
+      ".zeta-editor-tabs-control .zeta-tab-list",
+    )?.classList.contains("zeta-tab-list-inset"),
+    true,
+  );
+  assert.equal(
     tablist?.closest(".zeta-editor-tabs-control")?.nextElementSibling,
     toolbar?.parentElement,
   );
@@ -410,6 +417,38 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
   assert.deepEqual(editor.activeGroup.inputs, [second, third]);
   assert.equal(editor.element.querySelectorAll(".zeta-tab.preview").length, 1);
   assert.equal(editor.element.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "third.ts");
+
+  editor.dispose();
+  dom.window.close();
+});
+
+test("EditorPart opens beside the active group without stealing caller focus", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  const panes: TestEditorPane[] = [];
+  registry.register(descriptor("aster.editor.code", ".ts", () => trackPane(panes, "aster.editor.code")));
+  const editor = new EditorPart(dom.window.document, { registry });
+  dom.window.document.body.append(editor.element);
+  const sourceInput = input("C:\\project\\source.ts");
+  const previewInput = input("C:\\project\\preview.ts");
+  const pinnedInput = input("C:\\project\\pinned.ts");
+  await editor.openEditor(sourceInput);
+  const sourceGroup = editor.activeGroup;
+  const service = new BrowserEditorService(editor);
+
+  await service.openEditor(previewInput, { pinned: false, preserveFocus: true }, "sideGroup");
+  const previewPane = editor.groups[1]?.activePane as TestEditorPane;
+  assert.equal(editor.groups.length, 2);
+  assert.equal(editor.activeGroup, sourceGroup);
+  assert.deepEqual(editor.groups[1]?.inputs, [previewInput]);
+  assert.equal(previewPane.focusCount, 0);
+
+  await service.openEditor(pinnedInput, { pinned: true, preserveFocus: false }, "sideGroup");
+  const pinnedPane = editor.groups[1]?.activePane as TestEditorPane;
+  assert.equal(editor.groups.length, 2);
+  assert.equal(editor.activeGroup, editor.groups[1]);
+  assert.deepEqual(editor.groups[1]?.inputs, [previewInput, pinnedInput]);
+  assert.equal(pinnedPane.focusCount, 1);
 
   editor.dispose();
   dom.window.close();

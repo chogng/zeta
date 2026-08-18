@@ -1,14 +1,40 @@
-.zeta-tree,
-.zeta-tree-group {
+.zeta-tree {
+  position: relative;
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  list-style: none;
+  outline: none;
 }
 
-.zeta-tree-node {
-  margin: 0;
-  padding: 0;
+.zeta-tree-row.find-match .zeta-tree-contents {
+  text-decoration: underline;
+  text-decoration-color: var(--zeta-focus-border);
+  text-underline-offset: 2px;
+}
+
+.zeta-tree-row.drag-over {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-tree-sticky-container {
+  display: flex;
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  left: 0;
+  flex-direction: column;
+  background: inherit;
+  box-shadow: 0 1px 0 var(--zeta-tree-indent-guides-stroke);
+}
+
+.zeta-tree-sticky-container.empty {
+  display: none;
+}
+
+.zeta-tree-sticky-row {
+  flex: 0 0 auto;
 }
 
 .zeta-tree-row {
@@ -28,6 +54,10 @@
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.zeta-tree-row-inner {
+  display: contents;
 }
 
 .zeta-tree-indent {
@@ -56,7 +86,16 @@
   background: var(--zeta-list-hover-background);
 }
 
-.zeta-tree-row:focus-visible {
+.zeta-tree-row.selected {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-tree:focus-within .zeta-tree-row.selected {
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--zeta-list-active-selection-background);
+}
+
+.zeta-tree:focus .zeta-tree-row.focused {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }

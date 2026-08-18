@@ -2251,6 +2251,26 @@
       }
     },
     {
+      "id": "editor.tabBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-tab-background",
+      "owner": "workbench.shell",
+      "description": "Background for inactive Editor tabs.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#EEEEEE",
+        "light": "#EEEEEE",
+        "high-contrast-dark": "#EEEEEE",
+        "high-contrast-light": "#EEEEEE"
+      },
+      "values": {
+        "dark": "#eeeeee",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#eeeeee",
+        "high-contrast-light": "#eeeeee"
+      }
+    },
+    {
       "id": "titleBar.background",
       "kind": "color",
       "cssVariable": "--zeta-title-bar-background",
@@ -3179,6 +3199,14 @@
       "owner": "platform.ui",
       "description": "Horizontal inset between a TabList item's edge and its label content.",
       "value": "6px"
+    },
+    {
+      "id": "compositeBar.contentInset",
+      "kind": "size",
+      "cssVariable": "--zeta-composite-bar-content-inset",
+      "owner": "platform.ui",
+      "description": "Horizontal inset between a CompositeBar and its first or last action.",
+      "value": "4px"
     },
     {
       "id": "pane.titleHeight",

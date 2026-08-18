@@ -152,6 +152,7 @@
           "workbench.background",
           "editor.background",
           "editor.foreground",
+          "editor.tabBackground",
           "titleBar.background",
           "titleBar.foreground",
           "titleBar.actionForeground",

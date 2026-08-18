@@ -3,7 +3,8 @@ import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
-import { IWorkbenchSessionService, type SessionId, type ThreadId } from "../../../../services/sessions/common/sessionService.js";
+import type { SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService } from "../../../../services/views/browser/viewsService.js";
 import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../common/chat.js";
 
@@ -38,7 +39,7 @@ registerAction2(class NewChatAction extends Action2 {
   }
 
   override run(accessor: ServicesAccessor): void {
-    const sessionService = accessor.get(IWorkbenchSessionService);
+    const sessionService = accessor.get(ISessionsManagementService);
     const viewsService = accessor.get(IViewsService);
     sessionService.createUntitledSession();
     viewsService.focusView(CHAT_VIEW_ID);
@@ -67,7 +68,7 @@ registerAction2(class ShowChatHistoryAction extends Action2 {
   }
 
   override run(accessor: ServicesAccessor): void {
-    const sessions = accessor.get(IWorkbenchSessionService);
+    const sessions = accessor.get(ISessionsManagementService);
     const views = accessor.get(IViewsService);
     const quickPick = accessor.get(IQuickInputService).createQuickPick<ChatHistoryQuickPickItem>();
     const disposables = new DisposableStore();

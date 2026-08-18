@@ -1,6 +1,6 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ModelRef, SessionId, ThreadId } from "../../sessions/common/sessionService.js";
+import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 
 export interface ChatImageAttachment {

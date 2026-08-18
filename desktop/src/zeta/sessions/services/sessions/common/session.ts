@@ -1,6 +1,3 @@
-import type { Event } from "../../../../base/common/event.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-
 export type SessionId = string;
 export type ThreadId = string;
 
@@ -27,6 +24,7 @@ export interface SessionThread {
 
 export type SessionStatus = "active" | "completed" | "archived";
 
+/** Canonical frontend projection of one App Server Session aggregate. */
 export interface Session {
   readonly sessionId: SessionId;
   readonly title: string;
@@ -52,31 +50,3 @@ export interface IUntitledChatSession {
   readonly title: string;
   readonly model: ModelRef | undefined;
 }
-
-export type WorkbenchSessionState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
-
-/** Owns durable Session selection and window-local untitled Chat sessions. */
-export interface IWorkbenchSessionService {
-  readonly onDidChange: Event<void>;
-  readonly sessions: readonly Session[];
-  readonly active: IActiveSessionThread | undefined;
-  readonly untitledSessions: readonly IUntitledChatSession[];
-  readonly activeUntitledSession: IUntitledChatSession | undefined;
-  readonly state: WorkbenchSessionState;
-  readonly error: string | undefined;
-  initialize(): Promise<void>;
-  selectThread(sessionId: SessionId, threadId: ThreadId): void;
-  createUntitledSession(title?: string): IUntitledChatSession;
-  selectUntitledSession(untitledSessionId: string): void;
-  discardUntitledSession(untitledSessionId: string): void;
-  setUntitledSessionModel(untitledSessionId: string, model: ModelRef): void;
-  materializeUntitledSession(untitledSessionId: string): Promise<IActiveSessionThread>;
-  promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
-  ensureActiveThread(): Promise<IActiveSessionThread>;
-  startNewSession(title?: string): Promise<IActiveSessionThread>;
-  stopSession(sessionId: SessionId): Promise<void>;
-  archiveSession(sessionId: SessionId): Promise<void>;
-  setModel(sessionId: SessionId, model: ModelRef): Promise<void>;
-}
-
-export const IWorkbenchSessionService = createServiceIdentifier<IWorkbenchSessionService>("workbenchSessionService");

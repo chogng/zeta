@@ -14,8 +14,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
   const componentPresentationVariables = new Set([
     "--zeta-icon-label-text-overflow",
     "--zeta-sash-inset-gap",
-    "--zeta-tab-list-action-hover-background",
-    "--zeta-tab-list-checked-action-hover-background",
+    "--zeta-tab-list-inactive-background",
     "--zeta-terminal-command-gutter-width",
   ]);
   const intentionalColorFiles = new Set([

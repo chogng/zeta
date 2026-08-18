@@ -1,17 +1,18 @@
 import "./media/sessionsAuxiliarybarPart.css";
-import type { IUntitledChatSession, IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { IUntitledChatSession } from "../../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 
 /** Typed Session and Thread context for the active Sessions Workbench slot. */
 export class SessionsAuxiliarybarPart extends WorkbenchPart {
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly viewService: ISessionsViewService;
 
   override get minimumWidth(): number { return 220; }
   override get maximumWidth(): number { return 460; }
 
-  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, viewService: ISessionsViewService) {
+  constructor(ownerDocument: Document, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
     super("auxiliarybar", ownerDocument);
     this.sessionService = sessionService;
     this.viewService = viewService;

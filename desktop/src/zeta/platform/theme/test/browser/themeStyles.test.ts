@@ -16,6 +16,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   const foreground = colorCssVariable(ColorId.foreground);
   const background = colorCssVariable(ColorId.workbenchBackground);
   const chatTabBackground = colorCssVariable(ColorId.chatTabBackground);
+  const editorTabBackground = colorCssVariable(ColorId.editorTabBackground);
   const menuSelectionForeground = colorCssVariable(ColorId.menuSelectionForeground);
   const menuSelectionBackground = colorCssVariable(ColorId.menuSelectionBackground);
   const actionBarToggledBackground = colorCssVariable(ColorId.actionBarToggledBackground);
@@ -31,6 +32,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
   assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
   assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
+  assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
   assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#cccccc");
   assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#2a2d2e");
   assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#37373d");
@@ -47,6 +49,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   service.setColorTheme(lightColorTheme);
   assert.equal(target.style.getPropertyValue(background), "#ffffff");
   assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
+  assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
   assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#3b3b3b");
   assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#e8e8e8");
   assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#e4e6f2");
@@ -59,6 +62,7 @@ test("color theme binding applies changes and restores prior root styles", () =>
   assert.equal(target.style.getPropertyPriority(foreground), "important");
   assert.equal(target.style.getPropertyValue(background), "");
   assert.equal(target.style.getPropertyValue(chatTabBackground), "");
+  assert.equal(target.style.getPropertyValue(editorTabBackground), "");
   assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "");
   assert.equal(target.style.getPropertyValue(tabListActiveBackground), "");
   assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");

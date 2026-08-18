@@ -41,6 +41,14 @@ test("TabList owns manual selection semantics and roving focus", () => {
   assert.equal(tablist?.getAttribute("role"), "tablist");
   assert.equal(tablist?.getAttribute("aria-label"), "Documents");
   assert.deepEqual(
+    [...(tablist?.children ?? [])].map((container) => container.getAttribute("role")),
+    ["presentation", "presentation"],
+  );
+  assert.deepEqual(
+    [...(tablist?.children ?? [])].map((container) => container.firstElementChild?.getAttribute("role")),
+    ["tab", "tab"],
+  );
+  assert.deepEqual(
     [...elements].map((element) => element.getAttribute("aria-selected")),
     ["true", "false"],
   );

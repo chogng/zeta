@@ -22,8 +22,9 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_
 import { ISettingsService } from "../../../../../workbench/services/preferences/common/settings.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
-import { WorkbenchSessionService } from "../../../../../workbench/services/sessions/browser/sessionService.js";
-import { IWorkbenchSessionService, type Session } from "../../../../../workbench/services/sessions/common/sessionService.js";
+import { AppServerSessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
+import type { Session } from "../../../../../sessions/services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
@@ -120,7 +121,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
     ],
   });
   const api = fake.api;
-  using sessions = new WorkbenchSessionService(api);
+  using sessions = new AppServerSessionsManagementService(api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
     contextKeyService: contextKeys,
@@ -439,13 +440,13 @@ test("an empty Session list opens an untitled session and persists it on its fir
   });
   const api = fake.api;
   const services = new ServiceCollection();
-  using sessions = new WorkbenchSessionService(api);
+  using sessions = new AppServerSessionsManagementService(api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
     contextKeyService: contextKeys,
     registry: new WorkbenchViewRegistry(),
   });
-  services.set(IWorkbenchSessionService, sessions);
+  services.set(ISessionsManagementService, sessions);
   services.set(IViewsService, {
     openView: () => undefined,
     focusView: () => true,
@@ -535,13 +536,13 @@ test("the New Chat slash command opens an untitled session", async () => {
   const initialSession = session("session-1", "thread-1", "First Chat");
   const fake = fakeApi({ sessions: [initialSession] });
   const services = new ServiceCollection();
-  using sessions = new WorkbenchSessionService(fake.api);
+  using sessions = new AppServerSessionsManagementService(fake.api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
     contextKeyService: contextKeys,
     registry: new WorkbenchViewRegistry(),
   });
-  services.set(IWorkbenchSessionService, sessions);
+  services.set(ISessionsManagementService, sessions);
   let focusedView: string | undefined;
   services.set(IViewsService, {
     openView: () => undefined,
@@ -612,13 +613,13 @@ test("failed first send keeps the untitled session and its input draft", async (
     createSessionError: new Error("Cannot create Session"),
   });
   const services = new ServiceCollection();
-  using sessions = new WorkbenchSessionService(fake.api);
+  using sessions = new AppServerSessionsManagementService(fake.api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
     contextKeyService: contextKeys,
     registry: new WorkbenchViewRegistry(),
   });
-  services.set(IWorkbenchSessionService, sessions);
+  services.set(ISessionsManagementService, sessions);
   services.set(IViewsService, {
     openView: () => undefined,
     focusView: () => true,
@@ -689,7 +690,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
     ],
   };
   const api = fakeApi({ sessions: [multiThreadSession] }).api;
-  using sessions = new WorkbenchSessionService(api);
+  using sessions = new AppServerSessionsManagementService(api);
   using contextKeys = new ContextKeyService();
   using viewDescriptors = new ViewDescriptorService({
     contextKeyService: contextKeys,
@@ -747,14 +748,14 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
     ],
   }).api;
   const services = new ServiceCollection();
-  using sessions = new WorkbenchSessionService(api);
+  using sessions = new AppServerSessionsManagementService(api);
   using contextKeys = new ContextKeyService();
   using quickInput = new WorkbenchQuickInputService({
     container: dom.window.document.body,
     contextKeyService: contextKeys,
   });
   let focusedView: string | undefined;
-  services.set(IWorkbenchSessionService, sessions);
+  services.set(ISessionsManagementService, sessions);
   services.set(IQuickInputService, quickInput);
   services.set(IViewsService, {
     openView: () => undefined,
@@ -834,7 +835,7 @@ test("ViewsService resolves, opens, and focuses contributed views", () => {
   assert.equal(service.openView("missing"), undefined);
 });
 
-test("WorkbenchSessionService restores and creates active Threads", async () => {
+test("AppServerSessionsManagementService restores and creates active Threads", async () => {
   const initialSession = session("session-1", "thread-1");
   const createdSession = session("session-2");
   const attachedSession = session("session-2", "thread-2");
@@ -846,7 +847,7 @@ test("WorkbenchSessionService restores and creates active Threads", async () => 
       threadId: "thread-2",
     },
   }).api;
-  using service = new WorkbenchSessionService(api);
+  using service = new AppServerSessionsManagementService(api);
 
   await service.initialize();
   assert.equal(service.active?.threadId, "thread-1");
@@ -858,11 +859,11 @@ test("WorkbenchSessionService restores and creates active Threads", async () => 
   assert.equal(service.state, "ready");
 });
 
-test("WorkbenchSessionService archives a Session and selects the next active one", async () => {
+test("AppServerSessionsManagementService archives a Session and selects the next active one", async () => {
   const first = session("session-1", "thread-1");
   const second = session("session-2", "thread-2");
   const fake = fakeApi({ sessions: [first, second] });
-  using service = new WorkbenchSessionService(fake.api);
+  using service = new AppServerSessionsManagementService(fake.api);
 
   await service.initialize();
   await service.archiveSession("session-1");
@@ -884,10 +885,10 @@ test("WorkbenchSessionService archives a Session and selects the next active one
   assert.equal(service.state, "ready");
 });
 
-test("WorkbenchSessionService permits an empty selection when no durable Session remains", async () => {
+test("AppServerSessionsManagementService permits an empty selection when no durable Session remains", async () => {
   const onlySession = session("session-1", "thread-1");
   const fake = fakeApi({ sessions: [onlySession] });
-  using service = new WorkbenchSessionService(fake.api);
+  using service = new AppServerSessionsManagementService(fake.api);
 
   await service.initialize();
   await service.archiveSession("session-1");
@@ -899,9 +900,9 @@ test("WorkbenchSessionService permits an empty selection when no durable Session
   assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("WorkbenchSessionService selects another untitled session and permits the last one to be discarded", async () => {
+test("AppServerSessionsManagementService selects another untitled session and permits the last one to be discarded", async () => {
   const fake = fakeApi();
-  using service = new WorkbenchSessionService(fake.api);
+  using service = new AppServerSessionsManagementService(fake.api);
 
   await service.initialize();
   assert.equal(service.untitledSessions.length, 0);
@@ -918,14 +919,14 @@ test("WorkbenchSessionService selects another untitled session and permits the l
   assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("WorkbenchSessionService changes the model only for the selected Session", async () => {
+test("AppServerSessionsManagementService changes the model only for the selected Session", async () => {
   const fake = fakeApi({
     sessions: [
       session("session-1", "thread-1"),
       session("session-2", "thread-2"),
     ],
   });
-  using service = new WorkbenchSessionService(fake.api);
+  using service = new AppServerSessionsManagementService(fake.api);
   await service.initialize();
   const model: ModelRef = { provider: "openai", model: "gpt-session" };
 
@@ -948,7 +949,7 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
     sessions: [activeSession],
     thread: () => currentThread,
   });
-  using sessions = new WorkbenchSessionService(fake.api);
+  using sessions = new AppServerSessionsManagementService(fake.api);
   using model = new ChatPaneModel(createChatService(fake.api), {
     kind: "session",
     active: {

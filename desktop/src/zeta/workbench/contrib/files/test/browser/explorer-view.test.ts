@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
+import type { IConfigurationChangeEvent, IConfigurationService } from "../../../../../platform/configuration/common/configurationService.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
-import type { EditorInput, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 
 test("ExplorerViewPane renders, expands, and opens workspace files", async () => {
   const browser = new JSDOM("<!doctype html><body></body>");
@@ -15,6 +17,9 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
   const nextRoot = URI.file("C:\\next-project");
   const directoryReads: string[] = [];
   let openedInput: EditorInput | undefined;
+  let openedOptions: EditorOpenOptions | undefined;
+  let openedTarget: EditorOpenTarget | undefined;
+  let editorFocusCount = 0;
   const fileService: IFileService = {
     onDidChangeFiles: () => ({
       dispose() {},
@@ -74,10 +79,21 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     uri: root,
   });
   const editorService: IEditorService = {
-    openEditor: async (input: EditorInput) => {
+    openEditor: async (input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget) => {
       openedInput = input;
+      openedOptions = options;
+      openedTarget = target;
+      if (options?.preserveFocus !== true) editorFocusCount += 1;
     },
-    focusActiveEditor() {},
+    focusActiveEditor() { editorFocusCount += 1; },
+  };
+  const configurationChanges = new Emitter<IConfigurationChangeEvent>();
+  const configurationService: IConfigurationService = {
+    onDidChangeConfiguration: configurationChanges.event,
+    getValue: (key) => key.defaultValue,
+    updateValue: async () => {},
+    resetValue: async () => {},
+    reload: async () => {},
   };
   const fileIconThemeService: IFileIconThemeService = {
     onDidFileIconThemeChange: () => ({
@@ -144,6 +160,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       editorService,
       fileIconThemeService,
       hoverService,
+      configurationService,
     );
     browser.window.document.body.append(pane.element);
     assert.equal(
@@ -214,6 +231,13 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
       openedInput?.resource.toString(),
       URI.file("C:\\project\\README.md").toString(),
     );
+    assert.deepEqual(openedOptions, { pinned: false, preserveFocus: true });
+    assert.equal(openedTarget, "activeGroup");
+    assert.equal(editorFocusCount, 0);
+
+    readme.dispatchEvent(new browser.window.MouseEvent("dblclick", { bubbles: true, button: 0, detail: 2 }));
+    await waitFor(() => editorFocusCount === 1);
+    assert.deepEqual(openedOptions, { pinned: true, preserveFocus: false });
 
     workspaceContextService.updateWorkspace({
       id: "next-workspace",
@@ -226,6 +250,7 @@ test("ExplorerViewPane renders, expands, and opens workspace files", async () =>
     );
     assert.deepEqual(rowLabels(pane.element), ["next.txt"]);
   } finally {
+    configurationChanges.dispose();
     browser.window.close();
     for (const name of installedGlobals) {
       Reflect.deleteProperty(globalThis, name);

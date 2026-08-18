@@ -106,7 +106,7 @@
   padding: 6px;
   color: var(--zeta-editor-foreground);
   background: var(--zeta-editor-background);
-  font: 11px/1.4 var(--zeta-editor-font-family, monospace);
+  font: 11px/1.4 var(--zeta-font-family-monospace, ui-monospace, monospace);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

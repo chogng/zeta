@@ -9,6 +9,7 @@ export const sectionHeaderForeground = alias("sectionHeader.foreground", descrip
 export const workbenchBackground = color("workbench.background", "#1e1e1e", "#ffffff", "Workbench root background.");
 export const editorBackground = color("editor.background", "#1e1e1e", "#ffffff", "Editor background.");
 export const editorForeground = color("editor.foreground", "#d4d4d4", "#333333", "Editor foreground.");
+export const editorTabBackground = color("editor.tabBackground", "#EEEEEE", "#EEEEEE", "Background for inactive Editor tabs.");
 export const titleBarBackground = color("titleBar.background", "#FFFFFF", "#FFFFFF", "Title bar background.");
 export const titleBarForeground = color("titleBar.foreground", "#1f1f1f", "#1f1f1f", "Title bar foreground.");
 export const titleBarActionForeground = color("titleBar.actionForeground", "#424242", "#424242", "Title bar action foreground.");

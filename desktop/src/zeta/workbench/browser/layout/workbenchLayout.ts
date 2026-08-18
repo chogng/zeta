@@ -7,7 +7,7 @@ import type { ILayoutOffsetInfo } from "../../../platform/layout/common/layoutSe
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../../services/layout/common/workbenchLayoutService.js";
 import type { WorkbenchPart } from "../part.js";
-import type { WorkbenchSession } from "../workbenchSession.js";
+import type { WorkbenchProfile } from "../workbenchProfile.js";
 import { createDefaultWorkbenchLayoutState, parseWorkbenchLayoutState, type WorkbenchLayoutState, WorkbenchLayoutStateModel } from "./workbenchLayoutState.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 import { assertDimension, createWorkbenchGridDescriptor, parseWorkbenchPartId, resolveInitialDimension } from "./workbenchLayoutTopology.js";
@@ -19,7 +19,7 @@ const PART_GUTTER_SIZE = PART_GUTTER_HALF * 2;
 
 export interface WorkbenchLayoutOptions {
   readonly initialDimension?: IDimension;
-  readonly session?: WorkbenchSession;
+  readonly profile?: WorkbenchProfile;
   readonly storageService?: IStorageService;
 }
 
@@ -69,7 +69,7 @@ export class WorkbenchLayout
     );
     this.stateModel = new WorkbenchLayoutStateModel(
       options.storageService,
-      options.session ? parseWorkbenchLayoutState(options.session.layout) : createDefaultWorkbenchLayoutState(),
+      options.profile ? parseWorkbenchLayoutState(options.profile.layout) : createDefaultWorkbenchLayoutState(),
     );
     const initialState = this.stateModel.state;
     this.projectPartFrameInsets(

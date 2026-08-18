@@ -18,7 +18,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import { WorkbenchPart } from "../../part.js";
 import { EditorGroup, type EditorGroupOptions, type IEditorGroup } from "./editorGroup.js";
 import { EditorTabDragAndDropController, type EditorTabDropEvent } from "./editorTabDragAndDrop.js";
-import type { EditorInput, EditorOpenOptions } from "../../../services/editor/common/editorService.js";
+import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPane } from "./editorPane.js";
@@ -37,10 +37,7 @@ export interface IEditorPart {
   readonly activeInput: EditorInput | undefined;
   readonly activePane: IEditorPane | undefined;
 
-  openEditor(
-    input: EditorInput,
-    options?: EditorOpenOptions,
-  ): Promise<IEditorPane>;
+  openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<IEditorPane>;
   activateEditor(input: EditorInput): IEditorPane;
   closeEditor(input: EditorInput): void;
   saveActiveEditor(): Promise<void>;
@@ -166,11 +163,21 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
     return this._activeGroup.activePane;
   }
 
-  openEditor(
-    input: EditorInput,
-    options: EditorOpenOptions = {},
-  ): Promise<IEditorPane> {
-    return this._activeGroup.openEditor(input, options);
+  async openEditor(input: EditorInput, options: EditorOpenOptions = {}, target: EditorOpenTarget = "activeGroup"): Promise<IEditorPane> {
+    if (target === "activeGroup") return this._activeGroup.openEditor(input, options);
+    const source = this._activeGroup;
+    const { host, created } = this.resolveSideGroup(source);
+    try {
+      const pane = await host.group.openEditor(input, options);
+      if (!options.preserveFocus) {
+        this._activeGroup = host.group;
+      }
+      return pane;
+    } catch (error) {
+      if (created) this.removeGroup(host);
+      this._activeGroup = source;
+      throw error;
+    }
   }
 
   activateEditor(input: EditorInput): IEditorPane {
@@ -191,21 +198,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
   async splitActiveGroupHorizontal(): Promise<void> {
     const source = this._activeGroup;
-    const sourceIndex = this._groups.findIndex(
-      ({ group }) => group === source,
-    );
-    if (sourceIndex < 0) {
-      throw new Error("Active EditorGroup is not owned by EditorPart");
-    }
-    const created = this.createGroup();
-    const targetIndex = sourceIndex + 1;
-    this._groups.splice(targetIndex, 0, created);
-    this.splitView.addView(
-      created.view,
-      { type: "split", index: sourceIndex },
-      targetIndex,
-    );
-    this.splitView.distributeViewSizes();
+    const created = this.insertGroupAfter(source);
     this._activeGroup = created.group;
     try {
       if (source.activeInput) {
@@ -213,9 +206,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       }
       created.group.focus();
     } catch (error) {
-      this.splitView.removeView(targetIndex);
-      this._groups.splice(targetIndex, 1);
-      created.group.dispose();
+      this.removeGroup(created);
       this._activeGroup = source;
       throw error;
     }
@@ -266,6 +257,37 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
       group,
       view: new EditorGroupSplitView(group),
     };
+  }
+
+  private resolveSideGroup(source: EditorGroup): { readonly host: EditorGroupHost; readonly created: boolean } {
+    const sourceIndex = this.groupIndex(source);
+    const existing = this._groups[sourceIndex + 1];
+    if (existing) return { host: existing, created: false };
+    return { host: this.insertGroupAfter(source), created: true };
+  }
+
+  private insertGroupAfter(source: EditorGroup): EditorGroupHost {
+    const sourceIndex = this.groupIndex(source);
+    const created = this.createGroup();
+    const targetIndex = sourceIndex + 1;
+    this._groups.splice(targetIndex, 0, created);
+    this.splitView.addView(created.view, { type: "split", index: sourceIndex }, targetIndex);
+    this.splitView.distributeViewSizes();
+    return created;
+  }
+
+  private removeGroup(host: EditorGroupHost): void {
+    const index = this._groups.indexOf(host);
+    if (index < 0) return;
+    this.splitView.removeView(index);
+    this._groups.splice(index, 1);
+    host.group.dispose();
+  }
+
+  private groupIndex(group: EditorGroup): number {
+    const index = this._groups.findIndex((host) => host.group === group);
+    if (index < 0) throw new Error("EditorGroup is not owned by EditorPart");
+    return index;
   }
 
   private dropEditor(event: EditorTabDropEvent): void {

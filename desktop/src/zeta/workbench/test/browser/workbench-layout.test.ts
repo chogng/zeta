@@ -86,8 +86,8 @@ const { CommandService } = await import(
 const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
   "../../../platform/instantiation/common/instantiation.js"
 );
-const { defaultWorkbenchSession } = await import(
-  "../../../workbench/browser/defaultWorkbenchSession.js"
+const { defaultWorkbenchProfile } = await import(
+  "../../../workbench/browser/defaultWorkbenchProfile.js"
 );
 
 type WorkbenchPartId =
@@ -393,11 +393,39 @@ test("Workbench layout derives flexible editor size from the container", () => {
   dom.window.close();
 });
 
-test("Workbench layout applies the shared session defaults", () => {
+test("Workbench sash reset keeps unrelated sidebars at their current widths", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document, {
     initialDimension: new Dimension(1_200, 800),
-    session: defaultWorkbenchSession,
+  });
+  harness.layout.layout(new Dimension(1_200, 800));
+  harness.layout.resizePart(
+    "sidebar",
+    harness.layout.getPartSize("sidebar").with(260),
+  );
+  harness.layout.resizePart(
+    "auxiliarybar",
+    harness.layout.getPartSize("auxiliarybar").with(320),
+  );
+  const sidebarWidth = harness.layout.getPartSize("sidebar").width;
+
+  resetWorkbenchSash(dom.window, harness.container, "auxiliarybar", 1);
+
+  assert.equal(harness.layout.getPartSize("sidebar").width, sidebarWidth);
+  assert.equal(
+    harness.layout.getPartSize("editor").width,
+    harness.layout.getPartSize("auxiliarybar").width,
+  );
+
+  harness.disposables.dispose();
+  dom.window.close();
+});
+
+test("Workbench layout applies the shared profile defaults", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const harness = createLayoutHarness(dom.window.document, {
+    initialDimension: new Dimension(1_200, 800),
+    profile: defaultWorkbenchProfile,
   });
   harness.layout.layout(new Dimension(1_200, 800));
 
@@ -589,7 +617,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
   assert.ok(content);
   assert.equal(title.nextElementSibling, content);
   const actionbar = compositeBar.element.querySelector(
-    ".zeta-tab-list-scroll-content > .zeta-action-bar",
+    ":scope > .zeta-action-bar",
   );
   assert.equal(actionbar?.classList.contains("zeta-action-bar"), true);
   assert.equal(actionbar?.classList.contains("horizontal"), true);
@@ -599,7 +627,21 @@ test("Sidebar hosts its Composite Bar before content", () => {
     [...(actionbar?.children ?? [])].map(
       (item) => item.classList.contains("zeta-tab"),
     ),
+    [false, false, false],
+  );
+  assert.deepEqual(
+    [...(actionbar?.children ?? [])].map(
+      (item) => item.classList.contains("zeta-composite-bar-item"),
+    ),
     [true, true, true],
+  );
+  assert.deepEqual(
+    [...(actionbar?.children ?? [])].map((item) => item.getAttribute("role")),
+    ["tab", "tab", "tab"],
+  );
+  assert.deepEqual(
+    [...(actionbar?.children ?? [])].map((item) => item.firstElementChild?.getAttribute("role")),
+    [null, null, null],
   );
   assert.equal(
     compositeBar.element.querySelectorAll(
@@ -609,22 +651,23 @@ test("Sidebar hosts its Composite Bar before content", () => {
   );
   assert.equal(
     compositeBar.element.querySelectorAll(
-      ".zeta-action-view-item > .zeta-tab-label",
+      ".zeta-action-view-item > .zeta-composite-bar-action",
     ).length,
     3,
   );
-  assert.equal(compositeBar.element.querySelectorAll("button").length, 3);
+  assert.equal(compositeBar.element.querySelectorAll("button").length, 0);
+  assert.equal(compositeBar.element.querySelector(".zeta-tab-list"), null);
   assert.equal(compositeBar.element.hasAttribute("data-part"), false);
   assert.equal(
     compositeBar.element.querySelector(".zeta-workbench-part-content"),
     null,
   );
   sidebar.setActiveComposite("zeta.explorer");
-  const explorerTab = compositeBar.element.querySelector<HTMLButtonElement>(
-    "[data-action-id='zeta.explorer'] > [role='tab']",
+  const explorerTab = compositeBar.element.querySelector<HTMLElement>(
+    "[data-action-id='zeta.explorer'][role='tab']",
   );
-  const searchTab = compositeBar.element.querySelector<HTMLButtonElement>(
-    "[data-action-id='zeta.search'] > [role='tab']",
+  const searchTab = compositeBar.element.querySelector<HTMLElement>(
+    "[data-action-id='zeta.search'][role='tab']",
   );
   assert.ok(explorerTab);
   assert.ok(searchTab);
@@ -885,7 +928,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
     value: 110,
   });
   compositeBar.setActiveComposite("zeta.panel.terminal");
-  const tabs = [...compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab")];
+  const tabs = [...compositeBar.element.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination")];
   for (const [index, tab] of tabs.entries()) {
     tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
   }
@@ -894,21 +937,19 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   assert.deepEqual(
     [...compositeBar.element.querySelectorAll("[role='tab']")]
       .map((tab) => tab.textContent),
-    ["Terminal"],
+    ["Terminal", "Additional views"],
   );
   const overflowItem = compositeBar.element.querySelector<HTMLElement>(
     ".zeta-composite-bar-overflow",
   );
   assert.ok(overflowItem);
-  const overflowButton = overflowItem.querySelector<HTMLButtonElement>("button");
-  assert.ok(overflowButton);
-  assert.equal(overflowItem.hidden, false);
+  assert.equal(overflowItem.getAttribute("role"), "tab");
   assert.equal(
-    compositeBar.element.querySelector(".zeta-tab")?.nextElementSibling,
+    compositeBar.element.querySelector(".zeta-composite-bar-item")?.nextElementSibling,
     overflowItem,
   );
-  overflowButton.click();
-  assert.equal(overflowButton.getAttribute("aria-expanded"), "true");
+  overflowItem.click();
+  assert.equal(overflowItem.getAttribute("aria-expanded"), "true");
   assert.deepEqual(
     overflowActions.map((action) => action.label),
     ["Problems", "Output"],
@@ -919,8 +960,8 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   assert.deepEqual(selections, ["zeta.panel.problems"]);
   assert.ok(hideOverflowMenu);
   hideOverflowMenu();
-  assert.equal(overflowButton.getAttribute("aria-expanded"), "false");
-  assert.equal(overflowItem.hidden, false);
+  assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
+  assert.equal(overflowItem.isConnected, true);
 
   disposables.dispose();
   dom.window.close();
@@ -1087,7 +1128,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
     presentation: "label",
   }));
   dom.window.document.body.append(compositeBar.element);
-  const [problems, output] = compositeBar.element.querySelectorAll<HTMLElement>(".zeta-tab");
+  const [problems, output] = compositeBar.element.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination");
   assert.ok(problems);
   assert.ok(output);
   output.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
@@ -1198,6 +1239,23 @@ function dragWorkbenchSash(
   sash.dispatchEvent(event("pointerdown", 0));
   targetWindow.dispatchEvent(event("pointermove", delta));
   targetWindow.dispatchEvent(event("pointerup", delta));
+}
+
+function resetWorkbenchSash(
+  targetWindow: typeof browserEnvironment.window,
+  container: HTMLElement,
+  partId: WorkbenchPartId,
+  boundaryIndex: number,
+): void {
+  const part = container.querySelector<HTMLElement>(`[data-part='${partId}']`);
+  assert.ok(part);
+  const splitView = part.parentElement?.parentElement?.parentElement;
+  if (!splitView?.classList.contains("zeta-split-view")) {
+    throw new Error(`Workbench Part ${partId} is not hosted by a SplitView`);
+  }
+  const sash = splitView.querySelectorAll<HTMLElement>(":scope > .zeta-sash")[boundaryIndex];
+  assert.ok(sash);
+  sash.dispatchEvent(new targetWindow.MouseEvent("dblclick", { bubbles: true, detail: 2 }));
 }
 
 function compositeBarDragEvent(targetWindow: { readonly Event: typeof Event }, type: string, clientX = 0): DragEvent {

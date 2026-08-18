@@ -1,69 +1,9 @@
 .zeta-multi-chat-tabs-control {
-  --zeta-tab-list-action-hover-background: var(--zeta-chat-tab-background);
-  --zeta-tab-list-checked-action-hover-background: var(--zeta-tab-list-active-background);
+  --zeta-tab-list-inactive-background: var(--zeta-chat-tab-background);
 
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
   overflow: hidden;
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab-list {
-  height: var(--zeta-tab-height);
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab {
-  display: flex;
-  min-width: 64px;
-  max-width: 180px;
-  align-items: center;
-  border-radius: 4px;
-  color: var(--zeta-description-foreground);
-  background: var(--zeta-chat-tab-background);
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab:hover {
-  color: var(--zeta-foreground);
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab.checked {
-  color: var(--zeta-foreground);
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab-label {
-  --zeta-icon-label-text-overflow: clip;
-
-  position: relative;
-  overflow: hidden;
-  min-width: 0;
-  height: 100%;
-  flex: 1 1 auto;
-  padding-right: 4px;
-  border: 0;
-  outline: none;
-  color: inherit;
-  background: transparent;
-  white-space: nowrap;
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after,
-.zeta-multi-chat-tabs-control .zeta-tab:hover .zeta-tab-label::after {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: var(--zeta-toolbar-action-size);
-  content: "";
-  pointer-events: none;
-  background: linear-gradient(to right, transparent, var(--zeta-chat-tab-background));
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab.checked .zeta-tab-label::after {
-  background: linear-gradient(to right, transparent, var(--zeta-tab-list-active-background));
-}
-
-.zeta-multi-chat-tabs-control .zeta-tab-label:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
 }

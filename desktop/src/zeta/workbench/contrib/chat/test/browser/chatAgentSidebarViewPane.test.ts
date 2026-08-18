@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Session } from "../../../../services/sessions/common/sessionService.js";
+import type { Session } from "../../../../../sessions/services/sessions/common/session.js";
 import { projectAgentTree } from "../../browser/view/chatAgentTree.js";
 
 test("projects Agent spawn lineage as a stable nested tree", () => {

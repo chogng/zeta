@@ -1,6 +1,6 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../workbench/services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 
 /** One visible slot in the dedicated Sessions Workbench. */
 export type SessionsViewSelection =

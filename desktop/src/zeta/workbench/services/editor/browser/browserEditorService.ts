@@ -1,12 +1,13 @@
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
-import type { EditorInput, EditorOpenOptions, IEditorService } from "../common/editorService.js";
+import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
 export class BrowserEditorService implements IEditorService {
   constructor(private readonly editorPart: IEditorPart) {}
 
-  async openEditor(input: EditorInput, options?: EditorOpenOptions): Promise<void> {
-    await this.editorPart.openEditor(input, options);
+  async openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
+    await this.editorPart.openEditor(input, options, target);
+    if (options?.preserveFocus !== true) this.editorPart.focus();
   }
 
   focusActiveEditor(): void {

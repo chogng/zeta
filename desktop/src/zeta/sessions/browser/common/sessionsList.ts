@@ -3,7 +3,7 @@ import "./sessionsList.css";
 import { addDisposableListener } from "../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
-import type { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DisposableOwner {
@@ -12,10 +12,10 @@ export class SessionsList extends DisposableOwner {
   private readonly newSessionButton: HTMLButtonElement;
   private readonly list: HTMLDivElement;
   private readonly itemListeners = this.own(new ResettableDisposableGroup());
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly viewService: ISessionsViewService;
 
-  constructor(ownerDocument: Document, sessionService: IWorkbenchSessionService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
+  constructor(ownerDocument: Document, sessionService: ISessionsManagementService, viewService: ISessionsViewService, title: string, newSessionLabel: string) {
     super();
     this.sessionService = sessionService;
     this.viewService = viewService;

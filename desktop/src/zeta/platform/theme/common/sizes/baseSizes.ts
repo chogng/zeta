@@ -23,6 +23,7 @@ export const animationDurationSlow = duration("animation.durationSlow", 350, "Em
 export const tabHeight = dimension("tab.height", 24, "Standard height for TabList tabs.");
 export const tabListContentInset = dimension("tabList.contentInset", 4, "Horizontal inset between an inset TabList and its first or last tab.");
 export const tabListItemContentInset = dimension("tabList.itemContentInset", 6, "Horizontal inset between a TabList item's edge and its label content.");
+export const compositeBarContentInset = dimension("compositeBar.contentInset", 4, "Horizontal inset between a CompositeBar and its first or last action.");
 export const paneTitleHeight = dimension("pane.titleHeight", 32, "Standard height for a Workbench pane title.");
 export const actionBarGap = dimension("actionBar.gap", 2, "Gap between action bar items.");
 export const toolbarItemGap = dimension("toolbar.itemGap", 2, "Gap before a toolbar item.");

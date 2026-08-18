@@ -3,7 +3,8 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "../input/chatInputPart.js";
@@ -18,7 +19,7 @@ export class ChatPane extends DisposableOwner {
   private readonly inputPart: ChatInputPart;
   private submittedMessage = false;
 
-  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
+  constructor(ownerDocument: Document, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
     super();
     this.element = ownerDocument.createElement("div");
     this.element.id = panelId;

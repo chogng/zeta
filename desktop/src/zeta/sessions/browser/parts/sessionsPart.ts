@@ -4,14 +4,14 @@ import type { ICommandService } from "../../../platform/commands/common/commands
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
-import type { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { WorkbenchPart } from "../../../workbench/browser/part.js";
 import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
 import { SessionsChatView } from "../common/sessionsChatView.js";
 
 export interface SessionsPartOptions {
   readonly ownerDocument: Document;
-  readonly sessionService: IWorkbenchSessionService;
+  readonly sessionService: ISessionsManagementService;
   readonly chatService: IChatService;
   readonly contextMenuService: IContextMenuService;
   readonly contextViewService: IContextViewService;

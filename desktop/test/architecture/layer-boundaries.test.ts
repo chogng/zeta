@@ -29,11 +29,28 @@ test("Workbench service implementations do not depend on Workbench contributions
   assert.deepEqual(violations, []);
 });
 
-test("Workbench common service contracts do not import browser implementations", () => {
+test("Sessions owns canonical Session management independently from Workbench contributions", () => {
+  const sessionsServicesRoot = join(sourceRoot, "sessions/services");
+  const contributionRoot = join(sourceRoot, "workbench/contrib");
+  const violations = productionTypeScriptFiles(sessionsServicesRoot).flatMap(file => localImports(file).filter(target => target.startsWith(contributionRoot)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
+  assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/session.ts")), true);
+  assert.equal(existsSync(join(sessionsServicesRoot, "sessions/common/sessionsManagementService.ts")), true);
+  assert.equal(existsSync(join(sessionsServicesRoot, "sessions/browser/appServerSessionsManagementService.ts")), true);
+  assert.equal(existsSync(join(sourceRoot, "workbench/services/sessions/common/sessionService.ts")), false);
+  assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchSession.ts")), false);
+  assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchProfile.ts")), true);
+  assert.deepEqual(violations, []);
+});
+
+test("Frontend common service contracts do not import browser implementations", () => {
   const workbenchRoot = join(sourceRoot, "workbench");
+  const sessionsRoot = join(sourceRoot, "sessions");
   const platformRoot = join(sourceRoot, "platform");
-  const candidates = productionTypeScriptFiles(join(workbenchRoot, "services")).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file));
-  const violations = candidates.flatMap(file => localImports(file).filter(target => (target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
+  const candidates = [
+    ...productionTypeScriptFiles(join(sessionsRoot, "services")),
+    ...productionTypeScriptFiles(join(workbenchRoot, "services")),
+  ].filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file));
+  const violations = candidates.flatMap(file => localImports(file).filter(target => (target.startsWith(sessionsRoot) || target.startsWith(workbenchRoot) || target.startsWith(platformRoot)) && target.includes(`${sep}browser${sep}`)).map(target => `${sourceName(file)} -> ${sourceName(target)}`));
   assert.deepEqual(violations, []);
 });
 
@@ -48,6 +65,7 @@ test("Workbench contributions consume frontend services rather than Host aggrega
 
 test("Frontend common service contracts own their domain types", () => {
   const candidates = [
+    ...productionTypeScriptFiles(join(sourceRoot, "sessions/services")).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
     ...productionTypeScriptFiles(join(sourceRoot, "workbench/services")).filter(file => /services[/\\][^/\\]+[/\\]common[/\\]/u.test(file)),
     ...productionTypeScriptFiles(join(sourceRoot, "platform")).filter(file => /common[/\\][^/\\]*Service\.ts$/u.test(file)),
   ];
