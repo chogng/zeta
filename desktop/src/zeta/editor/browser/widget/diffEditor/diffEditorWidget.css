@@ -55,16 +55,16 @@
 
 .aster-diff-editor-cell.removed,
 .aster-diff-editor-row.modified .aster-diff-editor-cell.original {
-  background: var(--aster-diff-editor-removed-line-background);
+  background: var(--zeta-diff-editor-removed-line-background);
 }
 
 .aster-diff-editor-cell.added,
 .aster-diff-editor-row.modified .aster-diff-editor-cell.modified {
-  background: var(--aster-diff-editor-inserted-line-background);
+  background: var(--zeta-diff-editor-inserted-line-background);
 }
 
 .aster-diff-editor-cell.missing {
-  background: var(--aster-diff-editor-missing-line-background);
+  background: var(--zeta-diff-editor-missing-line-background);
 }
 
 .aster-diff-editor-line-number {
@@ -86,11 +86,11 @@
 }
 
 .aster-diff-editor-inline.removed {
-  background: var(--aster-diff-editor-removed-text-background);
+  background: var(--zeta-diff-editor-removed-text-background);
 }
 
 .aster-diff-editor-inline.added {
-  background: var(--aster-diff-editor-inserted-text-background);
+  background: var(--zeta-diff-editor-inserted-text-background);
 }
 
 .aster-diff-editor-accessibility-status {

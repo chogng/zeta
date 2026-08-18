@@ -105,6 +105,10 @@
   min-width: 0;
 }
 
+.zeta-tab.preview .zeta-icon-label-text {
+  font-style: italic;
+}
+
 .zeta-tab-actions {
   align-items: center;
   flex: 0 0 auto;

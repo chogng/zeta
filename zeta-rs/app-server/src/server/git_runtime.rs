@@ -7,15 +7,16 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchDto, GitChangeStatusDto, GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult,
-    GitHeadDto, GitReferenceDto, GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto,
-    GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusResult, GitSubmoduleStateDto,
-    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitBranchDto, GitChangeStatusDto, GitCommitChangeDto, GitCommitChangesResult,
+    GitCommitFileContentDto, GitCommitFileResult, GitCommitSummaryDto, GitDiffStatisticsDto,
+    GitGraphResult, GitHeadDto, GitReferenceDto, GitReferenceKindDto, GitRemoteDto,
+    GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusResult,
+    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
-    GitChangeStatus, GitGraph, GitGraphCursor, GitHead, GitReferenceKind, GitRemoteProvider,
-    GitRepository, GitRepositoryChange, GitRepositorySnapshot,
+    GitChangeStatus, GitCommitChange, GitGraph, GitGraphCursor, GitHead, GitReferenceKind,
+    GitRemoteProvider, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
 };
 use zeta_protocol::StreamInstanceId;
 use zeta_workspace::TrustedWorkspace;
@@ -243,6 +244,53 @@ impl GitRuntime {
                 additions: statistics.additions(),
                 deletions: statistics.deletions(),
             },
+        })
+    }
+
+    pub(super) fn commit_changes(
+        &self,
+        object_id: &str,
+    ) -> Result<GitCommitChangesResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let projected = self
+            .service
+            .commit_changes(object_id)
+            .map_err(GitRuntimeError::Service)?;
+        let workspace_prefix = self
+            .service
+            .workspace_root()
+            .strip_prefix(projected.repository.worktree_root())
+            .map_err(|_| GitRuntimeError::Boundary)?;
+        let changes = projected
+            .changes
+            .iter()
+            .filter_map(|change| workspace_commit_change(change, workspace_prefix))
+            .collect::<Result<Vec<_>, GitRuntimeError>>()?;
+        Ok(GitCommitChangesResult {
+            parent_object_id: projected.parent_object_id,
+            changes,
+        })
+    }
+
+    pub(super) fn commit_file(
+        &self,
+        object_id: &str,
+        path: &Path,
+    ) -> Result<GitCommitFileResult, GitRuntimeError> {
+        let _operation = self
+            .operation
+            .lock()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        let file = self
+            .service
+            .commit_file(object_id, path)
+            .map_err(GitRuntimeError::Service)?;
+        Ok(GitCommitFileResult {
+            original: commit_file_content(file.original()),
+            modified: commit_file_content(file.modified()),
         })
     }
 
@@ -655,6 +703,24 @@ fn workspace_change(
     })())
 }
 
+fn workspace_commit_change(
+    change: &GitCommitChange,
+    workspace_prefix: &Path,
+) -> Option<Result<GitCommitChangeDto, GitRuntimeError>> {
+    let path = change.path().strip_prefix(workspace_prefix).ok()?;
+    Some((|| {
+        Ok(GitCommitChangeDto {
+            path: wire_path(path)?,
+            original_path: change
+                .original_path()
+                .and_then(|path| path.strip_prefix(workspace_prefix).ok())
+                .map(wire_path)
+                .transpose()?,
+            status: change_status(change.status()),
+        })
+    })())
+}
+
 fn change_status(status: GitChangeStatus) -> GitChangeStatusDto {
     match status {
         GitChangeStatus::Unmodified => GitChangeStatusDto::Unmodified,
@@ -667,6 +733,17 @@ fn change_status(status: GitChangeStatus) -> GitChangeStatusDto {
         GitChangeStatus::Unmerged => GitChangeStatusDto::Unmerged,
         GitChangeStatus::Untracked => GitChangeStatusDto::Untracked,
         GitChangeStatus::Ignored => GitChangeStatusDto::Ignored,
+    }
+}
+
+fn commit_file_content(content: Option<&[u8]>) -> GitCommitFileContentDto {
+    match content {
+        None => GitCommitFileContentDto::Missing,
+        Some(content) if content.contains(&0) => GitCommitFileContentDto::Binary,
+        Some(content) => match std::str::from_utf8(content) {
+            Ok(text) => GitCommitFileContentDto::Text { text: text.into() },
+            Err(_) => GitCommitFileContentDto::Binary,
+        },
     }
 }
 

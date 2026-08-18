@@ -7,6 +7,7 @@ export interface EditorTabDescriptor {
   readonly input: EditorInput;
   readonly panelId: string;
   readonly tabId: string;
+  readonly preview?: boolean;
 }
 
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */

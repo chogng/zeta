@@ -66,6 +66,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
         value: editor.input,
         label,
         tooltip: editor.input.resource.toString(),
+        preview: editor.preview,
         tabId: editor.tabId,
         panelId: editor.panelId,
       };

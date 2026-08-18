@@ -423,8 +423,16 @@ traversal 启动单个 bounded `git log --all --topo-order` 进程，并只在�
 变化、mutation 或连接关闭会使游标失效。symbolic remote refs（例如 `origin/HEAD`）不会作为 branch
 ref 返回。协议不暴露 raw remote URL、token 或本地 `gh` 登录配置；因此该方法表示 local Git
 repository snapshot，不是 GitHub API、PR、Checks 或 review 查询，也不会自动 fetch。Desktop SCM
-负责触发后续页并合并 commit；它可据此显示不同 graph lane 颜色、local/remote ref labels 和
-GitHub repository 摘要。
+负责自动消费后续页并合并全部 commit；它可据此显示不同 graph lane 颜色、local/remote ref labels
+和 GitHub repository 摘要。
+
+`git/commitChanges` 接受 graph 返回的完整 commit object ID，按第一父提交（root commit 使用空树）
+返回 workspace-relative changed paths、rename original path、status 和 comparison parent object ID。
+`git/commitFile` 接受同一个 commit object ID 与上述结果中的 path；server 会重新解析该 commit 的
+changed paths 并确认 path 属于该提交和当前 workspace，然后按需返回 original/modified 两侧的
+`text`、`binary` 或 `missing` 状态。每侧文本上限为 2 MiB。Desktop SCM 因而只在展开 history item
+时读取路径，并只在用户点击具体文件时读取内容；modified/renamed 文件打开只读 diff，added/deleted
+文件打开存在的一侧。
 
 `git/branch/list` 返回当前仓库的现有本地分支。`git/branch/switch` 只接受有界非空 branch name；
 server 会重新列出当前仓库分支并按 exact name 解析后才执行 mutation，因此客户端提交的字符串

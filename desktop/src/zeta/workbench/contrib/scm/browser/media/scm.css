@@ -32,8 +32,35 @@
   container-name: zeta-scm-graph;
   container-type: inline-size;
   min-height: 0;
+  flex: 1 1 auto;
   padding: 2px 0 8px;
   overflow: auto;
+  scrollbar-color: var(--zeta-scrollbar-slider-background) transparent;
+  scrollbar-width: thin;
+}
+
+.zeta-scm-graph::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.zeta-scm-graph::-webkit-scrollbar-track,
+.zeta-scm-graph::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.zeta-scm-graph::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background: var(--zeta-scrollbar-slider-background) padding-box;
+}
+
+.zeta-scm-graph::-webkit-scrollbar-thumb:hover {
+  background: var(--zeta-scrollbar-slider-hover-background) padding-box;
+}
+
+.zeta-scm-graph::-webkit-scrollbar-thumb:active {
+  background: var(--zeta-scrollbar-slider-active-background) padding-box;
 }
 
 .zeta-scm-graph > .zeta-scm-command {
@@ -55,17 +82,31 @@
 .zeta-scm-graph-commit {
   --scm-graph-row-background: var(--zeta-side-bar-background);
   position: relative;
-  display: flex;
   min-width: 0;
-  height: 22px;
+}
+
+.zeta-scm-graph-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 22px;
   align-items: center;
   padding: 0 8px 0 0;
   line-height: 22px;
 }
 
-.zeta-scm-graph-commit:hover {
-  --scm-graph-row-background: var(--zeta-list-hover-background);
-  background: var(--zeta-list-hover-background);
+.zeta-scm-graph-commit:focus-visible {
+  outline: none;
+}
+
+.zeta-scm-graph-commit:focus-visible > .zeta-scm-graph-row {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+.zeta-scm-graph-row:hover {
+  background: linear-gradient(to right, transparent var(--scm-graph-content-x, 22px), var(--zeta-list-hover-background) var(--scm-graph-content-x, 22px));
 }
 
 .zeta-scm-graph-graph {
@@ -135,66 +176,56 @@
   font-weight: var(--zeta-font-weight-semi-bold);
 }
 
-.zeta-scm-graph-head {
-  display: inline-flex;
-  min-width: 0;
-  height: 22px;
-  max-width: 45%;
-  flex: 0 0 auto;
-  gap: 3px;
-  align-items: center;
-  border-radius: 11px;
-  padding: 0 7px 0 5px;
-  overflow: hidden;
-  color: var(--zeta-list-active-selection-foreground);
-  background: var(--scm-graph-accent);
-  font-size: var(--zeta-font-size-label1);
-  line-height: 22px;
-  white-space: nowrap;
-}
-
-.zeta-scm-graph-head > .zeta-icon {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 14px;
-}
-
-.zeta-scm-graph-head > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.zeta-scm-graph-refs {
+.zeta-scm-graph-label-container {
   display: flex;
   min-width: 0;
   max-width: 48%;
   flex: 0 1 auto;
-  gap: 3px;
+  gap: 4px;
   align-items: center;
   overflow: hidden;
 }
 
-.zeta-scm-graph-ref {
+.zeta-scm-graph-label {
   display: inline-flex;
   min-width: 0;
   max-width: 180px;
   align-items: center;
-  border: 1px solid color-mix(in srgb, var(--scm-graph-ref-color) 45%, transparent);
-  border-radius: 3px;
-  padding: 0 5px;
+  border: 0;
+  border-radius: 10px;
+  gap: 2px;
+  padding: 0 5px 0 3px;
   overflow: hidden;
   color: var(--scm-graph-ref-color);
+  background: color-mix(in srgb, var(--scm-graph-ref-color) 14%, transparent);
   font-size: var(--zeta-font-size-label2);
-  line-height: 17px;
+  line-height: 18px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.zeta-scm-graph-ref.local {
+.zeta-scm-graph-label > .zeta-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+
+.zeta-scm-graph-label-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zeta-scm-graph-label.head {
+  --scm-graph-ref-color: var(--scm-graph-accent);
+  color: var(--zeta-list-active-selection-foreground);
+  background: var(--scm-graph-accent);
+}
+
+.zeta-scm-graph-label.local {
   --scm-graph-ref-color: var(--scm-graph-lane-0);
 }
 
-.zeta-scm-graph-ref.remote {
+.zeta-scm-graph-label.remote {
   --scm-graph-ref-color: var(--scm-graph-lane-2);
 }
 
@@ -224,6 +255,75 @@
   white-space: nowrap;
 }
 
+.zeta-scm-graph-changes {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.zeta-scm-graph-changes > li {
+  height: 22px;
+}
+
+.zeta-scm-graph-change {
+  display: flex;
+  width: calc(100% - var(--scm-graph-content-x, 22px));
+  height: 22px;
+  min-width: 0;
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  margin-left: var(--scm-graph-content-x, 22px);
+  padding: 0 8px 0 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.zeta-scm-graph-change > .zeta-icon-label {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.zeta-scm-graph-change-description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-scm-graph-change:hover,
+.zeta-scm-graph-change:focus-visible {
+  background: var(--zeta-list-hover-background);
+  outline: none;
+}
+
+.zeta-scm-graph-change-status {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
+  font-weight: var(--zeta-font-weight-semi-bold);
+}
+
+.zeta-scm-graph-change-status.added { color: var(--zeta-success-foreground); }
+.zeta-scm-graph-change-status.deleted { color: var(--zeta-error-foreground); }
+.zeta-scm-graph-change-status.modified,
+.zeta-scm-graph-change-status.renamed { color: var(--zeta-warning-foreground); }
+
+.zeta-scm-graph-change-state {
+  padding-left: calc(var(--scm-graph-node-x, 11px) + 11px);
+  overflow: hidden;
+  color: var(--zeta-muted-foreground);
+  font-size: var(--zeta-font-size-label2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .zeta-scm-graph-load-more {
   display: flex;
   align-items: center;
@@ -241,7 +341,7 @@
     display: none;
   }
 
-  .zeta-scm-graph-refs {
+  .zeta-scm-graph-label-container {
     max-width: 35%;
   }
 }

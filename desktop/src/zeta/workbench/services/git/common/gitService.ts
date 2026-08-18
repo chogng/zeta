@@ -77,6 +77,27 @@ export interface GraphPage {
   readonly nextCursor: string | undefined;
 }
 
+export interface GitCommitChange {
+  readonly path: string;
+  readonly originalPath: string | undefined;
+  readonly status: GitChangeStatus;
+}
+
+export interface GitCommitChanges {
+  readonly parentObjectId: string | undefined;
+  readonly changes: readonly GitCommitChange[];
+}
+
+export type GitCommitFileContent =
+  | { readonly kind: "missing" }
+  | { readonly kind: "binary" }
+  | { readonly kind: "text"; readonly text: string };
+
+export interface GitCommitFile {
+  readonly original: GitCommitFileContent;
+  readonly modified: GitCommitFileContent;
+}
+
 /** Describes one bounded page of Git graph history requested by a frontend consumer. */
 export interface GraphQuery {
   readonly limit: number;
@@ -95,6 +116,8 @@ export interface IGitService {
   status(): Promise<GitStatus>;
   history(): Promise<readonly GitCommitSummary[]>;
   graph(query: GraphQuery): Promise<GraphPage>;
+  commitChanges(objectId: string): Promise<GitCommitChanges>;
+  commitFile(objectId: string, path: string): Promise<GitCommitFile>;
   stage(paths: readonly string[]): Promise<GitStatus>;
   unstage(paths: readonly string[]): Promise<GitStatus>;
   discardWorktree(paths: readonly string[]): Promise<GitStatus>;

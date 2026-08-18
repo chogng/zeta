@@ -6,9 +6,9 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchListResult, GitBranchSwitchParams, GitCommitParams,
-    GitCommitResult as GitCommitResultDto, GitGraphParams, GitHistoryResult, GitOperationResult,
-    GitPathsParams,
+    GitBranchListResult, GitBranchSwitchParams, GitCommitChangesParams, GitCommitFileParams,
+    GitCommitParams, GitCommitResult as GitCommitResultDto, GitGraphParams, GitHistoryResult,
+    GitOperationResult, GitPathsParams,
 };
 use zeta_git::GitError;
 
@@ -49,6 +49,31 @@ impl AppServer {
             &self
                 .git_runtime_service()?
                 .graph(connection_id, limit, params.cursor.as_deref())
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_commit_changes(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCommitChangesParams = decode(value)?;
+        validate_object_id(&params.object_id)?;
+        result(
+            &self
+                .git_runtime_service()?
+                .commit_changes(&params.object_id)
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_commit_file(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitCommitFileParams = decode(value)?;
+        validate_object_id(&params.object_id)?;
+        let path = workspace_paths(vec![params.path])?
+            .pop()
+            .expect("validated commit file path");
+        result(
+            &self
+                .git_runtime_service()?
+                .commit_file(&params.object_id, &path)
                 .map_err(git_error)?,
         )
     }
@@ -147,6 +172,15 @@ fn workspace_paths(paths: Vec<String>) -> Result<Vec<PathBuf>, RpcError> {
     Ok(paths)
 }
 
+fn validate_object_id(object_id: &str) -> Result<(), RpcError> {
+    if !(40..=64).contains(&object_id.len())
+        || !object_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+    }
+    Ok(())
+}
+
 fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
         GitRuntimeError::InvalidGraphCursor => {
@@ -154,7 +188,8 @@ fn git_error(error: GitRuntimeError) -> RpcError {
         }
         GitRuntimeError::Boundary
         | GitRuntimeError::Service(GitServiceError::Boundary)
-        | GitRuntimeError::Service(GitServiceError::BranchNotFound) => {
+        | GitRuntimeError::Service(GitServiceError::BranchNotFound)
+        | GitRuntimeError::Service(GitServiceError::CommitChangeNotFound) => {
             RpcError::new(-32061, AppServerErrorName::GitOperationFailed)
         }
         GitRuntimeError::Service(GitServiceError::Git(GitError::NotAWorkingTree { .. })) => {

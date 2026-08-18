@@ -186,6 +186,8 @@ test("capability IPC validators reject malformed input", () => {
   )!;
   const gitStage = routes.find((route) => route.channel === "zeta:git:stage")!;
   const gitCommit = routes.find((route) => route.channel === "zeta:git:commit")!;
+  const gitCommitChanges = routes.find((route) => route.channel === "zeta:git:commit-changes")!;
+  const gitCommitFile = routes.find((route) => route.channel === "zeta:git:commit-file")!;
 
   assert.deepEqual(
     sessionCreate.validate({ commandId: "one", title: "title" }),
@@ -471,6 +473,11 @@ test("capability IPC validators reject malformed input", () => {
   assert.throws(() => gitCommit.validate({ message: "   " }), /non-empty/);
   assert.throws(() => gitCommit.validate({ message: "bad\0message" }), /NUL/);
   assert.throws(() => gitCommit.validate({ message: "a".repeat(65_537) }), /UTF-8 bytes/);
+  const objectId = "a".repeat(40);
+  assert.deepEqual(gitCommitChanges.validate({ objectId }), { objectId });
+  assert.deepEqual(gitCommitFile.validate({ objectId, path: "src/main.ts" }), { objectId, path: "src/main.ts" });
+  assert.throws(() => gitCommitChanges.validate({ objectId: "HEAD" }), /objectId/);
+  assert.throws(() => gitCommitFile.validate({ objectId, path: "../outside.ts" }), /workspace root/);
 });
 
 test("trusted IPC router rejects duplicate route registrations", () => {

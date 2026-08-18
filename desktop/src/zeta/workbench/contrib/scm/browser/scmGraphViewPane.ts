@@ -1,15 +1,21 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
+import { observeElementSize } from "../../../../base/browser/observer.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
+import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { URI } from "../../../../base/common/uri.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
-import type { GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
+import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
+import type { GitCommitChange, GitCommitChanges, GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
+import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
+import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
 import { createRows, GraphRowHeight, renderRow, type GraphNodeKind, type GraphRow, type GraphState } from "./scmGraphRenderer.js";
 import { ScmGraphTitleActions } from "./scmGraphTitleActions.js";
 import { gitErrorMessage } from "./scmError.js";
@@ -17,6 +23,11 @@ import { gitErrorMessage } from "./scmError.js";
 const PageSize = 50;
 const LoadAhead = 48;
 const Overscan = 8;
+
+type ExpandedCommit =
+  | { readonly state: "loading" }
+  | { readonly state: "ready"; readonly result: GitCommitChanges }
+  | { readonly state: "error"; readonly message: string };
 
 /** Paged repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
@@ -35,9 +46,10 @@ export class ScmGraphViewPane extends ViewPane {
   private graphState: GraphState = { lanes: [], nextColor: 0 };
   private list: HTMLOListElement | undefined;
   private readonly refs = new Map<string, readonly GitReference[]>();
+  private readonly expanded = new Map<string, ExpandedCommit>();
   private disposed = false;
 
-  constructor(options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService) {
+  constructor(options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
     super({ ...options, headerActionsVisibility: "whenExpanded" });
     this.gitService = gitService;
     this.contentElement.classList.add("zeta-scm-secondary-pane");
@@ -50,6 +62,10 @@ export class ScmGraphViewPane extends ViewPane {
       if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - LoadAhead) void this.loadMore();
     }));
     this.contentElement.append(this.graphElement);
+    if (options.ownerDocument.defaultView?.ResizeObserver) {
+      this.own(observeElementSize(this.graphElement, () => this.renderRows()));
+    }
+    this.own(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
     this.actions = this.own(new ScmGraphTitleActions({
       ownerDocument: options.ownerDocument,
       gitService,
@@ -76,6 +92,7 @@ export class ScmGraphViewPane extends ViewPane {
     this.graphState = { lanes: [], nextColor: 0 };
     this.list = undefined;
     this.refs.clear();
+    this.expanded.clear();
     this.hovers.clear();
     this.more.clear();
     this.graphElement.textContent = "Loading commit graph…";
@@ -90,6 +107,7 @@ export class ScmGraphViewPane extends ViewPane {
       this.head = status.head;
       this.cursor = graph.nextCursor;
       this.renderGraph(graph, status.head);
+      if (graph.hasMore) void this.loadMore();
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       const document = this.graphElement.ownerDocument;
@@ -131,6 +149,7 @@ export class ScmGraphViewPane extends ViewPane {
     } else {
       this.list = this.graphElement.ownerDocument.createElement("ol");
       this.list.className = "zeta-scm-graph-list";
+      this.list.setAttribute("role", "tree");
       children.push(this.list);
     }
     if (graph.hasMore) children.push(this.renderMore());
@@ -144,25 +163,47 @@ export class ScmGraphViewPane extends ViewPane {
     const head = this.head;
     if (!list || !head || this.rows.length === 0) return;
     this.hovers.clear();
-    const listTop = list.offsetTop;
+    const listTop = offsetTopWithinScrollContainer(list, this.graphElement);
     const viewportTop = Math.max(0, this.graphElement.scrollTop - listTop);
     const viewportHeight = Math.max(GraphRowHeight, this.graphElement.clientHeight);
-    const start = Math.max(0, Math.floor(viewportTop / GraphRowHeight) - Overscan);
-    const end = Math.min(this.rows.length, Math.max(start + 1, Math.ceil((viewportTop + viewportHeight) / GraphRowHeight) + Overscan));
-    const children: HTMLElement[] = [this.renderSpacer(start)];
+    const offsets = this.rowOffsets();
+    const firstVisible = offsets.findIndex((offset, index) => offset + this.rowHeight(this.rows[index].commit) > viewportTop);
+    const start = Math.max(0, (firstVisible < 0 ? this.rows.length - 1 : firstVisible) - Overscan);
+    let end = start;
+    while (end < this.rows.length && offsets[end] < viewportTop + viewportHeight) end += 1;
+    end = Math.min(this.rows.length, Math.max(start + 1, end + Overscan));
+    const children: HTMLElement[] = [this.renderSpacer(offsets[start] ?? 0)];
     for (let index = start; index < end; index += 1) {
       const row = this.rows[index];
-      children.push(this.renderCommit(row.commit, head, this.refs.get(row.commit.objectId) ?? [], renderRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head))));
+      children.push(this.renderCommit(row.commit, head, this.refs.get(row.commit.objectId) ?? [], renderRow(this.graphElement.ownerDocument, row, graphNodeKind(row.commit, head), this.rowHeight(row.commit))));
     }
-    children.push(this.renderSpacer(this.rows.length - end));
+    const totalHeight = offsets.at(-1)! + this.rowHeight(this.rows.at(-1)!.commit);
+    children.push(this.renderSpacer(totalHeight - (offsets[end] ?? totalHeight)));
     list.replaceChildren(...children);
   }
 
-  private renderSpacer(rows: number): HTMLLIElement {
+  private rowOffsets(): number[] {
+    const offsets: number[] = [];
+    let offset = 0;
+    for (const row of this.rows) {
+      offsets.push(offset);
+      offset += this.rowHeight(row.commit);
+    }
+    return offsets;
+  }
+
+  private rowHeight(commit: GitCommitSummary): number {
+    const expanded = this.expanded.get(commit.objectId);
+    if (!expanded) return GraphRowHeight;
+    const childRows = expanded.state === "ready" ? Math.max(1, expanded.result.changes.length) : 1;
+    return GraphRowHeight * (childRows + 1);
+  }
+
+  private renderSpacer(height: number): HTMLLIElement {
     const spacer = this.graphElement.ownerDocument.createElement("li");
     spacer.className = "zeta-scm-graph-spacer";
     spacer.setAttribute("aria-hidden", "true");
-    spacer.style.height = `${rows * GraphRowHeight}px`;
+    spacer.style.height = `${height}px`;
     return spacer;
   }
 
@@ -210,22 +251,27 @@ export class ScmGraphViewPane extends ViewPane {
     this.moreError = undefined;
     this.updateMore();
     try {
-      const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) });
-      if (this.disposed || generation !== this.generation) return;
-      const commits = [...page.commits];
-      const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
-      const additions: GitCommitSummary[] = [];
-      for (const commit of next.commits) {
-        if (knownObjectIds.has(commit.objectId)) continue;
-        knownObjectIds.add(commit.objectId);
-        commits.push(commit);
-        additions.push(commit);
+      while (this.page?.hasMore) {
+        const current = this.page;
+        const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) });
+        if (this.disposed || generation !== this.generation) return;
+        const commits = [...current.commits];
+        const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
+        const additions: GitCommitSummary[] = [];
+        for (const commit of next.commits) {
+          if (knownObjectIds.has(commit.objectId)) continue;
+          knownObjectIds.add(commit.objectId);
+          commits.push(commit);
+          additions.push(commit);
+        }
+        const batch = createRows(additions, this.graphState);
+        this.rows = [...this.rows, ...batch.rows];
+        this.graphState = batch.state;
+        this.page = { ...next, commits };
+        this.cursor = next.nextCursor;
+        this.updateMore();
+        this.renderRows();
       }
-      const batch = createRows(additions, this.graphState);
-      this.rows = [...this.rows, ...batch.rows];
-      this.graphState = batch.state;
-      this.page = { ...next, commits };
-      this.cursor = next.nextCursor;
       this.loading = false;
       this.updateMore();
       this.renderRows();
@@ -247,6 +293,11 @@ export class ScmGraphViewPane extends ViewPane {
     item.classList.toggle("head", current);
     item.classList.toggle("merge", merge);
     item.classList.toggle("commit", !current && !merge);
+    item.style.setProperty("--scm-graph-node-x", `${graph.dataset.nodeX ?? 11}px`);
+    item.style.setProperty("--scm-graph-content-x", graph.style.width || "22px");
+    item.tabIndex = 0;
+    item.setAttribute("role", "treeitem");
+    item.setAttribute("aria-expanded", String(this.expanded.has(commit.objectId)));
     if (current) item.setAttribute("aria-current", "true");
     this.hovers.add(this.hoverService.setupHover({
       target: item,
@@ -263,25 +314,43 @@ export class ScmGraphViewPane extends ViewPane {
     subject.className = "zeta-scm-graph-subject";
     subject.textContent = commit.subject;
     details.append(subject);
-    if (current) details.append(this.renderHeadLabel(head));
-    const visibleReferences = references.filter((reference) => !(current && reference.kind === "localBranch" && reference.current));
+    const visibleReferences = commitReferences(commit, head, references);
     if (visibleReferences.length > 0) details.append(this.renderReferenceLabels(visibleReferences));
     const metadata = document.createElement("span");
     metadata.className = "zeta-scm-graph-metadata";
     const date = new Date(commit.timestampSeconds * 1_000);
     metadata.textContent = `${commit.objectId.slice(0, 7)} · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-    item.append(graph, details, metadata);
+    const row = document.createElement("div");
+    row.className = "zeta-scm-graph-row";
+    row.append(graph, details, metadata);
+    item.append(row);
+    const expanded = this.expanded.get(commit.objectId);
+    if (expanded) item.append(this.renderCommitChanges(commit, expanded));
+    this.hovers.add(addDisposableListener(item, "click", (event) => {
+      if ((event.target as Element).closest(".zeta-scm-graph-change")) return;
+      void this.toggleCommit(commit);
+    }));
+    this.hovers.add(addDisposableListener(item, "keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      void this.toggleCommit(commit);
+    }));
     return item;
   }
 
   private renderReferenceLabels(references: readonly GitReference[]): HTMLSpanElement {
     const container = this.graphElement.ownerDocument.createElement("span");
-    container.className = "zeta-scm-graph-refs";
+    container.className = "zeta-scm-graph-label-container";
     container.setAttribute("aria-label", "Git references");
     for (const reference of references) {
       const label = this.graphElement.ownerDocument.createElement("span");
-      label.className = `zeta-scm-graph-ref ${reference.kind === "remoteBranch" ? "remote" : "local"}`;
-      label.textContent = reference.name;
+      label.className = `zeta-scm-graph-label ${reference.current ? "head" : reference.kind === "remoteBranch" ? "remote" : "local"}`;
+      label.dataset.icon = reference.kind === "remoteBranch" ? "cloud" : "git-branch";
+      appendIcon(reference.kind === "remoteBranch" ? lxiconsLibrary.cloud : lxiconsLibrary.gitBranch, label);
+      const text = this.graphElement.ownerDocument.createElement("span");
+      text.className = "zeta-scm-graph-label-description";
+      text.textContent = reference.name;
+      label.append(text);
       label.title = reference.kind === "remoteBranch" ? `Fetched remote branch ${reference.name}` : `Local branch ${reference.name}`;
       container.append(label);
     }
@@ -303,15 +372,100 @@ export class ScmGraphViewPane extends ViewPane {
     return container;
   }
 
-  private renderHeadLabel(head: GitHead): HTMLSpanElement {
-    const label = this.graphElement.ownerDocument.createElement("span");
-    label.className = "zeta-scm-graph-head";
-    appendIcon(head.type === "branch" ? lxiconsLibrary.gitBranch : lxiconsLibrary.gitCommit, label);
-    const text = this.graphElement.ownerDocument.createElement("span");
-    text.textContent = head.type === "branch" ? head.name : head.type === "detached" ? head.objectId.slice(0, 7) : head.name;
-    label.append(text);
-    if (head.type === "branch" && head.upstream) label.title = `${head.name} tracks ${head.upstream.name}`;
-    return label;
+  private renderCommitChanges(commit: GitCommitSummary, expanded: ExpandedCommit): HTMLUListElement {
+    const document = this.graphElement.ownerDocument;
+    const list = document.createElement("ul");
+    list.className = "zeta-scm-graph-changes";
+    if (expanded.state !== "ready" || expanded.result.changes.length === 0) {
+      const state = document.createElement("li");
+      state.className = `zeta-scm-graph-change-state ${expanded.state}`;
+      state.textContent = expanded.state === "loading" ? "Loading changed files…" : expanded.state === "error" ? expanded.message : "No changed files.";
+      list.append(state);
+      return list;
+    }
+    for (const change of expanded.result.changes) {
+      const row = document.createElement("li");
+      const button = document.createElement("button");
+      button.className = "zeta-scm-graph-change";
+      button.type = "button";
+      button.title = `Open ${change.path} from ${commit.objectId.slice(0, 7)}`;
+      const name = change.path.split("/").at(-1) ?? change.path;
+      const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
+      const fileLabel = this.hovers.add(new IconLabel({
+        label: name,
+        ownerDocument: document,
+        reserveIconSpace: true,
+        renderIcon: (container) => this.fileIconThemeService.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
+        title: change.path,
+      }));
+      fileLabel.element.classList.add("zeta-scm-graph-change-label");
+      if (parentPath) {
+        const description = document.createElement("span");
+        description.className = "zeta-scm-graph-change-description";
+        description.textContent = parentPath;
+        fileLabel.element.append(description);
+      }
+      const status = document.createElement("span");
+      status.className = `zeta-scm-graph-change-status ${change.status}`;
+      status.textContent = changeStatusLabel(change.status);
+      button.append(fileLabel.element, status);
+      this.hovers.add(addDisposableListener(button, "click", (event) => {
+        event.stopPropagation();
+        if (event.detail > 1) return;
+        void this.openCommitChange(commit, change, expanded.result, false);
+      }));
+      this.hovers.add(addDisposableListener(button, "dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.openCommitChange(commit, change, expanded.result, true);
+      }));
+      row.append(button);
+      list.append(row);
+    }
+    return list;
+  }
+
+  private async toggleCommit(commit: GitCommitSummary): Promise<void> {
+    if (this.expanded.delete(commit.objectId)) {
+      this.renderRows();
+      return;
+    }
+    const generation = this.generation;
+    this.expanded.set(commit.objectId, { state: "loading" });
+    this.renderRows();
+    try {
+      const result = await this.gitService.commitChanges(commit.objectId);
+      if (this.disposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
+      this.expanded.set(commit.objectId, { state: "ready", result });
+    } catch (error) {
+      if (this.disposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
+      this.expanded.set(commit.objectId, { state: "error", message: gitErrorMessage(error) });
+    }
+    this.renderRows();
+  }
+
+  private async openCommitChange(commit: GitCommitSummary, change: GitCommitChange, expanded: GitCommitChanges, pinned: boolean): Promise<void> {
+    const file = await this.gitService.commitFile(commit.objectId, change.path);
+    const name = change.path.split("/").at(-1) ?? change.path;
+    const original = file.original.kind === "text" ? {
+      resource: commitFileUri(expanded.parentObjectId ?? "root", change.originalPath ?? change.path, "original"),
+      label: `${name} (${expanded.parentObjectId?.slice(0, 7) ?? "empty"})`,
+      readOnly: true,
+      initialText: file.original.text,
+    } : undefined;
+    const modified = file.modified.kind === "text" ? {
+      resource: commitFileUri(commit.objectId, change.path, "modified"),
+      label: `${name} (${commit.objectId.slice(0, 7)})`,
+      readOnly: true,
+      initialText: file.modified.text,
+    } : undefined;
+    if (original && modified) {
+      await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), { pinned });
+    } else if (modified) {
+      await this.editorService.openEditor(modified, { pinned });
+    } else if (original) {
+      await this.editorService.openEditor(original, { pinned });
+    }
   }
 
   private renderCommitHover(commit: GitCommitSummary): HTMLDivElement {
@@ -345,4 +499,42 @@ function remoteLabel(provider: GitRemoteProvider): string {
     case "bitbucket": return "Bitbucket";
     case "other": return "Remote";
   }
+}
+
+function commitReferences(commit: GitCommitSummary, head: GitHead, references: readonly GitReference[]): readonly GitReference[] {
+  const result = references.map((reference) => ({ ...reference }));
+  if (head.type === "branch" && head.objectId === commit.objectId) {
+    const current = result.findIndex((reference) => reference.kind === "localBranch" && reference.name === head.name);
+    if (current >= 0) result[current] = { ...result[current], current: true };
+    else result.unshift({ name: head.name, objectId: commit.objectId, kind: "localBranch", remoteName: undefined, current: true });
+  } else if (head.type === "detached" && head.objectId === commit.objectId) {
+    result.unshift({ name: commit.objectId.slice(0, 7), objectId: commit.objectId, kind: "localBranch", remoteName: undefined, current: true });
+  }
+  return result.sort((left, right) => Number(right.current) - Number(left.current) || left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name));
+}
+
+function changeStatusLabel(status: GitCommitChange["status"]): string {
+  switch (status) {
+    case "modified": return "M";
+    case "added": return "A";
+    case "deleted": return "D";
+    case "renamed": return "R";
+    case "copied": return "C";
+    case "typeChanged": return "T";
+    case "unmerged": return "U";
+    case "unmodified": return "";
+    case "untracked": return "?";
+    case "ignored": return "!";
+  }
+}
+
+function commitFileUri(objectId: string, path: string, side: "original" | "modified"): URI {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return URI.parse(`git-commit:/${encodeURIComponent(objectId)}/${encodedPath}?side=${side}`);
+}
+
+function offsetTopWithinScrollContainer(element: HTMLElement, scrollContainer: HTMLElement): number {
+  if (element.offsetParent === scrollContainer) return element.offsetTop;
+  if (element.offsetParent === scrollContainer.offsetParent) return element.offsetTop - scrollContainer.offsetTop;
+  return element.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
 }

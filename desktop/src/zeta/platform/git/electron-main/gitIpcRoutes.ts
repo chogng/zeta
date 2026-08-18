@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type GitCommitParams, type GitGraphParams, type GitPathsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type GitCommitChangesParams, type GitCommitFileParams, type GitCommitParams, type GitGraphParams, type GitPathsParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -21,6 +21,16 @@ export function gitIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute
       channel: "zeta:git:graph",
       validate: graphParams,
       invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/graph"], params),
+    }),
+    route({
+      channel: "zeta:git:commit-changes",
+      validate: commitChangesParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitChanges"], params),
+    }),
+    route({
+      channel: "zeta:git:commit-file",
+      validate: commitFileParams,
+      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitFile"], params),
     }),
     route({
       channel: "zeta:git:stage",
@@ -102,4 +112,22 @@ function graphParams(value: unknown): GitGraphParams {
     limit: boundedPositiveInteger(params.limit, "limit", 1000),
     ...(params.cursor === undefined ? {} : { cursor: string(params.cursor, "cursor") }),
   };
+}
+
+function commitChangesParams(value: unknown): GitCommitChangesParams {
+  const params = record(value, ["objectId"]);
+  return { objectId: objectId(params.objectId) };
+}
+
+function commitFileParams(value: unknown): GitCommitFileParams {
+  const params = record(value, ["objectId", "path"]);
+  const path = relativeWorkspacePath(params.path);
+  if (!path) throw new Error("path must not be empty");
+  return { objectId: objectId(params.objectId), path };
+}
+
+function objectId(value: unknown): string {
+  const objectId = string(value, "objectId");
+  if (!/^[0-9a-fA-F]{40,64}$/.test(objectId)) throw new Error("objectId must be a 40-64 character hexadecimal hash");
+  return objectId;
 }

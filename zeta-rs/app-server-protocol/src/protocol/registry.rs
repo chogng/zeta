@@ -178,12 +178,14 @@ use crate::protocol::fs::{
     FsWriteFileResult,
 };
 use crate::protocol::git::{
-    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto, GitCommitParams,
-    GitCommitResult, GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphParams, GitGraphResult,
-    GitHeadDto, GitHistoryResult, GitOperationResult, GitPathsParams, GitReferenceDto,
-    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto,
-    GitRepositoryIdentityDto, GitStatusChanged, GitStatusResult, GitSubmoduleStateDto,
-    GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeStatusDto,
+    GitCommitChangeDto, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileContentDto,
+    GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult,
+    GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphParams, GitGraphResult, GitHeadDto,
+    GitHistoryResult, GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto,
+    GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto,
+    GitStatusChanged, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult,
+    GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
@@ -1377,6 +1379,16 @@ client_methods! {
         response: GitGraphResult,
         serialization: GlobalSharedRead,
     },
+    GitCommitChanges => "git/commitChanges" {
+        params: GitCommitChangesParams,
+        response: GitCommitChangesResult,
+        serialization: GlobalSharedRead,
+    },
+    GitCommitFile => "git/commitFile" {
+        params: GitCommitFileParams,
+        response: GitCommitFileResult,
+        serialization: GlobalSharedRead,
+    },
     GitBranchSwitch => "git/branch/switch" {
         params: GitBranchSwitchParams,
         response: GitOperationResult,
@@ -2373,6 +2385,12 @@ typescript_bindings! {
     GitReferenceDto,
     GitGraphParams,
     GitGraphResult,
+    GitCommitChangesParams,
+    GitCommitChangeDto,
+    GitCommitChangesResult,
+    GitCommitFileParams,
+    GitCommitFileContentDto,
+    GitCommitFileResult,
     GitBranchSwitchParams,
     GitTextDiffDto,
     GitDiffStatisticsDto,

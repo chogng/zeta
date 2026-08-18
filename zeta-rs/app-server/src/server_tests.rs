@@ -3964,6 +3964,46 @@ fn git_remote_rpcs_fetch_pull_and_push_against_a_local_bare_remote() {
     assert_eq!(graph_tail["result"]["hasMore"], false);
     assert!(graph_tail["result"]["nextCursor"].is_null());
 
+    let committed_object_id = committed["result"]["objectId"]
+        .as_str()
+        .expect("committed object id");
+    let commit_changes = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":10,
+            "method":"git/commitChanges",
+            "params":{"objectId":committed_object_id}
+        }),
+    );
+    assert!(commit_changes.get("error").is_none(), "{commit_changes}");
+    assert!(commit_changes["result"]["parentObjectId"].is_string());
+    assert!(
+        commit_changes["result"]["changes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|change| change["path"] == "local.txt" && change["status"] == "added")
+    );
+    let commit_file = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":11,
+            "method":"git/commitFile",
+            "params":{"objectId":committed_object_id,"path":"local.txt"}
+        }),
+    );
+    assert!(commit_file.get("error").is_none(), "{commit_file}");
+    assert_eq!(commit_file["result"]["original"]["kind"], "missing");
+    assert_eq!(commit_file["result"]["modified"]["kind"], "text");
+    assert_eq!(
+        commit_file["result"]["modified"]["text"],
+        "from app server\n"
+    );
+
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
 }

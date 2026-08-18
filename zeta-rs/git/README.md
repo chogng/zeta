@@ -155,6 +155,12 @@ fetch 后才会进入 graph；graph 不执行 fetch，也不调用 GitHub API。
 丢弃 URL 中的 credential。App Server 只投影该 identity 和 remote name；raw URL、`gh` hosts 配置、
 token 与 provider-specific PR/Checks 数据不属于 `zeta-git` 的 graph contract。
 
+`GitClient::commit_changes` 将一个完整 object ID 相对第一父提交投影为 `GitCommitChange`；root
+commit 使用 empty-tree 语义，rename/copy 保留 original path。`GitClient::commit_file` 只读取调用方
+已解析的 commit、parent 与 changed path 的有界前后内容，`GitCommitFile` 用缺失的单侧表示
+added/deleted，不把 binary bytes 误称为 UTF-8。App Server 仍负责 workspace prefix 过滤、重新验证
+请求 path 确属该 commit，以及把 bytes 分类为 text/binary；Desktop 不拥有 Git revision 读取。
+
 ## 文本 Diff 与统计契约
 
 `text_diff_snapshot` / `text_diff_snapshot_under` 是 Git domain 对 HEAD-to-working-tree

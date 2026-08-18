@@ -4221,6 +4221,38 @@
           "properties": {
             "method": {
               "type": "string",
+              "const": "git/commitChanges"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCommitChangesParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/commitFile"
+            },
+            "params": {
+              "$ref": "#/$defs/GitCommitFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
               "const": "git/branch/switch"
             },
             "params": {
@@ -7157,6 +7189,38 @@
             },
             "result": {
               "$ref": "#/$defs/GitGraphResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/commitChanges"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCommitChangesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "method": {
+              "type": "string",
+              "const": "git/commitFile"
+            },
+            "result": {
+              "$ref": "#/$defs/GitCommitFileResult"
             }
           },
           "required": [
@@ -11870,6 +11934,144 @@
         "unmerged",
         "untracked",
         "ignored"
+      ]
+    },
+    "GitCommitChangeDto": {
+      "description": "One repository-relative path changed by a commit relative to its first parent.",
+      "type": "object",
+      "properties": {
+        "originalPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GitChangeStatusDto"
+        }
+      },
+      "required": [
+        "path",
+        "status"
+      ]
+    },
+    "GitCommitChangesParams": {
+      "description": "Identifies one commit whose changed paths should be expanded in repository history.",
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 40
+        }
+      },
+      "required": [
+        "objectId"
+      ]
+    },
+    "GitCommitChangesResult": {
+      "description": "The changed paths and comparison parent for one commit history item.",
+      "type": "object",
+      "properties": {
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GitCommitChangeDto"
+          }
+        },
+        "parentObjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "changes"
+      ]
+    },
+    "GitCommitFileContentDto": {
+      "description": "Bounded editor content for one side of a committed file comparison.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "missing"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "binary"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "text"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "text"
+          ]
+        }
+      ]
+    },
+    "GitCommitFileParams": {
+      "description": "Identifies one changed file to read at a commit and its comparison parent.",
+      "type": "object",
+      "properties": {
+        "objectId": {
+          "type": "string",
+          "maxLength": 64,
+          "minLength": 40
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 32768,
+          "minLength": 1
+        }
+      },
+      "required": [
+        "objectId",
+        "path"
+      ]
+    },
+    "GitCommitFileResult": {
+      "description": "Before/after editor content for one committed file.",
+      "type": "object",
+      "properties": {
+        "modified": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        },
+        "original": {
+          "$ref": "#/$defs/GitCommitFileContentDto"
+        }
+      },
+      "required": [
+        "original",
+        "modified"
       ]
     },
     "GitCommitParams": {

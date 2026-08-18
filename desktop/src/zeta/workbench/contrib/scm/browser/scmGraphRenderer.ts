@@ -71,7 +71,7 @@ export function createRows(commits: readonly GitCommitSummary[], state: GraphSta
 }
 
 /** Renders one SCM history swimlane row with a stable color for each branch lane. */
-export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind): SVGSVGElement {
+export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind, expandedHeight = LaneHeight): SVGSVGElement {
   const svg = document.createElementNS(SvgNamespace, "svg");
   svg.classList.add("zeta-scm-graph-graph", kind);
   svg.setAttribute("aria-hidden", "true");
@@ -110,7 +110,13 @@ export function renderRow(document: Document, row: GraphRow, kind: GraphNodeKind
 
   if (inputIndex !== -1) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} 0 V ${LaneHeight / 2}`, circleColorIndex);
   if (row.commit.parentObjectIds.length > 0) appendPath(svg, `M ${LaneWidth * (circleIndex + 1)} ${LaneHeight / 2} V ${LaneHeight}`, circleColorIndex);
+  if (expandedHeight > LaneHeight) {
+    for (let index = 0; index < row.outputSwimlanes.length; index += 1) {
+      appendPath(svg, `M ${LaneWidth * (index + 1)} ${LaneHeight} V ${expandedHeight}`, row.outputSwimlanes[index].colorIndex);
+    }
+  }
   appendNode(svg, circleIndex, kind, circleColorIndex);
+  svg.dataset.nodeX = String(LaneWidth * (circleIndex + 1));
   svg.style.width = `${LaneWidth * (Math.max(row.inputSwimlanes.length, row.outputSwimlanes.length, 1) + 1)}px`;
   svg.style.height = `${LaneHeight}px`;
   return svg;

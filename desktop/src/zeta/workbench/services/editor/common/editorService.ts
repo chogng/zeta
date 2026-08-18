@@ -17,6 +17,8 @@ export interface EditorOpenOptions {
   readonly preferredEditorId?: string;
   readonly index?: number;
   readonly selection?: TextRange;
+  /** Keeps the editor as a durable tab; `false` opens or replaces the group's preview tab. */
+  readonly pinned?: boolean;
 }
 
 /** Resource-oriented editor operations available to Workbench contributions. */

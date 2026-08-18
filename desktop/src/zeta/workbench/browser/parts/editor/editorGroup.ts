@@ -77,6 +77,7 @@ export interface EditorGroupOptions {
 interface EditorGroupEntry extends EditorTabDescriptor {
   paneInstance: EditorPaneInstance;
   input: EditorInput;
+  preview: boolean;
 }
 
 /**
@@ -227,6 +228,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     const existing = this.entry(input);
     if (existing?.paneInstance.pane.id === descriptor.id) {
       existing.input = input;
+      if (options.pinned === true) existing.preview = false;
       this.moveEntry(existing, options.index);
       this.activateEntry(existing, false);
       applyEditorOpenOptions(existing.paneInstance.pane, options);
@@ -301,6 +303,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       panelId: paneInstance.panelId,
       tabId: paneInstance.tabId,
       paneInstance,
+      preview: options.pinned === false,
     };
     if (existing) {
       const index = this.entries.indexOf(existing);
@@ -309,7 +312,16 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       if (this.activeEntry === existing) this.activeEntry = undefined;
       this.entries[index] = entry;
     } else {
-      this.insertEntry(entry, options.index);
+      const preview = options.pinned === false ? this.entries.find(candidate => candidate.preview) : undefined;
+      if (preview) {
+        const index = this.entries.indexOf(preview);
+        preview.paneInstance.setVisible(EditorPaneVisibility.Hidden);
+        preview.paneInstance.dispose();
+        if (this.activeEntry === preview) this.activeEntry = undefined;
+        this.entries[index] = entry;
+      } else {
+        this.insertEntry(entry, options.index);
+      }
     }
     this.ordinaryContent = undefined;
     this.activateEntry(entry, false);

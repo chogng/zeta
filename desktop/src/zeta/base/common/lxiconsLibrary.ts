@@ -17,6 +17,7 @@ export const lxiconsLibrary = {
   chat: register("chat", svg.chat),
   chatFilled: register("chat-filled", svg.chatFilled),
   check: register("check", svg.check),
+  cloud: register("cloud", svg.cloud),
   chevronDown: register("chevron-down", svg.chevronDown),
   chevronRight: register("chevron-right", svg.chevronRight),
   close: register("close", svg.close),

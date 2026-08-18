@@ -7,11 +7,13 @@
 ## 快速理解
 
 Desktop Renderer、Native 和 TUI 不启动 Git 进程，也不解析 Git 输出。Workspace-scoped App
-Server 接收 typed Git intent，调用 `zeta-git`，再把 client-safe DTO 返回产品入口。
+Server 接收 typed Git intent，调用 `zeta-git`，再把 client-safe DTO 返回产品入口。SCM 是
+Workbench 的通用展示与 provider 编排层；Git 是当前注册到 SCM 的版本控制 provider 和后端领域。
 
 ```text
-Desktop SCM View
-  ↔ Electron typed IPC + generic notification
+Desktop SCM View（当前直接消费 IGitService；目标改由 SCM contract 消费）
+  → Desktop Git domain service（目标由 frontend Git provider adapter 投影）
+  ↔ Electron typed IPC + Git notification
   ↔ App Server GitRuntime
   → GitService
   → zeta-git
@@ -40,15 +42,38 @@ Trusted workspace。Git query 继续由 `zeta-git` 以禁用 hooks、非交互�
 | 暂存或取消暂存 | 使用明确的工作区相对路径 | 不能越过工作区边界 |
 | 丢弃更改 | 只恢复已跟踪文件，并在界面确认 | 不删除未跟踪文件 |
 | 切换本地分支 | Native 点击底栏当前分支，在菜单中选择另一个本地分支；请求通过 App Server | 冲突时 Git 拒绝切换并保留当前工作树 |
-| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，按 lane 分配颜色并显示 local/remote refs；滚动到底部后追加下一页 | 只包含本地已存在的 refs；不会自动 fetch |
+| 查看 history graph | SCM Graph 以 `limit`/`cursor` 分页读取 `git/graph`，自动连续合并全部页面，按 lane 分配颜色并显示 local/remote refs；列表本身按视口虚拟化；history item 可展开 `git/commitChanges` 文件列表，点击文本文件再按需读取 `git/commitFile` 并挂到 Editor | 只包含本地已存在的 refs；不会自动 fetch；binary 或超限文件不作为文本 editor 打开 |
 | 拉取远端 | 只允许 fast-forward | 需要交互认证时失败 |
 | 提交和推送 | 使用系统 Git 的当前仓库配置 | 尚无凭据提示和进度 UI |
+
+## SCM 与 Git 的分层决策
+
+VS Code 的 SCM Workbench 不执行 Git，也不定义 Git wire DTO；Git provider 把 repository、resource
+group、history item、reference 和 command 投影成 SCM contract。Zeta 应保持同一依赖方向，但不照搬
+VS Code 的 extension-host 进程布局。
+
+| 层级 | 长期 owner | 当前状态 | 边界判断 |
+| --- | --- | --- | --- |
+| Workbench SCM | provider registry、通用 repository/resource/history contract、树与 Graph 展示、Editor 打开语义 | 尚未完成：`ScmViewPane`、`ScmGraphViewPane` 和 `ScmStatusContribution` 仍直接消费 `IGitService` | 需要解耦；新增 VCS 不应修改 SCM View |
+| Desktop Git provider adapter | 把 `IGitService` 的 status、refs、history、changed-file URI 和命令映射为 SCM contract | 尚未抽取为独立 provider；当前映射散落在 SCM consumer | 是前端迁移落点，不拥有 Git RPC 或 Git output parsing |
+| Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
+| App Server `GitRuntime` / `GitService` | Git operation serialization、workspace authority、projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
+| `zeta-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
+
+前端迁移必须从调用者 contract 开始：先定义通用 `IScmService`、repository/provider 和 history
+provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只依赖通用 contract。不能让
+`IScmService` 直接暴露 `GitStatus`、`GraphPage`、`git/commitFile` 或 `fetch/pull/push` 方法；这些能力
+应由 provider 以 resource group、history item change、status bar command 和 menu action 投影。
+
+后端只有在出现真正共享的跨 VCS authority、队列或 durability 语义时才增加对应通用层。仅为了让
+目录名与前端 SCM 对齐而包装 `git/*` 会增加一层同形 DTO、模糊错误 ownership，并使未来 provider
+被迫服从 Git 的 branch/index/worktree 模型，因此明确不采用。
 
 ## 所有权
 
 | 层级 | 当前职责 | 不拥有 |
 | --- | --- | --- |
-| Desktop SCM | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，history graph lane/ref/remote presentation，以及按 revision 接收自动状态更新 | Git process、porcelain parser、任意 host path authority |
+| Desktop SCM（当前实现） | 分支/upstream、Merge/Staged/Working Tree 分组，提交输入，Git intent，history graph lane/ref/remote presentation，以及按 revision 接收自动状态更新；其中 Git DTO 到 SCM contract 的 provider adapter 尚待抽取 | Git process、porcelain parser、任意 host path authority |
 | Electron bridge | 校验 workspace-relative path、commit message 和空参数，再把 typed Git intent 转发给 App Server | Git domain semantics、最终路径授权 |
 | App Server `GitRuntime` | 串行化 operation、维护 workspace projection/revision、消费 watcher hint、去重并发布状态 | Git command/parsing、Renderer state |
 | App Server `GitService` | 冻结 workspace root、映射 workspace/repository path、持有 Tokio runtime并调用 `zeta-git`；按 `InspectRepository`/`MutateRepository` 再校验读写边界 | live projection、notification |
@@ -109,13 +134,16 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 ## 当前限制
 
 - 当前是单 workspace `GitRuntime`，尚无 multi-repository registry；
+- Workbench SCM 尚无通用 provider registry；现有 panes 直接依赖 `IGitService`，因此第二种 VCS
+  仍会迫使 UI 分支。这是明确的前端架构债务，不是后端增加 `scm/*` facade 的理由；
 - operation 由 runtime mutex 串行化，但尚无可观测 queue、progress、caller cancellation 或 retry；
 - App Server 与 Native 已支持切换现有本地分支；系统仍无 branch 新建/删除/重命名、
   tag/worktree mutation 或 credential prompt；`zeta code` TUI 只消费 branch/dirty 会话上下文，
   当前产品定义不包含 SCM 管理 UI；
 - pull 固定为 fast-forward only；discard 不删除 untracked 文件；
 - 当前是单 workspace root contract，不是 multi-root repository collection；
-- SCM change row 尚未接入 editor diff/open workflow。
+- 工作树 change row 尚未接入 editor diff/open workflow；history changed-file row 已支持打开
+  commit/parent 文本 Diff。
 - `git/graph` 展示的是本地 repository 中已经存在的 refs；当前不会读取 `~/.config/gh/hosts.yml`，
   也不会调用 GitHub API，因此尚未提供 PR、Checks、review 或实时远端分支状态；这些属于独立的
   provider connector/权限能力，不能由 SCM graph 猜测；
@@ -127,10 +155,12 @@ stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。
 近期扩展顺序：
 
 1. 增加显式 repository identity 与 multi-root registry；
-2. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
-3. 接入 diff/open 与更细粒度的错误 UI；
-4. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
-5. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
+2. 抽取前端 `IScmService`、repository/history provider contract 与 Git adapter，让 SCM panes 不再
+   import `IGitService` 或 Git DTO；
+3. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
+4. 为工作树 change row 接入 diff/open，并补充更细粒度的错误 UI；
+5. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
+6. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
    UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git

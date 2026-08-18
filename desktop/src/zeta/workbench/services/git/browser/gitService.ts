@@ -3,7 +3,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
-import type { GitCommitResult, GitCommitSummary, GraphPage, GraphQuery, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
+import type { GitCommitChanges, GitCommitFile, GitCommitResult, GitCommitSummary, GraphPage, GraphQuery, GitHead, GitRepositoryChange, GitStatus, IGitService } from "../common/gitService.js";
 
 export interface GitServiceOptions {
   readonly api: IGitApi;
@@ -54,6 +54,19 @@ export class GitService extends DisposableOwner implements IGitService {
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
     };
+  }
+
+  async commitChanges(objectId: string): Promise<GitCommitChanges> {
+    const result = await this.api.commitChanges({ objectId });
+    return {
+      parentObjectId: result.parentObjectId ?? undefined,
+      changes: result.changes.map((change) => ({ ...change, originalPath: change.originalPath ?? undefined })),
+    };
+  }
+
+  async commitFile(objectId: string, path: string): Promise<GitCommitFile> {
+    const result = await this.api.commitFile({ objectId, path });
+    return { original: { ...result.original }, modified: { ...result.modified } };
   }
 
   async stage(paths: readonly string[]): Promise<GitStatus> {

@@ -378,6 +378,43 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
   dom.window.close();
 });
 
+test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const registry = new EditorPaneRegistry();
+  const panes: TestEditorPane[] = [];
+  registry.register(descriptor(
+    "aster.editor.code",
+    ".ts",
+    () => trackPane(panes, "aster.editor.code"),
+  ));
+  const editor = new EditorPart(dom.window.document, { registry });
+  dom.window.document.body.append(editor.element);
+  const first = input("C:\\project\\first.ts");
+  const second = input("C:\\project\\second.ts");
+  const third = input("C:\\project\\third.ts");
+
+  await editor.openEditor(first, { pinned: false });
+  assert.deepEqual(editor.activeGroup.inputs, [first]);
+  assert.equal(editor.element.querySelectorAll(".zeta-tab.preview").length, 1);
+
+  await editor.openEditor(second, { pinned: false });
+  assert.deepEqual(editor.activeGroup.inputs, [second]);
+  assert.equal(panes[0]?.disposed, true);
+  assert.equal(editor.element.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "second.ts");
+
+  await editor.openEditor(second, { pinned: true });
+  assert.deepEqual(editor.activeGroup.inputs, [second]);
+  assert.equal(editor.element.querySelector(".zeta-tab.preview"), null);
+
+  await editor.openEditor(third, { pinned: false });
+  assert.deepEqual(editor.activeGroup.inputs, [second, third]);
+  assert.equal(editor.element.querySelectorAll(".zeta-tab.preview").length, 1);
+  assert.equal(editor.element.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "third.ts");
+
+  editor.dispose();
+  dom.window.close();
+});
+
 test("Editor title toolbar splits the active group and owns More Actions", async () => {
   const [
     { MenuService },

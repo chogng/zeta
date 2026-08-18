@@ -205,6 +205,64 @@ pub struct GitGraphResult {
     pub next_cursor: Option<String>,
 }
 
+/// Identifies one commit whose changed paths should be expanded in repository history.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCommitChangesParams {
+    #[schemars(length(min = 40, max = 64))]
+    pub object_id: String,
+}
+
+/// One repository-relative path changed by a commit relative to its first parent.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCommitChangeDto {
+    pub path: String,
+    pub original_path: Option<String>,
+    pub status: GitChangeStatusDto,
+}
+
+/// The changed paths and comparison parent for one commit history item.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCommitChangesResult {
+    pub parent_object_id: Option<String>,
+    pub changes: Vec<GitCommitChangeDto>,
+}
+
+/// Identifies one changed file to read at a commit and its comparison parent.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCommitFileParams {
+    #[schemars(length(min = 40, max = 64))]
+    pub object_id: String,
+    #[schemars(length(min = 1, max = 32768))]
+    pub path: String,
+}
+
+/// Bounded editor content for one side of a committed file comparison.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+#[ts(rename_all = "camelCase")]
+pub enum GitCommitFileContentDto {
+    Missing,
+    Binary,
+    Text { text: String },
+}
+
+/// Before/after editor content for one committed file.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct GitCommitFileResult {
+    pub original: GitCommitFileContentDto,
+    pub modified: GitCommitFileContentDto,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {

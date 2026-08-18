@@ -24,6 +24,8 @@ export interface TabListItem<T> {
   readonly tooltip?: string;
   readonly icon?: Icon;
   readonly state?: string;
+  /** Presents transient preview content without changing tab selection semantics. */
+  readonly preview?: boolean;
   readonly tabId: string;
   readonly panelId?: string;
   readonly actions?: TabListActions;

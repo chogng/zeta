@@ -4,18 +4,26 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
 use zeta_git::{
-    GitBranch, GitClient, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitGraphCursor,
-    GitPathspecSet, GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
+    GitBranch, GitClient, GitCommitChange, GitCommitFile, GitCommitRequest, GitCommitSummary,
+    GitError, GitGraph, GitGraphCursor, GitPathspecSet, GitRepository, GitRepositorySnapshot,
+    GitTextDiffLimits, GitTextDiffSnapshot,
 };
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_COMMIT_FILE_BYTES: usize = 2 * 1024 * 1024;
 const RECENT_COMMIT_LIMIT: NonZeroUsize = NonZeroUsize::new(50).expect("history limit is non-zero");
 
 pub(crate) struct GitServiceCommit {
     pub(crate) object_id: String,
     pub(crate) repository: GitRepository,
     pub(crate) snapshot: GitRepositorySnapshot,
+}
+
+pub(crate) struct GitServiceCommitChanges {
+    pub(crate) repository: GitRepository,
+    pub(crate) parent_object_id: Option<String>,
+    pub(crate) changes: Vec<GitCommitChange>,
 }
 
 #[derive(Clone, Copy)]
@@ -139,6 +147,68 @@ impl GitService {
         runtime
             .block_on(cursor.page(limit))
             .map_err(GitServiceError::Git)
+    }
+
+    pub(crate) fn commit_changes(
+        &self,
+        object_id: &str,
+    ) -> Result<GitServiceCommitChanges, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let (parent_object_id, changes) = self
+                .client
+                .commit_changes(&repository, object_id)
+                .await
+                .map_err(GitServiceError::Git)?;
+            Ok(GitServiceCommitChanges {
+                repository,
+                parent_object_id,
+                changes,
+            })
+        })
+    }
+
+    pub(crate) fn commit_file(
+        &self,
+        object_id: &str,
+        workspace_path: &Path,
+    ) -> Result<GitCommitFile, GitServiceError> {
+        self.ensure_readable()?;
+        let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
+        runtime.block_on(async {
+            let repository = self.open_repository().await?;
+            let workspace_prefix = self
+                .workspace
+                .root()
+                .relative_to_existing_ancestor(repository.worktree_root())
+                .map_err(|_| GitServiceError::Boundary)?;
+            let repository_path = workspace_prefix.join(workspace_path);
+            let (parent_object_id, changes) = self
+                .client
+                .commit_changes(&repository, object_id)
+                .await
+                .map_err(GitServiceError::Git)?;
+            let change = changes
+                .iter()
+                .find(|change| change.path() == repository_path)
+                .ok_or(GitServiceError::CommitChangeNotFound)?;
+            let original_path = change
+                .original_path()
+                .filter(|path| path.strip_prefix(&workspace_prefix).is_ok());
+            self.client
+                .commit_file(
+                    &repository,
+                    object_id,
+                    parent_object_id.as_deref(),
+                    change.path(),
+                    original_path,
+                    MAX_COMMIT_FILE_BYTES,
+                )
+                .await
+                .map_err(GitServiceError::Git)
+        })
     }
 
     pub(crate) fn text_diff_snapshot(
@@ -350,6 +420,7 @@ impl GitService {
 pub(crate) enum GitServiceError {
     BranchNotFound,
     Boundary,
+    CommitChangeNotFound,
     Git(GitError),
     Runtime,
     Trust,

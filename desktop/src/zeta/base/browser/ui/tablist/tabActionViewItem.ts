@@ -56,6 +56,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
     container.classList.add("zeta-tab");
     container.classList.toggle("checked", this.tabAction.checked);
     container.classList.toggle("icon", item.icon !== undefined);
+    container.classList.toggle("preview", item.preview === true);
     if (item.state !== undefined) container.dataset.state = item.state;
 
     const tab = container.ownerDocument.createElement("button");
