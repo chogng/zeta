@@ -16,6 +16,10 @@
   padding: 0 var(--zeta-tab-list-content-inset);
 }
 
+.zeta-tab-list-inset {
+  height: var(--zeta-tab-height);
+}
+
 .zeta-tab-list-scroll-content > .zeta-action-bar.vertical {
   width: 100%;
   height: max-content;
@@ -105,6 +109,52 @@
   min-width: 0;
 }
 
+.zeta-tab-list-inset .zeta-tab {
+  min-width: 64px;
+  max-width: 180px;
+  border-radius: 4px;
+  color: var(--zeta-description-foreground);
+  background: var(--zeta-tab-list-inactive-background, transparent);
+}
+
+.zeta-tab-list-inset .zeta-tab:hover,
+.zeta-tab-list-inset .zeta-tab.checked {
+  color: var(--zeta-foreground);
+}
+
+.zeta-tab-list-inset .zeta-tab-label {
+  --zeta-icon-label-text-overflow: clip;
+
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  flex: 1 1 auto;
+  padding-right: 4px;
+  outline: none;
+  white-space: nowrap;
+}
+
+.zeta-tab-list-inset .zeta-tab.checked .zeta-tab-label::after,
+.zeta-tab-list-inset .zeta-tab:hover .zeta-tab-label::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--zeta-toolbar-action-size);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--zeta-tab-list-inactive-background, transparent));
+}
+
+.zeta-tab-list-inset .zeta-tab.checked .zeta-tab-label::after {
+  background: linear-gradient(to right, transparent, var(--zeta-tab-list-active-background));
+}
+
+.zeta-tab-list-inset .zeta-tab-label:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
 .zeta-tab.preview .zeta-icon-label-text {
   font-style: italic;
 }
@@ -146,9 +196,9 @@
 }
 
 .zeta-tab-actions .zeta-action-view-item.icon .zeta-button:hover {
-  background: var(--zeta-tab-list-action-hover-background, var(--zeta-toolbar-hover-background));
+  background: var(--zeta-toolbar-hover-background);
 }
 
 .zeta-tab.checked .zeta-tab-actions .zeta-action-view-item.icon .zeta-button:hover {
-  background: var(--zeta-tab-list-checked-action-hover-background, var(--zeta-tab-list-action-hover-background, var(--zeta-toolbar-hover-background)));
+  background: var(--zeta-toolbar-hover-background);
 }

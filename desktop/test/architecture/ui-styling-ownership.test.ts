@@ -100,6 +100,17 @@ test("TabList owns a stable pointer cursor across labels and action gaps", async
   assert.doesNotMatch(editorTabsCss, /\.zeta-multi-editor-tabs-control \.zeta-tab-label\s*\{[^}]*cursor:/s);
 });
 
+test("TabList preserves the standard close-action hover background", async () => {
+  const sourceRoot = join(process.cwd(), "src", "zeta");
+  const tabListCss = await readFile(join(sourceRoot, "base", "browser", "ui", "tablist", "tablist.css"), "utf8");
+  const editorTabsCss = await readFile(join(sourceRoot, "workbench", "browser", "parts", "editor", "media", "multiEditorTabsControl.css"), "utf8");
+  const chatTabsCss = await readFile(join(sourceRoot, "workbench", "contrib", "chat", "browser", "view", "multiChatTabsControl.css"), "utf8");
+
+  assert.match(tabListCss, /\.zeta-tab-actions \.zeta-action-view-item\.icon \.zeta-button:hover\s*\{[^}]*background: var\(--zeta-toolbar-hover-background\);/s);
+  assert.doesNotMatch(editorTabsCss, /--zeta-tab-list-(?:checked-)?action-hover-background/);
+  assert.doesNotMatch(chatTabsCss, /--zeta-tab-list-(?:checked-)?action-hover-background/);
+});
+
 test("Menubar icon actions hide only their text label", async () => {
   const menubarCss = await readFile(join(process.cwd(), "src", "zeta", "workbench", "browser", "parts", "titlebar", "menubarControl.css"), "utf8");
 

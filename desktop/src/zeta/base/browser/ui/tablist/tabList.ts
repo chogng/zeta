@@ -31,7 +31,7 @@ export interface TabListItem<T> {
   readonly actions?: TabListActions;
 }
 
-/** Visual edge treatment for the ActionBar rendered inside a TabList. */
+/** Named visual presentation for the ActionBar and tabs rendered by a TabList. */
 export type TabListPresentation = "flush" | "inset";
 export type TabListDropPosition = ActionBarDropPosition;
 

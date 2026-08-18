@@ -18,6 +18,7 @@ export class MultiEditorTabsControl extends EditorTabsControl {
     this.tabList = this.own(new TabList({
       ownerDocument,
       ariaLabel: "Open editors",
+      presentation: "inset",
       draggable: true,
       dragAndDrop: {
         canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),

@@ -304,6 +304,12 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
     "horizontal",
   );
   assert.equal(
+    titleControl?.querySelector(
+      ".zeta-editor-tabs-control .zeta-tab-list",
+    )?.classList.contains("zeta-tab-list-inset"),
+    true,
+  );
+  assert.equal(
     tablist?.closest(".zeta-editor-tabs-control")?.nextElementSibling,
     toolbar?.parentElement,
   );

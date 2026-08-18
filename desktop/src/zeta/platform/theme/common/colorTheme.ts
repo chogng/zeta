@@ -76,6 +76,7 @@ export const ColorId = Object.freeze({
   workbenchBackground: workbenchColors.workbenchBackground,
   editorBackground: workbenchColors.editorBackground,
   editorForeground: workbenchColors.editorForeground,
+  editorTabBackground: workbenchColors.editorTabBackground,
   titleBarBackground: workbenchColors.titleBarBackground,
   titleBarForeground: workbenchColors.titleBarForeground,
   titleBarActionForeground: workbenchColors.titleBarActionForeground,
