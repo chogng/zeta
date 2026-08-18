@@ -1,12 +1,13 @@
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchSessionService, Session, SessionThread } from "../../../../services/sessions/common/sessionService.js";
+import type { Session, SessionThread } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { type AgentTreeNode, projectAgentTree } from "./chatAgentTree.js";
 
 /** Projects durable Session Thread lineage as the Workbench Agent tree. */
 export class ChatAgentSidebarViewPane extends ViewPane {
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
 
-  constructor(options: IViewPaneOptions, sessionService: IWorkbenchSessionService) {
+  constructor(options: IViewPaneOptions, sessionService: ISessionsManagementService) {
     super(options);
     this.sessionService = sessionService;
     this.contentElement.classList.add("zeta-chat-agent-sidebar-view");

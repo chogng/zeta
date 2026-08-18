@@ -2,7 +2,7 @@ import type { Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
-import type { TreeDataSource, TreeFilter, TreeIndentGuides, TreeSorter, TreeTwistieState } from "./tree.js";
+import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from "./tree.js";
 
 export interface DataTreeOptions<T> {
   readonly ownerDocument?: Document;
@@ -10,6 +10,13 @@ export interface DataTreeOptions<T> {
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
   readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
+  readonly getHeight?: (element: T) => number;
+  readonly dnd?: TreeDragAndDrop<T>;
+  readonly keyboardNavigationLabelProvider?: TreeKeyboardNavigationLabelProvider<T>;
+  readonly findMode?: TreeFindMode;
+  readonly findMatchType?: TreeFindMatchType;
+  readonly enableStickyScroll?: boolean;
+  readonly stickyScrollMaxItemCount?: number;
   readonly identityProvider?: ObjectTreeIdentityProvider<T>;
   readonly sorter?: TreeSorter<T>;
   readonly filter?: TreeFilter<T>;
@@ -42,6 +49,13 @@ export class DataTree<TInput, T> extends DisposableOwner {
       indent: options.indent,
       indentGuides: options.indentGuides,
       expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
+      getHeight: options.getHeight,
+      dnd: options.dnd,
+      keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
+      findMode: options.findMode,
+      findMatchType: options.findMatchType,
+      enableStickyScroll: options.enableStickyScroll,
+      stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
       modelOptions: {
         identityProvider: { getId: (element) => this.getId(element) },
         sorter: options.sorter,
@@ -78,6 +92,11 @@ export class DataTree<TInput, T> extends DisposableOwner {
   expandTo(element: T): boolean { return this.tree.expandTo(this.getId(element)); }
   get focus(): T | undefined { return this.tree.focus; }
   get selection(): readonly T[] { return this.tree.selection; }
+  setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+  findNext(): T | undefined { return this.tree.findNext(); }
+  findPrevious(): T | undefined { return this.tree.findPrevious(); }
+  clearFind(): void { this.tree.clearFind(); }
+  updateElementHeight(element: T, height: number | undefined): void { this.tree.updateElementHeight(this.getId(element), height); }
 
   private createChildren(parent: TInput | T, ancestry: Set<T>): readonly ObjectTreeElement<T>[] {
     return [...this.dataSource.getChildren(parent)].map((element) => {

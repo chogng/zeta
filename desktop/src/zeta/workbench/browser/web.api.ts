@@ -4,7 +4,7 @@ import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleSe
 import type {
   IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
-import type { WorkbenchSession } from "./workbenchSession.js";
+import type { WorkbenchProfile } from "./workbenchProfile.js";
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -21,7 +21,7 @@ export interface IWebWorkbenchHost {
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
   readonly api: IRendererHost;
-  readonly session: WorkbenchSession;
+  readonly profile: WorkbenchProfile;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container: HTMLElement | null;
 }

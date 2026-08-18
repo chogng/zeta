@@ -13,18 +13,21 @@ is canonical for the renderer implementation and extension points.
 | Product composition | `browser/code/codeSessionsWorkbench.ts` | composes the fixed titlebar/sidebar/sessions/auxiliarybar Part set |
 | Layout | `browser/layout/` and `services/layout/` | owns Sessions-only topology, geometry, optional auxiliary visibility, and persisted sizes |
 | Window view state | `services/view/` | projects the canonical Session model into active/visible selections and Back/Forward history |
-| Session model | `workbench/services/sessions/` | owns App Server Session/Thread state, mutation commands, subscriptions, and authoritative refresh |
+| Session domain | `services/sessions/common/session.ts` | owns frontend Session, Thread, model, lineage, and untitled identity types |
+| Session management | `services/sessions/common/sessionsManagementService.ts` and `browser/appServerSessionsManagementService.ts` | own the frontend contract, App Server DTO projection, mutations, subscriptions, active selection, and authoritative refresh |
 | Main conversation | `browser/common/sessionsChatView.ts` | renders visible durable and untitled Sessions as retained full `ChatPane` Grid leaves |
 | Parts | `browser/parts/` | owns product chrome, list, primary surface, and typed active context |
 
-The dependency direction is one-way: Sessions may reuse backend-neutral
-Workbench mechanisms and contributions; regular Workbench modules must not
-import `sessions/` or add Sessions-specific branches to `WorkbenchLayout`.
+The canonical Session domain and management services are independent of
+Workbench contributions. Workbench Chat may consume those frontend contracts,
+while the dedicated Sessions renderer may reuse backend-neutral Workbench
+mechanisms and Chat contributions. Regular Workbench layout/runtime code must
+not import Sessions product UI or add Sessions-specific layout branches.
 
 ## Execution path
 
 1. The Code browser or Electron entry calls `startSessionsWorkbench`.
-2. `SessionsRuntime` creates one `WorkbenchSessionService`,
+2. `SessionsRuntime` creates one `AppServerSessionsManagementService`,
    `SessionsViewService`, and `ChatService`, and registers their frontend
    contracts in a window-local `ServiceCollection`.
 3. `CodeSessionsWorkbench` creates `BrowserLayoutService` and the shared
@@ -44,12 +47,17 @@ import `sessions/` or add Sessions-specific branches to `WorkbenchLayout`.
    pushes `(visible, active)` into the passive `SessionsPart`.
 
 App Server `session/update` notifications are sequence hints, not frontend
-state. `WorkbenchSessionService` subscribes to active Sessions, re-subscribes
-from its current sequence when a newer sequence is announced, applies the
-authoritative aggregate snapshot returned with the durable gap, updates active
+state. `AppServerSessionsManagementService` subscribes to active Sessions,
+re-subscribes from its current sequence when a newer sequence is announced,
+applies the authoritative aggregate snapshot returned with the durable gap, updates active
 selection references, and unsubscribes when a Session is stopped or archived.
 A snapshot that cannot advance to the announced sequence fails explicitly
 instead of entering a refresh loop.
+
+`session.ts` is the canonical frontend domain boundary. Transport DTO mapping
+stays private to `AppServerSessionsManagementService`; Workbench Chat and the
+dedicated Sessions renderer consume `ISessionsManagementService` plus the
+frontend-owned domain types, never generated App Server DTOs.
 
 ## Failure and lifecycle semantics
 
@@ -74,7 +82,7 @@ instead of entering a refresh loop.
   draft materialization.
 - `test/browser/sessions-part.test.ts` verifies the Sessions-owned primary Part
   passively renders multiple full Chat surfaces and reports focus/close intent.
-- `workbench/services/sessions/test/browser/sessionService.test.ts` protects
+- `services/sessions/test/browser/sessionsManagementService.test.ts` protects
   subscription, authoritative live refresh, active projection, and stale
   snapshot failure behavior.
 - `test/smoke/areas/sessions/sessions-window.spec.ts` verifies the dedicated
@@ -82,7 +90,7 @@ instead of entering a refresh loop.
 
 Changes to topology belong in `browser/layout/`; changes to window selection
 belong in `services/view/`; changes to canonical Session persistence or update
-semantics belong in `workbench/services/sessions/`. Adding a second layout or
+semantics belong in `services/sessions/`. Adding a second layout or
 Session model inside a Part would be architectural drift.
 
 ## Current limitations and staged evolution

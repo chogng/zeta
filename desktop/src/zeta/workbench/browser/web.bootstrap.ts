@@ -2,25 +2,25 @@ import { URI } from "../../base/common/uri.js";
 import type { ProductConfiguration } from "../../product/common/product.js";
 import { connectViteDevRendererApi, type ViteDevRendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { startWebWorkbench } from "./web.factory.js";
-import type { WorkbenchSession } from "./workbenchSession.js";
+import type { WorkbenchProfile } from "./workbenchProfile.js";
 
 declare const __ZETA_WEB_APP_SERVER__: boolean;
 
 /** Starts a product Workbench after resolving its optional development host. */
-export function startBrowserWorkbench(product: ProductConfiguration, session: WorkbenchSession, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
+export function startBrowserWorkbench(product: ProductConfiguration, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
   document.title = product.name;
-  void startBrowserWorkbenchAsync(product, session, rendererCapabilities);
+  void startBrowserWorkbenchAsync(product, profile, rendererCapabilities);
 }
 
-async function startBrowserWorkbenchAsync(product: ProductConfiguration, session: WorkbenchSession, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
+async function startBrowserWorkbenchAsync(product: ProductConfiguration, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
   if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
-    startWebWorkbench(product, session);
+    startWebWorkbench(product, profile);
     return;
   }
   const hot = import.meta.hot;
   if (!hot) {
     console.error("Zeta Web App Server development mode requires the Vite hot channel");
-    startWebWorkbench(product, session);
+    startWebWorkbench(product, profile);
     return;
   }
   let disposeConnectedHost: (() => void) | undefined;
@@ -38,7 +38,7 @@ async function startBrowserWorkbenchAsync(product: ProductConfiguration, session
     console.error("Failed to connect the Zeta Web development host", error);
   }
   try {
-    startWebWorkbench(product, session);
+    startWebWorkbench(product, profile);
   } catch (error) {
     disposeConnectedHost?.();
     throw error;

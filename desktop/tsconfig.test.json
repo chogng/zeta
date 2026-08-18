@@ -46,7 +46,7 @@
     "src/zeta/workbench/services/contextmenu/**/*.ts",
     "src/zeta/workbench/services/dialogs/**/*.ts",
     "src/zeta/workbench/services/keybinding/**/*.ts",
-    "src/zeta/workbench/services/sessions/**/*.ts",
+    "src/zeta/sessions/services/sessions/**/*.ts",
     "src/zeta/workbench/services/views/**/*.ts",
     "src/zeta/workbench/services/workspaces/**/*.ts",
     "src/zeta/workbench/common/**/*.ts",

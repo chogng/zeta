@@ -3,9 +3,9 @@ import test from "node:test";
 import type { ServerNotification, Session as SessionDto } from "../../../../../../../generated/app-server/types.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi } from "../../../../../platform/sessions/common/sessionApi.js";
-import { WorkbenchSessionService } from "../../../../../workbench/services/sessions/browser/sessionService.js";
+import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
 
-test("WorkbenchSessionService refreshes subscribed Sessions from canonical update snapshots", async () => {
+test("AppServerSessionsManagementService refreshes subscribed Sessions from canonical update snapshots", async () => {
   let current = session(1);
   const listeners = new Set<(event: ServerNotification) => void>();
   const subscribed: string[] = [];
@@ -33,7 +33,7 @@ test("WorkbenchSessionService refreshes subscribed Sessions from canonical updat
       return { dispose: () => { listeners.delete(listener); } };
     },
   };
-  using service = new WorkbenchSessionService({ session: api, events });
+  using service = new AppServerSessionsManagementService({ session: api, events });
   await service.initialize();
 
   assert.deepEqual(subscribed, ["session-1"]);
@@ -54,7 +54,7 @@ test("WorkbenchSessionService refreshes subscribed Sessions from canonical updat
   assert.equal(service.active, undefined);
 });
 
-test("WorkbenchSessionService stops refreshing when the canonical snapshot cannot reach an announced sequence", async () => {
+test("AppServerSessionsManagementService stops refreshing when the canonical snapshot cannot reach an announced sequence", async () => {
   const current = session(1);
   const listeners = new Set<(event: ServerNotification) => void>();
   let subscriptions = 0;
@@ -78,7 +78,7 @@ test("WorkbenchSessionService stops refreshing when the canonical snapshot canno
       return { dispose: () => { listeners.delete(listener); } };
     },
   };
-  using service = new WorkbenchSessionService({ session: api, events });
+  using service = new AppServerSessionsManagementService({ session: api, events });
   await service.initialize();
 
   emit(listeners, { method: "session/update", params: { sessionId: "session-1", durableSequence: 2, update: { type: "committed", event: { type: "sessionModelChanged", sessionId: "session-1", model: { provider: "openai", model: "gpt-live" } } } } });
@@ -88,7 +88,7 @@ test("WorkbenchSessionService stops refreshing when the canonical snapshot canno
   assert.match(service.error ?? "", /did not advance/);
 });
 
-test("WorkbenchSessionService reopens a foreign Session Workspace before selecting its Thread", async () => {
+test("AppServerSessionsManagementService reopens a foreign Session Workspace before selecting its Thread", async () => {
   const current = { ...session(1), workspace: { authorityId: "current", root: "/workspaces/current" } };
   const foreign: SessionDto = {
     ...session(1),
@@ -113,7 +113,7 @@ test("WorkbenchSessionService reopens a foreign Session Workspace before selecti
     async stop() { throw new Error("Not used"); },
     async setModel() { throw new Error("Not used"); },
   };
-  using service = new WorkbenchSessionService({
+  using service = new AppServerSessionsManagementService({
     session: api,
     workspaceRouter: {
       currentWorkspaceRoot: () => currentWorkspaceRoot,

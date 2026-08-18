@@ -50,6 +50,24 @@ from UI, platform, or workbench modules.
 - `ui/hover`, `ui/dropdown`, and `ui/selectbox` own their interaction and ARIA
   semantics; they do not add component-specific policy to `geometry.ts`.
 
+## Drag-and-drop boundaries
+
+- `base/browser/dnd.ts` owns native listener normalization and browser
+  `DataTransfer` helpers. It does not coordinate collection state or product
+  payloads.
+- `base/browser/ui/dnd` defines domain-neutral drag origins and shared visual
+  state. `base/browser/ui/list/listView.ts` owns flat rows, sizing, scrolling,
+  the canonical drag session, cross-list transfer, target sectors, and
+  feedback. `listWidget.ts` owns selection, focus, keyboard, and pointer
+  semantics over that View.
+- Tree controls adapt that List contract to model nodes. Tree alone owns
+  hierarchical bubbling, subtree feedback, and delayed expansion.
+- `platform/dnd` retains typed same-renderer payload identity. Workbench
+  consumers own Editor, View, file, and other product mutation semantics.
+- Action bars and tabs may keep their collection-specific insertion geometry;
+  they are not forced through the vertical List controller. Do not introduce a
+  global DnD manager that takes semantic drop policy away from components.
+
 ## Focus architecture
 
 The long-term focus model is **window-level coordination, scope-level

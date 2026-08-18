@@ -2,7 +2,7 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { AbstractTree } from "./abstractTree.js";
 import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from "./indexTreeModel.js";
-import type { IndexTreeLocation, TreeElement, TreeIndentGuides, TreePointerTarget, TreeTwistieState } from "./tree.js";
+import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
 
 export interface IndexTreeOptions<T> {
   readonly ownerDocument?: Document;
@@ -10,6 +10,13 @@ export interface IndexTreeOptions<T> {
   readonly indent?: number;
   readonly indentGuides?: TreeIndentGuides;
   readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
+  readonly getHeight?: (element: T) => number;
+  readonly dnd?: TreeDragAndDrop<T>;
+  readonly keyboardNavigationLabelProvider?: TreeKeyboardNavigationLabelProvider<T>;
+  readonly findMode?: TreeFindMode;
+  readonly findMatchType?: TreeFindMatchType;
+  readonly enableStickyScroll?: boolean;
+  readonly stickyScrollMaxItemCount?: number;
   readonly modelOptions?: IndexTreeModelOptions<T>;
   readonly renderElement: (element: T, node: IndexTreeNode<T>) => HTMLElement;
   readonly renderTwistie?: (element: T, state: TreeTwistieState, container: HTMLSpanElement) => void;
@@ -77,6 +84,13 @@ export class IndexTree<T> extends DisposableOwner {
       indent: options.indent,
       indentGuides: options.indentGuides,
       expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
+      getHeight: options.getHeight ? (node) => options.getHeight!(node.element) : undefined,
+      dnd: options.dnd ? mapDragAndDrop(options.dnd) : undefined,
+      keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider,
+      findMode: options.findMode,
+      findMatchType: options.findMatchType,
+      enableStickyScroll: options.enableStickyScroll,
+      stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
       renderElement: (node) => options.renderElement(node.element, node),
       renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element, state, container) : undefined,
     }));
@@ -119,7 +133,27 @@ export class IndexTree<T> extends DisposableOwner {
     this.tree.setSelection(locations.map((location) => this.model.getNode(location).id), browserEvent);
   }
 
+  setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
+  findNext(): T | undefined { return this.tree.findNext()?.element; }
+  findPrevious(): T | undefined { return this.tree.findPrevious()?.element; }
+  clearFind(): void { this.tree.clearFind(); }
+  updateElementHeight(location: IndexTreeLocation, height: number | undefined): void { this.tree.updateElementHeight(this.model.getNode(location).id, height); }
+
   private render(): void {
+    this.tree.setFindCandidates(flattenTreeNodes(this.model.rootNodes));
     this.tree.items = this.model.visibleNodes;
   }
+}
+
+function mapDragAndDrop<T>(dnd: TreeDragAndDrop<T>): TreeDragAndDrop<IndexTreeNode<T>> {
+  const elements = (nodes: readonly IndexTreeNode<T>[]) => nodes.map((node) => node.element);
+  return {
+    getDragURI: (node) => dnd.getDragURI(node.element),
+    getDragLabel: dnd.getDragLabel ? (nodes, event) => dnd.getDragLabel!(elements(nodes), event) : undefined,
+    onDragStart: dnd.onDragStart ? (data, event) => dnd.onDragStart!(mapTreeDragData(data, (node) => node.element), event) : undefined,
+    onDragOver: (data, target, index, sector, event) => dnd.onDragOver(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
+    onDragLeave: dnd.onDragLeave ? (data, target, index, event) => dnd.onDragLeave!(mapTreeDragData(data, (node) => node.element), target?.element, index, event) : undefined,
+    drop: (data, target, index, sector, event) => dnd.drop(mapTreeDragData(data, (node) => node.element), target?.element, index, sector, event),
+    onDragEnd: dnd.onDragEnd,
+  };
 }

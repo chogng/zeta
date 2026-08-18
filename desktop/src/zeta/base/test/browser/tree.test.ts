@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { AsyncDataTree } from "../../browser/ui/tree/asyncDataTree.js";
+import { DragAndDropDataKind } from "../../browser/ui/dnd/dnd.js";
+import { AsyncDataTree, CompressibleAsyncDataTree } from "../../browser/ui/tree/asyncDataTree.js";
+import { CompressibleObjectTreeModel, compressTreeElement, decompressTreeElement } from "../../browser/ui/tree/compressedObjectTreeModel.js";
 import { DataTree } from "../../browser/ui/tree/dataTree.js";
 import { IndexTree } from "../../browser/ui/tree/indexTree.js";
 import { IndexTreeModel } from "../../browser/ui/tree/indexTreeModel.js";
-import { ObjectTree } from "../../browser/ui/tree/objectTree.js";
+import { CompressibleObjectTree, ObjectTree } from "../../browser/ui/tree/objectTree.js";
 import { ObjectTreeModel } from "../../browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../browser/ui/tree/tree.js";
 
@@ -119,6 +121,90 @@ test("AsyncDataTree loads on expansion and rejects stale refresh results", async
   pending[0]!([stale]);
   await Promise.resolve();
   assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".zeta-tree-row")].map((row) => row.textContent), ["Group", "Current"]);
+  tree.dispose();
+  dom.window.close();
+});
+
+test("CompressibleObjectTreeModel round-trips chains and honors incompressible boundaries", () => {
+  const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
+  const boundary: TestNode = { id: "boundary", label: "Boundary", expanded: false };
+  const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
+  const root: TestNode = { id: "root", label: "Root", expanded: false };
+  const source = { element: root, children: [{ element: middle, children: [{ element: boundary, incompressible: true, children: [{ element: leaf }] }] }] };
+  const compressed = compressTreeElement(source);
+  assert.deepEqual(compressed.element.elements.map((node) => node.id), ["root", "middle"]);
+  assert.deepEqual(compressed.children?.[0]?.element.elements.map((node) => node.id), ["boundary", "leaf"]);
+  const decompressed = decompressTreeElement(compressed);
+  assert.equal(decompressed.element, root);
+  assert.equal(decompressed.children?.[0]?.element, middle);
+  assert.equal(decompressed.children?.[0]?.children?.[0]?.element, boundary);
+  assert.equal(decompressed.children?.[0]?.children?.[0]?.incompressible, true);
+  assert.equal(decompressed.children?.[0]?.children?.[0]?.children?.[0]?.element, leaf);
+
+  const model = new CompressibleObjectTreeModel<TestNode>({ identityProvider: { getId: (node) => node.id } });
+  model.setChildren([source]);
+  assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [["root", "middle"], ["boundary", "leaf"]]);
+  assert.equal(model.getCompressedNode(root), model.getCompressedNode(middle));
+  model.setCompressionEnabled(false);
+  assert.deepEqual(model.visibleNodes.map((node) => node.element.elements.map((element) => element.id)), [["root"], ["middle"], ["boundary"], ["leaf"]]);
+  model.dispose();
+});
+
+test("CompressibleObjectTree renders one row per compressed chain", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const root: TestNode = { id: "root", label: "Root", expanded: false };
+  const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
+  const leaf: TestNode = { id: "leaf", label: "Leaf", expanded: false };
+  const tree = new CompressibleObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    renderCompressedElements: (elements) => {
+      const label = dom.window.document.createElement("span");
+      label.textContent = elements.map((element) => element.label).join(" / ");
+      return label;
+    },
+  });
+  tree.setChildren([{ element: root, children: [{ element: middle, children: [{ element: leaf }] }] }]);
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.textContent), ["Root / Middle / Leaf"]);
+  assert.deepEqual(tree.getCompressedTreeNode(middle)?.elements.map((element) => element.id), ["root", "middle", "leaf"]);
+  tree.dispose();
+  dom.window.close();
+});
+
+test("CompressibleAsyncDataTree lazily expands compressed branches", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const root: TestNode = { id: "root", label: "Root", expanded: false };
+  const first: TestNode = { id: "first", label: "First", expanded: false };
+  const middle: TestNode = { id: "middle", label: "Middle", expanded: false };
+  const left: TestNode = { id: "left", label: "Left", expanded: false };
+  const right: TestNode = { id: "right", label: "Right", expanded: false };
+  const children = new Map<TestNode, readonly TestNode[]>([[root, [first]], [first, [middle]], [middle, [left, right]], [left, []], [right, []]]);
+  const tree = new CompressibleAsyncDataTree<TestNode, TestNode>({
+    hasChildren: (element) => (children.get(element as TestNode)?.length ?? 0) > 0,
+    getChildren: (element) => children.get(element as TestNode) ?? [],
+  }, {
+    ownerDocument: dom.window.document,
+    identityProvider: { getId: (node) => node.id },
+    renderCompressedElements: (elements) => {
+      const label = dom.window.document.createElement("span");
+      label.textContent = elements.map((element) => element.label).join(" / ");
+      return label;
+    },
+  });
+  const pointers: string[] = [];
+  tree.onPointer(({ element, elements }) => pointers.push(`${element.id}:${elements.map((candidate) => candidate.id).join("/")}`));
+  await tree.setInput(root);
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.textContent), ["First"]);
+  tree.element.querySelector<HTMLElement>(":scope > .zeta-tree-row")?.click();
+  assert.deepEqual(pointers, ["first:first"]);
+  assert.equal(tree.expand(first), true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.textContent), ["First / Middle"]);
+  tree.element.querySelector<HTMLElement>(":scope > .zeta-tree-row")?.click();
+  assert.deepEqual(pointers, ["first:first", "middle:first/middle"]);
+  assert.equal(tree.expand(middle), true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.textContent), ["First / Middle", "Left", "Right"]);
   tree.dispose();
   dom.window.close();
 });
@@ -335,6 +421,158 @@ test("ObjectTree keyboard expansion operates on model nodes", () => {
   assert.deepEqual(tree.model.visibleNodes.map((node) => node.id), ["parent"]);
   assert.deepEqual(collapseChanges, ["parent:false", "parent:true"]);
   tree.dispose();
+  dom.window.close();
+});
+
+test("ObjectTree find filters with ancestors and supports dynamic heights and sticky rows", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const group: TestNode = { id: "group", label: "Group", expanded: false };
+  const needle: TestNode = { id: "needle", label: "Needle", expanded: false };
+  const other: TestNode = { id: "other", label: "Other", expanded: false };
+  const tree = new ObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    enableStickyScroll: true,
+    keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: (element) => element.label },
+    findMode: "filter",
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    renderElement: (element) => {
+      const label = dom.window.document.createElement("span");
+      label.textContent = element.label;
+      return label;
+    },
+  });
+  tree.setChildren([{ element: group, collapsed: true, children: [{ element: needle }] }, { element: other }]);
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.dataset.treeId), ["group", "other"]);
+  tree.setFindPattern("ndl");
+  tree.updateElementHeight("group", 30);
+  tree.updateElementHeight("needle", 40);
+  assert.equal(tree.getElementTop("needle"), 30);
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(":scope > .zeta-tree-row")].map((row) => row.dataset.treeId), ["group", "needle"]);
+  assert.equal(tree.element.querySelector("[data-tree-id='group']")?.getAttribute("aria-expanded"), "true");
+  assert.equal(tree.element.querySelector("[data-tree-id='needle']")?.classList.contains("find-match"), true);
+  tree.clearFind();
+  assert.equal(tree.element.querySelectorAll(":scope > .zeta-tree-row").length, 2);
+  tree.expand("group");
+  tree.element.scrollTop = 31;
+  tree.element.dispatchEvent(new dom.window.Event("scroll"));
+  assert.deepEqual([...tree.element.querySelectorAll<HTMLElement>(".zeta-tree-sticky-row")].map((row) => row.dataset.treeId), ["group"]);
+  tree.dispose();
+  dom.window.close();
+});
+
+test("ObjectTree routes HTML drag and drop through hierarchy-aware policy", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const events: string[] = [];
+  const tree = new ObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    dnd: {
+      getDragURI: (element) => `zeta://${element.id}`,
+      onDragStart: ({ elements }) => events.push(`start:${elements.map((element) => element.id).join(",")}`),
+      onDragOver: (_data, target) => {
+        events.push(`over:${target?.id ?? "root"}`);
+        return { accept: true, effect: "move" };
+      },
+      drop: ({ elements }, target) => events.push(`drop:${elements[0]?.id}->${target?.id}`),
+      onDragEnd: () => events.push("end"),
+    },
+    renderElement: (element) => {
+      const label = dom.window.document.createElement("span");
+      label.textContent = element.label;
+      return label;
+    },
+  });
+  tree.setChildren([{ element: { id: "first", label: "First", expanded: false } }, { element: { id: "second", label: "Second", expanded: false } }]);
+  const first = tree.element.querySelector<HTMLElement>("[data-tree-id='first']")!;
+  const second = tree.element.querySelector<HTMLElement>("[data-tree-id='second']")!;
+  assert.equal(first.draggable, true);
+  first.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true, cancelable: true }));
+  second.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
+  second.dispatchEvent(new dom.window.Event("drop", { bubbles: true, cancelable: true }));
+  first.dispatchEvent(new dom.window.Event("dragend", { bubbles: true }));
+  assert.deepEqual(events, ["start:first", "over:second", "drop:first->second", "end"]);
+  tree.dispose();
+  dom.window.close();
+});
+
+test("ObjectTree drag feedback bubbles up without changing the raw drop target", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const events: string[] = [];
+  const tree = new ObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    dnd: {
+      getDragURI: (element) => `zeta://${element.id}`,
+      onDragOver: (_data, target) => {
+        events.push(`over:${target?.id}`);
+        return target?.id === "child" ? { accept: true, bubble: "up" } : { accept: true, effect: "move" };
+      },
+      drop: (_data, target) => events.push(`drop:${target?.id}`),
+    },
+    renderElement: (element) => {
+      const label = dom.window.document.createElement("span");
+      label.textContent = element.label;
+      return label;
+    },
+  });
+  tree.setChildren([{ element: { id: "source", label: "Source", expanded: false } }, {
+    element: { id: "parent", label: "Parent", expanded: false },
+    children: [{ element: { id: "child", label: "Child", expanded: false } }],
+  }]);
+  const source = tree.element.querySelector<HTMLElement>("[data-tree-id='source']")!;
+  const parent = tree.element.querySelector<HTMLElement>("[data-tree-id='parent']")!;
+  const child = tree.element.querySelector<HTMLElement>("[data-tree-id='child']")!;
+  source.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true }));
+  child.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
+  assert.equal(parent.classList.contains("drag-over"), true);
+  assert.equal(child.classList.contains("drag-over"), false);
+  child.dispatchEvent(new dom.window.Event("drop", { bubbles: true }));
+  assert.deepEqual(events, ["over:child", "over:parent", "drop:child"]);
+  tree.dispose();
+  dom.window.close();
+});
+
+test("ObjectTree preserves cross-tree drag origin while projecting domain elements", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const observed: string[] = [];
+  const renderElement = (element: TestNode) => {
+    const label = dom.window.document.createElement("span");
+    label.textContent = element.label;
+    return label;
+  };
+  const source = new ObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    dnd: { getDragURI: (element) => `zeta://${element.id}`, onDragOver: () => false, drop: () => {} },
+    renderElement,
+  });
+  const target = new ObjectTree<TestNode>({
+    ownerDocument: dom.window.document,
+    modelOptions: { identityProvider: { getId: (node) => node.id } },
+    dnd: {
+      getDragURI: (element) => `zeta://${element.id}`,
+      onDragOver: (data, element) => {
+        observed.push(`over:${data.kind}:${data.elements[0]?.id}:${element?.id}`);
+        return true;
+      },
+      drop: (data, element) => observed.push(`drop:${data.kind}:${data.elements[0]?.id}:${element?.id}`),
+    },
+    renderElement,
+  });
+  source.setChildren([{ element: { id: "source", label: "Source", expanded: false } }]);
+  target.setChildren([{ element: { id: "target", label: "Target", expanded: false } }]);
+  const sourceRow = source.element.querySelector<HTMLElement>("[data-tree-id='source']")!;
+  const targetRow = target.element.querySelector<HTMLElement>("[data-tree-id='target']")!;
+  sourceRow.dispatchEvent(new dom.window.Event("dragstart", { bubbles: true }));
+  targetRow.dispatchEvent(new dom.window.Event("dragover", { bubbles: true, cancelable: true }));
+  targetRow.dispatchEvent(new dom.window.Event("drop", { bubbles: true, cancelable: true }));
+  sourceRow.dispatchEvent(new dom.window.Event("dragend", { bubbles: true }));
+  assert.deepEqual(observed, [
+    `over:${DragAndDropDataKind.External}:source:target`,
+    `drop:${DragAndDropDataKind.External}:source:target`,
+  ]);
+  source.dispose();
+  target.dispose();
   dom.window.close();
 });
 

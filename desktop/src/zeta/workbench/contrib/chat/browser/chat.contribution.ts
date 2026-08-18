@@ -9,7 +9,7 @@ import { SyncDescriptor } from "../../../../platform/instantiation/common/instan
 import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from "../../../common/views.js";
 import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { IWorkbenchSessionService } from "../../../services/sessions/common/sessionService.js";
+import { ISessionsManagementService } from "../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
 import { ChatInputEditor } from "./input/asterChatInputEditor.js";
 import { ChatInputEditors } from "./input/chatInputEditor.js";
@@ -39,7 +39,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
     ctorDescriptor: new SyncDescriptor(ChatViewPane, {
       serviceDependencies: [
         IChatService,
-        IWorkbenchSessionService,
+        ISessionsManagementService,
         IMenuService,
         IContextMenuService,
         IContextViewService,
@@ -62,7 +62,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(ChatAgentSidebarViewPane, {
-      serviceDependencies: [IWorkbenchSessionService],
+      serviceDependencies: [ISessionsManagementService],
     }),
   }]);
 }

@@ -1,6 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, SessionId, ThreadId } from "../../../../workbench/services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagementService.js";
 import type { ISessionsViewService, SessionsViewSelection } from "../common/sessionsViewService.js";
 
 type SessionsViewReference =
@@ -9,7 +10,7 @@ type SessionsViewReference =
 
 /** Dedicated Sessions-window view state layered over the canonical Session model service. */
 export class SessionsViewService extends DisposableOwner implements ISessionsViewService {
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private _activeSelection: SessionsViewSelection | undefined;
   private _visibleSelections: readonly SessionsViewSelection[] = [];
@@ -21,7 +22,7 @@ export class SessionsViewService extends DisposableOwner implements ISessionsVie
 
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(sessionService: IWorkbenchSessionService) {
+  constructor(sessionService: ISessionsManagementService) {
     super();
     this.sessionService = sessionService;
     this.own(sessionService.onDidChange(() => this.syncFromSessionService()));
@@ -159,7 +160,7 @@ export class SessionsViewService extends DisposableOwner implements ISessionsVie
   }
 }
 
-function activeSelection(sessionService: IWorkbenchSessionService): SessionsViewSelection | undefined {
+function activeSelection(sessionService: ISessionsManagementService): SessionsViewSelection | undefined {
   const untitled = sessionService.activeUntitledSession;
   if (untitled) return { kind: "untitled", session: untitled };
   const active = sessionService.active;

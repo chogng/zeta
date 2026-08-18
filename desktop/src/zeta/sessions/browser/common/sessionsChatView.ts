@@ -9,7 +9,8 @@ import type { IContextMenuService } from "../../../platform/contextview/browser/
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import { ChatPane } from "../../../workbench/contrib/chat/browser/pane/chatPane.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";
-import type { IWorkbenchSessionService, SessionId } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { SessionId } from "../../services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import type { SessionsViewSelection } from "../../services/view/common/sessionsViewService.js";
 
 let sessionsChatPaneInstanceId = 0;
@@ -17,7 +18,7 @@ let sessionsChatPaneInstanceId = 0;
 export interface SessionsChatViewOptions {
   readonly ownerDocument: Document;
   readonly chatService: IChatService;
-  readonly sessionService: IWorkbenchSessionService;
+  readonly sessionService: ISessionsManagementService;
   readonly contextMenuService: IContextMenuService;
   readonly contextViewService: IContextViewService;
   readonly commandService: ICommandService;
@@ -35,7 +36,7 @@ export class SessionsChatView extends DisposableOwner {
   private dimension: IDimension | undefined;
 
   private readonly chatService: IChatService;
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly contextMenuService: IContextMenuService;
   private readonly contextViewService: IContextViewService;
   private readonly commandService: ICommandService;
@@ -153,7 +154,7 @@ class SessionsChatEmptyView implements IView {
 
   layout(_bounds: IRectangle): void {}
 
-  update(state: IWorkbenchSessionService["state"], error: string | undefined): void {
+  update(state: ISessionsManagementService["state"], error: string | undefined): void {
     if (state === "loading") {
       this.heading.textContent = "Loading sessions";
       this.description.textContent = "Restoring your agent workspace…";

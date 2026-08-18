@@ -6,8 +6,8 @@ import { isSingleFolderWorkspaceIdentifier, parseWorkspaceIdentifier } from "../
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../platform/remote/common/remote.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../../workbench/services/chat/common/chatService.js";
-import { WorkbenchSessionService } from "../../../workbench/services/sessions/browser/sessionService.js";
-import { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
+import { AppServerSessionsManagementService } from "../../services/sessions/browser/appServerSessionsManagementService.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { SessionsViewService } from "../../services/view/browser/sessionsViewService.js";
 import { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
@@ -20,7 +20,7 @@ export interface SessionsRuntimeOptions {
 /** Shared App Server-backed state used by one dedicated Sessions renderer. */
 export class SessionsRuntime extends DisposableOwner {
   readonly services = new ServiceCollection();
-  readonly sessions: WorkbenchSessionService;
+  readonly sessions: AppServerSessionsManagementService;
   readonly view: SessionsViewService;
   readonly chat: ChatService;
 
@@ -28,7 +28,7 @@ export class SessionsRuntime extends DisposableOwner {
 
   constructor(api: IRendererHost, options: SessionsRuntimeOptions = {}) {
     super();
-    this.sessions = this.own(new WorkbenchSessionService({
+    this.sessions = this.own(new AppServerSessionsManagementService({
       session: api.session,
       events: api.events,
       ...(options.sessionsWindowApi ? {
@@ -47,7 +47,7 @@ export class SessionsRuntime extends DisposableOwner {
       appServerApi: api.appServer,
       eventApi: api.events,
     }));
-    this.services.set(IWorkbenchSessionService, this.sessions);
+    this.services.set(ISessionsManagementService, this.sessions);
     this.services.set(ISessionsViewService, this.view);
     this.services.set(IChatService, this.chat);
     if (options.workspaceApi) {

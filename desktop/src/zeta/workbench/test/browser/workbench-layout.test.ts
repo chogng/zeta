@@ -86,8 +86,8 @@ const { CommandService } = await import(
 const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
   "../../../platform/instantiation/common/instantiation.js"
 );
-const { defaultWorkbenchSession } = await import(
-  "../../../workbench/browser/defaultWorkbenchSession.js"
+const { defaultWorkbenchProfile } = await import(
+  "../../../workbench/browser/defaultWorkbenchProfile.js"
 );
 
 type WorkbenchPartId =
@@ -393,11 +393,11 @@ test("Workbench layout derives flexible editor size from the container", () => {
   dom.window.close();
 });
 
-test("Workbench layout applies the shared session defaults", () => {
+test("Workbench layout applies the shared profile defaults", () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   const harness = createLayoutHarness(dom.window.document, {
     initialDimension: new Dimension(1_200, 800),
-    session: defaultWorkbenchSession,
+    profile: defaultWorkbenchProfile,
   });
   harness.layout.layout(new Dimension(1_200, 800));
 

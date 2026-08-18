@@ -1,3 +1,6 @@
+import { mapDragAndDropData, type DragAndDropData } from "../dnd/dnd.js";
+import type { ListDragOverPosition, ListDragTargetSector } from "../list/list.js";
+
 export const TreeVisibility = Object.freeze({
   Hidden: "hidden",
   Visible: "visible",
@@ -44,6 +47,50 @@ export interface TreeTwistieState {
 
 export type TreePointerTarget = "twistie" | "contents";
 
+export const TreeFindMode = Object.freeze({ Highlight: "highlight", Filter: "filter" } as const);
+export type TreeFindMode = typeof TreeFindMode[keyof typeof TreeFindMode];
+
+export const TreeFindMatchType = Object.freeze({ Fuzzy: "fuzzy", Contiguous: "contiguous" } as const);
+export type TreeFindMatchType = typeof TreeFindMatchType[keyof typeof TreeFindMatchType];
+
+export interface TreeKeyboardNavigationLabelProvider<T> {
+  getKeyboardNavigationLabel(element: T): string | readonly string[] | undefined;
+}
+
+export interface TreeFindResult<T> {
+  readonly pattern: string;
+  readonly matches: readonly T[];
+  readonly activeMatch: T | undefined;
+}
+
+export const TreeDragOverBubble = Object.freeze({ Up: "up", Down: "down" } as const);
+export type TreeDragOverBubble = typeof TreeDragOverBubble[keyof typeof TreeDragOverBubble];
+
+export type TreeDragData<T> = DragAndDropData<T>;
+
+export interface TreeDragOverReaction {
+  readonly accept: boolean;
+  readonly effect?: "copy" | "move";
+  readonly position?: ListDragOverPosition;
+  readonly bubble?: TreeDragOverBubble;
+  readonly autoExpand?: boolean;
+}
+
+/** Drag policy for hierarchy-aware targets. */
+export interface TreeDragAndDrop<T> {
+  getDragURI(element: T): string | undefined;
+  getDragLabel?: (elements: readonly T[], browserEvent: DragEvent) => string | undefined;
+  onDragStart?: (data: TreeDragData<T>, browserEvent: DragEvent) => void;
+  onDragOver: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => boolean | TreeDragOverReaction;
+  onDragLeave?: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, browserEvent: DragEvent) => void;
+  drop: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => void;
+  onDragEnd?: (browserEvent: DragEvent) => void;
+}
+
+export function mapTreeDragData<T, R>(data: TreeDragData<T>, map: (element: T) => R): TreeDragData<R> {
+  return mapDragAndDropData(data, map);
+}
+
 /** Structural node contract projected by `AbstractTree` into flat list rows. */
 export interface AbstractTreeNode<T> {
   readonly id: string;
@@ -56,6 +103,16 @@ export interface AbstractTreeNode<T> {
   readonly visible: boolean;
   readonly visibleChildIndex: number;
   readonly visibleChildrenCount: number;
+}
+
+export function flattenTreeNodes<T, TNode extends AbstractTreeNode<T>>(roots: readonly TNode[]): readonly TNode[] {
+  const result: TNode[] = [];
+  const visit = (node: TNode): void => {
+    result.push(node);
+    for (const child of node.children) visit(child as TNode);
+  };
+  for (const root of roots) visit(root);
+  return result;
 }
 
 export interface TreePointerEvent<T> {

@@ -3,7 +3,8 @@ import { Action2, registerAction2 } from "../../../platform/actions/common/actio
 import type { ServicesAccessor } from "../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
-import { IWorkbenchSessionService, type SessionId, type ThreadId } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 
 registerAction2(class NewSessionsChatAction extends Action2 {
@@ -27,7 +28,7 @@ registerAction2(class ShowSessionsChatHistoryAction extends Action2 {
   }
 
   override run(accessor: ServicesAccessor): void {
-    const sessions = accessor.get(IWorkbenchSessionService);
+    const sessions = accessor.get(ISessionsManagementService);
     const view = accessor.get(ISessionsViewService);
     const quickPick = accessor.get(IQuickInputService).createQuickPick<SessionsHistoryQuickPickItem>();
     const disposables = new DisposableStore();

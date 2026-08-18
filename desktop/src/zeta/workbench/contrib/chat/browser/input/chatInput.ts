@@ -1,6 +1,6 @@
 import type { AgentResponse, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import type { ModelRef } from "../../../../services/sessions/common/sessionService.js";
+import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
 

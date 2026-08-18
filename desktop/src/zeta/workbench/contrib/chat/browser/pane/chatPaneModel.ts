@@ -2,7 +2,8 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, SessionId, ThreadId } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
@@ -25,7 +26,7 @@ export type ChatPaneSelection =
  */
 export class ChatPaneModel extends DisposableOwner {
   private readonly chatService: IChatService;
-  private readonly sessionService: IWorkbenchSessionService;
+  private readonly sessionService: ISessionsManagementService;
   private readonly _onDidChange = this.own(new Emitter<void>());
   private readonly transientItems = new Map<string, ThreadItem>();
   private selection: ChatPaneSelection;
@@ -47,7 +48,7 @@ export class ChatPaneModel extends DisposableOwner {
 
   readonly onDidChange: Event<void> = this._onDidChange.event;
 
-  constructor(chatService: IChatService, selection: ChatPaneSelection, sessionService: IWorkbenchSessionService) {
+  constructor(chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService) {
     super();
     this.chatService = chatService;
     this.sessionService = sessionService;

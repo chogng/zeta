@@ -6,7 +6,7 @@ import type { ICommandEvent, ICommandService } from "../../../platform/commands/
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import type { IWorkbenchSessionService } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 import { SessionsViewService } from "../../../sessions/services/view/browser/sessionsViewService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -35,7 +35,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
   const onDidChange = new Emitter<void>();
   let untitledSessions: readonly { untitledSessionId: string; title: string; model: undefined }[] = [];
   let activeUntitledSessionId: string | undefined;
-  const sessionService: IWorkbenchSessionService = {
+  const sessionService: ISessionsManagementService = {
     onDidChange: onDidChange.event,
     sessions: [],
     active: undefined,

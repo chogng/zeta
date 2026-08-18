@@ -8,7 +8,8 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../../../../services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -50,7 +51,7 @@ test("opens a local Chat tab before the backend session request settles", () => 
   assert.equal(view.element.querySelector<HTMLElement>(".zeta-chat-view-empty")?.hidden, true);
 });
 
-class PendingSessionService implements IWorkbenchSessionService {
+class PendingSessionService implements ISessionsManagementService {
   private readonly _onDidChange = new Emitter<void>();
   private readonly pendingInitialization = new Promise<void>(() => {});
   private _untitledSessions: readonly IUntitledChatSession[] = [];
@@ -59,7 +60,7 @@ class PendingSessionService implements IWorkbenchSessionService {
   readonly onDidChange = this._onDidChange.event;
   readonly sessions: readonly Session[] = [];
   readonly active: IActiveSessionThread | undefined = undefined;
-  readonly state: WorkbenchSessionState = "loading";
+  readonly state: SessionsManagementState = "loading";
   readonly error: string | undefined = undefined;
 
   get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }

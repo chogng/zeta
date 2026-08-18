@@ -1,4 +1,4 @@
-import type { Session, SessionThread, ThreadId } from "../../../../services/sessions/common/sessionService.js";
+import type { Session, SessionThread, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 
 export interface AgentTreeNode {
   readonly thread: SessionThread;

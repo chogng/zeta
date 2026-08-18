@@ -20,13 +20,13 @@ import {
   createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
 import { loadUserThemes } from "./userThemes.js";
-import type { WorkbenchSession } from "../browser/workbenchSession.js";
+import type { WorkbenchProfile } from "../browser/workbenchProfile.js";
 import { type ElectronRendererCapabilityContribution } from "../../platform/native/electron-browser/rendererApi.js";
 
 /** Starts one Electron renderer for the selected product edition. */
 export async function startElectronWorkbench(
   product: ProductConfiguration,
-  session: WorkbenchSession,
+  profile: WorkbenchProfile,
   rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
   document.title = product.name;
@@ -41,7 +41,7 @@ export async function startElectronWorkbench(
   const userThemes = await loadUserThemes(api.userThemes);
   const workbench = startWorkbench({
     product,
-    session,
+    profile,
     api,
     container: document.querySelector<HTMLElement>("#app"),
     workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),

@@ -1,6 +1,4 @@
-import {
-  List,
-} from "../../../base/browser/ui/list/list.js";
+import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";

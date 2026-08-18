@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../base/common/event.js";
-import type { IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../../../workbench/services/sessions/common/sessionService.js";
+import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagementService.js";
 import { SessionsViewService } from "../../../sessions/services/view/browser/sessionsViewService.js";
 import type { SessionsViewSelection } from "../../../sessions/services/view/common/sessionsViewService.js";
 
@@ -85,7 +86,7 @@ test("closing the last draft does not reopen a previously closed durable Session
   assert.notEqual(selectionId(view.visibleSelections[0]), `untitled:${draft.untitledSessionId}`);
 });
 
-class FakeSessionService implements IWorkbenchSessionService {
+class FakeSessionService implements ISessionsManagementService {
   private readonly _onDidChange = new Emitter<void>();
   private _sessions: readonly Session[];
   private _active: IActiveSessionThread | undefined;
@@ -95,7 +96,7 @@ class FakeSessionService implements IWorkbenchSessionService {
   private nextMaterializedId = 1;
 
   readonly onDidChange = this._onDidChange.event;
-  readonly state: WorkbenchSessionState = "ready";
+  readonly state: SessionsManagementState = "ready";
   readonly error = undefined;
   startNewSessionCalls = 0;
 

@@ -13,7 +13,7 @@ import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolba
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
-import type { ModelRef } from "../../../../services/sessions/common/sessionService.js";
+import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditor.js";

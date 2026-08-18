@@ -4,21 +4,22 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
-import type { AgentThreadExecutionStatus, IActiveSessionThread, IUntitledChatSession, IWorkbenchSessionService, ModelRef, Session, SessionId, ThreadId, WorkbenchSessionState } from "../common/sessionService.js";
+import type { AgentThreadExecutionStatus, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
+import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagementService.js";
 
 export interface ISessionWorkspaceRouter {
   currentWorkspaceRoot(): string | undefined;
   reopenWorkspace(root: string): Promise<void>;
 }
 
-interface WorkbenchSessionServiceHost {
+interface AppServerSessionsManagementServiceHost {
   readonly session: ISessionApi;
   readonly events?: IServerEventApi;
   readonly workspaceRouter?: ISessionWorkspaceRouter;
 }
 
-/** App Server-backed active Session selector for one workbench window. */
-export class WorkbenchSessionService extends DisposableOwner implements IWorkbenchSessionService {
+/** App Server-backed canonical Session manager for one renderer window. */
+export class AppServerSessionsManagementService extends DisposableOwner implements ISessionsManagementService {
   private readonly api: ISessionApi;
   private readonly workspaceRouter: ISessionWorkspaceRouter | undefined;
   private readonly _onDidChange = this.own(new Emitter<void>());
@@ -26,7 +27,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
   private _active: IActiveSessionThread | undefined;
   private _untitledSessions: readonly IUntitledChatSession[] = [];
   private _activeUntitledSessionId: string | undefined;
-  private _state: WorkbenchSessionState = "loading";
+  private _state: SessionsManagementState = "loading";
   private _error: string | undefined;
   private initializePromise: Promise<void> | undefined;
   private readonly subscribedSessionIds = new Set<SessionId>();
@@ -35,7 +36,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
 
   readonly onDidChange = this._onDidChange.event;
 
-  constructor(api: ISessionApi | WorkbenchSessionServiceHost) {
+  constructor(api: ISessionApi | AppServerSessionsManagementServiceHost) {
     super();
     this.api = "session" in api ? api.session : api;
     this.workspaceRouter = "session" in api ? api.workspaceRouter : undefined;
@@ -61,7 +62,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
   get active(): IActiveSessionThread | undefined { return this._active; }
   get untitledSessions(): readonly IUntitledChatSession[] { return this._untitledSessions; }
   get activeUntitledSession(): IUntitledChatSession | undefined { return this._untitledSessions.find((session) => session.untitledSessionId === this._activeUntitledSessionId); }
-  get state(): WorkbenchSessionState { return this._state; }
+  get state(): SessionsManagementState { return this._state; }
   get error(): string | undefined { return this._error; }
 
   initialize(): Promise<void> {
@@ -250,7 +251,7 @@ export class WorkbenchSessionService extends DisposableOwner implements IWorkben
     }
   }
 
-  private setState(state: WorkbenchSessionState): void {
+  private setState(state: SessionsManagementState): void {
     this._state = state;
     this._error = undefined;
     this._onDidChange.fire();

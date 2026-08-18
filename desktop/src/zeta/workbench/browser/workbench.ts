@@ -101,8 +101,8 @@ import {
   IViewsService,
   ViewsService,
 } from "../services/views/browser/viewsService.js";
-import { WorkbenchSessionService } from "../services/sessions/browser/sessionService.js";
-import { IWorkbenchSessionService } from "../services/sessions/common/sessionService.js";
+import { AppServerSessionsManagementService } from "../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
+import { ISessionsManagementService } from "../../sessions/services/sessions/common/sessionsManagementService.js";
 import {
   WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
@@ -191,7 +191,7 @@ import { IWorkbenchHostService } from "../services/host/common/workbenchHostServ
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
-import { createWorkbenchSession, type WorkbenchSession } from "./workbenchSession.js";
+import { createWorkbenchProfile, type WorkbenchProfile } from "./workbenchProfile.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
@@ -199,7 +199,7 @@ import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js"
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
   readonly product: ProductConfiguration;
-  readonly session: WorkbenchSession;
+  readonly profile: WorkbenchProfile;
   readonly api: IRendererHost;
   readonly container: HTMLElement | null;
   readonly workspace: IAnyWorkspaceIdentifier;
@@ -214,7 +214,7 @@ export interface IStartWorkbenchOptions {
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export function startWorkbench({
   product,
-  session,
+  profile,
   api,
   container,
   workspace,
@@ -227,7 +227,7 @@ export function startWorkbench({
 }: IStartWorkbenchOptions): Workbench {
   return new Workbench(
     product,
-    session,
+    profile,
     api,
     container ?? document.body,
     workspace,
@@ -242,7 +242,7 @@ export function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends DisposableOwner {
-  readonly session: WorkbenchSession;
+  readonly profile: WorkbenchProfile;
   /** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
   readonly whenRestored: Promise<void>;
   private readonly workspaceContext: WorkspaceContextService;
@@ -258,7 +258,7 @@ export class Workbench extends DisposableOwner {
 
   constructor(
     product: ProductConfiguration,
-    session: WorkbenchSession,
+    profile: WorkbenchProfile,
     api: IRendererHost,
     workbenchRoot: HTMLElement,
     workspace: IAnyWorkspaceIdentifier,
@@ -270,8 +270,8 @@ export class Workbench extends DisposableOwner {
     createTitlebarPart: TitlebarPartFactory,
   ) {
     super();
-    const normalizedSession = createWorkbenchSession(session);
-    this.session = normalizedSession;
+    const normalizedProfile = createWorkbenchProfile(profile);
+    this.profile = normalizedProfile;
     const services = new ServiceCollection();
     const instantiationService = new InstantiationService(services);
     const logService = this.own(new LogService({ sinks: [new ConsoleLogSink()] }));
@@ -480,7 +480,7 @@ export class Workbench extends DisposableOwner {
       contextKeyService: contextKeys,
     }));
     services.set(IViewDescriptorService, viewDescriptors);
-    const sessionService = this.own(new WorkbenchSessionService({
+    const sessionService = this.own(new AppServerSessionsManagementService({
       session: api.session,
       events: api.events,
       ...(nativeHostApi ? {
@@ -494,7 +494,7 @@ export class Workbench extends DisposableOwner {
         },
       } : {}),
     }));
-    services.set(IWorkbenchSessionService, sessionService);
+    services.set(ISessionsManagementService, sessionService);
     const keybindings = interactionServices.keybindingService;
     const contributions = this.own(
       WorkbenchContributionsRegistry.createHost(services),
@@ -556,7 +556,7 @@ export class Workbench extends DisposableOwner {
     const sidebarCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Sidebar,
-      normalizedSession.composition.sidebar,
+      normalizedProfile.composition.sidebar,
     );
     const openSidebarComposite = (
       compositeId: string,
@@ -625,7 +625,7 @@ export class Workbench extends DisposableOwner {
     const panelCompositeDescriptor = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.Panel,
-      normalizedSession.composition.panel,
+      normalizedProfile.composition.panel,
     );
     const openPanelComposite = (
       compositeId: string,
@@ -662,7 +662,7 @@ export class Workbench extends DisposableOwner {
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
       ViewContainerLocation.AuxiliaryBar,
-      normalizedSession.composition.auxiliarybar,
+      normalizedProfile.composition.auxiliarybar,
     );
     const statusbar = this.own(new StatusbarPart(
       statusbarService,
@@ -680,7 +680,7 @@ export class Workbench extends DisposableOwner {
     ]);
     const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
       initialDimension: layoutService.mainContainerDimension,
-      session: normalizedSession,
+      profile: normalizedProfile,
       storageService: storage,
     }));
     workbenchLayout = layout;
@@ -715,8 +715,8 @@ export class Workbench extends DisposableOwner {
       return composite;
     };
     openAuxiliaryComposite(auxiliaryViewContainer.id);
-    if (normalizedSession.layout.agentSidebar.visible) {
-      openAgentSidebarComposite(normalizedSession.composition.agentSidebar);
+    if (normalizedProfile.layout.agentSidebar.visible) {
+      openAgentSidebarComposite(normalizedProfile.composition.agentSidebar);
     }
     const viewsService = new ViewsService({
       viewDescriptorService: viewDescriptors,
