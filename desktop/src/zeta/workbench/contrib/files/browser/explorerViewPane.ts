@@ -1,14 +1,16 @@
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { Tree, type TreeTwistieState } from "../../../../base/browser/ui/tree/tree.js";
+import type { TreeTwistieState } from "../../../../base/browser/ui/tree/tree.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 
@@ -16,9 +18,6 @@ interface ExplorerNode {
   readonly resource: URI;
   readonly name: string;
   readonly kind: FileKind;
-  expanded: boolean;
-  loading: boolean;
-  children: ExplorerNode[] | undefined;
 }
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
@@ -29,7 +28,7 @@ export class ExplorerViewPane extends ViewPane {
   private readonly fileIconThemeService: IFileIconThemeService;
   private readonly hoverService: IHoverService;
   private readonly scrollable: ScrollableElement;
-  private readonly tree: Tree<ExplorerNode>;
+  private readonly tree: WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>;
   private readonly renderedLabels =
     this.own(new ResettableDisposableGroup());
   private root: ExplorerNode | undefined;
@@ -44,6 +43,7 @@ export class ExplorerViewPane extends ViewPane {
     editorService: IEditorService,
     fileIconThemeService: IFileIconThemeService,
     hoverService: IHoverService,
+    configurationService: IConfigurationService,
   ) {
     super(options);
     this.fileService = fileService;
@@ -61,20 +61,30 @@ export class ExplorerViewPane extends ViewPane {
       vertical: "auto",
     }));
     this.contentElement.append(this.scrollable.element);
-    this.tree = this.own(new Tree<ExplorerNode>({
+    this.tree = this.own(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>({
+      hasChildren: (node) => node.kind === FileKind.Directory,
+      getChildren: async (node) => {
+        const entries = await this.fileService.readDirectory(node.resource);
+        return entries.map(explorerNode).sort(compareExplorerNodes);
+      },
+    }, {
       ownerDocument: options.ownerDocument,
       ariaLabel: "Workspace files",
+      configurationService,
       indentGuides: "always",
-      getId: (node) => node.resource.toString(),
-      getChildren: (node) => node.children,
-      isCollapsible: (node) => node.kind === FileKind.Directory,
-      isExpanded: (node) => node.expanded,
+      expandOnlyOnTwistieClick: false,
+      identityProvider: { getId: (node) => node.resource.toString() },
+      onWillRender: () => this.renderedLabels.clear(),
       renderElement: (node) => this.renderTreeElement(node),
       renderTwistie: (node, state, container) =>
         this.renderTreeTwistie(node, state, container),
     }));
-    this.own(this.tree.onDidActivate(({ element }) => {
-      this.activateNode(element);
+    this.own(this.tree.onDidError(({ error }) => {
+      this.error = error instanceof Error ? error.message : "Unable to read workspace files.";
+      this.render();
+    }));
+    this.own(this.tree.onDidOpen((event) => {
+      if (event.element.kind === FileKind.File) void this.openFile(event);
     }));
     this.own(fileIconThemeService.onDidFileIconThemeChange(
       () => this.render(),
@@ -93,6 +103,7 @@ export class ExplorerViewPane extends ViewPane {
     const generation = ++this.workspaceGeneration;
     this.root = undefined;
     this.error = undefined;
+    void this.tree.setInput(undefined);
     this.render();
     const folder = this.workspaceContextService.getWorkspace().folders[0];
     if (!folder) {
@@ -111,11 +122,9 @@ export class ExplorerViewPane extends ViewPane {
         resource: folder.uri,
         name: folder.name,
         kind: FileKind.Directory,
-        expanded: true,
-        loading: false,
-        children: undefined,
       };
-      await this.loadChildren(this.root, generation);
+      this.render();
+      await this.tree.setInput(this.root);
     } catch (error) {
       if (this.disposed || generation !== this.workspaceGeneration) return;
       this.error = error instanceof Error
@@ -125,53 +134,13 @@ export class ExplorerViewPane extends ViewPane {
     }
   }
 
-  private async loadChildren(
-    node: ExplorerNode,
-    generation: number = this.workspaceGeneration,
-  ): Promise<void> {
-    if (node.loading) return;
-    node.loading = true;
-    this.render();
-    try {
-      const entries = await this.fileService.readDirectory(node.resource);
-      if (this.disposed || generation !== this.workspaceGeneration) return;
-      node.children = entries.map(explorerNode).sort(compareExplorerNodes);
-      node.expanded = true;
-      this.error = undefined;
-    } catch (error) {
-      if (this.disposed || generation !== this.workspaceGeneration) return;
-      this.error = error instanceof Error
-        ? error.message
-        : `Unable to read ${node.name}.`;
-    } finally {
-      node.loading = false;
-      if (!this.disposed && generation === this.workspaceGeneration) {
-        this.render();
-      }
-    }
-  }
-
-  private activateNode(node: ExplorerNode): void {
-    if (node.loading) return;
-    if (node.kind === FileKind.Directory) {
-      if (node.children === undefined) {
-        void this.loadChildren(node, this.workspaceGeneration);
-        return;
-      }
-      node.expanded = !node.expanded;
-      this.render();
-    } else if (node.kind === FileKind.File) {
-      void this.openFile(node);
-    }
-  }
-
-  private async openFile(node: ExplorerNode): Promise<void> {
+  private async openFile(event: ResourceOpenEvent<ExplorerNode>): Promise<void> {
+    const node = event.element;
     try {
       await this.editorService.openEditor({
         resource: node.resource,
         label: node.name,
-      });
-      if (!this.disposed) this.editorService.focusActiveEditor();
+      }, event.editorOptions, event.sideBySide ? "sideGroup" : "activeGroup");
     } catch (error) {
       if (this.disposed) return;
       this.error = error instanceof Error
@@ -183,25 +152,25 @@ export class ExplorerViewPane extends ViewPane {
 
   private render(): void {
     const document = this.element.ownerDocument;
-    this.renderedLabels.clear();
-    this.tree.items = this.root?.children ?? [];
     const surface = document.createElement("div");
     surface.className = "zeta-explorer-scroll-content";
     if (!this.root) {
       const status = document.createElement("div");
       status.className = "zeta-explorer-status";
+      status.setAttribute("role", "status");
       status.textContent = this.error ?? "Loading files…";
       surface.append(status);
       this.scrollable.replaceChildren(surface);
       return;
     }
-    surface.append(this.tree.element);
     if (this.error) {
       const error = document.createElement("div");
       error.className = "zeta-explorer-status zeta-explorer-error";
+      error.setAttribute("role", "alert");
       error.textContent = this.error;
       surface.append(error);
     }
+    surface.append(this.tree.element);
     this.scrollable.replaceChildren(surface);
   }
 
@@ -250,9 +219,6 @@ function explorerNode(entry: IFileEntry): ExplorerNode {
     resource: entry.resource,
     name: entry.name,
     kind: entry.kind,
-    expanded: false,
-    loading: false,
-    children: undefined,
   };
 }
 

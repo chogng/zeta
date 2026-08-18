@@ -1,14 +1,14 @@
 import "./compositebar.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
-import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
-import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
+import { ActionBar, type ActionBarDropPosition } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
+import { CompositeBarAction, CompositeBarActionViewItem, CompositeBarOverflowViewItem } from "./compositeBarActionViewItem.js";
 
 /** Selection of an inactive Composite requested from a CompositeBar. */
 export interface CompositeBarSelectionEvent {
@@ -35,7 +35,7 @@ const OVERFLOW_BUTTON_WIDTH = 24;
 const OVERFLOW_ACTION_ID = "zeta.compositeBar.overflow";
 
 /**
- * Maps registered workbench Composites onto the shared TabList.
+ * Maps registered workbench Composites onto an ActionBar tablist.
  *
  * Its containing Part owns construction, activation, visibility, and
  * persisted state for the selected Composite.
@@ -44,16 +44,16 @@ export class CompositeBar extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly viewDescriptorService: IViewDescriptorService;
   private readonly location: ViewContainerLocation;
-  private readonly tabList: TabList<string>;
+  private readonly actionBar: ActionBar;
   private readonly contextMenuProvider: IContextMenuProvider | undefined;
+  private readonly overflowEnabled: boolean;
   private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
-  private overflowViewItem: CompositeBarOverflowViewItem | undefined;
   private readonly _onDidSelectComposite =
     this.own(new Emitter<CompositeBarSelectionEvent>());
   private containers: readonly IViewContainerDescriptor[] = [];
   private readonly tabWidths = new Map<string, number>();
-  private tabListInsetWidth = 0;
-  private tabListItemGap = 0;
+  private actionBarInsetWidth = 0;
+  private actionBarItemGap = 0;
   private renderedContainerIds: readonly string[] = [];
   private overflowingContainerIds = new Set<string>();
   private draggedCompositeId: string | undefined;
@@ -68,46 +68,42 @@ export class CompositeBar extends DisposableOwner {
     this.viewDescriptorService = options.viewDescriptorService;
     this.location = options.location;
     this.contextMenuProvider = options.contextMenuProvider;
+    this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
     this.containerFilter = options.containerFilter ?? (() => true);
     this.element = options.ownerDocument.createElement("section");
     this.element.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
     this.element.setAttribute("aria-label", options.ariaLabel);
     this.element.dataset.viewContainerLocation = options.location;
     this.defer(() => this.element.remove());
-    const overflowAction = presentation === "label" && this.contextMenuProvider
-      ? new CompositeBarOverflowAction()
-      : undefined;
-    this.tabList = this.own(new TabList({
+    this.actionBar = this.own(new ActionBar({
       ownerDocument: options.ownerDocument,
       ariaLabel: options.ariaLabel,
-      presentation: presentation === "icon" ? "inset" : "flush",
-      trailingActions: overflowAction ? [overflowAction] : undefined,
-      trailingActionViewItemProvider: overflowAction
-        ? (action): ActionViewItem => {
-          const item = new CompositeBarOverflowViewItem(
+      ariaRole: "tablist",
+      actionViewItemProvider: (action): ActionViewItem => {
+        if (action instanceof CompositeBarAction) {
+          return new CompositeBarActionViewItem(action);
+        }
+        if (action instanceof CompositeBarOverflowAction) {
+          return new CompositeBarOverflowViewItem(
             action,
             () => this.createOverflowActions(),
             this.contextMenuProvider!,
           );
-          this.overflowViewItem = item;
-          return item;
         }
-        : undefined,
-      onActivate: (compositeId) => {
-        if (this._activeCompositeId === compositeId) return;
-        this._onDidSelectComposite.fire({ compositeId });
+        throw new TypeError(`Unsupported CompositeBar action: ${action.id}`);
       },
-      draggable: true,
       dragAndDrop: {
         canDrop: () => this.draggedCompositeId !== undefined,
-        onDragStart: (compositeId, event) => this.onDragStart(compositeId, event),
-        onDrop: (targetCompositeId, position) => this.onDrop(targetCompositeId, position),
+        onDragStart: (action, event) => {
+          if (action instanceof CompositeBarAction) this.onDragStart(action.id, event);
+        },
+        onDrop: (action, position) => this.onDrop(action instanceof CompositeBarAction ? action.id : undefined, position),
         onDragEnd: () => {
           this.draggedCompositeId = undefined;
         },
       },
     }));
-    this.element.append(this.tabList.element);
+    this.element.append(this.actionBar.element);
     this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
       this.render();
     }));
@@ -115,7 +111,7 @@ export class CompositeBar extends DisposableOwner {
       if (location === this.location) this.render();
     }));
     const ResizeObserverConstructor = options.ownerDocument.defaultView?.ResizeObserver;
-    if (overflowAction && ResizeObserverConstructor) {
+    if (this.overflowEnabled && ResizeObserverConstructor) {
       const observer = new ResizeObserverConstructor(() => this.layout());
       observer.observe(this.element);
       this.defer(() => observer.disconnect());
@@ -141,22 +137,19 @@ export class CompositeBar extends DisposableOwner {
 
   /** Reconciles visible label tabs with the width assigned by the hosting Part. */
   layout(): void {
-    const overflowViewItem = this.overflowViewItem;
-    if (!overflowViewItem || !this.measureTabWidths()) return;
+    if (!this.overflowEnabled || !this.measureTabWidths()) return;
     const availableWidth = this.element.clientWidth;
     if (availableWidth <= 0) return;
 
-    const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.tabListItemGap);
+    const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.actionBarItemGap);
     const visibleContainerIds = visibleContainers.map((container) => container.id);
-    if (!sameIds(this.renderedContainerIds, visibleContainerIds)) {
-      this.renderTabs(visibleContainers);
-    }
-
-    this.setOverflowingContainerIds(new Set(this.containers
+    const overflowingContainerIds = new Set(this.containers
       .filter((container) => !visibleContainerIds.includes(container.id))
-      .map((container) => container.id)));
-    if (this.overflowViewItem) {
-      this.overflowViewItem.hidden = this.overflowingContainerIds.size === 0;
+      .map((container) => container.id));
+    const overflowChanged = !sameIds([...this.overflowingContainerIds], [...overflowingContainerIds]);
+    this.setOverflowingContainerIds(overflowingContainerIds);
+    if (!sameIds(this.renderedContainerIds, visibleContainerIds) || overflowChanged) {
+      this.renderTabs(visibleContainers);
     }
   }
 
@@ -171,7 +164,6 @@ export class CompositeBar extends DisposableOwner {
     }
     this.tabWidths.clear();
     this.setOverflowingContainerIds(new Set());
-    if (this.overflowViewItem) this.overflowViewItem.hidden = true;
     this.renderTabs(this.containers);
     this.layout();
   }
@@ -182,7 +174,7 @@ export class CompositeBar extends DisposableOwner {
     if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
   }
 
-  private onDrop(targetCompositeId: string | undefined, position: TabListDropPosition): void {
+  private onDrop(targetCompositeId: string | undefined, position: ActionBarDropPosition): void {
     const sourceCompositeId = this.draggedCompositeId;
     this.draggedCompositeId = undefined;
     if (sourceCompositeId === undefined) return;
@@ -191,31 +183,31 @@ export class CompositeBar extends DisposableOwner {
 
   private renderTabs(containers: readonly IViewContainerDescriptor[]): void {
     this.renderedContainerIds = containers.map((container) => container.id);
-    this.tabList.setTabs(
-      containers.map((container) => ({
+    const showOverflow = this.overflowEnabled && this.overflowingContainerIds.size > 0;
+    this.actionBar.setActions([
+      ...containers.map((container) => new CompositeBarAction({
         id: container.id,
-        value: container.id,
         label: container.title,
         tooltip: container.title,
         icon: container.icon,
         tabId: compositeTabId(this.location, container.id),
         panelId: compositePanelId(this.location, container.id),
+        checked: container.id === this._activeCompositeId,
+        onActivate: (compositeId) => {
+          if (this._activeCompositeId === compositeId) return;
+          this._onDidSelectComposite.fire({ compositeId });
+        },
       })),
-      this.renderedContainerIds.includes(this._activeCompositeId ?? "")
-        ? this._activeCompositeId
-        : undefined,
-    );
-    if (this.overflowViewItem) {
-      this.overflowViewItem.hidden = this.overflowingContainerIds.size === 0;
+      ...(showOverflow ? [new CompositeBarOverflowAction()] : []),
+    ]);
+    if (this.renderedContainerIds.includes(this._activeCompositeId ?? "")) {
+      this.actionBar.setTabStop(this._activeCompositeId!);
     }
   }
 
   private measureTabWidths(): boolean {
-    const actionBar = this.tabList.element.querySelector<HTMLElement>(
-      ".zeta-tab-list-scroll-content > .zeta-action-bar",
-    );
-    if (!actionBar) return false;
-    const tabs = [...actionBar.querySelectorAll<HTMLElement>(":scope > .zeta-tab")];
+    const actionBar = this.actionBar.element;
+    const tabs = [...actionBar.querySelectorAll<HTMLElement>(":scope > .zeta-composite-bar-destination")];
     const tabBounds: DOMRect[] = [];
     let totalTabWidth = 0;
     for (const tab of tabs) {
@@ -231,10 +223,10 @@ export class CompositeBar extends DisposableOwner {
     const lastTabBounds = tabBounds.at(-1);
     if (firstTabBounds && lastTabBounds) {
       const actionBarBounds = actionBar.getBoundingClientRect();
-      this.tabListInsetWidth = Math.max(0, firstTabBounds.left - actionBarBounds.left) * 2;
+      this.actionBarInsetWidth = Math.max(0, firstTabBounds.left - actionBarBounds.left) * 2;
       if (tabBounds.length > 1) {
         const itemSpan = lastTabBounds.right - firstTabBounds.left;
-        this.tabListItemGap = Math.max(0, (itemSpan - totalTabWidth) / (tabBounds.length - 1));
+        this.actionBarItemGap = Math.max(0, (itemSpan - totalTabWidth) / (tabBounds.length - 1));
       }
     }
     if (!this.containers.every((container) => this.tabWidths.has(container.id))) {
@@ -266,8 +258,8 @@ export class CompositeBar extends DisposableOwner {
   }
 
   private containersWidth(containers: readonly IViewContainerDescriptor[]): number {
-    return this.tabListInsetWidth + containers.reduce(
-      (total, container, index) => total + this.tabWidths.get(container.id)! + (index > 0 ? this.tabListItemGap : 0),
+    return this.actionBarInsetWidth + containers.reduce(
+      (total, container, index) => total + this.tabWidths.get(container.id)! + (index > 0 ? this.actionBarItemGap : 0),
       0,
     );
   }
@@ -302,22 +294,6 @@ class CompositeBarOverflowAction implements IAction {
   readonly enabled = true;
 
   run(): void {}
-}
-
-class CompositeBarOverflowViewItem extends DropdownMenuActionViewItem {
-  private container: HTMLElement | undefined;
-
-  override render(container: HTMLElement): void {
-    super.render(container);
-    this.container = container;
-    container.classList.add("zeta-composite-bar-overflow");
-  }
-
-  set hidden(hidden: boolean) {
-    if (!this.container) return;
-    this.container.hidden = hidden;
-    this.container.classList.toggle("hidden", hidden);
-  }
 }
 
 function sameIds(left: readonly string[], right: readonly string[]): boolean {

@@ -22,7 +22,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
   let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions } | undefined;
   let focusCount = 0;
   const editorService: IEditorService = {
-    openEditor: async (input, options) => { opened = { input, options }; },
+    openEditor: async (input, options) => { opened = { input, options }; if (options?.preserveFocus !== true) focusCount += 1; },
     focusActiveEditor() { focusCount += 1; },
   };
 

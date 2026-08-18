@@ -174,7 +174,6 @@ export class ProblemsViewPane extends ViewPane {
     this.navigationError = undefined;
     try {
       await this.editorService.openEditor({ resource: entry.resource, label: resourceName(entry.resource) }, { selection: entry.diagnostic.range });
-      if (!this.disposed) this.editorService.focusActiveEditor();
     } catch (error) {
       if (this.disposed) return;
       this.navigationError = error instanceof Error ? error.message : "Could not open problem location.";

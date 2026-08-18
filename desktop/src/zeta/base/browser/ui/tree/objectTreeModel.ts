@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { TreeVisibility, type TreeFilter, type TreeFilterResult, type TreeSorter } from "./tree.js";
+import { IndexTreeModel, type IndexTreeNode } from "./indexTreeModel.js";
+import type { TreeFilter, TreeSorter } from "./tree.js";
 
 export type ObjectTreeDefaultCollapseState = "collapsed" | "expanded";
 export type ObjectTreeModelChangeKind = "structure" | "collapse" | "filter" | "sort" | "rerender";
@@ -17,18 +18,10 @@ export interface ObjectTreeIdentityProvider<T> {
   getId(element: T): string;
 }
 
-/** Canonical structural node derived from one domain object. */
-export interface ObjectTreeNode<TNode> {
-  readonly id: string;
-  readonly element: TNode;
+/** Identity-addressed node projected by the underlying `IndexTreeModel`. */
+export interface ObjectTreeNode<TNode> extends IndexTreeNode<TNode> {
   readonly parent: ObjectTreeNode<TNode> | undefined;
   readonly children: readonly ObjectTreeNode<TNode>[];
-  readonly depth: number;
-  readonly collapsible: boolean;
-  readonly collapsed: boolean;
-  readonly visible: boolean;
-  readonly visibleChildIndex: number;
-  readonly visibleChildrenCount: number;
 }
 
 export interface ObjectTreeModelOptions<TNode> {
@@ -43,153 +36,83 @@ export interface ObjectTreeModelChangeEvent<TNode> {
   readonly node: ObjectTreeNode<TNode> | undefined;
 }
 
-interface MutableObjectTreeNode<TNode> {
-  readonly id: string;
-  readonly element: TNode;
-  readonly parent: MutableObjectTreeNode<TNode> | undefined;
-  children: MutableObjectTreeNode<TNode>[];
-  readonly depth: number;
-  readonly declaredCollapsible: boolean | undefined;
-  collapsible: boolean;
-  collapsed: boolean;
-  visible: boolean;
-  visibleChildIndex: number;
-  visibleChildrenCount: number;
+export interface ObjectTreeModelCollapseStateChangeEvent<TNode> {
+  readonly node: ObjectTreeNode<TNode>;
+  readonly collapsed: boolean;
 }
 
 /**
- * Owns an object hierarchy independently from its DOM renderer.
+ * Maps stable object identities onto the canonical index-addressed model.
  *
- * Stable IDs preserve collapse state across structural replacement. The model
- * owns validation, parent/depth metadata, local child replacement, filtering,
- * sorting, and the flattened visible-node projection consumed by tree views.
+ * Hierarchy, locations, filtering, collapse state, and the visible projection
+ * remain owned by `IndexTreeModel`; this layer only translates object IDs and
+ * applies object-level sorting before structural changes enter that model.
  */
 export class ObjectTreeModel<TNode> extends DisposableOwner {
   private readonly _onDidChange = this.own(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
-  private readonly nodesById = new Map<string, MutableObjectTreeNode<TNode>>();
-  private roots: MutableObjectTreeNode<TNode>[] = [];
-  private _visibleNodes: readonly ObjectTreeNode<TNode>[] = [];
-  private filter: TreeFilter<TNode> | undefined;
-  private sorter: TreeSorter<TNode> | undefined;
-  private readonly defaultCollapseState: ObjectTreeDefaultCollapseState;
+  private readonly _onDidChangeCollapseState = this.own(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
+  private readonly index: IndexTreeModel<TNode>;
   private readonly identityProvider: ObjectTreeIdentityProvider<TNode>;
+  private nodesById = new Map<string, ObjectTreeNode<TNode>>();
+  private sorter: TreeSorter<TNode> | undefined;
+  private changeKindOverride: ObjectTreeModelChangeKind | undefined;
 
   readonly onDidChange: Event<ObjectTreeModelChangeEvent<TNode>> = this._onDidChange.event;
+  readonly onDidChangeCollapseState: Event<ObjectTreeModelCollapseStateChangeEvent<TNode>> = this._onDidChangeCollapseState.event;
 
   constructor(options: ObjectTreeModelOptions<TNode>) {
     super();
-    this.defaultCollapseState = options.defaultCollapseState ?? "expanded";
-    this.filter = options.filter;
     this.identityProvider = options.identityProvider;
     this.sorter = options.sorter;
+    this.index = this.own(new IndexTreeModel<TNode>(undefined as TNode, {
+      defaultCollapseState: options.defaultCollapseState,
+      filter: options.filter,
+      identityProvider: options.identityProvider,
+      preserveCollapseStateByIdentity: true,
+    }));
+    this.own(this.index.onDidChange((event) => {
+      this.rebuildIdentityIndex();
+      this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined });
+    }));
+    this.own(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
+      this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });
+    }));
+    this.rebuildIdentityIndex();
   }
 
-  get children(): readonly TNode[] {
-    return this.roots.map((node) => node.element);
-  }
+  get children(): readonly TNode[] { return this.index.rootNodes.map((node) => node.element); }
+  get rootNodes(): readonly ObjectTreeNode<TNode>[] { return this.index.rootNodes as readonly ObjectTreeNode<TNode>[]; }
+  get visibleChildren(): readonly ObjectTreeNode<TNode>[] { return this.rootNodes.filter((node) => node.visible); }
+  get visibleNodes(): readonly ObjectTreeNode<TNode>[] { return this.index.visibleNodes as readonly ObjectTreeNode<TNode>[]; }
+  get size(): number { return this.index.size; }
 
-  get rootNodes(): readonly ObjectTreeNode<TNode>[] {
-    return this.roots;
-  }
-
-  get visibleChildren(): readonly ObjectTreeNode<TNode>[] {
-    return this.roots.filter((node) => node.visible);
-  }
-
-  get visibleNodes(): readonly ObjectTreeNode<TNode>[] {
-    return this._visibleNodes;
-  }
-
-  get size(): number {
-    return this.nodesById.size;
-  }
-
-  has(id: string): boolean {
-    return this.nodesById.has(id);
-  }
-
-  getNode(id: string): ObjectTreeNode<TNode> | undefined {
-    return this.nodesById.get(id);
-  }
-
-  getElement(id: string): TNode | undefined {
-    return this.nodesById.get(id)?.element;
-  }
-
-  getParent(id: string): ObjectTreeNode<TNode> | undefined {
-    return this.nodesById.get(id)?.parent;
-  }
+  has(id: string): boolean { return this.nodesById.has(id); }
+  getNode(id: string): ObjectTreeNode<TNode> | undefined { return this.nodesById.get(id); }
+  getElement(id: string): TNode | undefined { return this.nodesById.get(id)?.element; }
+  getParent(id: string): ObjectTreeNode<TNode> | undefined { return this.nodesById.get(id)?.parent; }
 
   setChildren(children: readonly ObjectTreeElement<TNode>[]): void {
-    const previousNodes = new Map(this.nodesById);
-    const seen = new Set<string>();
-    const roots = this.buildNodes(children, undefined, previousNodes, seen);
-    this.roots = roots;
-    this.rebuildIndex();
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "structure", node: undefined });
+    this.withChangeKind("structure", () => this.index.setChildren(this.prepareElements(children)));
   }
 
   setNodeChildren(parentId: string, children: readonly ObjectTreeElement<TNode>[]): void {
-    const parent = this.requireMutableNode(parentId);
-    const previousNodes = new Map(this.nodesById);
-    const seen = new Set(this.nodesById.keys());
-    for (const child of parent.children) this.removeNodeIds(child, seen);
-    const nextChildren = this.buildNodes(children, parent, previousNodes, seen);
-    parent.children = nextChildren;
-    parent.collapsible = parent.declaredCollapsible ?? nextChildren.length > 0;
-    if (!parent.collapsible) parent.collapsed = false;
-    this.rebuildIndex();
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "structure", node: parent });
+    const parent = this.requireNode(parentId);
+    this.withChangeKind("structure", () => this.index.setNodeChildren(parent.location, this.prepareElements(children)));
   }
 
-  collapse(id: string): boolean {
-    return this.updateCollapsed(id, "collapsed");
-  }
-
-  expand(id: string): boolean {
-    return this.updateCollapsed(id, "expanded");
-  }
-
-  toggleCollapsed(id: string): boolean {
-    const node = this.requireMutableNode(id);
-    return this.updateCollapsed(id, node.collapsed ? "expanded" : "collapsed");
-  }
-
-  collapseRecursive(id: string): boolean {
-    return this.updateCollapsedRecursive(id, "collapsed");
-  }
-
-  expandRecursive(id: string): boolean {
-    return this.updateCollapsedRecursive(id, "expanded");
-  }
-
-  expandTo(id: string): boolean {
-    let node = this.requireMutableNode(id).parent;
-    let changed = false;
-    while (node) {
-      if (node.collapsible && node.collapsed) {
-        node.collapsed = false;
-        changed = true;
-      }
-      node = node.parent;
-    }
-    if (!changed) return false;
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "collapse", node: this.nodesById.get(id) });
-    return true;
-  }
+  collapse(id: string): boolean { return this.index.collapse(this.requireNode(id).location); }
+  expand(id: string): boolean { return this.index.expand(this.requireNode(id).location); }
+  toggleCollapsed(id: string): boolean { return this.index.toggleCollapsed(this.requireNode(id).location); }
+  collapseRecursive(id: string): boolean { return this.index.collapseRecursive(this.requireNode(id).location); }
+  expandRecursive(id: string): boolean { return this.index.expandRecursive(this.requireNode(id).location); }
+  expandTo(id: string): boolean { return this.index.expandTo(this.requireNode(id).location); }
 
   setFilter(filter: TreeFilter<TNode> | undefined): void {
-    if (filter === this.filter) return;
-    this.filter = filter;
-    this.refilter();
+    this.withChangeKind("filter", () => this.index.setFilter(filter));
   }
 
   refilter(): void {
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "filter", node: undefined });
+    this.withChangeKind("filter", () => this.index.refilter());
   }
 
   setSorter(sorter: TreeSorter<TNode> | undefined): void {
@@ -199,156 +122,60 @@ export class ObjectTreeModel<TNode> extends DisposableOwner {
   }
 
   resort(): void {
-    if (this.sorter) {
-      this.sortNodes(this.roots);
-      this.recomputeVisibleNodes();
-    }
-    this._onDidChange.fire({ kind: "sort", node: undefined });
+    const current = this.rootNodes.map(toObjectTreeElement);
+    this.withChangeKind("sort", () => this.index.setChildren(this.prepareElements(current)));
   }
 
   rerender(id?: string): void {
-    this._onDidChange.fire({ kind: "rerender", node: id === undefined ? undefined : this.requireMutableNode(id) });
+    this.withChangeKind("rerender", () => this.index.rerender(id === undefined ? undefined : this.requireNode(id).location));
   }
 
-  private buildNodes(elements: readonly ObjectTreeElement<TNode>[], parent: MutableObjectTreeNode<TNode> | undefined, previousNodes: ReadonlyMap<string, MutableObjectTreeNode<TNode>>, seen: Set<string>): MutableObjectTreeNode<TNode>[] {
+  private prepareElements(elements: readonly ObjectTreeElement<TNode>[]): readonly ObjectTreeElement<TNode>[] {
     const ordered = [...elements];
     if (this.sorter) ordered.sort((left, right) => this.sorter!.compare(left.element, right.element));
-    return ordered.map((treeElement) => {
-      const id = this.identityProvider.getId(treeElement.element);
-      validateNodeId(id, seen);
-      const previous = previousNodes.get(id);
-      const node: MutableObjectTreeNode<TNode> = {
-        id,
-        element: treeElement.element,
-        parent,
-        children: [],
-        depth: parent ? parent.depth + 1 : 1,
-        declaredCollapsible: treeElement.collapsible,
-        collapsible: false,
-        collapsed: false,
-        visible: true,
-        visibleChildIndex: 0,
-        visibleChildrenCount: 0,
+    return ordered.map((treeElement) => ({
+      element: treeElement.element,
+      collapsible: treeElement.collapsible,
+      collapsed: treeElement.collapsed,
+      children: this.prepareElements(treeElement.children ?? []),
+    }));
+  }
+
+  private rebuildIdentityIndex(): void {
+    const next = new Map<string, ObjectTreeNode<TNode>>();
+    for (const node of this.index.rootNodes) {
+      const visit = (candidate: IndexTreeNode<TNode>): void => {
+        const id = this.identityProvider.getId(candidate.element);
+        next.set(id, candidate as ObjectTreeNode<TNode>);
+        for (const child of candidate.children) visit(child);
       };
-      node.children = this.buildNodes(treeElement.children ?? [], node, previousNodes, seen);
-      node.collapsible = treeElement.collapsible ?? node.children.length > 0;
-      node.collapsed = node.collapsible
-        ? previous?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === "collapsed"
-        : false;
-      return node;
-    });
+      visit(node);
+    }
+    this.nodesById = next;
   }
 
-  private rebuildIndex(): void {
-    this.nodesById.clear();
-    const visit = (node: MutableObjectTreeNode<TNode>): void => {
-      this.nodesById.set(node.id, node);
-      for (const child of node.children) visit(child);
-    };
-    for (const root of this.roots) visit(root);
-  }
-
-  private removeNodeIds(node: MutableObjectTreeNode<TNode>, ids: Set<string>): void {
-    ids.delete(node.id);
-    for (const child of node.children) this.removeNodeIds(child, ids);
-  }
-
-  private requireMutableNode(id: string): MutableObjectTreeNode<TNode> {
+  private requireNode(id: string): ObjectTreeNode<TNode> {
     const node = this.nodesById.get(id);
     if (!node) throw new RangeError(`Unknown tree node ID: ${id}`);
     return node;
   }
 
-  private updateCollapsed(id: string, state: ObjectTreeDefaultCollapseState): boolean {
-    const node = this.requireMutableNode(id);
-    if (!node.collapsible) return false;
-    const collapsed = state === "collapsed";
-    if (node.collapsed === collapsed) return false;
-    node.collapsed = collapsed;
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "collapse", node });
-    return true;
-  }
-
-  private updateCollapsedRecursive(id: string, state: ObjectTreeDefaultCollapseState): boolean {
-    const root = this.requireMutableNode(id);
-    const collapsed = state === "collapsed";
-    let changed = false;
-    const visit = (node: MutableObjectTreeNode<TNode>): void => {
-      if (node.collapsible && node.collapsed !== collapsed) {
-        node.collapsed = collapsed;
-        changed = true;
-      }
-      for (const child of node.children) visit(child);
-    };
-    visit(root);
-    if (!changed) return false;
-    this.recomputeVisibleNodes();
-    this._onDidChange.fire({ kind: "collapse", node: root });
-    return true;
-  }
-
-  private sortNodes(nodes: MutableObjectTreeNode<TNode>[]): void {
-    nodes.sort((left, right) => this.sorter!.compare(left.element, right.element));
-    for (const node of nodes) this.sortNodes(node.children);
-  }
-
-  private recomputeVisibleNodes(): void {
-    for (const root of this.roots) this.updateFilterVisibility(root, TreeVisibility.Visible);
-    this.updateVisibleChildMetadata(this.roots);
-    const visibleNodes: ObjectTreeNode<TNode>[] = [];
-    const append = (node: MutableObjectTreeNode<TNode>): void => {
-      if (!node.visible) return;
-      visibleNodes.push(node);
-      if (node.collapsed) return;
-      for (const child of node.children) append(child);
-    };
-    for (const root of this.roots) append(root);
-    this._visibleNodes = visibleNodes;
-  }
-
-  private updateFilterVisibility(node: MutableObjectTreeNode<TNode>, parentVisibility: TreeVisibility): boolean {
-    const visibility = normalizeFilterResult(this.filter?.filter(node.element, parentVisibility) ?? TreeVisibility.Visible);
-    if (visibility === TreeVisibility.Hidden) {
-      this.hideSubtree(node);
-      return false;
+  private withChangeKind<T>(kind: ObjectTreeModelChangeKind, operation: () => T): T {
+    const previous = this.changeKindOverride;
+    this.changeKindOverride = kind;
+    try {
+      return operation();
+    } finally {
+      this.changeKindOverride = previous;
     }
-    let visibleDescendants = false;
-    for (const child of node.children) {
-      if (this.updateFilterVisibility(child, visibility)) visibleDescendants = true;
-    }
-    node.visible = visibility === TreeVisibility.Visible || visibleDescendants;
-    return node.visible;
-  }
-
-  private hideSubtree(node: MutableObjectTreeNode<TNode>): void {
-    node.visible = false;
-    node.visibleChildIndex = -1;
-    node.visibleChildrenCount = 0;
-    for (const child of node.children) this.hideSubtree(child);
-  }
-
-  private updateVisibleChildMetadata(nodes: readonly MutableObjectTreeNode<TNode>[]): void {
-    const visible = nodes.filter((node) => node.visible);
-    for (const node of nodes) {
-      node.visibleChildIndex = -1;
-      node.visibleChildrenCount = visible.length;
-    }
-    for (let index = 0; index < visible.length; index += 1) {
-      visible[index]!.visibleChildIndex = index;
-    }
-    for (const node of nodes) this.updateVisibleChildMetadata(node.children);
   }
 }
 
-function validateNodeId(id: string, seen: Set<string>): void {
-  if (!id.trim()) throw new TypeError("Tree node IDs must not be empty");
-  if (seen.has(id)) throw new Error(`Duplicate tree node ID: ${id}`);
-  seen.add(id);
-}
-
-function normalizeFilterResult(result: TreeFilterResult): TreeVisibility {
-  if (result === true) return TreeVisibility.Visible;
-  if (result === false) return TreeVisibility.Hidden;
-  return result;
+function toObjectTreeElement<T>(node: ObjectTreeNode<T>): ObjectTreeElement<T> {
+  return {
+    element: node.element,
+    collapsible: node.collapsible,
+    collapsed: node.collapsed,
+    children: node.children.map(toObjectTreeElement),
+  };
 }

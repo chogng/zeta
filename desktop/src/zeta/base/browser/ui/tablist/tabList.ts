@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
-import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
+import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
 
@@ -58,9 +58,6 @@ export interface TabListOptions<T> {
   /** Makes tab items native drag sources without defining any drop behavior. */
   readonly draggable?: boolean;
   readonly dragAndDrop?: TabListDragAndDrop<T>;
-  /** Non-tab actions retained after the selectable tabs. */
-  readonly trailingActions?: readonly IAction[];
-  readonly trailingActionViewItemProvider?: ActionViewItemProvider;
 }
 
 /**
@@ -74,15 +71,12 @@ export class TabList<T> extends DisposableOwner {
   private readonly actionBar: ActionBar;
   private readonly scrollable: ScrollableElement;
   private readonly activate: (value: T) => void;
-  private readonly trailingActions: readonly IAction[];
 
   constructor(options: TabListOptions<T>) {
     super();
     this.activate = options.onActivate;
     const onClose = options.onClose;
     const closeActionIcon = options.closeActionIcon;
-    this.trailingActions = options.trailingActions ?? [];
-    const trailingActionIds = new Set(this.trailingActions.map((action) => action.id));
     const presentation = options.presentation ?? "flush";
     const orientation = options.orientation ?? "horizontal";
     const dragAndDrop = options.dragAndDrop;
@@ -111,12 +105,9 @@ export class TabList<T> extends DisposableOwner {
       ariaRole: "tablist",
       orientation,
       dragAndDrop: actionBarDragAndDrop,
-      actionViewItemProvider: (action, actionViewItemOptions) => {
+      actionViewItemProvider: (action) => {
         if (!(action instanceof TabAction)) {
-          if (!trailingActionIds.has(action.id)) {
-            throw new TypeError(`Unsupported TabList action: ${action.id}`);
-          }
-          return options.trailingActionViewItemProvider?.(action, actionViewItemOptions);
+          throw new TypeError(`Unsupported TabList action: ${action.id}`);
         }
         return new TabActionViewItem(action, onClose, closeActionIcon, options.draggable === true);
       },
@@ -153,19 +144,11 @@ export class TabList<T> extends DisposableOwner {
     if (selectedId !== undefined && !ids.has(selectedId)) {
       throw new RangeError(`Selected TabList item is not available: ${selectedId}`);
     }
-    for (const action of this.trailingActions) {
-      if (ids.has(action.id)) {
-        throw new TypeError(`TabList trailing action conflicts with tab ID: ${action.id}`);
-      }
-    }
-    this.actionBar.setActions([
-      ...tabs.map((tab) => new TabAction(
-        tab,
-        tab.id === selectedId,
-        this.activate,
-      )),
-      ...this.trailingActions,
-    ]);
+    this.actionBar.setActions(tabs.map((tab) => new TabAction(
+      tab,
+      tab.id === selectedId,
+      this.activate,
+    )));
     if (selectedId !== undefined) this.actionBar.setTabStop(selectedId);
     this.scrollable.layout();
     if (selectedId !== undefined) {

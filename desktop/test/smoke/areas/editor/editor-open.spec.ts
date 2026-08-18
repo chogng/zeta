@@ -14,12 +14,17 @@ test("App Server workspace files open in Aster and save through the editor regio
 
   const fileRow = explorer.locator(".zeta-tree-row").filter({ hasText: "main.ts" });
   await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "workspace file appears in Explorer" }).toBe(1);
-  await fileRow.click();
+  await fileRow.locator(".zeta-icon-label-icon").click();
 
   const group = workbench.editors.groupAt(0);
   await expect(group.tabs).toHaveCount(1);
   await expect(group.tabs.first()).toContainText("main.ts");
+  await expect(group.tabs.first()).toHaveClass(/preview/);
+  await expect(explorer.locator(".zeta-tree")).toBeFocused();
   await expect(group.content.locator(".aster-editor")).toBeVisible();
+
+  await fileRow.dblclick();
+  await expect(group.tabs.first()).not.toHaveClass(/preview/);
 
   const input = group.content.locator(".aster-editor-input");
   await expect(input).toBeAttached();
