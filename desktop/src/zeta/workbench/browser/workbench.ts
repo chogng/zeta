@@ -197,6 +197,7 @@ import { IEditorService } from "../services/editor/common/editorService.js";
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createWorkbenchProfile, type WorkbenchProfile } from "./workbenchProfile.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
+import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
@@ -299,6 +300,8 @@ export class Workbench extends DisposableOwner {
     const workspaceContext = this.own(new WorkspaceContextService(workspace));
     this.workspaceContext = workspaceContext;
     services.set(IWorkspaceContextService, workspaceContext);
+    const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
+    services.set(IWorkspaceTrustService, workspaceTrustService);
     const fileService = new BrowserFileService({
       api: api.fs,
       resourceApi: api.resource,
@@ -335,10 +338,10 @@ export class Workbench extends DisposableOwner {
     services.set(ITextMateService, textMateService);
     const languageFeaturesService = this.own(new LanguageFeaturesService());
     services.set(ILanguageFeaturesService, languageFeaturesService);
-    this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext));
+    this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
     const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
     services.set(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-    const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments));
+    const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
     services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
     const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
     services.set(IExtensionService, extensionService);
@@ -359,7 +362,6 @@ export class Workbench extends DisposableOwner {
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
     services.set(IMarketplaceService, new AppServerMarketplaceService(api.marketplace));
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
-    services.set(IWorkspaceTrustService, new AppServerWorkspaceTrustService(api.workspaceTrust));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,
@@ -549,6 +551,7 @@ export class Workbench extends DisposableOwner {
       workingCopyService,
       bulkEditService,
       createLineGutterDecorations: resource => createEditorLineGutterDecorations(resource, services),
+      createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, diffApi: api.diff, model, resource }),
       saveAsResource: nativeHostApi
         ? async (defaultName) => {
           const filePath = await nativeHostApi.saveFile({ defaultName });

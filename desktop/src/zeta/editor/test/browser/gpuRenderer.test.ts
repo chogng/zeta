@@ -4,7 +4,9 @@ import { GpuMinimapRenderer } from "../../browser/view/gpuMinimapRenderer.js";
 
 test("GPU minimap renders bounded density rows at device resolution and can yield to a fallback", () => {
   const calls: string[] = [];
-  const context = fakeWebGlContext(calls);
+  let vertices: Float32Array | undefined;
+  let foreground: Float32Array | undefined;
+  const context = fakeWebGlContext(calls, value => { vertices = value; }, value => { foreground = value; });
   const canvas = fakeCanvas(context);
   const renderer = GpuMinimapRenderer.tryCreate(canvas);
   assert.ok(renderer);
@@ -18,6 +20,12 @@ test("GPU minimap renders bounded density rows at device resolution and can yiel
   assert.equal(canvas.width, 112);
   assert.equal(canvas.height, 200);
   assert.deepEqual(calls.filter(call => call.startsWith("draw:")), ["draw:12"]);
+  assert.ok(vertices);
+  assertClose((1 - vertices[2]!) * 56 / 2, 4);
+  assertClose((vertices[2]! - vertices[0]!) * 56 / 2, 22);
+  assertClose((vertices[1]! - vertices[5]!) * 100 / 2, 1);
+  assert.ok(foreground);
+  assertClose(foreground[3]!, 0.42);
   assert.equal(renderer.isAvailable, true);
 
   renderer.disable();
@@ -49,7 +57,7 @@ function fakeCanvas(context: WebGLRenderingContext | undefined, userAgent = "Ele
   } as unknown as HTMLCanvasElement;
 }
 
-function fakeWebGlContext(calls: string[]): WebGLRenderingContext {
+function fakeWebGlContext(calls: string[], captureVertices?: (value: Float32Array) => void, captureForeground?: (value: Float32Array) => void): WebGLRenderingContext {
   const shader = {} as WebGLShader;
   const program = {} as WebGLProgram;
   const buffer = {} as WebGLBuffer;
@@ -67,7 +75,9 @@ function fakeWebGlContext(calls: string[]): WebGLRenderingContext {
     VERTEX_SHADER: 0x8b31,
     attachShader: () => undefined,
     bindBuffer: () => undefined,
-    bufferData: () => undefined,
+    bufferData: (_target: number, value: unknown) => {
+      if (value instanceof Float32Array) captureVertices?.(value);
+    },
     clear: () => undefined,
     clearColor: () => undefined,
     compileShader: () => undefined,
@@ -85,9 +95,13 @@ function fakeWebGlContext(calls: string[]): WebGLRenderingContext {
     getUniformLocation: () => uniform,
     linkProgram: () => undefined,
     shaderSource: () => undefined,
-    uniform4fv: () => undefined,
+    uniform4fv: (_location: WebGLUniformLocation | null, value: Float32List) => captureForeground?.(new Float32Array(value)),
     useProgram: () => undefined,
     vertexAttribPointer: () => undefined,
     viewport: () => undefined,
   } as unknown as WebGLRenderingContext;
+}
+
+function assertClose(actual: number, expected: number): void {
+  assert.equal(Math.abs(actual - expected) < 0.000_01, true);
 }

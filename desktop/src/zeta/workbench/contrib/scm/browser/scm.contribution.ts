@@ -16,10 +16,18 @@ import { ScmGraphViewPane } from "./scmGraphViewPane.js";
 import { ScmStatusContribution } from "./scmStatus.js";
 import { ScmViewPane } from "./scmViewPane.js";
 import "./media/scm.css";
+import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { registerEditorDecorationSourceFactory } from "../../../browser/parts/editor/editorDecorations.js";
+import { DirtyDiffDecorationSource } from "./dirtyDiffDecorationSource.js";
 
 export const GIT_VIEW_ID = "zeta.gitView";
 export const GIT_AGENT_REVIEW_VIEW_ID = "zeta.gitAgentReview";
 export const GIT_GRAPH_VIEW_ID = "zeta.gitGraph";
+
+registerEditorDecorationSourceFactory(({ accessor, diffApi, model, resource }) => {
+  if (!diffApi || (resource.scheme !== "file" && !isRemoteResource(resource))) return undefined;
+  return new DirtyDiffDecorationSource(resource, model, accessor.get(IGitService), diffApi);
+});
 
 /** Registers the Git Sidebar container and its initial pane. */
 export function registerGitViews(

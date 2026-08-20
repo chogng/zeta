@@ -6,6 +6,7 @@ import { getWindow } from "../../../../base/browser/window.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
+import { DiffOverviewRuler } from "./diffOverviewRuler.js";
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
@@ -36,6 +37,7 @@ export class DiffEditorWidget extends DisposableOwner {
   readonly element: HTMLDivElement;
   private readonly contentElement: HTMLDivElement;
   private readonly rowsElement: HTMLDivElement;
+  private readonly overviewRuler: DiffOverviewRuler;
   private readonly accessibilityStatusElement: HTMLDivElement;
   private readonly model: DiffModel;
   private readonly lineHeight: number;
@@ -43,6 +45,7 @@ export class DiffEditorWidget extends DisposableOwner {
   private currentDiff: LineDiff | undefined;
   private renderedStartRow = -1;
   private renderedEndRow = -1;
+  private viewportWidth = 0;
   private viewportHeight = 0;
   private activeChangeRow = -1;
   private readonly showInlineChanges: boolean;
@@ -61,6 +64,7 @@ export class DiffEditorWidget extends DisposableOwner {
     this.element = h(ownerDocument, "div");
     this.contentElement = h(ownerDocument, "div");
     this.rowsElement = h(ownerDocument, "div");
+    this.overviewRuler = new DiffOverviewRuler(this.element);
     this.accessibilityStatusElement = h(ownerDocument, "div");
     this.element.className = "aster-diff-editor";
     this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
@@ -76,7 +80,7 @@ export class DiffEditorWidget extends DisposableOwner {
     this.accessibilityStatusElement.setAttribute("aria-live", "polite");
     this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
     this.contentElement.append(this.rowsElement);
-    this.element.append(this.contentElement, this.accessibilityStatusElement);
+    this.element.append(this.contentElement, this.overviewRuler.element, this.accessibilityStatusElement);
     options.container.append(this.element);
     this.defer(() => this.element.remove());
     this.own(addDisposableListener(this.element, "scroll", () => this.project()));
@@ -85,6 +89,7 @@ export class DiffEditorWidget extends DisposableOwner {
     this.own(observeResize(this.element, ([entry]) => {
       if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
     }));
+    this.overviewRuler.setDiff(this.currentDiff);
     this.layout(getClientArea(this.element));
   }
 
@@ -101,12 +106,14 @@ export class DiffEditorWidget extends DisposableOwner {
     if (!Number.isFinite(size.width) || size.width < 0 || !Number.isFinite(size.height) || size.height < 0) {
       throw new RangeError("Diff editor widget layout size must be finite and non-negative");
     }
+    this.viewportWidth = size.width;
     this.viewportHeight = size.height;
     this.project(true);
   }
 
   private refresh(): void {
     this.currentDiff = this.model.diff;
+    this.overviewRuler.setDiff(this.currentDiff);
     this.renderedStartRow = -1;
     this.renderedEndRow = -1;
     this.activeChangeRow = -1;
@@ -190,7 +197,9 @@ export class DiffEditorWidget extends DisposableOwner {
 
   private project(force = false): void {
     const rows = this.currentDiff?.rows ?? [];
-    this.contentElement.style.height = `${rows.length * this.lineHeight}px`;
+    const contentHeight = rows.length * this.lineHeight;
+    this.contentElement.style.height = `${contentHeight}px`;
+    this.overviewRuler.layout({ contentHeight, scrollLeft: this.element.scrollLeft, scrollTop: this.element.scrollTop, viewportHeight: this.viewportHeight, viewportWidth: this.viewportWidth });
     const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
     const firstVisibleRow = Math.floor(this.element.scrollTop / this.lineHeight);
     const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);

@@ -65,6 +65,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
         contributionCapabilities.set(capability.id, value);
       };
       const decorationSources: DecorationSource[] = [];
+      for (const source of options.decorationSources ?? []) decorationSources.push(this.own(source));
       const lineGutterDecorations: EditorLineGutterDecoration[] = [...(options.lineGutterDecorations ?? [])];
       let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration } | undefined;
       let semanticTokenSource: SemanticTokenSource | undefined;

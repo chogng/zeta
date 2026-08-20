@@ -22,6 +22,8 @@ import { type TextRange } from "../../../../editor/common/core/text.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import { type OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import { type TextModel } from "../../../../editor/common/model/textModel.js";
 
 export interface EditorPanePart extends IDisposable {
   layout(dimension: IDimension): void;
@@ -77,6 +79,7 @@ export interface EditorPaneOptions {
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorPartOptions["lineGutterDecorations"]>;
+  readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly insertFinalNewLine?: boolean;
@@ -169,6 +172,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
         onOpenLocation: this.options.onOpenLocation,
         onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
         lineGutterDecorations: this.options.createLineGutterDecorations?.(input.resource),
+        decorationSources: this.options.createDecorationSources?.(input.resource, modelReference.model),
         placeholder: this.options.placeholder,
         showUnicodeHighlights: this.options.showUnicodeHighlights,
         insertFinalNewLine: this.options.insertFinalNewLine,

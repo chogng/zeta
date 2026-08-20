@@ -153,12 +153,17 @@
 
 .aster-editor-minimap {
   position: absolute;
+  top: 0;
+  left: 0;
   z-index: 6;
   box-sizing: border-box;
   width: 56px;
   overflow: hidden;
+  color: var(--zeta-description-foreground);
   cursor: pointer;
-  background: color-mix(in srgb, var(--zeta-editor-background) 80%, transparent);
+  background: var(--zeta-editor-background);
+  border-left: 1px solid color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
+  will-change: transform;
 }
 
 .aster-editor-minimap.dragging {
@@ -176,17 +181,16 @@
 
 .aster-editor-minimap-row {
   position: absolute;
-  right: 2px;
-  min-height: 1px;
-  opacity: 0.5;
-  background: var(--zeta-editor-foreground);
+  right: 4px;
+  opacity: 0.42;
+  background: currentColor;
 }
 
 .aster-editor-minimap-diagnostic-marker {
   position: absolute;
   right: 0;
-  left: 0;
   z-index: 1;
+  width: 3px;
   min-height: 2px;
   pointer-events: none;
 }
@@ -207,16 +211,44 @@
   background: var(--zeta-description-foreground);
 }
 
+.aster-editor-minimap-diagnostic-marker.diff-added,
+.aster-editor-overview-marker.diff-added {
+  background: var(--zeta-diff-editor-inserted-line-marker);
+}
+
+.aster-editor-minimap-diagnostic-marker.diff-modified,
+.aster-editor-overview-marker.diff-modified {
+  background: var(--zeta-focus-border);
+}
+
+.aster-editor-minimap-diagnostic-marker.diff-deleted,
+.aster-editor-overview-marker.diff-deleted {
+  background: var(--zeta-diff-editor-removed-line-marker);
+}
+
 .aster-editor-minimap-viewport {
   position: absolute;
+  top: 0;
   right: 0;
   left: 0;
   z-index: 1;
   box-sizing: border-box;
   min-height: 2px;
+  opacity: 0;
   pointer-events: none;
-  background: color-mix(in srgb, var(--zeta-focus-border) 25%, transparent);
-  border: 1px solid var(--zeta-focus-border);
+  background: color-mix(in srgb, var(--zeta-scrollbar-slider-background, color-mix(in srgb, currentColor 24%, transparent)) 50%, transparent);
+  transition: opacity 100ms linear, background-color 100ms linear;
+  will-change: transform;
+}
+
+.aster-editor-minimap:hover .aster-editor-minimap-viewport {
+  opacity: 1;
+  background: color-mix(in srgb, var(--zeta-scrollbar-slider-hover-background, color-mix(in srgb, currentColor 36%, transparent)) 50%, transparent);
+}
+
+.aster-editor-minimap.dragging .aster-editor-minimap-viewport {
+  opacity: 1;
+  background: color-mix(in srgb, var(--zeta-scrollbar-slider-active-background, color-mix(in srgb, currentColor 48%, transparent)) 50%, transparent);
 }
 
 .aster-editor-overview-marker {
@@ -224,6 +256,12 @@
   right: 0;
   left: 0;
   min-height: 2px;
+}
+
+.aster-editor-overview-marker.diff-added,
+.aster-editor-overview-marker.diff-modified,
+.aster-editor-overview-marker.diff-deleted {
+  right: 3px;
 }
 
 .aster-editor-overview-marker.error-underline {

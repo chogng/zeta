@@ -29,6 +29,8 @@ import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/com
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import type { TextModel } from "../../../../editor/common/model/textModel.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -71,6 +73,7 @@ export interface EditorGroupOptions {
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
+  readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
   readonly titleActions?: EditorTitleActions;
   readonly welcome?: EditorWelcomeOptions;
   readonly welcomeVisible?: boolean;
@@ -110,6 +113,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
   private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
   private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
   private readonly createLineGutterDecorations: ((resource: URI) => readonly EditorLineGutterDecoration[]) | undefined;
+  private readonly createDecorationSources: ((resource: URI, model: TextModel) => readonly OwnedDecorationSource[]) | undefined;
   private readonly titleControl: EditorTitleControl;
   private readonly welcome: EditorWelcome;
   private readonly welcomeElement: HTMLElement;
@@ -141,6 +145,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
     this.onOpenLocation = options.onOpenLocation;
     this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
     this.createLineGutterDecorations = options.createLineGutterDecorations;
+    this.createDecorationSources = options.createDecorationSources;
     this.element = h(ownerDocument, "section");
     this.element.className = "zeta-editor-group";
     this.element.setAttribute("aria-label", "Editor group");
@@ -267,6 +272,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
       onOpenLocation: this.onOpenLocation,
       onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
       createLineGutterDecorations: this.createLineGutterDecorations,
+      createDecorationSources: this.createDecorationSources,
       ...(this.onSave ? {
         onSave: () => {
           if (!createdPane) return Promise.reject(new Error("Editor save is unavailable"));

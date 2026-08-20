@@ -19,6 +19,7 @@ import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavi
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
 import { type EditorLineGutterDecoration } from "./view/lineGutterDecoration.js";
+import { type OwnedDecorationSource } from "./view/decorationPresentation.js";
 
 export interface EditorContextMenuRequest {
   readonly position: TextPosition;
@@ -92,6 +93,8 @@ export interface EditorPartOptions {
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   /** Host-contributed gutter presentation; feature semantics remain outside the editor core. */
   readonly lineGutterDecorations?: readonly EditorLineGutterDecoration[];
+  /** Host-created decoration sources whose lifetime transfers to this editor part. */
+  readonly decorationSources?: readonly OwnedDecorationSource[];
   readonly placeholder?: string;
   readonly showUnicodeHighlights?: boolean;
   readonly fontZoom?: { readonly initialScale?: number };

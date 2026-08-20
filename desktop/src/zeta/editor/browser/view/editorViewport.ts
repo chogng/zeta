@@ -17,11 +17,13 @@ import { type EditorLineRange, type EditorScrollPosition, type EditorViewportCha
 import { type DecorationSource, type ResolvedDecoration } from "./decorationPresentation.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { createAsterDiagnosticOverviewMarkers } from "./diagnosticOverviewMarkers.js";
+import { createAsterDiffOverviewMarkers } from "./diffOverviewMarkers.js";
 import { DomTextMeasurer, type TextMeasurer } from "./fontMetrics.js";
 import { LineWidthIndex } from "./lineWidthIndex.js";
 import { createAsterIndentationGuides } from "./indentationGuides.js";
 import { GpuMinimapRenderer } from "./gpuMinimapRenderer.js";
 import { MinimapNavigationController } from "./minimapNavigationController.js";
+import { MINIMAP_LINE_HEIGHT, MINIMAP_WIDTH, createMinimapSliderLayout, minimapContentWidth } from "./minimapPresentation.js";
 import { createMinimapRows } from "./minimapProjection.js";
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "./pointerHitTest.js";
 import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
@@ -35,7 +37,6 @@ import { type CompositeEditorLineGutterDecoration, type EditorLineGutterDecorati
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 const OVERVIEW_RULER_WIDTH = 6;
-const MINIMAP_WIDTH = 56;
 
 export type EditorViewportPresentation = "document" | "embedded";
 
@@ -315,10 +316,12 @@ export class EditorViewport extends DisposableOwner {
       viewport.setContentWidth(this.measuredContentWidth);
     }));
     this.own(addDisposableListener(this.element, "scroll", () => {
-      const layout = viewport.setScrollPosition({
+      const scrollPosition = {
         left: this.element.scrollLeft,
         top: this.element.scrollTop,
-      });
+      };
+      this.projectMinimapScrollPosition(viewport.layout, scrollPosition);
+      const layout = viewport.setScrollPosition(scrollPosition);
       this.syncScrollPosition(layout);
     }));
     this.own(new MinimapNavigationController(
@@ -869,10 +872,7 @@ export class EditorViewport extends DisposableOwner {
     this.overviewRulerElement.style.top = `${layout.scrollPosition.top}px`;
     this.overviewRulerElement.style.height = `${layout.viewportSize.height}px`;
     if (this.renderedOverviewRevision === this.overviewRevision) return;
-    const markers = createAsterDiagnosticOverviewMarkers(
-      this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
-      this.model.lineCount,
-    );
+    const markers = this.overviewMarkers();
     const fragment = createFragment(this.element.ownerDocument);
     for (const marker of markers) {
       const element = h(this.element.ownerDocument, "span");
@@ -889,13 +889,8 @@ export class EditorViewport extends DisposableOwner {
 
   private projectMinimap(layout: EditorViewportLayout): void {
     if (this.minimap === EditorMinimap.Off) return;
-    this.minimapElement.style.left = `${layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - MINIMAP_WIDTH)}px`;
-    this.minimapElement.style.top = `${layout.scrollPosition.top}px`;
-    this.minimapElement.style.height = `${layout.viewportSize.height}px`;
+    this.projectMinimapScrollPosition(layout, layout.scrollPosition);
     this.minimapGpuRenderer?.resize(MINIMAP_WIDTH, layout.viewportSize.height);
-    const contentHeight = Math.max(1, layout.contentSize.height);
-    this.minimapViewportElement.style.top = `${layout.scrollPosition.top / contentHeight * 100}%`;
-    this.minimapViewportElement.style.height = `${Math.max(2, layout.viewportSize.height / contentHeight * 100)}%`;
     if (this.renderedMinimapRevision === this.minimapRevision) return;
     const fragment = createFragment(this.element.ownerDocument);
     const rows = createMinimapRows(this.model);
@@ -907,15 +902,12 @@ export class EditorViewport extends DisposableOwner {
         const marker = h(this.element.ownerDocument, "span");
         marker.className = "aster-editor-minimap-row";
         marker.style.top = `${row.startLineIndex / this.model.lineCount * 100}%`;
-        marker.style.height = `${Math.max(1, (row.endLineIndexExclusive - row.startLineIndex) / this.model.lineCount * 100)}%`;
-        marker.style.width = `${Math.max(8, row.density * 100)}%`;
+        marker.style.width = `${minimapContentWidth(row.density)}px`;
+        marker.style.height = `${MINIMAP_LINE_HEIGHT}px`;
         fragment.append(marker);
       }
     }
-    for (const marker of createAsterDiagnosticOverviewMarkers(
-      this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []),
-      this.model.lineCount,
-    )) {
+    for (const marker of this.overviewMarkers()) {
       const element = h(this.element.ownerDocument, "span");
       element.className = "aster-editor-minimap-diagnostic-marker";
       element.classList.add(marker.presentation);
@@ -926,6 +918,24 @@ export class EditorViewport extends DisposableOwner {
     }
     this.minimapElement.replaceChildren(this.minimapCanvasElement, fragment, this.minimapViewportElement);
     this.renderedMinimapRevision = this.minimapRevision;
+  }
+
+  private overviewMarkers() {
+    const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
+    return [
+      ...createAsterDiagnosticOverviewMarkers(decorations, this.model.lineCount),
+      ...createAsterDiffOverviewMarkers(decorations, this.model.lineCount),
+    ];
+  }
+
+  private projectMinimapScrollPosition(layout: EditorViewportLayout, scrollPosition: EditorScrollPosition): void {
+    if (this.minimap === EditorMinimap.Off) return;
+    const left = scrollPosition.left + Math.max(0, layout.viewportSize.width - MINIMAP_WIDTH);
+    this.minimapElement.style.transform = `translate3d(${left}px, ${scrollPosition.top}px, 0)`;
+    this.minimapElement.style.height = `${layout.viewportSize.height}px`;
+    const slider = createMinimapSliderLayout(layout.viewportSize.height, layout.contentSize.height, scrollPosition.top);
+    this.minimapViewportElement.style.height = `${slider.height}px`;
+    this.minimapViewportElement.style.transform = `translate3d(0, ${slider.top}px, 0)`;
   }
 
   private resolveVisibleDecorations(layout: EditorViewportLayout): readonly ResolvedDecoration[] {

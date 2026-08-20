@@ -1,4 +1,5 @@
 import { type MinimapRow } from "./minimapProjection.js";
+import { MINIMAP_CONTENT_RIGHT, MINIMAP_LINE_HEIGHT, minimapContentWidth } from "./minimapPresentation.js";
 
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 position;
@@ -120,7 +121,7 @@ export class GpuMinimapRenderer {
 
     this.context.useProgram(this.program);
     this.context.bindBuffer(this.context.ARRAY_BUFFER, this.vertexBuffer);
-    this.context.bufferData(this.context.ARRAY_BUFFER, minimapVertices(this.rows, this.lineCount, this.width), this.context.DYNAMIC_DRAW);
+    this.context.bufferData(this.context.ARRAY_BUFFER, minimapVertices(this.rows, this.lineCount, this.width, this.height), this.context.DYNAMIC_DRAW);
     this.context.enableVertexAttribArray(this.positionLocation);
     this.context.vertexAttribPointer(this.positionLocation, 2, this.context.FLOAT, false, 0, 0);
     this.context.uniform4fv(this.colorLocation, minimapForegroundColor(this.canvas));
@@ -155,14 +156,14 @@ function compileShader(context: WebGLRenderingContext, kind: number, source: str
   throw new Error("Aster GPU minimap could not compile a WebGL shader");
 }
 
-function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: number): Float32Array {
+function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: number, height: number): Float32Array {
   const vertices = new Float32Array(rows.length * 12);
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]!;
-    const right = 1 - 4 / width;
-    const left = right - 2 * Math.max(width * 0.08, row.density * width) / width;
+    const right = 1 - 2 * MINIMAP_CONTENT_RIGHT / width;
+    const left = right - 2 * minimapContentWidth(row.density, width) / width;
     const top = 1 - 2 * row.startLineIndex / lineCount;
-    const bottom = 1 - 2 * Math.max(row.startLineIndex + 1, row.endLineIndexExclusive) / lineCount;
+    const bottom = Math.max(-1, top - 2 * MINIMAP_LINE_HEIGHT / height);
     vertices.set([left, top, right, top, left, bottom, left, bottom, right, top, right, bottom], index * 12);
   }
   return vertices;
@@ -171,12 +172,12 @@ function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: 
 function minimapForegroundColor(canvas: HTMLCanvasElement): Float32Array {
   const value = canvas.ownerDocument.defaultView?.getComputedStyle(canvas).color;
   const match = value?.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
-  if (!match) return new Float32Array([0.65, 0.65, 0.65, 0.5]);
+  if (!match) return new Float32Array([0.65, 0.65, 0.65, 0.42]);
   return new Float32Array([
     Number(match[1]) / 255,
     Number(match[2]) / 255,
     Number(match[3]) / 255,
-    match[4] === undefined ? 0.5 : Number(match[4]) * 0.5,
+    (match[4] === undefined ? 1 : Number(match[4])) * 0.42,
   ]);
 }
 

@@ -6,6 +6,9 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { LanguageFeaturesService } from "../../../../services/language/common/languageFeaturesService.js";
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
+import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import type { EditorPanePartOptions } from "../../browser/codeEditorPane.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -70,6 +73,43 @@ test("Aster editor pane loads, lays out, focuses, hides, and clears one editor p
   assert.equal(parent.children.length, 0);
   dom.window.close();
 });
+
+test("Aster editor pane acquires the Workbench language service for its detected model", async () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+  const parent = dom.window.document.querySelector<HTMLElement>("main")!;
+  const textFiles = new ImmediateTextFiles("const value = 1;");
+  const resourceStore = new BrowserTextResourceStore(textFiles);
+  using models = new BrowserTextModelService(resourceStore);
+  using languages = new LanguageFeaturesService();
+  const diagnostics = new RecordingLanguageDiagnosticsService();
+  const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageDiagnosticsService: diagnostics });
+  pane.create(parent);
+  const resource = URI.file("C:\\project\\main.ts");
+
+  await pane.setInput({ resource }, new AbortController().signal);
+
+  assert.deepEqual(diagnostics.acquired.map(entry => ({ resource: entry.resource.toString(), languageId: entry.languageId })), [{ resource: resource.toString(), languageId: "typescript" }]);
+  assert.equal(diagnostics.activeAcquisitions, 1);
+  pane.clearInput();
+  assert.equal(diagnostics.activeAcquisitions, 0);
+  pane.dispose();
+  dom.window.close();
+});
+
+class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService {
+  readonly acquired: Array<{ readonly resource: URI; readonly languageId: string; readonly model: TextModel }> = [];
+  activeAcquisitions = 0;
+  readonly onDidChangeDiagnostics = () => toDisposable(() => undefined);
+  acquire(resource: URI, languageId: string, model: TextModel) {
+    this.acquired.push({ resource, languageId, model });
+    this.activeAcquisitions += 1;
+    return toDisposable(() => { this.activeAcquisitions -= 1; });
+  }
+  createPublisher(): LanguageDiagnosticsPublisher { return { update: () => undefined, dispose: () => undefined, [Symbol.dispose]: () => undefined }; }
+  getDiagnostics(): LanguageDiagnosticSnapshot | undefined { return undefined; }
+  getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] { return []; }
+}
 
 test("Aster editor pane releases a load cancelled before content resolution", async () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

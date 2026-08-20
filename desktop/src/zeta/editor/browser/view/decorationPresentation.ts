@@ -1,4 +1,5 @@
 import { type Event } from "../../../base/common/event.js";
+import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { type TextDecorationCollection, type TextDecorationId, type TextDecorationSnapshot } from "../../common/model/decorationCollection.js";
 import { type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
@@ -18,6 +19,9 @@ export enum DecorationPresentation {
   HintUnderline = "hint-underline",
   UnicodeHighlight = "unicode-highlight",
   UnusualLineTerminator = "unusual-line-terminator",
+  DiffAdded = "diff-added",
+  DiffModified = "diff-modified",
+  DiffDeleted = "diff-deleted",
 }
 
 export interface ResolvedDecoration {
@@ -31,6 +35,9 @@ export interface DecorationSource {
   readonly onDidChange: Event<void>;
   readonly decorations: readonly ResolvedDecoration[];
 }
+
+/** A host-created decoration source whose lifetime transfers to one editor part. */
+export interface OwnedDecorationSource extends DecorationSource, IDisposable {}
 
 export interface DecorationRectangle {
   readonly id: TextDecorationId;
@@ -155,6 +162,9 @@ function validatePresentation(
     presentation !== DecorationPresentation.HintUnderline
     && presentation !== DecorationPresentation.UnicodeHighlight
     && presentation !== DecorationPresentation.UnusualLineTerminator
+    && presentation !== DecorationPresentation.DiffAdded
+    && presentation !== DecorationPresentation.DiffModified
+    && presentation !== DecorationPresentation.DiffDeleted
   ) {
     throw new TypeError(`Unknown Aster decoration presentation '${presentation}'`);
   }

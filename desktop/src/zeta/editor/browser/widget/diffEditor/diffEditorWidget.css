@@ -31,6 +31,58 @@
   will-change: transform;
 }
 
+.aster-diff-overview {
+  position: absolute;
+  z-index: 9;
+  width: 30px;
+  overflow: hidden;
+  color: var(--zeta-editor-foreground);
+  pointer-events: none;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.aster-diff-overview-lane {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 15px;
+}
+
+.aster-diff-overview-lane.original {
+  left: 0;
+}
+
+.aster-diff-overview-lane.modified {
+  right: 0;
+}
+
+.aster-diff-overview-marker {
+  position: absolute;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  min-height: 2px;
+}
+
+.aster-diff-overview-marker.removed {
+  background: var(--zeta-diff-editor-removed-line-marker);
+}
+
+.aster-diff-overview-marker.inserted {
+  background: var(--zeta-diff-editor-inserted-line-marker);
+}
+
+.aster-diff-overview-viewport {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  min-height: 2px;
+  background: var(--zeta-scrollbar-slider-background, color-mix(in srgb, currentColor 12%, transparent));
+  will-change: transform;
+}
+
 .aster-diff-editor-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

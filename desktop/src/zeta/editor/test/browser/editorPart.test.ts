@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { DisposableTracker, installDisposableTracker } from "../../../base/common/disposableTracker.js";
 import { URI } from "../../../base/common/uri.js";
 import { type TextModelReference } from "../../common/services/textModelService.js";
 import { LanguageFeaturesService } from "../../common/services/languageService.js";
@@ -68,6 +69,24 @@ test("Aster editor part composes native input, local language syntax, and presen
   assert.equal(container.children.length, 0);
   assert.throws(() => model.getText(), /disposed/);
   dom.window.close();
+});
+
+test("Aster editor part gives language editing one disposable owner", () => {
+  const tracker = new DisposableTracker();
+  {
+    using installation = installDisposableTracker(tracker);
+    const dom = new JSDOM("<!doctype html><body><main></main></body>");
+    dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+    const container = dom.window.document.querySelector<HTMLElement>("main")!;
+    const model = new TextModel("const value = { nested: true };");
+    const reference = modelReference(URI.file("C:\\project\\main.ts"), model);
+    const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "main.ts" }, languageId: "typescript", modelReference: reference });
+
+    editorPart.dispose();
+    dom.window.close();
+  }
+
+  assert.deepEqual(tracker.leaks().filter(leak => leak.label === "LanguageEditingAdapter"), []);
 });
 
 test("Aster editor part derives indentation folds and projects their gutter controls", () => {

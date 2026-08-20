@@ -9,14 +9,16 @@ import { type IServerEventApi } from "../../../../platform/app-server/common/app
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { type IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/types.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
+import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
-const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable"]);
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageRequestFailed", "LanguageServiceUnavailable", "WorkspaceTrustRequired"]);
 
 interface LanguageDocumentEntry {
   readonly resource: URI;
@@ -27,6 +29,8 @@ interface LanguageDocumentEntry {
   references: number;
   timer: ReturnType<typeof setTimeout> | undefined;
   queue: Promise<void>;
+  languageSynchronized: boolean;
+  codeIntelligenceSynchronized: boolean;
 }
 
 interface PublishedDiagnostics {
@@ -43,21 +47,31 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   private readonly changeEmitter = this.own(new Emitter<URI>());
   private nextPublisherId = 1;
   private workspaceDiagnosticsQueued = false;
+  private trustRefreshQueued = false;
+  private trustRefreshGeneration = 0;
+  private workspaceTrusted: boolean;
+  private trustQueue = Promise.resolve();
   private alive = true;
   readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
-  constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService) {
+  constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService, private readonly workspaceTrust?: IWorkspaceTrustService) {
     super();
+    this.workspaceTrusted = workspaceTrust === undefined;
     const subscription = events.subscribe(event => {
       if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
+      if (event.method === "config/changed") this.queueTrustRefresh();
     });
     this.defer(() => subscription.dispose());
     this.own(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
-      if (nextWorkspace.folders.length === 1) {
-        this.queueWorkspaceDiagnostics();
-      } else {
-        this.clearWorkspaceDiagnostics();
+      this.workspaceTrusted = this.workspaceTrust === undefined;
+      for (const entry of this.entries.values()) {
+        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.timer = undefined;
+        entry.languageSynchronized = false;
+        entry.codeIntelligenceSynchronized = false;
       }
+      this.clearServerDiagnostics();
+      if (nextWorkspace.folders.length === 1) this.queueTrustRefresh();
     }));
     this.defer(() => {
       this.alive = false;
@@ -70,7 +84,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       this.workspaceServerKeys.clear();
       this.publishedDiagnostics.clear();
     });
-    this.queueWorkspaceDiagnostics();
+    this.queueTrustRefresh();
   }
 
   acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
@@ -96,6 +110,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
       references: 1,
       timer: undefined,
       queue: Promise.resolve(),
+      languageSynchronized: false,
+      codeIntelligenceSynchronized: false,
     };
     entry.modelListener = model.onDidChange(() => this.schedule(entry, false));
     if (this.workspaceServerKeys.delete(key)) {
@@ -143,7 +159,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private schedule(entry: LanguageDocumentEntry, immediate: boolean): void {
-    if (entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+    if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || this.relativePath(entry.resource) !== entry.path) return;
     if (entry.timer !== undefined) clearTimeout(entry.timer);
     if (immediate) {
       entry.timer = undefined;
@@ -157,16 +173,21 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private enqueueSynchronization(entry: LanguageDocumentEntry): void {
+    if (!this.workspaceTrusted) return;
     const snapshot = entry.model.createSnapshot();
     const text = snapshot.getText();
     if (new TextEncoder().encode(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
     entry.queue = entry.queue.catch(() => undefined).then(async () => {
-      if (entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+      if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
       const document = { path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
+      let codeIntelligenceSynchronized = false;
       await Promise.all([
         this.api.synchronize({ document }),
-        this.codeIntelligenceDocuments?.synchronize(document).catch(reportCodeIntelligenceSynchronizationError),
+        this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError),
       ]);
+      if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+      entry.languageSynchronized = true;
+      entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
       try {
         const report = await this.api.documentDiagnostics({ document });
         if (report.kind === "full") this.acceptDiagnostics({ path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
@@ -178,7 +199,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private queueWorkspaceDiagnostics(): void {
-    if (this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
+    if (!this.workspaceTrusted || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
     this.workspaceDiagnosticsQueued = true;
     queueMicrotask(() => {
       this.workspaceDiagnosticsQueued = false;
@@ -187,11 +208,11 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
   }
 
   private async refreshWorkspaceDiagnostics(): Promise<void> {
-    if (!this.hasWorkspaceFolder()) return;
+    if (!this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
     const next = new Map<string, LanguageDiagnosticSnapshot>();
     let supported = false;
     for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
-      if (!this.alive || !this.hasWorkspaceFolder()) return;
+      if (!this.alive || !this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
       try {
         const report = await this.api.workspaceDiagnostics({ languageId });
         if (!report.supported) continue;
@@ -226,15 +247,42 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     for (const resource of changed.values()) this.changeEmitter.fire(resource);
   }
 
-  private clearWorkspaceDiagnostics(): void {
-    const changed: URI[] = [];
-    for (const key of this.workspaceServerKeys) {
-      const resource = this.serverSnapshots.get(key)?.resource;
-      if (resource) changed.push(resource);
-      this.serverSnapshots.delete(key);
-    }
+  private clearServerDiagnostics(): void {
+    const changed = [...this.serverSnapshots.values()].map(snapshot => snapshot.resource);
+    this.serverSnapshots.clear();
     this.workspaceServerKeys.clear();
     for (const resource of changed) this.changeEmitter.fire(resource);
+  }
+
+  private queueTrustRefresh(): void {
+    if (!this.alive) return;
+    this.trustRefreshGeneration += 1;
+    if (this.trustRefreshQueued) return;
+    this.trustRefreshQueued = true;
+    queueMicrotask(() => {
+      this.trustRefreshQueued = false;
+      const generation = this.trustRefreshGeneration;
+      this.trustQueue = this.trustQueue.catch(() => undefined).then(() => this.refreshWorkspaceTrust(generation)).catch(reportWorkspaceTrustRefreshError);
+    });
+  }
+
+  private async refreshWorkspaceTrust(generation: number): Promise<void> {
+    const trust = await resolveAppServerLanguageWorkspaceTrust(this.workspace, this.workspaceTrust);
+    if (!this.alive || generation !== this.trustRefreshGeneration || this.workspace.getWorkspace().id !== trust.workspaceId) return;
+    const changed = this.workspaceTrusted !== trust.trusted;
+    this.workspaceTrusted = trust.trusted;
+    if (!trust.trusted) {
+      for (const entry of this.entries.values()) {
+        if (entry.timer !== undefined) clearTimeout(entry.timer);
+        entry.timer = undefined;
+        entry.languageSynchronized = false;
+        entry.codeIntelligenceSynchronized = false;
+      }
+      if (changed) this.clearServerDiagnostics();
+      return;
+    }
+    if (changed) for (const entry of this.entries.values()) this.schedule(entry, true);
+    this.queueWorkspaceDiagnostics();
   }
 
   private hasWorkspaceFolder(): boolean {
@@ -253,10 +301,11 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
     if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
     entry.queue = entry.queue.catch(() => undefined).then(async () => {
       if (entry.references > 0) return;
-      await Promise.all([
-        this.api.close({ path: entry.path }),
-        this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError),
-      ]);
+      const closeLanguage = entry.languageSynchronized ? this.api.close({ path: entry.path }) : Promise.resolve();
+      const closeCodeIntelligence = entry.codeIntelligenceSynchronized ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
+      entry.languageSynchronized = false;
+      entry.codeIntelligenceSynchronized = false;
+      await Promise.all([closeLanguage, closeCodeIntelligence]);
       if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
       this.queueWorkspaceDiagnostics();
     }).catch(reportLanguageSynchronizationError);
@@ -305,6 +354,10 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 
 function reportCodeIntelligenceSynchronizationError(error: unknown): void {
   console.error("Code-intelligence document synchronization failed", error);
+}
+
+function reportWorkspaceTrustRefreshError(error: unknown): void {
+  console.error("Workspace Trust refresh for language services failed", error);
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {

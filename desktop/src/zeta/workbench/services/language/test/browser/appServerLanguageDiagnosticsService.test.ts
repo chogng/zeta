@@ -6,6 +6,7 @@ import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languag
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
+import { type IWorkspaceTrustService, type WorkspaceTrustSetting } from "../../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
@@ -166,3 +167,42 @@ test("App Server diagnostics service waits for a workspace folder before pulling
   await tick();
   assert.ok(api.workspaceDiagnosticPulls > 0);
 });
+
+test("App Server diagnostics service gates Editor synchronization on Workspace Trust and replays open models after trust", async () => {
+  const events = new FakeServerEvents();
+  const api = new FakeLanguageApi();
+  const trust = new FakeWorkspaceTrustService("workspace", "restricted");
+  using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+  using service = new AppServerLanguageDiagnosticsService(api, events, workspace, undefined, trust);
+  using model = new TextModel("fn main() {}\n");
+  using acquisition = service.acquire(URI.file("C:\\project\\main.rs"), "rust", model);
+
+  await tick();
+  await tick();
+  assert.equal(api.synchronized.length, 0);
+  assert.equal(api.workspaceDiagnosticPulls, 0);
+
+  trust.setting = "trusted";
+  events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
+  await tick();
+  await tick();
+  assert.equal(api.synchronized.length, 1);
+  assert.equal(api.synchronized[0]!.document.path, "main.rs");
+  assert.ok(api.workspaceDiagnosticPulls > 0);
+
+  trust.setting = "restricted";
+  events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
+  await tick();
+  await tick();
+  const synchronizedBeforeEdit = api.synchronized.length;
+  model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: "// " }]);
+  await new Promise(resolve => setTimeout(resolve, 200));
+  assert.equal(api.synchronized.length, synchronizedBeforeEdit);
+});
+
+class FakeWorkspaceTrustService implements IWorkspaceTrustService {
+  constructor(private readonly workspace: string, public setting: WorkspaceTrustSetting) {}
+  async list() { return { revision: 1, entries: [{ workspace: this.workspace, root: "C:\\project", setting: this.setting }] }; }
+  async set(): ReturnType<IWorkspaceTrustService["set"]> { throw new Error("unused"); }
+  async forget(): ReturnType<IWorkspaceTrustService["forget"]> { throw new Error("unused"); }
+}

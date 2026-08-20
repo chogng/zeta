@@ -1,4 +1,4 @@
-import { DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, DisposableSlot, DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { type ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
@@ -27,40 +27,94 @@ import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDocu
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import { type IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { APP_SERVER_LANGUAGE_IDS } from "./appServerLanguageSupport.js";
+import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorkspace.js";
 
 type LocationKind = "declaration" | "definition" | "implementation" | "typeDefinition" | "references";
 const APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
 /** Registers App Server-backed cross-resource providers for Code languages. */
 export class AppServerLanguageProviders extends DisposableOwner {
-  constructor(languageFeatures: ILanguageFeaturesService, api: ILanguageApi, workspace: IWorkspaceContextService) {
+  private readonly registrations = this.own(new DisposableSlot<DisposableStore>());
+  private refreshQueued = false;
+  private refreshGeneration = 0;
+  private refreshQueue = Promise.resolve();
+  private alive = true;
+
+  constructor(private readonly languageFeatures: ILanguageFeaturesService, private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly options: AppServerLanguageProvidersOptions = {}) {
     super();
-    const adapter = new AppServerLanguageProvider(api, workspace);
-    const registrations = this.own(new DisposableStore());
-    registrations.add(languageFeatures.registerHoverProvider(adapter));
-    registrations.add(languageFeatures.registerCompletionProvider(adapter));
-    registrations.add(languageFeatures.registerDeclarationProvider(adapter));
-    registrations.add(languageFeatures.registerDefinitionProvider(adapter));
-    registrations.add(languageFeatures.registerImplementationProvider(adapter));
-    registrations.add(languageFeatures.registerTypeDefinitionProvider(adapter));
-    registrations.add(languageFeatures.registerReferenceProvider(adapter));
-    registrations.add(languageFeatures.registerCallHierarchyProvider(adapter));
-    registrations.add(languageFeatures.registerTypeHierarchyProvider(adapter));
-    registrations.add(languageFeatures.registerWorkspaceSymbolProvider(new AppServerWorkspaceSymbolProvider(api, workspace)));
-    registrations.add(languageFeatures.registerRenameProvider(adapter));
-    registrations.add(languageFeatures.registerCodeActionProvider(adapter));
-    registrations.add(languageFeatures.registerFormattingProvider(adapter));
-    registrations.add(languageFeatures.registerParameterHintsProvider(adapter));
-    registrations.add(languageFeatures.registerInlayHintsProvider(adapter));
-    registrations.add(languageFeatures.registerLinkedEditingProvider(adapter));
-    registrations.add(languageFeatures.registerSemanticTokensProvider(adapter));
-    registrations.add(languageFeatures.registerDocumentSymbolProvider(adapter));
-    registrations.add(languageFeatures.registerCodeLensProvider(adapter));
-    registrations.add(languageFeatures.registerLinkProvider(adapter));
-    registrations.add(languageFeatures.registerColorProvider(adapter));
-    registrations.add(languageFeatures.registerFoldingRangeProvider(adapter));
+    if (options.workspaceTrust && !options.events) throw new Error("Trust-aware App Server language providers require the App Server event stream");
+    if (options.events) {
+      const subscription = options.events.subscribe(event => {
+        if (event.method === "config/changed") this.queueRefresh();
+      });
+      this.defer(() => subscription.dispose());
+    }
+    this.own(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
+    this.defer(() => { this.alive = false; });
+    if (!options.workspaceTrust && workspace.getWorkspace().folders.length === 1) this.registrations.replace(this.install());
+    else this.queueRefresh();
   }
+
+  private install(): DisposableStore {
+    const adapter = new AppServerLanguageProvider(this.api, this.workspace);
+    const registrations = new DisposableStore();
+    registrations.add(this.languageFeatures.registerHoverProvider(adapter));
+    registrations.add(this.languageFeatures.registerCompletionProvider(adapter));
+    registrations.add(this.languageFeatures.registerDeclarationProvider(adapter));
+    registrations.add(this.languageFeatures.registerDefinitionProvider(adapter));
+    registrations.add(this.languageFeatures.registerImplementationProvider(adapter));
+    registrations.add(this.languageFeatures.registerTypeDefinitionProvider(adapter));
+    registrations.add(this.languageFeatures.registerReferenceProvider(adapter));
+    registrations.add(this.languageFeatures.registerCallHierarchyProvider(adapter));
+    registrations.add(this.languageFeatures.registerTypeHierarchyProvider(adapter));
+    registrations.add(this.languageFeatures.registerWorkspaceSymbolProvider(new AppServerWorkspaceSymbolProvider(this.api, this.workspace)));
+    registrations.add(this.languageFeatures.registerRenameProvider(adapter));
+    registrations.add(this.languageFeatures.registerCodeActionProvider(adapter));
+    registrations.add(this.languageFeatures.registerFormattingProvider(adapter));
+    registrations.add(this.languageFeatures.registerParameterHintsProvider(adapter));
+    registrations.add(this.languageFeatures.registerInlayHintsProvider(adapter));
+    registrations.add(this.languageFeatures.registerLinkedEditingProvider(adapter));
+    registrations.add(this.languageFeatures.registerSemanticTokensProvider(adapter));
+    registrations.add(this.languageFeatures.registerDocumentSymbolProvider(adapter));
+    registrations.add(this.languageFeatures.registerCodeLensProvider(adapter));
+    registrations.add(this.languageFeatures.registerLinkProvider(adapter));
+    registrations.add(this.languageFeatures.registerColorProvider(adapter));
+    registrations.add(this.languageFeatures.registerFoldingRangeProvider(adapter));
+    return registrations;
+  }
+
+  private queueRefresh(): void {
+    if (!this.alive) return;
+    this.refreshGeneration += 1;
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    queueMicrotask(() => {
+      this.refreshQueued = false;
+      const generation = this.refreshGeneration;
+      this.refreshQueue = this.refreshQueue.catch(() => undefined).then(() => this.refresh(generation)).catch(error => {
+        this.registrations.clear();
+        console.error("Workspace Trust refresh for App Server language providers failed", error);
+      });
+    });
+  }
+
+  private async refresh(generation: number): Promise<void> {
+    const trust = await resolveAppServerLanguageWorkspaceTrust(this.workspace, this.options.workspaceTrust);
+    if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== trust.workspaceId) return;
+    if (trust.trusted) {
+      if (!this.registrations.value) this.registrations.replace(this.install());
+    } else {
+      this.registrations.clear();
+    }
+  }
+}
+
+export interface AppServerLanguageProvidersOptions {
+  readonly workspaceTrust?: IWorkspaceTrustService;
+  readonly events?: IServerEventApi;
 }
 
 class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LanguageLinkedEditingProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, LanguageCodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {

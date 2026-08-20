@@ -7,8 +7,11 @@ import { createLanguageCompletionInvokeContext } from "../../../../../editor/com
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageFeaturesService } from "../../../../../editor/common/services/languageService.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
+import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { type IWorkspaceTrustService, type WorkspaceTrustSetting } from "../../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
+import { type ServerNotification } from "../../../../../../../generated/app-server/types.js";
 
 const DTO_RANGE = Object.freeze({ start: Object.freeze({ lineIndex: 0, columnIndex: 0 }), end: Object.freeze({ lineIndex: 0, columnIndex: 5 }) });
 
@@ -132,6 +135,48 @@ test("App Server language providers do not send documents above their transport 
   assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 0)), []);
   assert.equal(api.locationRequests.length, 0);
 });
+
+test("App Server language providers register only while the Workspace is trusted", async () => {
+  using languages = new LanguageFeaturesService();
+  using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
+  const api = new FakeLanguageApi();
+  const events = new FakeServerEvents();
+  const trust = new FakeWorkspaceTrustService("workspace", "restricted");
+  using providers = new AppServerLanguageProviders(languages, api, workspace, { workspaceTrust: trust, events });
+  using model = new TextModel("value");
+  using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\project\\main.ts"));
+
+  await tick();
+  assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 2)), []);
+  assert.equal(api.locationRequests.length, 0);
+
+  trust.setting = "trusted";
+  events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
+  await tick();
+  assert.equal((await navigation.provideDefinition("typescript", TextPosition.at(0, 2))).length, 1);
+  assert.equal(api.locationRequests.length, 1);
+
+  trust.setting = "restricted";
+  events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
+  await tick();
+  assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 2)), []);
+  assert.equal(api.locationRequests.length, 1);
+});
+
+class FakeServerEvents implements IServerEventApi {
+  private listener: ((event: ServerNotification) => void) | undefined;
+  subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }
+  fire(event: ServerNotification): void { this.listener?.(event); }
+}
+
+class FakeWorkspaceTrustService implements IWorkspaceTrustService {
+  constructor(private readonly workspace: string, public setting: WorkspaceTrustSetting) {}
+  async list() { return { revision: 1, entries: [{ workspace: this.workspace, root: "C:\\project", setting: this.setting }] }; }
+  async set(): ReturnType<IWorkspaceTrustService["set"]> { throw new Error("unused"); }
+  async forget(): ReturnType<IWorkspaceTrustService["forget"]> { throw new Error("unused"); }
+}
+
+async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 
 class FakeLanguageApi implements ILanguageApi {
   readonly locationRequests: Parameters<ILanguageApi["locations"]>[0][] = [];

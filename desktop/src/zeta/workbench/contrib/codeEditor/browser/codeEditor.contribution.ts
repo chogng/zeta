@@ -61,6 +61,7 @@ registerEditorPane({
       onOpenLocation: options.onOpenLocation,
       onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
       createLineGutterDecorations: options.createLineGutterDecorations,
+      createDecorationSources: options.createDecorationSources,
     });
   },
 });

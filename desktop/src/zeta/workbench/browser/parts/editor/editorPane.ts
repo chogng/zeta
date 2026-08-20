@@ -24,6 +24,8 @@ import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/com
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import type { TextModel } from "../../../../editor/common/model/textModel.js";
 
 export enum EditorPaneVisibility {
   Hidden,
@@ -76,6 +78,7 @@ export interface EditorPaneCreationOptions {
   readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
   readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
   readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
+  readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 }
 
 export enum EditorPaneMatch {

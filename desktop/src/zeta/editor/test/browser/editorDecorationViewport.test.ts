@@ -163,6 +163,38 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   dom.window.close();
 });
 
+test("Quick Diff decorations project into the overview ruler and minimap gutter", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("same\nadded\nmodified\nafter delete");
+  using decorations = new TextDecorationCollection<DecorationPresentation>(model);
+  decorations.replaceAll([
+    { range: TextRange.emptyAt(TextPosition.at(1, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffAdded },
+    { range: TextRange.emptyAt(TextPosition.at(2, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffModified },
+    { range: TextRange.emptyAt(TextPosition.at(3, 0)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: DecorationPresentation.DiffDeleted },
+  ]);
+  using viewport = new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    decorationSources: [createAsterDecorationSource(decorations, decoration => decoration.metadata)],
+  });
+  viewport.layout({ width: 200, height: 80 });
+
+  assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-overview-marker")].map(marker => marker.classList[1]), [
+    DecorationPresentation.DiffAdded,
+    DecorationPresentation.DiffModified,
+    DecorationPresentation.DiffDeleted,
+  ]);
+  assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-minimap-diagnostic-marker")].map(marker => marker.classList[1]), [
+    DecorationPresentation.DiffAdded,
+    DecorationPresentation.DiffModified,
+    DecorationPresentation.DiffDeleted,
+  ]);
+  dom.window.close();
+});
+
 test("Decoration overlays use browser range rectangles for RTL text", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");
   const container = requiredElement(dom.window.document, "main");
