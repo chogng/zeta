@@ -37,7 +37,7 @@
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "tsc -p tsconfig.preload.json && node scripts/verify-sandbox-preload.mjs",
     "build:renderer": "tsc -p tsconfig.renderer.json --noEmit && vite build --config build/vite/vite.config.ts",
-    "build:rust": "cargo build --manifest-path ../Cargo.toml -p zeta-server-host --bin zeta-server",
+    "build:rust": "cargo build --manifest-path ../Cargo.toml -p zeta-server-host --bin zeta-server --profile dev-small",
     "test:main": "corepack pnpm run test:scripts && corepack pnpm run test:unit",
     "test:scripts": "node --test build/serverHost/*.test.mjs build/typescript/*.test.mjs build/vite/*.test.mjs scripts/prepare-dev-package.test.mjs scripts/sync-product-icons.test.mjs",
     "test:extensions": "node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.extensions-test.json && node test/extensions/run.mjs",

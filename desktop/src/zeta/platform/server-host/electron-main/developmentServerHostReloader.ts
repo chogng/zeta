@@ -181,7 +181,7 @@ function isExactGeneration(value: unknown): value is { readonly version: 1; read
   if (Object.keys(record).sort().join(",") !== "executable,version") return false;
   if (record.version !== 1 || typeof record.executable !== "string") return false;
   return record.executable === basename(record.executable)
-    && /^zeta-server(?:\.\d+\.\d+|\.\d+\.\d+\.exe)$/u.test(record.executable);
+    && /^zeta-server(?:\.\d+\.\d+|\.[a-f0-9]{64})(?:\.exe)?$/u.test(record.executable);
 }
 
 function parseDevelopmentServerHostGeneration(generationFile: string, contents: string): string {

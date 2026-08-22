@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +17,10 @@ from urllib.parse import urlsplit
 
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
+from zeta_package.cargo_paths import cargo_artifact_executable
+from zeta_package.cargo_paths import cargo_rendered_diagnostic
+from zeta_package.cargo_paths import parse_cargo_message
+from zeta_package.cargo_paths import resolve_cargo_target_directory
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +116,15 @@ def resolve_binary(
         "--profile",
         profile,
     ]
+    target_directory = resolve_cargo_target_directory(REPOSITORY_ROOT)
+    command.extend(
+        [
+            "--target-dir",
+            str(target_directory),
+            "--message-format",
+            "json-render-diagnostics",
+        ]
+    )
     if target:
         command.extend(["--target", target])
     environment = os.environ.copy()
@@ -129,14 +143,32 @@ def resolve_binary(
         environment["ZETERM_REMOTE_RUNTIME_CATALOG_URL"] = remote_runtime_release.url
     else:
         environment.pop("ZETERM_REMOTE_RUNTIME_CATALOG_URL", None)
-    subprocess.run(command, check=True, env=environment)
-
-    profile_directory = "debug" if profile == "dev" else profile
-    binary = REPOSITORY_ROOT / "target"
-    if target:
-        binary /= target
-    binary /= profile_directory
-    return binary / ("zeterm.exe" if target and "windows" in target else "zeterm")
+    result = subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+    executable = None
+    for line in result.stdout.splitlines():
+        message = parse_cargo_message(line)
+        diagnostic = cargo_rendered_diagnostic(message)
+        if diagnostic:
+            sys.stderr.write(diagnostic)
+        executable = cargo_artifact_executable(message, "zeterm") or executable
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            command,
+            output=result.stdout,
+            stderr=result.stderr,
+        )
+    if executable is None:
+        raise RuntimeError("cargo build did not report the zeterm executable")
+    return Path(executable)
 
 
 def build_package(

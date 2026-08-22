@@ -1,19 +1,44 @@
 import json
 import os
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
+from subprocess import CompletedProcess
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from build_zeterm_package import build_package
 from build_zeterm_package import remote_runtime_network_release
+from build_zeterm_package import resolve_binary
 from remote_runtime_bundle import build_remote_runtime_bundle
 from test_remote_runtime_bundle import create_package
 
 
 class ZetermPackageTests(unittest.TestCase):
+    def test_native_source_build_uses_cargo_artifact_without_forcing_target(
+        self,
+    ) -> None:
+        executable = "/custom/cargo-output/release/zeterm"
+        cargo_output = json.dumps(
+            {
+                "reason": "compiler-artifact",
+                "target": {"kind": ["bin"], "name": "zeterm"},
+                "executable": executable,
+            }
+        )
+        completed = CompletedProcess(["cargo"], 0, cargo_output + "\n", "")
+        with patch(
+            "build_zeterm_package.subprocess.run", return_value=completed
+        ) as run:
+            resolved = resolve_binary("cargo", "release", None, None, None, None)
+
+        command = run.call_args.args[0]
+        self.assertNotIn("--target", command)
+        self.assertIn("--target-dir", command)
+        self.assertEqual(Path(executable), resolved)
+
     def test_stages_binary_digest_and_unsigned_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

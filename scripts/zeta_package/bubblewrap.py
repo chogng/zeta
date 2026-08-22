@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional
 from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
+from .cargo_paths import cargo_profile_directory
+from .cargo_paths import resolve_cargo_target_directory
 from .targets import TargetSpec
 
 
@@ -219,7 +221,7 @@ def build_bubblewrap(
     cargo_profile: str,
 ) -> Path:
     rust_workspace = repository_root
-    target_directory = repository_root / "target"
+    target_directory = resolve_cargo_target_directory(repository_root)
     environment = dict(os.environ)
     environment["ZETA_BWRAP_SOURCE_DIR"] = str(source_directory)
     command = [
@@ -239,7 +241,7 @@ def build_bubblewrap(
         str(target_directory),
     ]
     subprocess.run(command, check=True, env=environment)
-    profile_directory = "debug" if cargo_profile == "dev" else cargo_profile
+    profile_directory = cargo_profile_directory(cargo_profile)
     executable = target_directory / spec.target / profile_directory / "bwrap"
     return validate_input_binary(
         executable, "built Bubblewrap executable", cargo, False

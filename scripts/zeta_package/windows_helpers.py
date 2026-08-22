@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Optional
 
 from .cargo import validate_input_binary
+from .cargo_paths import cargo_profile_directory
+from .cargo_paths import resolve_cargo_target_directory
 from .targets import TargetSpec
 
 
@@ -82,7 +84,7 @@ def build_windows_sandbox_helpers(
     cargo_profile: str,
 ) -> tuple[Path, Path]:
     rust_workspace = repository_root
-    target_directory = rust_workspace / "target"
+    target_directory = resolve_cargo_target_directory(rust_workspace)
     subprocess.run(
         [
             cargo,
@@ -101,7 +103,7 @@ def build_windows_sandbox_helpers(
         ],
         check=True,
     )
-    profile_directory = "debug" if cargo_profile == "dev" else cargo_profile
+    profile_directory = cargo_profile_directory(cargo_profile)
     output = target_directory / spec.target / profile_directory
     return output / COMMAND_RUNNER_NAME, output / SANDBOX_SETUP_NAME
 

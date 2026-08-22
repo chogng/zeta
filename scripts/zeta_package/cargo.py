@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from .cargo_paths import cargo_profile_directory
+from .cargo_paths import resolve_cargo_target_directory
 from .targets import TargetSpec
 
 
@@ -22,7 +24,7 @@ def resolve_server_binary(
         )
 
     rust_workspace = repository_root
-    target_directory = repository_root / "target"
+    target_directory = resolve_cargo_target_directory(repository_root)
     command = [
         cargo,
         "build",
@@ -40,7 +42,7 @@ def resolve_server_binary(
         str(target_directory),
     ]
     subprocess.run(command, check=True)
-    profile_directory = "debug" if cargo_profile == "dev" else cargo_profile
+    profile_directory = cargo_profile_directory(cargo_profile)
     binary = (
         target_directory
         / spec.target

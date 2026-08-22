@@ -80,12 +80,16 @@ Desktop development uses the same locks and canonical layout through the Node
 assembler at `desktop/scripts/prepare-dev-package.mjs`. It defaults to the
 host-provided runtime variant for Electron; Browser full mode passes
 `--javascript-runtime packaged-node`. The assembler builds first-party
-executables with Cargo's `dev` profile, verifies and extracts the required
+executables with Cargo's compact `dev-small` profile, verifies and extracts the required
 target-specific runtime archives, stages the result beside
 `desktop/.tmp/zeta-package`, and replaces the previous development package only
-after validation. It neither installs nor invokes Python. This Python package
-remains the release builder and retains its refusal to replace an explicit
-output directory.
+after validation. Host executables honor `CARGO_TARGET_DIR`, and the assembler
+reads the exact executable path from Cargo's JSON artifact messages instead of
+guessing a `target` layout. Normal compact host builds, the development
+assembler, and the Rust watcher therefore reuse one compilation cache without
+creating a second target-triple tree. It neither installs nor invokes Python.
+This Python package remains the release builder, also honors `CARGO_TARGET_DIR`,
+and retains its refusal to replace an explicit output directory.
 
 ```sh
 python3 scripts/build_zeta_package.py \

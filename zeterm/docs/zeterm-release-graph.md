@@ -59,7 +59,9 @@ flowchart LR
 
 所有 zeterm-owned crate 和 shared backend 通过根 `Cargo.toml` 解析。Bazel 的 `//zeterm:zeterm` 使用同一份
 Cargo metadata-derived dependency graph；package builder 只接受 Cargo 生成的 `zeterm` binary 或
-从 zeterm package 构建它，它不从 `zeta-rs` 的旧 Native target 取 binary。
+从 zeterm package 构建它，它不从 `zeta-rs` 的旧 Native target 取 binary。未显式传 `--target` 时，
+source build 保持 Cargo 的原生 host 输出拓扑；显式交叉 target 才产生 target-triple 子目录。两者都遵循
+`CARGO_TARGET_DIR`，并从 Cargo JSON artifact 消息取得真实 executable，不猜测 profile 输出路径。
 
 ### 2. Stage
 

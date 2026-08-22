@@ -27,6 +27,24 @@ test("development Server Host generation resolves one confined built executable"
   }
 });
 
+test("development Server Host generation accepts a content-addressed executable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "zeta-server-host-generation-"));
+  try {
+    const generationDirectory = join(root, ".tmp", "dev-server-host");
+    const generationFile = join(generationDirectory, "current.json");
+    const generation = `zeta-server.${"a".repeat(64)}`;
+    const executable = join(generationDirectory, generation);
+    await mkdir(generationDirectory, { recursive: true });
+    await writeFile(executable, "server", "utf8");
+    await chmod(executable, 0o700);
+    await writeFile(generationFile, `${JSON.stringify({ version: 1, executable: generation })}\n`, "utf8");
+
+    assert.equal(await readDevelopmentServerHostGeneration(generationFile), executable);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("development Server Host restart selects the new executable after stopping", async () => {
   const launcher = launcherAt("/test/zeta-server.old");
   const lifecycle: string[] = [];

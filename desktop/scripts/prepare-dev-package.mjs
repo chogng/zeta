@@ -1,8 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "./cargo-target.mjs";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
 const cargoWorkspace = repositoryRoot;
@@ -280,8 +283,8 @@ function run(command, args, options = {}) {
   }
 }
 
-function cargoBuild(target, packageName, binaryArgs, environment = process.env) {
-  run("cargo", [
+function cargoBuild(packageName, binaryArgs, expectedTargets, environment = process.env) {
+  const result = spawnSync("cargo", [
     "build",
     "--manifest-path",
     join(cargoWorkspace, "Cargo.toml"),
@@ -289,34 +292,57 @@ function cargoBuild(target, packageName, binaryArgs, environment = process.env) 
     packageName,
     ...binaryArgs,
     "--profile",
-    "dev",
-    "--target",
-    target,
+    "dev-small",
     "--target-dir",
-    join(cargoWorkspace, "target"),
-  ], { env: environment });
+    cargoTargetDirectory(cargoWorkspace, environment),
+    "--message-format",
+    "json-render-diagnostics",
+  ], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: environment,
+    maxBuffer: archiveBufferLimit,
+    stdio: ["inherit", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  if (result.stderr) process.stderr.write(result.stderr);
+  if (result.error) throw result.error;
+  const executables = new Map();
+  for (const line of result.stdout?.split(/\r?\n/u) ?? []) {
+    const message = parseCargoMessage(line);
+    const diagnostic = cargoRenderedDiagnostic(message);
+    if (diagnostic) process.stderr.write(diagnostic);
+    for (const targetName of expectedTargets) {
+      const executable = cargoArtifactExecutable(message, targetName);
+      if (executable) executables.set(targetName, executable);
+    }
+  }
+  if (result.status !== 0) throw new Error(`cargo exited with status ${result.status}`);
+  for (const targetName of expectedTargets) {
+    if (!executables.has(targetName)) throw new Error(`Cargo did not report the ${targetName} executable`);
+  }
+  return executables;
 }
 
-async function buildFirstPartyExecutables(target, platform) {
-  cargoBuild(target, "zeta-server-host", ["--bin", "zeta-server"]);
-  const debugDirectory = join(cargoWorkspace, "target", target, "debug");
+async function buildFirstPartyExecutables(platform) {
+  const serverArtifacts = cargoBuild("zeta-server-host", ["--bin", "zeta-server"], ["zeta-server"]);
   const executables = {
-    serverHost: join(debugDirectory, platform === "win32" ? "zeta-server.exe" : "zeta-server"),
+    serverHost: serverArtifacts.get("zeta-server"),
   };
   if (platform === "win32") {
-    cargoBuild(target, "zeta-windows-sandbox", ["--bins"]);
-    executables.commandRunner = join(debugDirectory, "zeta-command-runner.exe");
-    executables.sandboxSetup = join(debugDirectory, "zeta-windows-sandbox-setup.exe");
+    const sandboxArtifacts = cargoBuild("zeta-windows-sandbox", ["--bins"], ["zeta-command-runner", "zeta-windows-sandbox-setup"]);
+    executables.commandRunner = sandboxArtifacts.get("zeta-command-runner");
+    executables.sandboxSetup = sandboxArtifacts.get("zeta-windows-sandbox-setup");
   }
   if (platform === "linux") {
     const bubblewrap = await materializeBubblewrapSource();
-    cargoBuild(target, "zeta-bwrap", ["--bin", "bwrap"], {
+    const bubblewrapArtifacts = cargoBuild("zeta-bwrap", ["--bin", "bwrap"], ["bwrap"], {
       ...process.env,
       ZETA_BWRAP_SOURCE_DIR: bubblewrap.sourceDirectory,
     });
     executables.bubblewrap = {
       ...bubblewrap,
-      binary: join(debugDirectory, "bwrap"),
+      binary: bubblewrapArtifacts.get("bwrap"),
     };
   }
   for (const path of Object.values(executables).filter((value) => typeof value === "string")) {
@@ -390,7 +416,7 @@ async function materializeBubblewrapSource() {
 }
 
 async function copyExecutable(source, destination, isWindows) {
-  await copyFile(source, destination);
+  await copyFile(source, destination, constants.COPYFILE_FICLONE);
   if (!isWindows) {
     await chmod(destination, 0o755);
   }
@@ -706,7 +732,7 @@ export async function prepareDevelopmentPackage(javascriptRuntime = "host-provid
   }
   const target = hostTarget();
   const isWindows = process.platform === "win32";
-  const executables = await buildFirstPartyExecutables(target, process.platform);
+  const executables = await buildFirstPartyExecutables(process.platform);
   const ripgrep = await resolveRipgrep(target, isWindows);
   const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
   await replaceDirectoryAtomically(outputDirectory, (staging) => assemblePackage(

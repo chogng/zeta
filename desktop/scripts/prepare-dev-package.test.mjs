@@ -5,7 +5,15 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
+import { cargoTargetDirectory } from "./cargo-target.mjs";
 import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepare-dev-package.mjs";
+
+test("resolves one shared Cargo target directory for host development builds", () => {
+  const workspace = resolve("/workspace/zeta");
+  assert.equal(cargoTargetDirectory(workspace, {}), join(workspace, "target"));
+  assert.equal(cargoTargetDirectory(workspace, { CARGO_TARGET_DIR: "build/cargo" }), join(workspace, "build", "cargo"));
+  assert.equal(cargoTargetDirectory(workspace, { CARGO_TARGET_DIR: "/cache/zeta" }), resolve("/cache/zeta"));
+});
 
 test("selects host-provided Node for Desktop and explicit packaged Node for headless hosts", () => {
   assert.equal(parseJavaScriptRuntime([]), "host-provided-node");

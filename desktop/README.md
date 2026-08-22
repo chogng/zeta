@@ -85,9 +85,13 @@ watch program，但只在两边都完成当前编译且为 0 errors 后重启 El
 进程，避免加载同一轮增量编译中的半成品模块图。
 
 完整 Electron 开发命令还会运行 `build/serverHost/watch.mjs`。Rust 源码或 Cargo manifest 变化后，它先完成
-`zeta-server-host` 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
+`zeta-server-host` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
-时自动回滚到上一 generation。可以单独运行 `corepack pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
+时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
+executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
+和一个回滚版本。Watcher 只接受 `zeta-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
+`target` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
+`corepack pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
 不启动 Rust 的 disconnected Web 模式不会监听后端。
 
 不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
