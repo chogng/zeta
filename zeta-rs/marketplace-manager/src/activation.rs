@@ -9,6 +9,7 @@ use zeta_marketplace_client::ConnectorActivationSpec;
 use zeta_marketplace_client::ExecutableActivationSpec;
 use zeta_marketplace_client::ExecutableRuntime;
 use zeta_marketplace_client::LanguageActivationSpec;
+use zeta_marketplace_client::LocalizationActivationSpec;
 use zeta_marketplace_client::McpActivationSpec;
 use zeta_marketplace_client::McpTransportSpec;
 use zeta_marketplace_client::PackageRef;
@@ -145,6 +146,12 @@ pub(crate) fn acquire_spec(
             contract_version: "1".into(),
             manifest: resource_ref(&capability.descriptor.reference.id),
         })),
+        CapabilityKind::Localization => {
+            Ok(ActivationSpec::Localization(LocalizationActivationSpec {
+                contract_version: "1".into(),
+                catalog: resource_ref(&capability.descriptor.reference.id),
+            }))
+        }
         CapabilityKind::Executable => {
             let runtime = match capability.runtime.as_deref() {
                 Some("direct") => ExecutableRuntime::Direct,
@@ -177,6 +184,14 @@ pub(crate) fn open_resource(
             )
         }
         CapabilityKind::Theme | CapabilityKind::Language
+            if &resource_ref(&capability.descriptor.reference.id) == requested =>
+        {
+            (
+                format!("{}/package.json", capability.path),
+                "application/json; charset=utf-8",
+            )
+        }
+        CapabilityKind::Localization
             if &resource_ref(&capability.descriptor.reference.id) == requested =>
         {
             (

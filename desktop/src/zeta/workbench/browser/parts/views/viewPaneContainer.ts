@@ -1,6 +1,7 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { FocusedViewContext } from "../../../common/contextkeys.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
 import { ViewPane } from "./viewPane.js";
@@ -9,6 +10,7 @@ import { h } from "../../../../base/browser/dom.js";
 /** Construction inputs for one browser view container. */
 export interface ViewPaneContainerOptions {
   readonly viewContainer: IViewContainerDescriptor;
+  readonly localizationService?: ILocalizationService;
   readonly model: IViewContainerModel;
   readonly instantiationService: IInstantiationService;
   readonly contextKeyService: IContextKeyService;
@@ -27,6 +29,7 @@ export class ViewPaneContainer extends DisposableOwner {
   readonly viewContainer: IViewContainerDescriptor;
   private readonly model: IViewContainerModel;
   private readonly instantiationService: IInstantiationService;
+  private readonly localizationService: ILocalizationService | undefined;
   private readonly focusedView: IContextKey<string>;
   private readonly onDidFailCreateView: (
     error: unknown,
@@ -48,6 +51,7 @@ export class ViewPaneContainer extends DisposableOwner {
     this.viewContainer = options.viewContainer;
     this.model = options.model;
     this.instantiationService = options.instantiationService;
+    this.localizationService = options.localizationService;
     this.onDidFailCreateView = options.onDidFailCreateView ??
       ((error, viewId) => {
         console.error(`Unable to create view pane '${viewId}'`, error);
@@ -68,6 +72,7 @@ export class ViewPaneContainer extends DisposableOwner {
     this.own(this.model.onDidChangeVisibleViewDescriptors(() => {
       this.syncPanes();
     }));
+    if (this.localizationService) this.own(this.localizationService.onDidChange(() => this.updateLocalizedTitles()));
     this.syncPanes();
   }
 
@@ -141,13 +146,20 @@ export class ViewPaneContainer extends DisposableOwner {
     );
   }
 
+  private updateLocalizedTitles(): void {
+    for (const descriptor of this.model.visibleViewDescriptors) {
+      const pane = this._panes.get(descriptor.id)?.pane;
+      if (pane) pane.setTitle(localize(this.localizationService, descriptor.localizationKey, descriptor.title));
+    }
+  }
+
   private createView(descriptor: IViewDescriptor): ViewPane {
     const view = this.instantiationService.createInstance(
       descriptor.ctorDescriptor,
       this.element,
       {
         id: descriptor.id,
-        title: descriptor.title,
+        title: localize(this.localizationService, descriptor.localizationKey, descriptor.title),
         collapsed: descriptor.collapsed,
       },
     );

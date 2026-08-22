@@ -11,6 +11,9 @@ import type { IToolSearchService } from "../../../../platform/toolSearch/common/
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
+import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
+import type { ILocaleService } from "../../../services/localization/common/locale.js";
+import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditor } from "./settingsEditor.js";
@@ -28,6 +31,9 @@ export interface SettingsEditorContributionOptions {
   readonly pluginService?: IPluginService;
   readonly marketplaceService?: IMarketplaceService;
   readonly toolSearchService?: IToolSearchService;
+  readonly languagePackService?: ILanguagePackService;
+  readonly localeService?: ILocaleService;
+  readonly localizationService?: ILocalizationService;
   readonly workspaceTrustService?: IWorkspaceTrustService;
   readonly workspaceOpenService?: IWorkspaceOpenService;
 }
@@ -51,12 +57,15 @@ export class SettingsEditorContribution extends DisposableOwner {
       pluginService: options.pluginService ?? unavailablePluginService,
       marketplaceService: options.marketplaceService ?? unavailableMarketplaceService,
       toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
+      languagePackService: options.languagePackService ?? unavailableLanguagePackService,
+      localeService: options.localeService ?? unavailableLocaleService,
+      localizationService: options.localizationService ?? unavailableLocalizationService,
       workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
       workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
-      title: "Zeta Settings",
+      title: (options.localizationService ?? unavailableLocalizationService).translate("zeta.settings", "chrome.modalTitle", "Zeta Settings"),
       content: this.editor.element,
       focusContent: () => this.editor.focus(),
     }));
@@ -133,6 +142,7 @@ const unavailablePluginService: IPluginService = {
 
 const unavailableMarketplaceService: IMarketplaceService = {
   cachedBrowse: () => undefined,
+  onDidChangeInstalled: () => ({ dispose() {}, [Symbol.dispose]() {} }),
   browse: () => Promise.reject(new Error("Marketplace is unavailable.")),
   refreshBrowse: () => Promise.reject(new Error("Marketplace is unavailable.")),
   search: () => Promise.reject(new Error("Marketplace is unavailable.")),
@@ -145,4 +155,28 @@ const unavailableMarketplaceService: IMarketplaceService = {
   acquireCapability: () => Promise.reject(new Error("Marketplace is unavailable.")),
   releaseCapability: () => Promise.reject(new Error("Marketplace is unavailable.")),
   openResource: () => Promise.reject(new Error("Marketplace is unavailable.")),
+};
+
+const unavailableLocalizationService: ILocalizationService = {
+  onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  whenReady: Promise.resolve(),
+  translate: (_bundle, _key, fallback) => fallback,
+};
+
+const unavailableLocaleService: ILocaleService = {
+  locale: "en",
+  onDidChangeLocale: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  whenReady: Promise.resolve(),
+  setLocale: () => Promise.reject(new Error("Locale selection is unavailable.")),
+};
+
+const unavailableLanguagePackService: ILanguagePackService = {
+  onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  whenReady: Promise.resolve(),
+  catalogs: [],
+  availableLocales: [],
+  installedPackages: [],
+  search: () => Promise.reject(new Error("Language packs are unavailable.")),
+  install: () => Promise.reject(new Error("Language packs are unavailable.")),
+  refresh: () => Promise.reject(new Error("Language packs are unavailable.")),
 };

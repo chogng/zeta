@@ -15,6 +15,9 @@ import { IToolSearchService } from "../../../../platform/toolSearch/common/toolS
 import { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
+import { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
+import { ILocaleService } from "../../../services/localization/common/locale.js";
+import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
@@ -67,6 +70,9 @@ registerWorkbenchContribution(
     userThemeService: accessor.get(IUserThemeService),
     codeIndexService: accessor.get(ICodeIndexService),
     connectorService: accessor.get(IConnectorService),
+    languagePackService: accessor.get(ILanguagePackService),
+    localeService: accessor.get(ILocaleService),
+    localizationService: accessor.get(ILocalizationService),
     pluginService: accessor.get(IPluginService),
     marketplaceService: accessor.get(IMarketplaceService),
     toolSearchService: accessor.get(IToolSearchService),

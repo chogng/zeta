@@ -163,6 +163,12 @@ import { IPluginService } from "../../platform/plugins/common/pluginService.js";
 import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
 import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
 import { AppServerMarketplaceService } from "../services/marketplace/browser/appServerMarketplaceService.js";
+import { MarketplaceLanguagePackService } from "../../platform/languagePacks/browser/marketplaceLanguagePackService.js";
+import { ILanguagePackService } from "../../platform/languagePacks/common/languagePacksService.js";
+import { ILocaleService, WorkbenchLocaleService } from "../services/localization/common/locale.js";
+import { ILocalizationService } from "../services/localization/common/localizationService.js";
+import { WorkbenchLocalizationService } from "../services/localization/browser/workbenchLocalizationService.js";
+import { builtinLanguagePackCatalogs } from "../services/localization/common/localizationCatalogs.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
 import { ISymbolIndexApi } from "../../platform/symbolIndex/common/symbolIndexApi.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
@@ -360,7 +366,8 @@ export class Workbench extends DisposableOwner {
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
     services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
-    services.set(IMarketplaceService, new AppServerMarketplaceService(api.marketplace));
+    const marketplaceService = this.own(new AppServerMarketplaceService(api.marketplace));
+    services.set(IMarketplaceService, marketplaceService);
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
@@ -385,6 +392,12 @@ export class Workbench extends DisposableOwner {
       api: configurationApi,
     }));
     services.set(IConfigurationService, configuration);
+    const languagePackService = this.own(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
+    services.set(ILanguagePackService, languagePackService);
+    const localeService = this.own(new WorkbenchLocaleService(configuration, languagePackService));
+    services.set(ILocaleService, localeService);
+    const localizationService = this.own(new WorkbenchLocalizationService(localeService, languagePackService));
+    services.set(ILocalizationService, localizationService);
     const ownerWindow = ownerDocument.defaultView;
     if (!ownerWindow) {
       throw new Error("Workbench requires an owner window");
@@ -511,16 +524,23 @@ export class Workbench extends DisposableOwner {
     const titlebar = this.own(createTitlebarPart(workbenchRoot, {
       menuService: menus,
       contextMenuService: contextMenus,
+      localizationService,
     }));
     const sidebar = this.own(new SidebarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
+      localizationService,
+      ariaLabelKey: { bundle: "zeta.regions", key: "primarySidebar" },
+      viewsAriaLabelKey: { bundle: "zeta.regions", key: "primarySidebarViews" },
     }));
     const agentSidebar = this.own(new SidebarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
+      localizationService,
       id: "agentSidebar",
       location: ViewContainerLocation.AgentSidebar,
       ariaLabel: "Agent sidebar",
+      ariaLabelKey: { bundle: "zeta.regions", key: "agentSidebar" },
       viewsAriaLabel: "Agent sidebar views",
+      viewsAriaLabelKey: { bundle: "zeta.regions", key: "agentSidebarViews" },
       compositeBarContainerFilter: () => false,
       titleActions: {
         menuService: menus,
@@ -599,6 +619,7 @@ export class Workbench extends DisposableOwner {
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
+          localizationService,
         }));
       }
       sidebar.showComposite(viewContainer.id);
@@ -625,6 +646,7 @@ export class Workbench extends DisposableOwner {
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
+          localizationService,
         }));
       }
       agentSidebar.showComposite(viewContainer.id);
@@ -635,6 +657,7 @@ export class Workbench extends DisposableOwner {
     };
     const panel = this.own(new PanelPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
+      localizationService,
       contextMenuProvider: contextMenus,
       titleActions: {
         menuService: menus,
@@ -668,6 +691,7 @@ export class Workbench extends DisposableOwner {
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
+          localizationService,
           paneHeaders: "hidden",
           paneLayout: "fill",
         }));
@@ -680,6 +704,7 @@ export class Workbench extends DisposableOwner {
     };
     const auxiliarybar = this.own(new AuxiliarybarPart(workbenchRoot, {
       viewDescriptorService: viewDescriptors,
+      localizationService,
     }));
     const auxiliaryViewContainer = requiredViewContainer(
       viewDescriptors,
@@ -723,6 +748,7 @@ export class Workbench extends DisposableOwner {
           model: viewDescriptors.getViewContainerModel(viewContainer.id),
           instantiationService,
           contextKeyService: contextKeys,
+          localizationService,
           paneHeaders: "hidden",
           paneLayout: "fill",
         }));

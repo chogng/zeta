@@ -16,12 +16,14 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Problems,
     title: "Problems",
+    localizationKey: { bundle: "zeta.views", key: "problems" },
     location: ViewContainerLocation.Panel,
     order: 1,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Problems, [{
     id: PROBLEMS_VIEW_ID,
     title: "Problems",
+    localizationKey: { bundle: "zeta.views", key: "problems" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(ProblemsViewPane, {

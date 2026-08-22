@@ -53,10 +53,12 @@ pub(crate) struct CatalogManifest {
     #[serde(default)]
     pub languages: Vec<CatalogLanguage>,
     #[serde(default)]
+    pub localizations: Vec<CatalogLocalization>,
+    #[serde(default)]
     pub consumers: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum PackageType {
     Plugin,
@@ -64,6 +66,7 @@ pub(crate) enum PackageType {
     Mcp,
     Language,
     Theme,
+    Localization,
 }
 
 impl PackageType {
@@ -74,6 +77,7 @@ impl PackageType {
             Self::Mcp => "mcp",
             Self::Language => "language",
             Self::Theme => "theme",
+            Self::Localization => "localization",
         }
     }
 }
@@ -103,6 +107,14 @@ pub(crate) struct CatalogLanguage {
     pub language_server: Option<String>,
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct CatalogLocalization {
+    pub locale: String,
+    pub language_name: String,
+    pub localized_language_name: String,
+}
+
 #[derive(Clone, Copy, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum CatalogCapabilityKind {
@@ -118,6 +130,9 @@ impl CatalogCapability {
         match (self.kind, package_type) {
             (CatalogCapabilityKind::Asset, PackageType::Theme) => CapabilityKind::Theme,
             (CatalogCapabilityKind::Asset, PackageType::Language) => CapabilityKind::Language,
+            (CatalogCapabilityKind::Asset, PackageType::Localization) => {
+                CapabilityKind::Localization
+            }
             (CatalogCapabilityKind::Skill, _) => CapabilityKind::Skill,
             (CatalogCapabilityKind::Mcp, _) => CapabilityKind::Mcp,
             (CatalogCapabilityKind::Connector, _) => CapabilityKind::Connector,
@@ -456,6 +471,24 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Market
     {
         return Err(MarketplaceClientError::package_untrusted());
     }
+    if (matches!(manifest.package_type, PackageType::Localization)
+        && manifest.localizations.len() != 1)
+        || (!matches!(manifest.package_type, PackageType::Localization)
+            && !manifest.localizations.is_empty())
+        || manifest.localizations.iter().any(|localization| {
+            !valid_locale(&localization.locale)
+                || localization.language_name.trim().is_empty()
+                || localization.localized_language_name.trim().is_empty()
+        })
+    {
+        return Err(MarketplaceClientError::package_untrusted());
+    }
+    if manifest.package_type == PackageType::Localization
+        && (manifest.capabilities.len() != 1
+            || manifest.capabilities[0].kind != CatalogCapabilityKind::Asset)
+    {
+        return Err(MarketplaceClientError::package_untrusted());
+    }
     let executable_ids = manifest
         .capabilities
         .iter()
@@ -494,6 +527,17 @@ fn valid_identifier_segment(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+fn valid_locale(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 32
+        && !value.starts_with('-')
+        && !value.ends_with('-')
+        && !value.contains("--")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
 }
 
 fn copy_tree(source: &Path, destination: &Path) -> Result<(), MarketplaceClientError> {

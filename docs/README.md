@@ -37,7 +37,7 @@
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
 | 权限 / 审批 / 沙箱 | [`permissions.md`](permissions.md) → [`auto-review.md`](auto-review.md) → [`sandboxing.md`](sandboxing.md) |
 | 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
-| 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → 对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
+| 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → [`localization.md`](localization.md) 或对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
 | 开发 SSH Remote Workspace | [`remote-development.md`](remote-development.md) → [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`app-server-client.md`](app-server-client.md) |
 | 改 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) → 对应产品文档 → [`zeterm/README.md`](../zeterm/README.md) |
@@ -71,6 +71,7 @@
 | [`tools.md`](tools.md) | 设计 | 工具三层契约、registry snapshot |
 | [`exec.md`](exec.md) | 设计 | 进程执行 |
 | [`marketplace-integration.md`](marketplace-integration.md) | 设计 | 远端签名 registry、Zeta 本地 Manager、opaque capability handoff 与旧消费链迁移 |
+| [`localization.md`](localization.md) | 设计 | 内置 locale catalog、Marketplace localization 包与 UI fallback |
 | [`plugins.md`](plugins.md) / [`connectors.md`](connectors.md) / [`skills.md`](skills.md) | 设计 | Plugin 扩展分发、Connector 外部账号连接与 Skill 指令运行时边界 |
 | [`editor-extensions.md`](editor-extensions.md) | 设计 | 声明式扩展与 Zeta 原生可执行 Host v1 的双轨边界、信任、生命周期和产品接入状态 |
 | [`mcp.md`](mcp.md) / [`mcp-server.md`](mcp-server.md) | 设计 | MCP 协议会话与能力调用、Connector ready binding，以及 Zeta 作为 MCP server |

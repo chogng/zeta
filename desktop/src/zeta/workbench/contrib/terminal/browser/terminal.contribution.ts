@@ -17,6 +17,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Terminal,
     title: "Terminal",
+    localizationKey: { bundle: "zeta.views", key: "terminal" },
     location: ViewContainerLocation.Panel,
     order: 3,
     isDefault: true,
@@ -24,6 +25,7 @@ export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegi
   registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [{
     id: TERMINAL_VIEW_ID,
     title: "Terminal",
+    localizationKey: { bundle: "zeta.views", key: "terminal" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(TerminalViewPane, {

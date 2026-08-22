@@ -13,12 +13,14 @@ export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistr
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Tasks,
     title: "Tasks",
+    localizationKey: { bundle: "zeta.views", key: "tasks" },
     location: ViewContainerLocation.Panel,
     order: 2.5,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Tasks, [{
     id: TASKS_VIEW_ID,
     title: "Tasks",
+    localizationKey: { bundle: "zeta.views", key: "tasks" },
     order: 2,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),

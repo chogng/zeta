@@ -16,10 +16,11 @@ import "./media/bulkEdit.css";
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
 export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: "Refactor Preview", location: ViewContainerLocation.Panel, order: 2.75 });
+  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: "Refactor Preview", localizationKey: { bundle: "zeta.views", key: "refactorPreview" }, location: ViewContainerLocation.Panel, order: 2.75 });
   registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [{
     id: BULK_EDIT_VIEW_ID,
     title: "Refactor Preview",
+    localizationKey: { bundle: "zeta.views", key: "refactorPreview" },
     order: 1,
     hideByDefault: true,
     canToggleVisibility: false,

@@ -1,6 +1,7 @@
+import type { Event } from "../../../base/common/event.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-export type MarketplaceCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "executable" | "asset";
+export type MarketplaceCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "asset";
 
 export interface MarketplacePackageRef {
   readonly id: string;
@@ -77,6 +78,7 @@ export type MarketplaceActivationSpec =
   | { readonly kind: "connector"; readonly contractVersion: string; readonly authenticationProvider: string | null; readonly mcp: { readonly id: string } | null }
   | { readonly kind: "theme"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
   | { readonly kind: "language"; readonly contractVersion: string; readonly manifest: { readonly id: string } }
+  | { readonly kind: "localization"; readonly contractVersion: string; readonly catalog: { readonly id: string } }
   | { readonly kind: "executable"; readonly contractVersion: string; readonly runtime: "direct" | "node"; readonly entrypoint: { readonly id: string } };
 
 export interface MarketplaceAcquiredCapability {
@@ -86,6 +88,7 @@ export interface MarketplaceAcquiredCapability {
 
 /** Frontend Marketplace business capability, independent of distribution and package internals. */
 export interface IMarketplaceService {
+  readonly onDidChangeInstalled: Event<void>;
   cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined;
   browse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;
   refreshBrowse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;

@@ -23,6 +23,7 @@ export function registerFilesViews(
     {
       id: EXPLORER_VIEW_ID,
       title: "Explorer",
+      localizationKey: { bundle: "zeta.views", key: "explorer" },
       order: 1,
       when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
       canToggleVisibility: false,

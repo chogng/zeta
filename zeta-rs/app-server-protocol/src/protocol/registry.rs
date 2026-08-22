@@ -242,6 +242,7 @@ use crate::protocol::marketplace::MarketplaceInstallationStateDto;
 use crate::protocol::marketplace::MarketplaceInstalledPackageDto;
 use crate::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
 use crate::protocol::marketplace::MarketplaceListInstalledResult;
+use crate::protocol::marketplace::MarketplaceLocalizationActivationSpecDto;
 use crate::protocol::marketplace::MarketplaceMcpActivationSpecDto;
 use crate::protocol::marketplace::MarketplaceMcpTransportDto;
 use crate::protocol::marketplace::MarketplaceOpenResourceParams;
@@ -1937,6 +1938,7 @@ typescript_bindings! {
     MarketplaceMcpTransportDto,
     MarketplaceConnectorActivationSpecDto,
     MarketplaceLanguageActivationSpecDto,
+    MarketplaceLocalizationActivationSpecDto,
     MarketplaceExecutableRuntimeDto,
     MarketplaceExecutableActivationSpecDto,
     MarketplaceAcquiredCapabilityDto,

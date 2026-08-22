@@ -23,11 +23,15 @@ import type { IPluginService } from "../../../../platform/plugins/common/pluginS
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
 import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
+import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
+import type { ILocaleService } from "../../../services/localization/common/locale.js";
+import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
 import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
 import { EditorSettingsPane } from "./editorSettings.js";
+import { LocalizationSettingsPane } from "../../localization/browser/localizationSettings.js";
 import { GeneralSettingsPane } from "./generalSettings.js";
 import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
 import { WorkspaceTrustSettingsPane } from "./workspaceTrustSettings.js";
@@ -42,6 +46,9 @@ export interface SettingsEditorOptions {
   readonly codeIndexService: ICodeIndexService;
   readonly toolSearchService: IToolSearchService;
   readonly connectorService: IConnectorService;
+  readonly languagePackService: ILanguagePackService;
+  readonly localeService: ILocaleService;
+  readonly localizationService: ILocalizationService;
   readonly pluginService: IPluginService;
   readonly marketplaceService: IMarketplaceService;
   readonly workspaceTrustService: IWorkspaceTrustService;
@@ -62,6 +69,9 @@ export class SettingsEditor extends DisposableOwner {
   private readonly codeIndexService: ICodeIndexService;
   private readonly toolSearchService: IToolSearchService;
   private readonly connectorService: IConnectorService;
+  private readonly languagePackService: ILanguagePackService;
+  private readonly localeService: ILocaleService;
+  private readonly localizationService: ILocalizationService;
   private readonly pluginService: IPluginService;
   private readonly marketplaceService: IMarketplaceService;
   private readonly workspaceTrustService: IWorkspaceTrustService;
@@ -87,6 +97,9 @@ export class SettingsEditor extends DisposableOwner {
     this.settingsService = options.settingsService;
     this.themeService = options.themeService;
     this.userThemeService = options.userThemeService;
+    this.languagePackService = options.languagePackService;
+    this.localeService = options.localeService;
+    this.localizationService = options.localizationService;
     this.codeIndexService = options.codeIndexService;
     this.toolSearchService = options.toolSearchService;
     this.connectorService = options.connectorService;
@@ -105,8 +118,8 @@ export class SettingsEditor extends DisposableOwner {
     search.setAttribute("role", "search");
     this.searchInput = this.own(new InputBox(search, {
       type: "search",
-      placeholder: "Search settings",
-      ariaLabel: "Search settings",
+      placeholder: this.localizationService.translate("zeta.settings", "chrome.search", "Search settings"),
+      ariaLabel: this.localizationService.translate("zeta.settings", "chrome.search", "Search settings"),
       ariaControls: `${editorId}-navigation`,
     }));
     this.searchInput.element.classList.add("zeta-settings-search-input");
@@ -134,7 +147,7 @@ export class SettingsEditor extends DisposableOwner {
       button.className = "zeta-settings-navigation-item";
       button.type = "button";
       button.dataset.settingsSectionId = section.id;
-      button.textContent = section.label;
+      button.textContent = this.localizedSectionLabel(section);
       this.navigationItems.set(section.id, button);
       this.own(addDisposableListener(button, "click", () => {
         this.settingsService.open(section.id);
@@ -147,7 +160,7 @@ export class SettingsEditor extends DisposableOwner {
     }
     this.navigationEmpty = h(ownerDocument, "p");
     this.navigationEmpty.className = "zeta-settings-navigation-empty";
-    this.navigationEmpty.textContent = "No settings found.";
+    this.navigationEmpty.textContent = this.localizationService.translate("zeta.settings", "chrome.noResults", "No settings found.");
     this.navigationEmpty.setAttribute("role", "status");
     this.navigationEmpty.hidden = true;
     this.navigationScrollable.append(navigationList, this.navigationEmpty);
@@ -182,6 +195,12 @@ export class SettingsEditor extends DisposableOwner {
     this.element.append(search, layout);
     this.renderSection(getSettingsSection(this.settingsService.activeSectionId));
 
+    this.own(this.localizationService.onDidChange(() => {
+      this.updateLocalizedChrome();
+      const section = getSettingsSection(this.settingsService.activeSectionId);
+      this.contentHeading.textContent = this.localizedSectionLabel(section);
+      this.contentDescription.textContent = this.localizedSectionDescription(section);
+    }));
     this.own(this.settingsService.onDidChangeActiveSection((sectionId) => {
       this.renderSection(getSettingsSection(sectionId));
     }));
@@ -242,8 +261,8 @@ export class SettingsEditor extends DisposableOwner {
       else item.removeAttribute("aria-current");
     }
     this.content.dataset.activeSettingsSection = section.id;
-    this.contentHeading.textContent = section.label;
-    this.contentDescription.textContent = section.description;
+    this.contentHeading.textContent = this.localizedSectionLabel(section);
+    this.contentDescription.textContent = this.localizedSectionDescription(section);
     this.sectionBindings.clear();
     this.sectionContent.replaceChildren();
     if (section.id === "general") this.renderGeneral();
@@ -252,6 +271,7 @@ export class SettingsEditor extends DisposableOwner {
     else if (section.id === "connectors") this.renderConnectors();
     else if (section.id === "plugins") this.renderPlugins();
     else if (section.id === "languages") this.renderLanguages();
+    else if (section.id === "localization") this.renderLocalization();
     else if (section.id === "marketplace") this.renderMarketplace();
     else if (section.id === "indexing") void this.renderIndexing();
     else if (section.id === "workspace-trust") this.renderWorkspaceTrust();
@@ -291,13 +311,19 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderLanguages(): void {
-    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService, "language");
+    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService, "language", this.localizationService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderLocalization(): void {
+    const pane = new LocalizationSettingsPane(this.sectionContent, this.localizationService, this.localeService, this.languagePackService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
 
   private renderMarketplace(): void {
-    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService);
+    const pane = new MarketplaceSettingsPane(this.sectionContent, this.marketplaceService, undefined, this.localizationService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
@@ -842,7 +868,7 @@ export class SettingsEditor extends DisposableOwner {
     const query = value.trim().toLocaleLowerCase();
     let matches = 0;
     for (const section of SettingsSections) {
-      const visible = !query || `${section.label} ${section.description}`.toLocaleLowerCase().includes(query);
+      const visible = !query || (this.localizedSectionLabel(section) + " " + this.localizedSectionDescription(section)).toLocaleLowerCase().includes(query);
       const item = this.navigationItems.get(section.id)?.parentElement;
       if (item) item.hidden = !visible;
       if (visible) matches++;
@@ -850,6 +876,25 @@ export class SettingsEditor extends DisposableOwner {
     this.navigationEmpty.hidden = matches !== 0;
     this.navigationScrollable.scrollTo(0, 0);
     this.navigationScrollable.layout();
+  }
+
+  private updateLocalizedChrome(): void {
+    const searchLabel = this.localizationService.translate("zeta.settings", "chrome.search", "Search settings");
+    this.searchInput.placeholder = searchLabel;
+    this.searchInput.inputElement.setAttribute("aria-label", searchLabel);
+    this.navigationEmpty.textContent = this.localizationService.translate("zeta.settings", "chrome.noResults", "No settings found.");
+    for (const section of SettingsSections) {
+      const button = this.navigationItems.get(section.id);
+      if (button) button.textContent = this.localizedSectionLabel(section);
+    }
+  }
+
+  private localizedSectionLabel(section: SettingsSectionDescriptor): string {
+    return this.localizationService.translate("zeta.settings", "sections." + section.id + ".label", section.label);
+  }
+
+  private localizedSectionDescription(section: SettingsSectionDescriptor): string {
+    return this.localizationService.translate("zeta.settings", "sections." + section.id + ".description", section.description);
   }
 
   private visibleNavigationSections(): readonly SettingsSectionDescriptor[] {

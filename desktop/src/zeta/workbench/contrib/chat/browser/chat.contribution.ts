@@ -26,6 +26,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
   registry.registerStaticViewContainer({
     id: CHAT_VIEW_CONTAINER_ID,
     title: "Chat",
+    localizationKey: { bundle: "zeta.views", key: "chat" },
     location: ViewContainerLocation.AuxiliaryBar,
     icon: lxiconsLibrary.chat,
     order: 1,
@@ -34,6 +35,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
   registry.registerStaticViews(CHAT_VIEW_CONTAINER_ID, [{
     id: CHAT_VIEW_ID,
     title: "Chat",
+    localizationKey: { bundle: "zeta.views", key: "chat" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(ChatViewPane, {
@@ -51,6 +53,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
   registry.registerStaticViewContainer({
     id: CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
     title: "Agent",
+    localizationKey: { bundle: "zeta.views", key: "agent" },
     location: ViewContainerLocation.AgentSidebar,
     icon: lxiconsLibrary.agent,
     order: 1,
@@ -59,6 +62,7 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
   registry.registerStaticViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, [{
     id: CHAT_AGENT_SIDEBAR_VIEW_ID,
     title: "Agent Sessions",
+    localizationKey: { bundle: "zeta.views", key: "agentSessions" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(ChatAgentSidebarViewPane, {

@@ -12,6 +12,7 @@ import {
 } from "../../../base/common/lifecycle.js";
 import {
   commandActionLabel,
+  type CommandActionTitle,
   type ICommandAction,
   isCommandActionToggleInfo,
 } from "../../action/common/action.js";
@@ -43,7 +44,7 @@ export interface IMenuItem {
 }
 
 export interface ISubmenuItem {
-  readonly title: string;
+  readonly title: CommandActionTitle;
   readonly submenu: MenuId;
   readonly when?: ContextKeyExpression;
   readonly group?: "navigation" | string;
@@ -212,7 +213,7 @@ export class SubmenuItemAction extends SubmenuAction {
     readonly item: ISubmenuItem,
     actions: readonly IAction[],
   ) {
-    super(`submenu.${item.submenu.id}`, item.title, actions);
+    super(`submenu.${item.submenu.id}`, commandActionLabel(item.title), actions);
   }
 }
 

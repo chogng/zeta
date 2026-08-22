@@ -2,6 +2,7 @@ import "./paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IDimension } from "../../../base/browser/geometry.js";
 import { type Event } from "../../../base/common/event.js";
+import { localize, type ILocalizationService, type LocalizationKey } from "../../services/localization/common/localizationService.js";
 import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";
 import { type MenuId } from "../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../platform/actions/common/menuService.js";
@@ -22,10 +23,13 @@ export interface PaneCompositeTitleActions {
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
   readonly viewDescriptorService: IViewDescriptorService;
+  readonly localizationService?: ILocalizationService;
   readonly id: string;
   readonly location: ViewContainerLocation;
   readonly ariaLabel: string;
+  readonly ariaLabelKey?: LocalizationKey;
   readonly viewsAriaLabel: string;
+  readonly viewsAriaLabelKey?: LocalizationKey;
   readonly compositeBarPresentation?: CompositeBarPresentation;
   readonly compositeBarContextMenuProvider?: IContextMenuProvider;
   /** Selects which registered containers receive items in the hosted CompositeBar. */
@@ -54,17 +58,24 @@ export class PaneCompositePart extends CompositePart {
   constructor(container: HTMLElement, options: PaneCompositePartOptions) {
     super(container, options.id);
     const ownerDocument = container.ownerDocument;
-    this.element.setAttribute("aria-label", options.ariaLabel);
+    const ariaLabel = localize(options.localizationService, options.ariaLabelKey, options.ariaLabel);
+    const viewsAriaLabel = localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel);
+    this.element.setAttribute("aria-label", ariaLabel);
     this.titleElement.classList.add("zeta-pane-composite-title");
     this.titleContentElement = h(ownerDocument, "div");
     this.titleContentElement.className = "zeta-pane-composite-title-content";
     this.compositeBar = this.own(new CompositeBar(this.titleContentElement, {
       viewDescriptorService: options.viewDescriptorService,
+      localizationService: options.localizationService,
       location: options.location,
-      ariaLabel: options.viewsAriaLabel,
+      ariaLabel: viewsAriaLabel,
       presentation: options.compositeBarPresentation,
       contextMenuProvider: options.compositeBarContextMenuProvider,
       containerFilter: options.compositeBarContainerFilter,
+    }));
+    if (options.localizationService) this.own(options.localizationService.onDidChange(() => {
+      this.element.setAttribute("aria-label", localize(options.localizationService, options.ariaLabelKey, options.ariaLabel));
+      this.compositeBar.setAriaLabel(localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel));
     }));
     this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
     this.titleActionsSlotElement = h(ownerDocument, "div");

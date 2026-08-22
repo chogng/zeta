@@ -1,15 +1,19 @@
 import "./sidebarpart.css";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
+import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
   readonly viewDescriptorService: IViewDescriptorService;
+  readonly localizationService?: ILocalizationService;
   readonly id?: string;
   readonly location?: ViewContainerLocation;
   readonly ariaLabel?: string;
+  readonly ariaLabelKey?: LocalizationKey;
   readonly viewsAriaLabel?: string;
+  readonly viewsAriaLabelKey?: LocalizationKey;
   /** Selects which registered containers receive items in the hosted CompositeBar. */
   readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
   readonly compositeBarVisible?: boolean;
@@ -24,10 +28,13 @@ export class SidebarPart extends PaneCompositePart {
   constructor(container: HTMLElement, options: SidebarPartOptions) {
     super(container, {
       viewDescriptorService: options.viewDescriptorService,
+      localizationService: options.localizationService,
       id: options.id ?? "sidebar",
       location: options.location ?? ViewContainerLocation.Sidebar,
       ariaLabel: options.ariaLabel ?? "Primary sidebar",
+      ariaLabelKey: options.ariaLabelKey,
       viewsAriaLabel: options.viewsAriaLabel ?? "Primary side bar views",
+      viewsAriaLabelKey: options.viewsAriaLabelKey,
       compositeBarContainerFilter: options.compositeBarContainerFilter,
       compositeBarVisible: options.compositeBarVisible,
       titleActions: options.titleActions,

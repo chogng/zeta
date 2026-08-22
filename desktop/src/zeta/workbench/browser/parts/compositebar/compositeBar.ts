@@ -6,6 +6,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { CompositeBarAction, CompositeBarActionViewItem, CompositeBarOverflowViewItem } from "./compositeBarActionViewItem.js";
@@ -20,6 +21,7 @@ export interface CompositeBarSelectionEvent {
 /** Construction inputs for a location-specific Composite selector. */
 export interface CompositeBarOptions {
   readonly viewDescriptorService: IViewDescriptorService;
+  readonly localizationService?: ILocalizationService;
   readonly location: ViewContainerLocation;
   readonly ariaLabel: string;
   readonly presentation?: CompositeBarPresentation;
@@ -44,6 +46,7 @@ const OVERFLOW_ACTION_ID = "zeta.compositeBar.overflow";
 export class CompositeBar extends DisposableOwner {
   readonly element: HTMLElement;
   private readonly viewDescriptorService: IViewDescriptorService;
+  private readonly localizationService: ILocalizationService | undefined;
   private readonly location: ViewContainerLocation;
   private readonly actionBar: ActionBar;
   private readonly contextMenuProvider: IContextMenuProvider | undefined;
@@ -67,6 +70,7 @@ export class CompositeBar extends DisposableOwner {
     super();
     const presentation = options.presentation ?? "icon";
     this.viewDescriptorService = options.viewDescriptorService;
+    this.localizationService = options.localizationService;
     this.location = options.location;
     this.contextMenuProvider = options.contextMenuProvider;
     this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
@@ -110,12 +114,18 @@ export class CompositeBar extends DisposableOwner {
     this.own(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
       if (location === this.location) this.render();
     }));
+    if (this.localizationService) this.own(this.localizationService.onDidChange(() => this.render()));
     if (this.overflowEnabled) this.own(observeResize(this.element, () => this.layout()));
     this.render();
   }
 
   get activeCompositeId(): string | undefined {
     return this._activeCompositeId;
+  }
+
+  setAriaLabel(label: string): void {
+    this.element.setAttribute("aria-label", label);
+    this.actionBar.element.setAttribute("aria-label", label);
   }
 
   setActiveComposite(compositeId: string): void {
@@ -180,20 +190,23 @@ export class CompositeBar extends DisposableOwner {
     this.renderedContainerIds = containers.map((container) => container.id);
     const showOverflow = this.overflowEnabled && this.overflowingContainerIds.size > 0;
     this.actionBar.setActions([
-      ...containers.map((container) => new CompositeBarAction({
-        id: container.id,
-        label: container.title,
-        tooltip: container.title,
-        icon: container.icon,
-        tabId: compositeTabId(this.location, container.id),
-        panelId: compositePanelId(this.location, container.id),
-        checked: container.id === this._activeCompositeId,
-        onActivate: (compositeId) => {
-          if (this._activeCompositeId === compositeId) return;
-          this._onDidSelectComposite.fire({ compositeId });
-        },
-      })),
-      ...(showOverflow ? [new CompositeBarOverflowAction()] : []),
+      ...containers.map((container) => {
+        const label = localize(this.localizationService, container.localizationKey, container.title);
+        return new CompositeBarAction({
+          id: container.id,
+          label,
+          tooltip: label,
+          icon: container.icon,
+          tabId: compositeTabId(this.location, container.id),
+          panelId: compositePanelId(this.location, container.id),
+          checked: container.id === this._activeCompositeId,
+          onActivate: (compositeId) => {
+            if (this._activeCompositeId === compositeId) return;
+            this._onDidSelectComposite.fire({ compositeId });
+          },
+        });
+      }),
+      ...(showOverflow ? [new CompositeBarOverflowAction(localize(this.localizationService, { bundle: "zeta.regions", key: "additionalViews" }, "Additional views"))] : []),
     ]);
     if (this.renderedContainerIds.includes(this._activeCompositeId ?? "")) {
       this.actionBar.setTabStop(this._activeCompositeId!);
@@ -262,17 +275,20 @@ export class CompositeBar extends DisposableOwner {
   private createOverflowActions(): readonly IAction[] {
     return this.containers
       .filter((container) => this.overflowingContainerIds.has(container.id))
-      .map((container) => ({
-        id: `zeta.compositeBar.open.${this.location}.${encodeURIComponent(container.id)}`,
-        label: container.title,
-        tooltip: container.title,
-        enabled: true,
-        checked: container.id === this._activeCompositeId,
-        run: () => {
-          if (container.id === this._activeCompositeId) return;
-          this._onDidSelectComposite.fire({ compositeId: container.id });
-        },
-      }));
+      .map((container) => {
+        const label = localize(this.localizationService, container.localizationKey, container.title);
+        return {
+          id: `zeta.compositeBar.open.${this.location}.${encodeURIComponent(container.id)}`,
+          label,
+          tooltip: label,
+          enabled: true,
+          checked: container.id === this._activeCompositeId,
+          run: () => {
+            if (container.id === this._activeCompositeId) return;
+            this._onDidSelectComposite.fire({ compositeId: container.id });
+          },
+        };
+      });
   }
 
   private setOverflowingContainerIds(ids: Set<string>): void {
@@ -283,10 +299,15 @@ export class CompositeBar extends DisposableOwner {
 
 class CompositeBarOverflowAction implements IAction {
   readonly id = OVERFLOW_ACTION_ID;
-  readonly label = "Additional views";
-  readonly tooltip = "Additional views";
+  readonly label: string;
+  readonly tooltip: string;
   readonly icon = lxiconsLibrary.ellipsis;
   readonly enabled = true;
+
+  constructor(label: string) {
+    this.label = label;
+    this.tooltip = label;
+  }
 
   run(): void {}
 }

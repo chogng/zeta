@@ -28,7 +28,9 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
     releaseCapability: async () => {},
     openResource: async () => { throw new Error("unused"); },
   } as IMarketplaceApi;
-  const service = new AppServerMarketplaceService(api);
+  using service = new AppServerMarketplaceService(api);
+  let installedChanges = 0;
+  service.onDidChangeInstalled(() => installedChanges++);
 
   const first = await service.browse("", undefined, 100);
   const reopened = await service.browse("", undefined, 100);
@@ -38,6 +40,7 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
   assert.equal(installedReads, 1);
 
   await service.install(summary.id, summary.version);
+  assert.equal(installedChanges, 1);
   assert.equal(service.cachedBrowse("", undefined, 100), undefined);
   await service.browse("", undefined, 100);
   assert.equal(searches, 2);

@@ -12,6 +12,7 @@ use zeta_app_server_protocol::protocol::marketplace::MarketplaceExecutableRuntim
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceInstallationStateDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceInstalledPackageDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceLanguageActivationSpecDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceLocalizationActivationSpecDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceMcpActivationSpecDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceMcpTransportDto;
 use zeta_app_server_protocol::protocol::marketplace::MarketplacePackageDetailsDto;
@@ -39,6 +40,7 @@ use zeta_marketplace_client::ExecutableRuntime;
 use zeta_marketplace_client::InstallationState;
 use zeta_marketplace_client::InstalledPackage;
 use zeta_marketplace_client::LanguageActivationSpec;
+use zeta_marketplace_client::LocalizationActivationSpec;
 use zeta_marketplace_client::McpActivationSpec;
 use zeta_marketplace_client::McpTransportSpec;
 use zeta_marketplace_client::PackageDetails;
@@ -165,6 +167,7 @@ fn capability_kind(value: CapabilityKind) -> MarketplaceCapabilityKindDto {
         CapabilityKind::Connector => MarketplaceCapabilityKindDto::Connector,
         CapabilityKind::Theme => MarketplaceCapabilityKindDto::Theme,
         CapabilityKind::Language => MarketplaceCapabilityKindDto::Language,
+        CapabilityKind::Localization => MarketplaceCapabilityKindDto::Localization,
         CapabilityKind::Executable => MarketplaceCapabilityKindDto::Executable,
         CapabilityKind::Asset => MarketplaceCapabilityKindDto::Asset,
     }
@@ -214,6 +217,9 @@ fn activation_spec(value: ActivationSpec) -> MarketplaceActivationSpecDto {
         ActivationSpec::Language(value) => {
             MarketplaceActivationSpecDto::Language(language_activation(value))
         }
+        ActivationSpec::Localization(value) => {
+            MarketplaceActivationSpecDto::Localization(localization_activation(value))
+        }
         ActivationSpec::Executable(value) => {
             MarketplaceActivationSpecDto::Executable(executable_activation(value))
         }
@@ -262,6 +268,15 @@ fn language_activation(value: LanguageActivationSpec) -> MarketplaceLanguageActi
     MarketplaceLanguageActivationSpecDto {
         contract_version: value.contract_version,
         manifest: resource_ref(value.manifest),
+    }
+}
+
+fn localization_activation(
+    value: LocalizationActivationSpec,
+) -> MarketplaceLocalizationActivationSpecDto {
+    MarketplaceLocalizationActivationSpecDto {
+        contract_version: value.contract_version,
+        catalog: resource_ref(value.catalog),
     }
 }
 

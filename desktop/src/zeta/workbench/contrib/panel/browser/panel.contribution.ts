@@ -12,6 +12,6 @@ import "../../output/browser/outputActions.js";
 
 /** Registers the fixed Workbench-owned Panel destinations. */
 export function registerPanelViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Output, title: "Output", location: ViewContainerLocation.Panel, order: 2 });
-  registry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: "Output", order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(OutputViewPane, { serviceDependencies: [IOutputService, IContextMenuService, IStorageService, IEditorService, IWorkspaceContextService, IWorkbenchHostService] }) }]);
+  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Output, title: "Output", localizationKey: { bundle: "zeta.views", key: "output" }, location: ViewContainerLocation.Panel, order: 2 });
+  registry.registerStaticViews(WorkbenchViewContainerId.Output, [{ id: OUTPUT_VIEW_ID, title: "Output", localizationKey: { bundle: "zeta.views", key: "output" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(OutputViewPane, { serviceDependencies: [IOutputService, IContextMenuService, IStorageService, IEditorService, IWorkspaceContextService, IWorkbenchHostService] }) }]);
 }

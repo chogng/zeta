@@ -1,4 +1,5 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { AuxiliaryBarVisibleContext, EditorAreaVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
@@ -13,13 +14,13 @@ registerAction2(class ToggleSideBarAction extends Action2 {
   constructor() {
     super({
       id: ToggleSideBarCommandId,
-      title: "Show Primary Side Bar",
-      tooltip: "Show Primary Side Bar",
+      title: localizedString("zeta.actions", "showPrimarySidebar", "Show Primary Side Bar"),
+      tooltip: localizedString("zeta.actions", "showPrimarySidebar", "Show Primary Side Bar"),
       icon: lxiconsLibrary.layoutSidebarLeftOff,
       toggled: {
         condition: SideBarVisibleContext.isEqualTo(true),
-        title: "Hide Primary Side Bar",
-        tooltip: "Hide Primary Side Bar",
+        title: localizedString("zeta.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
+        tooltip: localizedString("zeta.actions", "hidePrimarySidebar", "Hide Primary Side Bar"),
         icon: lxiconsLibrary.layoutSidebarLeft,
       },
       menu: [
@@ -52,13 +53,13 @@ registerAction2(class ToggleAuxiliaryBarAction extends Action2 {
   constructor() {
     super({
       id: ToggleAuxiliaryBarCommandId,
-      title: "Show Secondary Side Bar",
-      tooltip: "Show Secondary Side Bar",
+      title: localizedString("zeta.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
+      tooltip: localizedString("zeta.actions", "showSecondarySidebar", "Show Secondary Side Bar"),
       icon: lxiconsLibrary.layoutSidebarRightOff,
       toggled: {
         condition: AuxiliaryBarVisibleContext.isEqualTo(true),
-        title: "Hide Secondary Side Bar",
-        tooltip: "Hide Secondary Side Bar",
+        title: localizedString("zeta.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
+        tooltip: localizedString("zeta.actions", "hideSecondarySidebar", "Hide Secondary Side Bar"),
         icon: lxiconsLibrary.layoutSidebarRight,
       },
       menu: [
@@ -91,13 +92,13 @@ registerAction2(class TogglePanelAction extends Action2 {
   constructor() {
     super({
       id: TogglePanelCommandId,
-      title: "Show Panel",
-      tooltip: "Show Panel",
+      title: localizedString("zeta.actions", "showPanel", "Show Panel"),
+      tooltip: localizedString("zeta.actions", "showPanel", "Show Panel"),
       icon: lxiconsLibrary.layoutPanelOff,
       toggled: {
         condition: PanelVisibleContext.isEqualTo(true),
-        title: "Hide Panel",
-        tooltip: "Hide Panel",
+        title: localizedString("zeta.actions", "hidePanel", "Hide Panel"),
+        tooltip: localizedString("zeta.actions", "hidePanel", "Hide Panel"),
         icon: lxiconsLibrary.layoutPanel,
       },
       menu: [
@@ -133,13 +134,13 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
   constructor() {
     super({
       id: ToggleMaximizedPanelCommandId,
-      title: "Maximize Panel",
-      tooltip: "Maximize Panel",
+      title: localizedString("zeta.actions", "maximizePanel", "Maximize Panel"),
+      tooltip: localizedString("zeta.actions", "maximizePanel", "Maximize Panel"),
       icon: lxiconsLibrary.screenFull,
       toggled: {
         condition: EditorAreaVisibleContext.isEqualTo(false),
-        title: "Restore Editor Area",
-        tooltip: "Restore Editor Area",
+        title: localizedString("zeta.actions", "restoreEditorArea", "Restore Editor Area"),
+        tooltip: localizedString("zeta.actions", "restoreEditorArea", "Restore Editor Area"),
         icon: lxiconsLibrary.screenNormal,
       },
       menu: {
@@ -165,8 +166,8 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
   command: {
     id: TogglePanelCommandId,
-    title: "Close Panel",
-    tooltip: "Close Panel",
+    title: localizedString("zeta.actions", "closePanel", "Close Panel"),
+    tooltip: localizedString("zeta.actions", "closePanel", "Close Panel"),
     icon: lxiconsLibrary.close,
   },
   group: "navigation",

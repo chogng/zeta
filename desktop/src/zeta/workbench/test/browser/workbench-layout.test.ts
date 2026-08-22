@@ -3,12 +3,14 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../base/common/actions.js";
+import { Emitter } from "../../../base/common/event.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/browser/parts/views/viewPane.js";
 import {
   ContextKeyService,
 } from "../../../platform/contextkey/common/contextkey.js";
 import { h } from "../../../base/browser/dom.js";
+import type { ILocalizationService } from "../../../workbench/services/localization/common/localizationService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -989,6 +991,41 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
   assert.equal(overflowItem.getAttribute("aria-expanded"), "false");
   assert.equal(overflowItem.isConnected, true);
 
+  disposables.dispose();
+  dom.window.close();
+});
+
+test("CompositeBar refreshes localized View Container labels", () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  const disposables = new DisposableStore();
+  const registry = new WorkbenchViewRegistry();
+  disposables.add(registry.registerViewContainer({
+    id: "zeta.panel.terminal.localized",
+    title: "Terminal",
+    localizationKey: { bundle: "zeta.views", key: "terminal" },
+    location: ViewContainerLocation.Panel,
+  }));
+  const contextKeys = disposables.add(new ContextKeyService());
+  const viewDescriptors = disposables.add(new ViewDescriptorService({ contextKeyService: contextKeys, registry }));
+  const localeChanges = new Emitter<string>();
+  let locale = "en";
+  const localization = {
+    onDidChange: localeChanges.event,
+    translate: (_bundle: string, key: string, fallback: string) => key === "terminal" && locale === "zh-CN" ? "终端" : fallback,
+  } as unknown as ILocalizationService;
+  const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
+    viewDescriptorService: viewDescriptors,
+    localizationService: localization,
+    location: ViewContainerLocation.Panel,
+    ariaLabel: "Panel views",
+  }));
+
+  assert.equal(compositeBar.element.querySelector("[role='tab']")?.textContent, "Terminal");
+  locale = "zh-CN";
+  localeChanges.fire(locale);
+  assert.equal(compositeBar.element.querySelector("[role='tab']")?.textContent, "终端");
+
+  localeChanges.dispose();
   disposables.dispose();
   dom.window.close();
 });

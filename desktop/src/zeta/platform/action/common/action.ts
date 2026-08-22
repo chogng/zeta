@@ -2,10 +2,13 @@ import type { Icon } from "../../../base/common/icon.js";
 import type {
   ContextKeyExpression,
 } from "../../contextkey/common/contextkey.js";
+import { localize } from "../../../nls.js";
 
 export interface ILocalizedString {
   readonly value: string;
   readonly original: string;
+  readonly bundle?: string;
+  readonly key?: string;
 }
 
 export type CommandActionTitle = string | ILocalizedString;
@@ -33,8 +36,13 @@ export interface ICommandAction {
   readonly toggled?: ContextKeyExpression | ICommandActionToggleInfo;
 }
 
+export function localizedString(bundle: string, key: string, original: string): ILocalizedString {
+  return Object.freeze({ value: original, original, bundle, key });
+}
+
 export function commandActionLabel(title: CommandActionTitle): string {
-  return typeof title === "string" ? title : title.value;
+  if (typeof title === "string") return title;
+  return title.bundle && title.key ? localize(title.bundle, title.key, title.original) : title.value;
 }
 
 export function isCommandActionToggleInfo(

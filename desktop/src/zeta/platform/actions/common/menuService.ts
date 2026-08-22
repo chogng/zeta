@@ -15,6 +15,7 @@ import type {
 import {
   createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
+import { onDidChangeNls } from "../../../nls.js";
 import {
   type IMenuActionOptions,
   type IMenuRegistryChangeEvent,
@@ -133,6 +134,13 @@ class Menu extends DisposableOwner implements IMenu {
         isStructuralChange,
         isEnablementChange,
         isToggleChange,
+      });
+    }));
+    this.own(onDidChangeNls(() => {
+      this._onDidChange.fire({
+        isStructuralChange: false,
+        isEnablementChange: false,
+        isToggleChange: false,
       });
     }));
   }
@@ -297,7 +305,7 @@ function compareGroups(
 }
 
 function itemTitle(item: MenuRegistryItem): string {
-  if (!isMenuItem(item)) return item.title;
+  if (!isMenuItem(item)) return typeof item.title === "string" ? item.title : item.title.original;
   return typeof item.command.title === "string"
     ? item.command.title
     : item.command.title.original;

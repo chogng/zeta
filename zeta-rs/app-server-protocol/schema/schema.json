@@ -15707,6 +15707,19 @@
           "properties": {
             "kind": {
               "type": "string",
+              "const": "localization"
+            }
+          },
+          "$ref": "#/$defs/MarketplaceLocalizationActivationSpecDto",
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
               "const": "executable"
             }
           },
@@ -15808,6 +15821,7 @@
         "connector",
         "theme",
         "language",
+        "localization",
         "executable",
         "asset"
       ]
@@ -16006,6 +16020,21 @@
       },
       "required": [
         "packages"
+      ]
+    },
+    "MarketplaceLocalizationActivationSpecDto": {
+      "type": "object",
+      "properties": {
+        "catalog": {
+          "$ref": "#/$defs/MarketplaceResourceRefDto"
+        },
+        "contractVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "catalog"
       ]
     },
     "MarketplaceMcpActivationSpecDto": {

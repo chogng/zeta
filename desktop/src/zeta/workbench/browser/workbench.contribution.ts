@@ -45,6 +45,7 @@ import "./parts/titlebar/titlebarActions.js";
 ViewsRegistry.registerStaticViewContainer({
   id: WorkbenchViewContainerId.Sidebar,
   title: "Explorer",
+  localizationKey: { bundle: "zeta.views", key: "explorer" },
   location: ViewContainerLocation.Sidebar,
   icon: lxiconsLibrary.files,
   order: 1,

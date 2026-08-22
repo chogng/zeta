@@ -36,6 +36,7 @@ pub enum CapabilityKind {
     Connector,
     Theme,
     Language,
+    Localization,
     Executable,
     Asset,
 }
@@ -231,6 +232,7 @@ pub enum ActivationSpec {
     Connector(ConnectorActivationSpec),
     Theme(ThemeActivationSpec),
     Language(LanguageActivationSpec),
+    Localization(LocalizationActivationSpec),
     Executable(ExecutableActivationSpec),
 }
 
@@ -285,6 +287,13 @@ pub struct ThemeActivationSpec {
 pub struct LanguageActivationSpec {
     pub contract_version: String,
     pub manifest: ResourceRef,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalizationActivationSpec {
+    pub contract_version: String,
+    pub catalog: ResourceRef,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

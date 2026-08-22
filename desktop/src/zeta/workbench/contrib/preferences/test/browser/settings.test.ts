@@ -202,6 +202,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
       "Appearance",
       "Editor",
       "Languages",
+      "Display Language",
       "Agents",
       "Models",
       "Git",
@@ -238,10 +239,10 @@ test("Settings overlay opens, closes, and restores focus", () => {
   assert.equal(settings.isOpen, true);
   assert.equal(search.value, "");
 
-  navigationItems[8].click();
+  navigationItems[9].click();
   assert.equal(settings.activeSectionId, "models");
   assert.equal(navigationItems[0].hasAttribute("aria-current"), false);
-  assert.equal(navigationItems[8].getAttribute("aria-current"), "page");
+  assert.equal(navigationItems[9].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
   assert.equal(
     root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
@@ -531,6 +532,7 @@ test("Marketplace settings discover and install through the generic service", as
     return cachedBrowse;
   };
   const marketplaceService = {
+    onDidChangeInstalled: () => ({ dispose() {}, [Symbol.dispose]() {} }),
     cachedBrowse: (query: string, packageType?: string, limit?: number) => cachedBrowse?.query === query && cachedBrowse?.packageType === packageType && cachedBrowse?.limit === limit ? cachedBrowse : undefined,
     browse: loadBrowse,
     refreshBrowse: loadBrowse,
@@ -567,7 +569,7 @@ test("Marketplace settings discover and install through the generic service", as
   await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
   assert.equal(root.querySelector(".zeta-package-marketplace-toolbar > button")?.textContent, "Browse Marketplace");
   assert.equal(root.querySelector(".zeta-package-marketplace-filters [role='tablist']")?.getAttribute("aria-label"), "Marketplace package types");
-  assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filters [role='tab']")].map(tab => tab.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Themes"]);
+  assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filters [role='tab']")].map(tab => tab.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Localization", "Themes"]);
   assert.equal(root.querySelector(".zeta-package-marketplace-filters .zeta-tab.checked")?.textContent, "All");
   assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
   assert.match(root.textContent ?? "", /mcp: docs-mcp/);
@@ -680,6 +682,7 @@ test("Language settings reuse Marketplace discovery with a language package filt
     return cachedBrowse;
   };
   const marketplaceService = {
+    onDidChangeInstalled: () => ({ dispose() {}, [Symbol.dispose]() {} }),
     cachedBrowse: (query: string, packageType?: string, limit?: number) => cachedBrowse?.query === query && cachedBrowse?.packageType === packageType && cachedBrowse?.limit === limit ? cachedBrowse : undefined,
     browse: loadBrowse,
     refreshBrowse: loadBrowse,

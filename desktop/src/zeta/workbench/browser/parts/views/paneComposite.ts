@@ -1,4 +1,5 @@
 import { compositePanelId, compositeTabId } from "../compositebar/compositeBar.js";
+import { localize } from "../../../services/localization/common/localizationService.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
 import type { PartTitleProjection } from "./viewPane.js";
 
@@ -17,11 +18,11 @@ export type PaneLayout = "stack" | "fill";
  * contribution-owned state survive temporary deactivation.
  */
 export class PaneComposite extends ViewPaneContainer {
-  readonly title: string;
+  title: string;
 
   constructor(container: HTMLElement, options: PaneCompositeOptions) {
     super(container, options);
-    this.title = options.viewContainer.title;
+    this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
     this.element.classList.add("zeta-pane-composite");
     this.element.classList.toggle("zeta-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");
     this.element.classList.toggle("zeta-pane-composite-pane-layout-fill", options.paneLayout === "fill");
@@ -29,6 +30,10 @@ export class PaneComposite extends ViewPaneContainer {
     this.element.id = compositePanelId(options.viewContainer.location, options.viewContainer.id);
     this.element.setAttribute("role", "tabpanel");
     this.element.setAttribute("aria-labelledby", compositeTabId(options.viewContainer.location, options.viewContainer.id));
+    if (options.localizationService) this.own(options.localizationService.onDidChange(() => {
+      this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
+      this.element.setAttribute("aria-label", this.title);
+    }));
   }
 
   get partTitleProjection(): PartTitleProjection | undefined {

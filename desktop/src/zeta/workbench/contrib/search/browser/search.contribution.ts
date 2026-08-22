@@ -15,6 +15,7 @@ export function registerSearchViews(
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Search,
     title: "Search",
+    localizationKey: { bundle: "zeta.views", key: "search" },
     location: ViewContainerLocation.Sidebar,
     icon: lxiconsLibrary.search,
     order: 2,
@@ -22,6 +23,7 @@ export function registerSearchViews(
   registry.registerStaticViews(WorkbenchViewContainerId.Search, [{
     id: SEARCH_VIEW_ID,
     title: "Search",
+    localizationKey: { bundle: "zeta.views", key: "search" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(SearchViewPane, {

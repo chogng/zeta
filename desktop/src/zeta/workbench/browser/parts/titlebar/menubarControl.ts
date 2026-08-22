@@ -7,6 +7,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 
 /** Host-selected menubar presentation owned by the titlebar. */
 export interface IMenubarControl extends IDisposable {
@@ -27,22 +28,32 @@ export class BrowserMenubarControl extends DisposableOwner
     container: HTMLElement,
     menuService: IMenuService,
     contextMenuService: IContextMenuService,
+    localizationService?: ILocalizationService,
   ) {
     super();
     const ownerDocument = container.ownerDocument;
     this.contextMenuService = contextMenuService;
     this.element = h(ownerDocument, "nav");
     this.element.className = "zeta-menubar";
-    this.element.setAttribute("aria-label", "Application menu");
+    const applicationMenuLabel = () => localize(localizationService, { bundle: "zeta.regions", key: "applicationMenu" }, "Application menu");
+    this.element.setAttribute("aria-label", applicationMenuLabel());
     container.append(this.element);
     this.defer(() => this.element.remove());
 
     this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
     this.button = this.own(new Button(this.element, {
-      label: "Application menu",
-      title: "Application menu",
+      label: applicationMenuLabel(),
+      title: applicationMenuLabel(),
       icon: lxiconsLibrary.menu,
       onClick: () => this.toggleMenu(),
+    }));
+    this.button.element.setAttribute("aria-label", applicationMenuLabel());
+    if (localizationService) this.own(localizationService.onDidChange(() => {
+      const label = applicationMenuLabel();
+      this.element.setAttribute("aria-label", label);
+      this.button.element.setAttribute("aria-label", label);
+      this.button.element.querySelector<HTMLElement>(".zeta-button-label")!.textContent = label;
+      this.button.setTitle(label);
     }));
     this.button.element.classList.add("zeta-menubar-item");
     this.button.element.setAttribute("aria-haspopup", "menu");

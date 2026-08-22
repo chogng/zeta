@@ -42,6 +42,11 @@ export const SettingsSections = [
     description: "Discover and manage Marketplace language extensions.",
   },
   {
+    id: "localization",
+    label: "Display Language",
+    description: "Choose the language used by the Zeta interface.",
+  },
+  {
     id: "agents",
     label: "Agents",
     description: "Control how agents work and collaborate on tasks.",

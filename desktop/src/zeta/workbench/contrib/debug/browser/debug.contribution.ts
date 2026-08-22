@@ -14,10 +14,10 @@ import "./debugActions.js";
 import "./media/debug.css";
 
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", location: ViewContainerLocation.Sidebar, icon: lxiconsLibrary.start, order: 3 });
-  registry.registerStaticViews(WorkbenchViewContainerId.Debug, [{ id: DEBUG_VIEW_ID, title: "Run and Debug", order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugViewPane, { serviceDependencies: [IDebugService, IEditorService] }) }]);
-  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", location: ViewContainerLocation.Panel, order: 2.75 });
-  registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugConsoleViewPane, { serviceDependencies: [IDebugConsoleService] }) }]);
+  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "zeta.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: lxiconsLibrary.start, order: 3 });
+  registry.registerStaticViews(WorkbenchViewContainerId.Debug, [{ id: DEBUG_VIEW_ID, title: "Run and Debug", localizationKey: { bundle: "zeta.views", key: "runAndDebug" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugViewPane, { serviceDependencies: [IDebugService, IEditorService] }) }]);
+  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "zeta.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
+  registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "zeta.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugConsoleViewPane, { serviceDependencies: [IDebugConsoleService] }) }]);
 }
 
 registerDebugView();

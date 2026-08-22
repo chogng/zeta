@@ -38,6 +38,7 @@ pub enum MarketplaceCapabilityKindDto {
     Connector,
     Theme,
     Language,
+    Localization,
     Executable,
     Asset,
 }
@@ -209,6 +210,7 @@ pub enum MarketplaceActivationSpecDto {
     Connector(MarketplaceConnectorActivationSpecDto),
     Theme(MarketplaceThemeActivationSpecDto),
     Language(MarketplaceLanguageActivationSpecDto),
+    Localization(MarketplaceLocalizationActivationSpecDto),
     Executable(MarketplaceExecutableActivationSpecDto),
 }
 
@@ -259,6 +261,13 @@ pub struct MarketplaceThemeActivationSpecDto {
 pub struct MarketplaceLanguageActivationSpecDto {
     pub contract_version: String,
     pub manifest: MarketplaceResourceRefDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceLocalizationActivationSpecDto {
+    pub contract_version: String,
+    pub catalog: MarketplaceResourceRefDto,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

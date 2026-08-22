@@ -10,6 +10,7 @@ import type {
   SyncDescriptor,
 } from "../../platform/instantiation/common/instantiation.js";
 import type { Icon } from "../../base/common/icon.js";
+import type { LocalizationKey } from "../../nls.js";
 
 /** Workbench region capable of hosting registered view containers. */
 export enum ViewContainerLocation {
@@ -23,6 +24,7 @@ export enum ViewContainerLocation {
 export interface IViewContainerDescriptor {
   readonly id: string;
   readonly title: string;
+  readonly localizationKey?: LocalizationKey;
   readonly location: ViewContainerLocation;
   readonly icon?: Icon;
   readonly order?: number;
@@ -33,6 +35,7 @@ export interface IViewContainerDescriptor {
 export interface IViewDescriptor {
   readonly id: string;
   readonly title: string;
+  readonly localizationKey?: LocalizationKey;
   /**
    * Construction owned by the contribution.
    *

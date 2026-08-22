@@ -38,6 +38,7 @@ pub use model::InstallationState;
 pub use model::InstalledPackage;
 pub use model::LanguageActivationSpec;
 pub use model::ListInstalledRequest;
+pub use model::LocalizationActivationSpec;
 pub use model::MarketplaceErrorCode;
 pub use model::McpActivationSpec;
 pub use model::McpTransportSpec;

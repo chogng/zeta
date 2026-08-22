@@ -14,6 +14,7 @@ import {
   registerAction2,
   SubmenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
+import { localizedString } from "../../../../platform/action/common/action.js";
 import {
   MenuService,
 } from "../../../../platform/actions/common/menuService.js";
@@ -38,6 +39,7 @@ import {
 import {
   CommandService,
 } from "../../../../workbench/services/commands/common/commandService.js";
+import { resetNlsResolver, setNlsResolver } from "../../../../nls.js";
 
 test("registerAction2 connects command execution and menu placement", async () => {
   using registrations = new DisposableStore();
@@ -248,4 +250,35 @@ test("menu service sorts groups and resolves submenus", () => {
     (groups[1][1][1] as SubmenuItemAction).actions[0].label,
     "Second",
   );
+});
+
+test("menu actions refresh localized labels when the locale changes", () => {
+  using registrations = new DisposableStore();
+  const menuId = new MenuId("test.actions.localization");
+  const commandId = "test.actions.localization.command";
+  registrations.add(CommandsRegistry.register(commandId, () => undefined));
+  registrations.add(MenusRegistry.appendMenuItem(menuId, {
+    command: {
+      id: commandId,
+      title: localizedString("zeta.test", "command", "Open"),
+    },
+  }));
+  let locale = "en";
+  const resolve = (_bundle: string, key: string, fallback: string) => key === "command" && locale === "zh-CN" ? "打开" : fallback;
+  setNlsResolver(resolve);
+  try {
+    const commands = new CommandService(new ServiceCollection());
+    const contexts = registrations.add(new ContextKeyService());
+    const menu = registrations.add(new MenuService(commands, contexts).createMenu(menuId));
+    const changes: boolean[] = [];
+    registrations.add(menu.onDidChange((event) => changes.push(event.isStructuralChange)));
+
+    assert.equal(menu.getActions()[0][1][0].label, "Open");
+    locale = "zh-CN";
+    setNlsResolver(resolve);
+    assert.deepEqual(changes, [false]);
+    assert.equal(menu.getActions()[0][1][0].label, "打开");
+  } finally {
+    resetNlsResolver();
+  }
 });

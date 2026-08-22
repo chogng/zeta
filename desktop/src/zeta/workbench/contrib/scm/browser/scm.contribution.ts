@@ -36,6 +36,7 @@ export function registerGitViews(
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Git,
     title: "Git",
+    localizationKey: { bundle: "zeta.views", key: "git" },
     location: ViewContainerLocation.Sidebar,
     icon: lxiconsLibrary.gitBranch,
     order: 3,
@@ -44,6 +45,7 @@ export function registerGitViews(
     {
       id: GIT_VIEW_ID,
       title: "Changes",
+      localizationKey: { bundle: "zeta.views", key: "changes" },
       order: 1,
       canToggleVisibility: false,
       ctorDescriptor: new SyncDescriptor(ScmViewPane, {
@@ -53,6 +55,7 @@ export function registerGitViews(
     {
       id: GIT_AGENT_REVIEW_VIEW_ID,
       title: "Agent Review",
+      localizationKey: { bundle: "zeta.views", key: "agentReview" },
       order: 2,
       collapsed: true,
       canToggleVisibility: false,
@@ -61,6 +64,7 @@ export function registerGitViews(
     {
       id: GIT_GRAPH_VIEW_ID,
       title: "Graph",
+      localizationKey: { bundle: "zeta.views", key: "graph" },
       order: 3,
       collapsed: true,
       canToggleVisibility: false,

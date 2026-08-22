@@ -1,14 +1,21 @@
+import { Emitter } from "../../../../base/common/event.js";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
 import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
 
 /** App Server adapter and owner of path-free Renderer browse snapshots. */
-export class AppServerMarketplaceService implements IMarketplaceService {
+export class AppServerMarketplaceService extends DisposableOwner implements IMarketplaceService {
   private readonly browseSnapshots = new Map<string, MarketplaceBrowseSnapshot>();
   private readonly browseRequests = new Map<string, Promise<MarketplaceBrowseSnapshot>>();
   private readonly details = new Map<string, Promise<MarketplacePackageDetails>>();
   private browseGeneration = 0;
+  private readonly _onDidChangeInstalled = this.own(new Emitter<void>());
 
-  constructor(private readonly api: IMarketplaceApi) {}
+  readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
+
+  constructor(private readonly api: IMarketplaceApi) {
+    super();
+  }
 
   cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined {
     return this.browseSnapshots.get(browseKey(query, packageType, limit));
@@ -39,18 +46,21 @@ export class AppServerMarketplaceService implements IMarketplaceService {
   async install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage> {
     const installed = await this.api.install({ packageId, version: version ?? null });
     this.invalidateBrowse();
+    this._onDidChangeInstalled.fire();
     return installed;
   }
 
   async update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage> {
     const installed = await this.api.update({ installationId, version: version ?? null });
     this.invalidateBrowse();
+    this._onDidChangeInstalled.fire();
     return installed;
   }
 
   async uninstall(installationId: string, mode: "ifUnused" | "whenUnused" = "whenUnused"): Promise<void> {
     await this.api.uninstall({ installationId, mode });
     this.invalidateBrowse();
+    this._onDidChangeInstalled.fire();
   }
 
   async listInstalled(): Promise<readonly MarketplaceInstalledPackage[]> {

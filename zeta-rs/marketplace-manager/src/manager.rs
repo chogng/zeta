@@ -573,6 +573,7 @@ fn capability_kind_tag(kind: CapabilityKind) -> &'static str {
         CapabilityKind::Connector => "connector",
         CapabilityKind::Theme => "theme",
         CapabilityKind::Language => "language",
+        CapabilityKind::Localization => "localization",
         CapabilityKind::Executable => "executable",
         CapabilityKind::Asset => "asset",
     }

@@ -21,12 +21,14 @@ export function registerRemoteViews(registry: WorkbenchViewRegistry = ViewsRegis
   registry.registerStaticViewContainer({
     id: WorkbenchViewContainerId.Ports,
     title: "Ports",
+    localizationKey: { bundle: "zeta.views", key: "ports" },
     location: ViewContainerLocation.Panel,
     order: 4,
   });
   registry.registerStaticViews(WorkbenchViewContainerId.Ports, [{
     id: REMOTE_PORTS_VIEW_ID,
     title: "Ports",
+    localizationKey: { bundle: "zeta.views", key: "ports" },
     order: 1,
     canToggleVisibility: false,
     ctorDescriptor: new SyncDescriptor(RemotePortsViewPane, { serviceDependencies: [IRemoteTunnelService, IRemoteAgentService] }),
