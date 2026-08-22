@@ -16,7 +16,7 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `ConfigCommandRequest` / `UserConfigCommand` | typed mutation、expected revision 与 retry identity |
 | `ResolvedConfigSnapshot` | User authority 的 immutable runtime input |
 | `WorkspaceConfigStore` | strict-read `.zeta/config.toml`，不写 Workspace 文件 |
-| `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 User 的 Restricted/Trusted 决策，并可保留仅供管理页展示的 canonical root metadata；缺失时 fail closed |
+| `WorkspaceTrustConfig` | 按 opaque `WorkspaceTrustId` 持久化 Trusted 文件夹白名单，并可保留仅供管理页展示的 canonical root metadata；缺失时 fail closed 为 Restricted |
 | `UserExecPolicyConfig` | 持久化 typed User rules；通过 `UpsertExecPolicyRule` / `RemoveExecPolicyRule` 原子变更 |
 | `WorkspaceExecPolicyConfig` | strict-read Workspace restrictions；validation 禁止 `AllowUnsandboxed` |
 | `compose_exec_policy` | 将 trusted Host/Organization layers、User rules 与 Workspace restrictions 组合成 immutable snapshot |
@@ -66,14 +66,18 @@ Workspace preferred model 在 User 已配置对应 Provider 时覆盖，并把 M
 
 Workspace trust 是另一条解析轴：`.zeta/config.toml` 不能声明 `workspaceTrust`；只有 User
 `config.toml` 的 `WorkspaceTrustConfig`、organization policy 或 trusted host composition 能产生
-信任来源。App Server 对 client 请求的 `workspace/switch` 在切换安全点重新读取 User snapshot，
+信任来源。User `WorkspaceTrustConfig.roots` 只保存 Trusted 条目；旧版本写入的 Restricted 条目
+会在 ConfigStore 打开时移除。App Server 对 client 请求的 `workspace/switch` 在切换安全点重新读取 User snapshot，
 按目标根的 `WorkspaceTrustId` 授权；未记录的根保持 Restricted。进程启动时由 trusted host
 明确固定的初始根仍标记为 `HostConfiguration`，不等同于 client 后续选择的任意根。
-User trust 从 Trusted 变为 Restricted 时，Config change 同时触发 App Server 撤销当前
+User trust 从 Trusted 变为 Restricted（即从白名单移除）时，Config change 同时触发 App Server 撤销当前
 root-bound lease、移除执行型服务并中断活跃 Turn；filesystem 与 watcher 保留。
-拥有 `workspaceTrustHost` capability 的 Desktop host 还可通过 `workspace/trust/list`、
-`workspace/trust/set` 与 `workspace/trust/forget` 管理这些 User decisions；管理 RPC 不改变
-active Workspace，且由 App Server 负责 identity/canonicalization。
+拥有 `workspaceTrustHost` capability 的 Desktop host 还可通过 `workspace/trust/list` 查看
+Trusted 文件夹白名单，通过 `workspace/trust/set` 与 `workspace/trust/forget` 管理 User
+decisions；Restricted 或缺失的决定不进入 list。`workspace/trust/read` 同时返回可选的持久化
+decision 与当前 effective state。管理 RPC 不替换 active Workspace root，但如果目标就是当前
+root，App Server 会同步 reconcile Restricted/Trusted runtime；identity/canonicalization 始终由
+App Server 负责。
 
 App Server 在 model safe point 读取 resolved snapshot；Skill/MCP manager 订阅 `ConfigChange` 后在
 旁路 reconcile。Config commit 成功不等于 MCP 已连接、Skill 已可用、Plugin 已激活或 Hook 已执行，

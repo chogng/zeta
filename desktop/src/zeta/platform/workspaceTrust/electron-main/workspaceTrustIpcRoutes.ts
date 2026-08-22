@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type WorkspaceTrustForgetParams, type WorkspaceTrustSetParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type WorkspaceTrustForgetParams, type WorkspaceTrustReadParams, type WorkspaceTrustSetParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { nonEmptyString, nonNegativeInteger, record } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -6,6 +6,7 @@ import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 export function workspaceTrustIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
   return [
     route({ channel: "zeta:workspace-trust:list", validate: emptyParams, invoke: () => supervisor.request(APP_SERVER_METHODS["workspace/trust/list"], {}) }),
+    route({ channel: "zeta:workspace-trust:read", validate: readParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/trust/read"], params) }),
     route({ channel: "zeta:workspace-trust:set", validate: setParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/trust/set"], params) }),
     route({ channel: "zeta:workspace-trust:forget", validate: forgetParams, invoke: params => supervisor.request(APP_SERVER_METHODS["workspace/trust/forget"], params) }),
   ];
@@ -29,6 +30,11 @@ function setParams(value: unknown): WorkspaceTrustSetParams {
     root: nonEmptyString(params.root, "root"),
     setting: params.setting,
   };
+}
+
+function readParams(value: unknown): WorkspaceTrustReadParams {
+  const params = record(value, ["root"]);
+  return { root: nonEmptyString(params.root, "root") };
 }
 
 function forgetParams(value: unknown): WorkspaceTrustForgetParams {

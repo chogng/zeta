@@ -555,6 +555,88 @@ fn workspace_trust_commands_persist_user_owned_decisions() {
 }
 
 #[test]
+fn legacy_restricted_workspace_entries_are_removed_when_config_opens() {
+    let path = config_path("workspace-trust-legacy-restricted");
+    let workspace = workspace_trust_id();
+    std::fs::write(
+        path.with_extension("toml"),
+        format!(
+            "[workspaceTrust.roots]\n\"{workspace}\" = \"restricted\"\n\n[workspaceTrust.rootPaths]\n\"{workspace}\" = \"/tmp/legacy-workspace\"\n"
+        ),
+    )
+    .unwrap();
+
+    let store = ConfigStore::open(&path).unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(
+        snapshot
+            .values
+            .workspace_trust
+            .explicit_setting_for(&workspace),
+        None
+    );
+    assert_eq!(
+        snapshot.values.workspace_trust.decision_for(&workspace),
+        WorkspaceTrustDecision::Restricted
+    );
+    let persisted = persisted_config_document(&path);
+    assert!(!persisted.contains("restricted"));
+    assert!(!persisted.contains("legacy-workspace"));
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
+fn setting_workspace_restricted_removes_the_allowlist_entry() {
+    let path = config_path("workspace-trust-revoke");
+    let store = ConfigStore::open(&path).unwrap();
+    let workspace = workspace_trust_id();
+    let trusted = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("trust-workspace-for-revoke").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: workspace.clone(),
+                setting: WorkspaceTrustSetting::Trusted,
+                display_root: Some("/tmp/revoke-workspace".into()),
+            },
+        })
+        .unwrap();
+
+    let restricted = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("restrict-workspace-for-revoke").unwrap(),
+            expected_revision: trusted.revision,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: workspace.clone(),
+                setting: WorkspaceTrustSetting::Restricted,
+                display_root: None,
+            },
+        })
+        .unwrap();
+
+    assert_eq!(restricted.revision.get(), 2);
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(
+        snapshot
+            .values
+            .workspace_trust
+            .explicit_setting_for(&workspace),
+        None
+    );
+    assert_eq!(
+        snapshot
+            .values
+            .workspace_trust
+            .explicit_root_path_for(&workspace),
+        None
+    );
+    assert!(!persisted_config_document(&path).contains("restricted"));
+    drop(store);
+    remove_config_files(&path);
+}
+
+#[test]
 fn selected_model_must_reference_a_configured_provider() {
     let path = config_path("selected-provider");
     let store = ConfigStore::open(&path).unwrap();

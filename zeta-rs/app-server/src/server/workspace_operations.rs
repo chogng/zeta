@@ -53,7 +53,12 @@ impl AppServer {
                 WorkspaceTrustSetting::Restricted => WorkspaceTrustSettingDto::Restricted,
                 WorkspaceTrustSetting::Trusted => WorkspaceTrustSettingDto::Trusted,
             });
-        result(&WorkspaceTrustReadResult { setting })
+        let state = if setting == Some(WorkspaceTrustSettingDto::Trusted) {
+            WorkspaceTrustStateDto::Trusted
+        } else {
+            WorkspaceTrustStateDto::Restricted
+        };
+        result(&WorkspaceTrustReadResult { setting, state })
     }
 
     pub(super) fn workspace_trust_list(
@@ -72,14 +77,14 @@ impl AppServer {
             .workspace_trust
             .roots
             .iter()
-            .map(|(workspace, setting)| WorkspaceTrustEntryDto {
+            .filter(|(_, setting)| **setting == WorkspaceTrustSetting::Trusted)
+            .map(|(workspace, _)| WorkspaceTrustEntryDto {
                 workspace: workspace.clone(),
                 root: snapshot
                     .values
                     .workspace_trust
                     .explicit_root_path_for(workspace)
                     .map(|path| path.to_path_buf()),
-                setting: workspace_trust_setting_dto(*setting),
             })
             .collect();
         result(&WorkspaceTrustListResult {
@@ -101,6 +106,17 @@ impl AppServer {
         let workspace = WorkspaceRoot::open(params.root)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let setting = workspace_trust_setting(params.setting);
+        let workspace_id = workspace.trust_id();
+        let command = match setting {
+            WorkspaceTrustSetting::Restricted => UserConfigCommand::ForgetWorkspaceTrust {
+                workspace: workspace_id,
+            },
+            WorkspaceTrustSetting::Trusted => UserConfigCommand::SetWorkspaceTrust {
+                workspace: workspace_id,
+                setting,
+                display_root: Some(workspace.canonical_path().to_path_buf()),
+            },
+        };
         let outcome = self
             .config
             .as_ref()
@@ -108,14 +124,12 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::SetWorkspaceTrust {
-                    workspace: workspace.trust_id(),
-                    setting,
-                    display_root: Some(workspace.canonical_path().to_path_buf()),
-                },
+                command,
             })
             .map_err(config_operation_error)?;
-        result(&config_command_result(outcome))
+        let command_result = config_command_result(outcome);
+        self.reconcile_active_workspace_trust()?;
+        result(&command_result)
     }
 
     pub(super) fn workspace_trust_forget(
@@ -137,7 +151,9 @@ impl AppServer {
                 },
             })
             .map_err(config_operation_error)?;
-        result(&config_command_result(outcome))
+        let command_result = config_command_result(outcome);
+        self.reconcile_active_workspace_trust()?;
+        result(&command_result)
     }
 
     pub(super) fn workspace_switch(
@@ -169,6 +185,17 @@ impl AppServer {
                     WorkspaceTrustSettingDto::Restricted => WorkspaceTrustSetting::Restricted,
                     WorkspaceTrustSettingDto::Trusted => WorkspaceTrustSetting::Trusted,
                 };
+                let workspace_id = workspace.trust_id();
+                let command = match setting {
+                    WorkspaceTrustSetting::Restricted => UserConfigCommand::ForgetWorkspaceTrust {
+                        workspace: workspace_id,
+                    },
+                    WorkspaceTrustSetting::Trusted => UserConfigCommand::SetWorkspaceTrust {
+                        workspace: workspace_id,
+                        setting,
+                        display_root: Some(workspace.canonical_path().to_path_buf()),
+                    },
+                };
                 self.config
                     .as_ref()
                     .ok_or_else(|| {
@@ -177,11 +204,7 @@ impl AppServer {
                     .apply(ConfigCommandRequest {
                         command_id,
                         expected_revision: ConfigRevision::new(expected_revision),
-                        command: UserConfigCommand::SetWorkspaceTrust {
-                            workspace: workspace.trust_id(),
-                            setting,
-                            display_root: Some(workspace.canonical_path().to_path_buf()),
-                        },
+                        command,
                     })
                     .map_err(|_| {
                         RpcError::new(-32072, AppServerErrorName::WorkspaceSwitchFailed)
@@ -206,17 +229,55 @@ impl AppServer {
     }
 }
 
+impl AppServer {
+    pub(crate) fn reconcile_active_workspace_trust(&self) -> Result<(), RpcError> {
+        if self.local_workspace_host.is_none() {
+            return Ok(());
+        }
+        let active = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .map(|authorization| (authorization.root().clone(), authorization.decision()));
+        let Some(runtime) = self.workspace_runtime_control() else {
+            return Ok(());
+        };
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let snapshot = config
+            .read_snapshot()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        if let Some((root, WorkspaceTrustDecision::Restricted)) = active
+            && matches!(
+                snapshot
+                    .values
+                    .workspace_trust
+                    .decision_for(&root.trust_id()),
+                WorkspaceTrustDecision::Trusted(_)
+            )
+        {
+            self.switch_local_workspace_root_with_decision(
+                root.canonical_path().to_path_buf(),
+                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            )
+            .map(|_| ())
+            .map_err(workspace_runtime_error)?;
+            return Ok(());
+        }
+        runtime
+            .reconcile_user_trust(&snapshot.values)
+            .map_err(workspace_runtime_error)
+    }
+}
+
 fn workspace_trust_setting(setting: WorkspaceTrustSettingDto) -> WorkspaceTrustSetting {
     match setting {
         WorkspaceTrustSettingDto::Restricted => WorkspaceTrustSetting::Restricted,
         WorkspaceTrustSettingDto::Trusted => WorkspaceTrustSetting::Trusted,
-    }
-}
-
-fn workspace_trust_setting_dto(setting: WorkspaceTrustSetting) -> WorkspaceTrustSettingDto {
-    match setting {
-        WorkspaceTrustSetting::Restricted => WorkspaceTrustSettingDto::Restricted,
-        WorkspaceTrustSetting::Trusted => WorkspaceTrustSettingDto::Trusted,
     }
 }
 

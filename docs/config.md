@@ -246,8 +246,10 @@ Workspace 配置不能覆盖审批模型，避免仓库内容自行降低 review
 fail closed，不得静默换成其他审批模型。
 
 `WorkspaceTrustConfig` 使用 `WorkspaceTrustId` 作为授权 key。该 ID 由 `zeta-workspace` 对
-canonical root 的平台原生 path bytes 做 SHA-256 得到；`roots` 中仍只保存 opaque identity，
-symlink/平台别名共享决定，移动根目录后必须重新决定。Settings 的 Workspace Trust 管理页另外
+canonical root 的平台原生 path bytes 做 SHA-256 得到；`roots` 只保存 Trusted 条目的 opaque identity，
+symlink/平台别名共享决定，移动根目录后必须重新决定。Workspace Trust 管理 RPC 的 list 只投影
+Trusted 条目；Restricted 由缺失条目表示，旧版本残留的显式 Restricted 记录会在 ConfigStore 打开时清理。
+Settings 的 Workspace Trust 管理页另外
 会在 `rootPaths` 保存 canonical root 作为展示元数据，旧 trust 记录可能没有该字段；该 map
 绝不能参与授权判断。它目前仍是 path-bound identity：同一路径被其他目录内容替换时不会自动
 失效，identity-change detection 属于后续 host 持久化阶段。
@@ -255,7 +257,8 @@ symlink/平台别名共享决定，移动根目录后必须重新决定。Settin
 Local App Server 把 User trust `ConfigChange` 同时作为撤销信号：Trusted → Restricted 会使当前
 root-bound capability lease 永久失效，拆除 local Tool/Git/search/terminal runtime、终止相关
 进程并中断活跃 Turn；filesystem 与 watcher 作为 Restricted runtime 保留。普通 Workspace
-document 不进入这条 mutation 或撤销 authority。
+document 不进入这条 mutation 或撤销 authority。Restricted → Trusted 也会在当前 root 匹配时
+重建可执行 runtime；两种方向都由 App Server reconcile，Renderer 只发起决定并投影状态。
 
 ## 5. Resolved config 快照
 

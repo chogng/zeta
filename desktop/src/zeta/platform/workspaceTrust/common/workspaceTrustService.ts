@@ -1,11 +1,11 @@
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type WorkspaceTrustSetting = "restricted" | "trusted";
+export type WorkspaceTrustState = "restricted" | "trusted";
 
 export interface WorkspaceTrustEntry {
   readonly workspace: string;
   readonly root: string | undefined;
-  readonly setting: WorkspaceTrustSetting;
 }
 
 export interface WorkspaceTrustSnapshot {
@@ -19,9 +19,13 @@ export interface WorkspaceTrustCommandResult {
   readonly disposition: "updated" | "replayed";
 }
 
-/** Frontend-owned contract for listing and revoking durable User Workspace Trust decisions. */
+/** Frontend-owned contract for managing the durable trusted-folder allowlist. */
 export interface IWorkspaceTrustService {
+  /** Lists trusted folders only; an absent entry remains the normal Restricted-mode state. */
   list(): Promise<WorkspaceTrustSnapshot>;
+  /** Reads the effective state for one exact filesystem root. */
+  read(root: string): Promise<WorkspaceTrustState>;
+  /** Adds a trusted root; the compatibility Restricted value removes its durable entry. */
   set(root: string, setting: WorkspaceTrustSetting, expectedRevision: number): Promise<WorkspaceTrustCommandResult>;
   forget(workspace: string, expectedRevision: number): Promise<WorkspaceTrustCommandResult>;
 }

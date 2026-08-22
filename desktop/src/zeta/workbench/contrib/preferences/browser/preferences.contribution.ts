@@ -18,6 +18,7 @@ import { IMarketplaceService } from "../../../../platform/marketplace/common/mar
 import { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
 import { ILocaleService } from "../../../services/localization/common/locale.js";
 import { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
@@ -78,5 +79,6 @@ registerWorkbenchContribution(
     toolSearchService: accessor.get(IToolSearchService),
     workspaceTrustService: accessor.get(IWorkspaceTrustService),
     workspaceOpenService: accessor.get(IWorkspaceOpenService),
+    workspaceContextService: accessor.get(IWorkspaceContextService),
   }),
 );

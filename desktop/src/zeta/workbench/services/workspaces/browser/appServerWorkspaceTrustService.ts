@@ -1,5 +1,5 @@
 import type { IWorkspaceTrustApi } from "../../../../platform/workspaceTrust/common/workspaceTrustApi.js";
-import type { IWorkspaceTrustService, WorkspaceTrustCommandResult, WorkspaceTrustSetting, WorkspaceTrustSnapshot } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import type { IWorkspaceTrustService, WorkspaceTrustCommandResult, WorkspaceTrustSetting, WorkspaceTrustSnapshot, WorkspaceTrustState } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 
 /** App Server transport adapter for the Workbench Workspace Trust service contract. */
 export class AppServerWorkspaceTrustService implements IWorkspaceTrustService {
@@ -12,9 +12,12 @@ export class AppServerWorkspaceTrustService implements IWorkspaceTrustService {
       entries: result.entries.map(entry => ({
         workspace: entry.workspace,
         root: entry.root ?? undefined,
-        setting: entry.setting,
       })),
     };
+  }
+
+  async read(root: string): Promise<WorkspaceTrustState> {
+    return (await this.api.read({ root })).state;
   }
 
   async set(root: string, setting: WorkspaceTrustSetting, expectedRevision: number): Promise<WorkspaceTrustCommandResult> {

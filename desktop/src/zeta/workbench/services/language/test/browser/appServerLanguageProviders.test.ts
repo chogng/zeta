@@ -171,7 +171,8 @@ class FakeServerEvents implements IServerEventApi {
 
 class FakeWorkspaceTrustService implements IWorkspaceTrustService {
   constructor(private readonly workspace: string, public setting: WorkspaceTrustSetting) {}
-  async list() { return { revision: 1, entries: [{ workspace: this.workspace, root: "C:\\project", setting: this.setting }] }; }
+  async list() { return { revision: 1, entries: this.setting === "trusted" ? [{ workspace: this.workspace, root: "C:\\project" }] : [] }; }
+  async read(): ReturnType<IWorkspaceTrustService["read"]> { return this.setting; }
   async set(): ReturnType<IWorkspaceTrustService["set"]> { throw new Error("unused"); }
   async forget(): ReturnType<IWorkspaceTrustService["forget"]> { throw new Error("unused"); }
 }

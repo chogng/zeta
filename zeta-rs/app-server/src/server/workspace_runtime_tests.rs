@@ -327,12 +327,15 @@ fn workspace_switch_rpc_persists_host_collected_user_trust() {
     )
     .unwrap();
     assert_eq!(read["result"]["setting"], "trusted");
+    assert_eq!(read["result"]["state"], "trusted");
     assert!(server.terminal_service().is_ok());
 }
 
 #[test]
-fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
+fn workspace_trust_management_rpc_lists_trusted_entries_sets_and_forgets_user_decisions() {
     let workspace = TestWorkspace::new("rpc-trust-management", "readable.txt");
+    let restricted_workspace =
+        TestWorkspace::new("rpc-trust-management-restricted", "readable.txt");
     let root = workspace.root();
     let config_storage = tempfile::tempdir().unwrap();
     let config = Arc::new(ConfigStore::open(config_storage.path().join("trust.sqlite3")).unwrap());
@@ -374,12 +377,79 @@ fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
     assert_eq!(empty["result"]["revision"], 0);
     assert_eq!(empty["result"]["entries"].as_array().unwrap().len(), 0);
 
-    let set: serde_json::Value = serde_json::from_str(
+    let restricted: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
             &serde_json::json!({
                 "jsonrpc": "2.0",
                 "id": 3,
+                "method": "workspace/trust/set",
+                "params": {
+                    "commandId": "desktop-trust-management-restricted",
+                    "expectedRevision": 0,
+                    "root": restricted_workspace.path,
+                    "setting": "restricted"
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(restricted["result"]["revision"], 0, "{restricted:#}");
+    assert!(
+        config
+            .read_snapshot()
+            .unwrap()
+            .values
+            .workspace_trust
+            .explicit_setting_for(&restricted_workspace.root().trust_id())
+            .is_none()
+    );
+
+    let restricted_read: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "workspace/trust/read",
+                "params": {"root": restricted_workspace.path}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(restricted_read["result"]["setting"].is_null());
+    assert_eq!(restricted_read["result"]["state"], "restricted");
+
+    let restricted_list: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "workspace/trust/list",
+                "params": {}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(restricted_list["result"]["revision"], 0);
+    assert_eq!(
+        restricted_list["result"]["entries"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let set: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 5,
                 "method": "workspace/trust/set",
                 "params": {
                     "commandId": "desktop-trust-management-set",
@@ -399,7 +469,7 @@ fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
             &mut connection,
             &serde_json::json!({
                 "jsonrpc": "2.0",
-                "id": 4,
+                "id": 6,
                 "method": "workspace/trust/list",
                 "params": {}
             })
@@ -416,14 +486,14 @@ fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
         listed["result"]["entries"][0]["root"],
         root.canonical_path().to_string_lossy().to_string()
     );
-    assert_eq!(listed["result"]["entries"][0]["setting"], "trusted");
+    assert!(listed["result"]["entries"][0].get("setting").is_none());
 
     let forgotten: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
             &serde_json::json!({
                 "jsonrpc": "2.0",
-                "id": 5,
+                "id": 7,
                 "method": "workspace/trust/forget",
                 "params": {
                     "commandId": "desktop-trust-management-forget",
@@ -442,7 +512,7 @@ fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
             &mut connection,
             &serde_json::json!({
                 "jsonrpc": "2.0",
-                "id": 6,
+                "id": 8,
                 "method": "workspace/trust/list",
                 "params": {}
             })
@@ -450,6 +520,7 @@ fn workspace_trust_management_rpc_lists_sets_and_forgets_user_decisions() {
         ),
     )
     .unwrap();
+    assert_eq!(final_list["result"]["revision"], 2);
     assert_eq!(final_list["result"]["entries"].as_array().unwrap().len(), 0);
 }
 
@@ -656,6 +727,42 @@ fn user_config_trust_is_resolved_for_each_client_requested_root() {
     assert!(server.git_runtime_service().is_ok());
     assert!(server.workspace_search_service().is_ok());
     assert!(server.terminal_service().is_ok());
+}
+
+#[test]
+fn user_config_trust_promotion_reactivates_an_active_restricted_workspace() {
+    let workspace = TestWorkspace::new("config-promotion", "readable.txt");
+    let root = workspace.root();
+    let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
+        )
+        .unwrap();
+    server
+        .switch_local_workspace_root(workspace.path.clone())
+        .unwrap();
+    assert!(server.terminal_service().is_err());
+    assert!(server.workspace_search_service().is_err());
+
+    let trusted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("promote-config-workspace").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetWorkspaceTrust {
+                workspace: root.trust_id(),
+                setting: WorkspaceTrustSetting::Trusted,
+                display_root: None,
+            },
+        })
+        .unwrap();
+    assert!(server.reconcile_active_workspace_trust().is_ok());
+
+    assert!(server.terminal_service().is_ok());
+    assert!(server.workspace_search_service().is_ok());
+    assert_eq!(trusted.revision.get(), 1);
 }
 
 #[test]

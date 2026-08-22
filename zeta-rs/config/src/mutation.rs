@@ -187,15 +187,24 @@ pub(crate) fn apply_command(
             setting,
             display_root,
         } => {
-            document
-                .workspace_trust
-                .roots
-                .insert(workspace.clone(), *setting);
-            if let Some(display_root) = display_root {
-                document
-                    .workspace_trust
-                    .root_paths
-                    .insert(workspace.clone(), display_root.clone());
+            match setting {
+                crate::WorkspaceTrustSetting::Trusted => {
+                    document
+                        .workspace_trust
+                        .roots
+                        .insert(workspace.clone(), *setting);
+                    if let Some(display_root) = display_root {
+                        document
+                            .workspace_trust
+                            .root_paths
+                            .insert(workspace.clone(), display_root.clone());
+                    }
+                }
+                crate::WorkspaceTrustSetting::Restricted => {
+                    // Restricted is represented by absence from the trusted-folder allowlist.
+                    document.workspace_trust.roots.remove(workspace);
+                    document.workspace_trust.root_paths.remove(workspace);
+                }
             }
         }
         UserConfigCommand::ForgetWorkspaceTrust { workspace } => {

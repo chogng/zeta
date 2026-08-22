@@ -89,7 +89,7 @@ impl ConfigStore {
             fs::create_dir_all(parent).map_err(io_error)?;
         }
         let config_existed = config_path.exists();
-        let mut document = crate::store_file::read_document(&config_path)?;
+        let mut document = read_document_and_migrate(&config_path)?;
         let initial_digest = crate::store_file::document_digest(&document)?;
 
         prepare_private_database_file(&database_path)?;
@@ -113,6 +113,7 @@ impl ConfigStore {
             }
             document = serde_json::from_str(&legacy.document_json)
                 .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))?;
+            document.workspace_trust.normalize_legacy_entries();
             document.validate()?;
             crate::store_file::write_document(&config_path, &document)?;
             replace_content_digest(&connection, &crate::store_file::document_digest(&document)?)?;
@@ -347,7 +348,7 @@ fn read_authority(
             metadata.0
         )));
     }
-    let document = crate::store_file::read_document(config_path)?;
+    let document = read_document_and_migrate(config_path)?;
     let content_digest = crate::store_file::document_digest(&document)?;
     let changed = content_digest != metadata.3;
     Ok((
@@ -360,6 +361,14 @@ fn read_authority(
         },
         changed,
     ))
+}
+
+fn read_document_and_migrate(config_path: &Path) -> Result<UserConfigDocument, ConfigError> {
+    let mut document = crate::store_file::read_document(config_path)?;
+    if document.workspace_trust.normalize_legacy_entries() {
+        crate::store_file::write_document(config_path, &document)?;
+    }
+    Ok(document)
 }
 
 fn write_metadata(connection: &Connection, authority: &ConfigAuthority) -> Result<(), ConfigError> {

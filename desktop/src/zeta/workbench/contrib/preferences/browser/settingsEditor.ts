@@ -21,11 +21,12 @@ import type { IToolSearchService, ToolSearchEmbeddingStatus } from "../../../../
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import type { IPluginService } from "../../../../platform/plugins/common/pluginService.js";
 import type { IMarketplaceService } from "../../../../platform/marketplace/common/marketplaceService.js";
-import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
-import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
 import type { ILocaleService } from "../../../services/localization/common/locale.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
+import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from "../common/settingsSections.js";
 import { ConnectorSettingsPane } from "./connectorSettings.js";
 import { PluginSettingsPane } from "./pluginSettings.js";
@@ -34,7 +35,7 @@ import { EditorSettingsPane } from "./editorSettings.js";
 import { LocalizationSettingsPane } from "../../localization/browser/localizationSettings.js";
 import { GeneralSettingsPane } from "./generalSettings.js";
 import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
-import { WorkspaceTrustSettingsPane } from "./workspaceTrustSettings.js";
+import { WorkspaceTrustEditor } from "../../workspace/browser/workspaceTrustEditor.js";
 
 export interface SettingsEditorOptions {
   readonly contextViewProvider: IContextViewProvider;
@@ -53,6 +54,7 @@ export interface SettingsEditorOptions {
   readonly marketplaceService: IMarketplaceService;
   readonly workspaceTrustService: IWorkspaceTrustService;
   readonly workspaceOpenService: IWorkspaceOpenService;
+  readonly workspaceContextService?: IWorkspaceContextService;
 }
 
 let nextSettingsEditorId = 1;
@@ -76,6 +78,7 @@ export class SettingsEditor extends DisposableOwner {
   private readonly marketplaceService: IMarketplaceService;
   private readonly workspaceTrustService: IWorkspaceTrustService;
   private readonly workspaceOpenService: IWorkspaceOpenService;
+  private readonly workspaceContextService: IWorkspaceContextService | undefined;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -107,6 +110,7 @@ export class SettingsEditor extends DisposableOwner {
     this.marketplaceService = options.marketplaceService;
     this.workspaceTrustService = options.workspaceTrustService;
     this.workspaceOpenService = options.workspaceOpenService;
+    this.workspaceContextService = options.workspaceContextService;
     const ownerDocument = container.ownerDocument;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = h(ownerDocument, "div");
@@ -329,7 +333,8 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderWorkspaceTrust(): void {
-    const pane = new WorkspaceTrustSettingsPane(this.sectionContent, this.workspaceTrustService, this.workspaceOpenService, this.dialogService);
+    // Preferences owns category routing; the Workspace contrib owns the trust surface and actions.
+    const pane = new WorkspaceTrustEditor(this.sectionContent, this.workspaceTrustService, this.workspaceOpenService, this.dialogService, this.workspaceContextService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }

@@ -37,6 +37,7 @@ const { KeybindingLabelStyle, getKeybindingLabel } = await import("../../../../.
 const { resolveKeybinding } = await import("../../../../../base/common/keybindings.js");
 const { lxiconsLibrary } = await import("../../../../../base/common/lxiconsLibrary.js");
 const { OperatingSystem } = await import("../../../../../base/common/platform.js");
+const { URI } = await import("../../../../../base/common/uri.js");
 const { MenuId } = await import("../../../../../platform/actions/common/actions.js");
 const { HoverConfiguration } = await import("../../../../../platform/hover/common/hoverService.js");
 const { MenuService } = await import("../../../../../platform/actions/common/menuService.js");
@@ -54,10 +55,11 @@ const { SettingsService } = await import("../../../../../workbench/services/pref
 const { WorkbenchConfiguration } = await import("../../../../../workbench/common/configuration.js");
 const { CodeEditorConfiguration } = await import("../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
-const { EditorLineWrapping } = await import("../../../../../editor/browser/view/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../../../editor/browser/viewModel/visualLineProjection.js");
 const { WorkbenchThemesRegistry } = await import("../../../../../workbench/common/theme.js");
 const { UnavailableUserThemeService } = await import("../../../../../workbench/common/userThemes.js");
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
+const { WorkspaceContextService } = await import("../../../../../workbench/services/workspaces/browser/workspaceContextService.js");
 const { SettingsEditorContribution } = await import("../../../../../workbench/contrib/preferences/browser/settingsEditor.contribution.js");
 const { SettingsTree } = await import("../../../../../workbench/contrib/preferences/browser/settingsTree.js");
 const { SettingsTreeModel } = await import("../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js");
@@ -268,16 +270,16 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   const configuration = disposables.add(new WorkbenchConfigurationService());
   let revision = 7;
   let entries = [
-    { workspace: "sha256:restricted", root: "/workspaces/restricted", setting: "restricted" as const },
-    { workspace: "sha256:trusted", root: "/workspaces/trusted", setting: "trusted" as const },
+    { workspace: "sha256:trusted", root: "/workspaces/trusted" },
   ];
   const mutations: string[] = [];
   const workspaceTrustService = {
     list: async () => ({ revision, entries }),
+    read: async () => "restricted" as const,
     set: async (folder: string, setting: "restricted" | "trusted", expectedRevision: number) => {
       mutations.push(`set:${folder}:${setting}:${expectedRevision}`);
       revision += 1;
-      entries = [...entries, { workspace: "sha256:new", root: folder, setting }];
+      if (setting === "trusted") entries = [...entries, { workspace: "sha256:new", root: folder }];
       return { revision, generation: revision, disposition: "updated" as const };
     },
     forget: async (workspace: string, expectedRevision: number) => {
@@ -309,8 +311,8 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   settings.open("workspace-trust");
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
   assert.deepEqual(
-    [...root.querySelectorAll<HTMLElement>(".zeta-workspace-trust-entry h4")].map(element => element.textContent),
-    ["/workspaces/restricted", "/workspaces/trusted"],
+    [...root.querySelectorAll<HTMLElement>('[data-workspace-trust-list="trusted"] .zeta-workspace-trust-entry h5')].map(element => element.textContent),
+    ["/workspaces/trusted"],
   );
   assert.equal(root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.textContent, "Add Folder…");
   root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.click();
@@ -319,7 +321,7 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
   assert.deepEqual(mutations, ["set:/workspaces/new:trusted:7"]);
 
   const trustedEntry = [...root.querySelectorAll<HTMLElement>(".zeta-workspace-trust-entry")]
-    .find(element => element.querySelector("h4")?.textContent === "/workspaces/trusted");
+    .find(element => element.querySelector("h5")?.textContent === "/workspaces/trusted");
   assert.ok(trustedEntry);
   trustedEntry.querySelector<HTMLButtonElement>("button")?.click();
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
@@ -328,7 +330,105 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
     "set:/workspaces/new:trusted:7",
     "forget:sha256:trusted:8",
   ]);
-  assert.equal(root.querySelector("h4")?.textContent, "/workspaces/new");
+  assert.equal(root.querySelector("h5")?.textContent, "/workspaces/new");
+});
+
+test("Workspace Trust settings does not render restricted legacy decisions in the trusted-folder list", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = h(ownerDocument, "div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  const workspaceTrustService = {
+    list: async () => ({
+      revision: 1,
+      entries: [],
+    }),
+    read: async () => "restricted" as const,
+    set: async () => ({ revision: 2, generation: 2, disposition: "updated" as const }),
+    forget: async () => ({ revision: 2, generation: 2, disposition: "updated" as const }),
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+    workspaceTrustService,
+    workspaceOpenService: {
+      canOpenFolder: true,
+      canOpenWorkspace: true,
+      openFolder: async () => {},
+      openWorkspace: async () => {},
+      pickFolder: async () => undefined,
+    },
+  }));
+
+  settings.open("workspace-trust");
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.equal(root.querySelector('[data-workspace-trust-list="trusted"] .zeta-workspace-trust-empty')?.textContent, "You haven't trusted any folders or workspace files yet. Use Add Folder… to trust a folder.");
+  assert.equal(root.querySelector(".zeta-workspace-trust-entry"), null);
+});
+
+test("Workspace Trust settings exposes and updates the current Restricted workspace", async () => {
+  using disposables = new DisposableStore();
+  using workspaceContext = new WorkspaceContextService({ id: "window", uri: URI.file("/workspaces/current") });
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = h(ownerDocument, "div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const configuration = disposables.add(new WorkbenchConfigurationService());
+  let revision = 1;
+  let state: "restricted" | "trusted" = "restricted";
+  const workspaceTrustService = {
+    list: async () => ({ revision, entries: state === "trusted" ? [{ workspace: "sha256:current", root: "/workspaces/current" }] : [] }),
+    read: async (folder: string) => {
+      assert.equal(folder, "/workspaces/current");
+      return state;
+    },
+    set: async (folder: string, nextState: "restricted" | "trusted", expectedRevision: number) => {
+      assert.equal(folder, "/workspaces/current");
+      assert.equal(expectedRevision, revision);
+      state = nextState;
+      revision += 1;
+      return { revision, generation: revision, disposition: "updated" as const };
+    },
+    forget: async () => ({ revision, generation: revision, disposition: "updated" as const }),
+  };
+  disposables.add(new SettingsEditorContribution({
+    configurationService: configuration,
+    container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+    workspaceTrustService,
+    workspaceContextService: workspaceContext,
+    workspaceOpenService: {
+      canOpenFolder: true,
+      canOpenWorkspace: true,
+      openFolder: async () => {},
+      openWorkspace: async () => {},
+      pickFolder: async () => undefined,
+    },
+  }));
+
+  settings.open("workspace-trust");
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.equal(root.querySelector(".zeta-workspace-trust-current .zeta-workspace-trust-status")?.textContent, "Restricted");
+  const trustCurrent = root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-current-actions button");
+  assert.equal(trustCurrent?.textContent, "Trust This Folder");
+  trustCurrent?.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.equal(state, "trusted");
+  assert.equal(root.querySelector(".zeta-workspace-trust-current .zeta-workspace-trust-status")?.textContent, "Trusted");
 });
 
 test("General settings persist shared interaction preferences", async () => {

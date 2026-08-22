@@ -11,6 +11,8 @@ export async function resolveAppServerLanguageWorkspaceTrust(workspaceContext: I
   const workspace = workspaceContext.getWorkspace();
   if (workspace.folders.length !== 1) return { workspaceId: workspace.id, trusted: false };
   if (!workspaceTrust) return { workspaceId: workspace.id, trusted: true };
-  const snapshot = await workspaceTrust.list();
-  return { workspaceId: workspace.id, trusted: snapshot.entries.some(entry => entry.workspace === workspace.id && entry.setting === "trusted") };
+  const folder = workspace.folders[0];
+  if (folder.uri.scheme !== "file") return { workspaceId: workspace.id, trusted: false };
+  const state = await workspaceTrust.read(folder.uri.fsPath);
+  return { workspaceId: workspace.id, trusted: state === "trusted" };
 }

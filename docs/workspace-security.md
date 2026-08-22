@@ -49,18 +49,26 @@ User Config 的 `roots` 因此只保存 opaque key。为支持 Settings 中的 W
 User Config 可在 `rootPaths` 保存 canonical path 作为展示元数据；它不参与授权，旧记录也可以
 没有对应路径。
 
-`zeta-config` 在 `UserConfigDocument.workspace_trust` 中保存用户明确的 Restricted/Trusted
-决定。缺失项解析为 Restricted；checked-in `.zeta/config.toml` 若声明该 section 会被拒绝。
+`zeta-config` 在 `UserConfigDocument.workspace_trust` 中只保存用户明确 Trusted 的
+allowlist。缺失项解析为 Restricted；旧版本残留的显式 Restricted 条目会在 ConfigStore 打开时
+清理，checked-in `.zeta/config.toml` 若声明该 section 会被拒绝。
 Client 请求 `workspace/switch` 时，App Server 在 authority-switch safe point 解析请求声明的
 authority：普通 client 只能读取最新 User snapshot；声明 `workspaceTrustHost` 的产品 host 可以
 提交一次会话级 `HostConfiguration` trust，或携带 config revision 和 command id 持久化明确的
-Restricted/Trusted 用户决定。App Server 始终先 canonicalize root、自行生成 trust identity，再写入
+Trusted 用户决定；撤销信任通过移除条目表示。App Server 始终先 canonicalize root、自行生成 trust identity，再写入
 User Config；Renderer 不能提供 identity 或直接签发 capability。
 
 声明 `workspaceTrustHost` 的 Desktop host 还可以调用 `workspace/trust/list` 查看当前 profile
-的显式决定，调用 `workspace/trust/set` 添加或修改决定，调用 `workspace/trust/forget` 删除
-决定。三个管理 RPC 都在 App Server 侧重新 canonicalize 或按 opaque identity 校验，不能把
-Renderer 提供的 path 或 identity 直接当成 capability authority。
+的 Trusted 文件夹白名单；Restricted 或缺失的决定不进入该列表。Host 通过
+`workspace/trust/read` 读取一个根的持久化 decision 与 effective state，通过
+`workspace/trust/set` 添加 Trusted 条目；撤销信任（包括兼容性 `Restricted` 请求）都通过
+`workspace/trust/forget` 的缺失条目语义完成。若目标是当前 root，set/forget 会同步触发
+App Server runtime reconcile，而不是只更新列表。
+三个管理 RPC 都在 App Server 侧重新 canonicalize 或按 opaque identity 校验，不能把 Renderer
+提供的 path 或 identity 直接当成 capability authority。
+Workbench 的 `contrib/workspace` 拥有当前 Workspace 的 Restricted/Trusted 状态、Trust list 的
+展示、folder picker、trust/revoke action；
+`preferences` 只负责把 Workspace Trust category 路由到这个 editor，不拥有 trust 业务或状态。
 
 当前产品入口的默认语义如下：
 
@@ -158,7 +166,8 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
 3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
 4. 在 host trust resolver 中增加 filesystem identity change invalidation。
-5. 让 Renderer 完整投影 App Server 已提交的 Restricted/Trusted 状态与 capability availability。
+5. 继续把 App Server 已提交的 capability availability 投影到更多 Workbench surface；当前
+Workspace Trust editor 与 language/diagnostics gate 已投影 Restricted/Trusted 状态。
 6. Terminal、Workspace MCP/LSP/extension activation、Hook 和 repository mutation 全部使用
    root-bound capability。
 7. 增加 restricted-safe content Search backend，或 narrow sandboxed host-owned Search

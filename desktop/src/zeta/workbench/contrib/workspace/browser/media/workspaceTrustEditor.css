@@ -1,4 +1,4 @@
-.zeta-workspace-trust-settings {
+.zeta-workspace-trust-editor {
   display: flex;
   max-width: 820px;
   flex-direction: column;
@@ -7,6 +7,7 @@
 
 .zeta-workspace-trust-intro,
 .zeta-workspace-trust-note,
+.zeta-workspace-trust-list-description,
 .zeta-workspace-trust-empty,
 .zeta-workspace-trust-error {
   margin: 0;
@@ -18,17 +19,65 @@
   font-size: 12px;
 }
 
-.zeta-workspace-trust-list {
-  overflow: hidden;
-  margin-top: 12px;
+.zeta-workspace-trust-current {
+  display: grid;
+  box-sizing: border-box;
+  gap: 4px;
+  padding: 14px;
   border: 1px solid var(--zeta-widget-border);
   border-radius: 8px;
   background: var(--zeta-editor-background);
 }
 
+.zeta-workspace-trust-current-heading {
+  margin: 0 0 2px;
+  color: var(--zeta-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.zeta-workspace-trust-current-path,
+.zeta-workspace-trust-current-detail {
+  overflow: hidden;
+  margin: 0;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-workspace-trust-current-detail {
+  white-space: normal;
+}
+
+.zeta-workspace-trust-current-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .zeta-workspace-trust-toolbar {
   display: flex;
   justify-content: flex-end;
+}
+
+.zeta-workspace-trust-list-heading {
+  margin: 8px 0 0;
+  color: var(--zeta-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.zeta-workspace-trust-list-description {
+  font-size: 12px;
+}
+
+.zeta-workspace-trust-list {
+  overflow: hidden;
+  border: 1px solid var(--zeta-widget-border);
+  border-radius: 8px;
+  background: var(--zeta-editor-background);
 }
 
 .zeta-workspace-trust-entry {
@@ -49,7 +98,7 @@
   min-width: 0;
 }
 
-.zeta-workspace-trust-entry-copy h4 {
+.zeta-workspace-trust-entry-copy h5 {
   overflow: hidden;
   margin: 0;
   color: var(--zeta-foreground);
@@ -71,7 +120,7 @@
 }
 
 .zeta-workspace-trust-status.restricted {
-  color: var(--zeta-description-foreground);
+  color: var(--zeta-error-foreground);
 }
 
 .zeta-workspace-trust-identity {
@@ -85,6 +134,10 @@
 .zeta-workspace-trust-entry-actions {
   display: flex;
   align-items: center;
+}
+
+.zeta-workspace-trust-empty {
+  padding: 14px;
 }
 
 .zeta-workspace-trust-error {

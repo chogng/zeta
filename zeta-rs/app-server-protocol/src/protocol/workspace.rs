@@ -5,7 +5,10 @@ use ts_rs::TS;
 use zeta_protocol::CommandId;
 use zeta_protocol::WorkspaceTrustId;
 
-/// User-owned trust setting collected by a product host.
+/// Trust state collected by a product host.
+///
+/// `Restricted` is a transient/runtime choice and is represented durably by removing the trusted
+/// root; it must not create a Restricted entry in the user's allowlist.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum WorkspaceTrustSettingDto {
@@ -43,7 +46,7 @@ pub enum WorkspaceTrustStateDto {
     Trusted,
 }
 
-/// Reads whether one exact canonical Workspace already has a durable user decision.
+/// Reads the durable user decision and effective UserConfig state for one exact canonical Workspace.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceTrustReadParams {
@@ -55,13 +58,17 @@ pub struct WorkspaceTrustReadParams {
 pub struct WorkspaceTrustReadResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    /// The durable decision, when one exists. Restricted is represented by omission.
     pub setting: Option<WorkspaceTrustSettingDto>,
+    /// The effective state used by UserConfig-backed Workspace activation.
+    pub state: WorkspaceTrustStateDto,
 }
 
-/// One persisted user trust decision projected for the trust-management surface.
+/// One persisted trusted folder projected for the trust-management surface.
 ///
 /// `workspace` remains the authoritative identity. `root` is display metadata and may be absent
-/// for decisions written by older clients.
+/// for decisions written by older clients. Restricted decisions are intentionally omitted from
+/// this management projection; an absent entry is the normal Restricted-mode state.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceTrustEntryDto {
@@ -69,10 +76,9 @@ pub struct WorkspaceTrustEntryDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub root: Option<PathBuf>,
-    pub setting: WorkspaceTrustSettingDto,
 }
 
-/// Lists all explicit user trust decisions in the active profile.
+/// Lists the trusted folders and workspace files in the active profile.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceTrustListResult {
@@ -81,7 +87,9 @@ pub struct WorkspaceTrustListResult {
     pub entries: Vec<WorkspaceTrustEntryDto>,
 }
 
-/// Persists one user trust decision without switching the active Workspace.
+/// Updates one user's trusted-root decision without switching the active Workspace.
+///
+/// `trusted` adds an entry. `restricted` is retained for compatibility and removes the entry.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceTrustSetParams {

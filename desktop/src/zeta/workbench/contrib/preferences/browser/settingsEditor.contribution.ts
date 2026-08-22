@@ -14,6 +14,7 @@ import type { IMarketplaceService } from "../../../../platform/marketplace/commo
 import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
 import type { ILocaleService } from "../../../services/localization/common/locale.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditor } from "./settingsEditor.js";
@@ -36,6 +37,7 @@ export interface SettingsEditorContributionOptions {
   readonly localizationService?: ILocalizationService;
   readonly workspaceTrustService?: IWorkspaceTrustService;
   readonly workspaceOpenService?: IWorkspaceOpenService;
+  readonly workspaceContextService?: IWorkspaceContextService;
 }
 
 /** Connects window Settings state to its modal editor host and content. */
@@ -62,6 +64,7 @@ export class SettingsEditorContribution extends DisposableOwner {
       localizationService: options.localizationService ?? unavailableLocalizationService,
       workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
       workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
+      workspaceContextService: options.workspaceContextService,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
@@ -108,6 +111,7 @@ const unavailableToolSearchService: IToolSearchService = {
 
 const unavailableWorkspaceTrustService: IWorkspaceTrustService = {
   list: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
+  read: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
   set: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
   forget: () => Promise.reject(new Error("Workspace Trust settings are unavailable.")),
 };

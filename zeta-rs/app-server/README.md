@@ -516,8 +516,9 @@ Workspace authority
    └─ Trusted → ExplicitUserDecision capability + optional cloud controller when providers exist
 
 Workspace Trust management (workspaceTrustHost)
-├─ workspace/trust/list → explicit User decisions + display-only root metadata
-├─ workspace/trust/set → canonicalize root, then persist without switching active Workspace
+├─ workspace/trust/read → durable decision + effective Restricted/Trusted state for one root
+├─ workspace/trust/list → trusted folders only + display-only root metadata
+├─ workspace/trust/set → canonicalize root, persist the decision, and reconcile the active root when it matches
 └─ workspace/trust/forget → remove one decision by opaque WorkspaceTrustId
 
 ConfigChange trust revocation

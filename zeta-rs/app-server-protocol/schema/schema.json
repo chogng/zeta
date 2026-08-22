@@ -23008,7 +23008,7 @@
       ]
     },
     "WorkspaceTrustEntryDto": {
-      "description": "One persisted user trust decision projected for the trust-management surface.\n\n`workspace` remains the authoritative identity. `root` is display metadata and may be absent\nfor decisions written by older clients.",
+      "description": "One persisted trusted folder projected for the trust-management surface.\n\n`workspace` remains the authoritative identity. `root` is display metadata and may be absent\nfor decisions written by older clients. Restricted decisions are intentionally omitted from\nthis management projection; an absent entry is the normal Restricted-mode state.",
       "type": "object",
       "properties": {
         "root": {
@@ -23017,16 +23017,12 @@
             "null"
           ]
         },
-        "setting": {
-          "$ref": "#/$defs/WorkspaceTrustSettingDto"
-        },
         "workspace": {
           "$ref": "#/$defs/WorkspaceTrustId"
         }
       },
       "required": [
-        "workspace",
-        "setting"
+        "workspace"
       ]
     },
     "WorkspaceTrustForgetParams": {
@@ -23070,7 +23066,7 @@
       "type": "string"
     },
     "WorkspaceTrustListResult": {
-      "description": "Lists all explicit user trust decisions in the active profile.",
+      "description": "Lists the trusted folders and workspace files in the active profile.",
       "type": "object",
       "properties": {
         "entries": {
@@ -23091,7 +23087,7 @@
       ]
     },
     "WorkspaceTrustReadParams": {
-      "description": "Reads whether one exact canonical Workspace already has a durable user decision.",
+      "description": "Reads the durable user decision and effective UserConfig state for one exact canonical Workspace.",
       "type": "object",
       "properties": {
         "root": {
@@ -23106,6 +23102,7 @@
       "type": "object",
       "properties": {
         "setting": {
+          "description": "The durable decision, when one exists. Restricted is represented by omission.",
           "anyOf": [
             {
               "$ref": "#/$defs/WorkspaceTrustSettingDto"
@@ -23114,11 +23111,18 @@
               "type": "null"
             }
           ]
+        },
+        "state": {
+          "description": "The effective state used by UserConfig-backed Workspace activation.",
+          "$ref": "#/$defs/WorkspaceTrustStateDto"
         }
-      }
+      },
+      "required": [
+        "state"
+      ]
     },
     "WorkspaceTrustSetParams": {
-      "description": "Persists one user trust decision without switching the active Workspace.",
+      "description": "Updates one user's trusted-root decision without switching the active Workspace.\n\n`trusted` adds an entry. `restricted` is retained for compatibility and removes the entry.",
       "type": "object",
       "properties": {
         "commandId": {
@@ -23144,7 +23148,7 @@
       ]
     },
     "WorkspaceTrustSettingDto": {
-      "description": "User-owned trust setting collected by a product host.",
+      "description": "Trust state collected by a product host.\n\n`Restricted` is a transient/runtime choice and is represented durably by removing the trusted\nroot; it must not create a Restricted entry in the user's allowlist.",
       "type": "string",
       "enum": [
         "restricted",
