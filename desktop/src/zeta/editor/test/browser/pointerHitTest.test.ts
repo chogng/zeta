@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { EditorHitTargetKind, hitTestAsterEditorPoint } from "../../browser/view/pointerHitTest.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { EditorHitTargetKind, hitTestAsterEditorPoint } from "../../common/viewModel/pointerHitTest.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 

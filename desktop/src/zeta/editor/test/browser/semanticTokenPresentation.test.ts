@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { SemanticTokenModifier, SemanticTokenPresentation, createAsterSemanticTokenSource, createOverlaySemanticTokenSource, projectAsterSemanticTokenLine, resolveAsterSemanticTokenModifiers, resolveAsterSemanticTokenPresentation, type ResolvedSemanticToken } from "../../browser/view/semanticTokenPresentation.js";
+import { SemanticTokenModifier, SemanticTokenPresentation, createAsterSemanticTokenSource, createOverlaySemanticTokenSource, projectAsterSemanticTokenLine, resolveAsterSemanticTokenModifiers, resolveAsterSemanticTokenPresentation, type ResolvedSemanticToken } from "../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";

@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorHitTarget } from "../../../browser/view/pointerHitTest.js";
+import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 export interface ContextMenuRequest { readonly position: TextPosition; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }

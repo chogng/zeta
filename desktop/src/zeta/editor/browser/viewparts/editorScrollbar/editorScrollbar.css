@@ -1,0 +1,94 @@
+.aster-editor {
+  --zeta-scrollbar-size: var(--aster-editor-scrollbar-size);
+  scrollbar-width: none;
+}
+
+.aster-editor::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.aster-editor-scrollbar-track {
+  position: absolute;
+  z-index: 8;
+  box-sizing: border-box;
+  border-radius: calc(var(--aster-editor-scrollbar-size) / 2);
+  opacity: 1;
+  outline: none;
+  touch-action: none;
+  transition: opacity 100ms linear;
+}
+
+.aster-editor-scrollbar-track-horizontal {
+  bottom: 0;
+  left: 0;
+  height: var(--aster-editor-scrollbar-size);
+}
+
+.aster-editor-scrollbar-track-vertical {
+  top: 0;
+  right: 0;
+  width: var(--aster-editor-scrollbar-size);
+}
+
+.aster-editor-scrollbar-track[data-visibility="auto"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.aster-editor:hover > .aster-editor-scrollbar-track[data-visibility="auto"],
+.aster-editor:focus-within > .aster-editor-scrollbar-track[data-visibility="auto"],
+.aster-editor-scrolling > .aster-editor-scrollbar-track[data-visibility="auto"],
+.aster-editor-scrollbar-track.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.aster-editor-scrollbar-track.disabled {
+  pointer-events: none;
+}
+
+.aster-editor-scrollbar-track > .zeta-scrollbar-thumb {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  border-radius: calc(var(--aster-editor-scrollbar-size) / 2);
+  background: var(--zeta-scrollbar-slider-background) padding-box;
+  cursor: default;
+  forced-color-adjust: none;
+  will-change: transform;
+}
+
+.aster-editor-scrollbar-track-horizontal > .zeta-scrollbar-thumb {
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+
+.aster-editor-scrollbar-track-vertical > .zeta-scrollbar-thumb {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+}
+
+.aster-editor-scrollbar-track:hover > .zeta-scrollbar-thumb {
+  background: var(--zeta-scrollbar-slider-hover-background) padding-box;
+}
+
+.aster-editor-scrollbar-track.active > .zeta-scrollbar-thumb {
+  background: var(--zeta-scrollbar-slider-active-background) padding-box;
+}
+
+.aster-editor-scrollbar-track:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+@media (forced-colors: active) {
+  .aster-editor-scrollbar-track > .zeta-scrollbar-thumb {
+    border-color: ButtonText;
+    background: ButtonFace padding-box;
+  }
+}

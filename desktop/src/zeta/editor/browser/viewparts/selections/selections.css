@@ -1,0 +1,28 @@
+.aster-editor-line-selections {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.aster-editor-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--zeta-selection-background);
+}
+
+.aster-editor-line.active::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  background: color-mix(in srgb, var(--zeta-editor-foreground) 6%, transparent);
+}
+
+@media (forced-colors: active) {
+  .aster-editor-selection {
+    background: Highlight;
+  }
+}

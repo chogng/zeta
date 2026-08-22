@@ -1,0 +1,51 @@
+.aster-editor-overview-ruler {
+  position: absolute;
+  z-index: 6;
+  width: 6px;
+  pointer-events: none;
+}
+
+.aster-editor-overview-marker {
+  position: absolute;
+  right: 0;
+  left: 0;
+  min-height: 2px;
+}
+
+.aster-editor-overview-marker.diff-added {
+  right: 3px;
+  background: var(--zeta-diff-editor-inserted-line-marker);
+}
+
+.aster-editor-overview-marker.diff-modified {
+  right: 3px;
+  background: var(--zeta-focus-border);
+}
+
+.aster-editor-overview-marker.diff-deleted {
+  right: 3px;
+  background: var(--zeta-diff-editor-removed-line-marker);
+}
+
+.aster-editor-overview-marker.error-underline {
+  background: var(--zeta-error-foreground);
+}
+
+.aster-editor-overview-marker.warning-underline {
+  background: var(--zeta-warning-foreground);
+}
+
+.aster-editor-overview-marker.information-underline {
+  background: var(--zeta-focus-border);
+}
+
+.aster-editor-overview-marker.hint-underline {
+  background: var(--zeta-description-foreground);
+}
+
+@media (forced-colors: active) {
+  .aster-editor-overview-marker {
+    background: CanvasText;
+    color: CanvasText;
+  }
+}

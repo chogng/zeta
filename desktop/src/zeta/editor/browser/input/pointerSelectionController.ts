@@ -10,7 +10,7 @@ import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/tr
 import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
 import { type EditorViewport } from "../view/editorViewport.js";
 import { PointerAutoScroller } from "./pointerAutoScroll.js";
-import { EditorHitTargetKind, type EditorHitTarget } from "../view/pointerHitTest.js";
+import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
 import { PointerMultiCursorModifier, combineAsterPointerSelection, findAsterPointerToggleCandidate, isAsterPointerMultiCursorGesture, readAsterPointerMultiCursorModifier } from "./pointerMultiCursor.js";
 
 enum PointerSelectionKind {

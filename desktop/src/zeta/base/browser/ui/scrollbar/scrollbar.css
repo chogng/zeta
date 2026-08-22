@@ -84,12 +84,12 @@
   .zeta-scrollbar-track[data-visibility="auto"],
 .zeta-scrollbar-scrolling >
   .zeta-scrollbar-track[data-visibility="auto"],
-.zeta-scrollbar-track[data-active="true"] {
+.zeta-scrollbar-track.active {
   opacity: 1;
   pointer-events: auto;
 }
 
-.zeta-scrollbar-track[aria-disabled="true"] {
+.zeta-scrollbar-track.disabled {
   pointer-events: none;
 }
 
@@ -125,7 +125,7 @@
     padding-box;
 }
 
-.zeta-scrollbar-track[data-active="true"] > .zeta-scrollbar-thumb {
+.zeta-scrollbar-track.active > .zeta-scrollbar-thumb {
   background:
     var(--zeta-scrollbar-slider-active-background)
     padding-box;

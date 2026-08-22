@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VisibleLineProjection } from "../../browser/view/visibleLineProjection.js";
-import { EditorLineWrapping, VisualLineProjection } from "../../browser/view/visualLineProjection.js";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { VisibleLineProjection } from "../../browser/viewModel/visibleLineProjection.js";
+import { EditorLineWrapping, VisualLineProjection } from "../../browser/viewModel/visualLineProjection.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";

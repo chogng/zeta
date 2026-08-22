@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -19,7 +19,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { EditorLineWrapping } = await import("../../../../browser/view/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../../browser/viewModel/visualLineProjection.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");
 
 test("Word-wrap shortcut switches Aster's visual projection without editing text", () => {

@@ -11,11 +11,11 @@ import { type DocumentCollaborationTarget } from "../common/services/documentCol
 import { type EditorPartOptions } from "./editorPart.js";
 import { type TextInputCompletionOptions, type TextInputController, type TextInputLanguageEditingAdapter } from "./input/textInputController.js";
 import { type EditorViewport } from "./view/editorViewport.js";
-import { type DecorationSource } from "./view/decorationPresentation.js";
-import { type EditorLineGutterDecoration } from "./view/lineGutterDecoration.js";
+import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
+import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "./view/semanticTokenPresentation.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
 
 /** Stable text-model mount point exposed to optional editor contributions. */
 export interface EditorCapability<T> {

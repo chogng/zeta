@@ -1,7 +1,7 @@
 import "./media/folding.css";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorLineGutterDecoration } from "../../../browser/view/lineGutterDecoration.js";
+import { type EditorLineGutterDecoration } from "../../../browser/viewparts/margin/lineGutterDecoration.js";
 import { type EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { h } from "../../../../base/browser/dom.js";

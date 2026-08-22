@@ -6,7 +6,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");

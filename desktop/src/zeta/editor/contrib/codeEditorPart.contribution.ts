@@ -13,9 +13,9 @@ import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition, type TextRange } from "../common/core/text.js";
 import { registerEditorPartFactory, type EditorPartOptions, type IEditorPartRuntime } from "../browser/editorPart.js";
 import { getEditorContributions, type EditorCapability } from "../browser/editorContribution.js";
-import { type DecorationSource } from "../browser/view/decorationPresentation.js";
-import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "../browser/view/lineGutterDecoration.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "../browser/view/semanticTokenPresentation.js";
+import { type DecorationSource } from "../browser/viewparts/decorations/decorationPresentation.js";
+import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "../browser/viewparts/margin/lineGutterDecoration.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type TextInputCompletionOptions } from "../browser/input/textInputController.js";
@@ -136,6 +136,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
           fontSize: options.fontSize,
           fontLigatures: options.fontLigatures,
           showLineNumbers: options.showLineNumbers,
+          rulers: options.rulers,
           showIndentationGuides: options.showIndentationGuides,
           minimap: options.minimap,
           activeLineHighlight: options.activeLineHighlight,

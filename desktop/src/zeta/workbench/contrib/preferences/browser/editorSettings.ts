@@ -7,7 +7,7 @@ import { Switch, Toggle } from "../../../../base/browser/ui/toggle/toggle.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
-import { EditorLineWrapping } from "../../../../editor/browser/view/visualLineProjection.js";
+import { EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
 import { CodeEditorConfiguration } from "../../codeEditor/common/editorConfiguration.js";
 import { WorkspaceSearchConfiguration } from "../../search/common/searchConfiguration.js";
 import { EditorSelectionConfiguration } from "../../../common/editorSelectionConfiguration.js";

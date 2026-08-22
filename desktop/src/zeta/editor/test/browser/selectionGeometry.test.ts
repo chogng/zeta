@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { createAsterSelectionGeometry } from "../../browser/view/selectionGeometry.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { createAsterSelectionGeometry } from "../../common/viewModel/selectionGeometry.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

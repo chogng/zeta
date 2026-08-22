@@ -15,14 +15,14 @@ import { type ITextResourceStore } from "../../../../editor/common/services/text
 import { EditorPart, type EditorPartOptions } from "../../../../editor/browser/editorPart.js";
 import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/textModelService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view/editorViewport.js";
-import { type EditorLineWrapping } from "../../../../editor/browser/view/visualLineProjection.js";
+import { type EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import { type TextRange } from "../../../../editor/common/core/text.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import { type OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 
 export interface EditorPanePart extends IDisposable {

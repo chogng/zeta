@@ -1,5 +1,5 @@
 import "../media/editorViewport.css";
-import { addDisposableListener, reset, h, fragment as createFragment } from "../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import { getClientArea } from "../../../base/browser/geometry.js";
 import { observeResize } from "../../../base/browser/observer.js";
 import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
@@ -11,32 +11,36 @@ import { resolveEditorIndentationOptions, type EditorIndentationOptions, type Re
 import { type EditorLineVisibilitySource } from "../../common/viewModel/modelLineProjection.js";
 import { TextPosition, type TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { type EditorLineRange, type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
-import { type DecorationSource, type ResolvedDecoration } from "./decorationPresentation.js";
-import { DecorationLineIndex } from "./decorationLineIndex.js";
-import { createAsterDiagnosticOverviewMarkers } from "./diagnosticOverviewMarkers.js";
-import { createAsterDiffOverviewMarkers } from "./diffOverviewMarkers.js";
-import { DomTextMeasurer, type TextMeasurer } from "./fontMetrics.js";
-import { LineWidthIndex } from "./lineWidthIndex.js";
-import { createAsterIndentationGuides } from "./indentationGuides.js";
-import { GpuMinimapRenderer } from "./gpuMinimapRenderer.js";
-import { MinimapNavigationController } from "./minimapNavigationController.js";
-import { MINIMAP_LINE_HEIGHT, MINIMAP_WIDTH, createMinimapSliderLayout, minimapContentWidth } from "./minimapPresentation.js";
-import { createMinimapRows } from "./minimapProjection.js";
-import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "./pointerHitTest.js";
-import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "./domTextGeometry.js";
-import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
-import { projectAsterSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "./semanticTokenPresentation.js";
-import { projectAsterCompositionOverlay, projectAsterDecorationOverlays, projectAsterSelectionOverlays, type ActiveLineHighlight, type ViewportOverlayContext } from "./viewportOverlayPresentation.js";
-import { EditorLineWrapping, VisualLineProjection } from "./visualLineProjection.js";
-import { VisibleLineProjection } from "./visibleLineProjection.js";
+import { type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
+import { type DecorationSource } from "../viewparts/decorations/decorationPresentation.js";
+import { DomTextMeasurer, type TextMeasurer } from "../measurement/fontMetrics.js";
+import { LineWidthIndex } from "../measurement/lineWidthIndex.js";
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
+import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "../viewparts/viewportOverlay/domTextGeometry.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "../viewparts/semanticTokens/semanticTokenPresentation.js";
+import { type ActiveLineHighlight, type ViewportOverlayContext } from "../viewparts/viewportOverlay/viewportOverlayPresentation.js";
+import { EditorLineWrapping, VisualLineProjection } from "../viewModel/visualLineProjection.js";
+import { VisibleLineProjection } from "../viewModel/visibleLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
-import { type CompositeEditorLineGutterDecoration, type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
-
-const GUTTER_HORIZONTAL_PADDING = 16;
-const OVERVIEW_RULER_WIDTH = 6;
+import { type EditorLineGutterDecoration } from "../viewparts/margin/lineGutterDecoration.js";
+import { BlockDecorationsPart } from "../viewparts/blockDecorations/blockDecorationsPart.js";
+import { MarginPart } from "../viewparts/margin/marginPart.js";
+import { MarginDecorationsPart } from "../viewparts/marginDecorations/marginDecorationsPart.js";
+import { RulersPart, type EditorRuler } from "../viewparts/rulers/rulersPart.js";
+import { EditorScrollbarPart } from "../viewparts/editorScrollbar/editorScrollbarPart.js";
+import { CompositionPart } from "../viewparts/composition/compositionPart.js";
+import { DecorationsPart } from "../viewparts/decorations/decorationsPart.js";
+import { IndentGuidesPart } from "../viewparts/indentGuides/indentGuidesPart.js";
+import { LineNumbersPart } from "../viewparts/lineNumbers/lineNumbersPart.js";
+import { LinesDecorationsPart } from "../viewparts/linesDecorations/linesDecorationsPart.js";
+import { MinimapPart } from "../viewparts/minimap/minimapPart.js";
+import { OverviewRulerPart } from "../viewparts/overviewRuler/overviewRulerPart.js";
+import { ScrollDecorationPart } from "../viewparts/scrollDecoration/scrollDecorationPart.js";
+import { SelectionsPart } from "../viewparts/selections/selectionsPart.js";
+import { ViewCursorsPart } from "../viewparts/viewCursors/viewCursorsPart.js";
+import { EditorViewPartCollection } from "../viewparts/viewPart.js";
+import { ViewLinesPart } from "../viewparts/viewLines/viewLinesPart.js";
 
 export type EditorViewportPresentation = "document" | "embedded";
 
@@ -58,6 +62,8 @@ export enum EditorMinimap {
   On = "on",
   Off = "off",
 }
+
+export type { EditorRuler } from "../viewparts/rulers/rulersPart.js";
 
 /** Controls the browser paragraph direction used to shape Aster's rendered text. */
 export enum EditorTextDirection {
@@ -90,6 +96,7 @@ export interface EditorViewportOptions {
   readonly fontSize?: number;
   readonly fontLigatures?: boolean;
   readonly showLineNumbers?: boolean;
+  readonly rulers?: readonly EditorRuler[];
   readonly showIndentationGuides?: boolean;
   readonly minimap?: EditorMinimap;
   readonly indentation?: EditorIndentationOptions;
@@ -107,7 +114,8 @@ export interface EditorContentPosition {
  * Read-only browser projection of one Aster text model.
  *
  * The common viewport owns layout math. This component owns the scroll host,
- * virtual line DOM, measurement inputs, and their lifecycle.
+ * measurement inputs, and ordered visual-part lifecycle; individual parts own
+ * their projected DOM and canvas surfaces.
  */
 export class EditorViewport extends DisposableOwner {
   readonly element: HTMLDivElement;
@@ -115,23 +123,21 @@ export class EditorViewport extends DisposableOwner {
   private readonly model: TextModel;
   private readonly viewport: EditorViewportModel;
   private readonly contentElement: HTMLDivElement;
-  private readonly linesElement: HTMLDivElement;
   private readonly textMetricsElement: HTMLSpanElement;
   private readonly accessibilityStatusElement: HTMLDivElement;
-  private readonly overviewRulerElement: HTMLDivElement;
-  private readonly minimapElement: HTMLDivElement;
-  private readonly minimapCanvasElement: HTMLCanvasElement;
-  private readonly minimapViewportElement: HTMLDivElement;
-  private readonly minimapGpuRenderer: GpuMinimapRenderer | undefined;
+  private readonly viewParts: EditorViewPartCollection;
+  private readonly viewLinesPart: ViewLinesPart;
+  private readonly marginPart: MarginPart;
+  private readonly decorationsPart: DecorationsPart;
+  private readonly compositionPart: CompositionPart;
+  private readonly selectionsPart: SelectionsPart;
+  private readonly viewCursorsPart: ViewCursorsPart;
   private readonly textMeasurer: TextMeasurer;
   private readonly lineWidths: LineWidthIndex;
   private readonly visualLineProjection: VisualLineProjection;
   private readonly visibleLineProjection: VisibleLineProjection;
   private readonly lineGutterDecoration: EditorLineGutterDecoration | undefined;
   private readonly selectionController: EditorSelectionController | undefined;
-  private readonly decorationSources: readonly DecorationSource[];
-  private readonly semanticTokenSource: SemanticTokenSource | undefined;
-  private readonly bracketColorizationSource: BracketColorizationSource | undefined;
   private readonly presentation: EditorViewportPresentation;
   private readonly focusOutlineOwner: EditorFocusOutlineOwner;
   private readonly activeLineHighlight: EditorActiveLineHighlight;
@@ -139,27 +145,9 @@ export class EditorViewport extends DisposableOwner {
   private readonly showIndentationGuides: boolean;
   private readonly padding: EditorViewportPadding;
   private readonly indentation: ResolvedEditorIndentationOptions;
-  private readonly decorationSnapshots =
-    new Map<DecorationSource, DecorationSource["decorations"]>();
-  private decorationLineIndex = new DecorationLineIndex([]);
-  private renderedLines = new Map<number, RenderedLine>();
-  private renderedRange: EditorLineRange = {
-    startLineIndex: 0,
-    endLineIndexExclusive: 0,
-  };
-  private renderedModelVersion = -1;
-  private renderedLineHeight = -1;
-  private renderedVisualProjectionRevision = -1;
-  private gutterRevision = 0;
-  private renderedGutterRevision = -1;
-  private overviewRevision = 0;
-  private renderedOverviewRevision = -1;
-  private minimapRevision = 0;
-  private renderedMinimapRevision = -1;
   private readonly minimap: EditorMinimap;
   private readonly textDirection: EditorTextDirection;
   private softWrapping: boolean;
-  private compositionRange: TrackedRange | undefined;
 
   constructor(options: EditorViewportOptions) {
     super();
@@ -167,16 +155,9 @@ export class EditorViewport extends DisposableOwner {
     this.model = options.model;
     this.element = h(ownerDocument, "div");
     this.contentElement = h(ownerDocument, "div");
-    this.linesElement = h(ownerDocument, "div");
     this.textMetricsElement = h(ownerDocument, "span");
     this.accessibilityStatusElement = h(ownerDocument, "div");
-    this.overviewRulerElement = h(ownerDocument, "div");
-    this.minimapElement = h(ownerDocument, "div");
-    this.minimapCanvasElement = h(ownerDocument, "canvas");
-    this.minimapViewportElement = h(ownerDocument, "div");
     this.selectionController = options.selectionController;
-    this.semanticTokenSource = options.semanticTokenSource;
-    this.bracketColorizationSource = options.bracketColorizationSource;
     this.presentation = options.presentation ?? "document";
     this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
     this.activeLineHighlight = options.activeLineHighlight ?? (this.presentation === "embedded" ? "off" : "on");
@@ -205,10 +186,10 @@ export class EditorViewport extends DisposableOwner {
           "Aster viewport and selection controller must share one text model",
         );
       }
-      if (this.semanticTokenSource && this.semanticTokenSource.textModel !== this.model) {
+      if (options.semanticTokenSource && options.semanticTokenSource.textModel !== this.model) {
         throw new TypeError("Aster viewport and semantic token source must share one text model");
       }
-      if (this.bracketColorizationSource && this.bracketColorizationSource.textModel !== this.model) {
+      if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== this.model) {
         throw new TypeError("Aster viewport and bracket colorization source must share one text model");
       }
     } catch (error) {
@@ -216,10 +197,6 @@ export class EditorViewport extends DisposableOwner {
       throw error;
     }
     this.lineGutterDecoration = options.lineGutterDecoration ? this.own(options.lineGutterDecoration) : undefined;
-    this.decorationSources = Object.freeze([
-      ...(options.decorationSources ?? []),
-    ]);
-
     this.element.className = "aster-editor";
     this.element.classList.add(`aster-editor-${this.presentation}`);
     this.element.classList.add(`aster-editor-focus-owner-${this.focusOutlineOwner}`);
@@ -231,39 +208,21 @@ export class EditorViewport extends DisposableOwner {
     this.element.style.tabSize = String(this.indentation.tabSize);
     this.element.style.setProperty("--aster-editor-padding-left", `${this.padding.left}px`);
     this.element.style.setProperty("--aster-editor-padding-right", `${this.padding.right}px`);
-    this.element.style.setProperty("--aster-editor-feature-gutter-width", `${this.featureGutterWidth}px`);
-    this.element.style.setProperty("--aster-editor-additional-feature-gutter-width", `${this.additionalFeatureGutterWidth}px`);
     this.element.dir = this.textDirection;
     this.element.classList.toggle("word-wrapped", this.softWrapping);
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor");
     this.contentElement.className = "aster-editor-content";
-    this.linesElement.className = "aster-editor-lines";
     this.textMetricsElement.className =
       "aster-editor-text-metrics";
     this.textMetricsElement.setAttribute("aria-hidden", "true");
     this.accessibilityStatusElement.className = "aster-editor-accessibility-status";
     this.accessibilityStatusElement.setAttribute("aria-live", "polite");
     this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
-    this.overviewRulerElement.className = "aster-editor-overview-ruler";
-    this.overviewRulerElement.setAttribute("aria-hidden", "true");
-    this.minimapElement.className = "aster-editor-minimap";
-    this.minimapElement.hidden = this.minimap === EditorMinimap.Off;
-    this.minimapElement.setAttribute("aria-hidden", "true");
-    this.minimapCanvasElement.className = "aster-editor-minimap-gpu";
-    this.minimapCanvasElement.setAttribute("aria-hidden", "true");
-    this.minimapViewportElement.className = "aster-editor-minimap-viewport";
-    this.minimapElement.append(this.minimapCanvasElement, this.minimapViewportElement);
-    this.contentElement.append(this.linesElement);
-    this.element.append(this.contentElement, this.overviewRulerElement, this.minimapElement, this.textMetricsElement, this.accessibilityStatusElement);
+    this.element.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
     options.container.append(this.element);
     this.defer(() => this.element.remove());
-    this.defer(() => this.compositionRange?.dispose());
-    this.minimapGpuRenderer = this.minimap === EditorMinimap.On
-      ? GpuMinimapRenderer.tryCreate(this.minimapCanvasElement)
-      : undefined;
-    this.defer(() => this.minimapGpuRenderer?.dispose());
     this.textMeasurer =
       options.textMeasurer ??
       new DomTextMeasurer(this.textMetricsElement);
@@ -307,8 +266,100 @@ export class EditorViewport extends DisposableOwner {
     }));
     this.viewport = viewport;
     this.onDidChangeLayout = viewport.onDidChange;
+    this.viewParts = this.own(new EditorViewPartCollection());
+    this.viewLinesPart = this.viewParts.register(new ViewLinesPart({
+      container: this.contentElement,
+      model: this.model,
+      readVisualProjection: () => this.visualProjection,
+      readProjectionRevision: () => this.visibleLineProjection.revision,
+      semanticTokenSource: options.semanticTokenSource,
+      bracketColorizationSource: options.bracketColorizationSource,
+      lineGutterDecoration: this.lineGutterDecoration,
+      textDirection: this.textDirection,
+    }));
+    this.marginPart = this.viewParts.register(new MarginPart({
+      host: this.element,
+      container: this.contentElement,
+      model: this.model,
+      textMeasurer: this.textMeasurer,
+      presentation: this.presentation,
+      showLineNumbers: this.showLineNumbers,
+      lineGutterDecoration: this.lineGutterDecoration,
+      readVisualProjection: () => this.visualProjection,
+      readRenderedLines: () => this.viewLinesPart.renderedLines,
+    }));
+    this.viewParts.register(new LineNumbersPart({
+      showLineNumbers: this.showLineNumbers,
+      readVisualProjection: () => this.visualProjection,
+      readRenderedLines: () => this.viewLinesPart.renderedLines,
+    }));
+    this.decorationsPart = this.viewParts.register(new DecorationsPart({
+      model: this.model,
+      decorationSources: options.decorationSources ?? [],
+      readOverlayContext: layout => this.overlayContext(layout),
+    }));
+    this.viewParts.register(new LinesDecorationsPart({
+      readOverlayContext: layout => this.overlayContext(layout),
+      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
+    }));
+    this.viewParts.register(new BlockDecorationsPart({
+      container: this.contentElement,
+      readOverlayContext: layout => this.overlayContext(layout),
+      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
+    }));
+    this.viewParts.register(new MarginDecorationsPart({
+      readOverlayContext: layout => this.overlayContext(layout),
+      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
+    }));
+    this.viewParts.register(new IndentGuidesPart({
+      showIndentationGuides: this.showIndentationGuides,
+      tabSize: this.indentation.tabSize,
+      readOverlayContext: layout => this.overlayContext(layout),
+    }));
+    this.selectionsPart = this.viewParts.register(new SelectionsPart({
+      selectionController: this.selectionController,
+      readOverlayContext: layout => this.overlayContext(layout),
+    }));
+    this.viewCursorsPart = this.viewParts.register(new ViewCursorsPart({
+      selectionController: this.selectionController,
+      readOverlayContext: layout => this.overlayContext(layout),
+    }));
+    this.viewParts.register(new RulersPart({
+      container: this.contentElement,
+      textMeasurer: this.textMeasurer,
+      readTextLeft: () => this.textLeft,
+      rulers: options.rulers,
+    }));
+    this.compositionPart = this.viewParts.register(new CompositionPart({
+      model: this.model,
+      readLayout: () => this.viewport.layout,
+      readOverlayContext: layout => this.overlayContext(layout),
+    }));
+    this.viewParts.register(new EditorScrollbarPart({
+      container: this.element,
+      viewport: this.element,
+      scrollTo: position => this.scrollTo(position),
+    }));
+    this.viewParts.register(new MinimapPart({
+      container: this.element,
+      model: this.model,
+      readLayout: () => this.viewport.layout,
+      scrollTo: position => this.scrollTo(position),
+      readMarkers: () => this.decorationsPart.overviewMarkers(),
+      readMarkersRevision: () => this.decorationsPart.markersRevision,
+      enabled: this.minimap === EditorMinimap.On,
+    }));
+    this.viewParts.register(new OverviewRulerPart({
+      container: this.element,
+      minimapEnabled: this.minimap === EditorMinimap.On,
+      readLineCount: () => this.model.lineCount,
+      readMarkers: () => this.decorationsPart.overviewMarkers(),
+      readMarkersRevision: () => this.decorationsPart.markersRevision,
+    }));
+    this.viewParts.register(new ScrollDecorationPart(this.element));
     this.own(this.visibleLineProjection.onDidChange(() => this.project(viewport.layout)));
-    if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => { this.gutterRevision += 1; this.project(viewport.layout); }));
+    if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
+    this.own(this.decorationsPart.onDidChange(() => this.project(viewport.layout)));
     viewport.setContentWidth(this.measuredContentWidth);
 
     this.own(viewport.onDidChange(({ layout }) => this.project(layout)));
@@ -320,50 +371,26 @@ export class EditorViewport extends DisposableOwner {
         left: this.element.scrollLeft,
         top: this.element.scrollTop,
       };
-      this.projectMinimapScrollPosition(viewport.layout, scrollPosition);
       const layout = viewport.setScrollPosition(scrollPosition);
       this.syncScrollPosition(layout);
     }));
-    this.own(new MinimapNavigationController(
-      this.minimapElement,
-      () => this.viewport.layout,
-      position => this.scrollTo(position),
-    ));
-    this.own(addDisposableListener<globalThis.Event>(this.minimapCanvasElement, "webglcontextlost", event => {
-      event.preventDefault();
-      this.minimapGpuRenderer?.disable();
-      this.renderedMinimapRevision = -1;
-      this.projectMinimap(this.viewport.layout);
-    }));
     this.own(this.model.onDidChange(change => {
       this.lineWidths.applyModelChange(change);
-      this.overviewRevision += 1;
-      this.minimapRevision += 1;
       if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
       viewport.setContentWidth(this.measuredContentWidth);
     }));
     if (this.selectionController) {
       this.own(this.selectionController.onDidChange(() => {
-        this.projectSelections(viewport.layout);
+        this.selectionsPart.render(viewport.layout);
+        this.viewCursorsPart.render(viewport.layout);
         this.updateAccessibilityStatus();
       }));
       this.updateAccessibilityStatus();
     }
-    for (const source of this.decorationSources) {
-      this.decorationSnapshots.set(source, source.decorations);
-      this.own(source.onDidChange(() => {
-        this.decorationSnapshots.set(source, source.decorations);
-        this.rebuildDecorationLineIndex();
-        this.projectDecorations(viewport.layout);
-        this.projectOverviewRuler(viewport.layout);
-        this.projectMinimap(viewport.layout);
-      }));
-    }
-    this.rebuildDecorationLineIndex();
-    const semanticTokenSource = this.semanticTokenSource;
+    const semanticTokenSource = options.semanticTokenSource;
     if (semanticTokenSource) {
       this.own(semanticTokenSource.onDidChange(() => {
-        this.projectVisibleLineText();
+        this.viewLinesPart.renderVisibleLineText();
       }));
     }
     const fontSet = ownerDocument.fonts;
@@ -523,7 +550,7 @@ export class EditorViewport extends DisposableOwner {
     if (!Number.isFinite(horizontalOffset)) throw new RangeError("Aster visual cursor horizontal offset must be finite");
     if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const visualLine = this.visualProjection.lineAt(visualLineIndex);
-    const line = this.renderedLines.get(visualLineIndex);
+    const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
     if (!visualLine || !line) return undefined;
     const text = this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, visualLine.endColumn);
     if (line.textElement.textContent?.length !== text.length) return undefined;
@@ -544,15 +571,7 @@ export class EditorViewport extends DisposableOwner {
   }
 
   setCompositionRange(range: TextRange | undefined): void {
-    const next = range
-      ? this.model.trackRange(
-        range,
-        TrackedRangeStickiness.NeverGrowsAtEdges,
-      )
-      : undefined;
-    this.compositionRange?.dispose();
-    this.compositionRange = next;
-    this.projectComposition(this.viewport.layout);
+    this.compositionPart.setRange(range);
   }
 
   getTargetAtClientPoint(
@@ -606,7 +625,7 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
-    for (const [visualLineIndex, renderedLine] of this.renderedLines) {
+    for (const [visualLineIndex, renderedLine] of this.viewLinesPart.renderedLines) {
       const offset = getAsterDomTextOffsetAtClientPoint(
         renderedLine.textElement,
         point.clientX,
@@ -625,7 +644,7 @@ export class EditorViewport extends DisposableOwner {
 
   private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
     if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
-    const line = this.renderedLines.get(visualLineIndex);
+    const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
     return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
       ? getAsterDomTextCaretLeft(line.textElement, offset, line.element)
       : undefined;
@@ -641,25 +660,11 @@ export class EditorViewport extends DisposableOwner {
   }
 
   private get gutterWidth(): number {
-    if (this.presentation === "embedded") return 0;
-    if (!this.showLineNumbers) return this.featureGutterWidth;
-    const digitCount = String(this.model.lineCount).length;
-    return Math.ceil(
-      this.textMeasurer.measureLineWidth("9".repeat(digitCount)) +
-      GUTTER_HORIZONTAL_PADDING + this.additionalFeatureGutterWidth,
-    );
-  }
-
-  private get featureGutterWidth(): number {
-    return (this.lineGutterDecoration as CompositeEditorLineGutterDecoration | undefined)?.width ?? (this.lineGutterDecoration ? 20 : 0);
-  }
-
-  private get additionalFeatureGutterWidth(): number {
-    return Math.max(0, this.featureGutterWidth - 20);
+    return this.marginPart.gutterWidth;
   }
 
   private get textLeft(): number {
-    return this.gutterWidth + this.textMeasurer.contentLeftPadding;
+    return this.marginPart.textLeft;
   }
 
   private updateWrapWidth(viewportWidth: number): void {
@@ -674,21 +679,9 @@ export class EditorViewport extends DisposableOwner {
     if (layout !== this.viewport.layout) return;
     this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
     this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
-    this.element.style.setProperty(
-      "--aster-editor-gutter-width",
-      `${this.gutterWidth}px`,
-    );
     this.contentElement.style.width = `${layout.contentSize.width}px`;
     this.contentElement.style.height = `${layout.contentSize.height}px`;
-    this.linesElement.style.transform =
-      `translate3d(0, ${layout.renderTop}px, 0)`;
-    this.reconcileLines(layout);
-    this.projectIndentationGuides(layout);
-    this.projectDecorations(layout);
-    this.projectComposition(layout);
-    this.projectSelections(layout);
-    this.projectOverviewRuler(layout);
-    this.projectMinimap(layout);
+    this.viewParts.render(layout);
     this.syncScrollPosition(layout);
   }
 
@@ -701,119 +694,6 @@ export class EditorViewport extends DisposableOwner {
       if (visualLine) logicalLineIndexes.add(visualLine.logicalLineIndex);
     }
     this.lineWidths.observeLines([...logicalLineIndexes]);
-  }
-
-  private reconcileLines(layout: EditorViewportLayout): void {
-    const visualProjection = this.visualProjection;
-      const visualProjectionRevision = this.visibleLineProjection.revision;
-    if (
-      this.renderedModelVersion === layout.modelVersion &&
-      this.renderedLineHeight === layout.lineHeight &&
-      this.renderedVisualProjectionRevision === visualProjectionRevision &&
-      this.renderedGutterRevision === this.gutterRevision &&
-      lineRangesEqual(this.renderedRange, layout.renderLines)
-    ) return;
-
-    const ownerDocument = this.element.ownerDocument;
-    const semanticTokens = this.resolveSemanticTokenRange(layout.renderLines);
-    const fragment = createFragment(ownerDocument);
-    const next = new Map<number, RenderedLine>();
-    for (
-      let visualLineIndex = layout.renderLines.startLineIndex;
-      visualLineIndex < layout.renderLines.endLineIndexExclusive;
-      visualLineIndex++
-    ) {
-      const visualLine = visualProjection.lineAt(visualLineIndex);
-      if (!visualLine) throw new Error("Viewport render range exceeds the visual line projection");
-      const existing = this.renderedLines.get(visualLineIndex);
-      const line = existing ?? createAsterRenderedLine(ownerDocument, visualLineIndex, this.lineGutterDecoration);
-      line.element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
-      if (!existing || this.renderedVisualProjectionRevision !== visualProjectionRevision || this.renderedGutterRevision !== this.gutterRevision) {
-        line.numberElement.textContent = visualLine.firstForLogicalLine
-          ? String(visualLine.logicalLineIndex + 1)
-          : "";
-        this.lineGutterDecoration?.project(line.featureGutterElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
-      }
-      if (
-        !existing ||
-        this.renderedModelVersion !== layout.modelVersion ||
-        this.renderedVisualProjectionRevision !== visualProjectionRevision
-      ) {
-        line.textElement.dir = this.textDirection;
-        this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
-      }
-      if (!existing || this.renderedLineHeight !== layout.lineHeight) {
-        line.element.style.height = `${layout.lineHeight}px`;
-        line.element.style.lineHeight = `${layout.lineHeight}px`;
-      }
-      next.set(visualLineIndex, line);
-      fragment.append(line.element);
-    }
-    reset(this.linesElement, fragment);
-    this.renderedLines = next;
-    this.renderedRange = layout.renderLines;
-    this.renderedModelVersion = layout.modelVersion;
-    this.renderedLineHeight = layout.lineHeight;
-    this.renderedVisualProjectionRevision = visualProjectionRevision;
-    this.renderedGutterRevision = this.gutterRevision;
-  }
-
-  private projectVisibleLineText(): void {
-    const semanticTokens = this.resolveSemanticTokenRange(this.renderedRange);
-    const visualProjection = this.visualProjection;
-    for (const [visualLineIndex, line] of this.renderedLines) {
-      const visualLine = visualProjection.lineAt(visualLineIndex);
-      if (visualLine) this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
-    }
-  }
-
-  private projectLineText(line: RenderedLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
-    const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
-    const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
-    const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
-    projectAsterSemanticTokenLine(
-      line.textElement,
-      text,
-      clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
-      clipBracketColorizations(brackets, visualLine.startColumn, visualLine.endColumn),
-    );
-  }
-
-  private projectIndentationGuides(layout: EditorViewportLayout): void {
-    const visualProjection = this.visualProjection;
-    for (const [visualLineIndex, line] of this.renderedLines) {
-      const visualLine = visualProjection.lineAt(visualLineIndex);
-      line.indentationElement.replaceChildren();
-      if (!this.showIndentationGuides) continue;
-      if (!visualLine?.firstForLogicalLine) continue;
-      const text = this.model.getLineContent(visualLine.logicalLineIndex);
-      for (const guide of createAsterIndentationGuides(text, this.indentation.tabSize)) {
-        const element = h(this.element.ownerDocument, "span");
-        element.className = "aster-editor-indent-guide";
-        element.dataset.indentLevel = String(guide.level);
-        element.style.left = `${this.textLeft + this.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
-        line.indentationElement.append(element);
-      }
-    }
-  }
-
-
-  private resolveSemanticTokenRange(range: EditorLineRange): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
-    const source = this.semanticTokenSource;
-    if (!source) return new Map();
-    const tokens = new Map<number, readonly ResolvedSemanticToken[]>();
-    const projection = this.visualProjection;
-    for (let visualLineIndex = range.startLineIndex; visualLineIndex < range.endLineIndexExclusive; visualLineIndex += 1) {
-      const visualLine = projection.lineAt(visualLineIndex);
-      if (visualLine && !tokens.has(visualLine.logicalLineIndex)) {
-        tokens.set(visualLine.logicalLineIndex, source.getLineTokens(visualLine.logicalLineIndex));
-      }
-    }
-    return tokens;
-  }
-
-  private projectSelections(layout: EditorViewportLayout): void {
-    projectAsterSelectionOverlays(this.overlayContext(layout), this.selectionController);
   }
 
   private updateAccessibilityStatus(): void {
@@ -836,121 +716,18 @@ export class EditorViewport extends DisposableOwner {
       : `Line ${position.lineIndex + 1}, column ${position.columnIndex + 1}, ${selectedLength} characters selected`);
   }
 
-  private projectDecorations(layout: EditorViewportLayout): void {
-    projectAsterDecorationOverlays(this.overlayContext(layout), this.resolveVisibleDecorations(layout));
-  }
-
-  private projectComposition(layout: EditorViewportLayout): void {
-    projectAsterCompositionOverlay(this.overlayContext(layout), this.compositionRange?.range);
-  }
-
   private overlayContext(layout: EditorViewportLayout): ViewportOverlayContext {
     return {
       ownerDocument: this.element.ownerDocument,
       model: this.model,
       visualLineProjection: this.visualProjection,
-      renderedLines: this.renderedLines,
+      renderedLines: this.viewLinesPart.renderedLines,
       renderLines: layout.renderLines,
       textLeft: this.textLeft,
       textMeasurer: this.textMeasurer,
       useDomTextGeometry: this.textDirection !== EditorTextDirection.LeftToRight,
       activeLineHighlight: this.activeLineHighlight,
     };
-  }
-
-  private rebuildDecorationLineIndex(): void {
-    this.decorationLineIndex = new DecorationLineIndex(this.decorationSources.flatMap(
-      source => this.decorationSnapshots.get(source) ?? [],
-    ));
-    this.overviewRevision += 1;
-    this.minimapRevision += 1;
-  }
-
-  private projectOverviewRuler(layout: EditorViewportLayout): void {
-    const rightOffset = this.minimap === EditorMinimap.On ? MINIMAP_WIDTH + 4 : 0;
-    this.overviewRulerElement.style.left = `${layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - OVERVIEW_RULER_WIDTH - rightOffset)}px`;
-    this.overviewRulerElement.style.top = `${layout.scrollPosition.top}px`;
-    this.overviewRulerElement.style.height = `${layout.viewportSize.height}px`;
-    if (this.renderedOverviewRevision === this.overviewRevision) return;
-    const markers = this.overviewMarkers();
-    const fragment = createFragment(this.element.ownerDocument);
-    for (const marker of markers) {
-      const element = h(this.element.ownerDocument, "span");
-      element.className = "aster-editor-overview-marker";
-      element.classList.add(marker.presentation);
-      element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
-      element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / this.model.lineCount * 100)}%`;
-      if (marker.hoverText !== undefined) element.title = marker.hoverText;
-      fragment.append(element);
-    }
-    reset(this.overviewRulerElement, fragment);
-    this.renderedOverviewRevision = this.overviewRevision;
-  }
-
-  private projectMinimap(layout: EditorViewportLayout): void {
-    if (this.minimap === EditorMinimap.Off) return;
-    this.projectMinimapScrollPosition(layout, layout.scrollPosition);
-    this.minimapGpuRenderer?.resize(MINIMAP_WIDTH, layout.viewportSize.height);
-    if (this.renderedMinimapRevision === this.minimapRevision) return;
-    const fragment = createFragment(this.element.ownerDocument);
-    const rows = createMinimapRows(this.model);
-    const gpuRenderer = this.minimapGpuRenderer;
-    if (gpuRenderer?.isAvailable) {
-      gpuRenderer.setRows(rows, this.model.lineCount);
-    } else {
-      for (const row of rows) {
-        const marker = h(this.element.ownerDocument, "span");
-        marker.className = "aster-editor-minimap-row";
-        marker.style.top = `${row.startLineIndex / this.model.lineCount * 100}%`;
-        marker.style.width = `${minimapContentWidth(row.density)}px`;
-        marker.style.height = `${MINIMAP_LINE_HEIGHT}px`;
-        fragment.append(marker);
-      }
-    }
-    for (const marker of this.overviewMarkers()) {
-      const element = h(this.element.ownerDocument, "span");
-      element.className = "aster-editor-minimap-diagnostic-marker";
-      element.classList.add(marker.presentation);
-      element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
-      element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / this.model.lineCount * 100)}%`;
-      if (marker.hoverText !== undefined) element.title = marker.hoverText;
-      fragment.append(element);
-    }
-    this.minimapElement.replaceChildren(this.minimapCanvasElement, fragment, this.minimapViewportElement);
-    this.renderedMinimapRevision = this.minimapRevision;
-  }
-
-  private overviewMarkers() {
-    const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
-    return [
-      ...createAsterDiagnosticOverviewMarkers(decorations, this.model.lineCount),
-      ...createAsterDiffOverviewMarkers(decorations, this.model.lineCount),
-    ];
-  }
-
-  private projectMinimapScrollPosition(layout: EditorViewportLayout, scrollPosition: EditorScrollPosition): void {
-    if (this.minimap === EditorMinimap.Off) return;
-    const left = scrollPosition.left + Math.max(0, layout.viewportSize.width - MINIMAP_WIDTH);
-    this.minimapElement.style.transform = `translate3d(${left}px, ${scrollPosition.top}px, 0)`;
-    this.minimapElement.style.height = `${layout.viewportSize.height}px`;
-    const slider = createMinimapSliderLayout(layout.viewportSize.height, layout.contentSize.height, scrollPosition.top);
-    this.minimapViewportElement.style.height = `${slider.height}px`;
-    this.minimapViewportElement.style.transform = `translate3d(0, ${slider.top}px, 0)`;
-  }
-
-  private resolveVisibleDecorations(layout: EditorViewportLayout): readonly ResolvedDecoration[] {
-    const projection = this.visualProjection;
-    let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
-    let maximumLogicalLineIndex = -1;
-    for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
-      const visualLine = projection.lineAt(visualLineIndex);
-      if (!visualLine) continue;
-      minimumLogicalLineIndex = Math.min(minimumLogicalLineIndex, visualLine.logicalLineIndex);
-      maximumLogicalLineIndex = Math.max(maximumLogicalLineIndex, visualLine.logicalLineIndex);
-    }
-    return maximumLogicalLineIndex < 0
-      ? []
-      : this.decorationLineIndex.getIntersectingLines(minimumLogicalLineIndex, maximumLogicalLineIndex);
   }
 
   private get visualProjection() {
@@ -997,32 +774,4 @@ function nonNegativePaddingValue(value: number, side: keyof EditorViewportPaddin
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
-}
-
-function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {
-  return left.startLineIndex === right.startLineIndex &&
-    left.endLineIndexExclusive === right.endLineIndexExclusive;
-}
-
-function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColumn: number, endColumn: number): readonly ResolvedSemanticToken[] {
-  return Object.freeze(tokens.flatMap(token => {
-    const start = Math.max(token.startColumn, startColumn);
-    const end = Math.min(token.endColumn, endColumn);
-    if (end <= start) return [];
-    return [Object.freeze({
-      startColumn: start - startColumn,
-      endColumn: end - startColumn,
-      presentation: token.presentation,
-      ...(token.modifiers && token.modifiers.length > 0 ? { modifiers: token.modifiers } : {}),
-    })];
-  }));
-}
-
-function clipBracketColorizations(brackets: readonly BracketColorizationSpan[], startColumn: number, endColumn: number): readonly BracketColorizationSpan[] {
-  return Object.freeze(brackets.flatMap(bracket => {
-    const start = Math.max(bracket.startColumn, startColumn);
-    const end = Math.min(bracket.endColumn, endColumn);
-    if (end <= start) return [];
-    return [Object.freeze({ startColumn: start - startColumn, endColumn: end - startColumn, level: bracket.level })];
-  }));
 }

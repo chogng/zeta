@@ -54,6 +54,7 @@ class ElectronMenubarControl extends DisposableOwner
       container,
       options.menuService,
       options.contextMenuService,
+      options.localizationService,
     ));
     this.element = browserMenubar.element;
     if (isMacintosh) {

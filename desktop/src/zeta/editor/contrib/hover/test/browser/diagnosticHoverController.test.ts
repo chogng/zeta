@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, createAsterDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";

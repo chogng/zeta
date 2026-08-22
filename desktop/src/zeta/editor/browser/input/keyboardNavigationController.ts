@@ -5,8 +5,8 @@ import { operatingSystem, OperatingSystem } from "../../../base/common/platform.
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../view/editorViewport.js";
-import { EditorLineWrapping } from "../view/visualLineProjection.js";
-import { navigateAsterVisualCursors } from "../view/visualCursorNavigation.js";
+import { EditorLineWrapping } from "../viewModel/visualLineProjection.js";
+import { navigateAsterVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 
 export interface KeyboardNavigationControllerOptions {
   readonly operatingSystem?: OperatingSystem;

@@ -105,6 +105,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       "aria-disabled",
       String(metrics.maximumPosition === 0),
     );
+    this.track.classList.toggle("disabled", metrics.maximumPosition === 0);
     this.applyThumbMetrics(metrics);
   }
 
@@ -147,7 +148,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     const thumbTravel = startMetrics.trackSize - startMetrics.thumbSize;
     if (thumbTravel <= 0 || startMetrics.maximumPosition <= 0) return;
     this.dragListeners.clear();
-    this.track.dataset.active = "true";
+    this.track.classList.add("active");
     if (
       typeof this.track.setPointerCapture === "function" &&
       browserEvent.pointerId !== undefined
@@ -179,7 +180,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       ) {
         this.track.releasePointerCapture(event.pointerId);
       }
-      delete this.track.dataset.active;
+      this.track.classList.remove("active");
       this.dragListeners.clear();
     };
     this.dragListeners.add(addDisposableListener(

@@ -1,0 +1,22 @@
+.aster-editor-rulers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  height: 100%;
+  pointer-events: none;
+}
+
+.aster-editor-ruler {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  pointer-events: none;
+  box-shadow: 1px 0 0 0 var(--zeta-editor-ruler-foreground, color-mix(in srgb, var(--zeta-editor-foreground) 25%, transparent)) inset;
+}
+
+@media (forced-colors: active) {
+  .aster-editor-ruler {
+    box-shadow: 1px 0 0 0 CanvasText inset;
+  }
+}

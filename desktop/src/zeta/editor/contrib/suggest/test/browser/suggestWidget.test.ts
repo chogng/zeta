@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { IME } from "../../../base/common/ime.js";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";

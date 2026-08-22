@@ -9,7 +9,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
-import { type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
+import { type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { createAsterSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
 import { captureAsterClipboardTextTransfer, normalizeAsterClipboardPasteProviders, provideAsterClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";

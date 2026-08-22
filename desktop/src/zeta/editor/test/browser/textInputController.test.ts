@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../base/common/platform.js";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { EditorIndentationKind } from "../../common/editorIndentation.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";

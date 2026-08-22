@@ -31,10 +31,10 @@ export interface SettingsEditorContributionOptions {
   readonly connectorService?: IConnectorService;
   readonly pluginService?: IPluginService;
   readonly marketplaceService?: IMarketplaceService;
-  readonly toolSearchService?: IToolSearchService;
   readonly languagePackService?: ILanguagePackService;
   readonly localeService?: ILocaleService;
   readonly localizationService?: ILocalizationService;
+  readonly toolSearchService?: IToolSearchService;
   readonly workspaceTrustService?: IWorkspaceTrustService;
   readonly workspaceOpenService?: IWorkspaceOpenService;
   readonly workspaceContextService?: IWorkspaceContextService;
@@ -58,10 +58,10 @@ export class SettingsEditorContribution extends DisposableOwner {
       connectorService: options.connectorService ?? unavailableConnectorService,
       pluginService: options.pluginService ?? unavailablePluginService,
       marketplaceService: options.marketplaceService ?? unavailableMarketplaceService,
-      toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
       languagePackService: options.languagePackService ?? unavailableLanguagePackService,
       localeService: options.localeService ?? unavailableLocaleService,
       localizationService: options.localizationService ?? unavailableLocalizationService,
+      toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
       workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
       workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
       workspaceContextService: options.workspaceContextService,
@@ -145,8 +145,8 @@ const unavailablePluginService: IPluginService = {
 };
 
 const unavailableMarketplaceService: IMarketplaceService = {
-  cachedBrowse: () => undefined,
   onDidChangeInstalled: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  cachedBrowse: () => undefined,
   browse: () => Promise.reject(new Error("Marketplace is unavailable.")),
   refreshBrowse: () => Promise.reject(new Error("Marketplace is unavailable.")),
   search: () => Promise.reject(new Error("Marketplace is unavailable.")),

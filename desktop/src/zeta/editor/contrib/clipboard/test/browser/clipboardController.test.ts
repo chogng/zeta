@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -112,7 +112,7 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, ClipboardLineEnding } = await import("../../browser/clipboardController.js");
 const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
-const { SemanticTokenPresentation } = await import("../../../../browser/view/semanticTokenPresentation.js");
+const { SemanticTokenPresentation } = await import("../../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js");
 const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test("Clipboard copies, distributes paste, cuts, and restores isolated history", () => {

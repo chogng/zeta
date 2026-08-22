@@ -2,7 +2,7 @@ import "./media/debugBreakpointDecorations.css";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
+import { type EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import { type IDebugService } from "../../../services/debug/common/debugService.js";
 import { h } from "../../../../base/browser/dom.js";
 

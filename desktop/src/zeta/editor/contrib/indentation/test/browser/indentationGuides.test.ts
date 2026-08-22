@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAsterIndentationGuides } from "../../../../browser/view/indentationGuides.js";
+import { createAsterIndentationGuides } from "../../../../browser/viewparts/indentGuides/indentationGuides.js";
 
 test("Indentation guides follow complete visual units in mixed leading whitespace", () => {
   assert.deepEqual(createAsterIndentationGuides("        value", 4), [

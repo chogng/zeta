@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
-import { SemanticTokenPresentation, createAsterSemanticTokenSource } from "../../browser/view/semanticTokenPresentation.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { SemanticTokenPresentation, createAsterSemanticTokenSource } from "../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../browser/view/editorViewport.js");
-const { EditorLineWrapping } = await import("../../browser/view/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../browser/viewModel/visualLineProjection.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

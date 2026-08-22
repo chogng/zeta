@@ -1,0 +1,111 @@
+.aster-editor-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-width: 100%;
+  will-change: transform;
+}
+
+.aster-editor-line {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 100%;
+  overflow: visible;
+  white-space: pre;
+}
+
+.aster-editor-line-text,
+.aster-editor-text-metrics {
+  box-sizing: border-box;
+  padding: 0 var(--aster-editor-padding-right) 0 var(--aster-editor-padding-left);
+}
+
+.aster-editor-line-text {
+  position: relative;
+  z-index: 3;
+  display: inline-block;
+  unicode-bidi: isolate;
+}
+
+.aster-editor-direction-auto .aster-editor-line-text {
+  unicode-bidi: plaintext;
+}
+
+.aster-editor-token.token-comment {
+  color: var(--zeta-editor-token-comment-foreground);
+}
+
+.aster-editor-token.token-keyword {
+  color: var(--zeta-editor-token-keyword-foreground);
+}
+
+.aster-editor-token.token-string {
+  color: var(--zeta-editor-token-string-foreground);
+}
+
+.aster-editor-token.token-number {
+  color: var(--zeta-editor-token-number-foreground);
+}
+
+.aster-editor-token.token-regexp {
+  color: var(--zeta-editor-token-regexp-foreground);
+}
+
+.aster-editor-token.token-type {
+  color: var(--zeta-editor-token-type-foreground);
+}
+
+.aster-editor-token.token-function {
+  color: var(--zeta-editor-token-function-foreground);
+}
+
+.aster-editor-token.token-variable {
+  color: var(--zeta-editor-token-variable-foreground);
+}
+
+.aster-editor-token.token-operator {
+  color: var(--zeta-editor-token-operator-foreground);
+}
+
+.aster-editor-token.token-modifier-declaration {
+  font-weight: 600;
+}
+
+.aster-editor-token.token-modifier-readonly,
+.aster-editor-token.token-modifier-abstract,
+.aster-editor-token.token-modifier-async {
+  font-style: italic;
+}
+
+.aster-editor-token.token-modifier-static {
+  text-decoration: underline dotted;
+}
+
+.aster-editor-token.token-modifier-deprecated {
+  text-decoration: line-through;
+}
+
+.aster-editor-bracket-level-1 {
+  color: var(--zeta-editor-token-keyword-foreground);
+}
+
+.aster-editor-bracket-level-2 {
+  color: var(--zeta-editor-token-function-foreground);
+}
+
+.aster-editor-bracket-level-3 {
+  color: var(--zeta-editor-token-type-foreground);
+}
+
+.aster-editor-bracket-level-4 {
+  color: var(--zeta-editor-token-number-foreground);
+}
+
+.aster-editor-bracket-level-5 {
+  color: var(--zeta-editor-token-string-foreground);
+}
+
+.aster-editor-bracket-level-6 {
+  color: var(--zeta-editor-token-variable-foreground);
+}

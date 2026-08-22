@@ -22,7 +22,7 @@ canonical Zeta line-oriented text-model contract.
 | --- | --- | --- |
 | `common/` | `base/common` | DOM-free editor identities, text, history, selection, decoration, composition transactions, and pure layout/view-model math |
 | `browser/` | `base/common`, `base/browser`, `common`, `contrib` | DOM projection, textarea/input events, viewport observation, font measurement, accessibility, and browser adapters |
-| `contrib/folding/browser/` | `base/common`, `base/browser`, `common`, `browser/view` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
+| `contrib/folding/browser/` | `base/common`, `base/browser`, `common`, `browser/view`, `browser/viewModel`, `browser/viewparts` | Code-folding range providers, tracked fold state, fold commands, gutter presentation, and folded visual-row projection |
 | `common/languages` + `common/tokens` | `base/common`, `common/core`, `common/model` | Aster language configuration, provider contracts, syntax/completion wire, versioned results, token index and lexical editing; no DOM or Workbench |
 | `common/model/documentModel.ts` + structured browser owners | Aster structured-document contracts and browser host | Structured-editor integration only; `DocumentModel` does not depend on `TextModel` |
 | Workbench contributions | editor public contracts and platform services | Pane registration, product composition, and document/workspace wiring |
@@ -132,7 +132,8 @@ architectural drift signal and require extraction at that point.
 | Adjacent single/multi-cursor typing and deletion coalescing | ✅ | `TextEditHistoryGroup` |
 | Single-selection IME composition transaction lifecycle | ✅ | `EditorCompositionSession` |
 | Domain-neutral decoration collections | ✅ | `TextDecorationCollection` |
-| Named browser decoration presentation | ✅ | `createAsterDecorationSource` / `EditorViewport` |
+| Named browser decoration presentation | ✅ | `createAsterDecorationSource` / `DecorationsPart` |
+| Line-side and block decoration lanes | ✅ | `DecorationLinesPresentation` / `DecorationBlockPresentation` / `LinesDecorationsPart` / `BlockDecorationsPart` |
 | Versioned cancellable language request gate | ✅ | `LanguageRequestCoordinator` |
 | Versioned token and diagnostic result stores | ✅ | `VersionedLanguageResultStore` / `languageResults.ts` |
 | Versioned diagnostic decoration bridge | ✅ | `LanguageDiagnosticDecorationBridge`; merges parser diagnostics with current-revision host push diagnostics |
@@ -160,18 +161,18 @@ architectural drift signal and require extraction at that point.
 | Per-editor auto-closing provenance | ✅ | `contrib/bracketMatching/common/autoClosingTracker.ts` / `pairEditing.ts` |
 | Fixed-height visual-row viewport, scrolling, and overscan | ✅ | `EditorViewportModel` / `EditorViewportLineSource` |
 | Measured grapheme-safe soft wrapping and visual-row mapping | ✅ | `VisualLineProjection` / `EditorVisualLineProjection` |
-| Bounded document minimap, GPU density projection with DOM fallback, click/drag scroll navigation | ✅ | `minimapProjection.ts` / `GpuMinimapRenderer` / `MinimapNavigationController` / `EditorViewport` |
+| Bounded document minimap, GPU density projection with DOM fallback, click/drag scroll navigation | ✅ | `minimapProjection.ts` / `GpuMinimapRenderer` / `MinimapNavigationController` / `MinimapPart` |
 | Version-pinned, cancellable diff model with Rust-backed computation and grapheme-safe inline ranges | ✅ | `common/diff/DiffModel` / `IDiffComputationService` / `browser/services/rustDiffComputationService.ts` |
 | Virtualized side-by-side review view | ✅ | `browser/widget/diffEditor/DiffEditorWidget` |
 | Workbench original/modified diff input and pane lifecycle | ✅ | `DiffEditorInput` / `DiffEditorPane` |
-| Visible-line indentation guides | ✅ | `browser/view/indentationGuides.ts` / `EditorViewport` |
+| Visible-line indentation guides | ✅ | `browser/viewparts/indentGuides/indentationGuides.ts` / `IndentGuidesPart` |
 | Parser/indentation/lexical/named-region/manual folding, visible-row projection, gutter toggle, recursive/level fold chords, collapse-all and expand-all | ✅ | `browser/services/rustSyntaxFoldingService.ts` adds revision-bound parser folds for JavaScript/JSX, TypeScript/TSX, JSON, JSONC, Rust, and Shell; `contrib/folding/browser/{foldingRanges,syntaxRangeProvider,indentRangeProvider,foldingModel,hiddenRangeModel,foldingDecorations,folding}` retains lexical, marker, indentation, and manual fallback |
 | Transient Alt+Z word-wrap toggle | ✅ | `EditorViewport` / `WordWrapController` |
-| Read-only virtual line DOM projection | ✅ | `browser/EditorViewport` |
+| Read-only virtual line DOM projection | ✅ | `ViewLinesPart` / `browser/viewparts/viewLines/renderedLine.ts` |
 | Canonical browser CodeEditor composition | ✅ | `browser/widget/codeEditor/CodeEditorWidget`; owns viewport, native input, and keyboard/pointer navigation while model and selections remain caller-owned; optional text drop is mounted by the full-editor contribution composition |
 | Computed-font measurement and incremental line widths | ✅ | `DomTextMeasurer` / `LineWidthIndex` |
-| Virtual line-number gutter | ✅ | `browser/EditorViewport` |
-| Multi-selection and caret geometry/DOM projection | ✅ | `createAsterSelectionGeometry` / `EditorViewport` |
+| Virtual line-number gutter | ✅ | `LineNumbersPart` |
+| Multi-selection and caret geometry/DOM projection | ✅ | `SelectionsPart` / `ViewCursorsPart` |
 | Focused caret blinking with reduced-motion fallback | ✅ | `media/editorViewport.css` |
 | Pointer client-coordinate hit testing | ✅ | `hitTestAsterEditorPoint` / `getTargetAtClientPoint` |
 | Pointer character/word/line click and drag selection | ✅ | `PointerSelectionController` |
@@ -190,7 +191,7 @@ architectural drift signal and require extraction at that point.
 | Empty-selection whole-line copy, cut, and paste | ✅ | `common/commands/clipboard.ts` / `ClipboardController` |
 | Plain-text and user-supplied single-text-file drop at the viewport hit target | ✅ | `TextDropController` / `textFileTransfer.ts` |
 | Desktop-style textarea composition and candidate anchor | ✅ | `CompositionController` |
-| Tracked multi-line composition underline | ✅ | `EditorCompositionSession.currentRange` / `EditorViewport` |
+| Tracked multi-line composition underline | ✅ | `EditorCompositionSession.currentRange` / `CompositionPart` |
 | Focused accessible text/primary-selection mirror, multi-selection description, status announcements, and forced-colors semantics | ✅ | `TextInputController` / `EditorViewport`; Workbench Pane reports save status through the runtime seam |
 | macOS desktop IME/VoiceOver DOM contract | ✅ | `CompositionController` / `TextInputController`; empirical VoiceOver walkthrough remains a release verification task |
 | Mobile IME variants and cross-platform assistive-technology acceptance | 不在 Aster 桌面完成范围 | Mobile is explicitly out of scope; Windows validation is separate release verification |
@@ -651,7 +652,7 @@ on an ARIA-based selector.
 `createAsterDecorationSource<TMetadata>` is the explicit boundary from opaque
 common decoration metadata to browser presentation. A caller-provided resolver
 selects `SearchMatch`, `ErrorUnderline`, `WarningUnderline`, or omits the
-decoration from this renderer. `EditorViewport` observes multiple sources
+decoration from this renderer. `DecorationsPart` observes multiple sources
 without owning them and renders only rectangles intersecting the overscanned
 line window. Resolved snapshots are cached per source until its collection
 event, so viewport scrolling does not rerun metadata resolvers. Search, error,
@@ -667,20 +668,20 @@ diagnostics before tracked ranges can emit a misleading movement event.
 `createAsterLanguageDiagnosticSource` maps every normalized severity to a
 named underline presentation and a diagnostic hover message. Error and Warning use
 their severity tokens; Information uses the focus token and Hint uses the
-description token with a dotted underline. The viewport projects the highest
-severity on each visible logical line as a gutter marker and joins that line's
-messages in `DiagnosticHoverController`'s component-owned rich hover.
+description token with a dotted underline. `MarginDecorationsPart` projects the
+highest severity on each visible logical line as a gutter marker and joins that
+line's messages in `DiagnosticHoverController`'s component-owned rich hover.
 Overview-ruler presentation remains a separate browser extension.
 
 Selection and decoration ranges share `createAsterRangeRectangles`; prefix
 measurement, end-exclusive multi-line ranges, selected newline cells, and
 render-range clipping therefore cannot drift between the two projections.
 The diagnostic adapter does not add arbitrary caller CSS classes. Browser
-projection uses `DecorationLineIndex` to resolve only decorations that can
-intersect the rendered logical-line span; it does not rescan the full
-collection on every scroll.
+projection uses the `DecorationLineIndex` owned by `DecorationsPart` to resolve
+only decorations that can intersect the rendered logical-line span; it does not
+rescan the full collection on every scroll.
 
-`EditorViewport` additionally owns a document-view minimap. It compresses
+`MinimapPart` owns the document-view minimap. It compresses
 the model into at most 160 sampled, non-whitespace density rows and redraws only
 after a model revision; it does not create a second model, retain source text,
 or rerun semantic analysis. On browsers with WebGL, `GpuMinimapRenderer`
@@ -692,8 +693,8 @@ condensed into named severity markers through the same snapshot used by the
 overview ruler; syntax colors and arbitrary decoration markers remain outside
 the minimap contract.
 
-Visible rows also receive component-owned indentation guides. The indentation
-projection derives complete visual indentation units from leading spaces/tabs
+Visible rows also receive component-owned indentation guides. `IndentGuidesPart`
+derives complete visual indentation units from leading spaces/tabs
 using the configured editor tab size, then positions the guides with the same
 text measurer used by caret and selection geometry. Wrapped continuation rows
 do not duplicate guides; no source text or indentation state is retained
@@ -1033,8 +1034,8 @@ composition session safely follows the ordinary text path. An active empty end c
 cancellation signals, while an extra end after closure is ignored.
 
 `EditorCompositionSession.currentRange` exposes the provisional model range
-only while its protected revision is active. The Viewport converts it to an
-owned temporary `TrackedRange`, so synchronous model events cannot make
+only while its protected revision is active. `CompositionPart` converts it to
+an owned temporary `TrackedRange`, so synchronous model events cannot make
 projection read stale positions. A separate per-line composition layer reuses
 `createAsterRangeRectangles` for measured tabs, multi-line clipping, and newline
 cells. Component-owned `.composing` CSS draws the underline and every commit,
@@ -1172,7 +1173,7 @@ EditorSelectionController
 createAsterSelectionGeometry
   preserves direction, primary identity, and selected line breaks
           ↓
-EditorViewport overlay + gutter state
+SelectionsPart + ViewCursorsPart
   projects visible selection rectangles, carets, and active line numbers
 
 TextDecorationCollection<TMetadata>
@@ -1183,7 +1184,7 @@ createAsterDecorationSource resolver
 createAsterRangeRectangles
   shares range/newline/clipping geometry with selections
           ↓
-EditorViewport decoration layer
+DecorationsPart decoration layer
   projects visible rectangles without owning source or collection
 
 clientX / clientY

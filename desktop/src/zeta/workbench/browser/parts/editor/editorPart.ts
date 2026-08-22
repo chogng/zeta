@@ -26,8 +26,8 @@ import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
-import type { OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, createAsterDecorationRectangles, createAsterDecorationSource } from "../../browser/view/decorationPresentation.js";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAsterDecorationRectangles, createAsterDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

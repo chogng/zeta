@@ -31,7 +31,7 @@ const { BrowserTextResourceStore } = await import("../../browser/browserTextReso
 const { EditorTextDirection } = await import("../../../../../editor/browser/view/editorViewport.js");
 const { EditorMinimap } = await import("../../../../../editor/browser/view/editorViewport.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
-const { EditorLineWrapping } = await import("../../../../../editor/browser/view/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../../../editor/browser/viewModel/visualLineProjection.js");
 
 test.after(() => browserEnvironment.window.close());
 

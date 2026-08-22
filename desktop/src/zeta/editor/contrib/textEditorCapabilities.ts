@@ -8,7 +8,7 @@ import { type TokenizationTextModelPart } from "./tokenization/common/tokenizati
 import { type UnicodeHighlight } from "./unicodeHighlighter/common/unicodeHighlighter.js";
 import { type RustSyntaxFactsService } from "../browser/services/rustSyntaxFactsService.js";
 import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
-import { type SemanticTokenSource } from "../browser/view/semanticTokenPresentation.js";
+import { type SemanticTokenSource } from "../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type SemanticTokensModelPart, type SemanticTokensService } from "./semanticTokens/common/semanticTokens.js";
 

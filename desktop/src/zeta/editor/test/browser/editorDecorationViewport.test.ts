@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../browser/view/decorationPresentation.js";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { DecorationPresentation, createAsterDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { createAsterLanguageDiagnosticSource, resolveAsterLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
@@ -31,7 +31,7 @@ const { EditorTextDirection, EditorViewport } = await import(
   "../../browser/view/editorViewport.js"
 );
 const { EditorLineWrapping } = await import(
-  "../../browser/view/visualLineProjection.js"
+  "../../browser/viewModel/visualLineProjection.js"
 );
 
 test("Decoration sources project, update, and follow tracked model ranges", () => {
@@ -160,6 +160,70 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
   assert.equal(matches.size, 1);
   assert.equal(diagnostics.size, 1);
 
+  dom.window.close();
+});
+
+test("Line and block decoration parts project source presentation details", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("first\nsecond\nthird");
+  using decorations = new TextDecorationCollection<"lines" | "block">(model);
+  decorations.add({
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(2, 0)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: "lines",
+  });
+  decorations.add({
+    range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(2, 1)),
+    stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+    metadata: "block",
+  });
+  const source = createAsterDecorationSource(
+    decorations,
+    decoration => decoration.metadata === "lines"
+      ? {
+        presentation: DecorationPresentation.DiffModified,
+        linesDecoration: {
+          className: "aster-test-line-marker",
+          firstLineClassName: "aster-test-first-line-marker",
+          tooltip: "line marker",
+        },
+      }
+      : {
+        presentation: DecorationPresentation.DiffModified,
+        blockDecoration: {
+          className: "aster-test-block",
+          padding: [1, 2, 3, 4],
+        },
+      },
+  );
+  using viewport = new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: new FixedTextMeasurer(),
+    decorationSources: [source],
+  });
+  viewport.layout({ width: 200, height: 60 });
+
+  const firstLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="0"]');
+  const secondLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="1"]');
+  const thirdLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="2"]');
+  const firstMarker = requiredElement<HTMLElement>(firstLine, ".aster-editor-line-decoration");
+  const secondMarker = requiredElement<HTMLElement>(secondLine, ".aster-editor-line-decoration");
+  assert.equal(firstMarker.classList.contains("aster-test-line-marker"), true);
+  assert.equal(firstMarker.classList.contains("aster-test-first-line-marker"), true);
+  assert.equal(firstMarker.title, "line marker");
+  assert.equal(secondMarker.classList.contains("aster-test-line-marker"), true);
+  assert.equal(secondMarker.classList.contains("aster-test-first-line-marker"), false);
+  assert.equal(thirdLine.querySelector(".aster-editor-line-decoration"), null);
+
+  const block = requiredElement<HTMLElement>(viewport.element, ".aster-editor-block-decoration");
+  assert.equal(block.classList.contains("aster-test-block"), true);
+  assert.equal(block.style.left, "34px");
+  assert.equal(block.style.width, "168px");
+  assert.equal(block.style.top, "-1px");
+  assert.equal(block.style.height, "64px");
   dom.window.close();
 });
 

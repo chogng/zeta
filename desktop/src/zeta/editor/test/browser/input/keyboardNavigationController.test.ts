@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../../browser/measurement/fontMetrics.js";
 import { resolveAsterKeyboardNavigation } from "../../../browser/input/keyboardNavigationController.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -105,7 +105,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
 const { KeyboardNavigationController } = await import("../../../browser/input/keyboardNavigationController.js");
-const { EditorLineWrapping } = await import("../../../browser/view/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../browser/viewModel/visualLineProjection.js");
 
 test("Keyboard controller retains columns, routes multi-selection, and reveals primary", () => {
   const dom = new JSDOM("<!doctype html><body><main></main></body>");

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
-import { CompositeEditorLineGutterDecoration, type EditorLineGutterDecoration } from "../../browser/view/lineGutterDecoration.js";
+import { CompositeEditorLineGutterDecoration, type EditorLineGutterDecoration } from "../../browser/viewparts/margin/lineGutterDecoration.js";
 import { h } from "../../../base/browser/dom.js";
 
 test("gutter decorations compose into independent ordered slots", () => {

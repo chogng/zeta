@@ -61,6 +61,35 @@ while scrolling. A new model version updates visible row text synchronously,
 and a shrinking document clamps both the common viewport state and native DOM
 scroll coordinates.
 
+`EditorViewport` is also the current view scheduler. `browser/viewparts` owns
+the first visual projections: `ViewLinesPart` owns the virtual row DOM and
+semantic text projection, `MarginPart` owns margin geometry, its background,
+and feature-gutter slots, `LineNumbersPart` projects only line numbers,
+`LinesDecorationsPart` projects caller-provided line-side classes,
+`MarginDecorationsPart` projects diagnostic line markers, and
+`BlockDecorationsPart` projects caller-provided block backgrounds/outlines in
+content coordinates. `RulersPart` projects column guides, and `SelectionsPart` projects selection ranges and the
+active-line state, and `ViewCursorsPart` projects primary and secondary
+carets. `EditorScrollbarPart` mirrors the canonical layout into accessible
+horizontal and vertical tracks, `MinimapPart` owns the bounded navigation
+preview and its diagnostic/diff markers, `OverviewRulerPart` owns the
+diagnostic/diff overview lane, and `ScrollDecorationPart` projects scroll-edge
+shadows. `DecorationsPart` owns decoration snapshots, inline decoration
+projection, and overview marker aggregation; `IndentGuidesPart`
+owns indentation-guide projection; and `CompositionPart` owns the tracked IME
+range projection. `EditorViewPartCollection` dispatches one synchronous render
+pass with the immutable `EditorViewportLayout`; these parts do not create a
+second scroll, layout, model, or selection authority.
+
+`createAsterDecorationSource` may attach `linesDecoration` and
+`blockDecoration` details to a resolved snapshot. The line projection follows
+logical lines rather than wrapped fragments, while the block projection maps a
+range to the first and last visible visual rows and supports VS Code-style
+after-end, collapse, and four-side padding semantics. These details stay
+separate from the closed inline `DecorationPresentation` vocabulary, so diff
+and diagnostic owners can opt into the appropriate visual lane without
+teaching `EditorViewport` about feature-specific classes.
+
 `DiffEditorWidget` is a separate read-only review projection rather than two
 independently scrolling editor instances. Its caller owns a `DiffModel`, which
 observes caller-owned original and modified `TextModel` values and accepts only
@@ -91,15 +120,15 @@ subsequent document-level drag map directly to canonical
 viewport scroll state. Embedded views default it off, and it has no model,
 selection, semantic-token, or Rust-service ownership.
 
-`EditorViewport` also projects diagnostic severity markers into the
+`MarginDecorationsPart` also projects diagnostic severity markers into the
 document minimap by reusing the existing decoration snapshot and overview-ruler
 aggregation. They carry only a closed named severity and proportional line
 span; minimap projection never retains diagnostic text, source text, or an
 syntax result. Arbitrary caller decoration markers and syntax-color minimaps
 remain outside this browser contract.
 
-`EditorViewport` also projects indentation guides only for visible first
-fragments of logical lines. `browser/view/indentationGuides.ts`
+`IndentGuidesPart` projects indentation guides only for visible first
+fragments of logical lines. `browser/viewparts/indentGuides/indentationGuides.ts`
 identifies complete
 visual indentation units from leading tabs/spaces, while `TextMeasurer`
 places each guide at the same coordinate system as carets and selections.
@@ -157,13 +186,13 @@ document command, undo/redo, and composition entry, so all browser adapters
 that submit through it retain selection/navigation/copy behavior without a
 path that can mutate the shared model.
 
-Each virtual row owns a sticky line-number gutter, a text node, and a
-presentation overlay. Gutter width is derived from the current line-count digit
-width and participates in authoritative horizontal content measurement.
-`EditorViewport` may observe one `EditorSelectionController`; it projects
-the controller's primary active line through `.active`, multi-line selected
-ranges as overlay rectangles, and every active edge as a caret. The controller
-remains caller-owned.
+`ViewLinesPart` creates each virtual row with a sticky line-number gutter, a
+text node, and named overlay slots. Gutter width is derived from the current
+line-count digit width and participates in authoritative horizontal content
+measurement. `SelectionsPart` and `ViewCursorsPart` read one optional
+`EditorSelectionController`; the controller remains caller-owned and is the
+only selection/cursor state owner, while the parts retain only browser DOM
+projection.
 
 `createAsterSelectionGeometry` is the DOM-independent browser geometry seam.
 It preserves anchor/active direction and primary-selection identity while
@@ -611,9 +640,9 @@ projects `.composing`/`.ime-input`, and positions the textarea through
 `EditorViewport.getPositionContentCoordinates` so the native candidate
 window follows the measured caret and line height.
 
-The common session exposes its active `currentRange`; the Viewport owns a
+The common session exposes its active `currentRange`; `CompositionPart` owns a
 temporary tracked copy and projects it through the same range geometry used by
-selections and decorations. A separate composition layer renders
+selections and decorations. Its separate composition layer renders
 component-owned underline segments across visible lines, including newline cells. It is
 cleared on commit, cancellation, external invalidation, IME disable, and
 disposal. Empty active end commits deletion, while an end arriving after the
@@ -622,7 +651,8 @@ session closed is ignored.
 The component reuses `base/browser/dom` for disposable events and DOM reset,
 `base/browser/geometry` for host measurement, and `base/common/lifecycle` for
 ownership. Its `.aster-editor` root and internal line classes are styled
-only by `media/editorViewport.css`; Workbench hosts may size the root and
+by the owning `viewparts/*/*.css` files and the root `media/editorViewport.css`;
+Workbench hosts may size the root and
 explicitly select `focusOutlineOwner: "host"` when their direct control owns
 one surrounding focus indicator, but must not override internal rows or focus
 state. The component projects stable
@@ -672,5 +702,6 @@ deprecated/abstract/async names to component-owned classes; unknown provider
 strings are intentionally excluded from DOM projection. Syntax result deltas and relative token-line
 payload reuse are common-layer capabilities; this browser layer consumes only
 the current visible-line query and does not own their persistence policy.
-Visible clipping uses `DecorationLineIndex` to resolve only decorations whose logical-line
-range intersects the rendered window; the index is rebuilt only when a source collection changes.
+Visible clipping uses `viewparts/decorations/decorationLineIndex.ts` to resolve
+only decorations whose logical-line range intersects the rendered window; the
+index is rebuilt only when a source collection changes.

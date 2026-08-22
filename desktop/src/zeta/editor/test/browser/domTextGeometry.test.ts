@@ -14,7 +14,7 @@ for (const [name, value] of Object.entries({
   Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { createAsterDomTextRange, getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint, getAsterDomTextRangeRectangles } = await import("../../browser/view/domTextGeometry.js");
+const { createAsterDomTextRange, getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint, getAsterDomTextRangeRectangles } = await import("../../browser/viewparts/viewportOverlay/domTextGeometry.js");
 
 test("DOM text geometry keeps one UTF-16 offset space across syntax spans", () => {
   const dom = new JSDOM("<!doctype html><body><div id=\"line\"><span id=\"text\"><span>ab</span><span>😊</span><span>cd</span></span></div></body>");

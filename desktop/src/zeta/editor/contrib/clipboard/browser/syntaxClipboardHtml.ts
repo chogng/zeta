@@ -1,6 +1,6 @@
 import { EditorClipboardPasteMode, type EditorClipboardEntry } from "../common/clipboard.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/view/semanticTokenPresentation.js";
+import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 
 /**
  * Creates portable preformatted HTML for an Aster clipboard operation.

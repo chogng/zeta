@@ -1,0 +1,36 @@
+.aster-editor-scroll-decoration {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.aster-editor-scroll-decoration-shadow {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 12px;
+  opacity: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--zeta-editor-foreground) 18%, transparent), transparent);
+  transition: opacity 100ms linear;
+}
+
+.aster-editor-scroll-decoration-shadow.top {
+  top: 0;
+}
+
+.aster-editor-scroll-decoration-shadow.bottom {
+  bottom: 0;
+  transform: rotate(180deg);
+}
+
+.aster-editor-scroll-decoration-shadow.visible {
+  opacity: 1;
+}
+
+@media (forced-colors: active) {
+  .aster-editor-scroll-decoration-shadow {
+    background: linear-gradient(to bottom, CanvasText, transparent);
+  }
+}

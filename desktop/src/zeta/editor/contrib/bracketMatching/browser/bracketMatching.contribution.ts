@@ -4,7 +4,7 @@ import { BracketMatchController } from "./bracketMatchController.js";
 import { BracketNavigationController } from "./bracketNavigationController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, createAsterDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 import { LanguageBracketMatcher } from "../common/bracketMatching.js";
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from "../../../common/languages/languageLexicalContext.js";
 import { LanguageBracketColorizationIndex } from "../common/bracketColorization.js";

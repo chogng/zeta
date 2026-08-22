@@ -1,5 +1,5 @@
 import { type LanguageBracketColorizationIndex } from "../common/bracketColorization.js";
-import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from "../../../browser/view/semanticTokenPresentation.js";
+import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 
 /** Adapts common lexical bracket nesting colors into Aster's closed DOM vocabulary. */
 export class BracketColorizationSource implements EditorBracketColorizationSource {

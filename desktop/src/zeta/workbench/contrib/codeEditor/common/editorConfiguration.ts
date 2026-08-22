@@ -1,6 +1,6 @@
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
-import { EditorLineWrapping } from "../../../../editor/browser/view/visualLineProjection.js";
+import { EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
 
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({

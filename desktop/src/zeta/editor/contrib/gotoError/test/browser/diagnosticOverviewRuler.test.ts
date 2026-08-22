@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/view/decorationPresentation.js";
-import { createAsterDiagnosticOverviewMarkers } from "../../../../browser/view/diagnosticOverviewMarkers.js";
+import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
+import { createAsterDiagnosticOverviewMarkers } from "../../../../browser/viewparts/overviewRuler/diagnosticOverviewMarkers.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 
 function diagnostic(startLineIndex: number, endLineIndex: number, presentation: DecorationPresentation, hoverText: string): ResolvedDecoration {

@@ -45,6 +45,8 @@ test("Aster viewport resize observations use the scrollable client area", () => 
   assert.deepEqual(viewport.viewportLayout.viewportSize, { width: 383, height: 62 });
   assert.equal(viewport.element.classList.contains("horizontally-scrollable"), false);
   assert.equal(viewport.element.classList.contains("vertically-scrollable"), false);
+  assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-scrollbar-track-horizontal").hidden, true);
+  assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-scrollbar-track-vertical").hidden, true);
   assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-content").style.width, "383px");
   assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-content").style.height, "62px");
   dom.window.close();
@@ -61,6 +63,12 @@ test("Aster viewport enables scrollbars only for model-backed overflow", () => {
 
   assert.equal(viewport.element.classList.contains("horizontally-scrollable"), true);
   assert.equal(viewport.element.classList.contains("vertically-scrollable"), true);
+  const horizontalScrollbar = requiredElement<HTMLElement>(viewport.element, ".aster-editor-scrollbar-track-horizontal");
+  const verticalScrollbar = requiredElement<HTMLElement>(viewport.element, ".aster-editor-scrollbar-track-vertical");
+  assert.equal(horizontalScrollbar.hidden, false);
+  assert.equal(verticalScrollbar.hidden, false);
+  assert.equal(horizontalScrollbar.getAttribute("role"), "scrollbar");
+  assert.equal(verticalScrollbar.getAttribute("aria-controls"), viewport.element.id);
   dom.window.close();
 });
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { navigateAsterVisualCursors } from "../../browser/view/visualCursorNavigation.js";
+import { navigateAsterVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorNavigation.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";

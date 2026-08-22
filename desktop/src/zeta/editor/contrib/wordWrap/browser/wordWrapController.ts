@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { EditorLineWrapping } from "../../../browser/view/visualLineProjection.js";
+import { EditorLineWrapping } from "../../../browser/viewModel/visualLineProjection.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Owns the transient Alt+Z word-wrap toggle for one Aster viewport. */

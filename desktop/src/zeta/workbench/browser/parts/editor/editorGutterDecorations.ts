@@ -1,5 +1,5 @@
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
+import { type EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 
 export type EditorLineGutterDecorationFactory = (resource: URI, accessor: ServicesAccessor) => EditorLineGutterDecoration | undefined;

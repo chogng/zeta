@@ -1,0 +1,16 @@
+.aster-editor-line-lines-decorations {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.aster-editor-line-decoration {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  box-sizing: border-box;
+  pointer-events: none;
+}

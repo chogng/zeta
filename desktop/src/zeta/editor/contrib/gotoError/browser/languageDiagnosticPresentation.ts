@@ -1,6 +1,6 @@
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
-import { DecorationPresentation, createAsterDecorationSource, type DecorationSource } from "../../../browser/view/decorationPresentation.js";
+import { DecorationPresentation, createAsterDecorationSource, type DecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 
 /**
  * Creates Aster's underline projection for caller-owned language diagnostics.

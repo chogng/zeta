@@ -21,7 +21,7 @@ const allowedExplicitDocumentContracts = new Map<string, ReadonlySet<string>>([
   [resolve(sourceRoot, "base/browser/fileAccess.ts"), new Set(["FilePickerOptions"])],
   [resolve(sourceRoot, "base/browser/markdownRenderer.ts"), new Set(["MarkdownElementOptions", "MarkdownSanitizerOptions"])],
   [resolve(sourceRoot, "editor/browser/editorWidget.ts"), new Set(["NodeViewContext", "InlineNodeViewContext", "EditorToolbarActionContext"])],
-  [resolve(sourceRoot, "editor/browser/view/viewportOverlayPresentation.ts"), new Set(["ViewportOverlayContext"])],
+  [resolve(sourceRoot, "editor/browser/viewparts/viewportOverlay/viewportOverlayPresentation.ts"), new Set(["ViewportOverlayContext"])],
   [resolve(sourceRoot, "workbench/services/keybinding/browser/keybindingService.ts"), new Set(["WorkbenchKeybindingServiceOptions"])],
 ]);
 const allowedDocumentConstructors = new Map<string, ReadonlySet<string>>([

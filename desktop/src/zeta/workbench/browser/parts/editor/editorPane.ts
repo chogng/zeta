@@ -23,8 +23,8 @@ import type { TextRange } from "../../../../editor/common/core/text.js";
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { EditorLineGutterDecoration } from "../../../../editor/browser/view/lineGutterDecoration.js";
-import type { OwnedDecorationSource } from "../../../../editor/browser/view/decorationPresentation.js";
+import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
+import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 
 export enum EditorPaneVisibility {

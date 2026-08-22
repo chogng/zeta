@@ -101,7 +101,7 @@
 | `folding` | `contrib/folding/browser/*` | provider/indent ranges、tracked fold state、hidden lines、gutter presentation。 |
 | `find` | `contrib/find/browser/findController.ts` + `common/model/textModelSearch.ts` | search/replace widget 和 selection scope；regex semantics 留在 model query。 |
 | `wordHighlighter` | `contrib/wordHighlighter/{common,browser}/*` | current word occurrence query、decoration owner、renderer presentation。 |
-| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/view/diagnosticOverviewMarkers.ts` | diagnostic decoration、navigation 和语言诊断 presentation；通用 overview marker 聚合归 viewport。 |
+| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/viewparts/overviewRuler/diagnosticOverviewMarkers.ts` / `browser/viewparts/decorations/decorationsPart.ts` / `browser/viewparts/marginDecorations/marginDecorationsPart.ts` | diagnostic decoration、navigation 和语言诊断 presentation；overview 聚合归 `DecorationsPart`，边栏标记归 `MarginDecorationsPart`。 |
 | `hover` | `contrib/hover/{common,browser}/*` | provider hover 与 diagnostic hover widget。 |
 | `documentSymbols` / `gotoSymbol` | `contrib/documentSymbols/common/documentSymbols.ts`、`contrib/gotoSymbol/{common,browser}/*` | versioned symbol provider、flatten/query 和 symbol quick navigation。 |
 | cross-file navigation / hierarchy | `contrib/gotoSymbol/common/languageNavigation.ts`、`browser/languageNavigationController.ts`、`contrib/callHierarchy/*` | definition/declaration/reference/implementation/type-definition、Peek、call/type hierarchy；只消费 URI/range provider contract。 |
@@ -117,12 +117,13 @@
 
 | feature | 文件 | 当前职责 |
 | --- | --- | --- |
+| `viewparts` visual lanes | `browser/viewparts/{linesDecorations,blockDecorations,margin,rulers}/*` | `EditorViewport` 调度行侧 class、跨行 block、margin 和 column-ruler 的浏览器 projection；共享 decoration snapshot，不拥有 model 或 scroll。 |
 | `editorState` | `contrib/editorState/{common,browser}/*` | focus、model version、selection、scroll 的 editor-local observable state。 |
 | `contextmenu` | `contrib/contextmenu/browser/contextMenuController.ts` | editor hit-test 后把 context menu request 交给 host。 |
 | `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | diff hunk 索引和 reveal；不参与 Rust diff computation。 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | selection anchor 的可选动作菜单；action callback 属于调用方。 |
 | `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | per-editor zoom、line height 和 font measurement invalidation。 |
-| minimap GPU / line width | `browser/view/gpuMinimapRenderer.ts`、`browser/view/lineWidthIndex.ts` | viewport 基础投影和 measurement budget；它们不是可卸载的 command contrib，viewModel 不依赖 WebGL。 |
+| minimap GPU / line width | `browser/viewparts/minimap/gpuMinimapRenderer.ts`、`browser/measurement/lineWidthIndex.ts` | `MinimapPart` 的可降级 GPU 投影和 viewport measurement budget；它们不是可卸载的 command contrib，viewModel 不依赖 WebGL。 |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | middle-button panning，独立于 pointer selection。 |
 | `quickAccess` / `readOnlyMessage` | 各 feature 的 browser 文件 | editor-local go-to-line 与 readonly feedback，不拥有 Workbench global quick open/permission。 |
 | `peekView` / `zoneWidget` | `contrib/peekView/browser/peekViewWidget.ts`、`contrib/zoneWidget/browser/zoneWidget.ts` | anchored transient surface 和其生命周期/布局容器。 |
@@ -153,7 +154,7 @@ TextModelReference
 common/core -> common/model -> common/services / common/languages / common/tokens
 browser/view -> common model snapshots + viewModel projections
 contrib/common -> common/core/model/services
-contrib/browser -> contrib/common + browser/view/input + host callbacks
+contrib/browser -> contrib/common + browser/view + browser/input + browser/viewparts + host callbacks
 Workbench/Electron -> browser adapters -> Aster contracts
 Rust App Server -> browser adapter -> Aster async service contract
 ```

@@ -111,7 +111,7 @@ VS Code 的官方源码组织说明了这些 editor 边界：`vs/editor` 不应�
 | `textModelSearch.ts` | `common/model/textModelSearch.ts` | 当前 | literal、regex、whole-word、wrap 和 version-pinned search 保持在 model query 层。 |
 | `editStack.ts` | `common/model/editStack.ts`、`historyCoalescing.ts` | 当前（文件名对齐） | 文档 undo/redo、typing merge 和 history budget 属于 Aster model；editor-instance selection undo 仍在 cursor/contrib。 |
 | `intervalTree.ts` | `common/model/trackedRange.ts`、`decorationCollection.ts` | 部分具备 | tracked range 和 decoration 的语义契约已具备；当前索引是 collection 内的 `Map`，尚未提供 interval-tree 级别的大量 range 更新性能。 |
-| `decorationProvider.ts` | `common/model/decorationCollection.ts`、`browser/view/*` | 当前（职责迁移） | model 只保存 range 和 caller metadata；CSS、severity、geometry 和 DOM presentation 留在对应 view/feature owner。 |
+| `decorationProvider.ts` | `common/model/decorationCollection.ts`、`browser/viewparts/*` | 当前（职责迁移） | model 只保存 range 和 caller metadata；CSS、severity、geometry 和 DOM presentation 留在对应 viewpart/feature owner。 |
 | `guidesTextModelPart.ts` | `contrib/folding/*`、`contrib/indentation/*` | 当前（职责迁移） | guides、folding ranges 和 hidden-line projection 是 feature/view-model 能力，不进入通用 TextModel part。 |
 | `indentationGuesser.ts` | `common/core/misc/indentation.ts`、`contrib/indentation/*` | 当前（职责迁移） | 纯缩进算法和 editor presentation 分开；不为 VS Code 文件名建立空 model helper。 |
 | `mirrorTextModel.ts` | `common/languages/languageWorkerDocumentMirror.ts` | 当前（职责迁移） | Worker mirror 是语言运行时边界，不是同步 TextModel 的第二个 owner。 |
@@ -189,15 +189,27 @@ Aster 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | --- | --- | --- |
 | `common/view/viewport.ts` | `common/viewLayout/editorViewportModel.ts` | scroll、visible line、overscan、layout change；Current |
 | `common/view/visualLineProjection.ts` | `common/viewModel/modelLineProjection.ts` | logical line 到 visual line 的投影；Current |
-| `browser/visualLineProjection.ts` | `browser/view/visualLineProjection.ts` | browser wrapping/measurement adapter |
-| `browser/visibleLineProjection.ts` | `browser/view/visibleLineProjection.ts` | folding/hidden line 的可见行组合 |
+| `browser/viewModel/visualLineProjection.ts` | `browser/viewModel/visualLineProjection.ts` | browser wrapping/measurement adapter |
+| `browser/viewModel/visibleLineProjection.ts` | `browser/viewModel/visibleLineProjection.ts` | folding/hidden line 的可见行组合 |
 | `browser/editorViewport.ts` | `browser/view/editorViewport.ts` | DOM viewport、render scheduling、hit testing 组合 |
-| `browser/renderedLine.ts` | `browser/view/renderedLine.ts` | 一行的 DOM/render representation |
-| `browser/rangeGeometry.ts` | `browser/view/rangeGeometry.ts` | model range 到像素矩形 |
-| `browser/selectionGeometry.ts` | `browser/view/selectionGeometry.ts` | selection 到 presentation geometry |
-| `browser/decorationPresentation.ts` | `browser/view/decorationPresentation.ts` | decoration snapshot 到 renderer presentation |
+| `browser/renderedLine.ts` | `browser/viewparts/viewLines/renderedLine.ts` | 一行的 DOM/render representation；由 `ViewLinesPart` 创建并向行级 parts 提供只读节点契约 |
+| `browser/fontMetrics.ts` | `browser/measurement/fontMetrics.ts` | DOM/canvas-backed text measurement adapter |
+| `browser/lineWidthIndex.ts` | `browser/measurement/lineWidthIndex.ts` | viewport-owned non-blocking line-width index |
+| `common/viewModel/textMeasurer.ts` | `common/viewModel/textMeasurer.ts` | geometry/navigation 使用的 DOM-free measurement contract |
+| `common/viewModel/rangeGeometry.ts` | `common/viewModel/rangeGeometry.ts` | model range 到 measured rectangles |
+| `common/viewModel/visualRangeGeometry.ts` | `common/viewModel/visualRangeGeometry.ts` | wrapped visual rows 上的 range geometry |
+| `common/viewModel/selectionGeometry.ts` | `common/viewModel/selectionGeometry.ts` | selection 到 presentation geometry |
+| `common/viewModel/visualSelectionGeometry.ts` | `common/viewModel/visualSelectionGeometry.ts` | wrapped visual rows 上的 selection geometry |
+| `common/viewModel/visualCursorNavigation.ts` | `common/viewModel/visualCursorNavigation.ts` | visual-row cursor navigation contract |
+| `common/viewModel/pointerHitTest.ts` | `common/viewModel/pointerHitTest.ts` | model/viewport coordinates 到 editor hit target |
+| `browser/viewparts/decorations/decorationPresentation.ts` | `browser/viewparts/decorations/decorationPresentation.ts` | decoration snapshot 到 renderer presentation |
+| `browser/viewparts/viewportOverlay/domTextGeometry.ts` | `browser/viewparts/viewportOverlay/domTextGeometry.ts` | DOM Range/caret geometry fallback |
+| `browser/viewparts/viewportOverlay/viewportOverlayPresentation.ts` | `browser/viewparts/viewportOverlay/viewportOverlayPresentation.ts` | shared DOM overlay context and selection geometry |
 
-`viewLayout` 和 `viewModel` 只能读取 model snapshot/事件。DOM、font measurement、CSS token、accessibility state 和 pointer event 都属于 `browser/view`。
+`viewLayout` 和 `viewModel` 只能读取 model snapshot/事件。DOM-free geometry 只依赖
+`common/viewModel/textMeasurer.ts`；DOM、font measurement、CSS token、accessibility
+state 和 pointer event 分别属于 `browser/measurement`、`browser/viewparts` 或
+`browser/input`。`browser/view/editorViewport.ts` 只保留 viewport host、调度和组合。
 
 ### 2.6 `common/services`
 
@@ -225,7 +237,7 @@ Aster 已将原来的 `common/view` 拆成 `viewLayout` 与 `viewModel`；后续
 | `language/common/languageCompletion*` | `common/languages/completion/*` | completion provider/session/wire；Current |
 | `language/common/languageTokenLineIndex.ts` | `common/tokens/languageTokenLineIndex.ts` | token line query和增量 index |
 | `language/browser/*Worker*` | `browser/language/*Worker*` | browser Worker lifecycle 和 port adapter |
-| `language/browser/semanticTokenPresentation.ts` | `browser/view/semanticTokenPresentation.ts` | token 到 CSS/presentation 的投影 |
+| `language/browser/semanticTokenPresentation.ts` | `browser/viewparts/semanticTokens/semanticTokenPresentation.ts` | token 到 CSS/presentation 的投影 |
 
 语言 provider 的异步实现可以由 Worker 或 Rust adapter 提供，但 result store 必须在 Aster common 侧完成版本校验；过期结果不能重新写入当前 model。
 
@@ -279,7 +291,7 @@ contrib/<feature>/
 | `wordPartOperations` | `common/cursor/wordPartOperations.ts` | `common/cursor/wordPartOperations.ts`、`cursorWordOperations.ts`、`core/wordHelper.ts` | Current | camelCase、subword 和语言无关 word part |
 | `lineSelection` | `contrib/lineSelection/browser/lineSelection.ts` | `contrib/lineSelection/browser/lineSelection.ts` | Current | 物理行选择扩展 |
 | `linesOperations` | `contrib/linesOperations/browser/linesOperations.ts`、`lineOperationsController.ts` | 同名 contrib | Current | indent、duplicate、move、delete、copy line groups |
-| `indentation` | `common/editorIndentation.ts`、`browser/view/indentationGuides.ts` | engine configuration + viewport projection | Current（职责归位） | indentation calculation 与 guides presentation 是基础 engine contract；line indentation command 仍在 contrib |
+| `indentation` | `common/editorIndentation.ts`、`browser/viewparts/indentGuides/indentationGuides.ts` | engine configuration + `IndentGuidesPart` projection | Current（职责归位） | indentation calculation 与 guides presentation 是基础 engine contract；line indentation command 仍在 contrib |
 | `comment` | `contrib/comment/common/{blockCommentCommands,lineCommentCommands}.ts`、browser controllers | 同名 contrib | Current | comment language contract、toggle command 和 selection presentation |
 | `clipboard` | `contrib/clipboard/common/clipboard.ts`、browser clipboard 系列 | 同名 contrib | Current | copy/cut/paste、selection metadata、safe HTML 和 line policy |
 | pointer selection | `browser/input/{pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | `CodeEditorWidget` | Current | 基础 pointer selection、拖动自动滚动与修饰键多光标；不是 contrib，也不处理外部 drop |
@@ -299,7 +311,7 @@ contrib/<feature>/
 | `tokenization` | `contrib/tokenization/common/tokenizationTextModelPart.ts`、`browser/tokenizationController.ts` | `contrib/tokenization/{common,browser}/*`、Aster syntax/TextMate adapters | Current | token production、line state 和 token invalidation |
 | `wordHighlighter` | `contrib/wordHighlighter/common/wordHighlighter.ts`、`browser/wordHighlighterController.ts` | 同名 contrib | Current | word occurrence query、decoration owner 和 presentation |
 | `find` | `contrib/find/browser/findController.ts`、`common/model/textModelSearch.ts` | 同名 contrib + model search | Current | search model、find widget、replace、selection scope |
-| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/view/diagnosticOverviewMarkers.ts` | 同名 contrib + viewport aggregation | Current | diagnostic decoration、navigation、overview、severity ordering |
+| `gotoError` | `contrib/gotoError/common/diagnosticDecorations.ts`、`browser/gotoError.ts`、`browser/languageDiagnosticPresentation.ts` + `browser/viewparts/overviewRuler/diagnosticOverviewMarkers.ts` / `browser/viewparts/decorations/decorationsPart.ts` / `browser/viewparts/marginDecorations/marginDecorationsPart.ts` | 同名 contrib + overview/inline/margin parts | Current | diagnostic decoration、navigation、overview、severity ordering |
 | `gotoSymbol` | `contrib/gotoSymbol/common/gotoSymbol.ts` | `contrib/gotoSymbol/{common,browser}/*`、Aster language service factory | Current | provider-backed symbol navigation；不与 goto line 混合 |
 | `documentSymbols` | `contrib/documentSymbols/common/documentSymbols.ts` | `contrib/documentSymbols/common/documentSymbols.ts`、Aster language service factory | Current | versioned document symbol result、outline/quick navigation contract |
 | `hover` | `contrib/hover/{common/hover.ts,browser/{hoverController,diagnosticHoverController}.ts}` | 同名 contrib | Current | 通用 hover provider、diagnostic hover、anchor、content widget |
@@ -324,8 +336,8 @@ contrib/<feature>/
 | `diffEditorBreadcrumbs` | `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | Rust diff model + `DiffEditorPane` 装配 | Current | diff editor 当前 hunk/文件导航，不参与 diff 计算 |
 | `floatingMenu` | `contrib/floatingMenu/browser/floatingMenuController.ts` | `contrib/floatingMenu/browser/floatingMenuController.ts`；宿主按 action 注入 | Current | selection/hover anchor 的 transient menu |
 | `fontZoom` | `contrib/fontZoom/browser/fontZoomController.ts` | `contrib/fontZoom/browser/fontZoomController.ts` + `EditorViewport.refreshFontMetrics` | Current | editor font zoom state 与 measurement invalidation |
-| `gpu` | `browser/view/gpuMinimapRenderer.ts` | viewport minimap | Current（职责归位） | GPU 是 viewport 的可降级实现细节；不得让 viewModel 依赖 WebGL |
-| `longLinesHelper` | `browser/view/lineWidthIndex.ts` | viewport budgets | Current（职责归位） | line measurement 是 viewport 基础算法，不伪装成可卸载 command contrib |
+| `gpu` | `browser/viewparts/minimap/gpuMinimapRenderer.ts` | viewport minimap | Current（职责归位） | GPU 是 `MinimapPart` 的可降级实现细节；不得让 viewModel 依赖 WebGL |
+| `longLinesHelper` | `browser/measurement/lineWidthIndex.ts` | viewport budgets | Current（职责归位） | line measurement 是 viewport 基础算法，不伪装成可卸载 command contrib |
 | `middleScroll` | `contrib/middleScroll/browser/middleScrollController.ts` | `contrib/middleScroll/browser/middleScrollController.ts` | Current | middle-button scroll，不污染普通 pointer selection |
 | `quickAccess` | `contrib/quickAccess/browser/quickAccessController.ts` | 同名 contrib；当前实现 Go to Line/Column | Current | editor-local quick access；Workbench global quick open 不归 Aster |
 | `peekView` | `contrib/peekView/browser/peekViewWidget.ts` | `contrib/peekView/browser/peekViewWidget.ts`；宿主按需创建 | Current | anchored preview surface 和生命周期 |
@@ -348,8 +360,11 @@ contrib/<feature>/
 | `common/view/viewport.ts` | `common/viewLayout/editorViewportModel.ts` | 重命名并保持无 DOM | Current |
 | `common/view/visualLineProjection.ts` | `common/viewModel/modelLineProjection.ts` | 拆出 model projection | Current |
 | `browser/editorViewport.ts` | `browser/view/editorViewport.ts` | 只保留 DOM viewport 组合 | Current |
-| `browser/renderedLine.ts` | `browser/view/renderedLine.ts` | 归入 view renderer | Current |
-| `browser/visualLineProjection.ts` | `browser/view/visualLineProjection.ts` | 归入 browser view | Current |
+| `browser/renderedLine.ts` | `browser/viewparts/viewLines/renderedLine.ts` | 归入 `ViewLinesPart` 的行 DOM 契约 | Current |
+| `browser/visualLineProjection.ts` | `browser/viewModel/visualLineProjection.ts` | 归入 browser measurement adapter | Current |
+| `browser/visibleLineProjection.ts` | `browser/viewModel/visibleLineProjection.ts` | 归入 browser visual-model adapter | Current |
+| `browser/rangeGeometry.ts`、`browser/selectionGeometry.ts` | `common/viewModel/*Geometry.ts` | 下沉 DOM-free geometry | Current |
+| `browser/decorationPresentation.ts`、`browser/semanticTokenPresentation.ts` | `browser/viewparts/{decorations,semanticTokens}/*` | 归入 visual part presentation owner | Current |
 | `browser/textInputController.ts` | `browser/input/textInputController.ts` | 输入 adapter，不改 common command | Current |
 | `browser/compositionController.ts` | `browser/input/compositionController.ts` | DOM composition adapter | Current |
 | `browser/clipboardController.ts` | `contrib/clipboard/browser/clipboardController.ts` | contribution 化 | Current |
@@ -391,9 +406,10 @@ contrib/<feature>/
 | languages/syntax | `common/languages/syntax/*.ts` | token/diagnostic provider registry、worker wire、request coordinator、delta 和 result freshness | result 先经过版本 gate，再交给 tokens/diagnostics |
 | languages/completion | `common/languages/completion/*.ts` | completion provider、catalog/resolve wire、completion result 和 word provider | snippet 实现位于 `contrib/snippet/common`，completion 只消费 parser contract |
 | languages/results | `common/languages/{languageResults,languageResultStore,languageRequestCoordinator}.ts` | diagnostic 结果、版本化 store、request identity/stale result gate | token value 已从这里迁到 `common/tokens` |
-| tokens | `common/tokens/{languageTokens,languageTokenLineIndex}.ts` | token value、delta、normalizer、按行索引 | 不渲染 CSS；presentation 由 browser/view 负责 |
+| tokens | `common/tokens/{languageTokens,languageTokenLineIndex}.ts` | token value、delta、normalizer、按行索引 | 不渲染 CSS；presentation 由 `browser/viewparts/semanticTokens` 负责 |
 | services | `common/services/{languageService,textModelService,textResourceStore}.ts` | Aster-owned provider factory、model reference、resource resolve/save/change contract | 不导出 Workbench transport 或 generated DTO |
-| browser/view | `browser/view/*.ts` | DOM viewport、rendered line、geometry、minimap、semantic token 和 decoration presentation | view 只能读取 model/viewModel snapshot；CSS 由 view owner 管理 |
+| browser/view | `browser/view/editorViewport.ts` | DOM viewport 调度、scroll/layout 组合和 part lifecycle | view 只能读取 model/viewModel snapshot；geometry 与视觉 DOM 由 measurement/viewpart owner 管理 |
+| browser/viewparts | `browser/viewparts/*` | `ViewLinesPart`、`MarginPart`、`LineNumbersPart`、`LinesDecorationsPart`、`MarginDecorationsPart`、`BlockDecorationsPart`、`RulersPart`、`SelectionsPart`、`ViewCursorsPart`、`DecorationsPart`、`IndentGuidesPart`、`CompositionPart`、scrollbar、minimap 和 overview 的视觉 projection | parts 只能消费 viewport 提供的 layout/projection；不得拥有第二套 model、selection 或 scroll authority |
 | browser/input | `browser/input/{textInputController,compositionController,keyboardNavigationController,pointerSelectionController,pointerAutoScroll,pointerMultiCursor}.ts` | textarea、IME、键盘和 pointer navigation、输入事件适配 | 输入热路径不等待 IPC/RPC |
 | editor browser/services | `browser/services/{browserTextModelService,rustDiffComputationService,rustSyntaxFactsService}.ts` | 管理 model reference/dirty/conflict，并将前端 `IDiffApi` / `ISyntaxApi` 结果投影为 editor facts | 不引用 Workbench、IPC 或 generated App Server DTO；强制能力缺失时显式报错 |
 | Workbench adapter | `workbench/contrib/codeEditor/browser/{browserTextResourceStore,browserEditorPart}.ts` | 文件、TextMate、worker 与产品服务接线 | 只实现 editor-owned contract，不复制 model、selection 或 contribution 行为 |

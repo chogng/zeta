@@ -12,14 +12,14 @@ import { type TextModelReference } from "../common/services/textModelService.js"
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type TextInputController } from "./input/textInputController.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
-import { type EditorHitTarget } from "./view/pointerHitTest.js";
-import { type EditorActiveLineHighlight, type EditorMinimap, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
-import { type EditorLineWrapping } from "./view/visualLineProjection.js";
+import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
+import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
+import { type EditorLineWrapping } from "./viewModel/visualLineProjection.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
-import { type EditorLineGutterDecoration } from "./view/lineGutterDecoration.js";
-import { type OwnedDecorationSource } from "./view/decorationPresentation.js";
+import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
+import { type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 
 export interface EditorContextMenuRequest {
   readonly position: TextPosition;
@@ -66,6 +66,7 @@ export interface EditorPartOptions {
   readonly minimap?: EditorMinimap;
   readonly activeLineHighlight?: EditorActiveLineHighlight;
   readonly showLineNumbers?: boolean;
+  readonly rulers?: readonly EditorRuler[];
   readonly showIndentationGuides?: boolean;
   readonly bracketPairColorization?: boolean;
   readonly stickyScroll?: boolean;

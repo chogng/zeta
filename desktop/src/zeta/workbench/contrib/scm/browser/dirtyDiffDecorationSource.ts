@@ -1,7 +1,7 @@
 import { type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { createAsterDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from "../../../../editor/browser/view/decorationPresentation.js";
+import { createAsterDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import { RustDiffComputationService } from "../../../../editor/browser/services/rustDiffComputationService.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../../editor/common/diff/lineDiff.js";

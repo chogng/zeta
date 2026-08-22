@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../browser/view/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -35,7 +35,7 @@ const { EditorTextDirection } = await import(
   "../../browser/view/editorViewport.js"
 );
 const { EditorLineWrapping } = await import(
-  "../../browser/view/visualLineProjection.js"
+  "../../browser/viewModel/visualLineProjection.js"
 );
 
 test("EditorViewport projects the initial virtual line window", () => {
@@ -103,6 +103,28 @@ test("EditorViewport gives browser text shaping an explicit paragraph direction"
   assert.equal(viewport.element.dir, "rtl");
   assert.equal(viewport.element.classList.contains("aster-editor-direction-rtl"), true);
   assert.equal(lineText(requiredLine(viewport.element, 0)).dir, "rtl");
+  dom.window.close();
+});
+
+test("EditorViewport projects configured column rulers through the margin coordinate system", () => {
+  const dom = new JSDOM("<!doctype html><body><main></main></body>");
+  const container = requiredElement(dom.window.document, "main");
+  using model = new TextModel("abcdefghij");
+  using viewport = new EditorViewport({
+    container,
+    model,
+    lineHeight: 20,
+    textMeasurer: fixedTextMeasurer(8, 24),
+    rulers: [{ column: 4 }, { column: 10, color: "red" }],
+  });
+  viewport.layout({ width: 200, height: 20 });
+
+  const rulers = [...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-ruler")];
+  assert.equal(rulers.length, 2);
+  assert.deepEqual(rulers.map(ruler => ruler.style.left), ["68px", "116px"]);
+  assert.equal(rulers[1]?.style.boxShadow, "1px 0 0 0 red inset");
+  assert.equal(rulers[0]?.style.height, "20px");
+
   dom.window.close();
 });
 
@@ -595,7 +617,9 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
       width: "30px",
     }],
   );
+  assert.equal(selectionElements.every(element => element.parentElement?.classList.contains("aster-editor-line-selections")), true);
   assert.equal(caretElements.length, 2);
+  assert.equal(caretElements.every(element => element.parentElement?.classList.contains("aster-editor-line-cursors")), true);
   assert.equal(caretElements[0]?.classList.contains("primary"), true);
   assert.equal(caretElements[0]?.style.left, "48px");
   assert.equal(
