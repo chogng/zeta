@@ -189,10 +189,12 @@ export class EditorWidget extends DisposableOwner {
         },
       });
     }
-    const container = h(parent.ownerDocument, "div");
-    container.className = "zeta-text-editor-widget-pane";
-    const layoutContainer = h(parent.ownerDocument, "div");
-    layoutContainer.className = "zeta-text-editor-widget-layout";
+    const containerNode = new FastDomNode(h(parent.ownerDocument, "div"));
+    const container = containerNode.domNode;
+    containerNode.setClassName("zeta-text-editor-widget-pane");
+    const layoutContainerNode = new FastDomNode(h(parent.ownerDocument, "div"));
+    const layoutContainer = layoutContainerNode.domNode;
+    layoutContainerNode.setClassName("zeta-text-editor-widget-layout");
     const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(layoutContainer, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
     if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
     layoutContainer.append(container);
@@ -201,8 +203,8 @@ export class EditorWidget extends DisposableOwner {
     this.collaborationContribution = collaborationContribution;
     this.formattingContribution = formattingContribution;
     this.container = container;
-    this.containerNode = new FastDomNode(container);
-    this.layoutContainerNode = new FastDomNode(layoutContainer);
+    this.containerNode = containerNode;
+    this.layoutContainerNode = layoutContainerNode;
     this.outlineNavigator = outlineNavigator;
     const onSelectionChange = () => this.syncDocumentSelection();
     parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);

@@ -1,6 +1,5 @@
 import "./editorScrollbar.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
@@ -29,8 +28,6 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
   private readonly container: HTMLElement;
   private readonly horizontal: HorizontalScrollbar;
   private readonly vertical: VerticalScrollbar;
-  private readonly horizontalTrackNode: FastDomNode<HTMLDivElement>;
-  private readonly verticalTrackNode: FastDomNode<HTMLDivElement>;
   private readonly scrollbarSize: number;
   private readonly minimumThumbSize: number;
   private readonly horizontalVisibility: EditorScrollbarVisibility;
@@ -77,10 +74,8 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
         top: position,
       }),
     }));
-    this.horizontalTrackNode = new FastDomNode(this.horizontal.track);
-    this.verticalTrackNode = new FastDomNode(this.vertical.track);
-    this.configureTrack(this.horizontal.track, "horizontal", this.horizontalVisibility);
-    this.configureTrack(this.vertical.track, "vertical", this.verticalVisibility);
+    this.configureTrack(this.horizontal, "horizontal", this.horizontalVisibility);
+    this.configureTrack(this.vertical, "vertical", this.verticalVisibility);
     this.defer(() => {
       if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
       this.container.classList.remove("aster-editor-scrolling");
@@ -112,11 +107,11 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
       0,
       layout.viewportSize.height - (horizontalRendered ? this.scrollbarSize : 0),
     );
-    this.horizontalTrackNode.setRight(verticalRendered ? this.scrollbarSize : 0);
-    this.verticalTrackNode.setBottom(horizontalRendered ? this.scrollbarSize : 0);
+    this.horizontal.trackNode.setRight(verticalRendered ? this.scrollbarSize : 0);
+    this.vertical.trackNode.setBottom(horizontalRendered ? this.scrollbarSize : 0);
     const scrollTransform = `translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`;
-    this.horizontalTrackNode.setTransform(scrollTransform);
-    this.verticalTrackNode.setTransform(scrollTransform);
+    this.horizontal.trackNode.setTransform(scrollTransform);
+    this.vertical.trackNode.setTransform(scrollTransform);
     this.horizontalMetrics = createScrollbarAxisMetrics(
       layout.viewportSize.width,
       layout.contentSize.width,
@@ -136,12 +131,13 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
   }
 
   private configureTrack(
-    track: HTMLDivElement,
+    scrollbar: HorizontalScrollbar | VerticalScrollbar,
     axis: "horizontal" | "vertical",
     visibility: EditorScrollbarVisibility,
   ): void {
-    track.classList.add("aster-editor-scrollbar-track", `aster-editor-scrollbar-track-${axis}`);
-    track.dataset.visibility = visibility;
+    scrollbar.trackNode.toggleClassName("aster-editor-scrollbar-track", true);
+    scrollbar.trackNode.toggleClassName(`aster-editor-scrollbar-track-${axis}`, true);
+    scrollbar.track.dataset.visibility = visibility;
   }
 
   private showScrollbars(): void {

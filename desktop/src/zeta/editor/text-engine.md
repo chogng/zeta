@@ -154,7 +154,7 @@ this.viewParts.render(context);
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 只用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短文本的节点。`RenderedLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性；`DiffEditorWidget`、`DiffOverviewRuler`、`CompositionController` 和 document `EditorWidget` 只包装它们独占的 retained geometry。这个边界与 VS Code 一致：editor view 的 root 和 overflow/layout containers 使用 `FastDomNode`，generic `SplitView`、`ContextView` 和 `Resizable` 则保留直接 DOM 写入及各自已有的 size/layout guard。某个属性第一次通过 wrapper 写入后，该属性只能继续通过同一个 wrapper 更新，清除 inline geometry 也必须通过 wrapper 写入空值；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短 leaf text 的节点；`RenderedLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性。generic `SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 

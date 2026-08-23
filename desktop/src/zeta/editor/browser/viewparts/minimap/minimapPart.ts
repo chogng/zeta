@@ -50,7 +50,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
     this.canvas = h(ownerDocument, "canvas");
     this.viewportElement = h(ownerDocument, "div");
     this.viewportNode = new FastDomNode(this.viewportElement);
-    this.domNode.className = "aster-editor-minimap";
+    this.root.setClassName("aster-editor-minimap");
     this.root.setHidden(!options.enabled);
     this.domNode.setAttribute("aria-hidden", "true");
     this.canvas.className = "aster-editor-minimap-gpu";

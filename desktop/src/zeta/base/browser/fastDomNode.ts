@@ -1,6 +1,6 @@
 /**
- * Caches inline geometry, visibility, class, and text writes for one retained DOM node.
- * After a setter is first used, that property must be mutated only through this wrapper.
+ * Caches repeated writes to selected properties of one retained DOM node.
+ * Keep one active wrapper per node. After a setter first manages a property, all writes to that property must use it.
  */
 export class FastDomNode<TElement extends HTMLElement> {
 	private width: string | undefined;
@@ -116,6 +116,17 @@ export class FastDomNode<TElement extends HTMLElement> {
 		this.domNode.className = value;
 	}
 
+	public toggleClassName(className: string, shouldHaveIt?: boolean): void {
+		this.className ??= this.domNode.className;
+		if (shouldHaveIt === undefined) {
+			this.domNode.classList.toggle(className);
+		} else {
+			this.domNode.classList.toggle(className, shouldHaveIt);
+		}
+		this.className = this.domNode.className;
+	}
+
+	/** Sets the complete content of a retained leaf whose children are not managed separately. */
 	public setTextContent(value: string): void {
 		if ((this.textContent ?? this.domNode.textContent) === value) {
 			this.textContent = value;

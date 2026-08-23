@@ -29,7 +29,7 @@ export class CompositionController extends DisposableOwner {
   readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
   constructor(
-    private readonly element: HTMLTextAreaElement,
+    inputNode: FastDomNode<HTMLTextAreaElement>,
     private readonly viewport: EditorViewport,
     private readonly selectionController: EditorSelectionController,
   ) {
@@ -40,11 +40,12 @@ export class CompositionController extends DisposableOwner {
         "Aster composition and selection controllers must share one text model",
       );
     }
-    this.inputNode = new FastDomNode(element);
+    this.inputNode = inputNode;
+    const element = inputNode.domNode;
     this.initialReadOnly = element.readOnly;
     this.defer(() => {
       this.cancelComposition();
-      this.element.readOnly = this.initialReadOnly;
+      this.inputNode.domNode.readOnly = this.initialReadOnly;
       this.clearPresentation();
     });
     this.own(addDisposableListener<CompositionEvent>(
@@ -100,7 +101,7 @@ export class CompositionController extends DisposableOwner {
       event.preventDefault();
       return;
     }
-    this.element.value = "";
+    this.inputNode.domNode.value = "";
     const startPosition = this.selectionController.selections.primary.range.start;
     const session = this.selectionController.beginComposition();
     this.activeComposition = {
@@ -111,7 +112,7 @@ export class CompositionController extends DisposableOwner {
       cancelRequested: false,
     };
     this.viewport.element.classList.add("composing");
-    this.element.classList.add("ime-input");
+    this.inputNode.toggleClassName("ime-input", true);
     this._onDidChange.fire(true);
     this.viewport.revealPosition(startPosition);
     this.positionInput(startPosition);
@@ -154,7 +155,7 @@ export class CompositionController extends DisposableOwner {
       return;
     }
     const text = normalizeTextLineEndings(rawText);
-    const selection = readCompositionSelection(this.element, rawText, text);
+    const selection = readCompositionSelection(this.inputNode.domNode, rawText, text);
     if (
       active.updated &&
       active.text === text &&
@@ -213,16 +214,16 @@ export class CompositionController extends DisposableOwner {
   }
 
   private finishPresentation(): void {
-    this.element.value = "";
+    this.inputNode.domNode.value = "";
     const changed = this.clearPresentation();
     if (changed) this._onDidChange.fire(false);
   }
 
   private clearPresentation(): boolean {
     const changed = this.viewport.element.classList.contains("composing") ||
-      this.element.classList.contains("ime-input");
+      this.inputNode.domNode.classList.contains("ime-input");
     this.viewport.element.classList.remove("composing");
-    this.element.classList.remove("ime-input");
+    this.inputNode.toggleClassName("ime-input", false);
     this.inputNode.setLeft("");
     this.inputNode.setTop("");
     this.inputNode.setHeight("");
@@ -231,7 +232,7 @@ export class CompositionController extends DisposableOwner {
   }
 
   private synchronizeReadOnly(): void {
-    this.element.readOnly = this.initialReadOnly || !IME.enabled;
+    this.inputNode.domNode.readOnly = this.initialReadOnly || !IME.enabled;
   }
 }
 

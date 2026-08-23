@@ -35,11 +35,11 @@ export class DiffOverviewRuler {
     this.modifiedLane = h(ownerDocument, "div");
     this.viewport = h(ownerDocument, "div");
     this.viewportNode = new FastDomNode(this.viewport);
-    this.element.className = "aster-diff-overview";
+    this.root.setClassName("aster-diff-overview");
     this.element.setAttribute("aria-hidden", "true");
     this.originalLane.className = "aster-diff-overview-lane original";
     this.modifiedLane.className = "aster-diff-overview-lane modified";
-    this.viewport.className = "aster-diff-overview-viewport";
+    this.viewportNode.setClassName("aster-diff-overview-viewport");
     this.element.append(this.originalLane, this.modifiedLane, this.viewport);
   }
 

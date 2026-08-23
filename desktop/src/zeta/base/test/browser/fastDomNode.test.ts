@@ -68,6 +68,24 @@ test('FastDomNode writes each changed value once', () => {
 	assert.deepEqual(fixture.tabIndex, { value: 0, writes: 1 });
 });
 
+test('FastDomNode keeps class writes coherent across set and toggle operations', () => {
+	const fixture = createElementFixture();
+	fixture.values.className = 'retained';
+	const node = new FastDomNode(fixture.element);
+
+	node.toggleClassName('active', true);
+	node.toggleClassName('active', true);
+	node.setClassName('retained active');
+	node.toggleClassName('active', false);
+	node.toggleClassName('active', false);
+	node.setClassName('retained');
+	node.toggleClassName('selected');
+	node.toggleClassName('selected');
+
+	assert.equal(fixture.values.className, 'retained');
+	assert.equal(fixture.writes.className, 4);
+});
+
 test('FastDomNode starts from the node current inline values', () => {
 	const fixture = createElementFixture();
 	fixture.values.width = '24px';
@@ -143,6 +161,26 @@ function createElementFixture(): {
 		set: (value: string) => {
 			values.className = value;
 			writes.className++;
+		},
+	});
+	Object.defineProperty(element, 'classList', {
+		value: {
+			toggle: (token: string, force?: boolean): boolean => {
+				const classNames = values.className.split(/\s+/u).filter(Boolean);
+				const index = classNames.indexOf(token);
+				const shouldHaveIt = force ?? index === -1;
+				if (shouldHaveIt === (index !== -1)) {
+					return shouldHaveIt;
+				}
+				if (shouldHaveIt) {
+					classNames.push(token);
+				} else {
+					classNames.splice(index, 1);
+				}
+				values.className = classNames.join(' ');
+				writes.className++;
+				return shouldHaveIt;
+			},
 		},
 	});
 	Object.defineProperty(element, 'textContent', {

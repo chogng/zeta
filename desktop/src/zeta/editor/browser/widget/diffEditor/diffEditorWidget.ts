@@ -79,8 +79,8 @@ export class DiffEditorWidget extends DisposableOwner {
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
-    this.contentElement.className = "aster-diff-editor-content";
-    this.rowsElement.className = "aster-diff-editor-rows";
+    this.contentNode.setClassName("aster-diff-editor-content");
+    this.rowsNode.setClassName("aster-diff-editor-rows");
     this.accessibilityStatusElement.className = "aster-diff-editor-accessibility-status";
     this.accessibilityStatusElement.setAttribute("aria-live", "polite");
     this.accessibilityStatusElement.setAttribute("aria-atomic", "true");

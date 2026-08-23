@@ -74,8 +74,6 @@ export class ScrollableElement extends DisposableOwner {
   private readonly horizontal: HorizontalScrollbar;
   private readonly vertical: VerticalScrollbar;
   private readonly corner: HTMLDivElement;
-  private readonly horizontalTrackNode: FastDomNode<HTMLDivElement>;
-  private readonly verticalTrackNode: FastDomNode<HTMLDivElement>;
   private readonly cornerNode: FastDomNode<HTMLDivElement>;
   private readonly options: ResolvedScrollableElementOptions;
   private readonly onScrollOption: ((position: ScrollPosition) => void) | undefined;
@@ -114,8 +112,6 @@ export class ScrollableElement extends DisposableOwner {
     this.horizontal = horizontal;
     this.vertical = vertical;
     this.corner = corner;
-    this.horizontalTrackNode = new FastDomNode(horizontal.track);
-    this.verticalTrackNode = new FastDomNode(vertical.track);
     this.cornerNode = new FastDomNode(corner);
     this.onDidScrollEmitter = this.own(new Emitter<ScrollableScrollEvent>());
     this.onDidScroll = this.onDidScrollEmitter.event;
@@ -135,7 +131,7 @@ export class ScrollableElement extends DisposableOwner {
     content.className = "zeta-scrollbar-content";
     horizontal.track.dataset.visibility = this.options.horizontal;
     vertical.track.dataset.visibility = this.options.vertical;
-    corner.className = "zeta-scrollbar-corner";
+    this.cornerNode.setClassName("zeta-scrollbar-corner");
     viewport.append(content);
     element.append(
       viewport,
@@ -430,8 +426,8 @@ export class ScrollableElement extends DisposableOwner {
       this.options.vertical,
       verticalNeeded,
     );
-    this.horizontalTrackNode.setRight(verticalRendered ? this.options.scrollbarSize : 0);
-    this.verticalTrackNode.setBottom(horizontalRendered ? this.options.scrollbarSize : 0);
+    this.horizontal.trackNode.setRight(verticalRendered ? this.options.scrollbarSize : 0);
+    this.vertical.trackNode.setBottom(horizontalRendered ? this.options.scrollbarSize : 0);
     this.cornerNode.setHidden(!(horizontalRendered && verticalRendered));
     const horizontalTrackSize = Math.max(
       0,

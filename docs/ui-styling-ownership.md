@@ -38,6 +38,14 @@
 
 文件位置不是所有权的唯一证据，root class 和构造者才是。Part 私有子控件可以与 Part CSS 共置，但 selector 必须以该私有子控件的 root class 开始，不能借 Part root 任意穿透共享组件。
 
+## Retained DOM 写入所有权
+
+`FastDomNode` 是 retained DOM 的局部写穿透缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 active wrapper；允许宿主投影根节点几何时，组件传递 canonical wrapper，不得让宿主重新包装同一节点。节点是刚创建还是从现有组件接收不产生两套 API：每个属性第一次通过 setter 写入时从当前 DOM 懒初始化，之后该属性及其等价入口只能继续通过同一 wrapper 修改。
+
+`domNode` 保持公开，用于事件、测量、attributes、挂载和未缓存的样式。已经缓存的属性不得通过 `domNode.style`、对应 attribute 或其他别名绕过 wrapper；class 增删使用缓存感知的 `toggleClassName`。`setTextContent` 只用于子内容不再由其他代码分别维护的 retained leaf，容器节点继续由其 DOM owner 管理 children。
+
+临时创建并立即替换的 DOM 不使用 `FastDomNode`。wrapper 不进入全局 registry，也不单独拥有 disposal；它与创建或接管该稳定节点的组件保持相同生命周期。
+
 ## 当前控件的准确职责
 
 | 控件 | 当前职责 | 状态视觉 owner |

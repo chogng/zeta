@@ -1,4 +1,5 @@
 import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
+import { FastDomNode } from "../../../base/browser/fastDomNode.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
@@ -137,6 +138,7 @@ export class TextInputController extends DisposableOwner {
   private readonly completionRequests: TextInputCompletionRequests | undefined;
   private readonly languageEditing: TextInputLanguageEditingAdapter | undefined;
   private readonly wordPattern: (() => RegExp | undefined) | undefined;
+  private readonly inputNode: FastDomNode<HTMLTextAreaElement>;
   private readonly commandTransformers: TextInputCommandTransformer[] = [];
   private completionRequest: AbortController | undefined;
   private completionIsIncomplete = false;
@@ -200,9 +202,10 @@ export class TextInputController extends DisposableOwner {
     this.languageEditing = options.languageEditing ? this.own(options.languageEditing) : options.language ? this.own(languageEditingFactory!(viewport.textModel, selectionController, options.language, options.indentation)) : undefined;
     this.wordPattern = options.wordPattern ?? (options.language ? () => options.language!.configurations.getLanguageConfiguration(options.language!.languageId).wordPattern : undefined);
     const ownerDocument = viewport.element.ownerDocument;
-    this.element = h(ownerDocument, "textarea");
-    this.element.className = "aster-editor-input";
-    this.element.tabIndex = -1;
+    this.inputNode = new FastDomNode(h(ownerDocument, "textarea"));
+    this.element = this.inputNode.domNode;
+    this.inputNode.setClassName("aster-editor-input");
+    this.inputNode.setTabIndex(-1);
     this.element.spellcheck = false;
     this.element.readOnly = selectionController.readOnly;
     this.element.wrap = "off";
@@ -219,7 +222,7 @@ export class TextInputController extends DisposableOwner {
     }
     this.completionWidget = this.completionSession ? this.own(completionViewFactory!(this.element, viewport, selectionController, this.completionSession)) : undefined;
     this.compositionController = this.own(new CompositionController(
-      this.element,
+      this.inputNode,
       viewport,
       selectionController,
     ));

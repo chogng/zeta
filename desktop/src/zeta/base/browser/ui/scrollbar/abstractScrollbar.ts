@@ -20,8 +20,8 @@ export interface AbstractScrollbarOptions {
 export abstract class AbstractScrollbar extends DisposableOwner {
   readonly track: HTMLDivElement;
   readonly thumb: HTMLDivElement;
+  public readonly trackNode: FastDomNode<HTMLDivElement>;
   protected readonly thumbNode: FastDomNode<HTMLDivElement>;
-  private readonly trackNode: FastDomNode<HTMLDivElement>;
   private readonly trackClickBehavior: "jump" | "page";
   private readonly getMetrics: () => ScrollbarAxisMetrics;
   private readonly setPosition: (position: number) => void;
@@ -45,14 +45,15 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     this.dragListeners = this.own(new ResettableDisposableGroup());
     this.defer(() => track.remove());
 
-    track.className =
-      `zeta-scrollbar-track zeta-scrollbar-track-${axis}`;
+    this.trackNode.setClassName(
+      `zeta-scrollbar-track zeta-scrollbar-track-${axis}`,
+    );
     track.setAttribute("role", "scrollbar");
     track.setAttribute("aria-label", `${capitalize(axis)} scrollbar`);
     track.setAttribute("aria-orientation", axis);
     track.setAttribute("aria-controls", options.viewport.id);
     track.setAttribute("aria-valuemin", "0");
-    thumb.className = "zeta-scrollbar-thumb";
+    this.thumbNode.setClassName("zeta-scrollbar-thumb");
     track.append(thumb);
     container.append(track);
 
@@ -110,7 +111,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       "aria-disabled",
       String(metrics.maximumPosition === 0),
     );
-    this.track.classList.toggle("disabled", metrics.maximumPosition === 0);
+    this.trackNode.toggleClassName("disabled", metrics.maximumPosition === 0);
     this.applyThumbMetrics(metrics);
   }
 
@@ -153,7 +154,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     const thumbTravel = startMetrics.trackSize - startMetrics.thumbSize;
     if (thumbTravel <= 0 || startMetrics.maximumPosition <= 0) return;
     this.dragListeners.clear();
-    this.track.classList.add("active");
+    this.trackNode.toggleClassName("active", true);
     if (
       typeof this.track.setPointerCapture === "function" &&
       browserEvent.pointerId !== undefined
@@ -185,7 +186,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
       ) {
         this.track.releasePointerCapture(event.pointerId);
       }
-      this.track.classList.remove("active");
+      this.trackNode.toggleClassName("active", false);
       this.dragListeners.clear();
     };
     this.dragListeners.add(addDisposableListener(
