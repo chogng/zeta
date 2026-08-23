@@ -48,6 +48,8 @@ export async function startElectronWorkbench(
 		workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
 		configurationApi: api.configuration,
 		keybindingsResourceApi: api.keybindings,
+		keyboardLayoutProvider: api.keyboardLayout,
+		userKeyboardLayoutApi: api.userKeyboardLayout,
 		nativeHostApi: api.nativeHost,
 		userThemeService: userThemes,
 		createContextMenuService: (options) =>

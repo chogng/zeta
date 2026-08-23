@@ -11,6 +11,8 @@ import { createSyntaxApi } from "../../syntax/electron-browser/syntaxApi.js";
 import { createDocumentCollaborationApi } from "../../collaboration/electron-browser/documentCollaborationApi.js";
 import { createGitApi } from "../../git/electron-browser/gitApi.js";
 import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/keybindingsResourceApi.js";
+import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
+import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
 import { createWorkspaceSearchApi } from "../../search/electron-browser/searchApi.js";
 import { createModelApi, createSessionApi, createThreadApi, createTurnApi } from "../../sessions/electron-browser/sessionApi.js";
@@ -76,6 +78,8 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 		events: createServerEventApi(),
 		configuration: createConfigurationApi(),
 		keybindings: createKeybindingsResourceApi(),
+		keyboardLayout: createNativeKeyboardLayoutApi(),
+		userKeyboardLayout: createUserKeyboardLayoutApi(),
 		nativeContextMenu: createNativeContextMenuApi(),
 		nativeHost: createNativeHostApi(),
 		nativeMenubar: createNativeMenubarApi(),

@@ -53,7 +53,7 @@ export interface KeybindingResolverOptions {
 	readonly registry?: KeybindingRegistry;
 	readonly resolveKeybinding?: (
 		keybinding: Keybinding,
-	) => ResolvedKeybinding;
+	) => ResolvedKeybinding | readonly ResolvedKeybinding[];
 }
 
 /**
@@ -63,7 +63,7 @@ export class KeybindingResolver {
 	private readonly registry: KeybindingRegistry;
 	private readonly resolveKeybinding: (
 		keybinding: Keybinding,
-	) => ResolvedKeybinding;
+	) => ResolvedKeybinding | readonly ResolvedKeybinding[];
 
 	constructor(options: KeybindingResolverOptions = {}) {
 		this.registry = options.registry ?? KeybindingsRegistry;
@@ -154,10 +154,15 @@ export class KeybindingResolver {
 	}
 
 	private resolvedRules(): readonly ResolvedRule[] {
-		return this.registry.getKeybindings().map((rule) => ({
-			rule,
-			keybinding: this.resolveKeybinding(rule.keybinding),
-		}));
+		const result: ResolvedRule[] = [];
+		for (const rule of this.registry.getKeybindings()) {
+			const resolved = this.resolveKeybinding(rule.keybinding);
+			const keybindings = Array.isArray(resolved) ? resolved : [resolved];
+			for (const keybinding of keybindings) {
+				result.push({ rule, keybinding });
+			}
+		}
+		return result;
 	}
 }
 

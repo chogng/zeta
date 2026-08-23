@@ -1,3 +1,4 @@
+import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -43,6 +44,10 @@ import { workspaceTrustIpcRoutes } from "../../platform/workspaceTrust/electron-
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
 import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import { migrateLegacyKeybindings } from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
+import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/nativeKeyboardLayout.js";
+import { NativeKeyboardLayoutMainService, nativeKeyboardLayoutIpcRoutes } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
+import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
+import { UserKeyboardLayoutMainService, userKeyboardLayoutIpcRoutes } from "../../platform/keyboardLayout/electron-main/userKeyboardLayoutMainService.js";
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from "../../platform/menubar/electron-main/menubarMainService.js";
 import { nativeHostIpcRoutes } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL } from "../../platform/native/common/nativeHost.js";
@@ -101,6 +106,7 @@ interface PersistentServices {
 	readonly state: StateService;
 	readonly configuration: ConfigurationMainService;
 	readonly keybindings: KeybindingsResourceMainService;
+	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
 
 interface RendererEntry {
@@ -138,6 +144,7 @@ export class ZetaApplication extends DisposableOwner {
 	private readonly disposableTracker: DisposableTracker | undefined;
 	private readonly tracking: Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
+	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
 	private readonly profileRoot: string;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
@@ -163,6 +170,7 @@ export class ZetaApplication extends DisposableOwner {
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
 		this.trustedIpcRouter = this.own(new TrustedIpcRouter(ipcMain));
+		this.nativeKeyboardLayout = this.own(new NativeKeyboardLayoutMainService());
 		this.profileRoot = localProfileRoot();
 
 		app.on("before-quit", this.onBeforeQuit);
@@ -245,6 +253,7 @@ export class ZetaApplication extends DisposableOwner {
 		);
 		let configuration: ConfigurationMainService | undefined;
 		let keybindings: KeybindingsResourceMainService | undefined;
+		let userKeyboardLayout: UserKeyboardLayoutMainService | undefined;
 		try {
 			configuration = await ConfigurationMainService.create({
 				filePath: join(this.profileRoot, "configuration.json"),
@@ -258,13 +267,21 @@ export class ZetaApplication extends DisposableOwner {
 					console.error("Failed to process keybindings resource", error);
 				},
 			});
+			userKeyboardLayout = await UserKeyboardLayoutMainService.create({
+				filePath: join(this.profileRoot, "keyboard-layout.json"),
+				openResource: (filePath) => shell.openPath(filePath),
+				onError: (error) => {
+					console.error("Failed to process user keyboard layout", error);
+				},
+			});
 			await migrateLegacyKeybindings(configuration, keybindings);
-			this.persistentServices = { state, configuration, keybindings };
+			this.persistentServices = { state, configuration, keybindings, userKeyboardLayout };
 		} catch (error) {
 			await Promise.all([
 				state.close(),
 				configuration?.close(),
 				keybindings?.close(),
+				userKeyboardLayout?.close(),
 			]);
 			throw error;
 		}
@@ -662,6 +679,8 @@ export class ZetaApplication extends DisposableOwner {
 			...browserViewIpcRoutes(browserViewMainService),
 			...configurationIpcRoutes(configuration),
 			...keybindingsResourceIpcRoutes(keybindings),
+			...nativeKeyboardLayoutIpcRoutes(this.nativeKeyboardLayout),
+			...userKeyboardLayoutIpcRoutes(this.services.userKeyboardLayout),
 			...nativeHostIpcRoutes({
 				openFolder: async () => {
 					const result = await dialog.showOpenDialog(window, {
@@ -744,6 +763,12 @@ export class ZetaApplication extends DisposableOwner {
 		));
 		windowDisposables.add(keybindings.onDidChange((snapshot) =>
 			window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot)
+		));
+		windowDisposables.add(this.nativeKeyboardLayout.onDidChangeKeyboardLayout((layout) =>
+			window.webContents.send(NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL, layout)
+		));
+		windowDisposables.add(this.services.userKeyboardLayout.onDidChangeKeyboardLayout(() =>
+			window.webContents.send(USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL, this.services.userKeyboardLayout.currentKeyboardLayout)
 		));
 		try {
 			await this.loadRendererEntry(window, rendererEntry);
@@ -1147,6 +1172,7 @@ export class ZetaApplication extends DisposableOwner {
 					services.state.close(),
 					services.configuration.close(),
 					services.keybindings.close(),
+					services.userKeyboardLayout.close(),
 				]).then(() => undefined)
 			: Promise.resolve();
 		return this.closePersistentServicesPromise;

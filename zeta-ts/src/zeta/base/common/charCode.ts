@@ -135,6 +135,36 @@ export const enum CharCode {
 	NextLine = 0x0085,
 	/** U+00A0 NO-BREAK SPACE, visually space-like but non-breaking. */
 	NoBreakSpace = 0x00A0,
+
+	// Combining marks emitted by macOS/Linux dead-key mappings.
+	/** U+0300 COMBINING GRAVE ACCENT. */
+	CombiningGraveAccent = 0x0300,
+	/** U+0301 COMBINING ACUTE ACCENT. */
+	CombiningAcuteAccent = 0x0301,
+	/** U+0302 COMBINING CIRCUMFLEX ACCENT. */
+	CombiningCircumflexAccent = 0x0302,
+	/** U+0303 COMBINING TILDE. */
+	CombiningTilde = 0x0303,
+	/** U+0304 COMBINING MACRON. */
+	CombiningMacron = 0x0304,
+	/** U+0306 COMBINING BREVE. */
+	CombiningBreve = 0x0306,
+	/** U+0307 COMBINING DOT ABOVE. */
+	CombiningDotAbove = 0x0307,
+	/** U+0308 COMBINING DIAERESIS. */
+	CombiningDiaeresis = 0x0308,
+	/** U+030A COMBINING RING ABOVE. */
+	CombiningRingAbove = 0x030A,
+	/** U+030B COMBINING DOUBLE ACUTE ACCENT. */
+	CombiningDoubleAcuteAccent = 0x030B,
+	/** U+030C COMBINING CARON. */
+	CombiningCaron = 0x030C,
+	/** U+0327 COMBINING CEDILLA. */
+	CombiningCedilla = 0x0327,
+	/** U+0328 COMBINING OGONEK. */
+	CombiningOgonek = 0x0328,
+	/** Last code point in the Combining Diacritical Marks block. */
+	CombiningDiacriticalMarksEnd = 0x036F,
 	/** U+200B ZERO WIDTH SPACE. */
 	ZeroWidthSpace = 0x200B,
 	/** U+2028 LINE SEPARATOR. */

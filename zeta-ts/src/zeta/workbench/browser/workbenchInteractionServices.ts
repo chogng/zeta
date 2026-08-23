@@ -12,13 +12,19 @@ import { IHoverService } from "../../platform/hover/common/hoverService.js";
 import type { ServiceCollection } from "../../platform/instantiation/common/instantiation.js";
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
 import { type IKeybindingsResourceApi, IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
-import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
+import {
+	IUserKeyboardLayoutService,
+	type IUserKeyboardLayoutApi,
+	UnavailableUserKeyboardLayoutService,
+} from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { ILayoutService, type ILayoutService as ILayoutServiceContract } from "../../platform/layout/common/layoutService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../services/commands/common/commandService.js";
 import type { WorkbenchContextMenuServiceFactory } from "../services/contextmenu/browser/workbenchContextMenuService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
+import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
 import { WorkbenchKeybindingsResourceService } from "../services/keybinding/browser/keybindingsResourceService.js";
 import { ISettingsService } from "../services/preferences/common/settings.js";
 import { SettingsService } from "../services/preferences/common/settingsService.js";
@@ -30,6 +36,8 @@ export interface WorkbenchInteractionServicesOptions {
 	readonly layoutService: ILayoutServiceContract;
 	readonly configurationService: IConfigurationServiceContract;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
+	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly statusbarService?: IStatusbarService;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
 }
@@ -56,6 +64,8 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 		const services = options.services;
 		services.set(ILayoutService, options.layoutService);
 		services.set(IConfigurationService, options.configurationService);
+		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
+		services.set(IUserKeyboardLayoutService, userKeyboardLayoutService);
 
 		this.commandService = this.own(new CommandService(services));
 		services.set(ICommandService, this.commandService);
@@ -64,6 +74,9 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 
 		const keyboardLayoutService = this.own(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
+			configurationService: options.configurationService,
+			layoutProvider: options.keyboardLayoutProvider,
+			userLayoutProvider: userKeyboardLayoutService,
 		}));
 		services.set(IKeyboardLayoutService, keyboardLayoutService);
 		const keybindingsResourceService = this.own(new WorkbenchKeybindingsResourceService({
@@ -78,6 +91,7 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 			statusbarService: options.statusbarService,
 		}));
 		services.set(IKeybindingService, this.keybindingService);
+		services.set(IKeyboardShortcutTroubleshootingService, this.keybindingService);
 
 		this.menuService = new MenuService(this.commandService, this.contextKeyService);
 		services.set(IMenuService, this.menuService);

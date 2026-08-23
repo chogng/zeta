@@ -11,6 +11,8 @@ import type {
 import type {
 	IKeybindingsResourceApi,
 } from "../../keybinding/common/keybindingsResource.js";
+import type { INativeKeyboardLayoutApi } from "../../keyboardLayout/common/nativeKeyboardLayout.js";
+import type { IUserKeyboardLayoutApi } from "../../keyboardLayout/common/userKeyboardLayout.js";
 import type {
 	INativeContextMenuApi,
 } from "../../../base/parts/contextmenu/common/contextmenu.js";
@@ -31,6 +33,8 @@ export interface ZetaElectronRendererApi extends IRendererHost {
 	readonly browserView: IBrowserViewApi;
 	readonly configuration: IConfigurationApi;
 	readonly keybindings: IKeybindingsResourceApi;
+	readonly keyboardLayout: INativeKeyboardLayoutApi;
+	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
 	readonly nativeContextMenu: INativeContextMenuApi;
 	readonly nativeHost: INativeHostApi;
 	readonly nativeMenubar: INativeMenubarApi;

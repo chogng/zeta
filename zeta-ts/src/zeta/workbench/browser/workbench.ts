@@ -39,6 +39,7 @@ import {
 	ServiceCollection,
 } from "../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
+import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
 	BrowserDialogHandler,
 } from "../../platform/dialogs/browser/browserDialogHandler.js";
@@ -205,6 +206,7 @@ import { createEditorDecorationSources } from "./parts/editor/editorDecorations.
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
+import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
 
@@ -217,6 +219,8 @@ export interface IStartWorkbenchOptions {
 	readonly workspace: IAnyWorkspaceIdentifier;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
+	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly nativeHostApi?: INativeHostApi;
 	readonly userThemeService?: IUserThemeServiceContract;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
@@ -233,6 +237,8 @@ export function startWorkbench({
 	workspace,
 	configurationApi,
 	keybindingsResourceApi,
+	keyboardLayoutProvider,
+	userKeyboardLayoutApi,
 	nativeHostApi,
 	userThemeService,
 	createContextMenuService,
@@ -247,6 +253,8 @@ export function startWorkbench({
 		workspace,
 		configurationApi,
 		keybindingsResourceApi,
+		keyboardLayoutProvider,
+		userKeyboardLayoutApi,
 		nativeHostApi,
 		userThemeService,
 		createContextMenuService,
@@ -281,6 +289,8 @@ export class Workbench extends DisposableOwner {
 		workspace: IAnyWorkspaceIdentifier,
 		configurationApi: IConfigurationApi | undefined,
 		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
+		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
+		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
 		createContextMenuService: WorkbenchContextMenuServiceFactory,
@@ -485,6 +495,8 @@ export class Workbench extends DisposableOwner {
 			layoutService,
 			configurationService: configuration,
 			keybindingsResourceApi,
+			keyboardLayoutProvider,
+			userKeyboardLayoutApi,
 			statusbarService,
 			createContextMenuService,
 		}));

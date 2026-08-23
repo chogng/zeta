@@ -52,6 +52,10 @@ function formatChord(
 	operatingSystem: OperatingSystem,
 	style: KeybindingLabelStyle,
 ): string {
+	const singleModifier = singleModifierLabel(chord, operatingSystem, style);
+	if (singleModifier) {
+		return singleModifier;
+	}
 	if (style === KeybindingLabelStyle.UserSettings) {
 		return formatUserSettingsChord(chord, operatingSystem);
 	}
@@ -66,6 +70,31 @@ function formatChord(
 	if (chord.metaKey) parts.push(labels.meta);
 	parts.push(displayKey(chord));
 	return parts.join(labels.separator);
+}
+
+function singleModifierLabel(
+	chord: ResolvedKeybindingChord,
+	operatingSystem: OperatingSystem,
+	style: KeybindingLabelStyle,
+): string | undefined {
+	if (chord.ctrlKey || chord.shiftKey || chord.altKey || chord.metaKey) {
+		return undefined;
+	}
+	const key = chord.key.toLocaleLowerCase("en-US");
+	if (key !== "ctrl" && key !== "shift" && key !== "alt" && key !== "meta") {
+		return undefined;
+	}
+	if (style === KeybindingLabelStyle.UserSettings) {
+		return key === "meta"
+			? operatingSystem === OperatingSystem.Macintosh ? "cmd" : operatingSystem === OperatingSystem.Windows ? "win" : "meta"
+			: key;
+	}
+	const labels = style === KeybindingLabelStyle.Aria
+		? ariaModifierLabels(operatingSystem)
+		: uiModifierLabels(operatingSystem);
+	return key === "ctrl" ? labels.ctrl :
+		key === "shift" ? labels.shift :
+		key === "alt" ? labels.alt : labels.meta;
 }
 
 function formatUserSettingsChord(

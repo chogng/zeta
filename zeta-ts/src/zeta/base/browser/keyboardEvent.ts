@@ -1,4 +1,10 @@
 import { stopEvent } from "./dom.js";
+import {
+	keyCodeFromKeyboardEvent,
+	KeyCode,
+	ScanCode,
+	ScanCodeUtils,
+} from "../common/keyCodes.js";
 
 export interface KeyChord {
 	/** Physical key identity, such as `KeyP` or `ArrowDown`. */
@@ -19,6 +25,9 @@ export interface KeyChord {
 export class StandardKeyboardEvent {
 	readonly key: string;
 	readonly code: string;
+	readonly keyCode: KeyCode;
+	readonly scanCode: ScanCode;
+	readonly location: number;
 	readonly ctrlKey: boolean;
 	readonly shiftKey: boolean;
 	readonly altKey: boolean;
@@ -30,6 +39,14 @@ export class StandardKeyboardEvent {
 	constructor(readonly browserEvent: KeyboardEvent) {
 		this.key = browserEvent.key;
 		this.code = browserEvent.code;
+		this.keyCode = keyCodeFromKeyboardEvent(
+			browserEvent.key,
+			browserEvent.keyCode,
+			browserEvent.code,
+			browserEvent.location,
+		);
+		this.scanCode = ScanCodeUtils.toEnum(browserEvent.code);
+		this.location = browserEvent.location;
 		this.ctrlKey = browserEvent.ctrlKey;
 		this.shiftKey = browserEvent.shiftKey;
 		this.altKey = browserEvent.altKey;

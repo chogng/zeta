@@ -11,15 +11,16 @@
     "icons:check": "node ../build/desktop/resources/syncProductIcons.ts --check",
     "tokens:generate": "node ../build/desktop/compileDesignTokens.ts",
     "tokens:check": "node ../build/desktop/compileDesignTokens.ts --check",
+    "rebuild:native": "electron-rebuild -f -w native-keymap",
     "prepare:output": "node ../build/lib/prepareDesktopOutput.ts",
-    "prebuild": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
-    "prebuild:host": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
-    "prebuild:main": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
+    "prebuild": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
+    "prebuild:host": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
+    "prebuild:main": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
     "prebuild:preload": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
     "prebuild:renderer": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
-    "predev": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts && node ../build/desktop/prepareDevPackage.ts",
-    "predev:ui": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
-    "predev:electron": "corepack pnpm run prepare:output && node ../build/desktop/prepareDevPackage.ts",
+    "predev": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts && node ../build/desktop/prepareDevPackage.ts",
+    "predev:ui": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
+    "predev:electron": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/prepareDevPackage.ts",
     "predev:main": "node ../build/desktop/resources/syncGeneratedResources.ts",
     "predev:preload": "node ../build/desktop/resources/syncGeneratedResources.ts",
     "predev:renderer": "node ../build/desktop/resources/syncGeneratedResources.ts",
@@ -76,10 +77,11 @@
     "dev:preload": "tsc -p tsconfig.preload.json --watch --preserveWatchOutput",
     "dev:rust": "node ../build/lib/watch/watchServerHost.ts",
     "dev:electron": "wait-on tcp:127.0.0.1:5173 && cross-env ZETA_DEV_SERVER_HOST_RELOAD=1 ZETA_RENDERER_URL=http://127.0.0.1:5173 node ../build/lib/watch/watchElectron.ts",
-    "prestart": "corepack pnpm run prepare:output && node ../build/desktop/prepareDevPackage.ts",
+    "prestart": "corepack pnpm run rebuild:native && corepack pnpm run prepare:output && node ../build/desktop/prepareDevPackage.ts",
     "start": "node ../build/desktop/runElectron.ts"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.0",
     "@playwright/test": "1.61.1",
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
@@ -103,5 +105,8 @@
     "pdfjs-dist": "6.1.200",
     "vscode-oniguruma": "1.7.0",
     "vscode-textmate": "9.3.2"
+  },
+  "optionalDependencies": {
+    "native-keymap": "3.3.9"
   }
 }

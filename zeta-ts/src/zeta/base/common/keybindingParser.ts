@@ -4,6 +4,7 @@ import {
 	logicalKey,
 	physicalKey,
 } from "./keybindings.js";
+import { KeyCode, KeyCodeUtils, ScanCode, ScanCodeUtils } from "./keyCodes.js";
 
 const modifierNames = new Map<string, ModifierName>([
 	["ctrl", "ctrlKey"],
@@ -48,6 +49,10 @@ export function parseKeybinding(value: string): Keybinding | undefined {
 function parseChord(value: string): KeybindingChord | undefined {
 	const tokens = value.split("+").map((token) => token.trim());
 	if (tokens.some((token) => token.length === 0)) return undefined;
+	if (tokens.length === 1) {
+		const singleModifier = singleModifierKey(tokens[0]);
+		if (singleModifier) return logicalKey(singleModifier);
+	}
 
 	const modifiers: Record<ModifierName, boolean> = {
 		primaryKey: false,
@@ -87,7 +92,34 @@ function parseChord(value: string): KeybindingChord | undefined {
 			metaKey: modifiers.metaKey,
 		} as const;
 	const physicalMatch = /^\[([^\]]+)\]$/.exec(key);
-	return physicalMatch
-		? physicalKey(physicalMatch[1], chordModifiers)
-		: logicalKey(key, chordModifiers);
+	if (physicalMatch) {
+		return ScanCodeUtils.toEnum(physicalMatch[1]) === ScanCode.None
+			? undefined
+			: physicalKey(ScanCodeUtils.toString(ScanCodeUtils.toEnum(physicalMatch[1])), chordModifiers);
+	}
+	if (KeyCodeUtils.fromString(key) === KeyCode.Unknown && [...key].length !== 1) {
+		return undefined;
+	}
+	return logicalKey(key, chordModifiers);
+}
+
+function singleModifierKey(value: string): string | undefined {
+	switch (value.toLocaleLowerCase("en-US")) {
+		case "ctrl":
+		case "control":
+			return "ctrl";
+		case "shift":
+			return "shift";
+		case "alt":
+		case "option":
+			return "alt";
+		case "meta":
+		case "cmd":
+		case "command":
+		case "win":
+		case "windows":
+			return "meta";
+		default:
+			return undefined;
+	}
 }

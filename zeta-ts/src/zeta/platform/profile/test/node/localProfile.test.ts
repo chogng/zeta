@@ -24,10 +24,13 @@ test("legacy Desktop resources migrate without overwriting canonical files", asy
 	await mkdir(join(legacy, "themes"), { recursive: true });
 	await writeFile(join(legacy, "configuration.json"), "legacy", "utf8");
 	await writeFile(join(legacy, "keybindings.json"), "bindings", "utf8");
+	await writeFile(join(legacy, "keyboard-layout.json"), "layout", "utf8");
 	await writeFile(join(legacy, "themes", "custom.json"), "theme", "utf8");
 
 	await migrateLegacyLocalProfile({ legacyUserDataRoot: legacy, profileRoot: profile });
 	assert.equal(await readFile(join(profile, "configuration.json"), "utf8"), "legacy");
+	assert.equal(await readFile(join(profile, "keybindings.json"), "utf8"), "bindings");
+	assert.equal(await readFile(join(profile, "keyboard-layout.json"), "utf8"), "layout");
 	assert.equal(await readFile(join(profile, "themes", "custom.json"), "utf8"), "theme");
 
 	await writeFile(join(profile, "configuration.json"), "canonical", "utf8");

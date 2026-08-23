@@ -14,6 +14,30 @@ import {
 	resolveKeybinding,
 } from "../../common/keybindings.js";
 import { OperatingSystem } from "../../common/platform.js";
+import {
+	EVENT_KEY_CODE_MAP,
+	IMMUTABLE_CODE_TO_KEY_CODE,
+	IMMUTABLE_KEY_CODE_TO_CODE,
+	KeyCode,
+	KeyCodeUtils,
+	NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE,
+	ScanCode,
+	ScanCodeUtils,
+} from "../../common/keyCodes.js";
+
+test("canonical key codes distinguish logical keys from physical scan codes", () => {
+	assert.equal(KeyCodeUtils.fromString("ArrowLeft"), KeyCode.LeftArrow);
+	assert.equal(KeyCodeUtils.fromString("KeyZ"), KeyCode.KeyZ);
+	assert.equal(KeyCodeUtils.toUserSettings(KeyCode.Slash), "/");
+	assert.equal(ScanCodeUtils.toEnum("IntlYen"), ScanCode.IntlYen);
+	assert.equal(ScanCodeUtils.lowerCaseToEnum("intlyen"), ScanCode.IntlYen);
+	assert.equal(ScanCodeUtils.toString(ScanCode.NumpadEnter), "NumpadEnter");
+	assert.equal(EVENT_KEY_CODE_MAP[38], KeyCode.UpArrow);
+	assert.equal(NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE.VK_F12, KeyCode.F12);
+	assert.equal(IMMUTABLE_CODE_TO_KEY_CODE[ScanCode.ArrowUp], KeyCode.UpArrow);
+	assert.equal(IMMUTABLE_KEY_CODE_TO_CODE[KeyCode.UpArrow], ScanCode.ArrowUp);
+	assert.equal(IMMUTABLE_CODE_TO_KEY_CODE[ScanCode.KeyA], KeyCode.DependsOnKeyboardLayout);
+});
 
 test("keybinding parser distinguishes logical and physical chords", () => {
 	const parsed = parseKeybinding("ctrl+k shift+[KeyP]");
@@ -31,6 +55,8 @@ test("keybinding parser distinguishes logical and physical chords", () => {
 	assert.equal(parseKeybinding("ctrl+shift"), undefined);
 	assert.equal(parseKeybinding("primary+ctrl+k"), undefined);
 	assert.equal(parseKeybinding("ctrl+k+v"), undefined);
+	assert.equal(parseKeybinding("ctrl+banana"), undefined);
+	assert.equal(parseKeybinding("ctrl+[Banana]"), undefined);
 });
 
 test("portable primary modifiers resolve and format for each OS", () => {

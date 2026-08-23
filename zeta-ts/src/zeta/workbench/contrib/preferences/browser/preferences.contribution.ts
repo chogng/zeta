@@ -24,6 +24,7 @@ import { IWorkspaceOpenService } from "../../../services/workspaces/browser/work
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
 import { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
 import { IChatService } from "../../../services/chat/common/chatService.js";
+import "./keyboardLayoutPicker.js";
 
 export const OpenSettingsCommandId = "workbench.action.openSettings";
 

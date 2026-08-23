@@ -35,6 +35,7 @@ export async function migrateLegacyLocalProfile(options: LegacyLocalProfileMigra
 	await mkdir(options.profileRoot, { recursive: true });
 	await copyFileIfMissing(join(options.legacyUserDataRoot, "configuration.json"), join(options.profileRoot, "configuration.json"));
 	await copyFileIfMissing(join(options.legacyUserDataRoot, "keybindings.json"), join(options.profileRoot, "keybindings.json"));
+	await copyFileIfMissing(join(options.legacyUserDataRoot, "keyboard-layout.json"), join(options.profileRoot, "keyboard-layout.json"));
 	await copyDirectoryIfMissing(join(options.legacyUserDataRoot, "themes"), join(options.profileRoot, "themes"));
 }
 
