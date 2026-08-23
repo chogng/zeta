@@ -15,6 +15,7 @@ export interface ISessionsManagementService {
 	readonly error: string | undefined;
 	initialize(): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
+	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	createUntitledSession(title?: string): IUntitledChatSession;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;

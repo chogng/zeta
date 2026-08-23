@@ -15,7 +15,6 @@ use zeta_action_policy::CapabilitySet;
 use zeta_action_policy::ResolvedAction;
 use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
-use zeta_core::CompleteDelegationRequest;
 use zeta_core::CoreError;
 use zeta_core::JoinAgentsRequest;
 use zeta_core::MultiAgentCoordinator;
@@ -34,22 +33,22 @@ use zeta_protocol::AgentJoinPolicy;
 use zeta_protocol::AgentJoinStatus;
 use zeta_protocol::AgentMessageId;
 use zeta_protocol::AgentMessageProvenance;
-use zeta_protocol::AgentRoleSnapshot;
 use zeta_protocol::ContextCheckpointId;
-use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::DelegatedPolicyCeiling;
 use zeta_protocol::DelegatedTask;
 use zeta_protocol::DelegationId;
-use zeta_protocol::DelegationResultStatus;
 use zeta_protocol::ForkedAgentContext;
 use zeta_protocol::ItemId;
-use zeta_protocol::SkillActivationReason;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolName;
-use zeta_protocol::TurnStatus;
+
+mod agent_selection;
+
+use agent_selection::ResolvedAgentSelection;
+use agent_selection::resolve_agent_selection;
 
 pub(crate) const SPAWN_AGENT_TOOL_NAME: &str = "spawn_agent";
 pub(crate) const SEND_AGENT_MESSAGE_TOOL_NAME: &str = "send_agent_message";
@@ -62,6 +61,7 @@ pub(super) struct MultiAgentToolService {
     turn_backend: Arc<dyn TurnExecutionBackend>,
     definitions: Vec<ToolDefinition>,
     action_policy_revision: ActionPolicyRevision,
+    customizations: Option<Arc<super::workspace_customizations::WorkspaceCustomizations>>,
 }
 
 impl MultiAgentToolService {
@@ -76,11 +76,20 @@ impl MultiAgentToolService {
             turn_backend,
             definitions: vec![spawn_definition(), send_definition(), wait_definition()],
             action_policy_revision: local_policy_revision(),
+            customizations: None,
         }
     }
 
     pub(super) fn with_action_policy_revision(mut self, revision: ActionPolicyRevision) -> Self {
         self.action_policy_revision = revision;
+        self
+    }
+
+    pub(super) fn with_workspace_customizations(
+        mut self,
+        customizations: Arc<super::workspace_customizations::WorkspaceCustomizations>,
+    ) -> Self {
+        self.customizations = Some(customizations);
         self
     }
 
@@ -99,6 +108,7 @@ impl MultiAgentToolService {
         match call.name.as_str() {
             SPAWN_AGENT_TOOL_NAME => {
                 let arguments: SpawnArguments = decode_arguments(&call.arguments)?;
+                let selection = self.resolve_agent(&arguments, facts)?;
                 let delegation_id = DelegationId::new(format!("tool:{}", call.id))
                     .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
                 let spawned = self.coordinator.spawn(SpawnAgentRequest {
@@ -110,27 +120,12 @@ impl MultiAgentToolService {
                         title: arguments.name.unwrap_or_else(|| "subagent".into()),
                         instructions: arguments.task,
                     },
-                    role: AgentRoleSnapshot {
-                        name: "general".into(),
-                        instructions: "Complete the delegated task independently. Return a concise, evidence-backed result to the parent Agent.".into(),
-                        model: identity.model().cloned(),
-                    },
+                    role: selection.role.clone(),
                     inheritance: spawn_context(arguments.context)?,
                     policy_ceiling: DelegatedPolicyCeiling {
                         policy_revision: identity.policy_revision().into(),
                     },
-                    capability_scope: DelegatedCapabilityScope {
-                        tools: facts.available_tools().cloned().collect(),
-                        skills: facts
-                            .activated_skills()
-                            .iter()
-                            .cloned()
-                            .map(|mut activation| {
-                                activation.reason = SkillActivationReason::Automatic;
-                                activation
-                            })
-                            .collect(),
-                    },
+                    capability_scope: selection.capability_scope,
                 })?;
                 self.turn_backend
                     .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
@@ -138,6 +133,7 @@ impl MultiAgentToolService {
                     "delegation_id": delegation_id,
                     "child_thread_id": spawned.child_thread_id,
                     "child_turn_id": spawned.child_turn_id,
+                    "agent": selection.role.definition,
                     "status": "running"
                 }))
             }
@@ -186,6 +182,33 @@ impl MultiAgentToolService {
                 call.name
             ))),
         }
+    }
+
+    fn resolve_agent(
+        &self,
+        arguments: &SpawnArguments,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ResolvedAgentSelection, CoreError> {
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Execution("Agent coordination tool requires durable caller identity".into())
+        })?;
+        let agent_snapshot = self
+            .customizations
+            .as_ref()
+            .map(|customizations| customizations.agent_snapshot());
+        let instruction_snapshot = self
+            .customizations
+            .as_ref()
+            .map(|customizations| customizations.instruction_snapshot());
+        resolve_agent_selection(
+            arguments.agent.as_deref(),
+            &arguments.task,
+            identity.model(),
+            facts.available_tools().cloned().collect(),
+            facts.activated_skills(),
+            agent_snapshot.as_deref(),
+            instruction_snapshot.as_deref(),
+        )
     }
 
     fn wait_for_join(
@@ -246,43 +269,8 @@ impl MultiAgentToolService {
             }
             let child_thread_id =
                 child_thread_for(&self.sessions, parent_thread_id, &delegation_id)?;
-            let child = self.sessions.threads().read_thread(&child_thread_id)?;
-            if child.turns.is_empty() || child.turns.iter().any(|turn| !terminal(turn.status)) {
-                continue;
-            }
-            let latest = child
-                .turns
-                .last()
-                .expect("non-empty child turn list checked above");
-            let status = match latest.status {
-                TurnStatus::Completed => DelegationResultStatus::Completed,
-                TurnStatus::Failed => DelegationResultStatus::Failed,
-                TurnStatus::Interrupted => DelegationResultStatus::Cancelled,
-                _ => unreachable!("terminal status checked above"),
-            };
-            let summary = child
-                .items
-                .iter()
-                .rev()
-                .find_map(|item| match item {
-                    zeta_protocol::ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
-                    _ => None,
-                })
-                .or_else(|| {
-                    latest
-                        .failure
-                        .as_ref()
-                        .map(|failure| failure.message.clone())
-                })
-                .unwrap_or_else(|| "Child Agent completed without a summary.".into());
             self.coordinator
-                .complete_delegation(CompleteDelegationRequest {
-                    parent_thread_id: parent_thread_id.clone(),
-                    delegation_id,
-                    status,
-                    summary,
-                    artifacts: Vec::new(),
-                })?;
+                .reconcile_terminal_delegation(&child_thread_id)?;
         }
         Ok(())
     }
@@ -362,6 +350,7 @@ impl ToolService for MultiAgentToolService {
 struct SpawnArguments {
     task: String,
     name: Option<String>,
+    agent: Option<String>,
     context: Option<SpawnContextArguments>,
 }
 
@@ -612,13 +601,6 @@ fn success(value: Value) -> Result<ToolExecutionOutput, CoreError> {
         .map_err(|error| CoreError::Execution(error.to_string()))
 }
 
-fn terminal(status: TurnStatus) -> bool {
-    matches!(
-        status,
-        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
-    )
-}
-
 fn definition(name: &str, description: &str, parameters: Value) -> ToolDefinition {
     ToolDefinition {
         name: ToolName::new(name).expect("static Agent tool name is valid"),
@@ -642,6 +624,10 @@ fn spawn_definition() -> ToolDefinition {
                 "name": {
                     "type": ["string", "null"],
                     "description": "An optional short label for the delegation and child Thread."
+                },
+                "agent": {
+                    "type": ["string", "null"],
+                    "description": "An optional exact Workspace Agent definition name. null lets the host select one unique metadata match or use the general fallback."
                 },
                 "context": {
                     "type": ["object", "null"],
@@ -675,7 +661,7 @@ fn spawn_definition() -> ToolDefinition {
                     "additionalProperties": false
                 }
             },
-            "required": ["task", "name", "context"],
+            "required": ["task", "name", "agent", "context"],
             "additionalProperties": false
         }),
     )

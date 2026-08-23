@@ -8,7 +8,9 @@ use zeta_config::SkillSourceEnablement;
 use zeta_config::SkillsConfig;
 use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::SkillActivationReason;
+use zeta_protocol::SkillId;
 use zeta_protocol::SkillRef;
+use zeta_protocol::UserInput;
 use zeta_skills::ActivatedSkill;
 use zeta_skills::SkillCatalog;
 use zeta_skills::SkillCatalogEntry;
@@ -199,6 +201,26 @@ impl SkillRuntime {
         selected: &SkillRef,
     ) -> Result<ActivatedSkill, String> {
         self.activate_available(selected, SkillActivationReason::Automatic)
+    }
+
+    pub(crate) fn select_automatic(
+        &self,
+        input: &[UserInput],
+        excluded: &[SkillId],
+    ) -> Result<Option<ActivatedSkill>, String> {
+        self.reconcile(SkillCatalogReload::Refresh)?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| "Skill runtime lock poisoned".to_string())?;
+        let Some(selected) = crate::selector::select(&state.snapshot, input, excluded) else {
+            return Ok(None);
+        };
+        state
+            .catalog
+            .activate(&selected, SkillActivationReason::Automatic)
+            .map(Some)
+            .map_err(|error| error.to_string())
     }
 
     /// Reads one inert package resource from an enabled, compatible Skill pinned to an exact

@@ -54,6 +54,12 @@ use crate::tool_executor_adapter::ToolExecutorReviewer;
 use crate::tool_executor_adapter::ToolExecutorRuntime;
 use crate::tool_search_embedding::ToolSearchEmbeddingRuntime;
 
+mod mcp_exposure;
+
+use mcp_exposure::MCP_SEARCH_TOOLS_NAME;
+use mcp_exposure::decide_mcp_catalog_search;
+use mcp_exposure::project_mcp_service;
+
 const TOOL_SEARCH_EMBEDDING_PROBE_TEXT: &str = "zeta tool search embedding readiness probe";
 const TOOL_SEARCH_POLICY_REVISION: &str = "tool-search-v1";
 
@@ -296,7 +302,12 @@ impl ToolPort {
     }
 
     pub(crate) fn mcp(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
-        Self::from_service(ToolPortKind::Mcp, ToolExposure::Deferred, tools, policy)
+        Self::from_service(
+            ToolPortKind::Mcp,
+            ToolExposure::Direct,
+            project_mcp_service(tools),
+            policy,
+        )
     }
 
     fn from_service(
@@ -1483,6 +1494,9 @@ impl ActionPolicyService for CompositeActionPolicyService {
     ) -> Result<ExecutionDecision, CoreError> {
         if self.search_enabled && request.provenance().source_id() == TOOL_SEARCH_TOOL_NAME {
             return decide_tool_search(request, cancellation);
+        }
+        if request.provenance().source_id() == MCP_SEARCH_TOOLS_NAME {
+            return decide_mcp_catalog_search(request, cancellation);
         }
         let policy = match request.provenance().source() {
             ActionSource::DynamicTool => self.dynamic.as_ref(),

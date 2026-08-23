@@ -228,6 +228,69 @@ impl MultiAgentCoordinator {
         Ok(result)
     }
 
+    /// Produces and delivers the terminal result for one completed child Thread.
+    ///
+    /// Repeated calls reuse the child's durable result. A non-child or a child with any
+    /// non-terminal Turn has no result to reconcile yet.
+    pub fn reconcile_terminal_delegation(
+        &self,
+        child_thread_id: &ThreadId,
+    ) -> Result<Option<DelegationResult>, CoreError> {
+        let child = self.sessions.threads().read_thread(child_thread_id)?;
+        let Some(seed) = child.agent_context_seed.as_ref() else {
+            return Ok(None);
+        };
+        if child.turns.is_empty()
+            || child
+                .turns
+                .iter()
+                .any(|turn| !is_terminal_turn(turn.status))
+        {
+            return Ok(None);
+        }
+        if let Some(existing) = child
+            .produced_delegation_results
+            .get(&seed.delegation_id)
+            .cloned()
+        {
+            self.deliver_result(&seed.parent_thread_id, existing.clone())?;
+            return Ok(Some(existing));
+        }
+        let latest = child
+            .turns
+            .last()
+            .expect("non-empty child turn list checked above");
+        let status = match latest.status {
+            TurnStatus::Completed => DelegationResultStatus::Completed,
+            TurnStatus::Failed => DelegationResultStatus::Failed,
+            TurnStatus::Interrupted => DelegationResultStatus::Cancelled,
+            _ => unreachable!("terminal status checked above"),
+        };
+        let summary = child
+            .items
+            .iter()
+            .rev()
+            .find_map(|item| match item {
+                zeta_protocol::ThreadItem::AgentMessage { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .or_else(|| {
+                latest
+                    .failure
+                    .as_ref()
+                    .map(|failure| failure.message.clone())
+            })
+            .unwrap_or_else(|| "Child Agent completed without a summary.".into());
+        self.complete_delegation(CompleteDelegationRequest {
+            parent_thread_id: seed.parent_thread_id.clone(),
+            delegation_id: seed.delegation_id.clone(),
+            status,
+            summary,
+            artifacts: Vec::new(),
+        })
+        .map(Some)
+    }
+
     /// Sends a steering message through a durable sender outbox and deduplicated receiver inbox.
     pub fn send_message(
         &self,
@@ -251,6 +314,7 @@ impl MultiAgentCoordinator {
                 "Agent messages cannot cross product Sessions".into(),
             ));
         }
+        validate_message_route(&sender, &receiver, request.delegation_id.as_ref())?;
         let message = match sender.sent_agent_messages.get(&request.message_id) {
             Some(existing) => {
                 if existing.delegation_id != request.delegation_id
@@ -382,14 +446,7 @@ impl MultiAgentCoordinator {
                     .threads()
                     .record_agent_message_received(&message.receiver_thread_id, message.clone())?;
             }
-            if let Some(seed) = &sender.agent_context_seed
-                && let Some(result) = sender
-                    .produced_delegation_results
-                    .get(&seed.delegation_id)
-                    .cloned()
-            {
-                self.deliver_result(&seed.parent_thread_id, result)?;
-            }
+            self.reconcile_terminal_delegation(&sender.thread_id)?;
             for delegation in sender.delegations.values() {
                 if delegation.cancellation_requested
                     && !sender
@@ -737,6 +794,37 @@ fn frozen_join_targets(
         ));
     }
     Ok(targets)
+}
+
+fn validate_message_route(
+    sender: &ThreadSnapshot,
+    receiver: &ThreadSnapshot,
+    delegation_id: Option<&DelegationId>,
+) -> Result<(), CoreError> {
+    let Some(delegation_id) = delegation_id else {
+        if sender.agent_context_seed.is_some() || receiver.agent_context_seed.is_some() {
+            return Err(CoreError::InvalidInput(
+                "Agent child messages require an exact delegation identity".into(),
+            ));
+        }
+        return Ok(());
+    };
+    let parent_to_child = sender
+        .delegations
+        .get(delegation_id)
+        .and_then(|delegation| delegation.child_thread_id.as_ref())
+        == Some(&receiver.thread_id);
+    let child_to_parent = receiver
+        .delegations
+        .get(delegation_id)
+        .and_then(|delegation| delegation.child_thread_id.as_ref())
+        == Some(&sender.thread_id);
+    if parent_to_child || child_to_parent {
+        return Ok(());
+    }
+    Err(CoreError::InvalidInput(format!(
+        "Agent message delegation {delegation_id} does not bind the sender and receiver Threads"
+    )))
 }
 
 fn cancellation_command_id(

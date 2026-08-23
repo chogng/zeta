@@ -552,21 +552,19 @@ impl ThreadController {
             let ThreadCommand::StartTurn {
                 model,
                 activated_skills,
+                host_activated_skills,
                 approval_mode,
                 resource_budget,
                 tool_profile,
                 input,
+                ..
             } = &existing.receipt.command
             else {
                 return Err(CoreError::CommandConflict);
             };
-            let host_activations = activated_skills
-                .iter()
-                .filter(|activation| activation.reason == SkillActivationReason::Automatic)
-                .cloned()
-                .collect::<Vec<_>>();
             if model != &request.model
-                || host_activations != request.activated_skills
+                || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
+                    != request.activated_skills
                 || approval_mode != &request.approval_mode
                 || resource_budget != &request.resource_budget
                 || tool_profile.as_deref() != request.tool_profile.as_ref()
@@ -585,6 +583,19 @@ impl ThreadController {
                 disposition: StartTurnDisposition::Replayed,
             });
         }
+        let agent_skill_ceiling = thread
+            .agent_context_seed
+            .as_ref()
+            .map(|seed| seed.capability_scope.skills.clone());
+        if request
+            .activated_skills
+            .iter()
+            .any(|activation| !skill_is_within_ceiling(agent_skill_ceiling.as_deref(), activation))
+        {
+            return Err(CoreError::InvalidInput(
+                "Agent Turn cannot expand its frozen Skill capability ceiling".into(),
+            ));
+        }
         let mut activated_skills = request.activated_skills.clone();
         let registries = self
             .extensions
@@ -600,12 +611,26 @@ impl ThreadController {
             ))
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         for activation in contributed_activations {
-            if activated_skills
-                .iter()
-                .any(|existing| existing.id == activation.id)
-            {
+            if !skill_is_within_ceiling(agent_skill_ceiling.as_deref(), &activation) {
+                if activation.reason == SkillActivationReason::Automatic {
+                    continue;
+                }
                 return Err(CoreError::InvalidInput(format!(
-                    "Skill '{}:{}' was activated more than once",
+                    "Agent Turn cannot activate Skill '{}:{}' outside its frozen capability ceiling",
+                    activation.id.source, activation.id.name
+                )));
+            }
+            if let Some(existing) = activated_skills
+                .iter()
+                .find(|existing| existing.id == activation.id)
+            {
+                if existing.content_digest == activation.content_digest
+                    && existing.catalog_generation == activation.catalog_generation
+                {
+                    continue;
+                }
+                return Err(CoreError::InvalidInput(format!(
+                    "Skill '{}:{}' resolved to conflicting frozen activations",
                     activation.id.source, activation.id.name
                 )));
             }
@@ -615,6 +640,7 @@ impl ThreadController {
         let command = ThreadCommand::StartTurn {
             model: request.model.clone(),
             activated_skills: activated_skills.clone(),
+            host_activated_skills: Some(request.activated_skills.clone()),
             approval_mode: request.approval_mode,
             resource_budget: request.resource_budget.clone(),
             tool_profile: request.tool_profile.clone().map(Box::new),
@@ -1563,6 +1589,34 @@ impl ThreadController {
             .as_nanos();
         format!("{prefix}_{timestamp:032x}_{ordinal:016x}")
     }
+}
+
+fn skill_is_within_ceiling(
+    ceiling: Option<&[FrozenSkillActivation]>,
+    activation: &FrozenSkillActivation,
+) -> bool {
+    ceiling.is_none_or(|ceiling| {
+        ceiling.iter().any(|allowed| {
+            allowed.id == activation.id
+                && allowed.content_digest == activation.content_digest
+                && allowed.catalog_generation == activation.catalog_generation
+        })
+    })
+}
+
+pub(crate) fn replay_host_activations(
+    recorded: Option<&[FrozenSkillActivation]>,
+    merged: &[FrozenSkillActivation],
+) -> Vec<FrozenSkillActivation> {
+    recorded
+        .map(<[FrozenSkillActivation]>::to_vec)
+        .unwrap_or_else(|| {
+            merged
+                .iter()
+                .filter(|activation| activation.reason == SkillActivationReason::Automatic)
+                .cloned()
+                .collect()
+        })
 }
 
 fn tool_content_preview(content: &[ContentPart]) -> String {

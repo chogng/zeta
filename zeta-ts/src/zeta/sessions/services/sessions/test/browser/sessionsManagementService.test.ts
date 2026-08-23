@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ServerNotification, Session as SessionDto } from "../../../../../../../generated/app-server/types.js";
+import type { AgentTreeNodeProjection, ServerNotification, Session as SessionDto } from "../../../../../../../generated/app-server/types.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import type { ISessionApi } from "../../../../../platform/sessions/common/sessionApi.js";
+import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
 
 test("AppServerSessionsManagementService refreshes subscribed Sessions from canonical update snapshots", async () => {
@@ -16,7 +16,7 @@ test("AppServerSessionsManagementService refreshes subscribed Sessions from cano
 		async list() { return { sessions: [current] }; },
 		async subscribe(params) {
 			subscribed.push(params.sessionId);
-			return { session: current, updates: [], threadProjections: [] };
+			return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } };
 		},
 		async unsubscribe(params) { unsubscribed.push(params.sessionId); },
 		async createThread() { throw new Error("Not used"); },
@@ -62,7 +62,7 @@ test("AppServerSessionsManagementService stops refreshing when the canonical sna
 		async create() { return { session: current }; },
 		async read() { return { session: current }; },
 		async list() { return { sessions: [current] }; },
-		async subscribe() { subscriptions += 1; return { session: current, updates: [], threadProjections: [] }; },
+		async subscribe() { subscriptions += 1; return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
 		async unsubscribe() {},
 		async createThread() { throw new Error("Not used"); },
 		async forkThread() { throw new Error("Not used"); },
@@ -88,6 +88,67 @@ test("AppServerSessionsManagementService stops refreshing when the canonical sna
 	assert.match(service.error ?? "", /did not advance/);
 });
 
+test("AppServerSessionsManagementService refreshes the canonical Agent tree after Thread updates", async () => {
+	const current = session(1);
+	const listeners = new Set<(event: ServerNotification) => void>();
+	let tree: AgentTreeNodeProjection = agentTreeNode();
+	let subscriptions = 0;
+	const api: ISessionApi = {
+		async create() { return { session: current }; },
+		async read() { return { session: current }; },
+		async list() { return { sessions: [current] }; },
+		async subscribe() {
+			subscriptions += 1;
+			return { session: current, updates: [], threadProjections: [], agentTree: { roots: [tree] } };
+		},
+		async unsubscribe() {},
+		async createThread() { throw new Error("Not used"); },
+		async forkThread() { throw new Error("Not used"); },
+		async archiveThread() { throw new Error("Not used"); },
+		async complete() { throw new Error("Not used"); },
+		async archive() { throw new Error("Not used"); },
+		async stop() { throw new Error("Not used"); },
+		async setModel() { throw new Error("Not used"); },
+	};
+	const events: IServerEventApi = {
+		subscribe(listener) {
+			listeners.add(listener);
+			return { dispose: () => { listeners.delete(listener); } };
+		},
+	};
+	using service = new AppServerSessionsManagementService({ session: api, events });
+	await service.initialize();
+
+	tree = { ...tree, threadSequence: 12, executionStatus: "completed" };
+	emit(listeners, {
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 12,
+			update: { type: "committed", event: { type: "turnCompleted", threadId: "thread-1", turnId: "turn-7" } },
+		},
+	});
+	await waitFor(() => service.sessions[0]?.agentTree?.[0]?.threadSequence === 12);
+
+	assert.equal(service.sessions[0]?.agentTree?.[0]?.executionStatus, "completed");
+	assert.equal(service.sessions[0]?.sequence, 1);
+	assert.equal(subscriptions, 2);
+
+	// A replayed or delayed Thread notification must not trigger another projection fetch.
+	emit(listeners, {
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 12,
+			update: { type: "committed", event: { type: "turnCompleted", threadId: "thread-1", turnId: "turn-7" } },
+		},
+	});
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(subscriptions, 2);
+});
+
 test("AppServerSessionsManagementService reopens a foreign Session Workspace before selecting its Thread", async () => {
 	const current = { ...session(1), workspace: { authorityId: "current", root: "/workspaces/current" } };
 	const foreign: SessionDto = {
@@ -103,7 +164,7 @@ test("AppServerSessionsManagementService reopens a foreign Session Workspace bef
 		async create() { return { session: current }; },
 		async read(params) { return { session: params.sessionId === foreign.sessionId ? foreign : current }; },
 		async list() { return { sessions: [foreign, current] }; },
-		async subscribe(params) { const value = params.sessionId === foreign.sessionId ? foreign : current; return { session: value, updates: [], threadProjections: [] }; },
+		async subscribe(params) { const value = params.sessionId === foreign.sessionId ? foreign : current; return { session: value, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
 		async unsubscribe() {},
 		async createThread() { throw new Error("Not used"); },
 		async forkThread() { throw new Error("Not used"); },
@@ -133,6 +194,51 @@ test("AppServerSessionsManagementService reopens a foreign Session Workspace bef
 	assert.equal(service.active?.threadId, "thread-foreign");
 });
 
+test("AppServerSessionsManagementService interrupts the exact canonical Agent Turn and sequence", async () => {
+	const current = session(3);
+	const interrupted: Parameters<ITurnApi["interrupt"]>[0][] = [];
+	const api: ISessionApi = {
+		async create() { return { session: current }; },
+		async read() { return { session: current }; },
+		async list() { return { sessions: [current] }; },
+		async subscribe() {
+			return {
+				session: current,
+				updates: [],
+				threadProjections: [],
+				agentTree: { roots: [agentTreeNode()] },
+			};
+		},
+		async unsubscribe() {},
+		async createThread() { throw new Error("Not used"); },
+		async forkThread() { throw new Error("Not used"); },
+		async archiveThread() { throw new Error("Not used"); },
+		async complete() { throw new Error("Not used"); },
+		async archive() { throw new Error("Not used"); },
+		async stop() { throw new Error("Not used"); },
+		async setModel() { throw new Error("Not used"); },
+	};
+	const turn: ITurnApi = {
+		async start() { throw new Error("Not used"); },
+		async compact() { throw new Error("Not used"); },
+		async steer() { throw new Error("Not used"); },
+		async interrupt(params) { interrupted.push(params); return { sequence: 12 }; },
+		async resolveInteraction() { throw new Error("Not used"); },
+	};
+	using service = new AppServerSessionsManagementService({ session: api, turn });
+	await service.initialize();
+
+	await service.interruptThread("session-1", "thread-1");
+
+	assert.equal(interrupted.length, 1);
+	assert.deepEqual(interrupted[0] && {
+		sessionId: interrupted[0].sessionId,
+		threadId: interrupted[0].threadId,
+		turnId: interrupted[0].turnId,
+		expectedSequence: interrupted[0].expectedSequence,
+	}, { sessionId: "session-1", threadId: "thread-1", turnId: "turn-7", expectedSequence: 11 });
+});
+
 function session(sequence: number): SessionDto {
 	return {
 		sessionId: "session-1",
@@ -140,6 +246,28 @@ function session(sequence: number): SessionDto {
 		status: "active",
 		sequence,
 		threads: [{ threadId: "thread-1", origin: { type: "root" }, status: "active" }],
+	};
+}
+
+function agentTreeNode() {
+	const usageTotal = { reported: 0, complete: true };
+	return {
+		threadId: "thread-1",
+		threadSequence: 11,
+		title: "Reviewer",
+		origin: { type: "root" as const },
+		membershipStatus: "active" as const,
+		executionStatus: "running" as const,
+		currentTurnId: "turn-7",
+		usage: {
+			modelInvocations: 0,
+			inputTokens: usageTotal,
+			outputTokens: usageTotal,
+			cachedInputTokens: usageTotal,
+			reasoningTokens: usageTotal,
+		},
+		joins: [],
+		children: [],
 	};
 }
 

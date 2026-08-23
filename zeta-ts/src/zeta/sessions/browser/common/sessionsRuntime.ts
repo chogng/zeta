@@ -32,6 +32,7 @@ export class SessionsRuntime extends DisposableOwner {
 		super();
 		this.sessions = this.own(new AppServerSessionsManagementService({
 			session: api.session,
+			turn: api.turn,
 			events: api.events,
 			...(options.sessionsWindowApi ? {
 				workspaceRouter: {

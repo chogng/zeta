@@ -13,6 +13,36 @@ export type ThreadOrigin =
 	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string };
 export type SessionThreadStatus = "creating" | "active" | "archived";
 export type AgentThreadExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
+export type AgentWaitingReason = "approval" | "userInput" | "capability";
+
+export interface AgentTreeNode {
+	readonly threadId: ThreadId;
+	readonly threadSequence: number;
+	readonly title: string;
+	readonly origin: ThreadOrigin;
+	readonly membershipStatus: SessionThreadStatus;
+	readonly executionStatus: AgentThreadExecutionStatus;
+	readonly currentTurnId?: string;
+	readonly waitingReason?: AgentWaitingReason;
+	readonly resourceBudget?: {
+		readonly maxTotalTokens?: number;
+		readonly maxCostUsdMicros?: number;
+	};
+	readonly usage: {
+		readonly inputTokens: number;
+		readonly outputTokens: number;
+	};
+	readonly role?: {
+		readonly name: string;
+		readonly selectionReason: "explicit" | "automatic";
+	};
+	readonly result?: {
+		readonly status: string;
+		readonly summary: string;
+	};
+	readonly joins: readonly { readonly status: "waiting" | "satisfied" }[];
+	readonly children: readonly AgentTreeNode[];
+}
 
 export interface SessionThread {
 	readonly threadId: ThreadId;
@@ -36,6 +66,8 @@ export interface Session {
 	} | null;
 	readonly sequence: number;
 	readonly threads: readonly SessionThread[];
+	/** Server-owned projection; absent only before an active Session has been subscribed. */
+	readonly agentTree?: readonly AgentTreeNode[];
 }
 
 /** Selected Session and Thread shared by session navigation and features. */

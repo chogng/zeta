@@ -1,51 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { Session } from "../../../../../sessions/services/sessions/common/session.js";
-import { projectAgentTree } from "../../browser/view/chatAgentTree.js";
+import type { AgentTreeNode } from "../../../../../sessions/services/sessions/common/session.js";
+import { agentNodeDetail, canInterruptAgentNode } from "../../browser/view/chatAgentTree.js";
 
-test("projects Agent spawn lineage as a stable nested tree", () => {
-	const session: Session = {
-		sessionId: "session-1",
-		title: "Review",
-		status: "active",
-		sequence: 8,
-		threads: [
-			{ threadId: "root", origin: { type: "root" }, status: "active", executionStatus: "running" },
-			{
-				threadId: "reviewer",
-				origin: { type: "agentSpawn", parentThreadId: "root", parentSequence: 4, delegationId: "review" },
-				status: "active",
-				executionStatus: "waiting",
-			},
-			{
-				threadId: "nested",
-				origin: { type: "agentSpawn", parentThreadId: "reviewer", parentSequence: 6, delegationId: "nested" },
-				status: "active",
-				executionStatus: "completed",
-			},
-		],
-	};
+test("renders status, waiting reason, budget, joins, and result from a canonical node", () => {
+	const node = agentNode({
+		executionStatus: "waiting",
+		waitingReason: "approval",
+		resourceBudget: { maxTotalTokens: 10_000, maxCostUsdMicros: 2_500_000 },
+		usage: { inputTokens: 2_000, outputTokens: 500 },
+		joins: [{ status: "waiting" }],
+		result: { status: "completed", summary: "Done" },
+	});
 
-	const tree = projectAgentTree(session);
-
-	assert.equal(tree.length, 1);
-	assert.equal(tree[0]?.thread.threadId, "root");
-	assert.equal(tree[0]?.children[0]?.thread.threadId, "reviewer");
-	assert.equal(tree[0]?.children[0]?.children[0]?.thread.threadId, "nested");
+	assert.equal(agentNodeDetail(node), "Agent · waiting · waiting for approval · 2,500/10,000 tokens · $2.50 cap · 1 join waiting · result completed");
 });
 
-test("keeps an orphaned lineage node visible as a root instead of dropping it", () => {
-	const session: Session = {
-		sessionId: "session-1",
-		title: "Recovered",
-		status: "active",
-		sequence: 2,
-		threads: [{
-			threadId: "orphan",
-			origin: { type: "agentSpawn", parentThreadId: "missing", parentSequence: 1, delegationId: "orphan" },
-			status: "active",
-		}],
-	};
-
-	assert.equal(projectAgentTree(session)[0]?.thread.threadId, "orphan");
+test("only exposes exact active non-terminal Turns as interruptible", () => {
+	assert.equal(canInterruptAgentNode(agentNode({ executionStatus: "running", currentTurnId: "turn-1" })), true);
+	assert.equal(canInterruptAgentNode(agentNode({ executionStatus: "completed", currentTurnId: "turn-1" })), false);
+	assert.equal(canInterruptAgentNode(agentNode({ executionStatus: "running" })), false);
 });
+
+function agentNode(overrides: Partial<AgentTreeNode>): AgentTreeNode {
+	return {
+		threadId: "agent-1",
+		threadSequence: 4,
+		title: "Reviewer",
+		origin: { type: "agentSpawn", parentThreadId: "root", parentSequence: 2, delegationId: "review" },
+		membershipStatus: "active",
+		executionStatus: "idle",
+		usage: { inputTokens: 0, outputTokens: 0 },
+		joins: [],
+		children: [],
+		...overrides,
+	};
+}

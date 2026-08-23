@@ -21,6 +21,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
             command: ThreadCommand::StartTurn {
                 model: None,
                 activated_skills: Vec::new(),
+                host_activated_skills: Some(Vec::new()),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
                 tool_profile: None,
@@ -129,6 +130,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
         command: ThreadCommand::StartTurn {
             model: Some(model.clone()),
             activated_skills: Vec::new(),
+            host_activated_skills: Some(Vec::new()),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             resource_budget: None,
             tool_profile: None,
@@ -548,6 +550,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
         command: ThreadCommand::StartTurn {
             model: None,
             activated_skills: Vec::new(),
+            host_activated_skills: Some(Vec::new()),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             resource_budget: None,
             tool_profile: None,

@@ -7,9 +7,13 @@ use crate::FrozenSkillActivation;
 use crate::ImageAttachmentRef;
 use crate::ItemId;
 use crate::ModelRef;
+use crate::ModelUsageSummary;
+use crate::SessionThreadStatus;
 use crate::ThreadId;
+use crate::ThreadOrigin;
 use crate::ToolName;
 use crate::TurnId;
+use crate::TurnResourceBudget;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -24,6 +28,25 @@ pub struct DelegatedTask {
     pub instructions: String,
 }
 
+/// Explains how one exact Agent definition was selected for a delegation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentDefinitionSelectionReason {
+    Explicit,
+    Automatic,
+}
+
+/// Durable identity of the exact Agent definition consumed by a child seed.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FrozenAgentDefinitionRef {
+    pub name: String,
+    #[ts(type = "number")]
+    pub catalog_generation: u64,
+    pub content_digest: ContentDigest,
+    pub selection_reason: AgentDefinitionSelectionReason,
+}
+
 /// Frozen Agent role instructions selected before a child Thread is created.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -33,6 +56,71 @@ pub struct AgentRoleSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub definition: Option<FrozenAgentDefinitionRef>,
+}
+
+/// Canonical execution state rendered for one Agent-tree node.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentTreeExecutionStatus {
+    Idle,
+    Queued,
+    Running,
+    Waiting,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+/// Stable reason why the latest Turn of an Agent-tree node is waiting.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentTreeWaitingReason {
+    Approval,
+    UserInput,
+    Capability,
+}
+
+/// One canonical, recursively nested Agent-tree node derived from durable Session and Thread facts.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTreeNodeProjection {
+    pub thread_id: ThreadId,
+    #[ts(type = "number")]
+    pub thread_sequence: u64,
+    pub title: String,
+    pub origin: ThreadOrigin,
+    pub membership_status: SessionThreadStatus,
+    pub execution_status: AgentTreeExecutionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub current_turn_id: Option<TurnId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub waiting_reason: Option<AgentTreeWaitingReason>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub resource_budget: Option<TurnResourceBudget>,
+    pub usage: ModelUsageSummary,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub role: Option<FrozenAgentDefinitionRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub result: Option<DelegationResult>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub joins: Vec<AgentJoin>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<AgentTreeNodeProjection>,
+}
+
+/// Canonical tree consumed directly by product Agent observability surfaces.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTreeProjection {
+    pub roots: Vec<AgentTreeNodeProjection>,
 }
 
 /// One immutable source selected from a fixed sequence of another Thread.

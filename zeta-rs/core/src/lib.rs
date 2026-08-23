@@ -50,6 +50,7 @@ pub use multi_agent::MultiAgentCoordinator;
 pub use multi_agent::SendAgentMessageRequest;
 pub use multi_agent::SpawnAgentRequest;
 pub use multi_agent::SpawnedAgent;
+pub use multi_agent::project_agent_tree;
 pub use services::AutoReviewedToolGrant;
 pub use services::ContextEvidence;
 pub use services::ContextSource;

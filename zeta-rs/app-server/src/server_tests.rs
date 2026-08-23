@@ -2333,6 +2333,10 @@ fn updates_are_broadcast_to_other_subscribed_connections() {
         session_subscription["result"]["threadProjections"][0]["thread"]["threadId"],
         thread_id
     );
+    assert_eq!(
+        session_subscription["result"]["agentTree"]["roots"][0]["threadId"],
+        thread_id
+    );
     call(
         &server,
         &mut writer,

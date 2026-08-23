@@ -1557,6 +1557,7 @@ function fakeApi(options: FakeOptions = {}): {
 				session: currentSession(sessionId),
 				updates: [],
 				threadProjections: [],
+				agentTree: { roots: [] },
 			}),
 			unsubscribe: async () => undefined,
 			create: async (params: SessionCreateParams) => {

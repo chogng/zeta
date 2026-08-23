@@ -16,7 +16,9 @@ use crate::SequenceExpectation;
 use crate::SessionCoordinator;
 use crate::StartTurnRequest;
 use crate::ThreadController;
+use crate::ToolExecutionFacts;
 use crate::context::ModelInvocationPreparation;
+use crate::project_agent_tree;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use std::sync::Arc;
 use zeta_protocol::AgentContextMode;
@@ -43,6 +45,7 @@ use zeta_protocol::SessionId;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
 use zeta_protocol::SkillSourceId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
@@ -59,6 +62,17 @@ struct Fixture {
     session_id: SessionId,
     parent_thread_id: ThreadId,
     parent_turn_id: TurnId,
+}
+
+struct FixedSkillActivation(FrozenSkillActivation);
+
+impl zeta_extension_api::SkillActivationContributor for FixedSkillActivation {
+    fn contribute(
+        &self,
+        _: zeta_extension_api::SkillActivationContext<'_>,
+    ) -> Result<Vec<FrozenSkillActivation>, zeta_extension_api::ExtensionError> {
+        Ok(vec![self.0.clone()])
+    }
 }
 
 #[test]
@@ -123,9 +137,34 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
             .collect::<Vec<_>>(),
         vec!["allowed"]
     );
+    let facts = ToolExecutionFacts::for_turn(
+        &child,
+        &first.child_turn_id,
+        [
+            ToolName::new("allowed").unwrap(),
+            ToolName::new("blocked").unwrap(),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        facts
+            .available_tools()
+            .map(ToolName::as_str)
+            .collect::<Vec<_>>(),
+        vec!["allowed"]
+    );
     assert!(child.items.iter().any(|item| {
         matches!(item, ThreadItem::UserMessage { text, .. } if text == "Review the change")
     }));
+    let parent = fixture
+        .sessions
+        .threads()
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    let tree = project_agent_tree(&session, &[parent, child]);
+    assert_eq!(tree.roots.len(), 1);
+    assert_eq!(tree.roots[0].thread_id, fixture.parent_thread_id);
+    assert_eq!(tree.roots[0].children[0].thread_id, first.child_thread_id);
 }
 
 #[test]
@@ -280,6 +319,231 @@ fn joins_freeze_targets_and_satisfy_all_any_and_quorum_durably() {
             .status,
         AgentJoinStatus::Satisfied
     );
+
+    let session = fixture.sessions.read_session(&fixture.session_id).unwrap();
+    let first_child = fixture
+        .sessions
+        .threads()
+        .read_thread(&first.child_thread_id)
+        .unwrap();
+    let second_child = fixture
+        .sessions
+        .threads()
+        .read_thread(&second.child_thread_id)
+        .unwrap();
+    let tree = project_agent_tree(&session, &[parent, first_child, second_child]);
+    assert_eq!(tree.roots[0].joins.len(), 3);
+    assert!(
+        tree.roots[0]
+            .joins
+            .iter()
+            .all(|join| join.status == AgentJoinStatus::Satisfied)
+    );
+    assert!(tree.roots[0].children.iter().all(|child| {
+        child
+            .result
+            .as_ref()
+            .is_some_and(|result| result.status == DelegationResultStatus::Completed)
+    }));
+}
+
+#[test]
+fn failed_child_is_reconciled_to_one_terminal_result() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    fixture
+        .sessions
+        .threads()
+        .fail_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            zeta_protocol::StableTurnError::model_invocation_failed(),
+        )
+        .unwrap();
+
+    let first = fixture
+        .coordinator
+        .reconcile_terminal_delegation(&spawned.child_thread_id)
+        .unwrap()
+        .unwrap();
+    let replayed = fixture
+        .coordinator
+        .reconcile_terminal_delegation(&spawned.child_thread_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(first, replayed);
+    assert_eq!(first.status, DelegationResultStatus::Failed);
+    assert_eq!(first.summary, "Model invocation failed");
+    let parent = fixture
+        .sessions
+        .threads()
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    assert_eq!(parent.received_delegation_results.len(), 1);
+}
+
+#[test]
+fn exhausted_child_turn_budget_is_reconciled_as_one_failed_delegation() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    fixture
+        .sessions
+        .threads()
+        .fail_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            zeta_protocol::StableTurnError::turn_budget_exhausted(),
+        )
+        .unwrap();
+
+    let result = fixture
+        .coordinator
+        .reconcile_terminal_delegation(&spawned.child_thread_id)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(result.status, DelegationResultStatus::Failed);
+    assert_eq!(result.summary, "The Turn resource budget was exhausted");
+    let replayed = fixture
+        .coordinator
+        .reconcile_terminal_delegation(&spawned.child_thread_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(result, replayed);
+}
+
+#[test]
+fn structural_agent_budget_rejects_a_second_live_child_without_partial_delegation() {
+    let fixture = fixture();
+    let coordinator = MultiAgentCoordinator::new(
+        Arc::clone(&fixture.sessions),
+        AgentTreeLimits::new(4, 1, 16).unwrap(),
+    );
+    coordinator
+        .spawn(spawn_request_with_id(&fixture, "delegation-first"))
+        .unwrap();
+
+    let Err(error) = coordinator.spawn(spawn_request_with_id(&fixture, "delegation-over-budget"))
+    else {
+        panic!("structural Agent budget must reject the second live child")
+    };
+
+    assert!(matches!(
+        error,
+        crate::CoreError::InvalidInput(message)
+            if message.contains("maximum live-child count")
+    ));
+    let parent = fixture
+        .sessions
+        .threads()
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    assert!(
+        !parent
+            .delegations
+            .contains_key(&DelegationId::new("delegation-over-budget").unwrap())
+    );
+}
+
+#[test]
+fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    fixture
+        .sessions
+        .threads()
+        .complete_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            "first turn complete".into(),
+        )
+        .unwrap();
+    let disallowed = FrozenSkillActivation {
+        id: SkillId::new(
+            SkillSourceId::new("builtin:skill-source:other").unwrap(),
+            SkillName::new("other").unwrap(),
+        ),
+        content_digest: ContentDigest::sha256(b"other body"),
+        catalog_generation: 9,
+        reason: SkillActivationReason::Automatic,
+    };
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.skill_activation_contributor(Arc::new(FixedSkillActivation(disallowed.clone())));
+    fixture
+        .sessions
+        .threads()
+        .install_extensions(Arc::new(extensions.build()))
+        .unwrap();
+
+    let second = fixture
+        .sessions
+        .start_turn(
+            &fixture.session_id,
+            &spawned.child_thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("child-second-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "Continue without expanding capabilities".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let child = fixture
+        .sessions
+        .threads()
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    assert!(child.turns[1].activated_skills.is_empty());
+    fixture
+        .sessions
+        .threads()
+        .complete_turn(
+            &spawned.child_thread_id,
+            &second.turn_id,
+            "second turn complete".into(),
+        )
+        .unwrap();
+
+    let mut explicit = disallowed;
+    explicit.reason = SkillActivationReason::Explicit;
+    let explicit_ref = SkillRef::pinned(explicit.id.clone(), explicit.content_digest.clone());
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.skill_activation_contributor(Arc::new(FixedSkillActivation(explicit)));
+    fixture
+        .sessions
+        .threads()
+        .install_extensions(Arc::new(extensions.build()))
+        .unwrap();
+    let result = fixture.sessions.start_turn(
+        &fixture.session_id,
+        &spawned.child_thread_id,
+        StartTurnRequest {
+            command_id: CommandId::new("child-third-turn").unwrap(),
+            expected_sequence: SequenceExpectation::Any,
+            model: None,
+            policy_revision: "policy-v1".into(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            resource_budget: None,
+            tool_profile: None,
+            activated_skills: Vec::new(),
+            input: vec![UserInput::Skill {
+                skill: explicit_ref,
+            }],
+        },
+    );
+    assert!(matches!(
+        result,
+        Err(crate::CoreError::InvalidInput(message))
+            if message.contains("outside its frozen capability ceiling")
+    ));
 }
 
 #[test]
@@ -304,6 +568,7 @@ fn cancelling_a_parent_delegation_interrupts_every_live_descendant() {
                 name: "nested".into(),
                 instructions: "Return the nested detail.".into(),
                 model: None,
+                definition: None,
             },
             inheritance: AgentContextMode::Fresh,
             policy_ceiling: DelegatedPolicyCeiling {
@@ -564,6 +829,88 @@ fn messages_and_results_apply_exactly_once_across_threads() {
 }
 
 #[test]
+fn messages_cannot_cross_their_exact_delegation_route() {
+    let fixture = fixture();
+    let first = fixture
+        .coordinator
+        .spawn(spawn_request_with_id(&fixture, "delegation-first"))
+        .unwrap();
+    let second = fixture
+        .coordinator
+        .spawn(spawn_request_with_id(&fixture, "delegation-second"))
+        .unwrap();
+
+    let result = fixture.coordinator.send_message(SendAgentMessageRequest {
+        message_id: AgentMessageId::new("wrong-delegation-route").unwrap(),
+        delegation_id: Some(first.delegation_id),
+        sender_thread_id: fixture.parent_thread_id.clone(),
+        receiver_thread_id: second.child_thread_id.clone(),
+        text: "This must not reach the sibling delegation".into(),
+        provenance: AgentMessageProvenance::Agent,
+    });
+    let Err(error) = result else {
+        panic!("cross-delegation message must be rejected")
+    };
+
+    assert!(matches!(
+        error,
+        crate::CoreError::InvalidInput(message)
+            if message.contains("does not bind the sender and receiver Threads")
+    ));
+    let second_child = fixture
+        .sessions
+        .threads()
+        .read_thread(&second.child_thread_id)
+        .unwrap();
+    assert!(second_child.received_agent_messages.is_empty());
+}
+
+#[test]
+fn recovery_reconciles_a_terminal_child_result_once_without_a_join() {
+    let fixture = fixture();
+    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
+    fixture
+        .sessions
+        .threads()
+        .complete_turn(
+            &spawned.child_thread_id,
+            &spawned.child_turn_id,
+            "Recovered result".into(),
+        )
+        .unwrap();
+
+    fixture
+        .coordinator
+        .recover_session(&fixture.session_id)
+        .unwrap();
+    fixture
+        .coordinator
+        .recover_session(&fixture.session_id)
+        .unwrap();
+
+    let child = fixture
+        .sessions
+        .threads()
+        .read_thread(&spawned.child_thread_id)
+        .unwrap();
+    let parent = fixture
+        .sessions
+        .threads()
+        .read_thread(&fixture.parent_thread_id)
+        .unwrap();
+    assert_eq!(child.produced_delegation_results.len(), 1);
+    assert_eq!(parent.received_delegation_results.len(), 1);
+    assert_eq!(
+        parent
+            .received_delegation_results
+            .get(&spawned.delegation_id)
+            .unwrap()
+            .summary,
+        "Recovered result"
+    );
+}
+
+#[test]
 fn reducers_reject_corrupted_seed_and_result_digests() {
     let fixture = fixture();
     let parent = fixture
@@ -688,6 +1035,7 @@ fn spawn_request_with_id(fixture: &Fixture, delegation_id: &str) -> SpawnAgentRe
             name: "reviewer".into(),
             instructions: "Review code and report concrete findings.".into(),
             model: None,
+            definition: None,
         },
         inheritance: AgentContextMode::Fresh,
         policy_ceiling: DelegatedPolicyCeiling {

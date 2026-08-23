@@ -18,6 +18,7 @@ fn discovers_a_typed_agent_definition() {
     assert_eq!(snapshot.entries().len(), 1);
     let definition = &snapshot.entries()[0];
     assert_eq!(definition.name(), "reviewer");
+    assert!(definition.content_digest().starts_with("sha256:"));
     assert_eq!(definition.model(), Some("openai/gpt-5"));
     assert_eq!(definition.tools(), ["read_file"]);
     assert_eq!(definition.skills(), ["code-review"]);

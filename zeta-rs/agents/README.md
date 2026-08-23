@@ -16,7 +16,7 @@ frontmatter 和 role instructions，并发布不可变 catalog snapshot。它不
 | `.zeta/agents` 不存在 | 空 catalog，无错误 |
 | 合法 `.md` | 进入确定性 definition catalog |
 | 单文件格式错误 | 产生隔离 diagnostic，其他文件继续 |
-| definition 被发现 | 只证明声明有效，不表示 Agent 已启动或引用可用 |
+| definition 被发现 | 只证明声明有效；`spawn_agent` 仍要在 parent 当前 authority 中解析并冻结所有引用 |
 
 ## 边界与格式
 
@@ -70,7 +70,12 @@ cargo test -p zeta-agents
 cargo clippy -p zeta-agents --all-targets --no-deps -- -D warnings
 ```
 
-当前已实现 Workspace 原生 definition 发现、格式校验、不可变 snapshot 与 refresh；App Server
-的 `WorkspaceCustomizations` 在 Workspace 激活时拥有 catalog，并响应 filesystem invalidation。
-当前限制是 App Server list API、definition selection、跨 authority 引用解析和 multi-agent
-runtime consumption 尚未实现。
+当前已实现 Workspace 原生 definition 发现、格式校验、内容摘要、不可变 snapshot 与 refresh；
+App Server 的 `WorkspaceCustomizations` 在 Workspace 激活时拥有 catalog，并响应 filesystem
+invalidation。`spawn_agent` 可以显式按 name 选择，或在 task 与 metadata 唯一匹配时自动选择；选择
+结果冻结 catalog generation、exact content digest 和 reason。model 按 `provider/model` 解析；Tool
+和 Skill 只能缩小 parent 当前可见集合，引用的 Workspace Instructions 正文会进入 frozen role，
+缺失或越权引用 fail closed。
+
+当前限制是尚无 App Server definition list/picker API，也不支持跨 authority Agent definition 引用；
+自动选择只使用当前 Workspace catalog metadata，不运行模型或读取其他产品格式。

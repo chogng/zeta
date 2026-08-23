@@ -6,6 +6,7 @@ use std::sync::Arc;
 pub struct AgentDefinition {
     name: String,
     description: String,
+    content_digest: String,
     relative_path: PathBuf,
     model: Option<String>,
     tools: Vec<String>,
@@ -17,6 +18,7 @@ pub struct AgentDefinition {
 pub(crate) struct AgentDefinitionFields {
     pub(crate) name: String,
     pub(crate) description: String,
+    pub(crate) content_digest: String,
     pub(crate) relative_path: PathBuf,
     pub(crate) model: Option<String>,
     pub(crate) tools: Vec<String>,
@@ -30,6 +32,7 @@ impl AgentDefinition {
         Self {
             name: fields.name,
             description: fields.description,
+            content_digest: fields.content_digest,
             relative_path: fields.relative_path,
             model: fields.model,
             tools: fields.tools,
@@ -45,6 +48,10 @@ impl AgentDefinition {
 
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    pub fn content_digest(&self) -> &str {
+        &self.content_digest
     }
 
     pub fn relative_path(&self) -> &std::path::Path {

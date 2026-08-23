@@ -4,9 +4,11 @@
 > `ThreadOrigin::AgentSpawn`、durable delegation/message/result events、Fresh child Thread spawn、
 > exact-once delivery、结构性 tree budget，以及 App Server 的 `spawn_agent`、
 > `send_agent_message`、`wait_agent` 工具已落地。`Selected/ForkedPrefix` 在 spawn 时物化并进入
-> immutable seed；All/Any/Quorum join、向下 cancellation tree 与 Desktop Agent-tree projection
-> 均使用 durable Thread/Session facts。Agent definition 自动选择、跨产品 UI 和完整 fault matrix
-> 仍按后续需求演进。原落地顺序分为契约冻结
+> immutable seed；All/Any/Quorum join、向下 cancellation tree 与 canonical Agent-tree projection
+> 均使用 durable Thread/Session facts。Workspace Agent definition 的显式/唯一 metadata 自动选择会
+> 冻结 generation、digest、reason 与 capability ceiling；Desktop 只消费 canonical tree 并可精确
+> 中断单个节点。S6 的 child failure、parent cancel、join timeout、any/quorum、恢复、预算耗尽与
+> mailbox isolation 矩阵已覆盖；late-result/UnknownOutcome 等更广故障注入仍按后续需求演进。原落地顺序分为契约冻结
 > （[阶段 D](zeta-agent-runtime-architecture.md#阶段-d多-agent-契约冻结)）与运行时
 > （[阶段 E](zeta-agent-runtime-architecture.md#阶段-emultiagentcoordinator)）；理由见
 > [`zeta-agent-runtime-architecture.md` R4](zeta-agent-runtime-architecture.md#44-r4多-agent-契约冻结先行)。
@@ -579,9 +581,12 @@ projection，不公开 coordinator 内部状态机。
 7. ✅ child execution、durable All/Any/Quorum join 与显式 `wait_agent` result；
 8. ✅ outbox/inbox exact-once delivery 与 steering；
 9. ✅ 结构性 Agent tree budget 与 parent-to-descendant cancellation tree；
-10. ✅ Desktop Workbench 从 Session lineage + thread projections 构造 Agent tree；
-11. 部分具备：spawn/join/cancellation recovery、duplicate delivery、digest corruption 与
-    context/tool isolation 已测试；更完整的 late-result/unknown-outcome fault matrix 继续补充。
+10. ✅ Core 从一致的 Session/Thread read set 生成 canonical nested Agent tree；App Server 随
+    `session/subscribe` 返回，Desktop 在 Thread durable update 后重新读取该投影，直接显示
+    status/wait/budget/usage/role/join/result 并精确中断；
+11. ✅ S6 fault matrix：terminal reconciliation、spawn/join/cancellation recovery、join timeout、
+    Any/Quorum、Turn/结构预算、duplicate/cross-delegation delivery、digest corruption 与 context/tool
+    isolation 已测试；更完整的 late-result/unknown-outcome 故障注入继续补充。
 
 第一阶段不需要：
 

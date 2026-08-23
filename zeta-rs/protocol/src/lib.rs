@@ -44,11 +44,13 @@ pub use model::{
     ToolCall, ToolChoice, ToolDefinition, ToolResult,
 };
 pub use multi_agent::{
-    AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource, AgentJoin,
-    AgentJoinPolicy, AgentJoinStatus, AgentMaterializedContext, AgentMessage, AgentMessageContent,
-    AgentMessageProvenance, AgentRoleSnapshot, ContextSeedDigest, DelegatedCapabilityScope,
-    DelegatedPolicyCeiling, DelegatedTask, DelegationArtifactRef, DelegationResult,
-    DelegationResultDigest, DelegationResultStatus, ForkedAgentContext, InvalidContextSeedDigest,
+    AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource,
+    AgentDefinitionSelectionReason, AgentJoin, AgentJoinPolicy, AgentJoinStatus,
+    AgentMaterializedContext, AgentMessage, AgentMessageContent, AgentMessageProvenance,
+    AgentRoleSnapshot, AgentTreeExecutionStatus, AgentTreeNodeProjection, AgentTreeProjection,
+    AgentTreeWaitingReason, ContextSeedDigest, DelegatedCapabilityScope, DelegatedPolicyCeiling,
+    DelegatedTask, DelegationArtifactRef, DelegationResult, DelegationResultDigest,
+    DelegationResultStatus, ForkedAgentContext, FrozenAgentDefinitionRef, InvalidContextSeedDigest,
     InvalidDelegationResultDigest, ThreadSequenceRange,
 };
 pub use session::{

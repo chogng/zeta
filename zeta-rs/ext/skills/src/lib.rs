@@ -3,6 +3,7 @@
 mod catalog_prompt;
 mod extension;
 mod runtime;
+mod selector;
 mod tool;
 mod watcher;
 

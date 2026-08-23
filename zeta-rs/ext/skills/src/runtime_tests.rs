@@ -36,12 +36,12 @@ use zeta_tools::ToolRegistryGeneration;
 use zeta_tools::ToolRuntimeAuthority;
 use zeta_tools::ToolRuntimeKey;
 
-struct TestConfig {
+pub(crate) struct TestConfig {
     skills: Mutex<SkillsConfig>,
 }
 
 impl TestConfig {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             skills: Mutex::new(SkillsConfig::default()),
         }
@@ -555,7 +555,7 @@ fn built_in_skill_id(name: &str) -> SkillId {
     )
 }
 
-fn test_directory(label: &str) -> PathBuf {
+pub(crate) fn test_directory(label: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
         "zeta-skills-extension-{label}-{}-{}",
         std::process::id(),
@@ -568,7 +568,7 @@ fn test_directory(label: &str) -> PathBuf {
     root
 }
 
-fn write_skill(root: &Path, name: &str, description: &str) {
+pub(crate) fn write_skill(root: &Path, name: &str, description: &str) {
     let directory = root.join(name);
     fs::create_dir_all(&directory).unwrap();
     fs::write(

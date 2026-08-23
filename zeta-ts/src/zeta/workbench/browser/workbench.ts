@@ -525,6 +525,7 @@ export class Workbench extends DisposableOwner {
 		services.set(IViewDescriptorService, viewDescriptors);
 		const sessionService = this.own(new AppServerSessionsManagementService({
 			session: api.session,
+			turn: api.turn,
 			events: api.events,
 			...(nativeHostApi ? {
 				workspaceRouter: {

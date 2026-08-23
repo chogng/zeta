@@ -121,6 +121,7 @@ class FakeSessionService implements ISessionsManagementService {
 		this.activeUntitledSessionId = undefined;
 		this._onDidChange.fire();
 	}
+	async interruptThread(): Promise<void> {}
 
 	createUntitledSession(title = "New session"): IUntitledChatSession {
 		const draft = { untitledSessionId: `untitled-${this.nextUntitledId++}`, title, model: undefined };

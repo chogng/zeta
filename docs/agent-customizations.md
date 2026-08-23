@@ -5,8 +5,9 @@
 >
 > 状态：架构边界已接受（2026-08-12）；Workspace 原生 catalog slice 已实现：Global
 > Instructions 会进入后续 model invocation，Skills 已有 metadata catalog、显式 activation 和通用
-> context injection，Agents 完成定义发现。Contextual/OnDemand Instruction 选择、自动 Skill
-> selection、Agent 执行选择和完整 import apply 仍未实现。
+> context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
+> Contextual/OnDemand Instruction 的通用选择、Agent definition list/picker API 和完整 import apply
+> 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
 > [`zeta-agent-import` README](../zeta-rs/agent-import/README.md)；配置与事务边界见
@@ -215,11 +216,12 @@ activation validation。
 | 能力 | 状态 | 实现证据或前置条件 |
 | --- | --- | --- |
 | `.zeta/config.toml` Workspace intent | 已实现 | `zeta-config` / App Server local composition |
-| Skill built-in/user/Workspace catalog 与 enablement | 部分具备 | `zeta-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
+| Skill built-in/user/Workspace catalog 与 enablement | 已实现 | `zeta-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
 | Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
+| Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
 | Codex/Claude known-path inspection | 已实现 | `zeta-agent-import::inspect_agent_paths` |
 | Workspace Instructions authority | 部分具备 | `zeta-instructions` + `WorkspaceCustomizations`；Global 注入已实现，其他选择策略未实现 |
-| Workspace Agents authority | 部分具备 | `zeta-agents` + `WorkspaceCustomizations`；catalog/refresh 已实现，list/selection/runtime 未实现 |
+| Workspace Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.zeta/{instructions,skills,agents}` loader | 已实现 | 固定原生 roots、有界校验、Workspace activation 与 watcher refresh |
 | External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
 | Skill → Slash Command 动态投影 | 已实现 | TUI/Desktop `/name` 绑定 stable `SkillRef`；`/skills` 只管理 |
@@ -228,10 +230,10 @@ activation validation。
 
 1. 固定本文的三类对象、命名空间和 import boundary，代码与文档不再新增 Prompt/Task artifact。
 2. 已完成 Workspace 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
-3. 下一步实现 Contextual/OnDemand Instruction 解析与自动 Skill selection；Skill 显式 activation、
-   Workspace source、用户可调用投影和通用 context injection 已接通。
-4. Agent definition catalog 保持只读，直到 list API、cross-authority reference resolution 和
-   multi-agent runtime 同时具备后再开放执行选择。
+3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Workspace source、用户可调用投影
+   和通用 context injection；下一步是通用 Contextual/OnDemand Instruction 解析。
+4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
+   cross-authority reference 在具备明确 authority contract 前继续拒绝。
 5. 为 `zeta-agent-import` 增加 source-specific bounded parsers 和 typed preview fragments；App
    Server 只对已经具备 target authority 的条目开放 apply。
 

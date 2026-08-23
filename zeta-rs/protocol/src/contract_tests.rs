@@ -151,6 +151,7 @@ fn turn_resource_budget_freezes_versioned_prices_in_the_durable_command() {
     let command = ThreadCommand::StartTurn {
         model: Some(model.clone()),
         activated_skills: Vec::new(),
+        host_activated_skills: Some(Vec::new()),
         approval_mode: ApprovalMode::AskPermissions,
         resource_budget: Some(TurnResourceBudget {
             max_total_tokens: Some(50_000),
@@ -175,6 +176,7 @@ fn turn_resource_budget_freezes_versioned_prices_in_the_durable_command() {
             "type": "startTurn",
             "model": { "provider": "provider", "model": "model" },
             "activatedSkills": [],
+            "hostActivatedSkills": [],
             "approvalMode": "askPermissions",
             "resourceBudget": {
                 "maxTotalTokens": 50_000,
@@ -190,6 +192,25 @@ fn turn_resource_budget_freezes_versioned_prices_in_the_durable_command() {
             "input": [{ "type": "text", "text": "hello" }]
         })
     );
+}
+
+#[test]
+fn legacy_start_turn_without_host_skill_activations_remains_distinguishable() {
+    let command: ThreadCommand = serde_json::from_value(json!({
+        "type": "startTurn",
+        "activatedSkills": [],
+        "approvalMode": "askPermissions",
+        "input": [{ "type": "text", "text": "hello" }]
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        command,
+        ThreadCommand::StartTurn {
+            host_activated_skills: None,
+            ..
+        }
+    ));
 }
 
 #[test]

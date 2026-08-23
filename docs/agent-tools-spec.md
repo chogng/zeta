@@ -466,6 +466,9 @@ Records or updates your durable plan for a multi-step task.
 
 ## 10. MCP 元工具（检索式模式，[harness §6](agent-harness-design.md#6-工具注册时机)）
 
+聚合 MCP catalog 只有在工具数 >15 或稳定估算 `ceil(canonical JSON bytes / 4)` >5000 时才整体
+进入本模式；两个阈值都未超出时实际 MCP definitions 直接平铺。一次投影不能混合两种模式。
+
 ### 10.1 search_tools
 
 ```text
@@ -486,9 +489,9 @@ call_mcp_tool.
 }
 ```
 
-返回 ≤ 5 个定义（name + description + schema），以 reminder 形式进入历史
-（[harness §4.4](agent-harness-design.md#44-动态注入append-only-reminder)），不修改 tools
-数组。无命中 → `no MCP tools match "{query}". Available servers: {list}`。
+返回 ≤ 5 个定义（name + description + schema + `catalog_digest` + `definition_digest`），不修改
+tools 数组。返回顺序由冻结 catalog 上的确定性 score/name 决定；无命中返回
+`no MCP tools match "{query}". Available servers: {list}`。
 
 ### 10.2 call_mcp_tool
 
@@ -497,15 +500,18 @@ call_mcp_tool.
   "type": "object",
   "properties": {
     "tool": { "type": "string", "description": "Fully qualified name server__tool from search_tools results." },
+    "catalog_digest": { "type": "string", "description": "Exact frozen catalog digest returned by search_tools." },
+    "definition_digest": { "type": "string", "description": "Exact tool definition digest returned by search_tools." },
     "arguments": { "type": "object", "description": "Arguments matching the tool's schema.", "additionalProperties": true }
   },
-  "required": ["tool", "arguments"],
+  "required": ["tool", "catalog_digest", "definition_digest", "arguments"],
   "additionalProperties": false
 }
 ```
 
-未先 search 的调用 → `unknown tool {name}; use search_tools first`。参数校验错误透传 MCP
-server 的 schema 错误。执行、审批与结果转换沿用 [`tools.md`](tools.md) §10 的 MCP 适配器。
+digest 缺失/伪造或 catalog 已刷新时拒绝并要求重新 `search_tools`，同名新 definition 不能继承旧
+绑定。参数校验错误透传 MCP server 的 schema 错误；执行、审批与结果转换沿用
+[`tools.md`](tools.md) §10 的 MCP 适配器。
 
 ## 11. 内建子代理工具
 
@@ -517,10 +523,14 @@ server 的 schema 错误。执行、审批与结果转换沿用 [`tools.md`](too
 
 ### 11.1 spawn_agent
 
-创建一个独立历史的 child Agent Thread，立即返回 `delegation_id`、`child_thread_id` 和
-`child_turn_id`。参数为完整 `task: string`、可空短标签 `name` 和可空 `context`。`context`
+创建一个独立历史的 child Agent Thread，立即返回 `delegation_id`、`child_thread_id`、
+`child_turn_id` 和冻结的 Agent definition reference。参数为完整 `task: string`、可空短标签
+`name`、可空 `agent` 和可空 `context`。`agent` 可显式指定 Workspace definition；省略时只在
+metadata 产生唯一匹配时自动选择，否则使用内置 general role。`context`
 支持 `fresh`、`full`、`lastTurns`、`checkpointAndTail`、`selected`；选中内容在 spawn 时固定
-source sequence、物化内容与 digest，再随 immutable seed 注入。Skill 与 Tool ceiling 同样冻结。
+source sequence、物化内容与 digest，再随 immutable seed 注入。definition 的 catalog generation、
+content digest、选择原因、role/model、引用 Instructions、active Skill 子集与 Tool ceiling 同样冻结；
+引用不能扩大 parent 当前可见的能力。
 
 ### 11.2 send_agent_message
 
@@ -535,8 +545,11 @@ delegation；`policy` 支持 `all`、`any`、`quorum`，最长等待 30000 ms。
 bounded results。进程恢复会重新求值 waiting join。
 
 App Server 的 parent Turn interrupt 与 Session stop 会提交 cancellation facts，并向 live child
-descendants 递归传播；Desktop Agent Sidebar 根据 Session lineage 与 thread projection 显示根
-Thread、Agent child、fork/rewind branch 及当前 execution status。
+descendants 递归传播。`session/subscribe.agentTree` 是从同一 durable Session/Thread read set 生成的
+canonical nested projection，包含 execution status、等待原因、Turn budget/usage、role、join 和
+delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thread/update` 只触发
+重新读取 canonical projection，旧 Thread sequence 通知会被忽略。中断使用节点的 exact
+`threadId/currentTurnId/threadSequence` 中断单个目标。
 
 ## 附录 A：系统提示词扩写正文
 

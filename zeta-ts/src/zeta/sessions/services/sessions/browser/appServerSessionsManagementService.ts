@@ -1,10 +1,10 @@
-import type { ModelRef as ModelRefDto, Session as SessionDto, SessionThreadProjection as SessionThreadProjectionDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/types.js";
+import type { AgentTreeNodeProjection as AgentTreeNodeProjectionDto, ModelRef as ModelRefDto, Session as SessionDto, SessionThreadProjection as SessionThreadProjectionDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import type { ISessionApi } from "../../../../platform/sessions/common/sessionApi.js";
-import type { AgentThreadExecutionStatus, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
+import type { ISessionApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
+import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagementService.js";
 
 export interface ISessionWorkspaceRouter {
@@ -14,6 +14,7 @@ export interface ISessionWorkspaceRouter {
 
 interface AppServerSessionsManagementServiceHost {
 	readonly session: ISessionApi;
+	readonly turn?: ITurnApi;
 	readonly events?: IServerEventApi;
 	readonly workspaceRouter?: ISessionWorkspaceRouter;
 }
@@ -21,6 +22,7 @@ interface AppServerSessionsManagementServiceHost {
 /** App Server-backed canonical Session manager for one renderer window. */
 export class AppServerSessionsManagementService extends DisposableOwner implements ISessionsManagementService {
 	private readonly api: ISessionApi;
+	private readonly turnApi: ITurnApi | undefined;
 	private readonly workspaceRouter: ISessionWorkspaceRouter | undefined;
 	private readonly _onDidChange = this.own(new Emitter<void>());
 	private _sessions: readonly Session[] = [];
@@ -32,6 +34,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 	private initializePromise: Promise<void> | undefined;
 	private readonly subscribedSessionIds = new Set<SessionId>();
 	private readonly pendingSessionSequences = new Map<SessionId, number>();
+	private readonly pendingProjectionRefreshes = new Set<SessionId>();
 	private readonly refreshes = new Map<SessionId, Promise<void>>();
 
 	readonly onDidChange = this._onDidChange.event;
@@ -39,12 +42,16 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 	constructor(api: ISessionApi | AppServerSessionsManagementServiceHost) {
 		super();
 		this.api = "session" in api ? api.session : api;
+		this.turnApi = "session" in api ? api.turn : undefined;
 		this.workspaceRouter = "session" in api ? api.workspaceRouter : undefined;
 		const events = "session" in api ? api.events : undefined;
 		if (events) {
 			const subscription = events.subscribe(event => {
-				if (event.method !== "session/update") return;
-				this.acceptSessionUpdate(event.params.sessionId, event.params.durableSequence);
+				if (event.method === "session/update") {
+					this.acceptSessionUpdate(event.params.sessionId, event.params.durableSequence);
+				} else if (event.method === "session/thread/update") {
+					this.acceptThreadUpdate(event.params.sessionId, event.params.threadId, event.params.durableSequence);
+				}
 			});
 			this.defer(() => subscription.dispose());
 		}
@@ -54,6 +61,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 			}
 			this.subscribedSessionIds.clear();
 			this.pendingSessionSequences.clear();
+			this.pendingProjectionRefreshes.clear();
 			this.refreshes.clear();
 		});
 	}
@@ -81,6 +89,22 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 		this.selectAvailableThread(sessionId, threadId);
 	}
 
+	async interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		if (!this.turnApi) throw new Error("Turn interruption is unavailable in this renderer host.");
+		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+		const node = findAgentNode(session?.agentTree ?? [], threadId);
+		if (!session || !node || !node.currentTurnId || !canInterrupt(node)) {
+			throw new Error(`Running Agent Thread is not available: ${threadId}`);
+		}
+		await this.turnApi.interrupt({
+			commandId: commandId("agent-interrupt"),
+			sessionId,
+			threadId,
+			turnId: node.currentTurnId,
+			expectedSequence: node.threadSequence,
+		});
+	}
+
 	private selectAvailableThread(sessionId: SessionId, threadId: ThreadId): void {
 		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId);
 		const thread = session?.threads.find((candidate) => candidate.threadId === threadId && candidate.status === "active");
@@ -97,6 +121,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 			await this.workspaceRouter!.reopenWorkspace(targetRoot);
 			this.subscribedSessionIds.clear();
 			this.pendingSessionSequences.clear();
+			this.pendingProjectionRefreshes.clear();
 			this.refreshes.clear();
 			await this.loadSessions();
 			this.selectAvailableThread(sessionId, threadId);
@@ -286,7 +311,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 		if (session.status !== "active") return session;
 		const result = await this.api.subscribe({ sessionId: session.sessionId, afterSequence: session.sequence });
 		this.subscribedSessionIds.add(session.sessionId);
-		const subscribed = toSession(result.session, result.threadProjections, session);
+		const subscribed = toSession(result.session, result.threadProjections, session, result.agentTree.roots);
 		if (subscribed.sessionId !== session.sessionId) {
 			await this.unsubscribeSession(session.sessionId);
 			throw new Error(`Session subscription returned '${subscribed.sessionId}' for '${session.sessionId}'`);
@@ -298,6 +323,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 	private async unsubscribeSession(sessionId: SessionId): Promise<void> {
 		if (!this.subscribedSessionIds.delete(sessionId)) return;
 		this.pendingSessionSequences.delete(sessionId);
+		this.pendingProjectionRefreshes.delete(sessionId);
 		await this.api.unsubscribe({ sessionId });
 	}
 
@@ -305,6 +331,18 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
 		if (!session || durableSequence <= session.sequence) return;
 		this.pendingSessionSequences.set(sessionId, Math.max(durableSequence, this.pendingSessionSequences.get(sessionId) ?? 0));
+		this.scheduleSessionRefresh(sessionId);
+	}
+
+	private acceptThreadUpdate(sessionId: SessionId, threadId: ThreadId, durableSequence: number): void {
+		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
+		const node = findAgentNode(session?.agentTree ?? [], threadId);
+		if (!session || (node && durableSequence <= node.threadSequence)) return;
+		this.pendingProjectionRefreshes.add(sessionId);
+		this.scheduleSessionRefresh(sessionId);
+	}
+
+	private scheduleSessionRefresh(sessionId: SessionId): void {
 		if (this.refreshes.has(sessionId)) return;
 		const refresh = this.refreshSessionUntilCurrent(sessionId).finally(() => this.refreshes.delete(sessionId));
 		this.refreshes.set(sessionId, refresh);
@@ -315,17 +353,23 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 			while (true) {
 				const expectedSequence = this.pendingSessionSequences.get(sessionId);
 				const current = this._sessions.find(candidate => candidate.sessionId === sessionId);
-				if (expectedSequence === undefined || !current || current.sequence >= expectedSequence) {
+				const refreshProjection = this.pendingProjectionRefreshes.delete(sessionId);
+				if (!current) {
 					this.pendingSessionSequences.delete(sessionId);
+					return;
+				}
+				const sessionBehind = expectedSequence !== undefined && current.sequence < expectedSequence;
+				if (!sessionBehind && !refreshProjection) {
+					if (expectedSequence !== undefined) this.pendingSessionSequences.delete(sessionId);
 					return;
 				}
 				const result = await this.api.subscribe({ sessionId, afterSequence: current.sequence });
 				this.subscribedSessionIds.add(sessionId);
-				const refreshed = toSession(result.session, result.threadProjections, current);
+				const refreshed = toSession(result.session, result.threadProjections, current, result.agentTree.roots);
 				if (refreshed.sessionId !== sessionId) {
 					throw new Error(`Session refresh returned '${refreshed.sessionId}' for '${sessionId}'`);
 				}
-				if (refreshed.sequence <= current.sequence && refreshed.sequence < expectedSequence) {
+				if (sessionBehind && refreshed.sequence <= current.sequence && refreshed.sequence < expectedSequence) {
 					throw new Error(`Session subscription did not advance '${sessionId}' beyond sequence ${current.sequence}`);
 				}
 				this.replaceSession(refreshed);
@@ -354,7 +398,12 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 	}
 }
 
-function toSession(session: SessionDto, projections: readonly SessionThreadProjectionDto[] = [], previous?: Session): Session {
+function toSession(
+	session: SessionDto,
+	projections: readonly SessionThreadProjectionDto[] = [],
+	previous?: Session,
+	agentTree?: readonly AgentTreeNodeProjectionDto[],
+): Session {
 	const projectionByThread = new Map(projections.map(projection => [projection.thread.threadId, projection.thread]));
 	return {
 		sessionId: session.sessionId,
@@ -373,7 +422,49 @@ function toSession(session: SessionDto, projections: readonly SessionThreadProje
 				executionStatus: projection ? executionStatus(projection.turns.at(-1)?.status) : prior?.executionStatus ?? "idle",
 			};
 		}),
+		agentTree: agentTree?.map(toAgentTreeNode) ?? previous?.agentTree,
 	};
+}
+
+function toAgentTreeNode(node: AgentTreeNodeProjectionDto): AgentTreeNode {
+	return {
+		threadId: node.threadId,
+		threadSequence: node.threadSequence,
+		title: node.title,
+		origin: { ...node.origin },
+		membershipStatus: node.membershipStatus,
+		executionStatus: node.executionStatus,
+		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),
+		...(node.waitingReason ? { waitingReason: node.waitingReason } : {}),
+		...(node.resourceBudget ? {
+			resourceBudget: {
+				...(node.resourceBudget.maxTotalTokens !== undefined && node.resourceBudget.maxTotalTokens !== null ? { maxTotalTokens: node.resourceBudget.maxTotalTokens } : {}),
+				...(node.resourceBudget.maxCostUsdMicros !== undefined && node.resourceBudget.maxCostUsdMicros !== null ? { maxCostUsdMicros: node.resourceBudget.maxCostUsdMicros } : {}),
+			},
+		} : {}),
+		usage: {
+			inputTokens: node.usage.inputTokens.reported,
+			outputTokens: node.usage.outputTokens.reported,
+		},
+		...(node.role ? { role: { name: node.role.name, selectionReason: node.role.selectionReason } } : {}),
+		...(node.result ? { result: { status: node.result.status, summary: node.result.summary } } : {}),
+		joins: (node.joins ?? []).map(join => ({ status: join.status })),
+		children: (node.children ?? []).map(toAgentTreeNode),
+	};
+}
+
+function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): AgentTreeNode | undefined {
+	for (const node of nodes) {
+		if (node.threadId === threadId) return node;
+		const child = findAgentNode(node.children, threadId);
+		if (child) return child;
+	}
+	return undefined;
+}
+
+function canInterrupt(node: AgentTreeNode): boolean {
+	return node.membershipStatus === "active"
+		&& (node.executionStatus === "queued" || node.executionStatus === "running" || node.executionStatus === "waiting");
 }
 
 function executionStatus(status: TurnStatusDto | undefined): AgentThreadExecutionStatus {

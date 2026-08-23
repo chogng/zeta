@@ -33,7 +33,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | Turn 资源预算 | 已实现 | 默认不限额；可选 token/cost ceiling 与带 revision 的模型价格快照在 Turn 接受时持久化；模型、压缩和工具安全点按 usage 已报告下限终止，恢复不读取漂移目录 | `zeta-rs/core/src/turn/resource_budget.rs`、`zeta-rs/core/src/turn/executor.rs`、`zeta-rs/core/src/turn/tool_scheduler.rs` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 已实现 | `coding-v1` 在 Turn 接受时冻结 exact 工具名、顺序、schema digest 与并行调用设置；canonical `read_file`/`write_file`/`edit`/`grep`/`glob`、`apply_patch`、`shell-command` 与 `update_plan` 已接线 | `zeta-rs/core/src/tool_profile.rs`、`zeta-rs/app-server/src/local_tools.rs` |
-| Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
+| Skills 与 MCP | 已具备 S6 基线 | slash、显式 SkillRef、可信 metadata 自动 selector、`skills-read`、registry snapshot，以及 MCP direct/meta 阈值切换已接通 | `zeta-rs/skills`、`zeta-rs/ext/skills`、`zeta-rs/app-server` |
 | Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、运行中 steering、默认手动压缩、附件 authority 下的图片输入、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
 | 多 Agent | 部分具备 | spawn/message/wait、Fresh/ForkedPrefix、all/any/quorum、取消树和恢复已实现 | `zeta-rs/core/src/multi_agent/`、`zeta-rs/app-server/src/server/multi_agent_tools.rs` |
 | 模型目录与选择 | 已实现 | 静态模型、access badge、隐藏设置和刷新已接通；目录不探活，运行错误归属对话 Turn | `zeta-rs/app-server/src/model_catalog.rs`、`zeta-ts/src/zeta/workbench/services/chat/` |
@@ -125,11 +125,16 @@ AL-501 与 AL-504 的图片半程已完成；S4 capability contract 已稳定，
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-601 | 待构建 | Skill 自动 selector | 只基于 metadata 召回候选，经过明确 selector 后冻结 exact SkillRef，再加载完整 `SKILL.md` | catalog 大小不线性增加 prompt；选择原因、digest 和 generation durable；不自动激活不可信 Skill |
-| AL-602 | 待构建 | MCP 暴露阈值 | 聚合定义不超过 15 个工具且不超过 5k tokens 时平铺，超阈值整体切换 search/call 元工具 | Turn 内工具面冻结；server 变化只影响新 Turn；阈值边界、排序和缓存稳定有测试 |
-| AL-603 | 待构建 | Agent 定义与自动选择 | 建立 agent role/profile catalog、允许工具和继承策略的 frozen selection | 子 Agent 只收到冻结角色、任务、Skill 和允许工具；父 Thread 不泄露未选择历史；选择结果可解释 |
-| AL-604 | 待构建 | 多 Agent 故障矩阵 | 覆盖 child crash、parent cancel、join timeout、any/quorum 提前满足、恢复和预算耗尽 | 每个 delegation 只有一个 terminal outcome；取消树可恢复；mailbox 消息不丢失、不跨 delegation |
-| AL-605 | 待构建 | Desktop 多 Agent 可观测性 | 在现有树投影上补充状态、预算、等待原因和结果入口 | UI 只消费 canonical projection；刷新后树结构与 join 状态一致；用户可中断明确目标而非整棵树 |
+| AL-601 | 已实现 | Skill 自动 selector | metadata-only、唯一高置信匹配只允许自动选择 `BuiltInVerified` Skill；先冻结 pinned `SkillRef`，再加载 exact `SKILL.md` | selector 输入有界且不注入 catalog 正文；reason、digest、generation 持久化；歧义或非可信来源不自动激活 |
+| AL-602 | 已实现 | MCP 暴露阈值 | 聚合定义不超过 15 个工具且估算不超过 5k tokens 时平铺；任一超限时整个 MCP port 只暴露 `search_tools`/`call_mcp_tool` | Turn 内冻结 catalog/definition digest；边界、排序和同名热更新 fail-closed 已测试 |
+| AL-603 | 已实现 | Agent 定义与自动选择 | `spawn_agent` 支持显式或唯一 metadata 匹配，冻结 definition generation/digest/reason、role、model、Instructions、Skill 与 Tool ceiling | child model input 和 nested tool facts 都受 frozen ceiling 约束；未选 parent history 不进入 Fresh child；缺失/越权引用拒绝 |
+| AL-604 | 已实现 | 多 Agent 故障矩阵 | child failure、parent cancel、join timeout、any/quorum、恢复、Turn/结构预算耗尽进入确定性测试 | terminal child reconciliation 幂等；取消树可恢复；mailbox 绑定 exact delegation，不能投递到 sibling |
+| AL-605 | 已实现 | Desktop 多 Agent 可观测性 | App Server `session/subscribe` 返回 canonical nested tree；Desktop 展示状态、预算、等待原因、join 和结果，并可中断单个节点 | UI 不再从 lineage 自行构树；刷新使用同一投影；interrupt 使用节点冻结的 Thread/Turn/sequence 精确目标 |
+
+S6 的选择与投影都冻结在当前 catalog/Session snapshot 上：Skill、MCP 或 Agent definition 的后续
+刷新只影响新 Turn/新 delegation；Desktop 只展示 App Server 从 durable Session/Thread facts 生成的
+projection。仍未纳入本阶段的是跨机器 Agent transport、Agent definition list/picker API 与
+Agent-tree 累计 token/cost scheduler；这些不能反向削弱本表已经冻结的执行 ceiling。
 
 ## 9. S7：评测、观测与发布门（横向）
 

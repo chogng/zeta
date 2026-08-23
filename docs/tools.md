@@ -828,7 +828,8 @@ pub struct McpToolProjection {
 - 用统一 `ToolSchema` parser 处理 input/output；
 - 将 MCP annotations 标记为 `UntrustedSourceClaim`；
 - 计算 definition/schema digest；
-- 根据 host policy 选择 `Eager` 或 `Deferred`，不能听任 server 自己扩大 exposure；
+- 根据 host policy 选择 exposure，不能听任 server 自己扩大暴露面；当前 App Server 对聚合 MCP
+  catalog 使用 §12.2 的整端口阈值投影；
 - 拒绝 schema bomb、invalid name、超长 description 和不支持 content contract。
 
 MCP `outputSchema` 只约束 `structuredContent`。MCP call result 外层 `content`、`isError` 和 `_meta`
@@ -956,11 +957,17 @@ name/schema 后要求 host 执行。
 第一版 `ToolSearchLimit` 默认值为 8，并受 host-configured hard cap 限制。超出 hard cap 返回
 typed validation error，不以无限结果或静默全量 catalog 作为 fallback。
 
-当前 App Server 的默认 exposure policy 是：built-in Workspace 与 client-hosted dynamic port 直接
-暴露，MCP port 默认 Deferred，extension executor 使用自身声明的 exposure；单个 host contribution
-还可在 composition 时显式覆盖。只有 registry 中确实存在 Deferred 工具时才增加 `tool_search`。
-这个默认值是 host policy，不属于 registry 的来源特例；以后可根据真实调用覆盖率调整，但 Plugin、
-Connector 和 dynamic contribution 仍必须经过同一 exposure contract，不能各自创建搜索入口。
+当前 App Server 的 exposure policy 是：built-in Workspace 与 client-hosted dynamic port 直接暴露，
+extension executor 使用自身声明的 exposure；聚合 MCP port 先对排序后的 canonical definitions 做
+稳定估算。工具数 ≤15 且 `ceil(canonical JSON bytes / 4)` ≤5000 时全部直接暴露；任一阈值超限时，
+整个 MCP port 不向 registry 添加实际定义，只直接暴露固定的 `search_tools` 与 `call_mcp_tool`。
+边界不会出现一部分平铺、一部分 deferred 的混合状态。
+
+超阈值投影冻结 catalog digest；`search_tools` 最多返回 5 个按确定性分数/名称排序的 definition，
+并携带 catalog digest 与各 definition digest。`call_mcp_tool` 必须回传两者，catalog 刷新或同名 tool
+schema/description 变化都会 fail closed，要求重新 search。该 MCP 专用元工具不替代通用 registry
+`tool_search`：后者仍只在其他 contribution 确实声明 `Deferred` 时出现。Plugin、Connector 和
+dynamic contribution 继续经过同一 composition/collision contract，不能各自创建旁路。
 
 ### 12.3 索引与排序
 

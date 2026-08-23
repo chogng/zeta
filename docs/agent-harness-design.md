@@ -385,8 +385,9 @@ instructions（下一个 model safe point 重新冻结）
   - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
     model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
     输入被拒绝；
-  - 自动候选检索（推迟）：只注入被 selector 激活的 Skill，不能把整个 catalog 正文或清单随
-    catalog 数量线性塞进 prompt。
+  - 自动 selector 已实现：host 只用有界 metadata 对 `BuiltInVerified` 候选做唯一高置信匹配，先
+    冻结 exact `SkillRef + digest + generation + reason`，再加载正文；歧义、低置信或非可信来源
+    不自动激活，catalog 正文不会随数量线性进入 prompt。
 
 ## 13. 供应商差异矩阵
 
@@ -447,8 +448,8 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；仍需 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | S7 T4 fixture |
 | M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
-| M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
-| M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
+| M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
+| M6（完成）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 
 当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
 

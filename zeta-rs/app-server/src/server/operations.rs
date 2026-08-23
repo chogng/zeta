@@ -333,6 +333,7 @@ impl AppServer {
             self.offer_pending_interactions(snapshot);
         }
         result(&SessionSubscribeResult {
+            agent_tree: zeta_core::project_agent_tree(&session, &thread_snapshots),
             session: session.public_session(),
             updates,
             thread_projections,

@@ -45,6 +45,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		error: undefined,
 		async initialize() {},
 		selectThread() {},
+		async interruptThread() {},
 		createUntitledSession() {
 			const untitledSession = { untitledSessionId: `untitled-${untitledSessions.length + 1}`, title: "New code session", model: undefined };
 			untitledSessions = [...untitledSessions, untitledSession];

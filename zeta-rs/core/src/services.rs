@@ -717,6 +717,11 @@ impl ToolExecutionFacts {
             .find(|turn| &turn.turn_id == turn_id)
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
         let mut calls = std::collections::BTreeMap::new();
+        let mut available_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
+        if let Some(seed) = &snapshot.agent_context_seed {
+            let ceiling = seed.capability_scope.tools.iter().collect::<BTreeSet<_>>();
+            available_tools.retain(|name| ceiling.contains(name));
+        }
         let mut facts = Self {
             execution: Some(ToolExecutionIdentity {
                 session_id: snapshot.session_id.clone(),
@@ -727,7 +732,7 @@ impl ToolExecutionFacts {
                 tool_profile: turn.tool_profile.clone(),
             }),
             read_paths: BTreeSet::new(),
-            available_tools: available_tools.into_iter().collect(),
+            available_tools,
             activated_skills: turn.activated_skills.clone(),
         };
         for item in &snapshot.items {

@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::AgentTreeProjection;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
@@ -220,6 +221,7 @@ pub struct SessionSubscribeResult {
     pub session: Session,
     pub updates: Vec<SessionUpdateEnvelope>,
     pub thread_projections: Vec<SessionThreadProjection>,
+    pub agent_tree: AgentTreeProjection,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

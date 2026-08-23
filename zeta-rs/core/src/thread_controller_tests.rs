@@ -30,6 +30,20 @@ impl zeta_extension_api::SkillActivationContributor for OneShotActivation {
     }
 }
 
+struct AutomaticActivation {
+    calls: Arc<AtomicU64>,
+}
+
+impl zeta_extension_api::SkillActivationContributor for AutomaticActivation {
+    fn contribute(
+        &self,
+        _: zeta_extension_api::SkillActivationContext<'_>,
+    ) -> Result<Vec<zeta_protocol::FrozenSkillActivation>, zeta_extension_api::ExtensionError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        Ok(vec![automatic_test_activation()])
+    }
+}
+
 static NEXT_THREAD: AtomicU64 = AtomicU64::new(1);
 
 fn start_request(key: &str) -> StartTurnRequest {
@@ -45,6 +59,18 @@ fn start_request(key: &str) -> StartTurnRequest {
         input: vec![UserInput::Text {
             text: "hello".into(),
         }],
+    }
+}
+
+fn automatic_test_activation() -> zeta_protocol::FrozenSkillActivation {
+    zeta_protocol::FrozenSkillActivation {
+        id: zeta_protocol::SkillId::new(
+            zeta_protocol::SkillSourceId::new("builtin:skill-source:test").unwrap(),
+            zeta_protocol::SkillName::new("review").unwrap(),
+        ),
+        content_digest: zeta_protocol::ContentDigest::sha256(b"review body"),
+        catalog_generation: 7,
+        reason: zeta_protocol::SkillActivationReason::Automatic,
     }
 }
 
@@ -979,6 +1005,45 @@ fn replay_does_not_reinvoke_extension_activation() {
         .unwrap();
 
     assert_eq!(calls.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn replay_reuses_durable_extension_automatic_activation_without_a_false_conflict() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let calls = Arc::new(AtomicU64::new(0));
+    let mut extensions = zeta_extension_api::ExtensionRegistryBuilder::new();
+    extensions.skill_activation_contributor(Arc::new(AutomaticActivation {
+        calls: Arc::clone(&calls),
+    }));
+    threads
+        .install_extensions(Arc::new(extensions.build()))
+        .unwrap();
+    let thread = create_thread(&threads, "automatic extension replay");
+
+    let first = threads
+        .start_turn(&thread, start_request("automatic-extension-replay"))
+        .unwrap();
+    let replayed = threads
+        .start_turn(&thread, start_request("automatic-extension-replay"))
+        .unwrap();
+
+    assert_eq!(first.turn_id, replayed.turn_id);
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    assert_eq!(
+        threads.read_thread(&thread).unwrap().turns[0].activated_skills,
+        vec![automatic_test_activation()]
+    );
+}
+
+#[test]
+fn legacy_replay_infers_host_automatic_activations_only_when_the_field_is_absent() {
+    let automatic = automatic_test_activation();
+
+    assert_eq!(
+        crate::thread_controller::replay_host_activations(None, std::slice::from_ref(&automatic),),
+        vec![automatic.clone()]
+    );
+    assert!(crate::thread_controller::replay_host_activations(Some(&[]), &[automatic]).is_empty());
 }
 
 #[test]

@@ -155,7 +155,7 @@ impl WorkspaceRuntimeControl {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
         let policy_config = LocalExecPolicyConfig::from_resolved(config);
-        let (authorization, code_index, symbol_index, semantic, cloud) = {
+        let (authorization, code_index, symbol_index, semantic, cloud, customizations) = {
             let runtime = self
                 .runtime
                 .read()
@@ -166,6 +166,7 @@ impl WorkspaceRuntimeControl {
                 runtime.symbol_index.clone(),
                 runtime.code_index_semantic.clone(),
                 runtime.cloud_code_index.clone(),
+                runtime._customizations.clone(),
             )
         };
         let Some(authorization) = authorization else {
@@ -203,8 +204,13 @@ impl WorkspaceRuntimeControl {
                 ),
             );
         }
-        local =
-            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &self.turn_backend);
+        local = append_multi_agent_tools(
+            local,
+            &self.multi_agent,
+            &self.sessions,
+            &self.turn_backend,
+            customizations.as_ref(),
+        );
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -346,8 +352,13 @@ impl WorkspaceRuntimeControl {
             ),
         );
         let turn_backend: Arc<dyn zeta_core::TurnExecutionBackend> = self.turn_backend.clone();
-        let local =
-            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &turn_backend);
+        let local = append_multi_agent_tools(
+            local,
+            &self.multi_agent,
+            &self.sessions,
+            &turn_backend,
+            Some(&customizations),
+        );
         let watcher = FileSystemWatcher::start_with_observers(
             authorization.root().clone(),
             Arc::clone(&self.updates),
@@ -1283,8 +1294,13 @@ impl AppServer {
             ),
         );
         let turn_backend: Arc<dyn zeta_core::TurnExecutionBackend> = self.turn_backend.clone();
-        let local =
-            append_multi_agent_tools(local, &self.multi_agent, &self.sessions, &turn_backend);
+        let local = append_multi_agent_tools(
+            local,
+            &self.multi_agent,
+            &self.sessions,
+            &turn_backend,
+            Some(&customizations),
+        );
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1767,6 +1783,7 @@ fn append_multi_agent_tools(
     coordinator: &Arc<MultiAgentCoordinator>,
     sessions: &Arc<SessionCoordinator>,
     turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
+    customizations: Option<&Arc<WorkspaceCustomizations>>,
 ) -> crate::local_tools::LocalToolComposition {
     let action_policy_revision = local.action_policy_revision().clone();
     let local = append_local_tool(
@@ -1776,17 +1793,16 @@ fn append_multi_agent_tools(
                 .with_action_policy_revision(action_policy_revision.clone()),
         ),
     );
-    append_local_tool(
-        local,
-        Arc::new(
-            MultiAgentToolService::new(
-                Arc::clone(coordinator),
-                Arc::clone(sessions),
-                Arc::clone(turn_backend),
-            )
-            .with_action_policy_revision(action_policy_revision),
-        ),
+    let mut multi_agent = MultiAgentToolService::new(
+        Arc::clone(coordinator),
+        Arc::clone(sessions),
+        Arc::clone(turn_backend),
     )
+    .with_action_policy_revision(action_policy_revision);
+    if let Some(customizations) = customizations {
+        multi_agent = multi_agent.with_workspace_customizations(Arc::clone(customizations));
+    }
+    append_local_tool(local, Arc::new(multi_agent))
 }
 
 fn open_code_index_semantic_runtime(

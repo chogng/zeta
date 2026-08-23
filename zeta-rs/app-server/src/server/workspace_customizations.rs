@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use zeta_agents::AgentDefinitionCatalog;
-#[cfg(test)]
 use zeta_agents::AgentDefinitionCatalogSnapshot;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_core::HarnessInstructions;
@@ -49,7 +48,6 @@ impl WorkspaceCustomizations {
         })
     }
 
-    #[cfg(test)]
     pub(super) fn instruction_snapshot(&self) -> Arc<InstructionCatalogSnapshot> {
         self.instructions
             .lock()
@@ -57,7 +55,6 @@ impl WorkspaceCustomizations {
             .snapshot()
     }
 
-    #[cfg(test)]
     pub(super) fn agent_snapshot(&self) -> Arc<AgentDefinitionCatalogSnapshot> {
         self.agents
             .lock()

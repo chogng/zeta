@@ -20,6 +20,11 @@ pub enum ThreadCommand {
         model: Option<ModelRef>,
         #[serde(default)]
         activated_skills: Vec<FrozenSkillActivation>,
+        /// Activations supplied by the caller before extension contributors run.
+        /// `None` identifies a legacy command whose host activations must be inferred.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        host_activated_skills: Option<Vec<FrozenSkillActivation>>,
         #[serde(default)]
         approval_mode: ApprovalMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]

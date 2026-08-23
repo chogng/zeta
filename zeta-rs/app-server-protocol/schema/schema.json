@@ -706,6 +706,14 @@
         }
       ]
     },
+    "AgentDefinitionSelectionReason": {
+      "description": "Explains how one exact Agent definition was selected for a delegation.",
+      "enum": [
+        "explicit",
+        "automatic"
+      ],
+      "type": "string"
+    },
     "AgentInteractionCapability": {
       "description": "Agent interaction kinds that one client connection can present and resolve.\n\nApp Server uses this declaration only for ephemeral owner selection. It never persists the\nconnection capability in Session or Thread state, and clients must still subscribe to the\ntarget Thread before they can become an interaction owner.",
       "properties": {
@@ -1108,6 +1116,16 @@
     "AgentRoleSnapshot": {
       "description": "Frozen Agent role instructions selected before a child Thread is created.",
       "properties": {
+        "definition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrozenAgentDefinitionRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "instructions": {
           "type": "string"
         },
@@ -1130,6 +1148,143 @@
         "instructions"
       ],
       "type": "object"
+    },
+    "AgentTreeExecutionStatus": {
+      "description": "Canonical execution state rendered for one Agent-tree node.",
+      "enum": [
+        "idle",
+        "queued",
+        "running",
+        "waiting",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "type": "string"
+    },
+    "AgentTreeNodeProjection": {
+      "description": "One canonical, recursively nested Agent-tree node derived from durable Session and Thread facts.",
+      "properties": {
+        "children": {
+          "items": {
+            "$ref": "#/$defs/AgentTreeNodeProjection"
+          },
+          "type": "array"
+        },
+        "currentTurnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "executionStatus": {
+          "$ref": "#/$defs/AgentTreeExecutionStatus"
+        },
+        "joins": {
+          "items": {
+            "$ref": "#/$defs/AgentJoin"
+          },
+          "type": "array"
+        },
+        "membershipStatus": {
+          "$ref": "#/$defs/SessionThreadStatus"
+        },
+        "origin": {
+          "$ref": "#/$defs/ThreadOrigin"
+        },
+        "resourceBudget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnResourceBudget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DelegationResult"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FrozenAgentDefinitionRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "threadSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/ModelUsageSummary"
+        },
+        "waitingReason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentTreeWaitingReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "threadId",
+        "threadSequence",
+        "title",
+        "origin",
+        "membershipStatus",
+        "executionStatus",
+        "usage"
+      ],
+      "type": "object"
+    },
+    "AgentTreeProjection": {
+      "description": "Canonical tree consumed directly by product Agent observability surfaces.",
+      "properties": {
+        "roots": {
+          "items": {
+            "$ref": "#/$defs/AgentTreeNodeProjection"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "roots"
+      ],
+      "type": "object"
+    },
+    "AgentTreeWaitingReason": {
+      "description": "Stable reason why the latest Turn of an Agent-tree node is waiting.",
+      "enum": [
+        "approval",
+        "userInput",
+        "capability"
+      ],
+      "type": "string"
     },
     "AppServerError": {
       "properties": {
@@ -11538,6 +11693,32 @@
         }
       ]
     },
+    "FrozenAgentDefinitionRef": {
+      "description": "Durable identity of the exact Agent definition consumed by a child seed.",
+      "properties": {
+        "catalogGeneration": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "name": {
+          "type": "string"
+        },
+        "selectionReason": {
+          "$ref": "#/$defs/AgentDefinitionSelectionReason"
+        }
+      },
+      "required": [
+        "name",
+        "catalogGeneration",
+        "contentDigest",
+        "selectionReason"
+      ],
+      "type": "object"
+    },
     "FrozenSkillActivation": {
       "additionalProperties": false,
       "description": "Durable exact Skill provenance frozen before a Turn is accepted.",
@@ -19231,6 +19412,9 @@
     "SessionSubscribeResult": {
       "description": "The aggregate Session port returned to product hosts.",
       "properties": {
+        "agentTree": {
+          "$ref": "#/$defs/AgentTreeProjection"
+        },
         "session": {
           "$ref": "#/$defs/Session"
         },
@@ -19250,7 +19434,8 @@
       "required": [
         "session",
         "updates",
-        "threadProjections"
+        "threadProjections",
+        "agentTree"
       ],
       "type": "object"
     },

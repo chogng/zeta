@@ -109,7 +109,7 @@ impl ToolService for FakeTools {
 }
 
 #[test]
-fn small_mcp_catalog_is_deferred_by_its_contribution_policy() {
+fn small_mcp_catalog_is_exposed_directly() {
     let combined = combine_tool_ports(vec![
         ToolPort::local(
             Arc::new(FakeTools::new(
@@ -141,7 +141,7 @@ fn small_mcp_catalog_is_deferred_by_its_contribution_policy() {
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["read_file", "tool_search"]
+        vec!["external_status", "read_file"]
     );
 }
 
@@ -175,7 +175,7 @@ fn one_tool_can_override_its_source_default_exposure() {
 }
 
 #[test]
-fn direct_tools_remain_visible_and_deferred_matches_load_after_search() {
+fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
     let combined = combine_tool_ports_at_generation(
         vec![
             ToolPort::local(
@@ -210,15 +210,14 @@ fn direct_tools_remain_visible_and_deferred_matches_load_after_search() {
             .iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["read_file", "tool_search"]
+        vec!["call_mcp_tool", "read_file", "search_tools"]
     );
 
     let search_call = ToolCall {
         id: zeta_protocol::ToolCallId::new("search-call").unwrap(),
-        name: ToolName::new("tool_search").unwrap(),
+        name: ToolName::new("search_tools").unwrap(),
         arguments: serde_json::json!({
-            "query": "external capability number 17",
-            "limit": 1
+            "query": "external capability number 17"
         }),
     };
     let review = combined.tools.prepare(&search_call).unwrap();
@@ -243,33 +242,19 @@ fn direct_tools_remain_visible_and_deferred_matches_load_after_search() {
     else {
         panic!("tool search must return a successful result");
     };
-    let activated = combined
+    let next = combined
         .tools
-        .activated_tool_names(&search_call, &output)
-        .unwrap()
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>();
-
-    let next = combined.tools.model_definitions(&activated).unwrap();
+        .model_definitions(&std::collections::BTreeSet::new())
+        .unwrap();
     assert_eq!(
         next.iter()
             .map(|definition| definition.name.as_str())
             .collect::<Vec<_>>(),
-        vec!["external_17", "read_file", "tool_search"]
+        vec!["call_mcp_tool", "read_file", "search_tools"]
     );
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&output).unwrap()["registry_generation"],
-        7
-    );
-
-    let mut forged = serde_json::from_str::<serde_json::Value>(&output).unwrap();
-    forged["registry_generation"] = serde_json::json!(8);
-    assert!(
-        combined
-            .tools
-            .activated_tool_names(&search_call, &forged.to_string())
-            .is_err()
-    );
+    let output = serde_json::from_str::<serde_json::Value>(&output).unwrap();
+    assert_eq!(output["tools"].as_array().unwrap().len(), 5);
+    assert_eq!(output["tools"][0]["name"], "external_17");
 }
 
 enum TestEmbeddingBehavior {
@@ -312,15 +297,24 @@ impl EmbeddingInvoker for TestEmbedding {
 }
 
 fn external_catalog() -> Vec<ToolPort> {
-    vec![ToolPort::mcp(
+    let mut port = ToolPort::dynamic(
         Arc::new(FakeTools::catalog(
             "external",
             21,
-            ActionSource::McpServer,
-            "user:mcp:test",
+            ActionSource::DynamicTool,
+            "test:dynamic",
         )),
         Arc::new(AskPolicy),
-    )]
+    );
+    for index in 0..21 {
+        port = port
+            .with_tool_exposure(
+                &ToolName::new(format!("external_{index}")).unwrap(),
+                ToolExposure::Deferred,
+            )
+            .unwrap();
+    }
+    vec![port]
 }
 
 fn try_execute_search(

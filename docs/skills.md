@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
-> 当前状态：Phase S0、S1 显式选择、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
+> 当前状态：Phase S0、S1 显式选择、可信 built-in metadata 自动 selector、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
 > 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
@@ -28,6 +28,7 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | --- | --- | --- |
 | 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
 | 用户输入 `/commit` 等 Skill 命令 | 接受 Turn 时完整读取对应 `SKILL.md` | 斜杠面板只持有元数据和精确 `SkillRef` |
+| Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文 | 歧义、低置信、user/Workspace/Plugin/Marketplace 来源都不自动激活 |
 | 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
 | 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
 | 正文引用参考资料 | 只在当前任务确实需要时读取 | 路径必须受来源目录约束 |
@@ -85,14 +86,15 @@ TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名�
 TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右切页和上下选择；只有 Manage
 中的动作修改后续 catalog eligibility。它是管理入口，不是日常执行 Skill 的二级 picker。
 
-当前显式激活链已经接通。协议输入为：
+当前显式和受信任自动激活链已经接通。显式协议输入为：
 
 ```rust
 UserInput::Skill { skill: SkillRef }
 ```
 
-Core 在接受 Turn 前调用 extension registry；`zeta-skills-extension` 从当前 enabled/compatible
-catalog 解析显式 `SkillRef`，完整读取受控根中的 `SKILL.md`，冻结
+Core 在接受 Turn 前调用 extension registry；`zeta-skills-extension` 先从当前 enabled/compatible
+catalog 解析显式 `SkillRef`，再对未显式选择的 `BuiltInVerified` 候选运行 metadata-only、唯一
+高置信 selector。两条路径都先得到 exact pinned `SkillRef`，再完整读取受控根中的 `SKILL.md`，冻结
 `SkillId + content digest + catalog generation + activation reason` 并持久化到 `TurnAccepted`。
 每个 model safe point，Core 再调用 `TurnInputContributor`，接收按 frozen digest 解析出的
 `PromptFragment` 并交给 context planner。客户端不能提交 raw path；文件缺失、换
@@ -387,8 +389,9 @@ enabled、compatible Skill 的稳定 source、name 与截断后的 description�
 `SkillRuntime` 的受控 catalog 完整读取并校验 `SKILL.md`，把正文与 content digest 作为普通工具
 结果返回。工具结果进入 durable Turn history，并参与下一次模型调用。
 
-这条路径没有后端关键词分类器：模型负责语义判断，runtime 负责目录边界、enablement、
-compatibility、exact identity 与文件安全。手动选择与模型选择复用同一个 catalog/loader，但持久化
+这条模型按需路径不依赖后端 selector：模型负责语义判断，runtime 负责目录边界、enablement、
+compatibility、exact identity 与文件安全。它与下一节的受信任 pre-Turn 自动 activation 是并行
+入口。手动选择与模型选择复用同一个 catalog/loader，但持久化
 形态不同：手动选择在 `TurnAccepted.activated_skills` 中预先冻结；模型选择发生在 tool loop 中，
 由 durable Tool Result 保存已读取内容。
 
@@ -396,22 +399,24 @@ compatibility、exact identity 与文件安全。手动选择与模型选择复�
 `zeta-skills-extension`，App Server 只把 executor 适配到已有 Extension ToolPort 与策略管线。
 因此该能力不依赖受信任 Workspace 的 shell/file tool，也不要求产品端了解 Skill 读取协议。
 
-### 8.3 后端自动候选检索（未实现，也不是主路径）
+### 8.3 后端自动 selector（已实现，严格受信任）
 
-如果未来 Skill 数量大到元数据目录也不能有效容纳，可以增加仅用于压缩候选集的检索层；它不是
-当前主选择机制，也不能替模型决定激活。候选检索仍不能把所有 Skill body 注入模型：
+当前 selector 在 host 内只接收最多 16 KiB 的当前 Turn 文本和 immutable catalog metadata，不把
+catalog 或候选正文写进 prompt。它只考虑 enabled、compatible 且 trust 为 `BuiltInVerified` 的
+Skill；user、Workspace、Plugin、Marketplace 等来源即使描述匹配也不会自动激活：
 
 ```text
 enabled catalog
 → compatibility/source/policy filter
-→ description + user intent retrieval
-→ bounded candidate shortlist
-→ deterministic threshold/ambiguity handling
-→ activate selected Skill
+→ name/description 与有界用户文本的 deterministic score
+→ 唯一高置信候选，否则不选择
+→ freeze pinned SkillRef
+→ load exact SKILL.md and persist automatic reason
 ```
 
-候选检索可以使用 lexical/keyword matcher；后续 embedding 必须可测、可解释并受候选数/延迟
-预算限制。检索结果仍进入同一个 metadata catalog，最终由模型调用 `skills-read`。
+当前实现是可测试的 lexical matcher，不做 embedding、网络检索或模型调用。显式 Skill 先解析，
+selector 会排除其 exact `SkillId`；每个 Turn 最多自动加入一个 Skill。catalog generation、正文
+digest 与 `Automatic` reason 和显式 activation 一样进入 durable `TurnAccepted`。
 
 规则：
 
@@ -419,7 +424,7 @@ enabled catalog
 - 低置信度时不自动激活；
 - 自动 Skill 数量有上限；
 - 互斥或顺序依赖在没有 accepted contract 前不通过自由文本猜测；
-- 候选检索结果不得被记录为“已激活”；只有成功读取才产生 Tool Result；
+- 只有 exact body 成功读取并冻结后才记录为“已激活”；候选分数本身不是 activation；
 - 用户明确说不使用某 Skill 时，当前 Turn 不得重新自动加入；
 - Skill 不能通过 description 要求自己在所有任务激活。
 
@@ -653,9 +658,9 @@ Skill catalog 是可重建 projection，不是 authority。Authority 分布为�
 - User/workspace Skill：显式 configured source；
 - current Turn selection：typed UserInput/command。
 
-Thread history 当前在 `TurnAccepted.activated_skills` 保留显式 activation 的 stable identity、
-digest、catalog generation 与 reason。模型按需选择不伪造该 pre-Turn activation：`skills-read`
-成功结果通过标准 Tool Call/Result 持久化；后端 automatic selector 仍未实现。
+Thread history 当前在 `TurnAccepted.activated_skills` 保留显式和 host automatic activation 的 stable
+identity、digest、catalog generation 与 reason。模型按需选择不伪造该 pre-Turn activation：
+`skills-read` 成功结果仍通过标准 Tool Call/Result 持久化。
 
 无论是否进入 Thread event，每次 model invocation 的 diagnostic/provenance snapshot 都应记录：
 
@@ -844,10 +849,21 @@ Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目�
 - 成功读取通过标准 durable Tool Call/Result 进入下一次模型调用；
 - 同一个 `skills-read` 使用 tagged target 区分完整说明与 package resource；resource target 必须提交
   exact source/name + pinned Skill digest 和完整 package-relative path；
-- 后端不实现 keyword classifier，也不把模型选择伪装为 pre-Turn activation。
+- 模型选择不被伪装为 pre-Turn activation；受信任 automatic selector 是独立、可解释入口。
 
 完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；restricted Workspace 下仍
 可使用受控的进程内 Skill reader，且 App Server 不拥有 Skill 选择或文件加载逻辑。
+
+### 阶段 S1.6：可信自动 selector（当前状态）
+
+- 只使用 immutable metadata 与有界 Turn 文本；
+- 只允许 `BuiltInVerified`、enabled、compatible 候选；
+- 唯一高置信才冻结 pinned `SkillRef`，歧义时不激活；
+- exact body 加载后持久化 digest、generation 与 `Automatic` reason；
+- 显式选择优先并从自动候选中排除。
+
+完成条件：catalog 增长不加载更多正文或线性扩写 selector prompt，任何非可信 Skill 都不能仅凭
+description 获得自动 activation。
 
 ### 阶段 S2：资源与脚本（资源读取、文本切片与 binary materialization 已实现）
 

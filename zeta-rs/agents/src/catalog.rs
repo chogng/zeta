@@ -4,6 +4,8 @@ use crate::model::AgentDefinitionDiagnostic;
 use crate::model::AgentDefinitionDiagnosticCode;
 use crate::model::AgentDefinitionFields;
 use serde::Deserialize;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
@@ -186,6 +188,7 @@ fn load_entry(
             return None;
         }
     };
+    let content_digest = format!("sha256:{:x}", Sha256::digest(&bytes));
     let text = match String::from_utf8(bytes) {
         Ok(text) => text,
         Err(_) => {
@@ -275,6 +278,7 @@ fn load_entry(
     Some(AgentDefinition::new(AgentDefinitionFields {
         name: frontmatter.name,
         description,
+        content_digest,
         relative_path,
         model,
         tools,

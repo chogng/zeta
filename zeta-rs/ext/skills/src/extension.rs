@@ -28,7 +28,7 @@ impl SkillActivationContributor for SkillRuntime {
         &self,
         input: SkillActivationContext<'_>,
     ) -> Result<Vec<FrozenSkillActivation>, ExtensionError> {
-        input
+        let mut activations = input
             .user_input()
             .iter()
             .filter_map(|item| match item {
@@ -44,7 +44,18 @@ impl SkillActivationContributor for SkillRuntime {
                     .map(|skill| skill.activation().clone())
                     .map_err(ExtensionError::new)
             })
-            .collect()
+            .collect::<Result<Vec<_>, _>>()?;
+        let excluded = activations
+            .iter()
+            .map(|activation| activation.id.clone())
+            .collect::<Vec<_>>();
+        if let Some(selected) = self
+            .select_automatic(input.user_input(), &excluded)
+            .map_err(ExtensionError::new)?
+        {
+            activations.push(selected.activation().clone());
+        }
+        Ok(activations)
     }
 }
 

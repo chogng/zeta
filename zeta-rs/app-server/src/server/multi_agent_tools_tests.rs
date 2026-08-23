@@ -12,8 +12,10 @@ use zeta_core::SequenceExpectation;
 use zeta_core::StartTurnRequest;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
+use zeta_protocol::AgentRoleSnapshot;
 use zeta_protocol::CommandId;
 use zeta_protocol::ContentPart;
+use zeta_protocol::DelegatedCapabilityScope;
 use zeta_protocol::InputItem;
 use zeta_protocol::ModelRequest;
 use zeta_protocol::ModelResponse;
@@ -150,6 +152,110 @@ fn wait_arguments_map_to_durable_all_any_and_quorum_policies() {
 }
 
 #[test]
+fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let sessions = Arc::new(SessionCoordinator::with_store(
+        Arc::new(InMemorySessionStore::default()),
+        threads,
+    ));
+    let coordinator = Arc::new(MultiAgentCoordinator::new(
+        Arc::clone(&sessions),
+        AgentTreeLimits::default(),
+    ));
+    let session = sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("timeout-session").unwrap(),
+            title: "timeout".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+    let parent = sessions
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("timeout-parent").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(1),
+            title: "parent".into(),
+        })
+        .unwrap();
+    let parent_turn = sessions
+        .start_turn(
+            &session.session_id,
+            &parent.thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("timeout-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "delegate".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let spawned = coordinator
+        .spawn(SpawnAgentRequest {
+            delegation_id: DelegationId::new("timeout-child").unwrap(),
+            session_id: session.session_id,
+            parent_thread_id: parent.thread_id.clone(),
+            parent_turn_id: parent_turn.turn_id,
+            task: DelegatedTask {
+                title: "child".into(),
+                instructions: "keep working".into(),
+            },
+            role: AgentRoleSnapshot {
+                name: "general".into(),
+                instructions: "Return one answer.".into(),
+                model: None,
+                definition: None,
+            },
+            inheritance: AgentContextMode::Fresh,
+            policy_ceiling: DelegatedPolicyCeiling {
+                policy_revision: "test-policy-v1".into(),
+            },
+            capability_scope: DelegatedCapabilityScope {
+                tools: Vec::new(),
+                skills: Vec::new(),
+            },
+        })
+        .unwrap();
+    let service = MultiAgentToolService::new(
+        Arc::clone(&coordinator),
+        Arc::clone(&sessions),
+        Arc::new(NoopTurnBackend),
+    );
+
+    let output = service
+        .wait_for_join(
+            &parent.thread_id,
+            AgentJoinId::new("timeout-join").unwrap(),
+            Some(vec![spawned.delegation_id]),
+            AgentJoinPolicy::All,
+            Duration::ZERO,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    let ToolExecutionOutput::Success(output) = output else {
+        panic!("wait timeout must return a successful waiting projection")
+    };
+    let output: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(output["status"], "waiting");
+    let parent = sessions.threads().read_thread(&parent.thread_id).unwrap();
+    assert_eq!(parent.agent_joins.len(), 1);
+    assert_eq!(
+        parent.agent_joins.values().next().unwrap().status,
+        AgentJoinStatus::Waiting
+    );
+}
+
+#[test]
 fn recovered_spawn_starts_a_new_child_turn_once() {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
@@ -209,6 +315,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
                 name: "general".into(),
                 instructions: "Return one concise answer.".into(),
                 model: None,
+                definition: None,
             },
             inheritance: AgentContextMode::Fresh,
             policy_ceiling: DelegatedPolicyCeiling {
