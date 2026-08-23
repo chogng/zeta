@@ -1245,6 +1245,75 @@ fn durable_projection_contains_messages_tools_and_session_identity() {
 }
 
 #[test]
+fn repeated_tool_failures_persist_one_reminder_and_recover_as_a_stable_failure() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let original = ThreadController::with_store(store.clone());
+    let thread = create_thread(&original, "tool repetition");
+    let turn = start_turn(&original, &thread, "tool-repetition");
+
+    for index in 1..=5 {
+        let call = original
+            .record_tool_call(
+                &thread,
+                &turn,
+                RecordToolCallRequest {
+                    tool_call_id: Some(ToolCallId::new(format!("repeat-{index}")).unwrap()),
+                    name: ToolName::new("search").unwrap(),
+                    arguments_json: if index % 2 == 0 {
+                        r#"{"limit":5,"query":"zeta"}"#.into()
+                    } else {
+                        r#"{"query":"zeta","limit":5}"#.into()
+                    },
+                    binding: None,
+                },
+            )
+            .unwrap();
+        let result = original
+            .record_tool_result(
+                &thread,
+                &turn,
+                RecordToolResultRequest {
+                    tool_call_id: call.tool_call_id,
+                    output: ToolCallOutput::Failure("search failed".into()),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            matches!(
+                result.item,
+                ThreadItem::ToolResult { ref text, .. }
+                    if text.contains(crate::tool_repetition::TOOL_REPETITION_REMINDER)
+            ),
+            index == 3
+        );
+    }
+
+    let snapshot = original.read_thread(&thread).unwrap();
+    assert_eq!(snapshot.turns[0].status, crate::TurnStatus::Running);
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| matches!(
+                item,
+                ThreadItem::ToolResult { text, .. }
+                    if text.contains(crate::tool_repetition::TOOL_REPETITION_REMINDER)
+            ))
+            .count(),
+        1
+    );
+
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(recovered.turns[0].status, crate::TurnStatus::Failed);
+    assert_eq!(
+        recovered.turns[0].failure.as_ref().map(|error| error.code),
+        Some(StableTurnErrorCode::ToolRepetition)
+    );
+}
+
+#[test]
 fn tool_image_content_is_prepared_before_it_becomes_durable() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = ThreadController::with_store(store.clone());

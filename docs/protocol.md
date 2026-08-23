@@ -591,7 +591,7 @@ zeta-rs/protocol/
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
 | waiting Turn lifecycle | 基础完成 | event/reducer/recovery 已实现；异步 Agent loop 的继续执行尚未实现 |
 | provider-independent model values | 基础完成 | provider adapters 已使用，tool name/call ID 已收敛 |
-| 稳定错误分类 | 部分具备 | 供应商上下文、认证、无效请求和无效响应已有持久化错误码；预算、工具重复等后续类别仍缺 |
+| 稳定错误分类 | 部分具备 | 供应商上下文、认证、无效请求、无效响应和工具重复已有持久化错误码；预算等后续类别仍缺 |
 | usage/compaction provenance | 部分具备 | checkpoint 有 source range/digest/revision；供应商溢出恢复有 durable Turn 绑定；usage 账本仍缺 |
 | ID validation | 已完成 | constructor 与 deserialize 都拒绝空的 canonical ID |
 | public API discipline | 已完成 | private modules、named exports 与 speculative envelope 清理已落地 |

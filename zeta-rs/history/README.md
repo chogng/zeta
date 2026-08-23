@@ -72,9 +72,9 @@ bazel test //zeta-rs/history:history-unit-tests
 
 ## 当前限制与演进
 
-当前新写入使用 schema version `7`，reader 仍接受 minimum version `1`；version 7 覆盖运行中
-`SteerTurn` 的 durable Item binding 与 backend delivery fact，version 6 覆盖 Turn 级供应商上下文
-溢出恢复 checkpoint，早期版本覆盖 Agent context seed、delegation、message/result facts、自动
+当前新写入使用 schema version `8`，reader 仍接受 minimum version `1`；version 8 覆盖稳定
+`ToolRepetition` Turn failure，version 7 覆盖运行中 `SteerTurn` 的 durable Item binding 与 backend
+delivery fact，version 6 覆盖 Turn 级供应商上下文溢出恢复 checkpoint，早期版本覆盖 Agent context seed、delegation、message/result facts、自动
 Skill activation command snapshot 和结构化工具绑定。本 crate
 只抽取已经在生产路径中使用的 Thread history record；Session envelope 仍由
 `zeta-session-store` 拥有。它没有照搬 Codex 尚无真实消费者的 `InitialHistory`、rollout JSONL

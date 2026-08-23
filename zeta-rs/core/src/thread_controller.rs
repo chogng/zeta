@@ -950,7 +950,7 @@ impl ThreadController {
         turn_id: &TurnId,
         request: RecordToolResultRequest,
     ) -> Result<RecordedToolResult, CoreError> {
-        let (text, content, is_error) = match request.output {
+        let (mut text, mut content, is_error) = match request.output {
             ToolCallOutput::Success(text) => (text, None, false),
             ToolCallOutput::Failure(text) => (text, None, true),
             ToolCallOutput::SuccessContent(mut content) => {
@@ -968,17 +968,39 @@ impl ThreadController {
                 (tool_content_preview(&content), Some(content), true)
             }
         };
-        let item = ThreadItem::ToolResult {
-            item_id: ItemId::new(self.next_identifier("item"))
-                .expect("generated Item ID is non-empty"),
-            turn_id: turn_id.clone(),
-            tool_call_id: request.tool_call_id,
-            text,
-            content,
-            is_error,
-        };
-        let sequence = self.record_item(thread_id, turn_id, item.clone())?;
-        Ok(RecordedToolResult { item, sequence })
+        let item_id =
+            ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty");
+        self.mutate_thread(thread_id, |snapshot| {
+            let failure_count = crate::tool_repetition::next_tool_failure_count(
+                &snapshot.items,
+                turn_id,
+                &request.tool_call_id,
+                is_error,
+            )?;
+            if failure_count == crate::tool_repetition::TOOL_REPETITION_REMINDER_THRESHOLD {
+                append_tool_repetition_reminder(&mut text, &mut content);
+            }
+            let item = ThreadItem::ToolResult {
+                item_id,
+                turn_id: turn_id.clone(),
+                tool_call_id: request.tool_call_id,
+                text,
+                content,
+                is_error,
+            };
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item: item.clone(),
+                }],
+            )?;
+            Ok(RecordedToolResult {
+                item,
+                sequence: snapshot.sequence,
+            })
+        })
     }
 
     pub fn fail_turn(
@@ -1132,6 +1154,24 @@ impl ThreadController {
         let mut snapshot = self.load_snapshot(thread_id)?;
         let mut recovery_events = Vec::new();
         for turn in snapshot.turns.clone() {
+            if !matches!(
+                turn.status,
+                crate::TurnStatus::Completed
+                    | crate::TurnStatus::Failed
+                    | crate::TurnStatus::Interrupted
+            ) && crate::tool_repetition::project_tool_failures(&snapshot.items, &turn.turn_id)?
+                .active()
+                .is_some_and(|streak| {
+                    streak.count >= crate::tool_repetition::TOOL_REPETITION_FAILURE_THRESHOLD
+                })
+            {
+                recovery_events.push(ThreadEvent::TurnFailed {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn.turn_id,
+                    error: StableTurnError::tool_repetition(),
+                });
+                continue;
+            }
             if !matches!(
                 turn.status,
                 crate::TurnStatus::Completed
@@ -1351,6 +1391,18 @@ fn tool_content_preview(content: &[ContentPart]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn append_tool_repetition_reminder(text: &mut String, content: &mut Option<Vec<ContentPart>>) {
+    if !text.trim().is_empty() {
+        text.push_str("\n\n");
+    }
+    text.push_str(crate::tool_repetition::TOOL_REPETITION_REMINDER);
+    if let Some(content) = content {
+        content.push(ContentPart::Text(
+            crate::tool_repetition::TOOL_REPETITION_REMINDER.into(),
+        ));
+    }
 }
 
 fn validate_command_id(command_id: &CommandId) -> Result<(), CoreError> {

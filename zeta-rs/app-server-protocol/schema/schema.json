@@ -19792,7 +19792,8 @@
         "invalidRequest",
         "invalidResponse",
         "completionPersistenceFailed",
-        "interactionDeadlineElapsed"
+        "interactionDeadlineElapsed",
+        "toolRepetition"
       ],
       "type": "string"
     },

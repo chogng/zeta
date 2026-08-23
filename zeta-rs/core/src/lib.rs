@@ -17,6 +17,7 @@ mod state;
 mod test_image;
 mod thread_controller;
 mod thread_reducer;
+mod tool_repetition;
 mod turn;
 
 pub use action_policy_service::{ActionPolicyService, durable_approval_request};

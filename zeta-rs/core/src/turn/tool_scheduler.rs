@@ -70,6 +70,15 @@ impl ToolScheduler {
                 .check()
                 .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
             let snapshot = self.threads.read_thread(thread_id)?;
+            if let Some(streak) =
+                crate::tool_repetition::project_tool_failures(&snapshot.items, turn_id)?.active()
+                && streak.count >= crate::tool_repetition::TOOL_REPETITION_FAILURE_THRESHOLD
+            {
+                return Err(CoreError::ToolRepetition(format!(
+                    "{} with arguments digest {} failed {} consecutive times",
+                    streak.tool_name, streak.arguments_digest, streak.count
+                )));
+            }
             let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
                 return Ok(ToolSchedulingProgress::Complete);
             };

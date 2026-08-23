@@ -502,6 +502,68 @@ fn executes_a_durable_tool_loop_before_the_next_model_invocation() {
 }
 
 #[test]
+fn repeated_identical_tool_failures_stop_at_five_with_a_stable_turn_error() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let mut responses = (1..=5)
+        .map(|index| {
+            Ok(ModelResponse {
+                output: vec![ResponseItem::ToolCall(ToolCall {
+                    id: ToolCallId::new(format!("repeat-{index}")).unwrap(),
+                    name: ToolName::new("weather").unwrap(),
+                    arguments: if index % 2 == 0 {
+                        json!({"unit": "c", "city": "Paris"})
+                    } else {
+                        json!({"city": "Paris", "unit": "c"})
+                    },
+                })],
+                usage: None,
+                stop_reason: StopReason::ToolUse,
+            })
+        })
+        .collect::<Vec<_>>();
+    responses.push(Ok(text_response("must not be invoked")));
+    let model = Arc::new(ScriptedModel::new(responses));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(FailingWeatherTool),
+        Arc::new(SandboxActionPolicyService),
+    );
+
+    let error = match executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()) {
+        Ok(_) => panic!("the fifth repeated failure must stop the Turn"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(error, CoreError::ToolRepetition(_)));
+    let requests = model.requests();
+    assert_eq!(requests.len(), 5);
+    assert!(requests[3].input.iter().any(|input| matches!(
+        input,
+        InputItem::ToolResult(result)
+            if result.content.iter().any(|content| matches!(
+                content,
+                ContentPart::Text(text)
+                    if text.contains(crate::tool_repetition::TOOL_REPETITION_REMINDER)
+            ))
+    )));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Failed);
+    assert_eq!(
+        snapshot.turns[0].failure.as_ref().map(|error| error.code),
+        Some(StableTurnErrorCode::ToolRepetition)
+    );
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| matches!(item, ThreadItem::ToolResult { is_error: true, .. }))
+            .count(),
+        5
+    );
+}
+
+#[test]
 fn rejects_a_model_tool_call_outside_the_invocation_capability_scope() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
@@ -1747,6 +1809,8 @@ impl ModelService for ScriptedModel {
 
 struct WeatherTool;
 
+struct FailingWeatherTool;
+
 struct DeferredWeatherTools;
 
 impl ToolService for DeferredWeatherTools {
@@ -1980,6 +2044,26 @@ impl ToolService for WeatherTool {
         assert!(matches!(authorization, ToolAuthorization::Sandboxed(_)));
         assert_eq!(call.arguments["city"], "Paris");
         Ok(ToolExecutionOutput::Success("sunny".into()))
+    }
+}
+
+impl ToolService for FailingWeatherTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        WeatherTool.definitions()
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        WeatherTool.prepare(call)
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        authorization: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        assert!(matches!(authorization, ToolAuthorization::Sandboxed(_)));
+        Ok(ToolExecutionOutput::Failure("weather unavailable".into()))
     }
 }
 

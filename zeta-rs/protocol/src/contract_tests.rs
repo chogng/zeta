@@ -8,6 +8,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
         StableTurnError::provider_auth(),
         StableTurnError::invalid_request(),
         StableTurnError::invalid_response(),
+        StableTurnError::tool_repetition(),
     ];
 
     assert_eq!(
@@ -20,6 +21,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
             json!("providerAuth"),
             json!("invalidRequest"),
             json!("invalidResponse"),
+            json!("toolRepetition"),
         ]
     );
 }

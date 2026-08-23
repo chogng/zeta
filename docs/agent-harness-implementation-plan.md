@@ -65,10 +65,10 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-101 | 已实现 | 运行中 steering | durable `ThreadCommand::SteerTurn`、`TurnSteered`/delivery facts、App Server `session/request::SteerTurn`、Desktop 运行中发送，以及 Codex exact `turn/steer` 转发 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复；未知委托结果不重放 |
 | AL-102 | 已实现 | Provider 错误分类 | 增加 `ContextOverflow`、`AuthFailed`、`InvalidRequest`、`InvalidResponse` 和对应 stable Turn error；各 Provider 从状态码和错误体映射 | 401/403 不重试；无效响应只重试一次；错误码跨 App Server 和 Desktop 保持稳定；原始错误只进入受控日志 |
 | AL-103 | 已实现 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | checkpoint 与本 Turn 的恢复标记原子提交后才发重试调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
-| AL-104 | 待构建 | 重复失败工具熔断 | 按“工具名 + canonical arguments digest”记录 Turn 内连续失败 | 第 3 次附加 reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；不增加固定 loop 次数上限 |
+| AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 待构建 | 交互错误 UI | Desktop 区分可重试、认证、上下文、预算和工具重复错误，并提供对应下一步 | UI 不从错误字符串推断类别；刷新和重连后展示与 canonical Thread 状态一致 |
 
-S1 顺序：AL-101、AL-102 与 AL-103 已完成；接下来构建 AL-104，最后接 AL-105。
+S1 顺序：AL-101 至 AL-104 已完成；接下来构建最后一项 AL-105。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -162,7 +162,7 @@ flowchart TD
 实际执行批次：
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
-2. 以已完成的 AL-101、AL-102、AL-103 为交互与失败语义基线，推进 AL-104，最后接 AL-105。
+2. 以已完成的 AL-101 至 AL-104 为交互与失败语义基线，推进 S1 最后一项 AL-105。
 3. S1 稳定后并行推进 S2、S3、S4；每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。

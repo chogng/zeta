@@ -66,6 +66,14 @@ impl StableTurnError {
             retryable: true,
         }
     }
+
+    pub fn tool_repetition() -> Self {
+        Self {
+            code: StableTurnErrorCode::ToolRepetition,
+            message: "The same failing tool call was repeated too many times".into(),
+            retryable: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -78,4 +86,5 @@ pub enum StableTurnErrorCode {
     InvalidResponse,
     CompletionPersistenceFailed,
     InteractionDeadlineElapsed,
+    ToolRepetition,
 }

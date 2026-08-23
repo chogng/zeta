@@ -1169,6 +1169,10 @@ impl ExecutionFailure {
                 error,
                 stable: StableTurnError::invalid_response(),
             },
+            error @ CoreError::ToolRepetition(_) => Self::Failed {
+                error,
+                stable: StableTurnError::tool_repetition(),
+            },
             _ => Self::model(error),
         }
     }

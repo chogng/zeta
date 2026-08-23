@@ -92,7 +92,7 @@
 | 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
 | TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
 | same-Turn steering + delegated delivery marker | 已实现 | `core/src/thread_controller/steering.rs`、`app-server/src/server/operations.rs`、`codex-app-server/src/turn_backend.rs` |
-| ToolScheduler：durable one-time approval、sandbox escalation、rejection circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs` |
+| ToolScheduler：durable one-time approval、sandbox escalation、rejection/repeated-failure circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs`、`core/src/tool_repetition.rs` |
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
 | `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
