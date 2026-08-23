@@ -99,6 +99,10 @@ export class ChatInputPart extends DisposableOwner {
 				this.submit(value, this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
 				return;
 			}
+			if (input.kind === "command" && input.binding.origin === "server") {
+				this.submit(value, this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+				return;
+			}
 			const skills = input.kind === "command" && input.binding.origin === "skill" ? [input.binding.skill] : undefined;
 			this.submit(value, this.delegate.send(value, skills));
 		}));

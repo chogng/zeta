@@ -35,6 +35,7 @@ pub struct ContextCompactionRequest {
     source_items: Vec<ThreadItem>,
     target_tokens: ContextTokenCount,
     generator_model: Option<ModelRef>,
+    retention_prompt: Option<String>,
 }
 
 impl ContextCompactionRequest {
@@ -49,7 +50,18 @@ impl ContextCompactionRequest {
                 FrozenModelSelection::ConfiguredDefault => None,
                 FrozenModelSelection::Selected(model) => Some(model.clone()),
             },
+            retention_prompt: None,
         }
+    }
+
+    pub(crate) fn from_manual_plan(
+        plan: &CompactionPlan,
+        model: &FrozenModelSelection,
+        retention_prompt: Option<String>,
+    ) -> Self {
+        let mut request = Self::from_plan(plan, model);
+        request.retention_prompt = retention_prompt;
+        request
     }
 
     pub const fn source_thread_sequence(&self) -> u64 {
@@ -74,6 +86,10 @@ impl ContextCompactionRequest {
 
     pub fn generator_model(&self) -> Option<&ModelRef> {
         self.generator_model.as_ref()
+    }
+
+    pub fn retention_prompt(&self) -> Option<&str> {
+        self.retention_prompt.as_deref()
     }
 
     fn model_selection(&self) -> ModelSelection<'_> {
@@ -161,6 +177,7 @@ impl ContextCompactionService for ModelContextCompactionService {
             request.covered,
             request.previous_checkpoint.as_ref(),
             &request.source_items,
+            request.retention_prompt.as_deref(),
         )
         .map_err(|error| {
             CoreError::Context(format!("failed to encode compaction source: {error}"))
@@ -230,8 +247,10 @@ pub(super) fn estimate_compaction_input(
     covered: ContextSourceRange,
     previous_checkpoint: Option<&ContextCheckpoint>,
     source_items: &[ThreadItem],
+    retention_prompt: Option<&str>,
 ) -> Result<ContextTokenCount, serde_json::Error> {
-    let input = encode_compaction_input(covered, previous_checkpoint, source_items)?;
+    let input =
+        encode_compaction_input(covered, previous_checkpoint, source_items, retention_prompt)?;
     let bytes = input.len().saturating_add(COMPACTION_PROMPT.body().len());
     let content_tokens = u32::try_from(bytes).unwrap_or(u32::MAX).saturating_add(3) / 4;
     Ok(ContextTokenCount::new(
@@ -243,6 +262,7 @@ fn encode_compaction_input(
     covered: ContextSourceRange,
     previous_checkpoint: Option<&ContextCheckpoint>,
     source_items: &[ThreadItem],
+    retention_prompt: Option<&str>,
 ) -> Result<String, serde_json::Error> {
     let source = serde_json::to_string_pretty(&serde_json::json!({
         "covered": covered,
@@ -254,5 +274,14 @@ fn encode_compaction_input(
         })),
         "items": source_items,
     }))?;
-    Ok(format!("{UNTRUSTED_SOURCE_PREAMBLE}\n\n{source}"))
+    let retention = retention_prompt
+        .map(|prompt| {
+            format!(
+                "Preserve the following user-requested details when they are supported by the source:\n{prompt}\n\n"
+            )
+        })
+        .unwrap_or_default();
+    Ok(format!(
+        "{retention}{UNTRUSTED_SOURCE_PREAMBLE}\n\n{source}"
+    ))
 }

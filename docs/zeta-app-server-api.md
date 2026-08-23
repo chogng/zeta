@@ -155,8 +155,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
   },
   "slashCommands": [
     {
-      "name": "diagnose",
-      "description": "inspect the current workspace",
+      "name": "compact",
+      "description": "Compact older conversation context",
       "argumentMode": "optional"
     }
   ]
@@ -166,7 +166,9 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 schema hash 不一致时客户端必须拒绝继续运行。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
-inline argument parsing；提交仍通过 `session/request` 的 `StartTurn.input`，并保留 `/name`、text/image 顺序。
+inline argument parsing；客户端必须按命令契约分发。Skill 和 server prompt command 通过
+`StartTurn.input` 保留 `/name`、text/image 顺序；内置 `/compact` 通过
+`session/request::CompactContext` 执行，不发送普通聊天文本。
 校验、local/server 合并与 Rust client 交互状态的 canonical owner 是
 [`zeta-slash-commands`](../zeta-rs/slash-commands/README.md)；App Server 只组合并发布 server snapshot。
 三种 client surface 的合并、执行与渲染边界见 [`slash-commands.md`](slash-commands.md)。
@@ -683,6 +685,28 @@ snapshot 均只保存 content digest 和验证后的媒体元数据。旧 `image
 
 `session/request` 的 `InterruptTurn` 同样携带 `commandId`、Session/Thread/Turn identity 与
 `expectedSequence`，成功返回新的 Thread sequence。
+
+`session/request` 的 `CompactContext` 创建独立压缩 Turn：
+
+```json
+{
+  "commandId": "command_compact_1",
+  "sessionId": "session_1",
+  "expectedSequence": 8,
+  "request": {
+    "type": "compactContext",
+    "threadId": "thread_1",
+    "retentionPrompt": "保留当前迁移方案和未完成测试"
+  }
+}
+```
+
+retention prompt 可省略；提供时 trim 后上限为 8 KiB，并与所选模型一起冻结到 durable command
+receipt。Thread 存在任何非终态 Turn 时请求被拒绝，压缩 Turn 不接受 steering。直接供应商路径只
+吸收最新 checkpoint 之后由完整 terminal Turn 和完整 Tool Call/Result 组组成的最老前缀；每批模型
+usage 和 verified checkpoint 都先持久化，再从新 snapshot 规划下一批。失败不会提交当前批次的
+半成品 checkpoint，相同 command replay 不会重复模型或后端调用。订阅模型的无提示请求转发
+upstream `thread/compact/start`；上游没有 retention prompt 字段，因此带提示的订阅请求明确失败。
 
 `session/request` 的 `ResolveInteraction` 携带同样的 aggregate identity、`commandId`、`expectedSequence`，
 以及 outstanding interaction 的 `requestId` 和 typed response。它只接受该 Turn 当前 pending

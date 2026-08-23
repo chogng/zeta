@@ -437,7 +437,26 @@ provider ContextOverflow
 
 若当前 Turn 之前没有可压缩历史，或压缩请求本身溢出，当前 Turn 直接以稳定 `contextOverflow` 失败，不进入递归压缩。
 
-### 8.4 恢复与失效
+### 8.4 手动压缩
+
+`/compact [保留提示]` 不是普通消息，也不复用正在运行的 Turn。App Server 通过 typed
+`SessionRequest::CompactContext` 创建独立的 `ThreadCommand::CompactContext` Turn，并把所选模型和
+经过大小校验的可选提示冻结在 command receipt 中。相同 command ID 与相同 payload 在恢复后返回
+原 Turn；不同 payload 冲突；Thread 上存在任何非终态 Turn 时拒绝开始，因此手动压缩不可 steering，
+也不会与模型或工具副作用竞态。
+
+本地执行器从最新 checkpoint 之后选择最老的完整 terminal durable 前缀。未完成 Turn、未配对的
+Tool Call/Result 组和压缩 Turn 自身都不进入 source；选择与普通压缩共用 bounded clone。Core-managed
+窗口会把过长 source 分批变成连续 verified checkpoint，每次模型 usage 都先写入 durable ledger，
+再提交 checkpoint 并从最新 snapshot 重规划。没有安全候选时 Turn 直接完成；生成、验证或 commit
+失败时当前批次不产生 checkpoint，Turn 以 canonical failure 出现在对话。
+
+可选保留提示作为 compaction model request 中独立于 untrusted durable source 的用户要求，不写成
+Thread 用户 Item，也不改变 `COMPACTION_PROMPT` revision 或 checkpoint source provenance。
+订阅后端对无提示请求调用 upstream `thread/compact/start`，压缩状态由远端 Thread 拥有；上游没有
+保留提示字段，因此带提示的订阅请求明确失败，不能静默忽略。
+
+### 8.5 恢复与失效
 
 以下情况会使 checkpoint commit 或 event replay 失败即关闭，损坏的摘要不会进入 projection：
 

@@ -369,6 +369,139 @@ impl ContextPlanner {
             },
         })
     }
+
+    pub(crate) fn prepare_manual_compaction(
+        input: &ContextInput,
+        retention_prompt: Option<&str>,
+    ) -> Result<CompactionPlan, ContextPreparationError> {
+        validate_shape(input)?;
+        let checkpoint = input.checkpoints().last().cloned();
+        let checkpoint_end = checkpoint
+            .as_ref()
+            .map_or(0, |checkpoint| checkpoint.covered.end_sequence);
+        let raw_items = input
+            .items()
+            .iter()
+            .filter(|item| {
+                input
+                    .item_sequence(item.item_id())
+                    .is_none_or(|sequence| sequence > checkpoint_end)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        validate_items(&raw_items)?;
+        let model_items = limit_model_input_items(&raw_items);
+        let groups = group_visible_items(&model_items);
+        let safe_groups = groups
+            .iter()
+            .take_while(|group| {
+                &group.turn_id != input.current_turn_id()
+                    && input.is_terminal_turn(&group.turn_id)
+                    && tool_group_is_complete(&group.items)
+            })
+            .collect::<Vec<_>>();
+        if safe_groups.is_empty() {
+            return Err(ContextPreparationError::NoCompactionCandidate);
+        }
+
+        let maximum_compaction_input = match input
+            .budget()
+            .resolve()
+            .map_err(|_| ContextPreparationError::InvalidBudget)?
+        {
+            ResolvedContextBudget::ProviderManaged => None,
+            ResolvedContextBudget::CoreManaged(budget) => Some(budget.maximum_compaction_input()),
+        };
+        let mut selected_groups = Vec::new();
+        let mut first_required = None;
+        for group in safe_groups {
+            let covered_end_sequence = group
+                .items
+                .iter()
+                .filter_map(|item| input.item_sequence(item.item_id()))
+                .max()
+                .unwrap_or(checkpoint_end);
+            let source_items = model_items
+                .iter()
+                .filter(|item| {
+                    input
+                        .item_sequence(item.item_id())
+                        .is_some_and(|sequence| sequence <= covered_end_sequence)
+                })
+                .cloned()
+                .collect::<Vec<_>>();
+            let required = estimate_compaction_input(
+                ContextSourceRange {
+                    start_sequence: 1,
+                    end_sequence: covered_end_sequence,
+                },
+                checkpoint.as_ref(),
+                &source_items,
+                retention_prompt,
+            )
+            .map_err(|error| {
+                ContextPreparationError::UnsupportedContextShape(format!(
+                    "failed to estimate manual context compaction input: {error}"
+                ))
+            })?;
+            first_required.get_or_insert(required);
+            if maximum_compaction_input.is_some_and(|available| required > available) {
+                break;
+            }
+            selected_groups.push(group);
+        }
+        if selected_groups.is_empty() {
+            return Err(ContextPreparationError::CompactionSourceTooLarge {
+                required: first_required.unwrap_or(ContextTokenCount::ZERO),
+                available: maximum_compaction_input.unwrap_or(ContextTokenCount::ZERO),
+            });
+        }
+
+        let covered_turns = selected_groups
+            .iter()
+            .map(|group| group.turn_id.clone())
+            .collect::<Vec<_>>();
+        let covered_end_sequence = selected_groups
+            .iter()
+            .flat_map(|group| group.items.iter())
+            .filter_map(|item| input.item_sequence(item.item_id()))
+            .max()
+            .unwrap_or(checkpoint_end);
+        let source_items = model_items
+            .iter()
+            .filter(|item| {
+                input
+                    .item_sequence(item.item_id())
+                    .is_some_and(|sequence| sequence <= covered_end_sequence)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let history_tokens =
+            estimate_checkpoint(checkpoint.as_ref()).saturating_add(estimate_items(&source_items));
+        if history_tokens.get() <= MIN_CHECKPOINT_TOKENS {
+            return Err(ContextPreparationError::NoCompactionCandidate);
+        }
+        let target_tokens = ContextTokenCount::new(
+            (history_tokens.get() / 4)
+                .clamp(MIN_CHECKPOINT_TOKENS, MAX_OVERFLOW_CHECKPOINT_TOKENS)
+                .min(history_tokens.get().saturating_sub(1)),
+        );
+        Ok(CompactionPlan {
+            source_thread_sequence: input.source_thread_sequence(),
+            covered_turns,
+            covered: ContextSourceRange {
+                start_sequence: 1,
+                end_sequence: covered_end_sequence,
+            },
+            previous_checkpoint: checkpoint,
+            source_items,
+            target_tokens,
+            budget: ContextBudgetReport::ProviderManaged {
+                estimated_input: history_tokens,
+                estimator_revision: ESTIMATOR_REVISION,
+            },
+        })
+    }
 }
 
 struct TurnGroup {
@@ -487,6 +620,24 @@ fn is_model_visible(item: &ThreadItem) -> bool {
     !matches!(item, ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. })
 }
 
+fn tool_group_is_complete(items: &[ThreadItem]) -> bool {
+    let calls = items
+        .iter()
+        .filter_map(|item| match item {
+            ThreadItem::ToolCall { tool_call_id, .. } => Some(tool_call_id),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let results = items
+        .iter()
+        .filter_map(|item| match item {
+            ThreadItem::ToolResult { tool_call_id, .. } => Some(tool_call_id),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    calls == results
+}
+
 fn compaction_prefix(groups: &[&TurnGroup], available: ContextTokenCount) -> Vec<TurnId> {
     let mut retained = ContextTokenCount::ZERO;
     let mut first_retained = groups.len();
@@ -517,11 +668,12 @@ fn bounded_compaction_prefix(
             start_sequence: 1,
             end_sequence: checkpoint_end,
         };
-        let required = estimate_compaction_input(covered, checkpoint, &[]).map_err(|error| {
-            ContextPreparationError::UnsupportedContextShape(format!(
-                "failed to estimate context compaction input: {error}"
-            ))
-        })?;
+        let required =
+            estimate_compaction_input(covered, checkpoint, &[], None).map_err(|error| {
+                ContextPreparationError::UnsupportedContextShape(format!(
+                    "failed to estimate context compaction input: {error}"
+                ))
+            })?;
         return if checkpoint_end > 0 && required <= available {
             Ok(Vec::new())
         } else {
@@ -562,6 +714,7 @@ fn bounded_compaction_prefix(
             },
             checkpoint,
             &source_items,
+            None,
         )
         .map_err(|error| {
             ContextPreparationError::UnsupportedContextShape(format!(

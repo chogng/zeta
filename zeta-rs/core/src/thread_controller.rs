@@ -109,6 +109,15 @@ pub struct StartShellTurnRequest {
     pub invocation: ShellTurnInvocation,
 }
 
+/// Client command that runs standalone manual context compaction without adding a user message.
+pub struct StartContextCompactionRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub model: Option<ModelRef>,
+    pub policy_revision: String,
+    pub retention_prompt: Option<String>,
+}
+
 pub struct CreateThreadRequest {
     pub session_id: SessionId,
     pub thread_id: ThreadId,
@@ -643,6 +652,105 @@ impl ThreadController {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
             });
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                &snapshot.thread_id,
+                events,
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(StartTurnResult {
+                turn_id,
+                sequence: snapshot.sequence,
+                disposition: StartTurnDisposition::Created,
+            })
+        })
+    }
+
+    pub fn start_context_compaction(
+        &self,
+        thread_id: &ThreadId,
+        request: StartContextCompactionRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        const MAX_RETENTION_PROMPT_BYTES: usize = 8 * 1024;
+
+        validate_command_id(&request.command_id)?;
+        validate_policy_revision(&request.policy_revision)?;
+        let retention_prompt = request
+            .retention_prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|prompt| !prompt.is_empty())
+            .map(str::to_owned);
+        if retention_prompt
+            .as_ref()
+            .is_some_and(|prompt| prompt.len() > MAX_RETENTION_PROMPT_BYTES)
+        {
+            return Err(CoreError::InvalidInput(format!(
+                "context compaction retention prompt exceeds {MAX_RETENTION_PROMPT_BYTES} bytes"
+            )));
+        }
+        let command = ThreadCommand::CompactContext {
+            model: request.model.clone(),
+            retention_prompt: retention_prompt.clone(),
+        };
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
+                    return Err(CoreError::Journal(
+                        "context compaction command has an invalid result".into(),
+                    ));
+                };
+                return Ok(StartTurnResult {
+                    turn_id: turn_id.clone(),
+                    sequence: existing.response_sequence,
+                    disposition: StartTurnDisposition::Replayed,
+                });
+            }
+            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            if snapshot.turns.iter().any(|turn| {
+                !matches!(
+                    turn.status,
+                    zeta_protocol::TurnStatus::Completed
+                        | zeta_protocol::TurnStatus::Failed
+                        | zeta_protocol::TurnStatus::Interrupted
+                )
+            }) {
+                return Err(CoreError::InvalidInput(
+                    "manual context compaction requires every existing Turn to be terminal".into(),
+                ));
+            }
+            let turn_id =
+                TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
+            let events = vec![
+                ThreadEvent::TurnAccepted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    policy_revision: request.policy_revision.clone(),
+                    approval_mode: ApprovalMode::AskPermissions,
+                    activated_skills: Vec::new(),
+                    model: request.model.clone(),
+                    resource_budget: None,
+                },
+                ThreadEvent::TurnStarted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                },
+            ];
             let (next_snapshot, batch) = self.project_batch(
                 Some(snapshot.clone()),
                 &snapshot.thread_id,

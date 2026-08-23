@@ -805,6 +805,69 @@ fn start_turn_replays_typed_command_without_creating_another_turn() {
 }
 
 #[test]
+fn context_compaction_command_is_frozen_and_replayed_without_another_turn() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "compact");
+    let history_turn = start_turn(&threads, &thread, "history");
+    threads
+        .complete_turn(&thread, &history_turn, "durable history".into())
+        .unwrap();
+    let request = || StartContextCompactionRequest {
+        command_id: CommandId::new("compact-command").unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        model: None,
+        policy_revision: "test-policy-v1".into(),
+        retention_prompt: Some("  preserve the deployment decision  ".into()),
+    };
+
+    let created = threads
+        .start_context_compaction(&thread, request())
+        .unwrap();
+    let recovered = ThreadController::with_store(store);
+    let replayed = recovered
+        .start_context_compaction(&thread, request())
+        .unwrap();
+    let snapshot = recovered.read_thread(&thread).unwrap();
+
+    assert_eq!(created.disposition, StartTurnDisposition::Created);
+    assert_eq!(replayed.disposition, StartTurnDisposition::Replayed);
+    assert_eq!(replayed.turn_id, created.turn_id);
+    assert_eq!(snapshot.turns.len(), 2);
+    assert!(matches!(
+        &snapshot.commands.last().unwrap().receipt.command,
+        zeta_protocol::ThreadCommand::CompactContext {
+            retention_prompt: Some(prompt),
+            ..
+        } if prompt == "preserve the deployment decision"
+    ));
+}
+
+#[test]
+fn context_compaction_rejects_a_nonterminal_existing_turn() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "compact");
+    start_turn(&threads, &thread, "active");
+
+    let error = match threads.start_context_compaction(
+        &thread,
+        StartContextCompactionRequest {
+            command_id: CommandId::new("compact-command").unwrap(),
+            expected_sequence: SequenceExpectation::Any,
+            model: None,
+            policy_revision: "test-policy-v1".into(),
+            retention_prompt: None,
+        },
+    ) {
+        Ok(_) => panic!("active Turn must prevent manual compaction"),
+        Err(error) => error,
+    };
+
+    assert!(matches!(error, CoreError::InvalidInput(message) if message.contains("terminal")));
+    assert_eq!(threads.read_thread(&thread).unwrap().turns.len(), 1);
+}
+
+#[test]
 fn shell_turn_atomically_persists_its_exact_command_and_tool_call() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread_id = create_thread(&threads, "shell");

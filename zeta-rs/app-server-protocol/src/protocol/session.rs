@@ -95,6 +95,12 @@ pub enum SessionRequest {
         command: String,
         working_directory: String,
     },
+    CompactContext {
+        thread_id: ThreadId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        retention_prompt: Option<String>,
+    },
     SteerTurn {
         thread_id: ThreadId,
         turn_id: TurnId,

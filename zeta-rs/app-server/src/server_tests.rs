@@ -1091,6 +1091,54 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
 }
 
 #[test]
+fn session_request_starts_and_replays_manual_context_compaction() {
+    let backend = Arc::new(CountingStartBackend::default());
+    let server = server().with_turn_backend(backend.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "compact-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "compact-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let request = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0","id":id,"method":"session/request",
+            "params":{
+                "commandId":"manual-compact",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{
+                    "type":"compactContext",
+                    "threadId":thread_id,
+                    "retentionPrompt":"preserve the deployment decision"
+                }
+            }
+        })
+    };
+
+    let started = call(&server, &mut connection, request(4));
+    let replayed = call(&server, &mut connection, request(5));
+    let protocol_thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&protocol_thread_id)
+        .unwrap();
+
+    assert_eq!(started["result"]["type"], "turn");
+    assert_eq!(replayed["result"], started["result"]);
+    assert_eq!(backend.starts.load(Ordering::Relaxed), 1);
+    assert_eq!(snapshot.turns.len(), 1);
+    assert!(matches!(
+        &snapshot.commands[0].receipt.command,
+        zeta_protocol::ThreadCommand::CompactContext {
+            retention_prompt: Some(prompt),
+            ..
+        } if prompt == "preserve the deployment decision"
+    ));
+}
+
+#[test]
 fn session_first_flow_exposes_canonical_session_and_thread_models() {
     let server = server();
     let mut connection = server.connection();
@@ -1567,6 +1615,30 @@ impl Drop for ReleaseSteeringModel {
 #[derive(Default)]
 struct FailingSteerBackend {
     steers: AtomicUsize,
+}
+
+#[derive(Default)]
+struct CountingStartBackend {
+    starts: AtomicUsize,
+}
+
+impl zeta_core::TurnExecutionBackend for CountingStartBackend {
+    fn start(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        self.starts.fetch_add(1, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn resume(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
 }
 
 impl zeta_core::TurnExecutionBackend for FailingSteerBackend {

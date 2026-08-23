@@ -311,7 +311,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 
 - **自动（已实现）**：估算历史超过 Core-managed input budget → 下一个 model safe point 先压缩、
   durable commit，再从新 snapshot 重规划；
-- **手动（Proposed）**：`/compact` 与用户保留提示尚未实现；
+- **手动（已实现）**：`/compact [保留提示]` 创建独立、不可 steering 的压缩 Turn；typed command receipt 冻结所选模型和可选提示，重复 command 只返回原 Turn；
 - **溢出恢复（已实现）**：provider `ContextOverflow` 会压缩全部可安全吸收的 terminal 历史前缀；checkpoint durable commit 后重试一次，当前 Turn 与未完成工具组不被吸收。
 
 ### 10.2 流程与精确规则
@@ -328,7 +328,13 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 - **失败路径**：空 summary、Tool Call、超目标 summary、source digest/Item/range 不一致或 store
   commit 失败都会失败即关闭；未 commit 的 summary 不进入 projection。
 
-热文件重注入和用户定向压缩属于 Proposed，当前不会在压缩过程中重新读取 Workspace 文件。
+手动压缩不会作为普通用户消息发送给模型。Desktop 对 server-owned `/compact` 走
+`SessionRequest::CompactContext`；Core 拒绝与任何非终态 Turn 并发，只选择最新 checkpoint 之后由完整
+terminal Turn 和完整 Tool Call/Result 组组成的最老前缀。可选保留提示只影响 summary 指令，不成为
+对话 Item。订阅模型的无提示压缩委托给 upstream `thread/compact/start`，远端 Thread 拥有其压缩状态；
+由于 upstream 方法没有保留提示字段，订阅路径收到带提示请求时明确失败，不静默丢弃提示。
+
+热文件重注入属于 Proposed，当前不会在压缩过程中重新读取 Workspace 文件。
 
 ### 10.3 窗口重建
 
@@ -434,7 +440,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding 且模型输入逐项限幅已接线；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan` 和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、durable compaction、模型调用 usage 账本及冻结 token/cost Turn 预算已实现；仍需预算校准、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | AL-204 手动压缩 |
+| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本及冻结 token/cost Turn 预算已实现；仍需预算校准和 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | AL-205 预算校准 |
 | M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |

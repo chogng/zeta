@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
+use crate::SlashCommandArgumentMode;
 use crate::SlashCommandDefinition;
 
 /// Declares which composition boundary contributed a command to one client catalog.
@@ -15,10 +16,21 @@ pub enum SlashCommandOrigin {
 ///
 /// Commands remain the canonical protocol model. Origin is catalog binding metadata and never
 /// creates a second command model.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SlashCommandCatalog {
     commands: Vec<SlashCommandDefinition>,
     origins: BTreeMap<String, SlashCommandOrigin>,
+}
+
+impl Default for SlashCommandCatalog {
+    fn default() -> Self {
+        Self::new([SlashCommandDefinition {
+            name: "compact".into(),
+            description: "Summarize conversation history to free context space".into(),
+            argument_mode: SlashCommandArgumentMode::Optional,
+        }])
+        .expect("built-in slash command definitions are valid")
+    }
 }
 
 impl SlashCommandCatalog {

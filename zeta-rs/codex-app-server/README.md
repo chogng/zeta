@@ -19,8 +19,9 @@ upstream redacted account projection; upstream error text and all credential fie
 `zeta-model-provider-config::STATIC_MODEL_CATALOG` owns the static subscription models exposed by
 Zeta. `CodexModelCatalog` remains an explicit adapter for callers that need the upstream account
 catalog, but the default product model list and Session selection do not use it as a health check.
-`CodexTurnDriver` exposes typed thread/Turn streaming, same-Turn steering, command and file-change
-approvals, structured user input, interruption, and exact once-only server-request resolution.
+`CodexTurnDriver` exposes typed thread/Turn streaming, same-Turn steering, manual thread compaction,
+command and file-change approvals, structured user input, interruption, and exact once-only
+server-request resolution.
 `CodexTurnExecutionBackend` implements Core's `TurnExecutionBackend`: Core remains authoritative for
 durable Thread state, interactions, cancellation, and terminal outcomes while Codex owns its remote
 agent loop. A remote thread binding, including its opaque Workspace authority scope, is persisted only
@@ -33,6 +34,12 @@ For steering, the backend waits until the local Turn has an exact active remote 
 route, then sends upstream `turn/steer` with `expectedTurnId`. App Server persists the local steer
 marker before this request and its delivery fact only after the matching upstream acknowledgement;
 an unknown transport/process outcome fails closed and is never automatically resent.
+
+For a standalone Zeta context-compaction Turn, the backend resolves the persisted remote thread and
+calls upstream `thread/compact/start`, then routes the matching upstream Turn events into the local
+terminal outcome. The remote Codex thread owns its compacted context, so Zeta does not fabricate a
+local checkpoint for this path. Upstream currently has no retention-prompt field; a subscription
+request carrying one fails explicitly instead of silently dropping user intent.
 
 ## Failure semantics
 

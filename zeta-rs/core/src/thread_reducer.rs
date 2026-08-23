@@ -511,6 +511,15 @@ pub fn reduce_thread_event(
                         && command_approval_mode == approval_mode
                         && activated_skills.is_empty()
                 }
+                ThreadCommand::CompactContext {
+                    model: command_model,
+                    ..
+                } => {
+                    command_model == model
+                        && resource_budget.is_none()
+                        && *approval_mode == ApprovalMode::AskPermissions
+                        && activated_skills.is_empty()
+                }
                 _ => false,
             };
             if !matching_start {

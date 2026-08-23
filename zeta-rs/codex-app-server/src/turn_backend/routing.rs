@@ -36,6 +36,7 @@ pub(super) fn pump_events(inner: Weak<BackendInner>, events: Receiver<CodexTurnE
                 Some(route) => (Some(route), Vec::new()),
                 None if state.orphans.len() < ORPHAN_CAPACITY => {
                     state.orphans.push_back(event.clone());
+                    inner.state_changed.notify_all();
                     (None, Vec::new())
                 }
                 None => {

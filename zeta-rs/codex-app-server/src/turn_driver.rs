@@ -376,6 +376,16 @@ impl CodexTurnDriver {
         parse_turn_id(&response)
     }
 
+    pub fn compact_thread(&self, thread_id: &CodexThreadId) -> Result<(), CodexTurnError> {
+        self.runtime
+            .request(
+                "thread/compact/start",
+                json!({ "threadId": thread_id.as_str() }),
+            )
+            .map_err(turn_process_error)?;
+        Ok(())
+    }
+
     /// Appends text input to the exact active upstream Turn.
     pub fn steer_turn(
         &self,

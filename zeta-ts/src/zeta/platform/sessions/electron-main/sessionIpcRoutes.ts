@@ -94,6 +94,11 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
 		}),
 		route({
+			channel: "zeta:turn:compact",
+			validate: turnCompactParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "compactContext", threadId: params.threadId, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
+		}),
+		route({
 			channel: "zeta:turn:steer",
 			validate: turnSteerParams,
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "steerTurn", threadId: params.threadId, turnId: params.turnId, input: params.input })).then(turnSteerResult),
@@ -240,6 +245,17 @@ function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
 			if (item.type !== "text") throw new Error(`input[${index}].type must be text`);
 			return { type: "text" as const, text: nonEmptyString(item.text, `input[${index}].text`) };
 		}),
+	};
+}
+
+function turnCompactParams(value: unknown): SessionOperationInput<"compactContext"> {
+	const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence"], ["retentionPrompt"]);
+	return {
+		commandId: nonEmptyString(params.commandId, "commandId"),
+		sessionId: nonEmptyString(params.sessionId, "sessionId"),
+		threadId: nonEmptyString(params.threadId, "threadId"),
+		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+		...(params.retentionPrompt === undefined ? {} : { retentionPrompt: string(params.retentionPrompt, "retentionPrompt") }),
 	};
 }
 

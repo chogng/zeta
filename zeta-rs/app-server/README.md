@@ -417,7 +417,7 @@ durable gap 和每个 child Thread 的 projection，并在同一 connection 上�
 `session/thread/update` child update delivery。
 `session/request` 是产品 mutation 的 canonical aggregate port：它携带一个 `CommandId`、Session
 sequence 和 typed `SessionRequest`，统一路由 Session lifecycle、child Thread lifecycle、Turn
-start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` 返回对应结果。
+start/compact/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` 返回对应结果。
 旧的独立 Session/Thread/Turn mutation methods 已从 registry 和 dispatcher 删除；所有 mutation
 都通过 `session/request`。Thread snapshot 和 gap 使用带 Session scope 的
 `session/thread/read` / `session/thread/subscribe`。这些订阅都是 connection-local delivery state；
@@ -431,6 +431,13 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 4. `start_turn` 使用 typed command ID + exact expected sequence；
 5. replay 在读取 mutable model/Skill authority 前校验 input、resource budget 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
+
+`session/request::CompactContext` 校验 Thread 归属和 active Session，读取当前所选模型，再创建独立的
+`ThreadCommand::CompactContext` Turn。可选 retention prompt 会 trim、限制为 8 KiB 并冻结在 command
+receipt；相同 command replay 返回原 Turn 且不再次启动 backend。Core 拒绝在 Thread 存在任何非终态
+Turn 时开始压缩。本地模型只压缩完整 terminal 前缀，通过 durable usage/checkpoint 后从新 snapshot
+继续分批；订阅模型的无提示压缩转发 upstream `thread/compact/start`，带提示因 upstream contract
+不支持而明确失败。Desktop 的 server `/compact` 直接走此 mutation，不发送普通聊天文本。
 
 `session/request::SteerTurn` 只接受当前 Running、WaitingForApproval 或 WaitingForUserInput Turn。
 Core 先把输入 Item、`TurnSteered` 与 exact command receipt 原子提交；App Server 随后调用当前
@@ -792,6 +799,7 @@ bazel test //zeta-rs/app-server:app-server-unit-tests
 [`docs/typst.md`](../../docs/typst.md)。
 
 测试覆盖初始化/请求 ID、Session 优先流程、命令重放/冲突、分叉谱系、Turn 重放/模型只调用一次、
+手动压缩的独立 Turn/replay/backend 单次启动、
 多连接更新、重连后的持久化缺口、有界通知 overflow、连接拥有的资源、配置命令、owner-directed
 交互/批准解决、断连重选与 deadline、
 先响应后通知、模型配置安全点、

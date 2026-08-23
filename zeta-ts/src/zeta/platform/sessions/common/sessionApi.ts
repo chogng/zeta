@@ -66,6 +66,7 @@ export interface IThreadApi {
 
 export interface ITurnApi {
 	start(params: SessionOperationInput<"startTurn">): Promise<TurnStartResult>;
+	compact(params: SessionOperationInput<"compactContext">): Promise<TurnStartResult>;
 	steer(params: SessionOperationInput<"steerTurn">): Promise<TurnSteerResult>;
 	interrupt(params: SessionOperationInput<"interruptTurn">): Promise<TurnInterruptResult>;
 	resolveInteraction(params: SessionOperationInput<"resolveInteraction">): Promise<TurnInteractionResolveResult>;

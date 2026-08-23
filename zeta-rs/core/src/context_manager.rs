@@ -35,6 +35,17 @@ impl ContextManager {
         Ok(plan)
     }
 
+    pub(crate) fn prepare_manual_compaction(
+        &mut self,
+        input: &ContextInput,
+        retention_prompt: Option<&str>,
+    ) -> Result<CompactionPlan, ContextPreparationError> {
+        self.validate_sequence(input)?;
+        let plan = ContextPlanner::prepare_manual_compaction(input, retention_prompt)?;
+        self.observed_thread_sequence = input.source_thread_sequence();
+        Ok(plan)
+    }
+
     fn validate_sequence(&self, input: &ContextInput) -> Result<(), ContextPreparationError> {
         if input.source_thread_sequence() < self.observed_thread_sequence {
             return Err(ContextPreparationError::UnsupportedContextShape(format!(

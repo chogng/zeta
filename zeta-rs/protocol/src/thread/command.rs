@@ -31,6 +31,14 @@ pub enum ThreadCommand {
         #[serde(default)]
         approval_mode: ApprovalMode,
     },
+    CompactContext {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        retention_prompt: Option<String>,
+    },
     InterruptTurn {
         turn_id: TurnId,
     },

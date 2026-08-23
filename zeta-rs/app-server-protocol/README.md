@@ -251,11 +251,15 @@ FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connecti
   `image { url }` 或 `skill { skill: SkillRef }`；图片在进入 wire contract 前必须已经从本地路径
   规范化为 HTTP(S)/data URL，Skill 只能携带 source-qualified ID 与 version selector，不能携带
   raw filesystem path。
+- `SessionRequest::CompactContext` 创建独立的压缩 Turn，并携带可选 retention prompt；它不是
+  `StartTurn.input`，也不能与 Thread 上的非终态 Turn 并发。prompt 在 Core command receipt 中冻结，
+  command replay 不得重新触发压缩后端。
 - `ProviderConfigDto.model_context` 是按模型 ID 索引的 context-window metadata，供 Core 决定
   是否启用 deterministic budget/compaction；它不改变 endpoint normalization。
 - `InitializeResult.slash_commands` 是 server composition 在 handshake 时冻结的完整动态命令
-  snapshot；每项声明 canonical name、description 与 inline argument mode。动态命令提交仍是
-  普通 ordered Turn input，不引入第二套 command RPC。
+  snapshot；每项声明 canonical name、description 与 inline argument mode。client 必须按命令契约
+  分发：Skill 和 server prompt command 进入普通 ordered Turn input，内置 `/compact` 进入
+  `SessionRequest::CompactContext`，不能只按 origin 猜测统一分发。
 - Resource chunk 的 `data_base64` 是标准 Base64，`decoded_length` 是原始 bytes 数，最大 chunk
   262,144 bytes。
 - Terminal raw output 使用 `TerminalOutputChunk.data_base64`；sequence 字段在 Rust 使用 `u64`，

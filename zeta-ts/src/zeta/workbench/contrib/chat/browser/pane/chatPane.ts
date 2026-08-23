@@ -39,6 +39,7 @@ export class ChatPane extends DisposableOwner {
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, skills) => this.send(text, skills),
 			executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
+			executeServerCommand: (invocation) => this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),

@@ -1,7 +1,8 @@
 use crate::{
     CoreError, CreateAgentThreadRequest, CreateThreadRequest, LeaseGuard, SessionCommandResult,
-    SessionSnapshot, StartShellTurnRequest, StartTurnRequest, StartTurnResult, SteerTurnRequest,
-    SteerTurnResult, ThreadController, WriterLease, reduce_session_event,
+    SessionSnapshot, StartContextCompactionRequest, StartShellTurnRequest, StartTurnRequest,
+    StartTurnResult, SteerTurnRequest, SteerTurnResult, ThreadController, WriterLease,
+    reduce_session_event,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -162,6 +163,21 @@ impl SessionCoordinator {
             .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
         self.validate_active_thread(&sessions, session_id, thread_id)?;
         self.threads.start_turn(thread_id, request)
+    }
+
+    /// Starts standalone context compaction while the owning Session and membership are active.
+    pub fn start_context_compaction(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        request: StartContextCompactionRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
+        self.validate_active_thread(&sessions, session_id, thread_id)?;
+        self.threads.start_context_compaction(thread_id, request)
     }
 
     /// Starts a shell Turn only while the owning Session and membership are active.

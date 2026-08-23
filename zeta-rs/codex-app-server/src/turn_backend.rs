@@ -43,6 +43,7 @@ use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::TurnExecutionBinding;
@@ -171,16 +172,44 @@ impl CodexTurnExecutionBackend {
                 "Codex backend can execute only a running Turn".into(),
             ));
         }
-        let prompt = turn_prompt(&snapshot.items, turn_id)?;
+        let compaction_retention = context_compaction_retention(&snapshot, turn_id);
+        let prompt = match &compaction_retention {
+            Some(_) => None,
+            None => Some(turn_prompt(&snapshot.items, turn_id)?),
+        };
+        if compaction_retention
+            .as_ref()
+            .is_some_and(|retention| retention.is_some())
+        {
+            return Err(CoreError::Execution(
+                "Codex subscription context compaction does not support a retention prompt".into(),
+            ));
+        }
         let workspace = self.inner.options.workspace.current_workspace()?;
         validate_workspace(&workspace)?;
         let remote_thread = self.remote_thread(thread_id, turn.model.as_ref(), &workspace)?;
         execution.check_current()?;
-        let remote_turn = self
-            .inner
-            .driver
-            .start_turn(&StartCodexTurn::text(remote_thread.clone(), prompt).map_err(codex_error)?)
-            .map_err(codex_error)?;
+        let remote_turn = match compaction_retention {
+            Some(Some(_)) => unreachable!("retention prompt is rejected before remote execution"),
+            Some(None) => {
+                self.inner
+                    .driver
+                    .compact_thread(&remote_thread)
+                    .map_err(codex_error)?;
+                self.await_compaction_started(&remote_thread, execution)?
+            }
+            None => self
+                .inner
+                .driver
+                .start_turn(
+                    &StartCodexTurn::text(
+                        remote_thread.clone(),
+                        prompt.expect("ordinary Codex Turn has a prompt"),
+                    )
+                    .map_err(codex_error)?,
+                )
+                .map_err(codex_error)?,
+        };
         let key = RouteKey {
             thread_id: remote_thread,
             turn_id: remote_turn.clone(),
@@ -581,6 +610,43 @@ impl CodexTurnExecutionBackend {
         Ok(receiver)
     }
 
+    fn await_compaction_started(
+        &self,
+        thread_id: &CodexThreadId,
+        execution: &ThreadExecutionContext,
+    ) -> Result<CodexTurnId, CoreError> {
+        let mut state = self.inner.state.lock().map_err(state_error)?;
+        loop {
+            execution.check_current()?;
+            if state.runtime_closed {
+                return Err(CoreError::Execution(
+                    "Codex context compaction event runtime is closed".into(),
+                ));
+            }
+            if let Some(index) = state.orphans.iter().position(|event| {
+                matches!(
+                    event,
+                    CodexTurnEvent::Started {
+                        thread_id: event_thread_id,
+                        ..
+                    } if event_thread_id == thread_id
+                )
+            }) {
+                let Some(CodexTurnEvent::Started { turn_id, .. }) = state.orphans.remove(index)
+                else {
+                    unreachable!("matched orphan is a Codex Turn start")
+                };
+                return Ok(turn_id);
+            }
+            let (next, _) = self
+                .inner
+                .state_changed
+                .wait_timeout(state, EVENT_POLL_INTERVAL)
+                .map_err(state_error)?;
+            state = next;
+        }
+    }
+
     fn unregister_route(&self, key: &RouteKey) {
         if let Ok(mut state) = self.inner.state.lock() {
             state.routes.remove(key);
@@ -853,6 +919,27 @@ fn turn_prompt(items: &[ThreadItem], turn_id: &TurnId) -> Result<String, CoreErr
     } else {
         Ok(prompt)
     }
+}
+
+fn context_compaction_retention(
+    snapshot: &zeta_core::ThreadSnapshot,
+    turn_id: &TurnId,
+) -> Option<Option<String>> {
+    snapshot.commands.iter().find_map(|command| {
+        matches!(
+            &command.result,
+            zeta_core::ThreadCommandResult::TurnAccepted {
+                turn_id: command_turn_id,
+            } if command_turn_id == turn_id
+        )
+        .then(|| match &command.receipt.command {
+            ThreadCommand::CompactContext {
+                retention_prompt, ..
+            } => Some(retention_prompt.clone()),
+            _ => None,
+        })
+        .flatten()
+    })
 }
 
 fn validate_workspace(workspace: &CodexTurnWorkspace) -> Result<(), CoreError> {

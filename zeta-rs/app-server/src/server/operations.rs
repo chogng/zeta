@@ -35,9 +35,9 @@ use zeta_core::{
     ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
     RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
-    SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
-    StartTurnRequest, SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend,
-    TurnStatus,
+    SetSessionModelRequest, ShellTurnInvocation, StartContextCompactionRequest,
+    StartShellTurnRequest, StartTurnDisposition, StartTurnRequest, SteerTurnDisposition,
+    SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
@@ -449,6 +449,12 @@ impl AppServer {
                 command,
                 working_directory,
             )?)),
+            SessionRequest::CompactContext {
+                thread_id,
+                retention_prompt,
+            } => result(&SessionRequestResult::Turn(
+                self.start_context_compaction_request(mutation, thread_id, retention_prompt)?,
+            )),
             SessionRequest::SteerTurn {
                 thread_id,
                 turn_id,
@@ -981,6 +987,61 @@ impl AppServer {
             .map_err(core_error)?;
         Ok(TurnStartResult {
             turn_id,
+            sequence: start.sequence,
+        })
+    }
+
+    fn start_context_compaction_request(
+        &self,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+        retention_prompt: Option<String>,
+    ) -> Result<TurnStartResult, RpcError> {
+        let thread = self.read_session_thread(&mutation.session_id, &thread_id)?;
+        let session = self
+            .sessions
+            .read_session(&mutation.session_id)
+            .map_err(core_error)?;
+        if session.status != SessionStatus::Active {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
+        let model = match session.model {
+            Some(model) => Some(model),
+            None => self
+                .model_catalog
+                .configured_default()
+                .map_err(core_error)?,
+        };
+        let turn_executor = self.turn_executor_snapshot();
+        let start = self
+            .sessions
+            .start_context_compaction(
+                &mutation.session_id,
+                &thread_id,
+                StartContextCompactionRequest {
+                    command_id: mutation.command_id,
+                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                    model,
+                    policy_revision: turn_executor.policy_revision(),
+                    retention_prompt,
+                },
+            )
+            .map_err(core_error)?;
+        if start.disposition == StartTurnDisposition::Replayed {
+            return Ok(TurnStartResult {
+                turn_id: start.turn_id,
+                sequence: start.sequence,
+            });
+        }
+        self.notify_thread_updates(&thread_id, thread.sequence)?;
+        self.turn_backend
+            .start(&thread_id, &start.turn_id)
+            .map_err(core_error)?;
+        Ok(TurnStartResult {
+            turn_id: start.turn_id,
             sequence: start.sequence,
         })
     }

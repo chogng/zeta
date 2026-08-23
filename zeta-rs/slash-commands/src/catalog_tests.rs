@@ -11,6 +11,19 @@ fn command(name: &str) -> SlashCommandDefinition {
 }
 
 #[test]
+fn default_catalog_advertises_manual_context_compaction() {
+    let catalog = SlashCommandCatalog::default();
+
+    assert_eq!(catalog.commands().len(), 1);
+    assert_eq!(catalog.commands()[0].name, "compact");
+    assert_eq!(
+        catalog.commands()[0].argument_mode,
+        SlashCommandArgumentMode::Optional
+    );
+    assert_eq!(catalog.origin("compact"), Some(SlashCommandOrigin::Server));
+}
+
+#[test]
 fn catalog_preserves_local_then_server_order_and_origin() {
     let catalog = SlashCommandCatalog::with_local_and_server(
         [command("model")],

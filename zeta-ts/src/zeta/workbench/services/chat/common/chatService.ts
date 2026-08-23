@@ -145,6 +145,7 @@ export interface ThreadSubscription {
 }
 
 export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly skills?: readonly SkillReference[]; readonly resourceBudget?: TurnResourceBudget }
+export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
 export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
@@ -166,6 +167,7 @@ export interface IChatService {
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
+	compactContext(options: CompactContextOptions): Promise<void>;
 	steerTurn(options: SteerTurnOptions): Promise<void>;
 	interruptTurn(options: InterruptTurnOptions): Promise<void>;
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;

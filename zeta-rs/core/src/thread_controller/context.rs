@@ -8,11 +8,13 @@ use crate::context::ContextInput;
 use crate::context::ContextOverflowRecoveryPreparation;
 use crate::context::ContextPreparation;
 use crate::context::FrozenModelSelection;
+use crate::context::ManualContextCompactionPreparation;
 use crate::context::ModelInvocationPreparation;
 use crate::context::ModelInvocationSnapshot;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextCheckpointId;
 use zeta_protocol::ContextCheckpointVerification;
+use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
@@ -154,6 +156,78 @@ impl ThreadController {
                 Err(error) => return Err(CoreError::Context(error.to_string())),
             };
             Ok(ContextOverflowRecoveryPreparation::NeedsCompaction { model, plan })
+        })
+    }
+
+    pub(crate) fn prepare_manual_context_compaction(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        budget: ContextBudget,
+    ) -> Result<ManualContextCompactionPreparation, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let turn = loaded
+                .snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != zeta_protocol::TurnStatus::Running {
+                return Err(CoreError::InvalidInput(
+                    "manual context compaction requires a running Turn".into(),
+                ));
+            }
+            let command = loaded
+                .snapshot
+                .commands
+                .iter()
+                .find(|command| {
+                    matches!(
+                        &command.result,
+                        crate::ThreadCommandResult::TurnAccepted {
+                            turn_id: command_turn_id,
+                        } if command_turn_id == turn_id
+                    )
+                })
+                .ok_or_else(|| {
+                    CoreError::Journal(
+                        "manual context compaction Turn has no command receipt".into(),
+                    )
+                })?;
+            let ThreadCommand::CompactContext {
+                model,
+                retention_prompt,
+            } = &command.receipt.command
+            else {
+                return Err(CoreError::InvalidInput(
+                    "Turn is not a manual context compaction command".into(),
+                ));
+            };
+            let frozen_model = match model {
+                Some(model) => FrozenModelSelection::Selected(model.clone()),
+                None => FrozenModelSelection::ConfiguredDefault,
+            };
+            let input = ContextInput::new(
+                &loaded.snapshot,
+                turn_id.clone(),
+                Vec::new(),
+                Vec::new(),
+                budget,
+            );
+            match loaded
+                .context
+                .prepare_manual_compaction(&input, retention_prompt.as_deref())
+            {
+                Ok(plan) => Ok(ManualContextCompactionPreparation::NeedsCompaction {
+                    model: frozen_model,
+                    retention_prompt: retention_prompt.clone(),
+                    plan,
+                }),
+                Err(crate::context::ContextPreparationError::NoCompactionCandidate) => {
+                    Ok(ManualContextCompactionPreparation::Complete)
+                }
+                Err(error) => Err(CoreError::Context(error.to_string())),
+            }
         })
     }
 

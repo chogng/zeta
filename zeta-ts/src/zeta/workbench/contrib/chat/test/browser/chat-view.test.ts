@@ -1346,6 +1346,26 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 	}]);
 });
 
+test("ChatPaneModel dispatches compact as a standalone server command", async () => {
+	const activeSession = session("session-1", "thread-1");
+	const fake = fakeApi({ sessions: [activeSession], thread: () => thread("previous answer") });
+	using chat = createChatService(fake.api);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	await model.initialize();
+
+	await model.executeServerCommand("compact", "preserve the deployment decision");
+
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.deepEqual(fake.turnCompactRequests, [{
+		commandId: fake.turnCompactRequests[0]?.commandId,
+		sessionId: "session-1",
+		threadId: "thread-1",
+		expectedSequence: 4,
+		retentionPrompt: "preserve the deployment decision",
+	}]);
+});
+
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
 	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
 	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
@@ -1373,6 +1393,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
 	readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
 	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
 	readonly emit: (notification: ServerNotification) => void;
@@ -1386,6 +1407,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
 	const setModelRequests: SessionOperationInput<"setModel">[] = [];
 	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
 	const currentThread = () => options.thread?.() ?? thread();
@@ -1479,6 +1501,10 @@ function fakeApi(options: FakeOptions = {}): {
 				turnStartRequests.push(params);
 				return { turnId: "turn-started", sequence: 2 };
 			},
+			compact: async (params: SessionOperationInput<"compactContext">) => {
+				turnCompactRequests.push(params);
+				return { turnId: "turn-compact", sequence: params.expectedSequence + 2 };
+			},
 			steer: async (params: SessionOperationInput<"steerTurn">) => {
 				turnSteerRequests.push(params);
 				return { turnId: params.turnId, sequence: params.expectedSequence + 2 };
@@ -1501,6 +1527,7 @@ function fakeApi(options: FakeOptions = {}): {
 		createThreadRequests,
 		setModelRequests,
 		turnStartRequests,
+		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
 		emit: (notification) => {

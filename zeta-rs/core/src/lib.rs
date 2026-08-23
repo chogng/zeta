@@ -107,6 +107,7 @@ pub use thread_controller::RequestedTurnInteraction;
 pub use thread_controller::ResolveTurnInteractionDisposition;
 pub use thread_controller::ResolveTurnInteractionRequest;
 pub use thread_controller::ResolveTurnInteractionResult;
+pub use thread_controller::StartContextCompactionRequest;
 pub use thread_controller::StartTurnDisposition;
 pub use thread_controller::StartTurnResult;
 pub use thread_controller::SteerTurnDisposition;

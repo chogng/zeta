@@ -126,6 +126,7 @@ function unavailableChatService(): IChatService {
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,
 		startTurn: () => pending as Promise<void>,
+		compactContext: () => pending as Promise<void>,
 		steerTurn: () => pending as Promise<void>,
 		interruptTurn: () => pending as Promise<void>,
 		resolveInteraction: () => pending as Promise<void>,

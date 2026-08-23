@@ -26,6 +26,8 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 ## 2. 公共契约
 
 - `SlashCommandCatalog::new` 构造 server-only snapshot；
+- `SlashCommandCatalog::default` 构造包含 `/compact` 的内置 server snapshot；该命令允许可选 inline
+  保留提示，具体执行由产品 adapter 绑定到 typed context-compaction request；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
 - `SlashCommandCatalog::with_local_server_and_skills` 在同一 snapshot 末尾追加 Skill command definition，
   并保留独立 `Skill` origin；调用方继续拥有 exact `SkillRef` binding；
@@ -69,6 +71,9 @@ Catalog validation 是全有或全无；失败时不发布部分 snapshot。`Sla
 
 Adapter 必须把完整 catalog 一次性交给 `set_catalog`，不能逐项修改内部列表；提交时必须使用同一
 state/catalog 解析，避免展示了一个命令却由另一套 parser 拒绝。
+Server origin 只表示命令由 server 声明，不决定统一的提交方式；adapter 必须按 command name 的
+产品契约执行。内置 `/compact` 必须调用 `CompactContext`，不得进入普通 `StartTurn`；其他 server
+prompt command 可以继续提交 unchanged invocation text。
 
 ## 5. 测试与修改影响
 

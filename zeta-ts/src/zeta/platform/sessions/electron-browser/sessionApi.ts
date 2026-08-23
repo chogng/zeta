@@ -34,6 +34,7 @@ export function createThreadApi(): IThreadApi {
 export function createTurnApi(): ITurnApi {
 	return {
 		start: (params) => invoke<TurnStartResult>("zeta:turn:start", params),
+		compact: (params) => invoke<TurnStartResult>("zeta:turn:compact", params),
 		steer: (params) => invoke<TurnSteerResult>("zeta:turn:steer", params),
 		interrupt: (params) => invoke<TurnInterruptResult>("zeta:turn:interrupt", params),
 		resolveInteraction: (params) => invoke<TurnInteractionResolveResult>("zeta:turn:interaction:resolve", params),

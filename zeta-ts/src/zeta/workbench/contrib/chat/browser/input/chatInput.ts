@@ -9,6 +9,11 @@ export interface ChatInputCommandInvocation {
 	readonly argumentsText: string;
 }
 
+export interface ChatInputServerCommandInvocation {
+	readonly name: string;
+	readonly argumentsText: string;
+}
+
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
 	readonly phase: ChatInputPhase;
@@ -25,6 +30,7 @@ export interface ChatInputState {
 export interface ChatInputDelegate {
 	send(text: string, skills?: readonly SkillReference[]): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
+	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
 	resolveInteraction(response: AgentResponse): Promise<void>;

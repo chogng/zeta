@@ -25,6 +25,7 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 App Server 当前在 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的
 local commands 合并。命令定义、名称冲突、补全和提交解析属于 Slash Commands；列表组合、跨来源
 匹配和面板选择属于 Slash Launcher；行布局、DOM/WGPU/Ratatui 绘制和平台输入事件仍留在各 renderer。
+默认 server snapshot 包含 `/compact`，允许可选 inline 保留提示。
 
 ## Launcher 分层
 
@@ -63,7 +64,7 @@ App Server composition
   → renderer projection
   → activation
       local  → client product command
-      server → unchanged /name text in session/request StartTurn.input
+      server → name-specific binding（`/compact` → CompactContext；prompt command → StartTurn text）
       skill  → exact SkillRef + unchanged /name text in session/request StartTurn.input
 ```
 
@@ -72,8 +73,11 @@ model。`origin`、Workbench `actionId`、TUI dispatcher identity 和 Skill `Ski
 分离的 client binding，不能包装成另一种 Slash Command。Skill authority 继续拥有 enablement、
 compatibility 和 activation validation。
 
-App Server 不执行 server-advertised Slash Command；它只声明 discoverability 与参数能力。Local command
-必须存在真实 client execution path，否则不能进入 catalog。Desktop 的 `/new`、`/history` 属于
+Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origin 猜测统一分发。当前内置
+`/compact` 由 Desktop 直接调用 `SessionRequest::CompactContext`，以独立 Turn 执行并把成功或失败留在
+当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
+作为普通 `StartTurn.input`。Local command 必须存在真实 client execution path，否则不能进入 catalog。
+Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Native 的 `/model` 属于 Session model selector；TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
 Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式

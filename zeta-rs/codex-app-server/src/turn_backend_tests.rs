@@ -17,6 +17,7 @@ use zeta_core::InMemoryThreadStore;
 use zeta_core::NoThreadUpdates;
 use zeta_core::ResolveTurnInteractionRequest;
 use zeta_core::SequenceExpectation;
+use zeta_core::StartContextCompactionRequest;
 use zeta_core::StartTurnRequest;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
@@ -72,6 +73,93 @@ fn delegated_turn_streams_and_commits_core_items() {
         ThreadItem::AgentMessage { turn_id: item_turn_id, text, .. }
             if item_turn_id == &turn_id && text == "Done"
     )));
+}
+
+#[test]
+#[cfg(unix)]
+fn delegated_manual_compaction_uses_the_upstream_compact_operation() {
+    let (root, program) = fake_codex_backend_program(BackendScenario::Compaction);
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("codex-compact-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("codex-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Codex compact".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("compact-codex-thread").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "codex-policy-v1".into(),
+                retention_prompt: None,
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let backend = build_backend(program, Arc::clone(&threads));
+
+    backend.start(&thread_id, &turn_id).unwrap();
+    wait_until(|| turn_status(&threads, &thread_id, &turn_id) == TurnStatus::Completed);
+
+    let requests = std::fs::read_to_string(root.path().join("requests.log")).unwrap();
+    assert_eq!(
+        requests
+            .matches("\"method\":\"thread/compact/start\"")
+            .count(),
+        1
+    );
+    assert_eq!(requests.matches("\"method\":\"turn/start\"").count(), 0);
+}
+
+#[test]
+#[cfg(unix)]
+fn delegated_manual_compaction_rejects_an_unsupported_retention_prompt() {
+    let (root, program) = fake_codex_backend_program(BackendScenario::Compaction);
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("codex-retention-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("codex-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Codex retention".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("compact-with-retention").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "codex-policy-v1".into(),
+                retention_prompt: Some("preserve the migration decision".into()),
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let backend = build_backend(program, Arc::clone(&threads));
+
+    backend.start(&thread_id, &turn_id).unwrap();
+    wait_until(|| turn_status(&threads, &thread_id, &turn_id) == TurnStatus::Failed);
+
+    let requests = std::fs::read_to_string(root.path().join("requests.log")).unwrap_or_default();
+    assert_eq!(
+        requests
+            .matches("\"method\":\"thread/compact/start\"")
+            .count(),
+        0
+    );
+    assert_eq!(requests.matches("\"method\":\"turn/start\"").count(), 0);
+    assert_eq!(requests.matches("\"method\":\"thread/start\"").count(), 0);
 }
 
 #[test]
@@ -406,6 +494,7 @@ fn start_core_turn_with_approval(
                 model: None,
                 policy_revision: "codex-policy-v1".into(),
                 approval_mode,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "inspect the workspace".into(),
@@ -459,6 +548,7 @@ fn wait_until(mut predicate: impl FnMut() -> bool) {
 #[derive(Clone, Copy)]
 enum BackendScenario {
     Complete,
+    Compaction,
     Steering,
     Approval,
     ExitAfterAcceptance,
@@ -479,6 +569,7 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
         BackendScenario::Steering => {
             r#"printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"inProgress","items":[]}}}'"#
         }
+        BackendScenario::Compaction => "",
         BackendScenario::Approval => {
             r#"printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"inProgress","items":[]}}}'
       printf '%s\n' '{"jsonrpc":"2.0","id":"approval-backend","method":"item/commandExecution/requestApproval","params":{"threadId":"remote-thread","turnId":"remote-turn","itemId":"command-1","startedAtMs":1700000000000,"reason":"run command","command":"printf approved","cwd":"/tmp/zeta-project"}}'"#
@@ -490,6 +581,7 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
     };
     let approval_response = match scenario {
         BackendScenario::Complete
+        | BackendScenario::Compaction
         | BackendScenario::Steering
         | BackendScenario::ExitAfterAcceptance => "",
         BackendScenario::Approval => {
@@ -512,6 +604,7 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
       ;;"#
         }
         BackendScenario::Complete
+        | BackendScenario::Compaction
         | BackendScenario::Approval
         | BackendScenario::ExitAfterAcceptance => "",
     };
@@ -530,6 +623,10 @@ while IFS= read -r line; do
     *'"method":"thread/resume"'*)
       printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"thread\":{{\"id\":\"remote-thread\"}}}}}}"
       ;;
+    *'"method":"thread/compact/start"'*)
+      printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{}}}}"
+      {compact_events}
+      ;;
     *'"method":"turn/start"'*)
       printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"turn\":{{\"id\":\"remote-turn\",\"status\":\"inProgress\",\"items\":[]}}}}}}"
       {turn_events}
@@ -540,6 +637,12 @@ while IFS= read -r line; do
 done
 "#,
         request_log = request_log.display(),
+        compact_events = if matches!(scenario, BackendScenario::Compaction) {
+            r#"printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"remote-thread","turn":{"id":"remote-compact-turn","status":"inProgress","items":[]}}}'
+      printf '%s\n' '{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"remote-thread","turn":{"id":"remote-compact-turn","status":"completed","items":[],"error":null}}}'"#
+        } else {
+            ""
+        },
     );
     std::fs::write(&program, script).unwrap();
     let mut permissions = std::fs::metadata(&program).unwrap().permissions();

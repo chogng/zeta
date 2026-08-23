@@ -3,9 +3,9 @@ use crate::{
     ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
     ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
     InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
-    StartTurnRequest, SteerTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts,
-    ToolExecutionOutput, ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
-    TurnExecutionOutcome,
+    StartContextCompactionRequest, StartTurnRequest, SteerTurnRequest, ThreadUpdateSink,
+    ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput, ToolInteractionService,
+    ToolOutputSink, ToolService, ToolUserInputOutcome, TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -65,6 +65,264 @@ fn completes_a_text_turn_from_durable_context() {
             .status,
         TurnStatus::Completed
     );
+}
+
+#[test]
+fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() {
+    let (threads, thread_id, history_turn_id) = started_turn();
+    threads
+        .complete_turn(
+            &thread_id,
+            &history_turn_id,
+            "durable history that must remain available ".repeat(40),
+        )
+        .unwrap();
+    let compact_turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("manual-compact").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: Some("preserve the deployment decision".into()),
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::Text("manual checkpoint".into())],
+        usage: Some(ModelUsage {
+            input_tokens: Some(100),
+            output_tokens: Some(8),
+            cached_input_tokens: Some(0),
+            reasoning_tokens: Some(0),
+        }),
+        stop_reason: StopReason::Completed,
+    })]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(
+            &thread_id,
+            &compact_turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+
+    assert!(matches!(
+        outcome,
+        TurnExecutionOutcome::ContextCompacted { .. }
+    ));
+    assert_eq!(snapshot.context_checkpoints.len(), 1);
+    assert_eq!(snapshot.context_checkpoints[0].summary, "manual checkpoint");
+    assert_eq!(snapshot.usage.model_invocations, 1);
+    assert_eq!(
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == compact_turn_id)
+            .unwrap()
+            .usage
+            .model_invocations,
+        1
+    );
+    assert_eq!(
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == compact_turn_id)
+            .unwrap()
+            .status,
+        TurnStatus::Completed
+    );
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1);
+    assert!(request_contains(
+        &requests[0],
+        "preserve the deployment decision"
+    ));
+    assert!(requests[0].tools.is_empty());
+}
+
+#[test]
+fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
+    let (threads, thread_id, first_turn_id) = started_turn();
+    threads
+        .complete_turn(
+            &thread_id,
+            &first_turn_id,
+            "first durable history segment ".repeat(180),
+        )
+        .unwrap();
+    let second_turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("second-history-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue the durable history".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    threads
+        .complete_turn(
+            &thread_id,
+            &second_turn_id,
+            "second durable history segment ".repeat(180),
+        )
+        .unwrap();
+    let compact_turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("batched-manual-compact").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: None,
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(BatchedCompactionModel::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(
+            &thread_id,
+            &compact_turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+
+    assert!(matches!(
+        outcome,
+        TurnExecutionOutcome::ContextCompacted { .. }
+    ));
+    assert_eq!(model.requests.lock().unwrap().len(), 2);
+    assert_eq!(snapshot.context_checkpoints.len(), 2);
+    assert!(
+        snapshot.context_checkpoints[0].covered.end_sequence
+            < snapshot.context_checkpoints[1].covered.end_sequence
+    );
+    assert_eq!(snapshot.usage.model_invocations, 2);
+}
+
+#[test]
+fn failed_manual_context_compaction_does_not_commit_a_checkpoint() {
+    let (threads, thread_id, history_turn_id) = started_turn();
+    threads
+        .complete_turn(
+            &thread_id,
+            &history_turn_id,
+            "history large enough to compact ".repeat(40),
+        )
+        .unwrap();
+    let compact_turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("failed-compact").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: None,
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let empty_response = || ModelResponse {
+        output: Vec::new(),
+        usage: Some(ModelUsage {
+            input_tokens: Some(10),
+            output_tokens: Some(0),
+            cached_input_tokens: None,
+            reasoning_tokens: None,
+        }),
+        stop_reason: StopReason::Completed,
+    };
+    let model = Arc::new(ScriptedModel::new([Ok(empty_response())]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model);
+
+    assert!(
+        executor
+            .execute(
+                &thread_id,
+                &compact_turn_id,
+                &CancellationSource::new().token(),
+            )
+            .is_err()
+    );
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.context_checkpoints.is_empty());
+    assert_eq!(snapshot.usage.model_invocations, 1);
+    assert_eq!(snapshot.turns.last().unwrap().status, TurnStatus::Failed);
+}
+
+#[test]
+fn manual_context_compaction_does_not_absorb_an_unfinished_tool_group() {
+    let (threads, thread_id, history_turn_id) = started_turn();
+    threads
+        .record_tool_call(
+            &thread_id,
+            &history_turn_id,
+            crate::RecordToolCallRequest {
+                tool_call_id: Some(ToolCallId::new("unfinished").unwrap()),
+                name: ToolName::new("weather").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    threads
+        .fail_turn(
+            &thread_id,
+            &history_turn_id,
+            zeta_protocol::StableTurnError::model_invocation_failed(),
+        )
+        .unwrap();
+    let compact_turn_id = threads
+        .start_context_compaction(
+            &thread_id,
+            StartContextCompactionRequest {
+                command_id: CommandId::new("safe-compact").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                retention_prompt: None,
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(
+            &thread_id,
+            &compact_turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+
+    assert!(matches!(
+        outcome,
+        TurnExecutionOutcome::ContextCompacted { .. }
+    ));
+    assert!(model.requests().is_empty());
+    assert!(snapshot.context_checkpoints.is_empty());
 }
 
 #[test]
@@ -1460,6 +1718,39 @@ fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+#[derive(Default)]
+struct BatchedCompactionModel {
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl ModelService for BatchedCompactionModel {
+    fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        Ok(ContextBudget::core_managed(
+            ContextTokenCount::new(2_400),
+            ContextTokenCount::new(200),
+            ContextTokenCount::new(100),
+            ContextCompactionLimit::ContextWindow,
+        ))
+    }
+
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        let mut response = text_response("batch checkpoint");
+        response.usage = Some(ModelUsage {
+            input_tokens: Some(100),
+            output_tokens: Some(8),
+            cached_input_tokens: None,
+            reasoning_tokens: None,
+        });
+        Ok(response)
+    }
 }
 
 struct CancellingResponseModel {

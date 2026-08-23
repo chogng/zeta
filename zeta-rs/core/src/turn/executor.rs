@@ -3,6 +3,7 @@ use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::ContextMeasurementDisposition;
 use crate::context::ContextMeasurementPolicy;
 use crate::context::ContextOverflowRecoveryPreparation;
+use crate::context::ManualContextCompactionPreparation;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::thread_controller::CommitContextCheckpointRequest;
@@ -63,6 +64,7 @@ impl HarnessInstructionsProvider for FixedHarnessInstructions {
 pub enum TurnExecutionOutcome {
     Completed(CompletedTurn),
     ShellCompleted { sequence: u64 },
+    ContextCompacted { sequence: u64 },
     WaitingForApproval,
     WaitingForCapability,
 }
@@ -384,6 +386,25 @@ impl TurnExecutor {
         }))
     }
 
+    fn is_context_compaction_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<bool, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        Ok(snapshot.commands.iter().any(|command| {
+            matches!(
+                (&command.result, &command.receipt.command),
+                (
+                    crate::ThreadCommandResult::TurnAccepted {
+                        turn_id: command_turn_id,
+                    },
+                    ThreadCommand::CompactContext { .. },
+                ) if command_turn_id == turn_id
+            )
+        }))
+    }
+
     fn execute(
         &self,
         thread_id: &ThreadId,
@@ -422,6 +443,12 @@ impl TurnExecutor {
     ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
         check_cancellation(cancellation)?;
         self.require_running_turn(thread_id, turn_id)?;
+        if self
+            .is_context_compaction_turn(thread_id, turn_id)
+            .map_err(ExecutionFailure::model)?
+        {
+            return self.execute_manual_context_compaction(thread_id, turn_id, cancellation);
+        }
         match self
             .tool_scheduler()
             .run_pending(thread_id, turn_id, cancellation)
@@ -723,6 +750,71 @@ impl TurnExecutor {
                     return Ok(TurnExecutionOutcome::WaitingForCapability);
                 }
             }
+        }
+    }
+
+    fn execute_manual_context_compaction(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
+        loop {
+            check_cancellation(cancellation)?;
+            let snapshot = self
+                .threads
+                .read_thread(thread_id)
+                .map_err(ExecutionFailure::model)?;
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
+            let selection = match turn.model.as_ref() {
+                Some(model) => ModelSelection::Session(model),
+                None => ModelSelection::ConfiguredDefault,
+            };
+            let budget = self
+                .model
+                .context_budget(selection)
+                .map_err(ExecutionFailure::model)?;
+            let (model, retention_prompt, plan) = match self
+                .threads
+                .prepare_manual_context_compaction(thread_id, turn_id, budget)
+                .map_err(ExecutionFailure::model)?
+            {
+                ManualContextCompactionPreparation::Complete => {
+                    let sequence = self
+                        .threads
+                        .complete_turn_without_agent_message(thread_id, turn_id)
+                        .map_err(ExecutionFailure::persistence)?;
+                    return Ok(TurnExecutionOutcome::ContextCompacted { sequence });
+                }
+                ManualContextCompactionPreparation::NeedsCompaction {
+                    model,
+                    retention_prompt,
+                    plan,
+                } => (model, retention_prompt, plan),
+            };
+            let request =
+                ContextCompactionRequest::from_manual_plan(&plan, &model, retention_prompt);
+            let (result, source_thread_sequence) =
+                self.compact_context(thread_id, turn_id, &request, cancellation)?;
+            check_cancellation(cancellation)?;
+            self.threads
+                .commit_context_checkpoint(
+                    thread_id,
+                    CommitContextCheckpointRequest {
+                        source_thread_sequence,
+                        covered: request.covered(),
+                        summary: result.summary().into(),
+                        schema_revision: result.schema_revision().into(),
+                        prompt_revision: result.prompt_revision().into(),
+                        context_policy_revision: result.context_policy_revision().into(),
+                        generator_model: request.generator_model().cloned(),
+                    },
+                )
+                .map_err(ExecutionFailure::persistence)?;
         }
     }
 

@@ -7,7 +7,7 @@ import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-se
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -134,6 +134,16 @@ export class ChatService extends DisposableOwner implements IChatService {
 			{ type: "text", text: options.text },
 		];
 		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", resourceBudget: options.resourceBudget, input });
+	}
+
+	async compactContext(options: CompactContextOptions): Promise<void> {
+		await this.options.turnApi.compact({
+			commandId: commandId("compact"),
+			sessionId: options.sessionId,
+			threadId: options.threadId,
+			expectedSequence: options.expectedSequence,
+			retentionPrompt: options.retentionPrompt,
+		});
 	}
 
 	async steerTurn(options: SteerTurnOptions): Promise<void> {

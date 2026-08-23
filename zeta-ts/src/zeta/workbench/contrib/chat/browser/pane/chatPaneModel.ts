@@ -219,6 +219,38 @@ export class ChatPaneModel extends DisposableOwner {
 		}
 	}
 
+	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
+		if (name !== "compact") {
+			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`);
+			return;
+		}
+		try {
+			this.setState("submitting");
+			const active = await this.ensureActiveSession();
+			if (this._thread?.threadId !== active.threadId) {
+				await this.subscribe(active);
+			}
+			const thread = this._thread;
+			if (!thread || thread.threadId !== active.threadId) {
+				throw new Error("Chat Thread is not available");
+			}
+			if (activeTurn(thread)) {
+				throw new Error("Context can be compacted only when the active Turn has finished");
+			}
+			await this.chatService.compactContext({
+				sessionId: active.session.sessionId,
+				threadId: active.threadId,
+				expectedSequence: thread.sequence,
+				...(argumentsText.trim() ? { retentionPrompt: argumentsText.trim() } : {}),
+			});
+			await this.refreshThread();
+			this.setState("ready");
+		} catch (error) {
+			this.setError(error);
+			throw error;
+		}
+	}
+
 	async retryFailedTurn(turnId: string): Promise<void> {
 		const turns = this._thread?.turns ?? [];
 		const turn = turns.at(-1);

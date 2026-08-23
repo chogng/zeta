@@ -17,6 +17,7 @@ pub use instructions::HarnessInstructions;
 pub use instructions::HarnessInstructionsProvider;
 pub(crate) use invocation::ContextOverflowRecoveryPreparation;
 pub(crate) use invocation::FrozenModelSelection;
+pub(crate) use invocation::ManualContextCompactionPreparation;
 pub(crate) use invocation::ModelInvocationPreparation;
 pub(crate) use invocation::ModelInvocationSnapshot;
 pub(crate) use measurement_policy::ContextMeasurementDisposition;

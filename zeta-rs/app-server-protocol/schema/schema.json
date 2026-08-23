@@ -18933,6 +18933,28 @@
         },
         {
           "properties": {
+            "retentionPrompt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "compactContext",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "input": {
               "items": {
                 "$ref": "#/$defs/InputItem"

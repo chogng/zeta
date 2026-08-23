@@ -36,6 +36,7 @@ export function createDisconnectedThreadApi(unavailable: UnavailableOperation): 
 export function createDisconnectedTurnApi(unavailable: UnavailableOperation): ITurnApi {
 	return {
 		start: () => unavailable("turn.start"),
+		compact: () => unavailable("turn.compact"),
 		steer: () => unavailable("turn.steer"),
 		interrupt: () => unavailable("turn.interrupt"),
 		resolveInteraction: () => unavailable("turn.resolveInteraction"),
@@ -74,6 +75,7 @@ export function createViteDevThreadApi(connection: ViteDevAppServerConnection): 
 export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
 	return {
 		start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
+		compact: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "compactContext", threadId: params.threadId, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
 		steer: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "steerTurn", threadId: params.threadId, turnId: params.turnId, input: params.input })).then(turnSteerResult),
 		interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),
 		resolveInteraction: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
