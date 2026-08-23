@@ -133,7 +133,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 			...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
 			{ type: "text", text: options.text },
 		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", resourceBudget: options.resourceBudget, input });
 	}
 
 	async steerTurn(options: SteerTurnOptions): Promise<void> {
@@ -219,6 +219,20 @@ function toThread(thread: ThreadDto): Thread {
 			turnId: turn.turnId,
 			status: turn.status,
 			model: turn.model ? { ...turn.model } : turn.model,
+			resourceBudget: turn.resourceBudget ? {
+				...turn.resourceBudget,
+				priceSnapshot: turn.resourceBudget.priceSnapshot ? {
+					...turn.resourceBudget.priceSnapshot,
+					model: { ...turn.resourceBudget.priceSnapshot.model },
+				} : turn.resourceBudget.priceSnapshot,
+			} : turn.resourceBudget,
+			usage: {
+				modelInvocations: turn.usage.modelInvocations,
+				inputTokens: { ...turn.usage.inputTokens },
+				outputTokens: { ...turn.usage.outputTokens },
+				cachedInputTokens: { ...turn.usage.cachedInputTokens },
+				reasoningTokens: { ...turn.usage.reasoningTokens },
+			},
 			items: turn.items.map((item) => ({ ...item })),
 			error: turn.error ? { ...turn.error } : turn.error,
 		})),

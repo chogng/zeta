@@ -32,6 +32,7 @@ fn recovery_preserves_external_attempt_and_does_not_leave_the_turn_runnable() {
                 model: None,
                 policy_revision: "recovery-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "run remotely".into(),

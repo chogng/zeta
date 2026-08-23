@@ -16978,6 +16978,40 @@
       ],
       "type": "object"
     },
+    "ModelPriceSnapshot": {
+      "description": "Immutable USD price inputs used to evaluate one Turn's cost budget.\n\nRates are expressed as micro-USD per one million tokens so the durable contract never depends\non floating-point arithmetic or a mutable model catalog.",
+      "properties": {
+        "cachedInputUsdMicrosPerMillionTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "inputUsdMicrosPerMillionTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "outputUsdMicrosPerMillionTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "revision",
+        "inputUsdMicrosPerMillionTokens",
+        "cachedInputUsdMicrosPerMillionTokens",
+        "outputUsdMicrosPerMillionTokens"
+      ],
+      "type": "object"
+    },
     "ModelRef": {
       "properties": {
         "model": {
@@ -18843,6 +18877,16 @@
               },
               "minItems": 1,
               "type": "array"
+            },
+            "resourceBudget": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TurnResourceBudget"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
@@ -21059,6 +21103,16 @@
               "default": "legacy-unversioned-policy",
               "type": "string"
             },
+            "resourceBudget": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TurnResourceBudget"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -22748,11 +22802,43 @@
             }
           ]
         },
+        "resourceBudget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnResourceBudget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "status": {
           "$ref": "#/$defs/TurnStatus"
         },
         "turnId": {
           "$ref": "#/$defs/TurnId"
+        },
+        "usage": {
+          "$ref": "#/$defs/ModelUsageSummary",
+          "default": {
+            "cachedInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "inputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "modelInvocations": 0,
+            "outputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "reasoningTokens": {
+              "complete": true,
+              "reported": 0
+            }
+          }
         }
       },
       "required": [
@@ -22848,6 +22934,38 @@
       "required": [
         "sequence"
       ],
+      "type": "object"
+    },
+    "TurnResourceBudget": {
+      "description": "Optional resource ceilings frozen when a Turn is accepted.\n\n`max_total_tokens` counts provider-reported input plus output tokens. Cached input and\nreasoning tokens remain observable usage subsets and are not counted twice. A cost ceiling\nrequires `price_snapshot`; Core validates both the snapshot revision and exact model binding.",
+      "properties": {
+        "maxCostUsdMicros": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxTotalTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "priceSnapshot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelPriceSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "type": "object"
     },
     "TurnStartResult": {

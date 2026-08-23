@@ -1,4 +1,7 @@
-use crate::{ModelRef, PendingInteraction, StableTurnError, ThreadItem, TurnId, TurnStatus};
+use crate::{
+    ModelRef, ModelUsageSummary, PendingInteraction, StableTurnError, ThreadItem, TurnId,
+    TurnResourceBudget, TurnStatus,
+};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -12,6 +15,11 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub resource_budget: Option<TurnResourceBudget>,
+    #[serde(default)]
+    pub usage: ModelUsageSummary,
     pub items: Vec<ThreadItem>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

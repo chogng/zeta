@@ -574,6 +574,8 @@ impl TurnExecutor {
             let mut invalid_response_attempt = false;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
+                self.ensure_resource_budget_available(thread_id, turn_id)
+                    .map_err(ExecutionFailure::service)?;
                 let mut stream = InvocationStream::new(
                     self.threads.clone(),
                     self.updates.clone(),
@@ -784,6 +786,7 @@ impl TurnExecutor {
                 }
             };
         let result = retry_invalid_model_response(|| {
+            self.ensure_resource_budget_available(thread_id, turn_id)?;
             self.compaction
                 .compact(&request, cancellation, &mut record_model_usage)
         });
@@ -820,6 +823,20 @@ impl TurnExecutor {
                 "cannot execute a {status:?} Turn"
             ))))
         }
+    }
+
+    fn ensure_resource_budget_available(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<(), CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let turn = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+        crate::turn::ensure_resource_budget_available(turn)
     }
 
     fn model_reasoning_items(
@@ -1208,6 +1225,10 @@ impl ExecutionFailure {
             error @ CoreError::ToolRepetition(_) => Self::Failed {
                 error,
                 stable: StableTurnError::tool_repetition(),
+            },
+            error @ CoreError::TurnBudgetExhausted => Self::Failed {
+                error,
+                stable: StableTurnError::turn_budget_exhausted(),
             },
             _ => Self::model(error),
         }

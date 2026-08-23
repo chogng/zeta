@@ -73,6 +73,7 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![zeta_protocol::UserInput::Text {
                     text: "hello".into(),
@@ -239,6 +240,11 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                    resource_budget: Some(zeta_protocol::TurnResourceBudget {
+                        max_total_tokens: Some(100),
+                        max_cost_usd_micros: None,
+                        price_snapshot: None,
+                    }),
                     activated_skills: Vec::new(),
                     input: vec![zeta_protocol::UserInput::Text {
                         text: prompt.into(),
@@ -246,6 +252,21 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                 },
             )
             .unwrap();
+        if index == 0 {
+            coordinator
+                .threads
+                .record_model_usage(
+                    &root.thread_id,
+                    &started.turn_id,
+                    Some(zeta_protocol::ModelUsage {
+                        input_tokens: Some(10),
+                        output_tokens: Some(2),
+                        cached_input_tokens: Some(0),
+                        reasoning_tokens: Some(0),
+                    }),
+                )
+                .unwrap();
+        }
         turn_ids.push(started.turn_id.clone());
         sequence = coordinator
             .threads
@@ -284,6 +305,11 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
     assert_eq!(replayed.disposition, CommandDisposition::Replayed);
     assert_eq!(child.turns.len(), 1);
     assert_eq!(child.turns[0].turn_id, turn_ids[0]);
+    assert_eq!(child.turns[0].resource_budget, None);
+    assert_eq!(
+        child.turns[0].usage,
+        zeta_protocol::ModelUsageSummary::default()
+    );
     assert!(child.turns[0].items.iter().any(|item| {
         matches!(item, zeta_protocol::ThreadItem::UserMessage { text, .. } if text == "first")
     }));

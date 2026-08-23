@@ -108,6 +108,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "old history".repeat(500),
@@ -128,6 +129,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue".into(),
@@ -232,6 +234,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),

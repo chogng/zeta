@@ -20,6 +20,7 @@ pub enum CoreError {
     Policy(String),
     PolicyCircuitBreaker(String),
     ToolRepetition(String),
+    TurnBudgetExhausted,
     CommandConflict,
     SessionStore(SessionStoreError),
     ThreadStore(ThreadStoreError),
@@ -51,6 +52,7 @@ impl fmt::Display for CoreError {
                 write!(formatter, "policy circuit breaker: {message}")
             }
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
+            Self::TurnBudgetExhausted => formatter.write_str("Turn resource budget exhausted"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),
             Self::SessionStore(error) => error.fmt(formatter),
             Self::ThreadStore(error) => error.fmt(formatter),

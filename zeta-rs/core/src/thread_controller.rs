@@ -49,6 +49,7 @@ use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadStoreError;
@@ -75,6 +76,7 @@ pub struct StartTurnRequest {
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub approval_mode: ApprovalMode,
+    pub resource_budget: Option<TurnResourceBudget>,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
 }
@@ -471,7 +473,11 @@ impl ThreadController {
             .iter()
             .position(|turn| turn.turn_id == request.before_turn_id)
             .ok_or_else(|| CoreError::NotFound(request.before_turn_id.to_string()))?;
-        let imported_turns = source.public_thread().turns[..checkpoint].to_vec();
+        let mut imported_turns = source.public_thread().turns[..checkpoint].to_vec();
+        for turn in &mut imported_turns {
+            turn.resource_budget = None;
+            turn.usage = zeta_protocol::ModelUsageSummary::default();
+        }
         let created = self.create_thread(CreateThreadRequest {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
@@ -507,6 +513,10 @@ impl ThreadController {
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
+        crate::turn::validate_resource_budget(
+            request.model.as_ref(),
+            request.resource_budget.as_ref(),
+        )?;
         let normalized_input =
             user_input::normalize_images(&request.input, &self.image_attachments)?;
         let thread = self.read_thread(thread_id)?;
@@ -520,6 +530,7 @@ impl ThreadController {
                 model,
                 activated_skills,
                 approval_mode,
+                resource_budget,
                 input,
             } = &existing.receipt.command
             else {
@@ -533,6 +544,7 @@ impl ThreadController {
             if model != &request.model
                 || host_activations != request.activated_skills
                 || approval_mode != &request.approval_mode
+                || resource_budget != &request.resource_budget
                 || input != &normalized_input
             {
                 return Err(CoreError::CommandConflict);
@@ -579,6 +591,7 @@ impl ThreadController {
             model: request.model.clone(),
             activated_skills: activated_skills.clone(),
             approval_mode: request.approval_mode,
+            resource_budget: request.resource_budget.clone(),
             input: normalized_input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
@@ -615,6 +628,7 @@ impl ThreadController {
                 approval_mode: request.approval_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
+                resource_budget: request.resource_budget.clone(),
             });
             events.extend(
                 input_items
@@ -724,6 +738,7 @@ impl ThreadController {
                     approval_mode: request.approval_mode,
                     activated_skills: Vec::new(),
                     model: None,
+                    resource_budget: None,
                 },
                 ThreadEvent::ItemCompleted {
                     thread_id: thread_id.clone(),

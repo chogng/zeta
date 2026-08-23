@@ -49,7 +49,7 @@ serde / schemars / ts-rs
 derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema artifact 由
 `zeta-app-server-protocol` 负责，不在这里写文件。
 
-供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；工具重复失败使用 `ToolRepetition`；资源预算使用 `TurnBudgetExhausted`，当前只预留协议和 Desktop 投影，运行时生产者由 AL-202 构建。它们只携带稳定用户文案和能否手动重试，不保存原始供应商、工具或预算内部错误细节。未细分的模型失败继续使用 `ModelInvocationFailed`。
+供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；工具重复失败使用 `ToolRepetition`；资源预算使用 `TurnBudgetExhausted`。`TurnResourceBudget` 把可选 token/cost ceiling 与带 revision 的 `ModelPriceSnapshot` 冻结到 start-Turn command 和 `TurnAccepted`；cost snapshot 必须匹配所选模型。错误只携带稳定用户文案和能否手动重试，不保存原始供应商、工具或预算内部错误细节。未细分的模型失败继续使用 `ModelInvocationFailed`。
 
 ## 内部接口地图
 

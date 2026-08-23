@@ -39,6 +39,7 @@ fn start_request(key: &str) -> StartTurnRequest {
         model: None,
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        resource_budget: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "hello".into(),
@@ -879,6 +880,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         model: None,
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        resource_budget: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "different".into(),
@@ -1383,6 +1385,7 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![
                     UserInput::Text {

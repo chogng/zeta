@@ -24,11 +24,12 @@ use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_protocol::{
     AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
-    ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, RequestUserInput,
-    RequestUserInputResponse, ResponseItem, SessionId, SkillActivationReason, SkillId, SkillName,
-    SkillRef, SkillSourceId, StableTurnErrorCode, StopReason, ThreadId, ThreadItem, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput,
-    UserInputAnswer, UserInputQuestion,
+    ModelId, ModelPriceSnapshot, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent,
+    ModelUsage, ProviderId, RequestUserInput, RequestUserInputResponse, ResponseItem, SessionId,
+    SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId, StableTurnErrorCode,
+    StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
+    ToolDefinition, ToolName, TurnResourceBudget, TurnStatus, UserInput, UserInputAnswer,
+    UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -211,6 +212,90 @@ fn first_invocation_injects_untrusted_evidence_once() {
 }
 
 #[test]
+fn token_budget_stops_before_the_next_tool_safe_point() {
+    let budget = TurnResourceBudget {
+        max_total_tokens: Some(12),
+        max_cost_usd_micros: None,
+        price_snapshot: None,
+    };
+    let (threads, thread_id, turn_id) = started_turn_with_resource_budget(None, budget);
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::ToolCall(ToolCall {
+            id: ToolCallId::new("budgeted-tool-call").unwrap(),
+            name: ToolName::new("weather").unwrap(),
+            arguments: json!({"city": "Paris"}),
+        })],
+        usage: Some(ModelUsage {
+            input_tokens: Some(10),
+            output_tokens: Some(2),
+            cached_input_tokens: Some(0),
+            reasoning_tokens: Some(0),
+        }),
+        stop_reason: StopReason::ToolUse,
+    })]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxActionPolicyService),
+    );
+
+    let error = match executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()) {
+        Ok(_) => panic!("the Tool Call must not execute after the budget is exhausted"),
+        Err(error) => error,
+    };
+
+    assert_eq!(error, CoreError::TurnBudgetExhausted);
+    assert_eq!(model.requests().len(), 1);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Failed);
+    assert_eq!(
+        snapshot.turns[0].failure.as_ref().map(|error| error.code),
+        Some(StableTurnErrorCode::TurnBudgetExhausted)
+    );
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolCall { tool_call_id, .. }
+            if tool_call_id.as_str() == "budgeted-tool-call"
+    )));
+    assert!(!snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::ToolResult { tool_call_id, .. }
+            if tool_call_id.as_str() == "budgeted-tool-call"
+    )));
+}
+
+#[test]
+fn final_answer_may_complete_when_its_usage_reaches_the_budget() {
+    let budget = TurnResourceBudget {
+        max_total_tokens: Some(12),
+        max_cost_usd_micros: None,
+        price_snapshot: None,
+    };
+    let (threads, thread_id, turn_id) = started_turn_with_resource_budget(None, budget);
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::Text("done".into())],
+        usage: Some(ModelUsage {
+            input_tokens: Some(10),
+            output_tokens: Some(2),
+            cached_input_tokens: Some(0),
+            reasoning_tokens: Some(0),
+        }),
+        stop_reason: StopReason::Completed,
+    })]));
+
+    let outcome = TurnExecutor::without_tools(threads.clone(), model)
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().turns[0].status,
+        TurnStatus::Completed
+    );
+}
+
+#[test]
 fn successful_tool_search_result_loads_deferred_definition_for_next_model_step() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([
@@ -273,6 +358,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                    resource_budget: None,
                     activated_skills: Vec::new(),
                     input: vec![UserInput::Text {
                         text: format!("history input {index}"),
@@ -294,6 +380,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),
@@ -353,6 +440,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),
@@ -426,6 +514,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: vec![activation.clone()],
                 input: vec![
                     UserInput::Skill {
@@ -936,6 +1025,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "history".into(),
@@ -956,6 +1046,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue".into(),
@@ -1067,7 +1158,7 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
 }
 
 #[test]
-fn model_usage_projection_is_identical_after_recovery() {
+fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = Arc::new(ThreadController::with_store(store.clone()));
     let thread_id = ThreadId::new("usage-recovery-thread").unwrap();
@@ -1078,15 +1169,31 @@ fn model_usage_projection_is_identical_after_recovery() {
             title: "usage recovery".into(),
         })
         .unwrap();
+    let model_ref = ModelRef::new(
+        ProviderId::new("provider").unwrap(),
+        ModelId::new("priced-model").unwrap(),
+    );
+    let resource_budget = TurnResourceBudget {
+        max_total_tokens: Some(100),
+        max_cost_usd_micros: Some(10),
+        price_snapshot: Some(ModelPriceSnapshot {
+            model: model_ref.clone(),
+            revision: "prices-2026-08-23".into(),
+            input_usd_micros_per_million_tokens: 10,
+            cached_input_usd_micros_per_million_tokens: 2,
+            output_usd_micros_per_million_tokens: 20,
+        }),
+    };
     let turn_id = original
         .start_turn(
             &thread_id,
             StartTurnRequest {
                 command_id: CommandId::new("usage-recovery-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
-                model: None,
+                model: Some(model_ref),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: Some(resource_budget.clone()),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -1108,16 +1215,20 @@ fn model_usage_projection_is_identical_after_recovery() {
     TurnExecutor::without_tools(original.clone(), model)
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
         .unwrap();
-    let before_restart = original.read_thread(&thread_id).unwrap().usage;
+    let before_restart = original.read_thread(&thread_id).unwrap();
 
     let recovered = ThreadController::with_store(store);
-    let after_restart = recovered.recover_thread(&thread_id).unwrap().usage;
+    let after_restart = recovered.recover_thread(&thread_id).unwrap();
 
-    assert_eq!(after_restart, before_restart);
-    assert_eq!(after_restart.model_invocations, 1);
-    assert_eq!(after_restart.input_tokens.reported, 11);
-    assert!(after_restart.input_tokens.complete);
-    assert!(!after_restart.cached_input_tokens.complete);
+    assert_eq!(after_restart.usage, before_restart.usage);
+    assert_eq!(after_restart.usage.model_invocations, 1);
+    assert_eq!(after_restart.usage.input_tokens.reported, 11);
+    assert!(after_restart.usage.input_tokens.complete);
+    assert!(!after_restart.usage.cached_input_tokens.complete);
+    assert_eq!(
+        after_restart.turns[0].resource_budget,
+        Some(resource_budget)
+    );
 }
 
 #[test]
@@ -1183,6 +1294,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "fast".into(),
@@ -2258,6 +2370,43 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    (threads, thread_id, turn_id)
+}
+
+fn started_turn_with_resource_budget(
+    model: Option<ModelRef>,
+    resource_budget: TurnResourceBudget,
+) -> (Arc<ThreadController>, ThreadId, TurnId) {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("budget-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("budget-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "budget test".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("budget-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: Some(resource_budget),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -2283,6 +2432,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue after durable history".into(),

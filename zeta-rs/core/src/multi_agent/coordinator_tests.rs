@@ -652,6 +652,7 @@ fn fixture() -> Fixture {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "Delegate a review".into(),

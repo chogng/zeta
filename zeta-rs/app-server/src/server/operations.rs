@@ -45,6 +45,7 @@ use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::UserInput;
 use zeta_typst::{
     TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
@@ -427,11 +428,13 @@ impl AppServer {
             SessionRequest::StartTurn {
                 thread_id,
                 approval_mode,
+                resource_budget,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 mutation,
                 thread_id,
                 approval_mode,
+                resource_budget,
                 input,
             )?)),
             SessionRequest::StartShellTurn {
@@ -785,6 +788,7 @@ impl AppServer {
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
         approval_mode: ApprovalMode,
+        resource_budget: Option<TurnResourceBudget>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
@@ -823,6 +827,7 @@ impl AppServer {
             &thread_before,
             &mutation.command_id,
             approval_mode,
+            resource_budget.as_ref(),
             &input,
         )? {
             return Ok(replayed);
@@ -853,6 +858,7 @@ impl AppServer {
                     model,
                     policy_revision,
                     approval_mode,
+                    resource_budget: resource_budget.clone(),
                     activated_skills: Vec::new(),
                     input,
                 },
@@ -869,6 +875,7 @@ impl AppServer {
                 &snapshot,
                 &command_id,
                 approval_mode,
+                resource_budget.as_ref(),
                 &replay_input,
             )?
             .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));

@@ -24,6 +24,7 @@ use crate::Turn;
 use crate::TurnExecutionBinding;
 use crate::TurnId;
 use crate::TurnInteraction;
+use crate::TurnResourceBudget;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -105,6 +106,9 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        resource_budget: Option<TurnResourceBudget>,
     },
     TurnStarted {
         thread_id: ThreadId,

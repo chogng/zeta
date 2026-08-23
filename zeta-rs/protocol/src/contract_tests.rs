@@ -113,6 +113,55 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
 }
 
 #[test]
+fn turn_resource_budget_freezes_versioned_prices_in_the_durable_command() {
+    let model = ModelRef::new(
+        ProviderId::new("provider").unwrap(),
+        ModelId::new("model").unwrap(),
+    );
+    let command = ThreadCommand::StartTurn {
+        model: Some(model.clone()),
+        activated_skills: Vec::new(),
+        approval_mode: ApprovalMode::AskPermissions,
+        resource_budget: Some(TurnResourceBudget {
+            max_total_tokens: Some(50_000),
+            max_cost_usd_micros: Some(25_000),
+            price_snapshot: Some(ModelPriceSnapshot {
+                model,
+                revision: "prices-2026-08-23".into(),
+                input_usd_micros_per_million_tokens: 2_500,
+                cached_input_usd_micros_per_million_tokens: 250,
+                output_usd_micros_per_million_tokens: 10_000,
+            }),
+        }),
+        input: vec![UserInput::Text {
+            text: "hello".into(),
+        }],
+    };
+
+    assert_eq!(
+        serde_json::to_value(command).unwrap(),
+        json!({
+            "type": "startTurn",
+            "model": { "provider": "provider", "model": "model" },
+            "activatedSkills": [],
+            "approvalMode": "askPermissions",
+            "resourceBudget": {
+                "maxTotalTokens": 50_000,
+                "maxCostUsdMicros": 25_000,
+                "priceSnapshot": {
+                    "model": { "provider": "provider", "model": "model" },
+                    "revision": "prices-2026-08-23",
+                    "inputUsdMicrosPerMillionTokens": 2_500,
+                    "cachedInputUsdMicrosPerMillionTokens": 250,
+                    "outputUsdMicrosPerMillionTokens": 10_000
+                }
+            },
+            "input": [{ "type": "text", "text": "hello" }]
+        })
+    );
+}
+
+#[test]
 fn turn_steering_serializes_as_a_typed_command_and_durable_item_binding() {
     let turn_id = TurnId::new("turn_1").unwrap();
     let command = ThreadCommand::SteerTurn {

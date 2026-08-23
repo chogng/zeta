@@ -22,6 +22,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
                 model: None,
                 activated_skills: Vec::new(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -66,6 +67,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
     )
@@ -122,6 +124,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
         envelope(
@@ -255,6 +258,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
         envelope(
@@ -383,7 +387,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
-                    model: None
+                    model: None,
+                    resource_budget: None,
                 }
             )
         )
@@ -401,6 +406,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
     )
@@ -431,6 +437,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             activated_skills: Vec::new(),
             model: None,
+            resource_budget: None,
         },
     );
     accepted.command = Some(ThreadCommandReceipt {
@@ -439,6 +446,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             model: None,
             activated_skills: Vec::new(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            resource_budget: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],
@@ -569,6 +577,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
     )
@@ -677,6 +686,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
+                resource_budget: None,
             },
         ),
         envelope(

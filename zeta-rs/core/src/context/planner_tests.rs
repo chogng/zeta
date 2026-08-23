@@ -518,6 +518,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 failure: None,
                 pending_interaction: None,
                 execution_backend_attempt: None,
+                resource_budget: None,
                 usage: zeta_protocol::ModelUsageSummary::default(),
             })
             .collect(),

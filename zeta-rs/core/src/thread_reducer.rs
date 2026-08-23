@@ -43,6 +43,7 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::TurnStatus;
 
 #[path = "thread_reducer_approval.rs"]
@@ -119,6 +120,8 @@ impl ThreadSnapshot {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     model: turn.model.clone(),
+                    resource_budget: turn.resource_budget.clone(),
+                    usage: turn.usage.clone(),
                     items: self
                         .items
                         .iter()
@@ -175,6 +178,7 @@ pub struct TurnSnapshot {
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
+    pub resource_budget: Option<TurnResourceBudget>,
     pub usage: ModelUsageSummary,
 }
 
@@ -461,6 +465,7 @@ pub fn reduce_thread_event(
             policy_revision,
             approval_mode,
             activated_skills,
+            resource_budget,
             ..
         } => {
             if policy_revision.trim().is_empty() {
@@ -468,6 +473,8 @@ pub fn reduce_thread_event(
                     "Turn policy revision must not be empty".into(),
                 ));
             }
+            crate::turn::validate_resource_budget(model.as_ref(), resource_budget.as_ref())
+                .map_err(|error| CoreError::Journal(error.to_string()))?;
             create_turn(
                 &mut snapshot,
                 turn_id,
@@ -475,6 +482,7 @@ pub fn reduce_thread_event(
                 policy_revision.clone(),
                 *approval_mode,
                 activated_skills.clone(),
+                resource_budget.clone(),
             )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
                 CoreError::Journal("Turn acceptance requires a command receipt".into())
@@ -484,12 +492,14 @@ pub fn reduce_thread_event(
                     model: command_model,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
+                    resource_budget: command_resource_budget,
                     input,
                     ..
                 } => {
                     command_model == model
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
+                        && command_resource_budget == resource_budget
                         && turn_skill_activations_match(input, activated_skills)
                 }
                 ThreadCommand::StartShellTurn {
@@ -497,6 +507,7 @@ pub fn reduce_thread_event(
                     ..
                 } => {
                     model.is_none()
+                        && resource_budget.is_none()
                         && command_approval_mode == approval_mode
                         && activated_skills.is_empty()
                 }
@@ -1606,6 +1617,7 @@ fn import_history(
             failure: turn.error.clone(),
             pending_interaction: None,
             execution_backend_attempt: None,
+            resource_budget: None,
             usage: ModelUsageSummary::default(),
         })
         .collect();
@@ -1780,6 +1792,7 @@ fn create_turn(
     policy_revision: String,
     approval_mode: ApprovalMode,
     activated_skills: Vec<FrozenSkillActivation>,
+    resource_budget: Option<TurnResourceBudget>,
 ) -> Result<(), CoreError> {
     if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
         return Err(CoreError::Journal(format!(
@@ -1796,6 +1809,7 @@ fn create_turn(
         failure: None,
         pending_interaction: None,
         execution_backend_attempt: None,
+        resource_budget,
         usage: ModelUsageSummary::default(),
     });
     Ok(())

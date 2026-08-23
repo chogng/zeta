@@ -265,7 +265,7 @@ src/
 | `BrowserToolPolicy` | crate-private | 只接受 built-in `BrowserInteraction` + 单个 `UserInterface` capability，并要求一次性批准 | 不复用 local shell、MCP 或 extension policy |
 | `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
 | `zeta-skills-extension::SkillRuntime` | external runtime | 组合 roots、缓存 metadata projection、叠加 enablement，并贡献 durable activation/context fragment | App Server 只安装 runtime、提供 config/event adapter 与协议 projection |
-| `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入并返回原 Turn 结果 | 重放不重新读取 model config 或 Skill 文件；不同输入返回 `CommandConflict` |
+| `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入、审批模式和资源预算并返回原 Turn 结果 | 重放不重新读取 model config、价格目录或 Skill 文件；不同输入返回 `CommandConflict` |
 | `SkillConfigSnapshotProvider` adapter | crate-private implementation | 给 external runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
 | `SkillRuntimeEventSink` adapter | `UpdateBroker` implementation | 把 runtime generation change 投影为 `skills/changed` | 不参与 catalog reconcile |
 | `WorkspaceCustomizations` | crate-private | 发现/刷新 `.zeta/instructions` 与 `.zeta/agents`，发布 future-invocation harness snapshot | 不执行 Agent、不激活 Skill、不解析外部生态格式 |
@@ -427,9 +427,9 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
-3. 读取 Session 当前模型，并把它与请求携带的 `ApprovalMode` 一起作为 `TurnAccepted` 的 durable snapshot；
+3. 读取 Session 当前模型，并把它、请求携带的 `ApprovalMode` 和可选 `TurnResourceBudget` 一起作为 `TurnAccepted` 的 durable snapshot；cost ceiling 的带 revision 价格快照由 Core 校验必须匹配该模型；
 4. `start_turn` 使用 typed command ID + exact expected sequence；
-5. replay 时同时校验 input、model 与 approval mode，terminal failure/interruption 不伪装成 success；
+5. replay 在读取 mutable model/Skill authority 前校验 input、resource budget 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
 `session/request::SteerTurn` 只接受当前 Running、WaitingForApproval 或 WaitingForUserInput Turn。

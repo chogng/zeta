@@ -49,6 +49,8 @@ export interface Turn {
 	readonly turnId: string;
 	readonly status: TurnStatus;
 	readonly model?: ModelRef | null;
+	readonly resourceBudget?: TurnResourceBudget | null;
+	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
 	readonly error?: TurnError | null;
 }
@@ -64,6 +66,20 @@ export interface ModelUsageSummary {
 	readonly outputTokens: ModelUsageTotal;
 	readonly cachedInputTokens: ModelUsageTotal;
 	readonly reasoningTokens: ModelUsageTotal;
+}
+
+export interface ModelPriceSnapshot {
+	readonly model: ModelRef;
+	readonly revision: string;
+	readonly inputUsdMicrosPerMillionTokens: number;
+	readonly cachedInputUsdMicrosPerMillionTokens: number;
+	readonly outputUsdMicrosPerMillionTokens: number;
+}
+
+export interface TurnResourceBudget {
+	readonly maxTotalTokens?: number | null;
+	readonly maxCostUsdMicros?: number | null;
+	readonly priceSnapshot?: ModelPriceSnapshot | null;
 }
 
 export interface Thread {
@@ -128,7 +144,7 @@ export interface ThreadSubscription {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly skills?: readonly SkillReference[] }
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly skills?: readonly SkillReference[]; readonly resourceBudget?: TurnResourceBudget }
 export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }

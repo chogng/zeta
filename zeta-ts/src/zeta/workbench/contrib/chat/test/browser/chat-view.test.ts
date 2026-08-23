@@ -1075,6 +1075,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		turns: [{
 			turnId: "turn-1",
 			status: "failed",
+			usage: emptyUsage(),
 			items: [],
 			error: {
 				code: "providerAuth",
@@ -1317,6 +1318,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 		turns: [{
 			turnId: "turn-running",
 			status: "running",
+			usage: emptyUsage(),
 			items: [{
 				type: "userMessage",
 				itemId: "item-user",
@@ -1538,6 +1540,7 @@ function thread(agentText?: string): Thread {
 			? [{
 				turnId: "turn-1",
 				status: "completed",
+				usage: emptyUsage(),
 				items: [{
 					type: "agentMessage",
 					itemId: "item-1",
@@ -1553,6 +1556,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 	return {
 		turnId: "turn-1",
 		status: "failed",
+		usage: emptyUsage(),
 		items: [],
 		error: { code, message, retryable },
 	};
