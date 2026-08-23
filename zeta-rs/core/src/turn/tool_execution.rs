@@ -370,14 +370,22 @@ impl ToolExecutionOrchestrator {
             item_id: context.item_id.clone(),
             cancellation: context.cancellation.clone(),
         });
-        self.tools.execute_streaming_with_facts_and_interactions(
+        let before_sequence = snapshot.sequence;
+        let output = self.tools.execute_streaming_with_facts_and_interactions(
             call,
             authorization,
             context.cancellation,
             &facts,
             interactions,
             &mut stream,
-        )
+        );
+        for update in self
+            .threads
+            .thread_updates_after(context.thread_id, before_sequence)?
+        {
+            self.updates.publish(update);
+        }
+        output
     }
 
     fn review_denial_and_retry(

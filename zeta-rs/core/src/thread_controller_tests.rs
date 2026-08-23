@@ -11,9 +11,9 @@ use zeta_history::StoredEvent;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    ContextSourceRange, InteractionDeadline, RequestId, RequestUserInput, RequestUserInputResponse,
-    SessionId, StableTurnError, StableTurnErrorCode, ThreadEvent, ThreadId, ThreadItem, ToolCallId,
-    ToolName, TurnId, UserInput, UserInputQuestion,
+    ContextSourceRange, InteractionDeadline, PlanStep, PlanStepStatus, PlanUpdate, RequestId,
+    RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError, StableTurnErrorCode,
+    ThreadEvent, ThreadId, ThreadItem, ToolCallId, ToolName, TurnId, UserInput, UserInputQuestion,
 };
 
 struct OneShotActivation {
@@ -40,6 +40,7 @@ fn start_request(key: &str) -> StartTurnRequest {
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         resource_budget: None,
+        tool_profile: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "hello".into(),
@@ -944,6 +945,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         resource_budget: None,
+        tool_profile: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
             text: "different".into(),
@@ -1449,6 +1451,7 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![
                     UserInput::Text {
@@ -1478,5 +1481,41 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         &snapshot.commands[0].receipt.command,
         zeta_protocol::ThreadCommand::StartTurn { input, .. }
             if matches!(input[1], UserInput::ImageAttachment { .. })
+    ));
+}
+
+#[test]
+fn update_plan_is_idempotent_and_recovers_as_canonical_turn_state() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "plan");
+    let turn = start_turn(&threads, &thread, "plan-turn");
+    let plan = PlanUpdate {
+        explanation: Some("Implement S3".into()),
+        steps: vec![
+            PlanStep {
+                step: "Implement".into(),
+                status: PlanStepStatus::InProgress,
+            },
+            PlanStep {
+                step: "Verify".into(),
+                status: PlanStepStatus::Pending,
+            },
+        ],
+    };
+
+    let changed = threads.update_plan(&thread, &turn, plan.clone()).unwrap();
+    assert_eq!(changed.disposition, UpdatePlanDisposition::Changed);
+    let unchanged = threads.update_plan(&thread, &turn, plan.clone()).unwrap();
+    assert_eq!(unchanged.disposition, UpdatePlanDisposition::Unchanged);
+    assert_eq!(unchanged.sequence, changed.sequence);
+
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(recovered.turns[0].plan.as_ref(), Some(&plan));
+    assert!(matches!(
+        recovered.public_thread().turns[0].plan.as_ref(),
+        Some(projected) if projected == &plan
     ));
 }

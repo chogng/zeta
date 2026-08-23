@@ -23,6 +23,24 @@ export interface IChatListItem {
 	readonly action?: ChatTurnErrorAction;
 }
 
+/** Projects the canonical durable plan owned by a Turn. */
+export function chatPlanListItem(turn: Turn): IChatListItem | undefined {
+	if (!turn.plan) return undefined;
+	const steps = turn.plan.steps.map((step) => {
+		switch (step.status) {
+			case "completed": return `- [x] ${step.step}`;
+			case "inProgress": return `- [ ] **In progress:** ${step.step}`;
+			case "pending": return `- [ ] ${step.step}`;
+		}
+	});
+	return {
+		id: `turn-plan:${turn.turnId}`,
+		type: "plan",
+		text: [turn.plan.explanation, ...steps].filter((value): value is string => Boolean(value)).join("\n\n"),
+		transient: false,
+	};
+}
+
 /** Projects one durable Turn failure as a conversation item. */
 export function chatTurnErrorListItem(turn: Turn, options: ChatTurnErrorListItemOptions = {}): IChatListItem | undefined {
 	if (turn.status !== "failed") return undefined;

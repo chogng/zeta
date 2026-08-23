@@ -1,6 +1,7 @@
 use crate::{
     ActionApprovalResponse, ApprovalMode, DynamicToolResponse, FrozenSkillActivation, ModelRef,
-    RequestId, RequestUserInputResponse, TurnId, TurnResourceBudget, UserInput,
+    RequestId, RequestUserInputResponse, ToolProfileSnapshot, TurnId, TurnResourceBudget,
+    UserInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,9 @@ pub enum ThreadCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         resource_budget: Option<TurnResourceBudget>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        tool_profile: Option<Box<ToolProfileSnapshot>>,
         input: Vec<UserInput>,
     },
     StartShellTurn {

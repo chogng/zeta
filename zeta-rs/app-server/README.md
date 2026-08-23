@@ -51,6 +51,7 @@ JSONL / in-process caller
    │              → built-in browser Tool port + one-time approval policy
    ├─ read-only/capability ToolExecutor contributions → zeta-extension-api
    ├─ optional Web Search executor → zeta-web-search-extension
+   ├─ trusted Workspace coding tools → read_file / write_file / edit / grep / glob / apply_patch / shell-command / update_plan
    ├─ trusted Workspace Agent tools → spawn_agent / send_agent_message / wait_agent
    ├─ Skill RPC/config/event adapters → zeta-skills-extension
    │                                  → zeta-skills + zeta-file-watcher
@@ -96,7 +97,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
-| `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
+| `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports；正常 local composition 另在 Turn 接受时冻结 `coding-v1` snapshot |
 | `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
 | `AppServer::with_codex_turn_backend` | 将静态目录中 `access = subscription` 的模型路由到 Codex complete-Turn backend；不读取登录状态做隐式切换 |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
@@ -427,10 +428,15 @@ start/compact/interrupt 与 interaction resolve，并以 tagged `SessionRequestR
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
-3. 读取 Session 当前模型，并把它、请求携带的 `ApprovalMode` 和可选 `TurnResourceBudget` 一起作为 `TurnAccepted` 的 durable snapshot；cost ceiling 的带 revision 价格快照由 Core 校验必须匹配该模型；
+3. 读取 Session 当前模型并从 exact registry definitions 构造 `coding-v1` `ToolProfileSnapshot`，再把模型、profile、请求携带的 `ApprovalMode` 和可选 `TurnResourceBudget` 一起作为 `TurnAccepted` 的 durable snapshot；cost ceiling 的带 revision 价格快照由 Core 校验必须匹配该模型；
 4. `start_turn` 使用 typed command ID + exact expected sequence；
 5. replay 在读取 mutable model/Skill authority 前校验 input、resource budget 与 approval mode，terminal failure/interruption 不伪装成 success；
-6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
+6. 新 start 发布 durable update 后调用 `TurnExecutor::start`；执行器在每次模型调用前复核冻结的工具名、顺序和 definition digest，漂移时 fail closed。
+
+Trusted Workspace 的 canonical local coding surface 由 direct `LocalToolSuite` 唯一提供
+`read_file`、`write_file`、`edit`、`grep` 和 `glob`，由独立 executor 提供 `shell-command` 与
+`apply_patch`；legacy operation-enum `file-system` 不暴露给 Agent。`update_plan` 使用 durable caller
+identity 提交 `ThreadEvent::PlanUpdated`，相同内容幂等，Desktop 只从 `Turn.plan` 重建计划。
 
 `session/request::CompactContext` 校验 Thread 归属和 active Session，读取当前所选模型，再创建独立的
 `ThreadCommand::CompactContext` Turn。可选 retention prompt 会 trim、限制为 8 KiB 并冻结在 command
@@ -631,6 +637,7 @@ session/request StartTurn { SkillRef }
 └─ Core extension lifecycle
    ├─ SkillsExtension activation contributor → exact frozen activation
    ├─ ThreadEvent::TurnAccepted persists FrozenSkillActivation
+   ├─ ThreadEvent::TurnAccepted persists ToolProfileSnapshot
    └─ TurnExecutor safe point → TurnInputContributor → PromptFragment → ContextPlan
 ```
 

@@ -482,7 +482,6 @@ impl UpdateBroker {
             }
             ThreadUpdate::ItemStarted { .. }
             | ThreadUpdate::ItemDelta { .. }
-            | ThreadUpdate::PlanUpdated { .. }
             | ThreadUpdate::ToolOutputDelta { .. } => self.publish_thread_transient(&update),
         }
     }

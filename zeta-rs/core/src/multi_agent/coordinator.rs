@@ -406,13 +406,18 @@ impl MultiAgentCoordinator {
 
     fn finish_spawn(&self, seed: AgentContextSeed) -> Result<SpawnedAgent, CoreError> {
         validate_context_seed_digest(&seed)?;
-        let session = self.sessions.read_session(
-            &self
-                .sessions
-                .threads()
-                .read_thread(&seed.parent_thread_id)?
-                .session_id,
-        )?;
+        let parent = self
+            .sessions
+            .threads()
+            .read_thread(&seed.parent_thread_id)?;
+        let parent_tool_profile = parent
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == seed.parent_turn_id)
+            .ok_or_else(|| CoreError::NotFound(seed.parent_turn_id.to_string()))?
+            .tool_profile
+            .clone();
+        let session = self.sessions.read_session(&parent.session_id)?;
         let spawned = self.sessions.spawn_agent_thread(SpawnAgentThreadRequest {
             command_id: spawn_command_id(&seed.delegation_id)?,
             session_id: session.session_id.clone(),
@@ -436,6 +441,7 @@ impl MultiAgentCoordinator {
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: parent_tool_profile,
                 activated_skills: seed.capability_scope.skills.clone(),
                 input: vec![UserInput::Text {
                     text: seed.task.instructions.clone(),

@@ -1,6 +1,4 @@
-use crate::{
-    ItemId, PlanUpdate, SessionId, StreamCursor, ThreadEvent, ThreadId, ThreadItem, TurnId,
-};
+use crate::{ItemId, SessionId, StreamCursor, ThreadEvent, ThreadId, ThreadItem, TurnId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -27,10 +25,6 @@ pub enum ThreadUpdate {
         turn_id: TurnId,
         item_id: ItemId,
         delta: ItemDelta,
-    },
-    PlanUpdated {
-        turn_id: TurnId,
-        plan: PlanUpdate,
     },
     ToolOutputDelta {
         turn_id: TurnId,

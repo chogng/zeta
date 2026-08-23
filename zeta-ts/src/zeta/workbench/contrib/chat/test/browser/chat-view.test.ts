@@ -1064,6 +1064,74 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 	assert.equal(model.thread?.sequence, 4);
 });
 
+test("ChatPaneModel projects and refreshes the canonical durable Turn plan", async () => {
+	const activeSession = session("session-1", "thread-1");
+	let currentThread: Thread = {
+		...thread(),
+		sequence: 3,
+		turns: [{
+			turnId: "turn-1",
+			status: "running",
+			usage: emptyUsage(),
+			items: [],
+			plan: {
+				explanation: "Implement S3",
+				steps: [
+					{ step: "Implement", status: "inProgress" },
+					{ step: "Verify", status: "pending" },
+				],
+			},
+		}],
+	};
+	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: { session: activeSession, threadId: "thread-1" },
+	}, sessions);
+
+	await model.initialize();
+	assert.equal(model.items[0]?.id, "turn-plan:turn-1");
+	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Implement/);
+
+	currentThread = {
+		...currentThread,
+		sequence: 4,
+		turns: [{
+			...currentThread.turns[0],
+			plan: {
+				explanation: "Implementation complete",
+				steps: [
+					{ step: "Implement", status: "completed" },
+					{ step: "Verify", status: "inProgress" },
+				],
+			},
+		}],
+	};
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 4,
+			update: {
+				type: "committed",
+				event: {
+					type: "planUpdated",
+					threadId: "thread-1",
+					turnId: "turn-1",
+					plan: currentThread.turns[0].plan!,
+				},
+			},
+		},
+	});
+	await nextTask();
+
+	assert.equal(model.items.length, 1);
+	assert.match(model.items[0]?.text ?? "", /\[x\] Implement/);
+	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Verify/);
+});
+
 test("ChatPaneModel refreshes on stream gaps and rejects retired incarnations", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({

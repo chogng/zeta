@@ -96,9 +96,10 @@ Core durable Tool Call / Tool Result lifecycle
 - `zeta-core::ContextAssembler` 已能重建 Tool Call/Result pairing；
 - `zeta-api` 已分别把 canonical function tool 和图片 detail 转成 OpenAI Responses、
   Chat Completions 与 Anthropic Messages wire payload；
-- `zeta-shell-command`、`zeta-file-system` 与 `zeta-apply-patch` 各自提供独立 executor；App Server
-  已用 `ToolExecutorRuntime` 把它们接入 durable facts、policy authority、streaming output 与统一
-  registry，旧 read/write/edit 名称只保留 hidden migration route；
+- `zeta-shell-command` 与 `zeta-apply-patch` 各自提供独立 executor；App Server 的 direct
+  `LocalToolSuite` 唯一提供 Agent 可见的 `read_file`、`write_file`、`edit`、`grep` 与 `glob`，三者
+  共同接入 durable facts、policy authority、streaming output 与统一 registry；legacy
+  operation-enum `file-system` 只留给明确的非 Agent consumer；
 - `zeta-mcp` 的 tools-only catalog/binding runtime 与 `zeta-mcp-extension` 的 host/Core adapter 已进入共享
   registry/search projection；client-hosted dynamic tool 已进入同一 approval、durable interaction、
   exact owner 与 unknown-outcome 链；
@@ -203,8 +204,8 @@ Core 的 `ToolService` 是 consumer-owned port；它可以由外层 `ToolRegistr
                    shared types / pure adapters
                     ▲       ▲        ▲
                     │       │        │
-          local tool crates  zeta-mcp  code-mode adapter
-      shell-command / file-system / apply-patch
+          local tool owners  zeta-mcp  code-mode adapter
+      shell-command / App Server direct files / apply_patch
                     \       |        /
                      \      |       /
                       App Server composition
@@ -262,18 +263,19 @@ MCP adapter 的公开输入使用 `zeta-tools` 自己的纯 `McpToolProjection`�
 
 ### 4.1 当前本地工具来源运行时
 
-本地 Workspace 工具不再有聚合 crate。每个 crate 只提供一个独立 `ToolExecutor`，可由
-App Server composition root 按 policy 单独注册：
+本地 Workspace 的 Agent 工具由 App Server composition root 统一注册；模型侧只看到 canonical
+direct 工具名，不看到基础库或 legacy operation enum：
 
 | Crate / tool name | 可做的事 | 明确不做的事 |
 | --- | --- | --- |
 | `zeta-shell-command` / `shell-command` | 在批准的相对 Workspace 工作目录执行显式 program/arguments；复用 `zeta-tool-executor` 的 approval、timeout 和输出上限 | 不隐式启动 shell，不绕过 process policy |
-| `zeta-file-system` / `file-system` | 读取 UTF-8 文件、列目录、读取 metadata | 不写入、删除、移动或重命名 |
-| `zeta-apply-patch` / `apply-patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API |
+| App Server `LocalToolSuite` / `read_file`、`write_file`、`edit`、`grep`、`glob` | Thread-scoped 读后写入、conditional atomic 单文件写入和受控搜索 | 不暴露 operation enum；断线恢复后必须重读才能恢复内存中的文件 fingerprint |
+| `zeta-file-system` / 非 Agent 基础库 | 提供 workspace-scoped 条件写入与 host-only filesystem 能力 | 默认 coding profile 不暴露 `file-system` 工具 |
+| `zeta-apply-patch` / `apply_patch` | 预检后更新、添加或删除普通文件；replacement 按文件原子写入 | 不接受绝对/`..` 路径，不直接提供任意写入 API；多文件提交不承诺事务性 |
 
-三者均在构造时固定 `ToolEnvironmentId + WorkspaceRoot`，要求它与
+这些 owner 均在构造时固定 `ToolEnvironmentId + WorkspaceRoot`，要求它与
 `ToolExecutionContext.environment_id` 一致，且只接受与自身 `ToolDefinition` digest 相符的冻结
-binding。`apply-patch` 在所有 hunk 校验完成前不写入；
+binding。`apply_patch` 在所有 hunk 校验完成前不写入；
 若多文件 commit 中途失败，返回 `OutcomeUncertain`，由 Core 决定后续恢复语义。
 
 `zeta-file-system` 还提供 host-only 的 `find_nearest_ancestor_with_markers`，用于从一个本地路径
@@ -1466,7 +1468,7 @@ mod tests;
 ### 阶段 T1：执行器与注册表（主执行链已接入）
 
 - ✅ 定义 `ToolBinding`、`ToolExecutor`、materialized invocation、cancellation context 与 outcome；
-- ✅ built-in process、filesystem 与 apply-patch tool 实现 executor contract；
+- ✅ built-in process、direct filesystem suite 与 `apply_patch` tool 实现 executor contract；
 - ✅ App Server 构造 immutable registry snapshot，并在 Workspace replacement 时单调递增 generation；
 - ✅ Core `ToolService` adapter 按 frozen binding/runtime key 路由，并把 durable Turn facts 投影为 `ToolInvocation`；
 - ✅ prepared call 在 hot reload 后继续使用原 Tool/Policy generation，sandbox retry 不切换 generation；
@@ -1474,7 +1476,7 @@ mod tests;
 
 完成条件：registry 更新不能劫持 in-flight call，stale binding 被明确拒绝。
 
-### 阶段 T2：MCP 与动态适配器（MCP/dynamic 与 durable provenance 主链完成）
+### 阶段 T2：MCP 与动态适配器（MCP/动态与 durable 来源主链完成）
 
 - ✅ `zeta-mcp` 输出 `McpToolProjection` 并建立 immutable catalog/binding；
 - ✅ 接通 MCP schema/name/result conversion 与调用取消；

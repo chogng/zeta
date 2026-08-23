@@ -14,6 +14,7 @@ use zeta_action_policy::{
 };
 use zeta_async_utils::CancellationToken;
 use zeta_core::{CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService};
+use zeta_file_system::{FileWriteCondition, LocalFileSystem, WorkspaceFileSystem};
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName, ToolOutputStream};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::TrustedWorkspace;
@@ -25,7 +26,7 @@ Usage notes:
   of a truncated read says how many lines remain; call again with a larger
   offset to continue.
 - Lines longer than 2000 characters are truncated with a marker.
-- Image files (png, jpg, gif, webp) are returned as viewable images.
+- Binary files, including images, are rejected; use a dedicated viewer for images.
 - You must read a file before editing or overwriting it.
 - Prefer reading whole files (omit offset/limit) unless the file is too large."#;
 const WRITE_DESCRIPTION: &str = r#"Creates or overwrites a file with the given content.
@@ -33,21 +34,23 @@ const WRITE_DESCRIPTION: &str = r#"Creates or overwrites a file with the given c
 Usage notes:
 - Overwriting an existing file you have not read in this conversation fails;
   read it first.
-- Prefer edit (or apply_patch) for modifying existing files; use write_file
-  for new files or full rewrites you have already read.
+- Prefer apply_patch for modifying existing files, or edit for one small exact
+  replacement; use write_file for new files or full rewrites you have read.
 - Parent directories are created automatically.
 - Never proactively create documentation files unless explicitly requested."#;
 const EDIT_DESCRIPTION: &str = r#"Performs an exact string replacement in a file.
 
 Usage notes:
 - You must read the file first; the edit fails otherwise.
+- Use edit for one small, exact replacement, or as a fallback when a narrow
+  apply_patch context cannot match. Prefer apply_patch for coordinated changes
+  across multiple locations or files.
 - old_string must match the file content exactly, including whitespace and
   indentation, and must identify a unique location. If it matches more than
   one location, extend it with surrounding lines until unique, or set
   replace_all to true to change every occurrence.
 - Do not include line-number prefixes from read_file output in old_string.
-- For moving or renaming files use shell with git mv; for full rewrites use
-  write_file."#;
+- For moves or renames use shell with git mv; for full rewrites use write_file."#;
 const GREP_DESCRIPTION: &str = r#"Searches file contents with a regular expression (ripgrep syntax).
 
 - Full regex support, e.g. "fn\\s+resolve" or "TODO|FIXME".
@@ -80,6 +83,7 @@ const EDIT_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"stri
 const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for (ripgrep syntax)."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the workspace root."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
 const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the workspace root."}},"required":["pattern","path"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The fixed local coding-tool suite and its path-scoped execution state.
@@ -87,8 +91,9 @@ pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
     ripgrep: RipgrepExecutable,
     workspace: TrustedWorkspace,
-    read_paths: Mutex<BTreeSet<PathBuf>>,
-    read_fingerprints: Mutex<std::collections::BTreeMap<PathBuf, String>>,
+    file_system: LocalFileSystem,
+    read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
+    read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
 }
 
@@ -106,6 +111,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         Self {
             shell,
             ripgrep,
+            file_system: LocalFileSystem::new(workspace.root().clone()),
             workspace,
             read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
@@ -193,7 +199,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ))
     }
 
-    fn read_file(&self, call: &ToolCall) -> Result<ToolExecutionOutput, CoreError> {
+    fn read_file(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let (relative, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
         let metadata = fs::metadata(&resolved)
@@ -220,12 +226,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         self.read_paths
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(relative.clone());
+            .insert((scope.into(), relative.clone()));
         self.read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                relative.clone(),
+                (scope.into(), relative.clone()),
                 format!("{:x}", Sha256::digest(text.as_bytes())),
             );
         if text.is_empty() {
@@ -256,7 +262,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         Ok(ToolExecutionOutput::Success(output.join("\n")))
     }
 
-    fn write_file(&self, call: &ToolCall) -> Result<ToolExecutionOutput, CoreError> {
+    fn write_file(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let content = string_arg(&call.arguments, "content")?;
         let (relative, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
@@ -270,7 +276,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 .read_paths
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .contains(&relative)
+                .contains(&(scope.into(), relative.clone()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} exists but has not been read in this conversation. Read it first, or choose a new path"
@@ -279,11 +285,45 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         if let Some(parent) = resolved.parent() {
             fs::create_dir_all(parent).map_err(|error| CoreError::Execution(error.to_string()))?;
         }
-        fs::write(&resolved, content).map_err(|error| CoreError::Execution(error.to_string()))?;
+        let expected_revision = self
+            .read_fingerprints
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&(scope.into(), relative.clone()))
+            .cloned();
+        if resolved.exists() && expected_revision.is_none() {
+            return Ok(ToolExecutionOutput::Failure(format!(
+                "{path} must be read again after reconnecting before it can be overwritten"
+            )));
+        }
+        let write = match expected_revision {
+            Some(revision) => self.file_system.write_file_with_condition(
+                &relative,
+                content.as_bytes(),
+                MAX_WRITE_FILE_BYTES,
+                &FileWriteCondition::ExpectedRevision(revision),
+            ),
+            None => {
+                self.file_system
+                    .write_file(&relative, content.as_bytes(), MAX_WRITE_FILE_BYTES)
+            }
+        };
+        write.map_err(|error| CoreError::Execution(error.to_string()))?;
+        self.read_paths
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert((scope.into(), relative.clone()));
+        self.read_fingerprints
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                (scope.into(), relative),
+                format!("{:x}", Sha256::digest(content.as_bytes())),
+            );
         Ok(ToolExecutionOutput::Success(format!("wrote {path}")))
     }
 
-    fn edit(&self, call: &ToolCall) -> Result<ToolExecutionOutput, CoreError> {
+    fn edit(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let old = string_arg(&call.arguments, "old_string")?;
         let new = string_arg(&call.arguments, "new_string")?;
@@ -298,7 +338,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .read_paths
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(&relative)
+            .contains(&(scope.into(), relative.clone()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} has not been read in this conversation. Read it first"
@@ -310,7 +350,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&relative)
+            .get(&(scope.into(), relative.clone()))
             && expected != &format!("{:x}", Sha256::digest(text.as_bytes()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
@@ -337,12 +377,30 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         } else {
             text.replacen(&old, &new, 1)
         };
-        fs::write(&resolved, &replaced).map_err(|error| CoreError::Execution(error.to_string()))?;
+        let Some(expected_revision) = self
+            .read_fingerprints
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&(scope.into(), relative.clone()))
+            .cloned()
+        else {
+            return Ok(ToolExecutionOutput::Failure(format!(
+                "{path} must be read again after reconnecting before it can be edited"
+            )));
+        };
+        self.file_system
+            .write_file_with_condition(
+                &relative,
+                replaced.as_bytes(),
+                MAX_WRITE_FILE_BYTES,
+                &FileWriteCondition::ExpectedRevision(expected_revision),
+            )
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
         self.read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                relative,
+                (scope.into(), relative),
                 format!("{:x}", Sha256::digest(replaced.as_bytes())),
             );
         let lines = replaced.lines().collect::<Vec<_>>();
@@ -479,23 +537,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        if call.name.as_str() == "shell-command" {
-            return self.shell.execute(call, authorization, cancellation);
-        }
-        cancellation
-            .check()
-            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        match call.name.as_str() {
-            "read_file" => self.read_file(call),
-            "write_file" => self.write_file(call),
-            "edit" => self.edit(call),
-            "grep" => self.grep(call, cancellation),
-            "glob" => self.glob(call, cancellation),
-            _ => Ok(ToolExecutionOutput::Failure(format!(
-                "tool is not available: {}",
-                call.name
-            ))),
-        }
+        self.execute_scoped(call, authorization, cancellation, "direct")
     }
 
     fn execute_with_facts(
@@ -522,15 +564,21 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
+        let scope = facts
+            .execution_identity()
+            .map(|identity| identity.thread_id().to_string())
+            .ok_or_else(|| {
+                CoreError::Execution("local tools require durable caller identity".into())
+            })?;
         for path in facts.read_paths() {
             if let Ok((relative, _)) = self.resolve(&path.display().to_string(), true) {
                 self.read_paths
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert(relative);
+                    .insert((scope.clone(), relative));
             }
         }
-        let output = self.execute(call, authorization, cancellation)?;
+        let output = self.execute_scoped(call, authorization, cancellation, &scope)?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
@@ -544,11 +592,39 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let output = self.execute(call, authorization, cancellation)?;
+        let output = self.execute_scoped(call, authorization, cancellation, "direct")?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
         Ok(output)
+    }
+}
+
+impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
+    fn execute_scoped(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        scope: &str,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if call.name.as_str() == "shell-command" {
+            return self.shell.execute(call, authorization, cancellation);
+        }
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        match call.name.as_str() {
+            "read_file" => self.read_file(call, scope),
+            "write_file" => self.write_file(call, scope),
+            "edit" => self.edit(call, scope),
+            "grep" => self.grep(call, cancellation),
+            "glob" => self.glob(call, cancellation),
+            _ => Ok(ToolExecutionOutput::Failure(format!(
+                "tool is not available: {}",
+                call.name
+            ))),
+        }
     }
 }
 

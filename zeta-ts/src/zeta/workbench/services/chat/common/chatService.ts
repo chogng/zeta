@@ -45,11 +45,24 @@ export interface TurnError {
 	readonly retryable: boolean;
 }
 
+export type PlanStepStatus = "pending" | "inProgress" | "completed";
+
+export interface PlanStep {
+	readonly step: string;
+	readonly status: PlanStepStatus;
+}
+
+export interface PlanUpdate {
+	readonly explanation?: string | null;
+	readonly steps: readonly PlanStep[];
+}
+
 export interface Turn {
 	readonly turnId: string;
 	readonly status: TurnStatus;
 	readonly model?: ModelRef | null;
 	readonly resourceBudget?: TurnResourceBudget | null;
+	readonly plan?: PlanUpdate | null;
 	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
 	readonly error?: TurnError | null;
@@ -122,13 +135,12 @@ export type ThreadCommittedEvent =
 	| { readonly type: "turnCompleted" }
 	| { readonly type: "turnFailed" }
 	| { readonly type: "turnInterrupted" }
-	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "modelUsageRecorded" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
+	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "planUpdated" | "modelUsageRecorded" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
 
 export type ThreadUpdate =
 	| { readonly type: "committed"; readonly event: ThreadCommittedEvent }
 	| { readonly type: "itemStarted"; readonly item: ThreadItem }
 	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string } }
-	| { readonly type: "planUpdated" }
 	| { readonly type: "toolOutputDelta" };
 
 export interface ThreadUpdateEnvelope {

@@ -33,7 +33,7 @@ serde / schemars / ts-rs
 | --- | --- | --- |
 | Identity | `SessionId`, `ThreadId`, `TurnId`, `ItemId`, `CommandId`, `RequestId`, `ToolCallId` | non-empty typed string identity |
 | Skill identity | `SkillName`, `SkillSourceId`, `SkillId` | Agent Skills name + source-qualified cross-config/catalog identity |
-| Product model | `Session`, `SessionThread`, `Thread`, `Turn`, `ThreadItem` | `Session → Thread → Turn → Item` snapshot |
+| Product model | `Session`, `SessionThread`, `Thread`, `Turn`, `ThreadItem`, `PlanUpdate`, `ToolProfileSnapshot` | `Session → Thread → Turn → Item` snapshot；Turn 冻结工具 profile 并保存 canonical plan |
 | Intent | `SessionCommand`, `ThreadCommand` | 请求改变状态，不表示已发生 |
 | Durable fact | `SessionEvent`, `ThreadEvent`, `ToolExecutionAuthority` | reducer/store 接受的过去式事实 |
 | Tool execution | `ProcessExecutionOutput`, `SandboxDenialOutput`, `ToolExecutionOutput`, `ToolReplaySafety` | executor、Core 与 durable audit 共享的原始结果/重放语义 |
@@ -116,8 +116,9 @@ Command
 Event 不携带 sequence、timestamp、schema version、event ID 或 transport metadata。特别地，
 `ThreadEvent::ToolExecutionStarted` durable 地保存 action digest、policy revision 和
 `ToolExecutionAuthority`，但不负责判断 authority 是否有效。`SessionEvent::SessionModelChanged`
-保存 Session 当前模型，而 `ThreadEvent::TurnAccepted` 再保存该 Turn 的不可变模型与
-`ApprovalMode` 快照。`ApprovalMode` 的 canonical variants 是 `AskPermissions`、`AutoReview` 和
+保存 Session 当前模型，而 `ThreadEvent::TurnAccepted` 再保存该 Turn 的不可变模型、
+`ToolProfileSnapshot` 与 `ApprovalMode` 快照。profile 保存 ID、revision、definition digest、工具顺序和
+`parallel_tool_calls`；恢复执行不得从当前 registry 猜测旧 Turn 的工具面。`ApprovalMode` 的 canonical variants 是 `AskPermissions`、`AutoReview` 和
 `BypassPermissions`；旧数据缺字段时按 `AskPermissions` 读取。模式只给 policy safe point 使用，
 不能替代 action、capability、revision 或 Tool Call 的精确绑定。
 一次 sandbox denial 获得新的 exact
@@ -127,8 +128,9 @@ escalate 的 Tool Call。
 
 ### 更新
 
-`ThreadUpdate::Committed { event }` 是 durable；`ItemStarted`、`ItemDelta` 与 `PlanUpdated` 是可丢失
-的低延迟 projection。`ThreadUpdateEnvelope` 同时区分：
+`ThreadUpdate::Committed { event }` 是 durable；计划更新属于其中的
+`ThreadEvent::PlanUpdated`，reducer 将它投影到 `Turn.plan`。只有 `ItemStarted`、`ItemDelta` 和
+`ToolOutputDelta` 是可丢失的低延迟 projection。`ThreadUpdateEnvelope` 同时区分：
 
 - `durable_sequence`：aggregate 已提交事实的位置；
 - `stream_cursor`：某个 transient stream instance 内的位置。

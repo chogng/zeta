@@ -851,6 +851,7 @@ impl AppServer {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let turn_executor = self.turn_executor_snapshot();
         let policy_revision = turn_executor.policy_revision();
+        let tool_profile = turn_executor.tool_profile_snapshot().map_err(core_error)?;
         let command_id = mutation.command_id.clone();
         let replay_input = input.clone();
         let start = self
@@ -865,6 +866,7 @@ impl AppServer {
                     policy_revision,
                     approval_mode,
                     resource_budget: resource_budget.clone(),
+                    tool_profile: Some(tool_profile),
                     activated_skills: Vec::new(),
                     input,
                 },

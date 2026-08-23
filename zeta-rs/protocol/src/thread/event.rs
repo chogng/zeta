@@ -14,6 +14,7 @@ use crate::ItemId;
 use crate::ModelInputEstimate;
 use crate::ModelRef;
 use crate::ModelUsage;
+use crate::PlanUpdate;
 use crate::RequestId;
 use crate::SandboxDenialOutput;
 use crate::SessionId;
@@ -21,6 +22,7 @@ use crate::StableTurnError;
 use crate::ThreadId;
 use crate::ThreadItem;
 use crate::ToolCallId;
+use crate::ToolProfileSnapshot;
 use crate::Turn;
 use crate::TurnExecutionBinding;
 use crate::TurnId;
@@ -110,6 +112,9 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         resource_budget: Option<TurnResourceBudget>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        tool_profile: Option<ToolProfileSnapshot>,
     },
     TurnStarted {
         thread_id: ThreadId,
@@ -142,6 +147,11 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
         item: ThreadItem,
+    },
+    PlanUpdated {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        plan: PlanUpdate,
     },
     InteractionRequested {
         thread_id: ThreadId,
@@ -259,6 +269,7 @@ impl ThreadEvent {
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
             Self::ModelUsageRecorded { .. } => "model.usage_recorded",
             Self::ItemCompleted { .. } => "item.completed",
+            Self::PlanUpdated { .. } => "plan.updated",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
             Self::ToolExecutionStarted { .. } => "tool.execution_started",
@@ -298,6 +309,7 @@ impl ThreadEvent {
             | Self::TurnExecutionAttempted { thread_id, .. }
             | Self::ModelUsageRecorded { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
+            | Self::PlanUpdated { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }
             | Self::ToolExecutionStarted { thread_id, .. }

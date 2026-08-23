@@ -31,9 +31,6 @@ use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_execpolicy::ExecPolicySelector;
 use zeta_execpolicy::ExecPolicySnapshot;
-use zeta_file_system::LocalFileSystem;
-use zeta_file_system_tool::FileSystemLimits;
-use zeta_file_system_tool::FileSystemTool;
 use zeta_install_context::{ExecutableCandidates, InstallContext, ManagedExecutable};
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolOutputStream};
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy};
@@ -143,14 +140,6 @@ pub(crate) fn compose_local_tools_with_config(
         )
         .map_err(LocalToolError::definition)?,
     );
-    let file_system_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
-        FileSystemTool::new(
-            environment_id.clone(),
-            Arc::new(LocalFileSystem::new(workspace.root().clone())),
-            FileSystemLimits::default(),
-        )
-        .map_err(LocalToolError::definition)?,
-    );
     let apply_patch_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
         ApplyPatchTool::new(
             environment_id.clone(),
@@ -178,11 +167,6 @@ pub(crate) fn compose_local_tools_with_config(
         executors: vec![
             LocalExecutorContribution {
                 executor: shell_executor,
-                environment_id: environment_id.clone(),
-                reviewer: Arc::clone(&reviewer),
-            },
-            LocalExecutorContribution {
-                executor: file_system_executor,
                 environment_id: environment_id.clone(),
                 reviewer: Arc::clone(&reviewer),
             },
@@ -218,15 +202,13 @@ impl LocalToolComposition {
     pub(crate) fn tool_port(&self) -> Result<ToolPort, ToolCompositionError> {
         let mut port = ToolPort::local(Arc::clone(&self.tools), Arc::clone(&self.policy));
         let local_definitions = self.tools.definitions();
-        for hidden in ["shell-command", "read_file", "write_file", "edit"] {
-            let name =
-                zeta_protocol::ToolName::new(hidden).expect("static local tool name is valid");
-            if local_definitions
-                .iter()
-                .any(|definition| definition.name == name)
-            {
-                port = port.with_tool_exposure(&name, zeta_tools::ToolExposure::Hidden)?;
-            }
+        let shell_name =
+            zeta_protocol::ToolName::new("shell-command").expect("static local tool name is valid");
+        if local_definitions
+            .iter()
+            .any(|definition| definition.name == shell_name)
+        {
+            port = port.with_tool_exposure(&shell_name, zeta_tools::ToolExposure::Hidden)?;
         }
         for contribution in &self.executors {
             port = port.with_executor(
@@ -657,8 +639,7 @@ impl ToolExecutorReviewer for LocalExecutorReviewer {
             ));
         }
         let review = match call.name.as_str() {
-            "file-system" => self.prepare_file_system(call),
-            "apply-patch" => self.prepare_apply_patch(call),
+            "apply_patch" => self.prepare_apply_patch(call),
             _ => Err(CoreError::Policy(format!(
                 "local executor reviewer does not own tool {}",
                 call.name
@@ -739,58 +720,12 @@ impl LocalExecutorReviewer {
         Ok((review, request))
     }
 
-    fn prepare_file_system(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        let operation = call
-            .arguments
-            .get("operation")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| CoreError::Policy("file-system operation must be a string".into()))?;
-        if !matches!(operation, "read" | "list" | "metadata") {
-            return Err(CoreError::Policy(format!(
-                "unsupported file-system operation: {operation}"
-            )));
-        }
-        let path = call
-            .arguments
-            .get("path")
-            .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| CoreError::Policy("file-system path must be a string".into()))?;
-        let relative = if path.is_empty() { "." } else { path };
-        let resolved = self
-            .workspace
-            .root()
-            .resolve_existing(relative)
-            .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let canonical = serde_json::to_vec(&json!({
-            "tool": call.name,
-            "operation": operation,
-            "path": resolved,
-        }))
-        .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok(ActionReviewRequest::new(
-            ResolvedAction::new(
-                ActionDigest::from_canonical_bytes(canonical),
-                ActionKind::SystemOperation,
-                format!("{operation} {}", resolved.display()),
-                CapabilitySet::new([Capability::new(
-                    CapabilityKind::FileRead,
-                    resolved.display().to_string(),
-                )]),
-            ),
-            ActionProvenance::new(ActionSource::BuiltInTool, "file-system"),
-            SandboxCompatibility::NotApplicable {
-                reason: "the in-process file-system executor is confined by WorkspaceRoot".into(),
-            },
-            self.action_policy_revision.clone(),
-        ))
-    }
-
     fn prepare_apply_patch(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         let patch = call
             .arguments
             .get("patch")
             .and_then(serde_json::Value::as_str)
-            .ok_or_else(|| CoreError::Policy("apply-patch patch must be a string".into()))?;
+            .ok_or_else(|| CoreError::Policy("apply_patch patch must be a string".into()))?;
         let targets = materialize_patch_targets(self.workspace.root(), patch)?;
         let capabilities = targets.iter().flat_map(|target| {
             [
@@ -811,9 +746,9 @@ impl LocalExecutorReviewer {
                 format!("apply patch to {} workspace file(s)", targets.len()),
                 CapabilitySet::new(capabilities),
             ),
-            ActionProvenance::new(ActionSource::BuiltInTool, "apply-patch"),
+            ActionProvenance::new(ActionSource::BuiltInTool, "apply_patch"),
             SandboxCompatibility::NotApplicable {
-                reason: "apply-patch validates every target through WorkspaceRoot and commits host-mediated file mutations".into(),
+                reason: "apply_patch validates every target through WorkspaceRoot and commits host-mediated file mutations".into(),
             },
             self.action_policy_revision.clone(),
         ))
@@ -838,7 +773,7 @@ fn materialize_patch_targets(
         };
         if path.trim().is_empty() {
             return Err(CoreError::Policy(
-                "apply-patch contains an empty target path".into(),
+                "apply_patch contains an empty target path".into(),
             ));
         }
         let resolved = if existing {
@@ -853,7 +788,7 @@ fn materialize_patch_targets(
     targets.dedup();
     if targets.is_empty() {
         return Err(CoreError::Policy(
-            "apply-patch contains no file operations to review".into(),
+            "apply_patch contains no file operations to review".into(),
         ));
     }
     Ok(targets)
@@ -916,19 +851,19 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
         ),
         local_rule(
             "local-apply-patch",
-            "apply-patch",
+            "apply_patch",
             ExecPolicyActionKind::FileSystemMutation,
             ExecPolicyEffect::Continue,
         ),
         local_rule(
-            "local-file-system-read-only",
-            "file-system",
+            "workspace-code-index-read-only",
+            crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::AllowUnsandboxed,
         ),
         local_rule(
-            "workspace-code-index-read-only",
-            crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
+            "built-in:update_plan",
+            crate::server::update_plan_tool::UPDATE_PLAN_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::AllowUnsandboxed,
         ),

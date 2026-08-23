@@ -976,6 +976,7 @@ fn fixture_with_approval_mode(
                 policy_revision,
                 approval_mode,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text { text: "run".into() }],
             },

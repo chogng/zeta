@@ -10,7 +10,7 @@
 
 | 提示词类别 | 当前资产 | 注入时机 owner | 当前状态 |
 |---|---|---|---|
-| System | `SYSTEM_PROMPT` | Agent invocation/context caller | 已具备资产，尚未由 Core 自动注入 |
+| System | `SYSTEM_PROMPT` (`system-v4`) | Agent invocation/context caller | ✅ 已通过 harness/context 注入；包含 canonical 编辑工具和计划工具 guidance |
 | Compaction | `COMPACTION_PROMPT` | Core `ContextCompactionService` | ✅ 已接入 durable checkpoint 流程 |
 | Goals | `GOALS_PROMPT` + `render_goals_prompt` | Goal lifecycle caller | 已具备模板和类型化渲染，目标模型尚未完成 |
 | Review | `REVIEW_PROMPT` | Review caller | 已具备通用 review 资产 |
@@ -18,7 +18,7 @@
 `zeta-auto-review` 的专用审查 prompt 不属于这里：它必须和 response schema、`review-protocol-3`
 revision 绑定，继续由 [`zeta-auto-review`](../auto-review/README.md) 拥有。
 
-## Ownership
+## 所有权
 
 本 crate 拥有：
 
@@ -97,7 +97,7 @@ module 覆盖。新增 renderer 也必须遵守这一模式；不要提供 `rend
 新增类别必须同步更新 `PromptCategory`、对应 private module、`lib.rs` export、资源 glob、唯一性测试
 和本 README。不要把外部 Skill、MCP Prompt 或专用 classifier protocol 为了复用文本迁移到本 crate。
 
-## Tests
+## 测试
 
 ```text
 cargo test -p zeta-prompts
@@ -105,5 +105,6 @@ bazel test //zeta-rs/prompts:prompts-unit-tests
 ```
 
 `prompt_tests.rs` 验证所有内置资产具有非空正文、稳定且唯一的 ID/revision，并保持 authored trailing
-newline；`goals_tests.rs` 验证空目标拒绝、文本 escaping、budget 渲染和 source revision binding。
+newline；同时回归 `system-v4` 的 `apply_patch` 默认、`edit` 微编辑/降级、多文件非事务边界和
+`update_plan` guidance。`goals_tests.rs` 验证空目标拒绝、文本 escaping、budget 渲染和 source revision binding。
 调用时机和上下文 precedence 的测试属于调用方 crate，不应复制到本 crate。

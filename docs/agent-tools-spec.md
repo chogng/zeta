@@ -1,6 +1,6 @@
 # Agent 工具规格
 
-> 状态：Accepted（2026-08-03）
+> 状态：Accepted（2026-08-23）
 > 定位：[`agent-harness-design.md`](agent-harness-design.md) §5 工具面的实现规格：逐工具的
 > JSON schema、**描述正文（模型可见的实际英文文本）**、参数校验规则、错误文案、输出格式与
 > 限幅、capability 注记；附录 A 是系统提示词的工具指导与输出风格扩写正文（M0 时移入
@@ -11,7 +11,18 @@
 > 的一部分：修改需要与 system prompt 同级 review，并跑
 > [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的评测对比。
 
-## 1. Schema 约定
+## 快速理解
+
+默认 coding profile 同时向模型提供 `apply_patch` 与 `edit`：模型通常用 `apply_patch` 表达一个完整的多位置或多文件变更，只在唯一字符串微编辑或窄 patch 上下文失配时使用 `edit`。`apply_patch` 在写入前校验完整 patch，`edit` 要求本 Thread 先读并以 exact revision 条件写入；两者都受路径授权和 unknown outcome 不重放边界约束。本文件固定它们以及其余内置工具的模型可见 schema、描述、校验和错误文案。
+
+| 决策 | 固定契约 |
+| --- | --- |
+| 默认代码修改 | `apply_patch`，一次表达一个逻辑变更 |
+| 小范围确定性修改 | `edit`，要求 exact match 且默认唯一命中 |
+| 多文件安全 | patch 在第一次写入前完成整体验证；多文件 envelope 不承诺事务性，unknown outcome 不重放 |
+| 模型差异 | 不按模型或 Provider 名称切工具；有版本化评测或隐私受控聚合证据后再评审候选 profile |
+
+## 1. 模式约定
 
 所有工具 schema 按**最严格 provider 交集**编写，同一份 schema 直接用于 Anthropic
 `input_schema` 与 OpenAI strict 模式：
@@ -43,8 +54,8 @@ stderr with the exit code.
 
 Usage notes:
 - Use dedicated tools instead of shell equivalents when available: read_file
-  instead of cat, grep instead of grep/rg, glob instead of find, edit or
-  apply_patch instead of sed -i. Dedicated tools produce better results.
+  instead of cat, grep instead of grep/rg, glob instead of find, apply_patch
+  or edit instead of sed -i. Dedicated tools produce better results.
 - Commands run with the workspace root as the default working directory; state
   such as environment variables does not persist between calls. Chain dependent
   steps with && in a single call.
@@ -95,7 +106,7 @@ Usage notes:
 
 | | |
 | --- | --- |
-| 状态 | `file-system-tool` 已有 `read` 操作，需改造为独立工具 + 行号/offset/limit/图片 |
+| 状态 | 已实现；由 canonical direct `LocalToolSuite` 提供，Agent 不再看到 operation-enum `file-system` |
 | 模型侧限幅 | 默认 2000 行；单行 > 2000 字符截断并标注 |
 
 **description：**
@@ -108,7 +119,7 @@ Usage notes:
   of a truncated read says how many lines remain; call again with a larger
   offset to continue.
 - Lines longer than 2000 characters are truncated with a marker.
-- Image files (png, jpg, gif, webp) are returned as viewable images.
+- Binary files, including images, are rejected; use a dedicated viewer for images.
 - You must read a file before editing or overwriting it.
 - Prefer reading whole files (omit offset/limit) unless the file is too large.
 ```
@@ -155,7 +166,7 @@ Usage notes:
 
 | | |
 | --- | --- |
-| 状态 | 新增（`file-system-tool` 扩展） |
+| 状态 | 已实现；与 `read_file`/`edit` 共享 Thread-scoped 读后写入状态和磁盘 revision 校验 |
 | capability | 写路径进入 `ActionReviewRequest`，沙箱/审批按路径判定 |
 
 **description：**
@@ -166,8 +177,8 @@ Creates or overwrites a file with the given content.
 Usage notes:
 - Overwriting an existing file you have not read in this conversation fails;
   read it first.
-- Prefer edit (or apply_patch) for modifying existing files; use write_file
-  for new files or full rewrites you have already read.
+- Prefer apply_patch for modifying existing files, or edit for one small exact
+  replacement; use write_file for new files or full rewrites you have read.
 - Parent directories are created automatically.
 - Never proactively create documentation files unless explicitly requested.
 ```
@@ -200,15 +211,15 @@ Usage notes:
 | 超出 workspace | `path is outside the workspace: {path}` |
 | 目标是目录 | `{path} is a directory` |
 
-"读过"判定：本 Thread durable history 中存在该路径成功的 `read_file` Tool Result，且其后
-无该文件的外部修改通知 reminder。此校验由工具实现基于 Thread 提供的已读路径集完成（Core
-在 prepare 阶段传入，工具不读 Thread store——遵守 [`tools.md`](tools.md) 依赖边界）。
+"读过"判定由 App Server runtime 按 Thread scope 维护成功的 `read_file` 路径和内容 revision；
+另一个 Thread 的读取不能授权当前 Thread。写入使用 expected revision 条件提交，因此读取后发生的
+外部修改会拒绝写入；进程重启或重连后无法仅从 durable 路径恢复该内存 fingerprint，必须重新读取。
 
-## 5. edit（anthropic / google / 默认 profile）
+## 5. edit（微编辑与降级工具）
 
 | | |
 | --- | --- |
-| 状态 | 新增（`file-system-tool` 扩展） |
+| 状态 | 已实现；由 canonical direct `LocalToolSuite` 提供并进入 `coding-v1` |
 | 核心不变量 | `old_string` 唯一命中，否则拒绝——这条校验挡住大部分错误编辑 |
 
 **description：**
@@ -218,13 +229,15 @@ Performs an exact string replacement in a file.
 
 Usage notes:
 - You must read the file first; the edit fails otherwise.
+- Use edit for one small, exact replacement, or as a fallback when a narrow
+  apply_patch context cannot match. Prefer apply_patch for coordinated changes
+  across multiple locations or files.
 - old_string must match the file content exactly, including whitespace and
   indentation, and must identify a unique location. If it matches more than
   one location, extend it with surrounding lines until unique, or set
   replace_all to true to change every occurrence.
 - Do not include line-number prefixes from read_file output in old_string.
-- For moving or renaming files use shell with git mv; for full rewrites use
-  write_file.
+- For moves or renames use shell with git mv; for full rewrites use write_file.
 ```
 
 **parameters：**
@@ -265,33 +278,24 @@ Usage notes:
 | old == new | `new_string must differ from old_string` |
 | 读后被外部修改 | `{path} changed on disk after your last read. Read it again before editing` |
 
+**执行约束：**执行阶段在写入前完成已读校验、磁盘版本校验和命中计数，再以 expected revision 做同文件原子替换；任何校验失败都不得修改文件。
+
 **输出格式：**成功返回替换处 ±4 行的带行号片段（模型自查 + UI 可渲染 diff）。
 
-## 6. apply_patch（openai profile）
+## 6. apply_patch（默认代码修改工具）
 
 | | |
 | --- | --- |
-| 状态 | `zeta-apply-patch` crate 已存在，需接入 profile |
-| 格式 | V4A envelope（OpenAI 系模型的训练格式，原样采用不发明方言） |
+| 状态 | 已实现；`zeta-apply-patch` 是 `coding-v1` 中唯一的 `apply_patch` executor |
+| 格式 | V4A envelope（canonical 格式，不按模型或 Provider 发明方言） |
 
-**description：**
+**description（模型可见）：**
 
 ```text
-Applies a patch to create, delete, or modify files using the V4A format:
-
-*** Begin Patch
-*** Update File: path/to/file
-@@ context line
--removed line
-+added line
-*** End Patch
-
-Usage notes:
-- Use *** Add File: / *** Delete File: / *** Update File: headers; an Update
-  may include *** Move to: for renames.
-- Context lines must match the current file content exactly. Read the file
-  first if you are not certain.
-- Keep patches minimal and focused; unrelated files must not appear.
+Apply a validated workspace patch. Use *** Begin Patch and *** End Patch, with
+*** Update File:, *** Add File:, or *** Delete File: operations. Prefer this
+tool for general multi-hunk or multi-file code changes; use edit for one exact
+local replacement.
 ```
 
 **parameters：**
@@ -300,27 +304,26 @@ Usage notes:
 {
   "type": "object",
   "properties": {
-    "input": {
+    "patch": {
       "type": "string",
-      "description": "The full patch text, starting with *** Begin Patch and ending with *** End Patch."
+      "description": "Patch text using the documented Begin/End Patch grammar."
     }
   },
-  "required": ["input"],
+  "required": ["patch"],
   "additionalProperties": false
 }
 ```
 
-**校验与错误文案：**格式解析失败 →
-`invalid patch: {原因} at line {n}. The patch must start with *** Begin Patch and use *** Update File: / *** Add File: / *** Delete File: headers`；
-上下文行不匹配 →
-`patch does not apply to {path}: context mismatch near "{片段}". Read the current file content and regenerate the patch`。
-成功输出各文件的变更摘要（`M path (+a/-b)`）。
+**校验与错误文案：**空 patch → `patch must not be empty`；格式解析失败 →
+`invalid patch: {parser reason}`；路径、目标类型或上下文校验失败 →
+`patch could not be prepared: {reason}`。成功输出 JSON，分别列出 `updated_files`、`added_files` 与
+`deleted_files`。prepare 必须在第一次写入前完成整份 patch 的解析、路径授权、文件读取和上下文校验；在存储层事务或回滚能力落地前，commit 阶段若可能已写入部分文件，必须返回 terminal unknown outcome，并由调度器禁止自动重放。多文件 envelope 本身不承诺原子性。
 
 ## 7. glob
 
 | | |
 | --- | --- |
-| 状态 | 新增（`zeta-file-search` 已有路径索引，补 glob 语义） |
+| 状态 | 已实现；canonical direct `LocalToolSuite` 使用受控 `RipgrepExecutable` |
 | 限幅 | 100 条，按修改时间降序 |
 
 **description：**
@@ -360,7 +363,7 @@ Finds files by glob pattern, sorted by most recently modified.
 
 | | |
 | --- | --- |
-| 状态 | 新增封装（`RipgrepExecutable` 已被 App Server 发现和管理） |
+| 状态 | 已实现；canonical direct `LocalToolSuite` 使用受控 `RipgrepExecutable` |
 | 限幅 | 100 条命中；单行 > 500 字符截断 |
 
 **description：**
@@ -410,16 +413,16 @@ Searches file contents with a regular expression (ripgrep syntax).
 
 | | |
 | --- | --- |
-| 状态 | 新增薄工具，durable 提交 `ThreadItem::Plan`（protocol 已有该 Item） |
-| 组装 | assembler 停止跳过 Plan：**最新一条** Plan 注入当前窗口，旧 Plan 被压缩吸收 |
+| 状态 | 已实现；薄工具 durable 提交 `ThreadEvent::PlanUpdated`，reducer 投影到 `Turn.plan` |
+| 组装 | 模型调用从 canonical Turn snapshot 读取最新计划；Desktop 只投影 `Turn.plan` |
 
 **description：**
 
 ```text
-Records or updates your plan for a multi-step task.
+Records or updates your durable plan for a multi-step task.
 
 - Use for tasks that need 3 or more distinct steps; skip it for trivial work.
-- Keep exactly one step in_progress at a time. Mark a step completed as soon
+- Keep at most one step in_progress at a time. Mark a step completed as soon
   as it is done; update the plan when scope changes rather than following a
   stale plan.
 - Steps are short imperative phrases ("Fix parser offset bug"), not essays.
@@ -434,6 +437,8 @@ Records or updates your plan for a multi-step task.
     "plan": {
       "type": "array",
       "description": "The full plan, replacing any previous plan.",
+      "minItems": 1,
+      "maxItems": 100,
       "items": {
         "type": "object",
         "properties": {
@@ -443,16 +448,21 @@ Records or updates your plan for a multi-step task.
         "required": ["step", "status"],
         "additionalProperties": false
       }
+    },
+    "explanation": {
+      "type": ["string", "null"],
+      "description": "Optional short explanation for this plan update."
     }
   },
-  "required": ["plan"],
+  "required": ["explanation", "plan"],
   "additionalProperties": false
 }
 ```
 
-**校验与错误文案：**空 plan → `plan must contain at least one step`；
-多个 in_progress → `keep at most one step in_progress (found {n})`；
-step 为空 → `every step needs a non-empty description`。成功输出 `plan updated`。
+**校验与错误文案：**plan 为空或超过 100 步 → `plan must contain between 1 and 100 steps`；
+多个 in_progress → `plan must contain at most one in_progress step`；step 为空或超过 1000 字符 →
+`plan step must contain between 1 and 1000 characters: {step}`；explanation 超过 4000 字符时拒绝。
+成功输出 canonical plan、durable sequence 与本次更新是否改变状态；相同计划幂等返回 unchanged。
 
 ## 10. MCP 元工具（检索式模式，[harness §6](agent-harness-design.md#6-工具注册时机)）
 
@@ -542,9 +552,9 @@ base.md 的身份/优先级/防注入/工作行为四段保留在前。
 - Search before you read, read before you edit: locate code with grep and
   glob, read the relevant files, then make changes. Do not edit code you have
   not seen.
-- Use the dedicated tools (read_file, grep, glob, edit) instead of their shell
-  equivalents (cat, rg, find, sed). Use shell for builds, tests, git, and
-  anything without a dedicated tool.
+- Use the dedicated tools (read_file, grep, glob, apply_patch, edit) instead
+  of their shell equivalents (cat, rg, find, sed). Use shell for builds,
+  tests, git, and anything without a dedicated tool.
 - Prefer several small, verifiable changes over one large speculative change.
 - After a code change, verify it with the narrowest relevant check (the
   affected test, a typecheck, a targeted build) before moving on. Do not claim
@@ -555,22 +565,18 @@ base.md 的身份/优先级/防注入/工作行为四段保留在前。
   and keep it current.
 ```
 
-### A.2 工具指导（profile 差异段）
-
-edit profile（anthropic / google / 默认）：
+### A.2 编辑工具选择
 
 ```text
-- Modify files with edit using an exact unique snippet; extend old_string
-  with surrounding lines when the match is ambiguous. Use write_file only for
-  new files or full rewrites of files you have read.
-```
-
-apply_patch profile（openai）：
-
-```text
-- Modify files with apply_patch. Keep each patch focused on one logical
-  change; regenerate the patch from current file content when context lines
-  fail to match.
+- Use apply_patch by default for one logical code change, especially when it
+  spans multiple locations or files. Keep the patch focused and regenerate it
+  from current content when context lines fail to match.
+- Use edit for one small exact unique-string replacement, or as a fallback
+  after a narrow patch context mismatch. Extend old_string with surrounding
+  lines when the match is ambiguous.
+- Use write_file only for new files or full rewrites of files you have read.
+- If apply_patch reports an unknown outcome, inspect the current workspace
+  state before proceeding. Never replay the same patch blindly.
 ```
 
 ### A.3 输出风格（共享段）

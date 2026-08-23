@@ -18,7 +18,7 @@
 | 模型调用失败怎么办？ | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作 | [§7](#7-turn-内循环与失败策略) |
 | Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，Codex 委托转发 exact `turn/steer` | [§8](#8-引导与并发输入) |
 | 提示词怎么做？ | 四层：静态身份/策略 + per-profile 工具指导 + 会话冻结环境快照 + 工作区指令；动态走 append-only reminder | [§4](#4-提示词) |
-| 工具选哪些？ | 共享七件套 + 按模型家族切编辑工具形态；逐工具规格见 tools-spec | [§5](#5-工具集) |
+| 工具选哪些？ | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
 | 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-缓存) |
@@ -30,9 +30,9 @@
 
 | 环节 | 可用 harness 需要 | Zeta 现状 |
 | --- | --- | --- |
-| System prompt | 每次调用注入身份、策略、工具指导、环境 | 部分：`SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；per-profile 工具指导仍未完成 |
+| System prompt | 每次调用注入身份、策略、工具指导、环境 | ✅ `SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；`system-v4` 固定 `apply_patch` 默认、`edit` 微编辑/降级与 `update_plan` guidance |
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
-| 工具面 | 读/搜/改/执行闭环 | 部分：`shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 已进入本地闭环；家族 ToolProfile、统一 ownership 与 `update_plan` 仍待 S3 |
+| 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop、本地重规划和 Codex 转发均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
@@ -40,7 +40,7 @@
 | 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
-| 计划工具 | 长任务显式计划状态 | 部分：`ThreadItem::Plan` 存在，无工具产生它，assembler 跳过它 |
+| 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
 | 评测 | 任务集 + 指标回路 | ❌ 无 |
 
 ## 2. 一次模型调用的目标形态
@@ -150,35 +150,35 @@ reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、h
 
 ### 5.1 设计原则
 
-1. **匹配训练分布**：Anthropic 系对 str-replace Edit/Glob/Grep 有深度训练，OpenAI 系对
-   `apply_patch`（V4A）有专门训练。多 provider 的 Zeta **必须按模型家族分 profile**。
-2. **结构化优于 shell 万能**：结构化工具才能给 `zeta-action-policy` 精确的审查材料（参数级
-   capability、路径级沙箱判定），审批 UX 与 diff 展示也依赖结构。
-3. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
-4. **少而精**：v1 ≤ 10 个。
+1. **`apply_patch` 是默认代码变更协议**：一次表达一个完整的逻辑变更，可包含多个 hunk 和多个文件，便于展示 diff、审批、记录、失败诊断和恢复核验，也减少连续微编辑暴露的中间状态。
+2. **`edit` 是微编辑与降级原语**：只在修改唯一字符串、单个常量等小范围确定性变更时使用，或在窄 patch 上下文无法匹配时作为降级；它不是与 `apply_patch` 并列竞争的默认入口。
+3. **结构化优于 shell 万能**：结构化工具才能给 `zeta-action-policy` 精确的审查材料（参数级 capability、路径级沙箱判定），审批 UX 与 diff 展示也依赖结构。
+4. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
+5. **少而精**：v1 ≤ 10 个。
+
+`apply_patch` 能把多文件变更表达为一个逻辑请求，但这不等于存储层事务。执行器应在第一次写入前完成全部解析、读取和上下文校验；在事务提交或回滚能力落地前，提交阶段若可能已写入部分文件，必须返回 unknown outcome、禁止自动重放，并要求重新检查工作区状态。
+
+外部 harness 的具体工具形式只能作为 schema 和交互设计参考，不能证明某个模型家族必须绑定某种编辑工具。Zeta 只有在版本控制的评测或明确启用、去内容化且达到最小样本门槛的用户聚合数据支持时，才考虑新增按模型细分的候选 profile。
 
 ### 5.2 工具面与配置档案
 
 ```text
-ToolProfile = 共享核心 + 家族特定编辑工具
+ToolProfile = 默认 coding profile + MCP 暴露策略
 
-共享核心：shell / read_file / write_file / glob / grep / update_plan
-家族特定：
-  anthropic / google / 默认 → edit（str-replace + 唯一性）
-  openai                    → apply_patch（V4A）
+默认 coding profile：
+  shell / read_file / write_file / glob / grep / update_plan / apply_patch / edit
+编辑选择：
+  跨位置、跨文件、函数重写、接口迁移 → apply_patch（默认）
+  唯一字符串微编辑、单个常量、窄 patch 上下文失配 → edit（微编辑/降级）
 MCP（按 §6 阈值）：直接平铺 或 search_tools + call_mcp_tool
 ```
 
 逐工具规格（schema、描述正文、校验、错误文案、限幅、capability 注记）：
 [`agent-tools-spec.md`](agent-tools-spec.md)。
 
-Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模型 → 家族→profile 映射
-（属 `model-provider-config` 声明层）→ 冻结进本 Turn。Core 不认识"模型家族"。跨 Turn 换
-模型后，历史中另一 profile 的 Tool Call/Result 只是 transcript，无需处理；只有当前可调用
-集合须与 profile 一致。
+Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile，并把精确工具顺序、schema/description revision 和并行调用设置冻结进本 Turn。默认使用模型中立的 coding profile；切换模型本身不会推断或切换另一套编辑工具。若以后引入有证据支持的候选 profile，显式配置变化也只影响新 Turn；历史中的 Tool Call/Result 继续作为 transcript，只有当前可调用集合必须匹配冻结 profile。
 
-`parallel_tool_calls` 改为 profile 属性：允许模型一次响应发多个 Tool Call（执行侧仍按现有
-调度器串行），Anthropic/OpenAI profile 默认开。
+`parallel_tool_calls` 是 profile 属性：默认 coding profile 允许模型一次响应发多个 Tool Call，执行侧仍按现有调度器和 durable 调用顺序串行，避免并行写副作用。
 
 ## 6. 工具注册时机
 
@@ -397,7 +397,7 @@ authoring 规则以最严格交集为准：
 | --- | --- | --- | --- |
 | instructions | `system` 字段 | `instructions` 字段 | 单值 `instructions`，adapter 映射 |
 | 角色 | user/assistant | + developer | v1 canonical 只产生 System/User/Assistant；`Developer` 保留给 OpenAI 路径未来用 |
-| 工具 schema | `input_schema`，无 strict | strict 模式：`additionalProperties:false` + 全字段 `required` | **按通用子集 authoring**（[`agent-tools-spec.md` §1](agent-tools-spec.md#1-schema-约定)）：顶层 object、全 required、可选性用 `["T","null"]`，两边同一份 schema 直接可用 |
+| 工具 schema | `input_schema`，无 strict | strict 模式：`additionalProperties:false` + 全字段 `required` | **按通用子集 authoring**（[`agent-tools-spec.md` §1](agent-tools-spec.md#1-模式约定)）：顶层 object、全 required、可选性用 `["T","null"]`，两边同一份 schema 直接可用 |
 | tool_choice | auto/any/tool | auto/required/function/none | 现有 `ToolChoice` 已覆盖 |
 | 并行 Tool Call | 支持（`disable_parallel_tool_use`） | 支持（`parallel_tool_calls`） | profile 属性透传 |
 | Tool result | user 消息内 `tool_result` block | `function_call_output` item | assembler 已配对，adapter 负责 wire 形态 |
@@ -426,16 +426,14 @@ harness 的每层都直接影响成功率与 token 成本；没有评测回路�
 
 ### 14.2 指标
 
-每次运行记录：成功与否、input/cached/output tokens、工具调用次数、墙钟时间。
-按 profile × provider 出对比表。
+每次运行记录：成功与否、input/cached/output tokens、工具调用次数、`apply_patch`/`edit` 选择、prepare/commit 失败、降级次数、验证结果和墙钟时间。运行时聚合只保留去内容化类别，不采集工具参数、diff 或文件正文；按 provider/model × profile 出对比表。
 
 ### 14.3 运行方式
 
 - **PR smoke（无真模型）**：组装快照测试——固定 Thread 夹具跑 assembler，断言
   （a）请求字节稳定（连续 Turn 前缀不变，§11 回归）；（b）限幅与结构不变量；用
   deterministic fake `ModelService` 跑 T1 子集的 loop 行为（重试、steering、循环终止）；
-- **nightly（真模型）**：全任务集 × 主力 profile（anthropic / openai 各一），指标入库
-  看趋势；
+- **模型行为评测**：有受控测试凭据时运行全任务集 × 主力 provider/model × 候选 profile；没有凭据时维持统一 profile，只使用明确启用且去内容化的用户聚合指标看趋势；
 - M0–M6 每个里程碑的验收 = 对应任务层在接线前后的指标对比。
 
 ## 15. 落地顺序
@@ -444,8 +442,8 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
-| M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding 且模型输入逐项限幅已接线；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan` 和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
+| M0（完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装、工具指导与统一编辑选择 guidance 已接线 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
+| M1（实现完成，待评测）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；T1/T2 指标由 S7 拥有 | 本地工具组合、executor contributions、profile 声明层 | S7 T1/T2 fixture |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；仍需 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | S7 T4 fixture |
 | M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
@@ -462,5 +460,3 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 - [`tools.md`](tools.md) — 工具三层契约与 registry snapshot
 - [`skills.md`](skills.md) / [`slash-commands` crate](../zeta-rs/slash-commands/) — 扩展来源
 - [`zeta-prompts` README](../zeta-rs/prompts/README.md) — 提示词资产 ownership
-- Claude Code harness 行为（Edit 唯一性、Read 限幅、system-reminder、压缩后文件重注入）
-- Codex harness 行为（apply_patch V4A、AGENTS.md、environment_context、update_plan）

@@ -239,6 +239,10 @@ function toThread(thread: ThreadDto): Thread {
 					model: { ...turn.resourceBudget.priceSnapshot.model },
 				} : turn.resourceBudget.priceSnapshot,
 			} : turn.resourceBudget,
+			plan: turn.plan ? {
+				explanation: turn.plan.explanation,
+				steps: turn.plan.steps.map((step) => ({ ...step })),
+			} : turn.plan,
 			usage: {
 				modelInvocations: turn.usage.modelInvocations,
 				inputTokens: { ...turn.usage.inputTokens },

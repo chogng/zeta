@@ -163,6 +163,7 @@ fn turn_resource_budget_freezes_versioned_prices_in_the_durable_command() {
                 output_usd_micros_per_million_tokens: 10_000,
             }),
         }),
+        tool_profile: None,
         input: vec![UserInput::Text {
             text: "hello".into(),
         }],

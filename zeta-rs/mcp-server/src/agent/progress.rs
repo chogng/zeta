@@ -28,10 +28,6 @@ pub(super) fn project(update: &ThreadUpdateEnvelope, turn_id: &TurnId) -> Option
             }
             .into(),
         )),
-        ThreadUpdate::PlanUpdated {
-            turn_id: update_turn,
-            ..
-        } if update_turn == turn_id => Some(TurnUpdate::Progress("Agent plan updated".into())),
         _ => None,
     }
 }
@@ -41,6 +37,7 @@ fn committed(event: &ThreadEvent, turn_id: &TurnId) -> Option<TurnUpdate> {
         ThreadEvent::TurnAccepted { turn_id, .. } => (turn_id, "Turn accepted"),
         ThreadEvent::TurnStarted { turn_id, .. } => (turn_id, "Turn started"),
         ThreadEvent::ItemCompleted { turn_id, .. } => (turn_id, "Agent item completed"),
+        ThreadEvent::PlanUpdated { turn_id, .. } => (turn_id, "Agent plan updated"),
         ThreadEvent::InteractionRequested {
             turn_id: event_turn,
             interaction,

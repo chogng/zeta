@@ -10,10 +10,42 @@ use zeta_async_utils::CancellationSource;
 use zeta_protocol::{ToolCallId, TurnId};
 use zeta_tools::{
     ToolBinding, ToolBindingId, ToolDefinition, ToolEnvironmentId, ToolExecutionContext,
-    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus,
-    ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
+    ToolExecutionOutcome, ToolExecutor, ToolInvocation, ToolInvocationKind, ToolOperationId,
+    ToolOutputStatus, ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
 use zeta_workspace::WorkspaceRoot;
+
+#[test]
+fn exposes_the_canonical_apply_patch_schema() {
+    let workspace = TestWorkspace::new();
+    let tool = ApplyPatchTool::new(
+        environment_id(),
+        workspace.root(),
+        ApplyPatchLimits::default(),
+    )
+    .unwrap();
+    let definition = tool.definition();
+
+    assert_eq!(definition.name().as_str(), "apply_patch");
+    assert!(definition.description().contains("Prefer this tool"));
+    let ToolInvocationKind::Function { input_schema } = definition.invocation() else {
+        panic!("apply_patch must use function arguments");
+    };
+    assert_eq!(
+        input_schema.as_value(),
+        &json!({
+            "type": "object",
+            "properties": {
+                "patch": {
+                    "type": "string",
+                    "description": "Patch text using the documented Begin/End Patch grammar."
+                }
+            },
+            "required": ["patch"],
+            "additionalProperties": false
+        })
+    );
+}
 
 #[test]
 fn applies_an_update_and_an_add_after_preparing_the_whole_patch() {

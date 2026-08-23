@@ -23,6 +23,7 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
                 activated_skills: Vec::new(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
                 }],
@@ -68,6 +69,7 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
     )
@@ -119,6 +121,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
             activated_skills: Vec::new(),
             model: Some(model.clone()),
             resource_budget: None,
+            tool_profile: None,
         },
     );
     accepted.command = Some(ThreadCommandReceipt {
@@ -128,6 +131,7 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
             activated_skills: Vec::new(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             resource_budget: None,
+            tool_profile: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],
@@ -219,6 +223,7 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
         envelope(
@@ -353,6 +358,7 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
         envelope(
@@ -483,6 +489,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                     activated_skills: Vec::new(),
                     model: None,
                     resource_budget: None,
+                    tool_profile: None,
                 }
             )
         )
@@ -501,6 +508,7 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
     )
@@ -532,6 +540,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             activated_skills: Vec::new(),
             model: None,
             resource_budget: None,
+            tool_profile: None,
         },
     );
     accepted.command = Some(ThreadCommandReceipt {
@@ -541,6 +550,7 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             activated_skills: Vec::new(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             resource_budget: None,
+            tool_profile: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
             }],
@@ -672,6 +682,7 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
     )
@@ -781,6 +792,7 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
                 activated_skills: Vec::new(),
                 model: None,
                 resource_budget: None,
+                tool_profile: None,
             },
         ),
         envelope(

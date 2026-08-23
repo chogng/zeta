@@ -31,6 +31,7 @@ use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelUsageSummary;
+use zeta_protocol::PlanUpdate;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
@@ -41,6 +42,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolProfileSnapshot;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
@@ -134,6 +136,7 @@ impl ThreadSnapshot {
                     status: turn.status,
                     model: turn.model.clone(),
                     resource_budget: turn.resource_budget.clone(),
+                    tool_profile: turn.tool_profile.clone(),
                     usage: turn.usage.clone(),
                     items: self
                         .items
@@ -141,6 +144,7 @@ impl ThreadSnapshot {
                         .filter(|item| item.turn_id() == &turn.turn_id)
                         .cloned()
                         .collect(),
+                    plan: turn.plan.clone(),
                     pending_interaction: turn
                         .pending_interaction
                         .as_ref()
@@ -192,6 +196,8 @@ pub struct TurnSnapshot {
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
     pub resource_budget: Option<TurnResourceBudget>,
+    pub tool_profile: Option<ToolProfileSnapshot>,
+    pub plan: Option<PlanUpdate>,
     pub usage: ModelUsageSummary,
 }
 
@@ -508,6 +514,7 @@ pub fn reduce_thread_event(
             approval_mode,
             activated_skills,
             resource_budget,
+            tool_profile,
             ..
         } => {
             if policy_revision.trim().is_empty() {
@@ -517,14 +524,27 @@ pub fn reduce_thread_event(
             }
             crate::turn::validate_resource_budget(model.as_ref(), resource_budget.as_ref())
                 .map_err(|error| CoreError::Journal(error.to_string()))?;
+            if let Some(tool_profile) = tool_profile {
+                crate::tool_profile::validate_tool_profile_snapshot(tool_profile)
+                    .map_err(CoreError::Journal)?;
+            }
             create_turn(
                 &mut snapshot,
-                turn_id,
-                model.clone(),
-                policy_revision.clone(),
-                *approval_mode,
-                activated_skills.clone(),
-                resource_budget.clone(),
+                TurnSnapshot {
+                    turn_id: turn_id.clone(),
+                    status: TurnStatus::Created,
+                    model: model.clone(),
+                    policy_revision: policy_revision.clone(),
+                    approval_mode: *approval_mode,
+                    activated_skills: activated_skills.clone(),
+                    failure: None,
+                    pending_interaction: None,
+                    execution_backend_attempt: None,
+                    resource_budget: resource_budget.clone(),
+                    tool_profile: tool_profile.clone(),
+                    plan: None,
+                    usage: ModelUsageSummary::default(),
+                },
             )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
                 CoreError::Journal("Turn acceptance requires a command receipt".into())
@@ -535,6 +555,7 @@ pub fn reduce_thread_event(
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
                     resource_budget: command_resource_budget,
+                    tool_profile: command_tool_profile,
                     input,
                     ..
                 } => {
@@ -542,6 +563,7 @@ pub fn reduce_thread_event(
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
                         && command_resource_budget == resource_budget
+                        && command_tool_profile.as_deref() == tool_profile.as_ref()
                         && turn_skill_activations_match(input, activated_skills)
                 }
                 ThreadCommand::StartShellTurn {
@@ -550,6 +572,7 @@ pub fn reduce_thread_event(
                 } => {
                     model.is_none()
                         && resource_budget.is_none()
+                        && tool_profile.is_none()
                         && command_approval_mode == approval_mode
                         && activated_skills.is_empty()
                 }
@@ -559,6 +582,7 @@ pub fn reduce_thread_event(
                 } => {
                     command_model == model
                         && resource_budget.is_none()
+                        && tool_profile.is_none()
                         && *approval_mode == ApprovalMode::AskPermissions
                         && activated_skills.is_empty()
                 }
@@ -768,6 +792,23 @@ pub fn reduce_thread_event(
             snapshot
                 .item_sequences
                 .insert(item.item_id().clone(), envelope.sequence);
+        }
+        ThreadEvent::PlanUpdated { turn_id, plan, .. } => {
+            require_no_command(envelope)?;
+            crate::turn::validate_plan_update(plan).map_err(CoreError::Journal)?;
+            let turn = find_turn_mut(&mut snapshot, turn_id)?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Journal(format!(
+                    "cannot update the plan for a {:?} Turn",
+                    turn.status
+                )));
+            }
+            if turn.plan.as_ref() == Some(plan) {
+                return Err(CoreError::Journal(
+                    "duplicate plan update must not be appended".into(),
+                ));
+            }
+            turn.plan = Some(plan.clone());
         }
         ThreadEvent::InteractionRequested {
             turn_id,
@@ -1613,6 +1654,13 @@ fn import_history(
                 turn.turn_id
             )));
         }
+        if let Some(tool_profile) = &turn.tool_profile {
+            crate::tool_profile::validate_tool_profile_snapshot(tool_profile)
+                .map_err(CoreError::Journal)?;
+        }
+        if let Some(plan) = &turn.plan {
+            crate::turn::validate_plan_update(plan).map_err(CoreError::Journal)?;
+        }
         for item in &turn.items {
             if item.turn_id() != &turn.turn_id {
                 return Err(CoreError::Journal(
@@ -1669,6 +1717,8 @@ fn import_history(
             pending_interaction: None,
             execution_backend_attempt: None,
             resource_budget: None,
+            tool_profile: turn.tool_profile.clone(),
+            plan: turn.plan.clone(),
             usage: ModelUsageSummary::default(),
         })
         .collect();
@@ -1836,33 +1886,18 @@ fn is_sha256_hex(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn create_turn(
-    snapshot: &mut ThreadSnapshot,
-    turn_id: &TurnId,
-    model: Option<ModelRef>,
-    policy_revision: String,
-    approval_mode: ApprovalMode,
-    activated_skills: Vec<FrozenSkillActivation>,
-    resource_budget: Option<TurnResourceBudget>,
-) -> Result<(), CoreError> {
-    if snapshot.turns.iter().any(|turn| turn.turn_id == *turn_id) {
+fn create_turn(snapshot: &mut ThreadSnapshot, turn: TurnSnapshot) -> Result<(), CoreError> {
+    if snapshot
+        .turns
+        .iter()
+        .any(|existing| existing.turn_id == turn.turn_id)
+    {
         return Err(CoreError::Journal(format!(
-            "Turn already exists: {turn_id}"
+            "Turn already exists: {}",
+            turn.turn_id
         )));
     }
-    snapshot.turns.push(TurnSnapshot {
-        turn_id: turn_id.clone(),
-        status: TurnStatus::Created,
-        model,
-        policy_revision,
-        approval_mode,
-        activated_skills,
-        failure: None,
-        pending_interaction: None,
-        execution_backend_attempt: None,
-        resource_budget,
-        usage: ModelUsageSummary::default(),
-    });
+    snapshot.turns.push(turn);
     Ok(())
 }
 

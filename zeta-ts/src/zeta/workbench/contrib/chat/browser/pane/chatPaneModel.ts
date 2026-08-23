@@ -4,7 +4,7 @@ import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefini
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { chatListItem, chatTurnErrorListItem, type IChatListItem } from "../list/chatListItems.js";
+import { chatListItem, chatPlanListItem, chatTurnErrorListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
 	| "loading"
@@ -116,8 +116,9 @@ export class ChatPaneModel extends DisposableOwner {
 		const latestTurnId = turns.at(-1)?.turnId;
 		const committed = turns.flatMap((turn) => {
 			const items = turn.items.map((item) => chatListItem(item));
+			const plan = chatPlanListItem(turn);
 			const failure = chatTurnErrorListItem(turn, { actionsEnabled: turn.turnId === latestTurnId });
-			return failure ? [...items, failure] : items;
+			return [...items, ...(plan ? [plan] : []), ...(failure ? [failure] : [])];
 		});
 		const committedIds = new Set(committed.map((item) => item.id));
 		const transient = [...this.transientItems.values()]
@@ -425,8 +426,6 @@ export class ChatPaneModel extends DisposableOwner {
 				break;
 			case "itemDelta":
 				this.applyDelta(update);
-				break;
-			case "planUpdated":
 				break;
 		}
 	}

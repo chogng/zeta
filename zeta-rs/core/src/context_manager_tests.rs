@@ -83,6 +83,8 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             pending_interaction: None,
             execution_backend_attempt: None,
             resource_budget: None,
+            tool_profile: None,
+            plan: None,
             usage: zeta_protocol::ModelUsageSummary::default(),
         }],
         items: vec![ThreadItem::UserMessage {

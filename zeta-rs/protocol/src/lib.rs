@@ -72,7 +72,7 @@ pub use tool_execution::{
     ToolReplaySafety,
 };
 pub use tool_name::{InvalidToolName, ToolName};
-pub use turn::{ModelPriceSnapshot, Turn, TurnResourceBudget, TurnStatus};
+pub use turn::{ModelPriceSnapshot, ToolProfileSnapshot, Turn, TurnResourceBudget, TurnStatus};
 pub use turn_execution::TurnExecutionBinding;
 pub use zeta_workspace::WorkspaceBinding;
 pub use zeta_workspace::WorkspaceTrustId;

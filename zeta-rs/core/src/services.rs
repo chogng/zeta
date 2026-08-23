@@ -724,6 +724,7 @@ impl ToolExecutionFacts {
                 turn_id: turn_id.clone(),
                 model: turn.model.clone(),
                 policy_revision: turn.policy_revision.clone(),
+                tool_profile: turn.tool_profile.clone(),
             }),
             read_paths: BTreeSet::new(),
             available_tools: available_tools.into_iter().collect(),
@@ -789,6 +790,7 @@ pub struct ToolExecutionIdentity {
     turn_id: zeta_protocol::TurnId,
     model: Option<zeta_protocol::ModelRef>,
     policy_revision: String,
+    tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
 }
 
 impl ToolExecutionIdentity {
@@ -810,6 +812,10 @@ impl ToolExecutionIdentity {
 
     pub fn policy_revision(&self) -> &str {
         &self.policy_revision
+    }
+
+    pub fn tool_profile(&self) -> Option<&zeta_protocol::ToolProfileSnapshot> {
+        self.tool_profile.as_ref()
     }
 }
 

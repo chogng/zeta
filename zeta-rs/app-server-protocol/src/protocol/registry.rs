@@ -399,9 +399,9 @@ use zeta_protocol::{
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
     SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
     ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus, ThreadUpdate,
-    ToolExecutionAuthority, ToolOutputStream, ToolReplaySafety, Turn, TurnExecutionBinding,
-    TurnInteraction, TurnResourceBudget, TurnStatus, UserInputAnswer, UserInputOption,
-    UserInputQuestion,
+    ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot, ToolReplaySafety, Turn,
+    TurnExecutionBinding, TurnInteraction, TurnResourceBudget, TurnStatus, UserInputAnswer,
+    UserInputOption, UserInputQuestion,
 };
 
 /// Selects whether equal scheduling keys exclude or share execution.
@@ -2223,6 +2223,7 @@ typescript_bindings! {
     ModelUsageSummary,
     ModelPriceSnapshot,
     TurnResourceBudget,
+    ToolProfileSnapshot,
     Turn,
     Thread,
     ToolExecutionAuthority,

@@ -222,6 +222,7 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
 #[test]
 fn local_policy_runs_agent_coordination_without_an_external_approval() {
     for tool_name in [
+        crate::server::update_plan_tool::UPDATE_PLAN_TOOL_NAME,
         crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME,
         crate::server::multi_agent_tools::SEND_AGENT_MESSAGE_TOOL_NAME,
         crate::server::multi_agent_tools::WAIT_AGENT_TOOL_NAME,
@@ -250,38 +251,16 @@ fn local_policy_runs_agent_coordination_without_an_external_approval() {
 }
 
 #[test]
-fn executor_reviewer_materializes_workspace_paths_before_policy() {
+fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
     let workspace = TestWorkspace::new();
-    fs::write(workspace.path().join("readable.txt"), "hello").unwrap();
     let reviewer = LocalExecutorReviewer {
         workspace: workspace.trusted(),
         ripgrep: RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
     };
-    let read = ToolCall {
-        id: ToolCallId::new("file-system-read").unwrap(),
-        name: ToolName::new("file-system").unwrap(),
-        arguments: json!({"operation": "read", "path": "readable.txt"}),
-    };
-
-    let review = reviewer.prepare_file_system(&read).unwrap();
-    assert!(matches!(
-        LocalShellPolicy::default()
-            .decide(&review, &CancellationSource::new().token())
-            .unwrap(),
-        ExecutionDecision::RunExecPolicyGranted(_)
-    ));
-    assert!(
-        review
-            .action()
-            .required_capabilities()
-            .iter()
-            .any(|capability| capability.scope().ends_with("readable.txt"))
-    );
-
     let patch = ToolCall {
         id: ToolCallId::new("apply-patch").unwrap(),
-        name: ToolName::new("apply-patch").unwrap(),
+        name: ToolName::new("apply_patch").unwrap(),
         arguments: json!({
             "patch": "*** Begin Patch\n*** Add File: added.txt\n+hello\n*** End Patch"
         }),
@@ -296,7 +275,7 @@ fn executor_reviewer_materializes_workspace_paths_before_policy() {
 
     let escaping = ToolCall {
         id: ToolCallId::new("escaping-patch").unwrap(),
-        name: ToolName::new("apply-patch").unwrap(),
+        name: ToolName::new("apply_patch").unwrap(),
         arguments: json!({
             "patch": "*** Begin Patch\n*** Add File: ../outside.txt\n+bad\n*** End Patch"
         }),
@@ -305,7 +284,7 @@ fn executor_reviewer_materializes_workspace_paths_before_policy() {
 }
 
 #[test]
-fn local_tool_port_exposes_executor_tools_and_hides_migrated_legacy_names() {
+fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     let workspace = TestWorkspace::new();
     let trusted = workspace.trusted();
     let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
@@ -342,18 +321,6 @@ fn local_tool_port_exposes_executor_tools_and_hides_migrated_legacy_names() {
             },
             LocalExecutorContribution {
                 executor: Arc::new(
-                    FileSystemTool::new(
-                        environment_id.clone(),
-                        Arc::new(LocalFileSystem::new(trusted.root().clone())),
-                        FileSystemLimits::default(),
-                    )
-                    .unwrap(),
-                ),
-                environment_id: environment_id.clone(),
-                reviewer: Arc::clone(&reviewer),
-            },
-            LocalExecutorContribution {
-                executor: Arc::new(
                     ApplyPatchTool::new(
                         environment_id.clone(),
                         trusted.root().clone(),
@@ -382,11 +349,13 @@ fn local_tool_port_exposes_executor_tools_and_hides_migrated_legacy_names() {
     assert_eq!(
         visible,
         vec![
-            "apply-patch",
-            "file-system",
+            "apply_patch",
+            "edit",
             "glob",
             "grep",
-            "shell-command"
+            "read_file",
+            "shell-command",
+            "write_file"
         ]
     );
 }
@@ -455,7 +424,29 @@ fn local_suite_reads_and_edits_with_spec_errors() {
         )
         .unwrap();
     assert!(matches!(edit, ToolExecutionOutput::Success(text) if text.contains("new")));
-    assert!(fs::read_to_string(path).unwrap().contains("new"));
+    assert!(fs::read_to_string(&path).unwrap().contains("new"));
+
+    fs::write(&path, "fn main() { println!(\"external\"); }\n").unwrap();
+    let stale_edit = suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("stale-edit").unwrap(),
+                name: ToolName::new("edit").unwrap(),
+                arguments: json!({
+                    "path": path.clone(),
+                    "old_string": "external",
+                    "new_string": "overwritten",
+                    "replace_all": false
+                }),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+    assert!(
+        matches!(stale_edit, ToolExecutionOutput::Failure(message) if message.contains("changed on disk"))
+    );
+    assert!(fs::read_to_string(path).unwrap().contains("external"));
 }
 
 fn tool_call(arguments: serde_json::Value) -> ToolCall {

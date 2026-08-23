@@ -34,3 +34,19 @@ fn prompt_categories_match_their_public_assets() {
     assert_eq!(GOALS_PROMPT.category(), PromptCategory::Goals);
     assert_eq!(REVIEW_PROMPT.category(), PromptCategory::Review);
 }
+
+#[test]
+fn system_prompt_prefers_apply_patch_and_scopes_exact_edit() {
+    assert_eq!(SYSTEM_PROMPT.revision(), "system-v4");
+    assert!(
+        SYSTEM_PROMPT
+            .body()
+            .contains("Use apply_patch as the default editing tool")
+    );
+    assert!(
+        SYSTEM_PROMPT
+            .body()
+            .contains("Use edit for one small exact replacement")
+    );
+    assert!(SYSTEM_PROMPT.body().contains("not a transaction"));
+}

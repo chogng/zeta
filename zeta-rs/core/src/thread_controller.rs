@@ -50,6 +50,7 @@ use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
 use zeta_protocol::TurnResourceBudget;
+use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
 use zeta_thread_store::ThreadStoreError;
@@ -77,8 +78,21 @@ pub struct StartTurnRequest {
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub approval_mode: ApprovalMode,
     pub resource_budget: Option<TurnResourceBudget>,
+    pub tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdatePlanDisposition {
+    Changed,
+    Unchanged,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpdatePlanResult {
+    pub sequence: u64,
+    pub disposition: UpdatePlanDisposition,
 }
 
 /// Named inputs for preparing one immutable model invocation from durable Thread state.
@@ -540,6 +554,7 @@ impl ThreadController {
                 activated_skills,
                 approval_mode,
                 resource_budget,
+                tool_profile,
                 input,
             } = &existing.receipt.command
             else {
@@ -554,6 +569,7 @@ impl ThreadController {
                 || host_activations != request.activated_skills
                 || approval_mode != &request.approval_mode
                 || resource_budget != &request.resource_budget
+                || tool_profile.as_deref() != request.tool_profile.as_ref()
                 || input != &normalized_input
             {
                 return Err(CoreError::CommandConflict);
@@ -601,6 +617,7 @@ impl ThreadController {
             activated_skills: activated_skills.clone(),
             approval_mode: request.approval_mode,
             resource_budget: request.resource_budget.clone(),
+            tool_profile: request.tool_profile.clone().map(Box::new),
             input: normalized_input.clone(),
         };
         self.mutate_thread(thread_id, |snapshot| {
@@ -638,6 +655,7 @@ impl ThreadController {
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
                 resource_budget: request.resource_budget.clone(),
+                tool_profile: request.tool_profile.clone(),
             });
             events.extend(
                 input_items
@@ -745,6 +763,7 @@ impl ThreadController {
                     activated_skills: Vec::new(),
                     model: request.model.clone(),
                     resource_budget: None,
+                    tool_profile: None,
                 },
                 ThreadEvent::TurnStarted {
                     thread_id: thread_id.clone(),
@@ -847,6 +866,7 @@ impl ThreadController {
                     activated_skills: Vec::new(),
                     model: None,
                     resource_budget: None,
+                    tool_profile: None,
                 },
                 ThreadEvent::ItemCompleted {
                     thread_id: thread_id.clone(),
@@ -1064,6 +1084,47 @@ impl ThreadController {
             item,
             tool_call_id,
             sequence,
+        })
+    }
+
+    /// Replaces the current Turn plan with one validated durable projection.
+    pub fn update_plan(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        plan: zeta_protocol::PlanUpdate,
+    ) -> Result<UpdatePlanResult, CoreError> {
+        crate::turn::validate_plan_update(&plan).map_err(CoreError::InvalidInput)?;
+        self.mutate_thread(thread_id, |snapshot| {
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running {
+                return Err(CoreError::Execution(format!(
+                    "cannot update the plan for a {:?} Turn",
+                    turn.status
+                )));
+            }
+            if turn.plan.as_ref() == Some(&plan) {
+                return Ok(UpdatePlanResult {
+                    sequence: snapshot.sequence,
+                    disposition: UpdatePlanDisposition::Unchanged,
+                });
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::PlanUpdated {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    plan,
+                }],
+            )?;
+            Ok(UpdatePlanResult {
+                sequence: snapshot.sequence,
+                disposition: UpdatePlanDisposition::Changed,
+            })
         })
     }
 

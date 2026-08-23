@@ -21172,6 +21172,16 @@
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
+            "toolProfile": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolProfileSnapshot"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "turnId": {
               "$ref": "#/$defs/TurnId"
             },
@@ -21343,6 +21353,30 @@
             "threadId",
             "turnId",
             "item"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "plan": {
+              "$ref": "#/$defs/PlanUpdate"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "planUpdated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "plan"
           ],
           "type": "object"
         },
@@ -22291,26 +22325,6 @@
         },
         {
           "properties": {
-            "plan": {
-              "$ref": "#/$defs/PlanUpdate"
-            },
-            "turnId": {
-              "$ref": "#/$defs/TurnId"
-            },
-            "type": {
-              "const": "planUpdated",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "turnId",
-            "plan"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
             "stream": {
               "$ref": "#/$defs/ToolOutputStream"
             },
@@ -22566,6 +22580,37 @@
         "stderr"
       ],
       "type": "string"
+    },
+    "ToolProfileSnapshot": {
+      "description": "Immutable model-visible tool surface selected for one Turn.",
+      "properties": {
+        "definitionDigest": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "parallelToolCalls": {
+          "type": "boolean"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "toolNames": {
+          "items": {
+            "$ref": "#/$defs/ToolName"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "definitionDigest",
+        "toolNames",
+        "parallelToolCalls"
+      ],
+      "type": "object"
     },
     "ToolReplaySafety": {
       "description": "Whether Core may automatically execute the same exact Tool Call after sandbox review.",
@@ -22868,6 +22913,16 @@
             }
           ]
         },
+        "plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanUpdate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "resourceBudget": {
           "anyOf": [
             {
@@ -22880,6 +22935,16 @@
         },
         "status": {
           "$ref": "#/$defs/TurnStatus"
+        },
+        "toolProfile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolProfileSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "turnId": {
           "$ref": "#/$defs/TurnId"

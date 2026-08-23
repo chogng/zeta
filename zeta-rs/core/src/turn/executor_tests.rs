@@ -68,6 +68,120 @@ fn completes_a_text_turn_from_durable_context() {
 }
 
 #[test]
+fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("profile-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("profile-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "profile".into(),
+        })
+        .unwrap();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(text_response("first complete")),
+        Ok(text_response("unused")),
+    ]));
+    let tools = Arc::new(MutableDefinitionsTool {
+        description: Mutex::new("stable definition".into()),
+    });
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        tools.clone(),
+        Arc::new(SandboxActionPolicyService),
+    );
+    let profile = executor.tool_profile_snapshot().unwrap();
+    assert_eq!(profile.id, "coding");
+    assert_eq!(profile.revision, "coding-v1");
+    assert_eq!(profile.tool_names, vec![ToolName::new("weather").unwrap()]);
+    assert!(profile.parallel_tool_calls);
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("profile-start").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: Some(ModelRef::new(
+                    ProviderId::new("any-provider").unwrap(),
+                    ModelId::new("any-model").unwrap(),
+                )),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                tool_profile: Some(profile.clone()),
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    assert_eq!(
+        threads.read_thread(&thread_id).unwrap().turns[0]
+            .tool_profile
+            .as_ref(),
+        Some(&profile)
+    );
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0]
+            .tools
+            .iter()
+            .map(|definition| definition.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["weather"]
+    );
+    assert!(requests[0].parallel_tool_calls);
+
+    let drift_turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("profile-drift-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: Some(ModelRef::new(
+                    ProviderId::new("another-provider").unwrap(),
+                    ModelId::new("another-model").unwrap(),
+                )),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
+                tool_profile: Some(profile),
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+
+    *tools.description.lock().unwrap() = "drifted definition".into();
+    let error = match executor.execute(
+        &thread_id,
+        &drift_turn_id,
+        &CancellationSource::new().token(),
+    ) {
+        Ok(_) => panic!("definition drift must fail before model invocation"),
+        Err(error) => error,
+    };
+
+    assert!(
+        matches!(error, CoreError::Context(message) if message.contains("frozen tool profile"))
+    );
+    assert_eq!(model.requests().len(), 1);
+}
+
+#[test]
 fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() {
     let (threads, thread_id, history_turn_id) = started_turn();
     let model_ref = ModelRef::new(
@@ -175,6 +289,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue the durable history".into(),
@@ -644,6 +759,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     resource_budget: None,
+                    tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![UserInput::Text {
                         text: format!("history input {index}"),
@@ -666,6 +782,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),
@@ -726,6 +843,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "current input".into(),
@@ -800,6 +918,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: vec![activation.clone()],
                 input: vec![
                     UserInput::Skill {
@@ -1311,6 +1430,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "history".into(),
@@ -1332,6 +1452,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue".into(),
@@ -1479,6 +1600,7 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: Some(resource_budget.clone()),
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -1606,6 +1728,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "fast".into(),
@@ -2420,6 +2543,34 @@ struct FailingWeatherTool;
 
 struct DeferredWeatherTools;
 
+struct MutableDefinitionsTool {
+    description: Mutex<String>,
+}
+
+impl ToolService for MutableDefinitionsTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![ToolDefinition {
+            name: ToolName::new("weather").unwrap(),
+            description: self.description.lock().unwrap().clone(),
+            parameters: json!({"type": "object"}),
+            strict: true,
+        }]
+    }
+
+    fn prepare(&self, _: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Err(CoreError::Execution("not used".into()))
+    }
+
+    fn execute(
+        &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Err(CoreError::Execution("not used".into()))
+    }
+}
+
 impl ToolService for DeferredWeatherTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
         vec![tool_definition("tool_search"), tool_definition("weather")]
@@ -2715,6 +2866,7 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -2751,6 +2903,7 @@ fn started_turn_with_resource_budget(
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: Some(resource_budget),
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -2777,6 +2930,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "continue after durable history".into(),

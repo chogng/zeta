@@ -74,6 +74,7 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![zeta_protocol::UserInput::Text {
                     text: "hello".into(),
@@ -245,6 +246,7 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                         max_cost_usd_micros: None,
                         price_snapshot: None,
                     }),
+                    tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![zeta_protocol::UserInput::Text {
                         text: prompt.into(),

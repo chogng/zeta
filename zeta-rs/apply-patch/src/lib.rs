@@ -25,7 +25,7 @@ use zeta_workspace::WorkspaceRoot;
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
 const DEFAULT_MAX_CHANGED_FILES: usize = 128;
 
-/// Limits the patch text accepted and files changed by one `apply-patch` invocation.
+/// Limits the patch text accepted and files changed by one `apply_patch` invocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApplyPatchLimits {
     max_patch_bytes: usize,
@@ -68,7 +68,7 @@ impl Default for ApplyPatchLimits {
     }
 }
 
-/// Error raised while configuring the apply-patch tool.
+/// Error raised while configuring the apply_patch tool.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApplyPatchError {
     InvalidLimit { kind: &'static str },
@@ -157,7 +157,7 @@ impl ApplyPatchTool {
 
         match commit(prepared) {
             Ok(summary) => returned_json(json!({
-                "tool": "apply-patch",
+                "tool": "apply_patch",
                 "result": {
                     "updated_files": summary.updated,
                     "added_files": summary.added,
@@ -276,8 +276,8 @@ struct ApplyPatchInput {
 
 fn apply_patch_definition() -> Result<ToolDefinition, ApplyPatchError> {
     ToolDefinition::function(
-        ToolName::new("apply-patch").map_err(definition_error)?,
-        "Apply a validated workspace patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. File changes must be made through this tool rather than file-system.",
+        ToolName::new("apply_patch").map_err(definition_error)?,
+        "Apply a validated workspace patch. Use *** Begin Patch and *** End Patch, with *** Update File:, *** Add File:, or *** Delete File: operations. Prefer this tool for general multi-hunk or multi-file code changes; use edit for one exact local replacement.",
         ToolInputSchema::parse(json!({
             "type": "object",
             "properties": {

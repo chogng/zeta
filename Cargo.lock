@@ -9467,7 +9467,6 @@ dependencies = [
  "zeta-extension-api",
  "zeta-extensions",
  "zeta-file-system",
- "zeta-file-system-tool",
  "zeta-file-watcher",
  "zeta-git",
  "zeta-hooks",

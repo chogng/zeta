@@ -102,6 +102,7 @@ fn delegated_turn_materializes_a_durable_image_as_inline_codex_input() {
                 policy_revision: "codex-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Image {
                     url: TINY_PNG_DATA_URL.into(),
@@ -557,6 +558,7 @@ fn start_core_turn_with_approval(
                 policy_revision: "codex-policy-v1".into(),
                 approval_mode,
                 resource_budget: None,
+                tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "inspect the workspace".into(),

@@ -6,6 +6,7 @@ use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
+use super::update_plan_tool::UpdatePlanToolService;
 use super::workspace_customizations::WorkspaceCustomizations;
 use super::{AppServer, AppServerThreadUpdates, RpcError};
 use crate::code_retrieval_context::CodeRetrievalContextSource;
@@ -1768,6 +1769,13 @@ fn append_multi_agent_tools(
     turn_backend: &Arc<dyn zeta_core::TurnExecutionBackend>,
 ) -> crate::local_tools::LocalToolComposition {
     let action_policy_revision = local.action_policy_revision().clone();
+    let local = append_local_tool(
+        local,
+        Arc::new(
+            UpdatePlanToolService::new(Arc::clone(sessions))
+                .with_action_policy_revision(action_policy_revision.clone()),
+        ),
+    );
     append_local_tool(
         local,
         Arc::new(

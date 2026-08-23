@@ -17,6 +17,7 @@ mod state;
 mod test_image;
 mod thread_controller;
 mod thread_reducer;
+mod tool_profile;
 mod tool_repetition;
 mod turn;
 
@@ -116,6 +117,8 @@ pub use thread_controller::SteerTurnResult;
 pub use thread_controller::ThreadController;
 pub use thread_controller::ThreadExecutionContext;
 pub use thread_controller::ToolCallOutput;
+pub use thread_controller::UpdatePlanDisposition;
+pub use thread_controller::UpdatePlanResult;
 pub use thread_controller::{ShellTurnInvocation, StartShellTurnRequest, StartTurnRequest};
 pub use thread_reducer::DelegationSnapshot;
 pub use thread_reducer::ResolvedTurnInteraction;

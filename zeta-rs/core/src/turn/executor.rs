@@ -73,6 +73,12 @@ pub enum TurnExecutionOutcome {
 }
 
 impl TurnExecutor {
+    /// Captures the model-neutral direct tool surface for a newly accepted Turn.
+    pub fn tool_profile_snapshot(&self) -> Result<zeta_protocol::ToolProfileSnapshot, CoreError> {
+        let catalog = self.tools.model_catalog_snapshot(&BTreeSet::new())?;
+        crate::tool_profile::snapshot_tool_profile(catalog.definitions())
+    }
+
     /// Freezes the exact durable binding for a host-created Tool Call.
     pub fn bind_tool_call(
         &self,
@@ -479,12 +485,25 @@ impl TurnExecutor {
                 .tools
                 .model_catalog_snapshot(&activated)
                 .map_err(ExecutionFailure::model)?;
-            let tools = tool_catalog.definitions().to_vec();
             let turn = snapshot
                 .turns
                 .iter()
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
+            if let Some(profile) = &turn.tool_profile {
+                let frozen_definitions = tool_catalog
+                    .definitions()
+                    .iter()
+                    .filter(|definition| !activated.contains(&definition.name))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                crate::tool_profile::validate_tool_profile_definitions(
+                    profile,
+                    &frozen_definitions,
+                )
+                .map_err(ExecutionFailure::model)?;
+            }
+            let tools = tool_catalog.definitions().to_vec();
             let frozen_model = turn.model.clone();
             let model = match frozen_model.as_ref() {
                 Some(model) => ModelSelection::Session(model),
@@ -576,8 +595,11 @@ impl TurnExecutor {
                     continue;
                 }
             };
-            let request = ContextAssembler::assemble(invocation.context())
+            let mut request = ContextAssembler::assemble(invocation.context())
                 .map_err(ExecutionFailure::model)?;
+            if let Some(profile) = &turn.tool_profile {
+                request.parallel_tool_calls = profile.parallel_tool_calls;
+            }
             let model = invocation.model().as_service_selection();
             let estimated_input = invocation.context().budget().total_input();
             let input_estimate = frozen_model.as_ref().map(|_| ModelInputEstimate {
