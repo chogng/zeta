@@ -3,12 +3,12 @@ import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IConnectorApi } from "../common/connectorApi.js";
 
 export function createConnectorApi(): IConnectorApi {
-  return {
-    list: () => invoke<ConnectorListResult>("zeta:connectors:list"),
-    connectApiToken: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-api-token", params),
-    connectOAuth: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-oauth", params),
-    disconnect: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:disconnect", params),
-    refreshOAuth: connectorId => invoke<void>("zeta:connectors:oauth-refresh", { connectorId }),
-    revokeOAuth: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:oauth-revoke", params),
-  };
+	return {
+		list: () => invoke<ConnectorListResult>("zeta:connectors:list"),
+		connectApiToken: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-api-token", params),
+		connectOAuth: params => invoke<ConnectorCommandResultDto>("zeta:connectors:connect-oauth", params),
+		disconnect: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:disconnect", params),
+		refreshOAuth: connectorId => invoke<void>("zeta:connectors:oauth-refresh", { connectorId }),
+		revokeOAuth: params => invoke<ConnectorDisconnectResultDto>("zeta:connectors:oauth-revoke", params),
+	};
 }

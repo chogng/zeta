@@ -11,39 +11,39 @@ export type HostOperatingSystem = "windows" | "mac" | "linux" | "unknown";
  * hosts derive the same contract from browser metadata.
  */
 export interface IRuntimeEnvironment {
-  readonly runtime: RuntimeKind;
-  readonly os: HostOperatingSystem;
-  readonly arch?: string;
+	readonly runtime: RuntimeKind;
+	readonly os: HostOperatingSystem;
+	readonly arch?: string;
 }
 
 /** @internal */
 export function operatingSystemFromNodePlatform(
-  platform: string,
+	platform: string,
 ): HostOperatingSystem {
-  switch (platform) {
-    case "win32":
-      return "windows";
-    case "darwin":
-      return "mac";
-    case "linux":
-      return "linux";
-    default:
-      return "unknown";
-  }
+	switch (platform) {
+		case "win32":
+			return "windows";
+		case "darwin":
+			return "mac";
+		case "linux":
+			return "linux";
+		default:
+			return "unknown";
+	}
 }
 
 /** @internal */
 export function operatingSystemFromUserAgent(
-  userAgent: string,
+	userAgent: string,
 ): HostOperatingSystem {
-  if (userAgent.includes("Windows")) return "windows";
-  if (
-    userAgent.includes("Macintosh")
-    || userAgent.includes("iPhone")
-    || userAgent.includes("iPad")
-  ) {
-    return "mac";
-  }
-  if (userAgent.includes("Linux")) return "linux";
-  return "unknown";
+	if (userAgent.includes("Windows")) return "windows";
+	if (
+		userAgent.includes("Macintosh")
+		|| userAgent.includes("iPhone")
+		|| userAgent.includes("iPad")
+	) {
+		return "mac";
+	}
+	if (userAgent.includes("Linux")) return "linux";
+	return "unknown";
 }

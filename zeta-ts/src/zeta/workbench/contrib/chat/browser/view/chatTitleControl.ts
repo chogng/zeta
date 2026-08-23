@@ -12,41 +12,41 @@ import { h } from "../../../../../base/browser/dom.js";
 
 /** Owns Chat's title content and action projections. */
 export class ChatTitleControl extends DisposableOwner {
-  private readonly tabs: ChatTabsControl;
-  private readonly actionsElement: HTMLDivElement;
+	private readonly tabs: ChatTabsControl;
+	private readonly actionsElement: HTMLDivElement;
 
-  constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.tabs = this.own(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
-    this.actionsElement = h(ownerDocument, "div");
-    this.actionsElement.className = "zeta-chat-title-actions";
-    container.append(this.actionsElement);
-    const toolbar = this.own(new MenuWorkbenchToolBar(
-      this.actionsElement,
-      menuService,
-      contextMenuService,
-      MenuId.ChatTitle,
-      { hoverAnchorPosition: AnchorPosition.Below },
-    ));
-    toolbar.element.setAttribute("aria-label", "Chat actions");
-    const layoutToolbar = this.own(new MenuWorkbenchToolBar(
-      this.actionsElement,
-      menuService,
-      contextMenuService,
-      MenuId.ChatTitleLayout,
-      { highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
-    ));
-    layoutToolbar.element.setAttribute("aria-label", "Chat layout");
-    layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
-    this.defer(() => this.actionsElement.remove());
-  }
+	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.tabs = this.own(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
+		this.actionsElement = h(ownerDocument, "div");
+		this.actionsElement.className = "zeta-chat-title-actions";
+		container.append(this.actionsElement);
+		const toolbar = this.own(new MenuWorkbenchToolBar(
+			this.actionsElement,
+			menuService,
+			contextMenuService,
+			MenuId.ChatTitle,
+			{ hoverAnchorPosition: AnchorPosition.Below },
+		));
+		toolbar.element.setAttribute("aria-label", "Chat actions");
+		const layoutToolbar = this.own(new MenuWorkbenchToolBar(
+			this.actionsElement,
+			menuService,
+			contextMenuService,
+			MenuId.ChatTitleLayout,
+			{ highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
+		));
+		layoutToolbar.element.setAttribute("aria-label", "Chat layout");
+		layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
+		this.defer(() => this.actionsElement.remove());
+	}
 
-  get partTitleProjection(): PartTitleProjection {
-    return { content: this.tabs.element, actions: this.actionsElement };
-  }
+	get partTitleProjection(): PartTitleProjection {
+		return { content: this.tabs.element, actions: this.actionsElement };
+	}
 
-  setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
-    return this.tabs.setTabs(entries, activeTabId);
-  }
+	setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {
+		return this.tabs.setTabs(entries, activeTabId);
+	}
 }

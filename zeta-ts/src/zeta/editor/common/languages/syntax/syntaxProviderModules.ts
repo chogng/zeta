@@ -13,11 +13,11 @@ export type SyntaxProviderModuleStateChange = LanguageProviderModuleStateChange;
 export class SyntaxProviderModuleRegistry extends LanguageProviderModuleRegistry<SyntaxProvider> {}
 
 export class SyntaxProviderModuleHost extends LanguageProviderModuleHost<SyntaxProvider> {
-  constructor(modules: SyntaxProviderModuleRegistry, providers: SyntaxProviderRegistry) {
-    super(modules, providers);
-  }
+	constructor(modules: SyntaxProviderModuleRegistry, providers: SyntaxProviderRegistry) {
+		super(modules, providers);
+	}
 }
 
 export function normalizeSyntaxProviderModuleCatalog(value: unknown): SyntaxProviderModuleCatalog {
-  return normalizeLanguageProviderModuleCatalog(value);
+	return normalizeLanguageProviderModuleCatalog(value);
 }

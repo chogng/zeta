@@ -17,321 +17,321 @@ import "../../../bracketMatching/browser/languageEditingAdapter.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
-  window: browserEnvironment.window,
-  document: browserEnvironment.window.document,
-  Node: browserEnvironment.window.Node,
-  Element: browserEnvironment.window.Element,
-  HTMLElement: browserEnvironment.window.HTMLElement,
-  Event: browserEnvironment.window.Event,
-  InputEvent: browserEnvironment.window.InputEvent,
-  KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+	InputEvent: browserEnvironment.window.InputEvent,
+	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) {
-  Object.defineProperty(globalThis, name, {
-    configurable: true,
-    value,
-  });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { TextInputController } = await import("../../../../browser/input/textInputController.js");
 
 test("Ctrl+Space requests providers through the completion service", async () => {
-  const requests: LanguageCompletionProviderRequest[] = [];
-  using fixture = createFixture({
-    id: "typescript",
-    languageIds: ["typescript"],
-    provideCompletions: request => {
-      requests.push(request);
-      return completionResult(request, "const");
-    },
-  });
-  const event = keyboardEvent(fixture.dom.window, " ", { ctrlKey: true });
-  fixture.input.element.dispatchEvent(event);
-  await waitFor(() => fixture.session.state !== undefined);
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "typescript",
+		languageIds: ["typescript"],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, "const");
+		},
+	});
+	const event = keyboardEvent(fixture.dom.window, " ", { ctrlKey: true });
+	fixture.input.element.dispatchEvent(event);
+	await waitFor(() => fixture.session.state !== undefined);
 
-  assert.equal(event.defaultPrevented, true);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
-  assert.equal(requests[0]!.snapshot.getText(), "con");
-  assert.equal(fixture.session.state!.selectedItem.providerId, "typescript");
-  assert.equal(fixture.input.completionWidget!.visible, true);
+	assert.equal(event.defaultPrevented, true);
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
+	assert.equal(requests[0]!.snapshot.getText(), "con");
+	assert.equal(fixture.session.state!.selectedItem.providerId, "typescript");
+	assert.equal(fixture.input.completionWidget!.visible, true);
 });
 
 test("A registered trigger character requests after the text transaction", async () => {
-  const requests: LanguageCompletionProviderRequest[] = [];
-  using fixture = createFixture({
-    id: "member",
-    languageIds: ["typescript"],
-    triggerCharacters: ["."],
-    provideCompletions: request => {
-      requests.push(request);
-      return completionResult(request, "method", true);
-    },
-  }, "obj");
-  const event = beforeInputEvent(fixture.dom.window, ".");
-  fixture.input.element.dispatchEvent(event);
-  await waitFor(() => fixture.session.state !== undefined);
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "member",
+		languageIds: ["typescript"],
+		triggerCharacters: ["."],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, "method", true);
+		},
+	}, "obj");
+	const event = beforeInputEvent(fixture.dom.window, ".");
+	fixture.input.element.dispatchEvent(event);
+	await waitFor(() => fixture.session.state !== undefined);
 
-  assert.equal(event.defaultPrevented, true);
-  assert.equal(fixture.model.getText(), "obj.");
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
-  assert.equal(
-    requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter
-      ? requests[0]!.context.triggerCharacter
-      : undefined,
-    ".",
-  );
-  assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 4)), 0);
-  assert.equal(requests[0]!.snapshot.getText(), "obj.");
+	assert.equal(event.defaultPrevented, true);
+	assert.equal(fixture.model.getText(), "obj.");
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
+	assert.equal(
+		requests[0]!.context.kind === LanguageCompletionTriggerKind.TriggerCharacter
+			? requests[0]!.context.triggerCharacter
+			: undefined,
+		".",
+	);
+	assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 4)), 0);
+	assert.equal(requests[0]!.snapshot.getText(), "obj.");
 });
 
 test("An auto-closed trigger character requests from the caret inside its pair", async () => {
-  const requests: LanguageCompletionProviderRequest[] = [];
-  using fixture = createFixture({
-    id: "call",
-    languageIds: ["typescript"],
-    triggerCharacters: ["("],
-    provideCompletions: request => {
-      requests.push(request);
-      return completionResult(request, "argument");
-    },
-  }, "call");
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "call",
+		languageIds: ["typescript"],
+		triggerCharacters: ["("],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, "argument");
+		},
+	}, "call");
 
-  fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "("));
-  await waitFor(() => fixture.session.state !== undefined);
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "("));
+	await waitFor(() => fixture.session.state !== undefined);
 
-  assert.equal(fixture.model.getText(), "call()");
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 5)), 0);
-  assert.equal(requests[0]!.snapshot.getText(), "call()");
+	assert.equal(fixture.model.getText(), "call()");
+	assert.equal(requests.length, 1);
+	assert.equal(requests[0]!.position.compareTo(TextPosition.at(0, 5)), 0);
+	assert.equal(requests[0]!.snapshot.getText(), "call()");
 });
 
 test("Typing after an incomplete result retriggers all providers at the new version", async () => {
-  const requests: LanguageCompletionProviderRequest[] = [];
-  using fixture = createFixture({
-    id: "incomplete",
-    languageIds: ["typescript"],
-    provideCompletions: request => {
-      requests.push(request);
-      return completionResult(request, requests.length === 1 ? "const" : "continue", true);
-    },
-  });
-  fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
-  await waitFor(() => fixture.session.state?.requestId === 1);
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "incomplete",
+		languageIds: ["typescript"],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, requests.length === 1 ? "const" : "continue", true);
+		},
+	});
+	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
+	await waitFor(() => fixture.session.state?.requestId === 1);
 
-  fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "t"));
-  await waitFor(() => fixture.session.state?.requestId === 2);
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "t"));
+	await waitFor(() => fixture.session.state?.requestId === 2);
 
-  assert.equal(fixture.model.getText(), "cont");
-  assert.deepEqual(requests.map(request => request.context.kind), [
-    LanguageCompletionTriggerKind.Invoke,
-    LanguageCompletionTriggerKind.IncompleteRefresh,
-  ]);
-  assert.equal(requests[1]!.position.compareTo(TextPosition.at(0, 4)), 0);
-  assert.equal(requests[1]!.snapshot.getText(), "cont");
-  assert.equal(fixture.session.state!.selectedItem.label, "continue");
+	assert.equal(fixture.model.getText(), "cont");
+	assert.deepEqual(requests.map(request => request.context.kind), [
+		LanguageCompletionTriggerKind.Invoke,
+		LanguageCompletionTriggerKind.IncompleteRefresh,
+	]);
+	assert.equal(requests[1]!.position.compareTo(TextPosition.at(0, 4)), 0);
+	assert.equal(requests[1]!.snapshot.getText(), "cont");
+	assert.equal(fixture.session.state!.selectedItem.label, "continue");
 });
 
 test("Deleting after an incomplete result retriggers providers at the new version", async () => {
-  const requests: LanguageCompletionProviderRequest[] = [];
-  using fixture = createFixture({
-    id: "incomplete-delete",
-    languageIds: ["typescript"],
-    provideCompletions: request => {
-      requests.push(request);
-      return completionResult(request, request.snapshot.getText(), true);
-    },
-  });
-  fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
-  await waitFor(() => fixture.session.state?.requestId === 1);
+	const requests: LanguageCompletionProviderRequest[] = [];
+	using fixture = createFixture({
+		id: "incomplete-delete",
+		languageIds: ["typescript"],
+		provideCompletions: request => {
+			requests.push(request);
+			return completionResult(request, request.snapshot.getText(), true);
+		},
+	});
+	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
+	await waitFor(() => fixture.session.state?.requestId === 1);
 
-  fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, "deleteContentBackward"));
-  await waitFor(() => fixture.session.state?.requestId === 2);
+	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, "deleteContentBackward"));
+	await waitFor(() => fixture.session.state?.requestId === 2);
 
-  assert.equal(fixture.model.getText(), "co");
-  assert.equal(requests[1]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
-  assert.equal(requests[1]!.snapshot.getText(), "co");
+	assert.equal(fixture.model.getText(), "co");
+	assert.equal(requests[1]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
+	assert.equal(requests[1]!.snapshot.getText(), "co");
 });
 
 test("Completion request wiring rejects a same-model session from another service", () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  using registration = registry.register({
-    id: "one",
-    languageIds: ["typescript"],
-    provideCompletions: () => undefined,
-  });
-  using model = new TextModel("con");
-  using firstService = new LanguageCompletionService(model, registry);
-  using secondService = new LanguageCompletionService(model, registry);
-  using selections = controllerAt(model, TextPosition.at(0, 3));
-  using session = new LanguageCompletionSessionController(firstService.results, selections);
-  const dom = new JSDOM("<!doctype html><body><main></main></body>");
-  using viewport = new EditorViewport({
-    container: requiredElement<HTMLElement>(dom.window.document, "main"),
-    model,
-    lineHeight: 20,
-    textMeasurer: new FixedTextMeasurer(),
-    selectionController: selections,
-  });
+	using registry = new LanguageCompletionProviderRegistry();
+	using registration = registry.register({
+		id: "one",
+		languageIds: ["typescript"],
+		provideCompletions: () => undefined,
+	});
+	using model = new TextModel("con");
+	using firstService = new LanguageCompletionService(model, registry);
+	using secondService = new LanguageCompletionService(model, registry);
+	using selections = controllerAt(model, TextPosition.at(0, 3));
+	using session = new LanguageCompletionSessionController(firstService.results, selections);
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using viewport = new EditorViewport({
+		container: requiredElement<HTMLElement>(dom.window.document, "main"),
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		selectionController: selections,
+	});
 
-  assert.throws(() => new TextInputController(viewport, selections, {
-    completion: {
-      session,
-      requests: {
-        service: secondService,
-        languageId: "typescript",
-      },
-    },
-  }), /must share one text model and completion result store/);
-  using configurations = new LanguageConfigurationRegistry();
-  using builtins = registerBuiltinLanguageConfigurations(configurations);
-  assert.throws(() => new TextInputController(viewport, selections, {
-    language: {
-      languageId: "json",
-      configurations,
-    },
-    completion: {
-      session,
-      requests: {
-        service: firstService,
-        languageId: "typescript",
-      },
-    },
-  }), /identities must match/);
-  dom.window.close();
+	assert.throws(() => new TextInputController(viewport, selections, {
+		completion: {
+			session,
+			requests: {
+				service: secondService,
+				languageId: "typescript",
+			},
+		},
+	}), /must share one text model and completion result store/);
+	using configurations = new LanguageConfigurationRegistry();
+	using builtins = registerBuiltinLanguageConfigurations(configurations);
+	assert.throws(() => new TextInputController(viewport, selections, {
+		language: {
+			languageId: "json",
+			configurations,
+		},
+		completion: {
+			session,
+			requests: {
+				service: firstService,
+				languageId: "typescript",
+			},
+		},
+	}), /identities must match/);
+	dom.window.close();
 });
 
 interface TriggerFixture extends Disposable {
-  readonly dom: JSDOM;
-  readonly model: TextModel;
-  readonly service: LanguageCompletionService;
-  readonly session: LanguageCompletionSessionController;
-  readonly input: InstanceType<typeof TextInputController>;
+	readonly dom: JSDOM;
+	readonly model: TextModel;
+	readonly service: LanguageCompletionService;
+	readonly session: LanguageCompletionSessionController;
+	readonly input: InstanceType<typeof TextInputController>;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
-  const dom = new JSDOM("<!doctype html><body><main></main></body>");
-  const registry = new LanguageCompletionProviderRegistry();
-  const registration = registry.register(provider);
-  const model = new TextModel(text);
-  const service = new LanguageCompletionService(model, registry);
-  const selections = controllerAt(model, TextPosition.at(0, text.length));
-  const session = new LanguageCompletionSessionController(service.results, selections);
-  const configurations = new LanguageConfigurationRegistry();
-  const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
-  const viewport = new EditorViewport({
-    container: requiredElement<HTMLElement>(dom.window.document, "main"),
-    model,
-    lineHeight: 20,
-    textMeasurer: new FixedTextMeasurer(),
-    selectionController: selections,
-  });
-  viewport.layout({ width: 300, height: 40 });
-  const input = new TextInputController(viewport, selections, {
-    language: {
-      languageId: "typescript",
-      configurations,
-    },
-    completion: {
-      session,
-      requests: {
-        service,
-        languageId: "typescript",
-      },
-    },
-  });
-  input.focus();
-  return {
-    dom,
-    model,
-    service,
-    session,
-    input,
-    [Symbol.dispose](): void {
-      input.dispose();
-      viewport.dispose();
-      session.dispose();
-      selections.dispose();
-      service.dispose();
-      model.dispose();
-      registration.dispose();
-      registry.dispose();
-      builtinConfigurations.dispose();
-      configurations.dispose();
-      dom.window.close();
-    },
-  };
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const registry = new LanguageCompletionProviderRegistry();
+	const registration = registry.register(provider);
+	const model = new TextModel(text);
+	const service = new LanguageCompletionService(model, registry);
+	const selections = controllerAt(model, TextPosition.at(0, text.length));
+	const session = new LanguageCompletionSessionController(service.results, selections);
+	const configurations = new LanguageConfigurationRegistry();
+	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
+	const viewport = new EditorViewport({
+		container: requiredElement<HTMLElement>(dom.window.document, "main"),
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		selectionController: selections,
+	});
+	viewport.layout({ width: 300, height: 40 });
+	const input = new TextInputController(viewport, selections, {
+		language: {
+			languageId: "typescript",
+			configurations,
+		},
+		completion: {
+			session,
+			requests: {
+				service,
+				languageId: "typescript",
+			},
+		},
+	});
+	input.focus();
+	return {
+		dom,
+		model,
+		service,
+		session,
+		input,
+		[Symbol.dispose](): void {
+			input.dispose();
+			viewport.dispose();
+			session.dispose();
+			selections.dispose();
+			service.dispose();
+			model.dispose();
+			registration.dispose();
+			registry.dispose();
+			builtinConfigurations.dispose();
+			configurations.dispose();
+			dom.window.close();
+		},
+	};
 }
 
 function completionResult(request: LanguageCompletionProviderRequest, label: string, isIncomplete = false): LanguageCompletionProviderResult {
-  return {
-    items: [{
-      id: label,
-      label,
-      kind: LanguageCompletionItemKind.Keyword,
-      range: TextRange.from(
-        TextPosition.at(request.position.lineIndex, 0),
-        request.position,
-      ),
-      insertText: label,
-    }],
-    isIncomplete,
-  };
+	return {
+		items: [{
+			id: label,
+			label,
+			kind: LanguageCompletionItemKind.Keyword,
+			range: TextRange.from(
+				TextPosition.at(request.position.lineIndex, 0),
+				request.position,
+			),
+			insertText: label,
+		}],
+		isIncomplete,
+	};
 }
 
 function controllerAt(model: TextModel, position: TextPosition): EditorSelectionController {
-  return new EditorSelectionController(
-    model,
-    TextSelectionSet.single(TextSelection.collapsedAt(position)),
-  );
+	return new EditorSelectionController(
+		model,
+		TextSelectionSet.single(TextSelection.collapsedAt(position)),
+	);
 }
 
 interface KeyOptions {
-  readonly ctrlKey?: boolean;
+	readonly ctrlKey?: boolean;
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyOptions = {}): KeyboardEvent {
-  return new targetWindow.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key,
-    ctrlKey: options.ctrlKey,
-  }) as unknown as KeyboardEvent;
+	return new targetWindow.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key,
+		ctrlKey: options.ctrlKey,
+	}) as unknown as KeyboardEvent;
 }
 
 function beforeInputEvent(targetWindow: typeof browserEnvironment.window, data: string | null, inputType = "insertText"): InputEvent {
-  return new targetWindow.InputEvent("beforeinput", {
-    bubbles: true,
-    cancelable: true,
-    inputType,
-    data,
-  }) as unknown as InputEvent;
+	return new targetWindow.InputEvent("beforeinput", {
+		bubbles: true,
+		cancelable: true,
+		inputType,
+		data,
+	}) as unknown as InputEvent;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (predicate()) return;
-    await new Promise<void>(resolve => setTimeout(resolve, 0));
-  }
-  assert.fail("Timed out waiting for completion request");
+	for (let attempt = 0; attempt < 20; attempt += 1) {
+		if (predicate()) return;
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+	}
+	assert.fail("Timed out waiting for completion request");
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {
-  const element = root.querySelector<T>(selector);
-  assert.ok(element);
-  return element;
+	const element = root.querySelector<T>(selector);
+	assert.ok(element);
+	return element;
 }
 
 class FixedTextMeasurer implements TextMeasurer {
-  readonly horizontalPadding = 24;
-  readonly contentLeftPadding = 12;
+	readonly horizontalPadding = 24;
+	readonly contentLeftPadding = 12;
 
-  refresh(): boolean {
-    return false;
-  }
+	refresh(): boolean {
+		return false;
+	}
 
-  measureLineWidth(text: string): number {
-    return text.length * 10;
-  }
+	measureLineWidth(text: string): number {
+		return text.length * 10;
+	}
 }

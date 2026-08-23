@@ -11,9 +11,9 @@ const RECENT_WORKSPACES_STORAGE_KEY = "workbench.recentWorkspaces";
 export const MAX_RECENT_WORKSPACES = 12;
 
 interface PersistedRecentWorkspace {
-  readonly name: string;
-  readonly root: string;
-  readonly lastOpened: number;
+	readonly name: string;
+	readonly root: string;
+	readonly lastOpened: number;
 }
 
 /**
@@ -21,92 +21,92 @@ interface PersistedRecentWorkspace {
  * synchronized with host-authoritative workspace transitions.
  */
 export class RecentWorkspacesService extends DisposableOwner implements IRecentWorkspacesService {
-  private readonly _onDidChange = this.own(new Emitter<readonly IRecentWorkspace[]>());
-  private readonly storageService: IStorageService;
-  private readonly workspaceContextService: IWorkspaceContextService;
-  private readonly workspaceOpenService: IWorkspaceOpenService;
-  private entries: readonly PersistedRecentWorkspace[];
+	private readonly _onDidChange = this.own(new Emitter<readonly IRecentWorkspace[]>());
+	private readonly storageService: IStorageService;
+	private readonly workspaceContextService: IWorkspaceContextService;
+	private readonly workspaceOpenService: IWorkspaceOpenService;
+	private entries: readonly PersistedRecentWorkspace[];
 
-  readonly onDidChange = this._onDidChange.event;
+	readonly onDidChange = this._onDidChange.event;
 
-  constructor(storageService: IStorageService, workspaceContextService: IWorkspaceContextService, workspaceOpenService: IWorkspaceOpenService) {
-    super();
-    this.storageService = storageService;
-    this.workspaceContextService = workspaceContextService;
-    this.workspaceOpenService = workspaceOpenService;
-    this.entries = readEntries(storageService.get(RECENT_WORKSPACES_STORAGE_KEY, StorageScope.PROFILE));
-    this.own(workspaceContextService.onDidChangeWorkspace(() => this.recordCurrentWorkspace()));
-    this.recordCurrentWorkspace();
-  }
+	constructor(storageService: IStorageService, workspaceContextService: IWorkspaceContextService, workspaceOpenService: IWorkspaceOpenService) {
+		super();
+		this.storageService = storageService;
+		this.workspaceContextService = workspaceContextService;
+		this.workspaceOpenService = workspaceOpenService;
+		this.entries = readEntries(storageService.get(RECENT_WORKSPACES_STORAGE_KEY, StorageScope.PROFILE));
+		this.own(workspaceContextService.onDidChangeWorkspace(() => this.recordCurrentWorkspace()));
+		this.recordCurrentWorkspace();
+	}
 
-  get recentWorkspaces(): readonly IRecentWorkspace[] {
-    return Object.freeze(this.entries.map(toRecentWorkspace));
-  }
+	get recentWorkspaces(): readonly IRecentWorkspace[] {
+		return Object.freeze(this.entries.map(toRecentWorkspace));
+	}
 
-  openWorkspace(root: string): Promise<void> {
-    return this.workspaceOpenService.openWorkspace(root);
-  }
+	openWorkspace(root: string): Promise<void> {
+		return this.workspaceOpenService.openWorkspace(root);
+	}
 
-  private recordCurrentWorkspace(): void {
-    const workspace = this.workspaceContextService.getWorkspace();
-    if (workspace.configuration || workspace.folders.length !== 1) return;
-    const folder = workspace.folders[0];
-    if (!folder || folder.uri.scheme !== "file") return;
-    const root = folder.uri.fsPath;
-    if (!root) return;
+	private recordCurrentWorkspace(): void {
+		const workspace = this.workspaceContextService.getWorkspace();
+		if (workspace.configuration || workspace.folders.length !== 1) return;
+		const folder = workspace.folders[0];
+		if (!folder || folder.uri.scheme !== "file") return;
+		const root = folder.uri.fsPath;
+		if (!root) return;
 
-    const nextEntry: PersistedRecentWorkspace = {
-      name: folder.name || resourceName(root),
-      root,
-      lastOpened: Date.now(),
-    };
-    this.entries = Object.freeze([
-      nextEntry,
-      ...this.entries.filter(entry => entry.root !== root),
-    ].slice(0, MAX_RECENT_WORKSPACES));
-    this.storageService.store(
-      RECENT_WORKSPACES_STORAGE_KEY,
-      JSON.stringify(this.entries),
-      StorageScope.PROFILE,
-      StorageTarget.USER,
-    );
-    this._onDidChange.fire(this.recentWorkspaces);
-  }
+		const nextEntry: PersistedRecentWorkspace = {
+			name: folder.name || resourceName(root),
+			root,
+			lastOpened: Date.now(),
+		};
+		this.entries = Object.freeze([
+			nextEntry,
+			...this.entries.filter(entry => entry.root !== root),
+		].slice(0, MAX_RECENT_WORKSPACES));
+		this.storageService.store(
+			RECENT_WORKSPACES_STORAGE_KEY,
+			JSON.stringify(this.entries),
+			StorageScope.PROFILE,
+			StorageTarget.USER,
+		);
+		this._onDidChange.fire(this.recentWorkspaces);
+	}
 }
 
 function readEntries(value: string | undefined): readonly PersistedRecentWorkspace[] {
-  if (!value) return [];
-  try {
-    const candidate: unknown = JSON.parse(value);
-    if (!Array.isArray(candidate)) return [];
-    const entries: PersistedRecentWorkspace[] = [];
-    const roots = new Set<string>();
-    for (const value of candidate) {
-      if (!isRecord(value)) continue;
-      const root = typeof value.root === "string" ? value.root.trim() : "";
-      const name = typeof value.name === "string" ? value.name.trim() : "";
-      const lastOpened = typeof value.lastOpened === "number" && Number.isFinite(value.lastOpened) ? value.lastOpened : 0;
-      if (!root || roots.has(root)) continue;
-      roots.add(root);
-      entries.push({ name: name || resourceName(root), root, lastOpened });
-    }
-    entries.sort((left, right) => right.lastOpened - left.lastOpened);
-    return Object.freeze(entries.slice(0, MAX_RECENT_WORKSPACES));
-  } catch {
-    return [];
-  }
+	if (!value) return [];
+	try {
+		const candidate: unknown = JSON.parse(value);
+		if (!Array.isArray(candidate)) return [];
+		const entries: PersistedRecentWorkspace[] = [];
+		const roots = new Set<string>();
+		for (const value of candidate) {
+			if (!isRecord(value)) continue;
+			const root = typeof value.root === "string" ? value.root.trim() : "";
+			const name = typeof value.name === "string" ? value.name.trim() : "";
+			const lastOpened = typeof value.lastOpened === "number" && Number.isFinite(value.lastOpened) ? value.lastOpened : 0;
+			if (!root || roots.has(root)) continue;
+			roots.add(root);
+			entries.push({ name: name || resourceName(root), root, lastOpened });
+		}
+		entries.sort((left, right) => right.lastOpened - left.lastOpened);
+		return Object.freeze(entries.slice(0, MAX_RECENT_WORKSPACES));
+	} catch {
+		return [];
+	}
 }
 
 function toRecentWorkspace(entry: PersistedRecentWorkspace): IRecentWorkspace {
-  return { name: entry.name, path: entry.root, root: entry.root };
+	return { name: entry.name, path: entry.root, root: entry.root };
 }
 
 function resourceName(root: string): string {
-  const normalized = root.replace(/[\\/]+$/, "");
-  const separator = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
-  return normalized.slice(separator + 1) || normalized;
+	const normalized = root.replace(/[\\/]+$/, "");
+	const separator = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+	return normalized.slice(separator + 1) || normalized;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

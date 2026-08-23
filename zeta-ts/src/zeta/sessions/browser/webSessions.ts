@@ -9,18 +9,18 @@ import { startSessionsWorkbench } from "./sessionsWorkbench.js";
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
 export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
-  installBaseUiStyles();
-  const sessions = new DisposableStore();
-  const host = globalThis.zetaWebWorkbenchHost;
-  const container = host?.container ?? document.querySelector<HTMLElement>("#app");
-  if (!container) throw new Error("Sessions renderer requires an #app container");
-  sessions.add(startSessionsWorkbench({
-    modeId,
-    profile,
-    api: host?.api ?? createDisconnectedRendererApi(),
-    createContextMenuService: createBrowserWorkbenchContextMenuService,
-    container,
-  }));
-  sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
-  return sessions;
+	installBaseUiStyles();
+	const sessions = new DisposableStore();
+	const host = globalThis.zetaWebWorkbenchHost;
+	const container = host?.container ?? document.querySelector<HTMLElement>("#app");
+	if (!container) throw new Error("Sessions renderer requires an #app container");
+	sessions.add(startSessionsWorkbench({
+		modeId,
+		profile,
+		api: host?.api ?? createDisconnectedRendererApi(),
+		createContextMenuService: createBrowserWorkbenchContextMenuService,
+		container,
+	}));
+	sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
+	return sessions;
 }

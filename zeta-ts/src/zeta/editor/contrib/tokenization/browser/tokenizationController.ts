@@ -4,12 +4,12 @@ import { type TokenizationTextModelPart } from "../common/tokenizationTextModelP
 
 /** Exposes tokenization readiness to the browser view without owning token production. */
 export class TokenizationController extends DisposableOwner {
-  constructor(private readonly viewport: EditorViewport, private readonly tokenization: TokenizationTextModelPart) {
-    super();
-    if (viewport.textModel !== tokenization.textModel) throw new TypeError("Aster tokenization dependencies must share a text model");
-    this.own(tokenization.onDidChange(() => this.update()));
-    this.update();
-  }
+	constructor(private readonly viewport: EditorViewport, private readonly tokenization: TokenizationTextModelPart) {
+		super();
+		if (viewport.textModel !== tokenization.textModel) throw new TypeError("Aster tokenization dependencies must share a text model");
+		this.own(tokenization.onDidChange(() => this.update()));
+		this.update();
+	}
 
-  private update(): void { this.viewport.element.classList.toggle("tokens-ready", this.tokenization.modelVersion === this.viewport.textModel.version && this.tokenization.tokenCount > 0); }
+	private update(): void { this.viewport.element.classList.toggle("tokens-ready", this.tokenization.modelVersion === this.viewport.textModel.version && this.tokenization.tokenCount > 0); }
 }

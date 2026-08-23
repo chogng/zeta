@@ -25,58 +25,58 @@ export const GIT_AGENT_REVIEW_VIEW_ID = "zeta.gitAgentReview";
 export const GIT_GRAPH_VIEW_ID = "zeta.gitGraph";
 
 registerEditorDecorationSourceFactory(({ accessor, diffApi, model, resource }) => {
-  if (!diffApi || (resource.scheme !== "file" && !isRemoteResource(resource))) return undefined;
-  return new DirtyDiffDecorationSource(resource, model, accessor.get(IGitService), diffApi);
+	if (!diffApi || (resource.scheme !== "file" && !isRemoteResource(resource))) return undefined;
+	return new DirtyDiffDecorationSource(resource, model, accessor.get(IGitService), diffApi);
 });
 
 /** Registers the Git Sidebar container and its initial pane. */
 export function registerGitViews(
-  registry: WorkbenchViewRegistry = ViewsRegistry,
+	registry: WorkbenchViewRegistry = ViewsRegistry,
 ): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Git,
-    title: "Git",
-    localizationKey: { bundle: "zeta.views", key: "git" },
-    location: ViewContainerLocation.Sidebar,
-    icon: lxiconsLibrary.gitBranch,
-    order: 3,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Git, [
-    {
-      id: GIT_VIEW_ID,
-      title: "Changes",
-      localizationKey: { bundle: "zeta.views", key: "changes" },
-      order: 1,
-      canToggleVisibility: false,
-      ctorDescriptor: new SyncDescriptor(ScmViewPane, {
-        serviceDependencies: [IGitService, IFileIconThemeService, IEditorService],
-      }),
-    },
-    {
-      id: GIT_AGENT_REVIEW_VIEW_ID,
-      title: "Agent Review",
-      localizationKey: { bundle: "zeta.views", key: "agentReview" },
-      order: 2,
-      collapsed: true,
-      canToggleVisibility: false,
-      ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
-    },
-    {
-      id: GIT_GRAPH_VIEW_ID,
-      title: "Graph",
-      localizationKey: { bundle: "zeta.views", key: "graph" },
-      order: 3,
-      collapsed: true,
-      canToggleVisibility: false,
-      ctorDescriptor: new SyncDescriptor(ScmGraphViewPane, {
-        serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IFileIconThemeService],
-      }),
-    },
-  ]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Git,
+		title: "Git",
+		localizationKey: { bundle: "zeta.views", key: "git" },
+		location: ViewContainerLocation.Sidebar,
+		icon: lxiconsLibrary.gitBranch,
+		order: 3,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Git, [
+		{
+			id: GIT_VIEW_ID,
+			title: "Changes",
+			localizationKey: { bundle: "zeta.views", key: "changes" },
+			order: 1,
+			canToggleVisibility: false,
+			ctorDescriptor: new SyncDescriptor(ScmViewPane, {
+				serviceDependencies: [IGitService, IFileIconThemeService, IEditorService],
+			}),
+		},
+		{
+			id: GIT_AGENT_REVIEW_VIEW_ID,
+			title: "Agent Review",
+			localizationKey: { bundle: "zeta.views", key: "agentReview" },
+			order: 2,
+			collapsed: true,
+			canToggleVisibility: false,
+			ctorDescriptor: new SyncDescriptor(ScmAgentReviewViewPane),
+		},
+		{
+			id: GIT_GRAPH_VIEW_ID,
+			title: "Graph",
+			localizationKey: { bundle: "zeta.views", key: "graph" },
+			order: 3,
+			collapsed: true,
+			canToggleVisibility: false,
+			ctorDescriptor: new SyncDescriptor(ScmGraphViewPane, {
+				serviceDependencies: [IGitService, IMenuService, IContextMenuService, IContextKeyService, IHoverService, IEditorService, IFileIconThemeService],
+			}),
+		},
+	]);
 }
 
 registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.BlockRestore, accessor => new ScmStatusContribution({
-  statusbarService: accessor.get(IStatusbarService),
-  gitService: accessor.get(IGitService),
-  viewsService: accessor.get(IViewsService),
+	statusbarService: accessor.get(IStatusbarService),
+	gitService: accessor.get(IGitService),
+	viewsService: accessor.get(IViewsService),
 }));

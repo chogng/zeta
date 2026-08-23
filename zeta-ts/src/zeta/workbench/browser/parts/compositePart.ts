@@ -8,43 +8,43 @@ import { PaneComposite } from "./views/paneComposite.js";
  * add their standard title and CompositeBar through PaneCompositePart.
  */
 export abstract class CompositePart extends WorkbenchPart {
-  private readonly composites = new Map<string, PaneComposite>();
-  private activeComposite: PaneComposite | undefined;
+	private readonly composites = new Map<string, PaneComposite>();
+	private activeComposite: PaneComposite | undefined;
 
-  protected constructor(container: HTMLElement, id: string) {
-    super(container, id);
-    this.contentElement.classList.add("zeta-composite-content");
-    this.defer(() => this.composites.clear());
-  }
+	protected constructor(container: HTMLElement, id: string) {
+		super(container, id);
+		this.contentElement.classList.add("zeta-composite-content");
+		this.defer(() => this.composites.clear());
+	}
 
-  addComposite(composite: PaneComposite): void {
-    if (this.composites.has(composite.id)) {
-      throw new Error(`Composite already exists in Part: ${composite.id}`);
-    }
-    this.composites.set(composite.id, this.own(composite));
-    composite.setVisible(false);
-  }
+	addComposite(composite: PaneComposite): void {
+		if (this.composites.has(composite.id)) {
+			throw new Error(`Composite already exists in Part: ${composite.id}`);
+		}
+		this.composites.set(composite.id, this.own(composite));
+		composite.setVisible(false);
+	}
 
-  getComposite(compositeId: string): PaneComposite | undefined {
-    return this.composites.get(compositeId);
-  }
+	getComposite(compositeId: string): PaneComposite | undefined {
+		return this.composites.get(compositeId);
+	}
 
-  showComposite(compositeId: string): void {
-    const composite = this.composites.get(compositeId);
-    if (!composite) {
-      throw new Error(`Composite is not available in Part: ${compositeId}`);
-    }
-    if (this.activeComposite === composite) return;
-    if (this.activeComposite) {
-      this.activeComposite.setVisible(false);
-      this.activeComposite.element.remove();
-    }
-    this.activeComposite = composite;
-    this.contentElement.append(composite.element);
-    composite.setVisible(true);
-  }
+	showComposite(compositeId: string): void {
+		const composite = this.composites.get(compositeId);
+		if (!composite) {
+			throw new Error(`Composite is not available in Part: ${compositeId}`);
+		}
+		if (this.activeComposite === composite) return;
+		if (this.activeComposite) {
+			this.activeComposite.setVisible(false);
+			this.activeComposite.element.remove();
+		}
+		this.activeComposite = composite;
+		this.contentElement.append(composite.element);
+		composite.setVisible(true);
+	}
 
-  get activeCompositeId(): string | undefined {
-    return this.activeComposite?.id;
-  }
+	get activeCompositeId(): string | undefined {
+		return this.activeComposite?.id;
+	}
 }

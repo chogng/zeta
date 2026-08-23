@@ -9,46 +9,46 @@ import { RecentWorkspacesService } from "../../browser/recentWorkspacesService.j
 import { WorkspaceContextService } from "../../browser/workspaceContextService.js";
 
 test("RecentWorkspacesService records, persists, deduplicates, and reopens folders", async () => {
-  const browser = new JSDOM("<!doctype html><body></body>", { url: "https://zeta.test" });
-  const openedRoots: string[] = [];
-  const workspaceOpenService: IWorkspaceOpenService = {
-    canOpenFolder: true,
-    canOpenWorkspace: true,
-    openFolder: async () => {},
-    openWorkspace: async root => {
-      openedRoots.push(root);
-    },
-    pickFolder: async () => undefined,
-  };
-  using storage = new BrowserStorageService({
-    ownerWindow: browser.window as unknown as Window,
-    applicationId: "recent-workspaces-test",
-    workspaceId: "alpha",
-    backend: browser.window.localStorage,
-    flushInterval: 0,
-  });
-  using workspace = new WorkspaceContextService({ id: "alpha", uri: URI.file("/workspaces/alpha") });
-  using recent = new RecentWorkspacesService(storage, workspace, workspaceOpenService);
+	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://zeta.test" });
+	const openedRoots: string[] = [];
+	const workspaceOpenService: IWorkspaceOpenService = {
+		canOpenFolder: true,
+		canOpenWorkspace: true,
+		openFolder: async () => {},
+		openWorkspace: async root => {
+			openedRoots.push(root);
+		},
+		pickFolder: async () => undefined,
+	};
+	using storage = new BrowserStorageService({
+		ownerWindow: browser.window as unknown as Window,
+		applicationId: "recent-workspaces-test",
+		workspaceId: "alpha",
+		backend: browser.window.localStorage,
+		flushInterval: 0,
+	});
+	using workspace = new WorkspaceContextService({ id: "alpha", uri: URI.file("/workspaces/alpha") });
+	using recent = new RecentWorkspacesService(storage, workspace, workspaceOpenService);
 
-  assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["alpha"]);
-  workspace.updateWorkspace({ id: "beta", uri: URI.file("/workspaces/beta") });
-  workspace.updateWorkspace({ id: "alpha", uri: URI.file("/workspaces/alpha") });
-  assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
-  assert.equal(recent.recentWorkspaces.length, 2);
+	assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["alpha"]);
+	workspace.updateWorkspace({ id: "beta", uri: URI.file("/workspaces/beta") });
+	workspace.updateWorkspace({ id: "alpha", uri: URI.file("/workspaces/alpha") });
+	assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
+	assert.equal(recent.recentWorkspaces.length, 2);
 
-  await recent.openWorkspace("/workspaces/beta");
-  assert.deepEqual(openedRoots, ["/workspaces/beta"]);
+	await recent.openWorkspace("/workspaces/beta");
+	assert.deepEqual(openedRoots, ["/workspaces/beta"]);
 
-  using restoredStorage = new BrowserStorageService({
-    ownerWindow: browser.window as unknown as Window,
-    applicationId: "recent-workspaces-test",
-    workspaceId: "restored",
-    backend: browser.window.localStorage,
-    flushInterval: 0,
-  });
-  using restoredWorkspace = new WorkspaceContextService({ id: "empty-window" });
-  using restored = new RecentWorkspacesService(restoredStorage, restoredWorkspace, workspaceOpenService);
-  assert.deepEqual(restored.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
-  assert.equal(restoredStorage.get("workbench.recentWorkspaces", StorageScope.PROFILE) !== undefined, true);
-  browser.window.close();
+	using restoredStorage = new BrowserStorageService({
+		ownerWindow: browser.window as unknown as Window,
+		applicationId: "recent-workspaces-test",
+		workspaceId: "restored",
+		backend: browser.window.localStorage,
+		flushInterval: 0,
+	});
+	using restoredWorkspace = new WorkspaceContextService({ id: "empty-window" });
+	using restored = new RecentWorkspacesService(restoredStorage, restoredWorkspace, workspaceOpenService);
+	assert.deepEqual(restored.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
+	assert.equal(restoredStorage.get("workbench.recentWorkspaces", StorageScope.PROFILE) !== undefined, true);
+	browser.window.close();
 });

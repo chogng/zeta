@@ -5,66 +5,66 @@ import { TextModel } from "../../common/model/textModel.js";
 import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
 
 test("Word selection distinguishes words, whitespace, and punctuation", () => {
-  using model = new TextModel("alpha  beta.\ntail");
+	using model = new TextModel("alpha  beta.\ntail");
 
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(0, 2)),
-    range(0, 0, 5),
-  );
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(0, 5)),
-    range(0, 5, 7),
-  );
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(0, 11)),
-    range(0, 11, 12),
-  );
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(1, 4)),
-    range(1, 0, 4),
-  );
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(0, 2)),
+		range(0, 0, 5),
+	);
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(0, 5)),
+		range(0, 5, 7),
+	);
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(0, 11)),
+		range(0, 11, 12),
+	);
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(1, 4)),
+		range(1, 0, 4),
+	);
 });
 
 test("Word selection preserves Unicode boundaries and empty lines", () => {
-  using model = new TextModel("😀x\ne\u0301lan\n");
+	using model = new TextModel("😀x\ne\u0301lan\n");
 
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(0, 1)),
-    range(0, 0, 2),
-  );
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(1, 1)),
-    range(1, 0, 5),
-  );
-  assert.deepEqual(
-    getWordSelectionRange(model, TextPosition.at(2, 0)),
-    TextRange.emptyAt(TextPosition.at(2, 0)),
-  );
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(0, 1)),
+		range(0, 0, 2),
+	);
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(1, 1)),
+		range(1, 0, 5),
+	);
+	assert.deepEqual(
+		getWordSelectionRange(model, TextPosition.at(2, 0)),
+		TextRange.emptyAt(TextPosition.at(2, 0)),
+	);
 });
 
 test("Word selection honors a language word pattern before generic segmentation", () => {
-  using model = new TextModel("crate::item-name");
-  const pattern = /[A-Za-z:]+/;
-  assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 7), pattern), range(0, 0, 11));
-  assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 12), pattern), range(0, 12, 16));
+	using model = new TextModel("crate::item-name");
+	const pattern = /[A-Za-z:]+/;
+	assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 7), pattern), range(0, 0, 11));
+	assert.deepEqual(getWordSelectionRange(model, TextPosition.at(0, 12), pattern), range(0, 12, 16));
 });
 
 test("Word selection rejects positions outside the model", () => {
-  using model = new TextModel("alpha");
+	using model = new TextModel("alpha");
 
-  assert.throws(
-    () => getWordSelectionRange(model, TextPosition.at(0, 6)),
-    /columnIndex/,
-  );
-  assert.throws(
-    () => getWordSelectionRange(model, TextPosition.at(1, 0)),
-    /lineIndex/,
-  );
+	assert.throws(
+		() => getWordSelectionRange(model, TextPosition.at(0, 6)),
+		/columnIndex/,
+	);
+	assert.throws(
+		() => getWordSelectionRange(model, TextPosition.at(1, 0)),
+		/lineIndex/,
+	);
 });
 
 function range(lineIndex: number, startColumn: number, endColumn: number): TextRange {
-  return TextRange.from(
-    TextPosition.at(lineIndex, startColumn),
-    TextPosition.at(lineIndex, endColumn),
-  );
+	return TextRange.from(
+		TextPosition.at(lineIndex, startColumn),
+		TextPosition.at(lineIndex, endColumn),
+	);
 }

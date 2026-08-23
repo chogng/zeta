@@ -7,34 +7,34 @@ import { CODE_EDITOR_ID, languageForEditorInput, matchCodeEditor } from "../../b
 import { DIFF_EDITOR_ID, createDiffEditorInput, matchDiffEditor } from "../../browser/diffEditorInput.js";
 
 test("Aster is the default text editor with canonical language IDs", () => {
-  assert.equal(CODE_EDITOR_ID, "aster.editor.code");
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Default);
-  assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\view.tsx") }), "typescriptreact");
-  assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }), "jsonc");
-  assert.equal(matchCodeEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
-  assert.equal(languageForEditorInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script") }), EditorPaneMatch.Optional);
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script.cgi") }), EditorPaneMatch.Optional);
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\.env") }), EditorPaneMatch.Optional);
-  assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.Optional);
+	assert.equal(CODE_EDITOR_ID, "aster.editor.code");
+	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\view.tsx") }), EditorPaneMatch.Default);
+	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\view.tsx") }), "typescriptreact");
+	assert.equal(languageForEditorInput({ resource: URI.file("C:\\project\\settings.jsonc") }), "jsonc");
+	assert.equal(matchCodeEditor({ resource: URI.parse("untitled:/Untitled-1") }), EditorPaneMatch.Default);
+	assert.equal(languageForEditorInput({ resource: URI.parse("untitled:/Untitled-1"), languageId: "typescript" }), "typescript");
+	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script") }), EditorPaneMatch.Optional);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\script.cgi") }), EditorPaneMatch.Optional);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\.env") }), EditorPaneMatch.Optional);
+	assert.equal(matchCodeEditor({ resource: URI.file("C:\\project\\binary.bin") }), EditorPaneMatch.Optional);
 });
 
 test("Aster excludes structured Academic documents", () => {
-  assert.equal(matchCodeEditor({
-    resource: URI.file("C:\\papers\\research.zeta-paper"),
-    contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
-  }), EditorPaneMatch.None);
+	assert.equal(matchCodeEditor({
+		resource: URI.file("C:\\papers\\research.zeta-paper"),
+		contentType: ACADEMIC_DOCUMENT_CONTENT_TYPE,
+	}), EditorPaneMatch.None);
 });
 
 test("Aster diff inputs have one stable tab identity and select only the diff pane", () => {
-  const original = { resource: URI.file("C:\\project\\before.ts"), label: "before.ts" };
-  const modified = { resource: URI.file("C:\\project\\after.ts"), label: "after.ts" };
-  const input = createDiffEditorInput(original, modified, "Review changes");
+	const original = { resource: URI.file("C:\\project\\before.ts"), label: "before.ts" };
+	const modified = { resource: URI.file("C:\\project\\after.ts"), label: "after.ts" };
+	const input = createDiffEditorInput(original, modified, "Review changes");
 
-  assert.equal(DIFF_EDITOR_ID, "aster.editor.diff");
-  assert.equal(input.label, "Review changes");
-  assert.equal(input.readOnly, true);
-  assert.equal(matchDiffEditor(input), EditorPaneMatch.Default);
-  assert.equal(matchCodeEditor(input), EditorPaneMatch.None);
-  assert.match(input.resource.toString(), /^zeta-diff:\/compare\?/);
+	assert.equal(DIFF_EDITOR_ID, "aster.editor.diff");
+	assert.equal(input.label, "Review changes");
+	assert.equal(input.readOnly, true);
+	assert.equal(matchDiffEditor(input), EditorPaneMatch.Default);
+	assert.equal(matchCodeEditor(input), EditorPaneMatch.None);
+	assert.match(input.resource.toString(), /^zeta-diff:\/compare\?/);
 });

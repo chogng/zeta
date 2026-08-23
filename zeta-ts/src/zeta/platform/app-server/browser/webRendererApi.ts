@@ -25,58 +25,58 @@ import { createViteDevWorkspaceTrustApi } from "../../workspaceTrust/browser/wor
 export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
 export interface ConnectedWebRendererApi {
-  readonly api: IRendererHost;
-  readonly metadata: ViteDevAppServerMetadata;
-  dispose(): void;
+	readonly api: IRendererHost;
+	readonly metadata: ViteDevAppServerMetadata;
+	dispose(): void;
 }
 
 /** Connects a browser Renderer host to the loopback Vite development bridge. */
 export async function connectViteDevRendererApi(hot: ViteDevHotContext, connectorHostServices: BrowserConnectorHostServices, options: ViteDevAppServerConnectionOptions = {}, contributions: readonly ViteDevRendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
-  const connection = new ViteDevAppServerConnection(hot, options);
-  try {
-    const metadata = await connection.connect();
-    return {
-      api: createRendererHost(connection, connectorHostServices, contributions),
-      metadata,
-      dispose: () => connection.dispose(),
-    };
-  } catch (error) {
-    connection.dispose();
-    throw error;
-  }
+	const connection = new ViteDevAppServerConnection(hot, options);
+	try {
+		const metadata = await connection.connect();
+		return {
+			api: createRendererHost(connection, connectorHostServices, contributions),
+			metadata,
+			dispose: () => connection.dispose(),
+		};
+	} catch (error) {
+		connection.dispose();
+		throw error;
+	}
 }
 
 function createRendererHost(connection: ViteDevAppServerConnection, connectorHostServices: BrowserConnectorHostServices, contributions: readonly ViteDevRendererCapabilityContribution[]): IRendererHost {
-  const appServer = createViteDevAppServerApi(connection);
-  const resource = createViteDevResourceApi(connection);
-  const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
-  return {
-    appServer,
-    session: createViteDevSessionApi(connection),
-    model: createViteDevModelApi(connection),
-    thread: createViteDevThreadApi(connection),
-    turn: createViteDevTurnApi(connection),
-    skills: createViteDevSkillApi(connection),
-    typst: createViteDevTypstApi(connection),
-    documentCollaboration: createViteDevDocumentCollaborationApi(connection),
-    resource,
-    extensions: createViteDevExtensionApi(connection, resource),
-    extensionHost: createViteDevExtensionHostApi(connection),
-    fs: createViteDevFileApi(connection),
-    diff: createViteDevDiffApi(connection),
-    syntax: createViteDevSyntaxApi(connection),
-    language: createViteDevLanguageApi(connection),
-    git: createViteDevGitApi(connection),
-    workspaceSearch: createViteDevWorkspaceSearchApi(connection),
-    terminal: new ViteDevTerminalProcessService(connection, appServer),
-    ...capabilities,
-    events: createViteDevServerEventApi(connection),
-    codeIndex: createViteDevCodeIndexApi(connection),
-    symbolIndex: createViteDevSymbolIndexApi(connection),
-    connectors: createViteDevConnectorApi(connection, connectorHostServices),
-    plugins: createViteDevPluginApi(connection),
-    marketplace: createViteDevMarketplaceApi(connection),
-    toolSearch: createViteDevToolSearchApi(connection),
-    workspaceTrust: createViteDevWorkspaceTrustApi(connection),
-  };
+	const appServer = createViteDevAppServerApi(connection);
+	const resource = createViteDevResourceApi(connection);
+	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
+	return {
+		appServer,
+		session: createViteDevSessionApi(connection),
+		model: createViteDevModelApi(connection),
+		thread: createViteDevThreadApi(connection),
+		turn: createViteDevTurnApi(connection),
+		skills: createViteDevSkillApi(connection),
+		typst: createViteDevTypstApi(connection),
+		documentCollaboration: createViteDevDocumentCollaborationApi(connection),
+		resource,
+		extensions: createViteDevExtensionApi(connection, resource),
+		extensionHost: createViteDevExtensionHostApi(connection),
+		fs: createViteDevFileApi(connection),
+		diff: createViteDevDiffApi(connection),
+		syntax: createViteDevSyntaxApi(connection),
+		language: createViteDevLanguageApi(connection),
+		git: createViteDevGitApi(connection),
+		workspaceSearch: createViteDevWorkspaceSearchApi(connection),
+		terminal: new ViteDevTerminalProcessService(connection, appServer),
+		...capabilities,
+		events: createViteDevServerEventApi(connection),
+		codeIndex: createViteDevCodeIndexApi(connection),
+		symbolIndex: createViteDevSymbolIndexApi(connection),
+		connectors: createViteDevConnectorApi(connection, connectorHostServices),
+		plugins: createViteDevPluginApi(connection),
+		marketplace: createViteDevMarketplaceApi(connection),
+		toolSearch: createViteDevToolSearchApi(connection),
+		workspaceTrust: createViteDevWorkspaceTrustApi(connection),
+	};
 }

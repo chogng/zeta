@@ -1,46 +1,46 @@
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import {
-  DisposableStore,
-  type IDisposable,
+	DisposableStore,
+	type IDisposable,
 } from "../../base/common/lifecycle.js";
 import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import {
-  createDisconnectedRendererApi,
+	createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";
 import {
-  UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 } from "../../platform/workspace/common/workspace.js";
 import {
-  createBrowserWorkbenchContextMenuService,
+	createBrowserWorkbenchContextMenuService,
 } from "../services/contextmenu/browser/contextMenuService.js";
 import {
-  createBrowserTitlebarPart,
+	createBrowserTitlebarPart,
 } from "./parts/titlebar/titlebarPart.js";
 import type {
-  IWebWorkbench,
-  IWebWorkbenchConstructionOptions,
-  IWebWorkbenchHost,
+	IWebWorkbench,
+	IWebWorkbenchConstructionOptions,
+	IWebWorkbenchHost,
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
 import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
-  modeId: WorkbenchModeId,
-  options: IWebWorkbenchConstructionOptions,
+	modeId: WorkbenchModeId,
+	options: IWebWorkbenchConstructionOptions,
 ): IWebWorkbench {
-  installBaseUiStyles();
-  return startWorkbench({
-    modeId,
-    profile: options.profile,
-    api: options.api,
-    container: options.container,
-    workspace: options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE,
-    createContextMenuService: createBrowserWorkbenchContextMenuService,
-    createTitlebarPart: createBrowserTitlebarPart,
-    switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
-  });
+	installBaseUiStyles();
+	return startWorkbench({
+		modeId,
+		profile: options.profile,
+		api: options.api,
+		container: options.container,
+		workspace: options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+		createContextMenuService: createBrowserWorkbenchContextMenuService,
+		createTitlebarPart: createBrowserTitlebarPart,
+		switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
+	});
 }
 
 /**
@@ -49,39 +49,39 @@ export function createWebWorkbench(
  * state so its UI remains inspectable without claiming backend availability.
  */
 export function startWebWorkbench(
-  modeId: WorkbenchModeId,
-  profile: IWebWorkbenchConstructionOptions["profile"],
+	modeId: WorkbenchModeId,
+	profile: IWebWorkbenchConstructionOptions["profile"],
 ): IDisposable {
-  const host = readWebWorkbenchHost();
-  const workbench = new DisposableStore();
-  const instance = createWebWorkbench(modeId, {
-    api: host?.api ?? createDisconnectedRendererApi(),
-    profile,
-    workspace: host?.workspace,
-    container: host?.container ??
-      document.querySelector<HTMLElement>("#app") ??
-      document.body,
-    switchWorkbenchMode: host?.switchWorkbenchMode,
-  });
-  workbench.add(instance);
-  workbench.add(addDisposableListener(window, "pagehide", () => {
-    void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
-  }, { once: true }));
-  return workbench;
+	const host = readWebWorkbenchHost();
+	const workbench = new DisposableStore();
+	const instance = createWebWorkbench(modeId, {
+		api: host?.api ?? createDisconnectedRendererApi(),
+		profile,
+		workspace: host?.workspace,
+		container: host?.container ??
+			document.querySelector<HTMLElement>("#app") ??
+			document.body,
+		switchWorkbenchMode: host?.switchWorkbenchMode,
+	});
+	workbench.add(instance);
+	workbench.add(addDisposableListener(window, "pagehide", () => {
+		void instance.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => workbench.dispose());
+	}, { once: true }));
+	return workbench;
 }
 
 function readWebWorkbenchHost(): IWebWorkbenchHost | undefined {
-  const host = globalThis.zetaWebWorkbenchHost;
-  if (host === undefined) return undefined;
-  if (
-    typeof host !== "object" ||
-    host === null ||
-    typeof host.api !== "object" ||
-    host.api === null
-  ) {
-    throw new TypeError(
-      "globalThis.zetaWebWorkbenchHost must provide a renderer API",
-    );
-  }
-  return host;
+	const host = globalThis.zetaWebWorkbenchHost;
+	if (host === undefined) return undefined;
+	if (
+		typeof host !== "object" ||
+		host === null ||
+		typeof host.api !== "object" ||
+		host.api === null
+	) {
+		throw new TypeError(
+			"globalThis.zetaWebWorkbenchHost must provide a renderer API",
+		);
+	}
+	return host;
 }

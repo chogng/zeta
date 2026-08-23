@@ -4,8 +4,8 @@ import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../product
 declare const __ZETA_WORKBENCH_MODE__: WorkbenchModeId;
 
 const modeLoaders = {
-  [WorkbenchModeId.Code]: () => import("./modes/code.js"),
-  [WorkbenchModeId.Academic]: () => import("./modes/academic.js"),
+	[WorkbenchModeId.Code]: () => import("./modes/code.js"),
+	[WorkbenchModeId.Academic]: () => import("./modes/academic.js"),
 } satisfies Record<WorkbenchModeId, () => Promise<unknown>>;
 
 const modeId = resolveWorkbenchModeIdFromUrl(window.location.href, __ZETA_WORKBENCH_MODE__);

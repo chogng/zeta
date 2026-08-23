@@ -3,7 +3,7 @@
  * paste event could not expose a textual DataTransfer representation.
  */
 export interface ClipboardSystemTextReader {
-  readText(): PromiseLike<string>;
+	readText(): PromiseLike<string>;
 }
 
 /**
@@ -11,8 +11,8 @@ export interface ClipboardSystemTextReader {
  * permission-gated Async Clipboard text read API.
  */
 export function createAsterBrowserClipboardSystemTextReader(ownerDocument: Document): ClipboardSystemTextReader | undefined {
-  const clipboard = ownerDocument.defaultView?.navigator.clipboard;
-  return clipboard && typeof clipboard.readText === "function"
-    ? Object.freeze({ readText: () => clipboard.readText() })
-    : undefined;
+	const clipboard = ownerDocument.defaultView?.navigator.clipboard;
+	return clipboard && typeof clipboard.readText === "function"
+		? Object.freeze({ readText: () => clipboard.readText() })
+		: undefined;
 }

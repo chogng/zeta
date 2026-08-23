@@ -6,33 +6,33 @@
  * without serializing product objects into a browser-visible format.
  */
 export class LocalSelectionTransfer<T> {
-  private static readonly instance = new LocalSelectionTransfer<unknown>();
+	private static readonly instance = new LocalSelectionTransfer<unknown>();
 
-  private data: readonly T[] | undefined;
-  private token: object | undefined;
+	private data: readonly T[] | undefined;
+	private token: object | undefined;
 
-  private constructor() {}
+	private constructor() {}
 
-  static getInstance<T>(): LocalSelectionTransfer<T> {
-    return LocalSelectionTransfer.instance as LocalSelectionTransfer<T>;
-  }
+	static getInstance<T>(): LocalSelectionTransfer<T> {
+		return LocalSelectionTransfer.instance as LocalSelectionTransfer<T>;
+	}
 
-  hasData(token: object): boolean {
-    return token === this.token;
-  }
+	hasData(token: object): boolean {
+		return token === this.token;
+	}
 
-  getData(token: object): readonly T[] | undefined {
-    return this.hasData(token) ? this.data : undefined;
-  }
+	getData(token: object): readonly T[] | undefined {
+		return this.hasData(token) ? this.data : undefined;
+	}
 
-  setData(data: readonly T[], token: object): void {
-    this.data = [...data];
-    this.token = token;
-  }
+	setData(data: readonly T[], token: object): void {
+		this.data = [...data];
+		this.token = token;
+	}
 
-  clearData(token: object): void {
-    if (!this.hasData(token)) return;
-    this.data = undefined;
-    this.token = undefined;
-  }
+	clearData(token: object): void {
+		if (!this.hasData(token)) return;
+		this.data = undefined;
+		this.token = undefined;
+	}
 }

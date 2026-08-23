@@ -7,12 +7,12 @@ import type { RemoteRuntimeRollbackResult } from "../../../../platform/remote/co
 
 /** Exposes the active remote agent without leaking the backend transport API. */
 export interface IRemoteAgentService {
-  readonly connectionState: RemoteConnectionState | undefined;
-  readonly connection: RemoteAgentConnection | undefined;
-  readonly onDidChangeConnectionState: Event<RemoteConnectionState>;
-  readonly onDidChangeConnection: Event<RemoteAgentConnection>;
-  reconnect(): Promise<RemoteAgentReconnectResult>;
-  rollbackRuntime(): Promise<RemoteRuntimeRollbackResult>;
+	readonly connectionState: RemoteConnectionState | undefined;
+	readonly connection: RemoteAgentConnection | undefined;
+	readonly onDidChangeConnectionState: Event<RemoteConnectionState>;
+	readonly onDidChangeConnection: Event<RemoteAgentConnection>;
+	reconnect(): Promise<RemoteAgentReconnectResult>;
+	rollbackRuntime(): Promise<RemoteRuntimeRollbackResult>;
 }
 
 export const IRemoteAgentService = createServiceIdentifier<IRemoteAgentService>("remoteAgentService");

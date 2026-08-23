@@ -2,15 +2,15 @@ import { type DocumentTransaction } from "../../../common/model/documentTransact
 
 /** One ordered client submission to a Aster collaboration authority. */
 export interface DocumentCollaborationEnvelope {
-  readonly clientId: string;
-  readonly sequence: number;
-  readonly baseVersion: number;
-  readonly transaction: DocumentTransaction;
+	readonly clientId: string;
+	readonly sequence: number;
+	readonly baseVersion: number;
+	readonly transaction: DocumentTransaction;
 }
 
 /** A server-ordered collaboration submission with its committed document version. */
 export interface DocumentCollaborationRemoteEnvelope extends DocumentCollaborationEnvelope {
-  readonly version: number;
+	readonly version: number;
 }
 
 export type DocumentCollaborationAcknowledgement = DocumentCollaborationRemoteEnvelope;

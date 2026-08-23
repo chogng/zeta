@@ -18,36 +18,36 @@ export const REMOTE_PORTS_VIEW_ID = "zeta.ports";
 
 /** Contributes the host-owned SSH tunnel catalog as a Workbench panel. */
 export function registerRemoteViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Ports,
-    title: "Ports",
-    localizationKey: { bundle: "zeta.views", key: "ports" },
-    location: ViewContainerLocation.Panel,
-    order: 4,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Ports, [{
-    id: REMOTE_PORTS_VIEW_ID,
-    title: "Ports",
-    localizationKey: { bundle: "zeta.views", key: "ports" },
-    order: 1,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(RemotePortsViewPane, { serviceDependencies: [IRemoteTunnelService, IRemoteAgentService] }),
-  }]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Ports,
+		title: "Ports",
+		localizationKey: { bundle: "zeta.views", key: "ports" },
+		location: ViewContainerLocation.Panel,
+		order: 4,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Ports, [{
+		id: REMOTE_PORTS_VIEW_ID,
+		title: "Ports",
+		localizationKey: { bundle: "zeta.views", key: "ports" },
+		order: 1,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(RemotePortsViewPane, { serviceDependencies: [IRemoteTunnelService, IRemoteAgentService] }),
+	}]);
 }
 
 registerWorkbenchContribution(RemoteContextKeys.ID, WorkbenchPhase.BlockStartup, accessor => new RemoteContextKeys({
-  contextKeyService: accessor.get(IContextKeyService),
-  remoteAgentService: accessor.get(IRemoteAgentService),
-  remoteConnectionService: accessor.get(IRemoteConnectionService),
+	contextKeyService: accessor.get(IContextKeyService),
+	remoteAgentService: accessor.get(IRemoteAgentService),
+	remoteConnectionService: accessor.get(IRemoteConnectionService),
 }));
 
 registerWorkbenchContribution(RemoteStatusIndicator.ID, WorkbenchPhase.BlockStartup, accessor => new RemoteStatusIndicator({
-  remoteAgentService: accessor.get(IRemoteAgentService),
-  runCommand: id => accessor.get(ICommandService).executeCommand(id),
-  statusbarService: accessor.get(IStatusbarService),
+	remoteAgentService: accessor.get(IRemoteAgentService),
+	runCommand: id => accessor.get(ICommandService).executeCommand(id),
+	statusbarService: accessor.get(IStatusbarService),
 }));
 
 registerWorkbenchContribution(RemoteExtensionRecoveryContribution.ID, WorkbenchPhase.BlockStartup, accessor => new RemoteExtensionRecoveryContribution({
-  extensionService: accessor.get(IExtensionService),
-  remoteAgentService: accessor.get(IRemoteAgentService),
+	extensionService: accessor.get(IExtensionService),
+	remoteAgentService: accessor.get(IRemoteAgentService),
 }));

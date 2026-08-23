@@ -6,39 +6,39 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
-  readonly viewDescriptorService: IViewDescriptorService;
-  readonly localizationService?: ILocalizationService;
-  readonly id?: string;
-  readonly location?: ViewContainerLocation;
-  readonly ariaLabel?: string;
-  readonly ariaLabelKey?: LocalizationKey;
-  readonly viewsAriaLabel?: string;
-  readonly viewsAriaLabelKey?: LocalizationKey;
-  /** Selects which registered containers receive items in the hosted CompositeBar. */
-  readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
-  readonly compositeBarVisible?: boolean;
-  readonly titleActions?: PaneCompositeTitleActions;
+	readonly viewDescriptorService: IViewDescriptorService;
+	readonly localizationService?: ILocalizationService;
+	readonly id?: string;
+	readonly location?: ViewContainerLocation;
+	readonly ariaLabel?: string;
+	readonly ariaLabelKey?: LocalizationKey;
+	readonly viewsAriaLabel?: string;
+	readonly viewsAriaLabelKey?: LocalizationKey;
+	/** Selects which registered containers receive items in the hosted CompositeBar. */
+	readonly compositeBarContainerFilter?: (container: IViewContainerDescriptor) => boolean;
+	readonly compositeBarVisible?: boolean;
+	readonly titleActions?: PaneCompositeTitleActions;
 }
 
 /** Reusable Pane Composite Part presented at the side of the Workbench. */
 export class SidebarPart extends PaneCompositePart {
-  override get minimumWidth(): number { return 180; }
-  override get maximumWidth(): number { return 600; }
+	override get minimumWidth(): number { return 180; }
+	override get maximumWidth(): number { return 600; }
 
-  constructor(container: HTMLElement, options: SidebarPartOptions) {
-    super(container, {
-      viewDescriptorService: options.viewDescriptorService,
-      localizationService: options.localizationService,
-      id: options.id ?? "sidebar",
-      location: options.location ?? ViewContainerLocation.Sidebar,
-      ariaLabel: options.ariaLabel ?? "Primary sidebar",
-      ariaLabelKey: options.ariaLabelKey,
-      viewsAriaLabel: options.viewsAriaLabel ?? "Primary side bar views",
-      viewsAriaLabelKey: options.viewsAriaLabelKey,
-      compositeBarContainerFilter: options.compositeBarContainerFilter,
-      compositeBarVisible: options.compositeBarVisible,
-      titleActions: options.titleActions,
-    });
-    this.element.classList.add("zeta-sidebar-part");
-  }
+	constructor(container: HTMLElement, options: SidebarPartOptions) {
+		super(container, {
+			viewDescriptorService: options.viewDescriptorService,
+			localizationService: options.localizationService,
+			id: options.id ?? "sidebar",
+			location: options.location ?? ViewContainerLocation.Sidebar,
+			ariaLabel: options.ariaLabel ?? "Primary sidebar",
+			ariaLabelKey: options.ariaLabelKey,
+			viewsAriaLabel: options.viewsAriaLabel ?? "Primary side bar views",
+			viewsAriaLabelKey: options.viewsAriaLabelKey,
+			compositeBarContainerFilter: options.compositeBarContainerFilter,
+			compositeBarVisible: options.compositeBarVisible,
+			titleActions: options.titleActions,
+		});
+		this.element.classList.add("zeta-sidebar-part");
+	}
 }

@@ -6,36 +6,36 @@ import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata }
 import { type TextModel } from "../../../common/model/textModel.js";
 
 export interface LanguageLinkedEditingRanges {
-  readonly ranges: readonly TextRange[];
-  readonly wordPattern?: RegExp;
+	readonly ranges: readonly TextRange[];
+	readonly wordPattern?: RegExp;
 }
 
 export interface LanguageLinkedEditingRequest extends LanguageFeatureRequest {
-  readonly resource?: URI;
-  readonly position: TextPosition;
+	readonly resource?: URI;
+	readonly position: TextPosition;
 }
 
 export interface LanguageLinkedEditingProvider extends LanguageFeatureProviderMetadata {
-  provideLinkedEditingRanges(request: LanguageLinkedEditingRequest, signal: AbortSignal): LanguageLinkedEditingRanges | undefined | Promise<LanguageLinkedEditingRanges | undefined>;
+	provideLinkedEditingRanges(request: LanguageLinkedEditingRequest, signal: AbortSignal): LanguageLinkedEditingRanges | undefined | Promise<LanguageLinkedEditingRanges | undefined>;
 }
 
 /** Calculates linked ranges; the browser controller later translates them into one model transaction. */
 export class LinkedEditingService extends DisposableOwner {
-  constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkedEditingProvider>, private readonly resource?: URI) {
-    super();
-  }
+	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkedEditingProvider>, private readonly resource?: URI) {
+		super();
+	}
 
-  get textModel(): TextModel {
-    return this.model;
-  }
+	get textModel(): TextModel {
+		return this.model;
+	}
 
-  async provideLinkedEditingRanges(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<LanguageLinkedEditingRanges | undefined> {
-    const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position };
-    for (const provider of this.providers.getProviders(languageId)) {
-      const value = await provider.provideLinkedEditingRanges(request, signal);
-      if (!isLanguageFeatureRequestCurrent(request)) return undefined;
-      if (value) return Object.freeze({ ranges: Object.freeze([...value.ranges]), ...(value.wordPattern ? { wordPattern: value.wordPattern } : {}) });
-    }
-    return undefined;
-  }
+	async provideLinkedEditingRanges(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<LanguageLinkedEditingRanges | undefined> {
+		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), position };
+		for (const provider of this.providers.getProviders(languageId)) {
+			const value = await provider.provideLinkedEditingRanges(request, signal);
+			if (!isLanguageFeatureRequestCurrent(request)) return undefined;
+			if (value) return Object.freeze({ ranges: Object.freeze([...value.ranges]), ...(value.wordPattern ? { wordPattern: value.wordPattern } : {}) });
+		}
+		return undefined;
+	}
 }

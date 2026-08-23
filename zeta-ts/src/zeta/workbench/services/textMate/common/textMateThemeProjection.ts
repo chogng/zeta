@@ -4,34 +4,34 @@ import { type TextMateScopeTheme, type TextMateScopeThemeRule, type TextMateToke
 
 /** Selects the declarative extension theme matching the active Workbench color scheme. */
 export function projectExtensionTokenTheme(catalog: ExtensionThemeCatalog, colorScheme: ColorScheme, revision: number, activeThemeId?: string): TextMateScopeTheme {
-  const selected = activeThemeId === undefined ? selectTheme(catalog.themes, colorScheme) : catalog.themes.find(candidate => candidate.id === activeThemeId);
-  return Object.freeze({ revision, rules: selected ? compileRules(selected) : Object.freeze([]) });
+	const selected = activeThemeId === undefined ? selectTheme(catalog.themes, colorScheme) : catalog.themes.find(candidate => candidate.id === activeThemeId);
+	return Object.freeze({ revision, rules: selected ? compileRules(selected) : Object.freeze([]) });
 }
 
 function selectTheme(themes: readonly ExtensionThemeDefinition[], colorScheme: ColorScheme): ExtensionThemeDefinition | undefined {
-  const expected = colorScheme === "dark" ? "vs-dark" : colorScheme === "light" ? "vs" : colorScheme === "high-contrast-dark" ? "hc-black" : "hc-light";
-  const fallback = colorScheme === "dark" || colorScheme === "high-contrast-dark" ? "vs-dark" : "vs";
-  return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => theme.uiTheme === fallback);
+	const expected = colorScheme === "dark" ? "vs-dark" : colorScheme === "light" ? "vs" : colorScheme === "high-contrast-dark" ? "hc-black" : "hc-light";
+	const fallback = colorScheme === "dark" || colorScheme === "high-contrast-dark" ? "vs-dark" : "vs";
+	return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => theme.uiTheme === fallback);
 }
 
 function compileRules(theme: ExtensionThemeDefinition): readonly TextMateScopeThemeRule[] {
-  const rules: TextMateScopeThemeRule[] = [];
-  for (const tokenColor of theme.tokenColors) {
-    const foreground = tokenColor.settings.foreground;
-    const background = tokenColor.settings.background;
-    const fontStyle = parseFontStyle(tokenColor.settings.fontStyle);
-    if (foreground === undefined && background === undefined && fontStyle === undefined) continue;
-    for (const selector of tokenColor.scopes) rules.push(Object.freeze({ selector, ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) }));
-  }
-  return Object.freeze(rules);
+	const rules: TextMateScopeThemeRule[] = [];
+	for (const tokenColor of theme.tokenColors) {
+		const foreground = tokenColor.settings.foreground;
+		const background = tokenColor.settings.background;
+		const fontStyle = parseFontStyle(tokenColor.settings.fontStyle);
+		if (foreground === undefined && background === undefined && fontStyle === undefined) continue;
+		for (const selector of tokenColor.scopes) rules.push(Object.freeze({ selector, ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) }));
+	}
+	return Object.freeze(rules);
 }
 
 function parseFontStyle(value: string | undefined): readonly TextMateTokenFontStyle[] | undefined {
-  if (value === undefined) return undefined;
-  if (value.trim().length === 0) return Object.freeze([]);
-  const styles = value.split(/\s+/u).map(style => {
-    if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported extension token font style '${style}'`);
-    return style;
-  });
-  return Object.freeze([...new Set(styles)]);
+	if (value === undefined) return undefined;
+	if (value.trim().length === 0) return Object.freeze([]);
+	const styles = value.split(/\s+/u).map(style => {
+		if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported extension token font style '${style}'`);
+		return style;
+	});
+	return Object.freeze([...new Set(styles)]);
 }

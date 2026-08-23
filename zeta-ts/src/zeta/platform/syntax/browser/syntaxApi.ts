@@ -4,15 +4,15 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { ISyntaxApi } from "../common/syntaxApi.js";
 
 export function createDisconnectedSyntaxApi(unavailable: UnavailableOperation): ISyntaxApi {
-  return {
-    analyze: () => unavailable("syntax.analyze"),
-    selectionRanges: () => unavailable("syntax.selectionRanges"),
-  };
+	return {
+		analyze: () => unavailable("syntax.analyze"),
+		selectionRanges: () => unavailable("syntax.selectionRanges"),
+	};
 }
 
 export function createViteDevSyntaxApi(connection: ViteDevAppServerConnection): ISyntaxApi {
-  return {
-    analyze: params => viteDevRequest(connection, "syntax/analyze", params),
-    selectionRanges: params => viteDevRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
-  };
+	return {
+		analyze: params => viteDevRequest(connection, "syntax/analyze", params),
+		selectionRanges: params => viteDevRequest(connection, "syntax/selectionRanges", { ...params, ranges: [...params.ranges] }),
+	};
 }

@@ -4,15 +4,15 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { IToolSearchApi } from "../common/toolSearchApi.js";
 
 export function createDisconnectedToolSearchApi(unavailable: UnavailableOperation): IToolSearchApi {
-  return {
-    readConfig: () => unavailable("toolSearch.readConfig"),
-    configure: () => unavailable("toolSearch.configure"),
-  };
+	return {
+		readConfig: () => unavailable("toolSearch.readConfig"),
+		configure: () => unavailable("toolSearch.configure"),
+	};
 }
 
 export function createViteDevToolSearchApi(connection: ViteDevAppServerConnection): IToolSearchApi {
-  return {
-    readConfig: () => viteDevRequest(connection, "config/read", {}),
-    configure: params => viteDevRequest(connection, "toolSearch/configure", params),
-  };
+	return {
+		readConfig: () => viteDevRequest(connection, "config/read", {}),
+		configure: params => viteDevRequest(connection, "toolSearch/configure", params),
+	};
 }

@@ -2,122 +2,122 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { bindColorTheme } from "../../browser/themeStyles.js";
 import {
-  ColorId,
-  colorCssVariable,
-  darkColorTheme,
-  lightColorTheme,
-  sizeCssVariable,
+	ColorId,
+	colorCssVariable,
+	darkColorTheme,
+	lightColorTheme,
+	sizeCssVariable,
 } from "../../common/colorTheme.js";
 import { ThemeService } from "../../common/themeService.js";
 
 test("color theme binding applies changes and restores prior root styles", () => {
-  using service = new ThemeService(darkColorTheme);
-  const target = new FakeThemeTarget();
-  const foreground = colorCssVariable(ColorId.foreground);
-  const background = colorCssVariable(ColorId.workbenchBackground);
-  const chatTabBackground = colorCssVariable(ColorId.chatTabBackground);
-  const editorTabBackground = colorCssVariable(ColorId.editorTabBackground);
-  const menuSelectionForeground = colorCssVariable(ColorId.menuSelectionForeground);
-  const menuSelectionBackground = colorCssVariable(ColorId.menuSelectionBackground);
-  const actionBarToggledBackground = colorCssVariable(ColorId.actionBarToggledBackground);
-  const tabListActiveBackground = colorCssVariable(ColorId.tabListActiveBackground);
-  target.style.setProperty(foreground, "hotpink", "important");
-  target.style.setProperty("color-scheme", "only light");
-  target.setAttribute("data-color-theme", "host-theme");
+	using service = new ThemeService(darkColorTheme);
+	const target = new FakeThemeTarget();
+	const foreground = colorCssVariable(ColorId.foreground);
+	const background = colorCssVariable(ColorId.workbenchBackground);
+	const chatTabBackground = colorCssVariable(ColorId.chatTabBackground);
+	const editorTabBackground = colorCssVariable(ColorId.editorTabBackground);
+	const menuSelectionForeground = colorCssVariable(ColorId.menuSelectionForeground);
+	const menuSelectionBackground = colorCssVariable(ColorId.menuSelectionBackground);
+	const actionBarToggledBackground = colorCssVariable(ColorId.actionBarToggledBackground);
+	const tabListActiveBackground = colorCssVariable(ColorId.tabListActiveBackground);
+	target.style.setProperty(foreground, "hotpink", "important");
+	target.style.setProperty("color-scheme", "only light");
+	target.setAttribute("data-color-theme", "host-theme");
 
-  const binding = bindColorTheme(
-    service,
-    target as unknown as HTMLElement,
-  );
-  assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
-  assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
-  assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
-  assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
-  assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#cccccc");
-  assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#2a2d2e");
-  assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#37373d");
-  assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#37373d");
-  assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "4px");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "6px");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "13px");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.label2")), "11px");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "400");
-  assert.equal(target.getAttribute("data-color-theme"), "zeta-dark");
+	const binding = bindColorTheme(
+		service,
+		target as unknown as HTMLElement,
+	);
+	assert.equal(target.style.getPropertyValue(foreground), "#cccccc");
+	assert.equal(target.style.getPropertyValue(background), "#1e1e1e");
+	assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
+	assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
+	assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#cccccc");
+	assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#2a2d2e");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#37373d");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#37373d");
+	assert.equal(target.style.getPropertyValue("color-scheme"), "dark");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "10px");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "4px");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "6px");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "13px");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.label2")), "11px");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "400");
+	assert.equal(target.getAttribute("data-color-theme"), "zeta-dark");
 
-  service.setColorTheme(lightColorTheme);
-  assert.equal(target.style.getPropertyValue(background), "#ffffff");
-  assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
-  assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
-  assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#3b3b3b");
-  assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#e8e8e8");
-  assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#e4e6f2");
-  assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#e4e6f2");
-  assert.equal(target.style.getPropertyValue("color-scheme"), "light");
-  assert.equal(target.getAttribute("data-color-theme"), "zeta-light");
+	service.setColorTheme(lightColorTheme);
+	assert.equal(target.style.getPropertyValue(background), "#ffffff");
+	assert.equal(target.style.getPropertyValue(chatTabBackground), "#eeeeee");
+	assert.equal(target.style.getPropertyValue(editorTabBackground), "#eeeeee");
+	assert.equal(target.style.getPropertyValue(menuSelectionForeground), "#3b3b3b");
+	assert.equal(target.style.getPropertyValue(menuSelectionBackground), "#e8e8e8");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "#e4e6f2");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "#e4e6f2");
+	assert.equal(target.style.getPropertyValue("color-scheme"), "light");
+	assert.equal(target.getAttribute("data-color-theme"), "zeta-light");
 
-  binding.dispose();
-  assert.equal(target.style.getPropertyValue(foreground), "hotpink");
-  assert.equal(target.style.getPropertyPriority(foreground), "important");
-  assert.equal(target.style.getPropertyValue(background), "");
-  assert.equal(target.style.getPropertyValue(chatTabBackground), "");
-  assert.equal(target.style.getPropertyValue(editorTabBackground), "");
-  assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "");
-  assert.equal(target.style.getPropertyValue(tabListActiveBackground), "");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "");
-  assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "");
-  assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
-  assert.equal(target.getAttribute("data-color-theme"), "host-theme");
-  assert.equal(target.getAttribute("data-color-scheme"), null);
+	binding.dispose();
+	assert.equal(target.style.getPropertyValue(foreground), "hotpink");
+	assert.equal(target.style.getPropertyPriority(foreground), "important");
+	assert.equal(target.style.getPropertyValue(background), "");
+	assert.equal(target.style.getPropertyValue(chatTabBackground), "");
+	assert.equal(target.style.getPropertyValue(editorTabBackground), "");
+	assert.equal(target.style.getPropertyValue(actionBarToggledBackground), "");
+	assert.equal(target.style.getPropertyValue(tabListActiveBackground), "");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("scrollbar.size")), "");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.contentInset")), "");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("tabList.itemContentInset")), "");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontSize.body1")), "");
+	assert.equal(target.style.getPropertyValue(sizeCssVariable("fontWeight.regular")), "");
+	assert.equal(target.style.getPropertyValue("color-scheme"), "only light");
+	assert.equal(target.getAttribute("data-color-theme"), "host-theme");
+	assert.equal(target.getAttribute("data-color-scheme"), null);
 
-  service.setColorTheme(darkColorTheme);
-  assert.equal(target.style.getPropertyValue(background), "");
+	service.setColorTheme(darkColorTheme);
+	assert.equal(target.style.getPropertyValue(background), "");
 });
 
 interface IStyleProperty {
-  readonly value: string;
-  readonly priority: string;
+	readonly value: string;
+	readonly priority: string;
 }
 
 class FakeStyle {
-  private readonly properties = new Map<string, IStyleProperty>();
+	private readonly properties = new Map<string, IStyleProperty>();
 
-  getPropertyValue(name: string): string {
-    return this.properties.get(name)?.value ?? "";
-  }
+	getPropertyValue(name: string): string {
+		return this.properties.get(name)?.value ?? "";
+	}
 
-  getPropertyPriority(name: string): string {
-    return this.properties.get(name)?.priority ?? "";
-  }
+	getPropertyPriority(name: string): string {
+		return this.properties.get(name)?.priority ?? "";
+	}
 
-  setProperty(name: string, value: string, priority = ""): void {
-    this.properties.set(name, { value, priority });
-  }
+	setProperty(name: string, value: string, priority = ""): void {
+		this.properties.set(name, { value, priority });
+	}
 
-  removeProperty(name: string): string {
-    const previous = this.getPropertyValue(name);
-    this.properties.delete(name);
-    return previous;
-  }
+	removeProperty(name: string): string {
+		const previous = this.getPropertyValue(name);
+		this.properties.delete(name);
+		return previous;
+	}
 }
 
 class FakeThemeTarget {
-  readonly style = new FakeStyle();
-  private readonly attributes = new Map<string, string>();
+	readonly style = new FakeStyle();
+	private readonly attributes = new Map<string, string>();
 
-  getAttribute(name: string): string | null {
-    return this.attributes.get(name) ?? null;
-  }
+	getAttribute(name: string): string | null {
+		return this.attributes.get(name) ?? null;
+	}
 
-  setAttribute(name: string, value: string): void {
-    this.attributes.set(name, value);
-  }
+	setAttribute(name: string, value: string): void {
+		this.attributes.set(name, value);
+	}
 
-  removeAttribute(name: string): void {
-    this.attributes.delete(name);
-  }
+	removeAttribute(name: string): void {
+		this.attributes.delete(name);
+	}
 }

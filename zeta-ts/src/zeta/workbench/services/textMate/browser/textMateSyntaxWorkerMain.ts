@@ -22,13 +22,13 @@ const modules = resources.add(new SyntaxProviderModuleRegistry());
 const languageConfigurations = resources.add(new LanguageConfigurationRegistry());
 resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
 resources.add(modules.register({
-  id: "language.lexical",
-  load: () => [createLanguageLexicalSyntaxProvider({ languageConfigurations })],
+	id: "language.lexical",
+	load: () => [createLanguageLexicalSyntaxProvider({ languageConfigurations })],
 }));
 const grammarCatalog = resources.add(new TextMateGrammarCatalogStore());
 const scopeTheme = resources.add(new TextMateScopeThemeModel());
 const textMateTokenization = resources.add(createBrowserTextMateTokenizationService(grammarCatalog, {
-  scopeResolver: scopes => scopeTheme.resolve(scopes),
+	scopeResolver: scopes => scopeTheme.resolve(scopes),
 }));
 resources.add(modules.register(createTextMateSyntaxModule(textMateTokenization)));
 const moduleHost = resources.add(new SyntaxProviderModuleHost(modules, registry));

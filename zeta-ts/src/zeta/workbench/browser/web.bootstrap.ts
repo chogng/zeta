@@ -10,43 +10,43 @@ declare const __ZETA_WEB_APP_SERVER__: boolean;
 
 /** Starts a Workbench mode after resolving its optional development host. */
 export function startBrowserWorkbench(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
-  document.title = WorkbenchModeRegistry.get(modeId).title;
-  void startBrowserWorkbenchAsync(modeId, profile, rendererCapabilities);
+	document.title = WorkbenchModeRegistry.get(modeId).title;
+	void startBrowserWorkbenchAsync(modeId, profile, rendererCapabilities);
 }
 
 async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
-  if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
-    startWebWorkbench(modeId, profile);
-    return;
-  }
-  const hot = import.meta.hot;
-  if (!hot) {
-    console.error("Zeta Web App Server development mode requires the Vite hot channel");
-    startWebWorkbench(modeId, profile);
-    return;
-  }
-  let disposeConnectedHost: (() => void) | undefined;
-  try {
-    const connected = await connectViteDevRendererApi(hot, {
-      openerService: new BrowserOpenerService(window),
-      clipboardService: new BrowserClipboardService(window.navigator.clipboard),
-    }, {}, rendererCapabilities);
-    globalThis.zetaWebWorkbenchHost = {
-      api: connected.api,
-      workspace: Object.freeze({
-        id: connected.metadata.workspaceId,
-        uri: URI.file(connected.metadata.workspaceRoot),
-      }),
-    };
-    disposeConnectedHost = () => connected.dispose();
-  } catch (error) {
-    console.error("Failed to connect the Zeta Web development host", error);
-  }
-  try {
-    startWebWorkbench(modeId, profile);
-  } catch (error) {
-    disposeConnectedHost?.();
-    throw error;
-  }
-  if (disposeConnectedHost) window.addEventListener("pagehide", disposeConnectedHost, { once: true });
+	if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
+		startWebWorkbench(modeId, profile);
+		return;
+	}
+	const hot = import.meta.hot;
+	if (!hot) {
+		console.error("Zeta Web App Server development mode requires the Vite hot channel");
+		startWebWorkbench(modeId, profile);
+		return;
+	}
+	let disposeConnectedHost: (() => void) | undefined;
+	try {
+		const connected = await connectViteDevRendererApi(hot, {
+			openerService: new BrowserOpenerService(window),
+			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
+		}, {}, rendererCapabilities);
+		globalThis.zetaWebWorkbenchHost = {
+			api: connected.api,
+			workspace: Object.freeze({
+				id: connected.metadata.workspaceId,
+				uri: URI.file(connected.metadata.workspaceRoot),
+			}),
+		};
+		disposeConnectedHost = () => connected.dispose();
+	} catch (error) {
+		console.error("Failed to connect the Zeta Web development host", error);
+	}
+	try {
+		startWebWorkbench(modeId, profile);
+	} catch (error) {
+		disposeConnectedHost?.();
+		throw error;
+	}
+	if (disposeConnectedHost) window.addEventListener("pagehide", disposeConnectedHost, { once: true });
 }

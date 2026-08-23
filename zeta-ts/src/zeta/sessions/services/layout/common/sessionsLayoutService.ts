@@ -8,18 +8,18 @@ export type SessionsPartId = typeof sessionsPartIds[number];
 
 /** Describes a dedicated Sessions Part whose effective visibility changed. */
 export interface SessionsPartVisibilityChangeEvent {
-  readonly partId: SessionsPartId;
-  readonly visible: boolean;
+	readonly partId: SessionsPartId;
+	readonly visible: boolean;
 }
 
 /** Window-scoped Part operations implemented by the dedicated Sessions layout. */
 export interface ISessionsLayoutService {
-  readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
-  isPartVisible(partId: SessionsPartId): boolean;
-  showPart(partId: SessionsPartId): void;
-  hidePart(partId: SessionsPartId): void;
-  getPartSize(partId: SessionsPartId): IDimension;
-  resizePart(partId: SessionsPartId, dimension: IDimension): void;
+	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
+	isPartVisible(partId: SessionsPartId): boolean;
+	showPart(partId: SessionsPartId): void;
+	hidePart(partId: SessionsPartId): void;
+	getPartSize(partId: SessionsPartId): IDimension;
+	resizePart(partId: SessionsPartId, dimension: IDimension): void;
 }
 
 export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>("sessionsLayoutService");

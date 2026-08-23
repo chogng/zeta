@@ -7,85 +7,85 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 
 test("bulk edits apply directly for a single entry", async () => {
-  const applier = new RecordingWorkspaceEditService();
-  using service = new BrowserBulkEditService(applier);
-  const edit = textEdit("one.ts", "one");
+	const applier = new RecordingWorkspaceEditService();
+	using service = new BrowserBulkEditService(applier);
+	const edit = textEdit("one.ts", "one");
 
-  const result = await service.apply(edit);
+	const result = await service.apply(edit);
 
-  assert.equal(result.applied, true);
-  assert.equal(applier.calls.length, 1);
-  assert.deepEqual(applier.calls[0], edit);
+	assert.equal(result.applied, true);
+	assert.equal(applier.calls.length, 1);
+	assert.deepEqual(applier.calls[0], edit);
 });
 
 test("multi-entry edits fall back to direct apply when preview is unavailable", async () => {
-  const applier = new RecordingWorkspaceEditService();
-  using service = new BrowserBulkEditService(applier);
-  const first = textEdit("one.ts", "one");
-  const second = textEdit("two.ts", "two");
+	const applier = new RecordingWorkspaceEditService();
+	using service = new BrowserBulkEditService(applier);
+	const first = textEdit("one.ts", "one");
+	const second = textEdit("two.ts", "two");
 
-  const result = await service.apply({ entries: [first.entries[0]!, second.entries[0]!] });
+	const result = await service.apply({ entries: [first.entries[0]!, second.entries[0]!] });
 
-  assert.equal(result.applied, true);
-  assert.equal(applier.calls.length, 1);
+	assert.equal(result.applied, true);
+	assert.equal(applier.calls.length, 1);
 });
 
 test("multi-entry edits preview by default and apply the accepted subset", async () => {
-  const applier = new RecordingWorkspaceEditService();
-  using service = new BrowserBulkEditService(applier);
-  const first = textEdit("one.ts", "one");
-  const second = textEdit("two.ts", "two");
-  const edit: LanguageWorkspaceEdit = { entries: [...first.entries, ...second.entries] };
-  service.setPreviewHandler(async value => ({ entries: [value.entries[1]!] }));
+	const applier = new RecordingWorkspaceEditService();
+	using service = new BrowserBulkEditService(applier);
+	const first = textEdit("one.ts", "one");
+	const second = textEdit("two.ts", "two");
+	const edit: LanguageWorkspaceEdit = { entries: [...first.entries, ...second.entries] };
+	service.setPreviewHandler(async value => ({ entries: [value.entries[1]!] }));
 
-  const result = await service.apply(edit);
+	const result = await service.apply(edit);
 
-  assert.equal(result.applied, true);
-  assert.deepEqual(applier.calls[0]?.entries, [second.entries[0]]);
+	assert.equal(result.applied, true);
+	assert.deepEqual(applier.calls[0]?.entries, [second.entries[0]]);
 });
 
 test("cancelling the preview does not mutate through the lower-level applier", async () => {
-  const applier = new RecordingWorkspaceEditService();
-  using service = new BrowserBulkEditService(applier);
-  service.setPreviewHandler(async () => undefined);
+	const applier = new RecordingWorkspaceEditService();
+	using service = new BrowserBulkEditService(applier);
+	service.setPreviewHandler(async () => undefined);
 
-  const result = await service.apply({ entries: [textEdit("one.ts", "one").entries[0]!, textEdit("two.ts", "two").entries[0]!] });
+	const result = await service.apply({ entries: [textEdit("one.ts", "one").entries[0]!, textEdit("two.ts", "two").entries[0]!] });
 
-  assert.equal(result.applied, false);
-  assert.equal(applier.calls.length, 0);
+	assert.equal(result.applied, false);
+	assert.equal(applier.calls.length, 0);
 });
 
 test("a caller can force preview for a single entry", async () => {
-  const applier = new RecordingWorkspaceEditService();
-  using service = new BrowserBulkEditService(applier);
-  let previewed = false;
-  service.setPreviewHandler(async value => {
-    previewed = true;
-    return value;
-  });
+	const applier = new RecordingWorkspaceEditService();
+	using service = new BrowserBulkEditService(applier);
+	let previewed = false;
+	service.setPreviewHandler(async value => {
+		previewed = true;
+		return value;
+	});
 
-  const result = await service.apply(textEdit("one.ts", "one"), { preview: "always" });
+	const result = await service.apply(textEdit("one.ts", "one"), { preview: "always" });
 
-  assert.equal(result.applied, true);
-  assert.equal(previewed, true);
-  assert.equal(applier.calls.length, 1);
+	assert.equal(result.applied, true);
+	assert.equal(previewed, true);
+	assert.equal(applier.calls.length, 1);
 });
 
 class RecordingWorkspaceEditService implements IWorkspaceEditService {
-  readonly calls: LanguageWorkspaceEdit[] = [];
+	readonly calls: LanguageWorkspaceEdit[] = [];
 
-  async apply(edit: LanguageWorkspaceEdit): Promise<WorkspaceEditResult> {
-    this.calls.push(edit);
-    return { resources: Object.freeze([]) };
-  }
+	async apply(edit: LanguageWorkspaceEdit): Promise<WorkspaceEditResult> {
+		this.calls.push(edit);
+		return { resources: Object.freeze([]) };
+	}
 }
 
 function textEdit(name: string, text: string): LanguageWorkspaceEdit {
-  return {
-    entries: [{
-      kind: "textDocument",
-      resource: URI.file(`C:\\workspace\\${name}`),
-      edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text }],
-    }],
-  };
+	return {
+		entries: [{
+			kind: "textDocument",
+			resource: URI.file(`C:\\workspace\\${name}`),
+			edits: [{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text }],
+		}],
+	};
 }

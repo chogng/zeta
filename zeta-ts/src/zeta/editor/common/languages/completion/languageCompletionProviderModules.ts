@@ -13,11 +13,11 @@ export type LanguageCompletionProviderModuleStateChange = LanguageProviderModule
 export class LanguageCompletionProviderModuleRegistry extends LanguageProviderModuleRegistry<LanguageCompletionProvider> {}
 
 export class LanguageCompletionProviderModuleHost extends LanguageProviderModuleHost<LanguageCompletionProvider> {
-  constructor(modules: LanguageCompletionProviderModuleRegistry, providers: LanguageCompletionProviderRegistry) {
-    super(modules, providers);
-  }
+	constructor(modules: LanguageCompletionProviderModuleRegistry, providers: LanguageCompletionProviderRegistry) {
+		super(modules, providers);
+	}
 }
 
 export function normalizeLanguageCompletionProviderModuleCatalog(value: unknown): LanguageCompletionProviderModuleCatalog {
-  return normalizeLanguageProviderModuleCatalog(value);
+	return normalizeLanguageProviderModuleCatalog(value);
 }

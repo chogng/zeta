@@ -8,29 +8,29 @@ import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Owns tracked IME range presentation while the input controller owns composition state. */
 export class CompositionPart extends EditorOverlayPart {
-  private readonly model: TextModel;
-  private compositionRange: TrackedRange | undefined;
+	private readonly model: TextModel;
+	private compositionRange: TrackedRange | undefined;
 
-  constructor(context: EditorViewContext, model: TextModel) {
-    super(context);
-    this.model = model;
-    this.defer(() => this.compositionRange?.dispose());
-  }
+	constructor(context: EditorViewContext, model: TextModel) {
+		super(context);
+		this.model = model;
+		this.defer(() => this.compositionRange?.dispose());
+	}
 
-  public setRange(range: TextRange | undefined): void {
-    const next = range
-      ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges)
-      : undefined;
-    this.compositionRange?.dispose();
-    this.compositionRange = next;
-    this.render(this.context.layout);
-  }
+	public setRange(range: TextRange | undefined): void {
+		const next = range
+			? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges)
+			: undefined;
+		this.compositionRange?.dispose();
+		this.compositionRange = next;
+		this.render(this.context.layout);
+	}
 
-  public render(layout: EditorViewportLayout): void {
-    const context = this.context.overlayContext(layout);
-    if (!context) {
-      return;
-    }
-    projectAsterCompositionOverlay(context, this.compositionRange?.range);
-  }
+	public render(layout: EditorViewportLayout): void {
+		const context = this.context.overlayContext(layout);
+		if (!context) {
+			return;
+		}
+		projectAsterCompositionOverlay(context, this.compositionRange?.range);
+	}
 }

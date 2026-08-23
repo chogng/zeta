@@ -6,25 +6,25 @@ import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, Workb
 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
-  ...AccessibilityConfiguration,
-  mode: ConfigurationsRegistry.registerConfiguration({
-    key: WorkbenchModeConfigurationKey,
-    defaultValue: WorkbenchModeRegistry.defaultModeId,
-    parse(value: unknown) {
-      if (typeof value !== "string") throw new TypeError(`Unknown Workbench mode: ${String(value)}`);
-      return WorkbenchModeRegistry.resolveModeId(value);
-    },
-  }),
-  colorTheme: ConfigurationsRegistry.registerConfiguration<string>({
-    key: "workbench.colorTheme",
-    defaultValue: defaultWorkbenchColorThemePreference,
-    parse(value: unknown): string {
-      if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(`Unknown workbench color theme preference: ${String(value)}`);
-      return value;
-    },
-  }),
+	...AccessibilityConfiguration,
+	mode: ConfigurationsRegistry.registerConfiguration({
+		key: WorkbenchModeConfigurationKey,
+		defaultValue: WorkbenchModeRegistry.defaultModeId,
+		parse(value: unknown) {
+			if (typeof value !== "string") throw new TypeError(`Unknown Workbench mode: ${String(value)}`);
+			return WorkbenchModeRegistry.resolveModeId(value);
+		},
+	}),
+	colorTheme: ConfigurationsRegistry.registerConfiguration<string>({
+		key: "workbench.colorTheme",
+		defaultValue: defaultWorkbenchColorThemePreference,
+		parse(value: unknown): string {
+			if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(`Unknown workbench color theme preference: ${String(value)}`);
+			return value;
+		},
+	}),
 });
 
 function isColorThemePreference(value: string): boolean {
-  return value === SystemColorThemePreference || WorkbenchThemesRegistry.getColorTheme(value) !== undefined || /^extension-[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
+	return value === SystemColorThemePreference || WorkbenchThemesRegistry.getColorTheme(value) !== undefined || /^extension-[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(value);
 }

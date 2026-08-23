@@ -11,82 +11,82 @@ import { EditorMinimap } from "../../../../editor/browser/view/editorViewport.js
 import { CodeEditorConfiguration } from "../common/editorConfiguration.js";
 
 registerEditorPane({
-  id: CODE_EDITOR_ID,
-  name: "Code Editor",
-  canOpen: matchCodeEditor,
-  create: options => {
-    if (!options.textFileService) throw new Error("Code Editor requires the Workbench text file service");
-    const resourceStore = getBrowserTextResourceStore(options.textFileService);
-    const configuration = options.configurationService;
-    return new CodeEditorPane(resourceStore, {
-      modelService: getBrowserTextModelService(resourceStore),
-      createPart: createBrowserEditorPart,
-      textMateService: options.textMateService,
-      languageFeaturesService: options.languageFeaturesService,
-      syntaxApi: options.syntaxApi,
-      languageDiagnosticsService: options.languageDiagnosticsService,
-      workingCopyService: options.workingCopyService,
-      fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
-      fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
-      lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
-      fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
-      lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
-      minimap: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) === false ? EditorMinimap.Off : EditorMinimap.On,
-      activeLineHighlight: configuration?.getValue(CodeEditorConfiguration.highlightActiveLine) === false ? "off" : "on",
-      showLineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers),
-      showIndentationGuides: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
-      bracketPairColorization: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization),
-      stickyScroll: configuration?.getValue(CodeEditorConfiguration.stickyScroll),
-      indentation: {
-        kind: configuration?.getValue(CodeEditorConfiguration.indentationKind),
-        tabSize: configuration?.getValue(CodeEditorConfiguration.tabSize),
-      },
-      showUnicodeHighlights: configuration?.getValue(CodeEditorConfiguration.unicodeHighlights),
-      suggestions: configuration?.getValue(CodeEditorConfiguration.suggestions),
-      inlineCompletions: configuration?.getValue(CodeEditorConfiguration.inlineCompletions),
-      parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
-      inlayHints: configuration?.getValue(CodeEditorConfiguration.inlayHints),
-      codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
-      formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
-      find: configuration ? {
-        seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
-        autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),
-        loop: configuration.getValue(CodeEditorConfiguration.findLoop),
-        matchCase: configuration.getValue(CodeEditorConfiguration.findMatchCase),
-        wholeWord: configuration.getValue(CodeEditorConfiguration.findWholeWord),
-        regularExpression: configuration.getValue(CodeEditorConfiguration.findRegularExpression),
-      } : undefined,
-      insertFinalNewLine: configuration?.getValue(CodeEditorConfiguration.insertFinalNewLine),
-      onSave: options.onSave,
-      onOpenLocation: options.onOpenLocation,
-      onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
-      createLineGutterDecorations: options.createLineGutterDecorations,
-      createDecorationSources: options.createDecorationSources,
-    });
-  },
+	id: CODE_EDITOR_ID,
+	name: "Code Editor",
+	canOpen: matchCodeEditor,
+	create: options => {
+		if (!options.textFileService) throw new Error("Code Editor requires the Workbench text file service");
+		const resourceStore = getBrowserTextResourceStore(options.textFileService);
+		const configuration = options.configurationService;
+		return new CodeEditorPane(resourceStore, {
+			modelService: getBrowserTextModelService(resourceStore),
+			createPart: createBrowserEditorPart,
+			textMateService: options.textMateService,
+			languageFeaturesService: options.languageFeaturesService,
+			syntaxApi: options.syntaxApi,
+			languageDiagnosticsService: options.languageDiagnosticsService,
+			workingCopyService: options.workingCopyService,
+			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
+			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
+			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
+			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
+			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
+			minimap: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) === false ? EditorMinimap.Off : EditorMinimap.On,
+			activeLineHighlight: configuration?.getValue(CodeEditorConfiguration.highlightActiveLine) === false ? "off" : "on",
+			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers),
+			showIndentationGuides: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
+			bracketPairColorization: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization),
+			stickyScroll: configuration?.getValue(CodeEditorConfiguration.stickyScroll),
+			indentation: {
+				kind: configuration?.getValue(CodeEditorConfiguration.indentationKind),
+				tabSize: configuration?.getValue(CodeEditorConfiguration.tabSize),
+			},
+			showUnicodeHighlights: configuration?.getValue(CodeEditorConfiguration.unicodeHighlights),
+			suggestions: configuration?.getValue(CodeEditorConfiguration.suggestions),
+			inlineCompletions: configuration?.getValue(CodeEditorConfiguration.inlineCompletions),
+			parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
+			inlayHints: configuration?.getValue(CodeEditorConfiguration.inlayHints),
+			codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
+			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
+			find: configuration ? {
+				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),
+				autoFindInSelection: configuration.getValue(CodeEditorConfiguration.findAutoFindInSelection),
+				loop: configuration.getValue(CodeEditorConfiguration.findLoop),
+				matchCase: configuration.getValue(CodeEditorConfiguration.findMatchCase),
+				wholeWord: configuration.getValue(CodeEditorConfiguration.findWholeWord),
+				regularExpression: configuration.getValue(CodeEditorConfiguration.findRegularExpression),
+			} : undefined,
+			insertFinalNewLine: configuration?.getValue(CodeEditorConfiguration.insertFinalNewLine),
+			onSave: options.onSave,
+			onOpenLocation: options.onOpenLocation,
+			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
+			createLineGutterDecorations: options.createLineGutterDecorations,
+			createDecorationSources: options.createDecorationSources,
+		});
+	},
 });
 
 registerEditorPane({
-  id: DIFF_EDITOR_ID,
-  name: "Diff Editor",
-  canOpen: matchDiffEditor,
-  create: options => {
-    if (!options.textFileService) throw new Error("Diff Editor requires the Workbench text file service");
-    const diffApi = options.diffApi;
-    if (!diffApi) throw new Error("Diff Editor requires the Rust diff API");
-    const resourceStore = getBrowserTextResourceStore(options.textFileService);
-    const configuration = options.configurationService;
-    return new DiffEditorPane(resourceStore, {
-      modelService: getBrowserTextModelService(resourceStore),
-      createComputationService: () => new RustDiffComputationService(diffApi),
-      lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
-      fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
-      fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
-      fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
-      showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
-      showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
-      loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
-      breadcrumbs: configuration?.getValue(CodeEditorConfiguration.diffBreadcrumbs),
-    });
-  },
+	id: DIFF_EDITOR_ID,
+	name: "Diff Editor",
+	canOpen: matchDiffEditor,
+	create: options => {
+		if (!options.textFileService) throw new Error("Diff Editor requires the Workbench text file service");
+		const diffApi = options.diffApi;
+		if (!diffApi) throw new Error("Diff Editor requires the Rust diff API");
+		const resourceStore = getBrowserTextResourceStore(options.textFileService);
+		const configuration = options.configurationService;
+		return new DiffEditorPane(resourceStore, {
+			modelService: getBrowserTextModelService(resourceStore),
+			createComputationService: () => new RustDiffComputationService(diffApi),
+			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
+			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
+			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
+			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
+			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
+			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
+			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
+			breadcrumbs: configuration?.getValue(CodeEditorConfiguration.diffBreadcrumbs),
+		});
+	},
 });

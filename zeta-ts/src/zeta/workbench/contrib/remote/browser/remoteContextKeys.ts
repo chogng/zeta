@@ -12,31 +12,31 @@ export const RemoteConnectionStateContext = new RawContextKey<RemoteConnectionSt
 export const RemoteConnectionsAvailableContext = new RawContextKey<boolean>("remoteConnectionsAvailable", false);
 
 export interface RemoteContextKeysOptions {
-  readonly contextKeyService: IContextKeyService;
-  readonly remoteAgentService: IRemoteAgentService;
-  readonly remoteConnectionService: IRemoteConnectionService;
+	readonly contextKeyService: IContextKeyService;
+	readonly remoteAgentService: IRemoteAgentService;
+	readonly remoteConnectionService: IRemoteConnectionService;
 }
 
 /** Projects the host-owned connection kind into action enablement without exposing transport state. */
 export class RemoteContextKeys extends DisposableOwner implements IWorkbenchContribution {
-  static readonly ID = "workbench.contrib.remoteContextKeys";
+	static readonly ID = "workbench.contrib.remoteContextKeys";
 
-  private readonly connectionKind: IContextKey<RemoteConnectionKind>;
-  private readonly connectionState: IContextKey<RemoteConnectionState | "unknown">;
-  private readonly connectionsAvailable: IContextKey<boolean>;
+	private readonly connectionKind: IContextKey<RemoteConnectionKind>;
+	private readonly connectionState: IContextKey<RemoteConnectionState | "unknown">;
+	private readonly connectionsAvailable: IContextKey<boolean>;
 
-  constructor(options: RemoteContextKeysOptions) {
-    super();
-    this.connectionKind = RemoteConnectionKindContext.bindTo(options.contextKeyService);
-    this.connectionState = RemoteConnectionStateContext.bindTo(options.contextKeyService);
-    this.connectionsAvailable = RemoteConnectionsAvailableContext.bindTo(options.contextKeyService);
-    this.connectionKind.set(options.remoteAgentService.connection?.kind ?? "unknown");
-    this.connectionState.set(options.remoteAgentService.connectionState ?? "unknown");
-    this.connectionsAvailable.set(options.remoteConnectionService.available);
-    this.own(options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)));
-    this.own(options.remoteAgentService.onDidChangeConnectionState(state => this.connectionState.set(state)));
-    this.defer(() => this.connectionKind.reset());
-    this.defer(() => this.connectionState.reset());
-    this.defer(() => this.connectionsAvailable.reset());
-  }
+	constructor(options: RemoteContextKeysOptions) {
+		super();
+		this.connectionKind = RemoteConnectionKindContext.bindTo(options.contextKeyService);
+		this.connectionState = RemoteConnectionStateContext.bindTo(options.contextKeyService);
+		this.connectionsAvailable = RemoteConnectionsAvailableContext.bindTo(options.contextKeyService);
+		this.connectionKind.set(options.remoteAgentService.connection?.kind ?? "unknown");
+		this.connectionState.set(options.remoteAgentService.connectionState ?? "unknown");
+		this.connectionsAvailable.set(options.remoteConnectionService.available);
+		this.own(options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)));
+		this.own(options.remoteAgentService.onDidChangeConnectionState(state => this.connectionState.set(state)));
+		this.defer(() => this.connectionKind.reset());
+		this.defer(() => this.connectionState.reset());
+		this.defer(() => this.connectionsAvailable.reset());
+	}
 }

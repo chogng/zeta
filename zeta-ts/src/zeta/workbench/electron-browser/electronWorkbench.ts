@@ -2,22 +2,22 @@ import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore } from "../../base/common/lifecycle.js";
 import {
-  DisposableTracker,
-  installDisposableTracker,
+	DisposableTracker,
+	installDisposableTracker,
 } from "../../base/common/disposableTracker.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import {
-  createElectronRendererApi,
+	createElectronRendererApi,
 } from "../../platform/native/electron-browser/rendererApi.js";
 import {
-  parseWorkspaceIdentifier,
+	parseWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import { type Workbench, startWorkbench } from "../browser/workbench.js";
 import {
-  createElectronTitlebarPartFactory,
+	createElectronTitlebarPartFactory,
 } from "./parts/titlebar/titlebarPart.js";
 import {
-  createElectronWorkbenchContextMenuService,
+	createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
 import { loadUserThemes } from "./userThemes.js";
 import type { WorkbenchProfile } from "../browser/workbenchProfile.js";
@@ -26,64 +26,64 @@ import { switchElectronWorkbenchMode } from "../services/workbenchMode/electron-
 
 /** Starts one Electron renderer for the selected Workbench mode. */
 export async function startElectronWorkbench(
-  modeId: WorkbenchModeId,
-  profile: WorkbenchProfile,
-  rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
+	modeId: WorkbenchModeId,
+	profile: WorkbenchProfile,
+	rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
-  document.title = WorkbenchModeRegistry.get(modeId).title;
-  installBaseUiStyles();
-  const disposableTracker = import.meta.env.DEV
-    ? new DisposableTracker()
-    : undefined;
-  const tracking = disposableTracker
-    ? installDisposableTracker(disposableTracker)
-    : undefined;
-  const api = createElectronRendererApi(rendererCapabilities);
-  const userThemes = await loadUserThemes(api.userThemes);
-  const workbench = startWorkbench({
-    modeId,
-    profile,
-    api,
-    container: document.querySelector<HTMLElement>("#app") ?? document.body,
-    workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
-    configurationApi: api.configuration,
-    keybindingsResourceApi: api.keybindings,
-    nativeHostApi: api.nativeHost,
-    userThemeService: userThemes,
-    createContextMenuService: (options) =>
-      createElectronWorkbenchContextMenuService(
-        options,
-        api.nativeContextMenu,
-      ),
-    createTitlebarPart: createElectronTitlebarPartFactory(
-      api.nativeMenubar,
-    ),
-    switchWorkbenchMode: switchElectronWorkbenchMode,
-  });
-  const lifecycle = new DisposableStore();
-  const workspaceSubscription = api.workspace.onDidChange((workspace) => {
-    void applyWorkspaceChange(workbench, workspace);
-  });
-  lifecycle.defer(() => workspaceSubscription.dispose());
-  lifecycle.add(addDisposableListener(window, "pagehide", () => {
-    void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
-      try {
-        lifecycle.dispose();
-        workbench.dispose();
-        userThemes.dispose();
-        disposableTracker?.assertNoLeaks();
-      } finally {
-        tracking?.[Symbol.dispose]();
-      }
-    });
-  }, { once: true }));
+	document.title = WorkbenchModeRegistry.get(modeId).title;
+	installBaseUiStyles();
+	const disposableTracker = import.meta.env.DEV
+		? new DisposableTracker()
+		: undefined;
+	const tracking = disposableTracker
+		? installDisposableTracker(disposableTracker)
+		: undefined;
+	const api = createElectronRendererApi(rendererCapabilities);
+	const userThemes = await loadUserThemes(api.userThemes);
+	const workbench = startWorkbench({
+		modeId,
+		profile,
+		api,
+		container: document.querySelector<HTMLElement>("#app") ?? document.body,
+		workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
+		configurationApi: api.configuration,
+		keybindingsResourceApi: api.keybindings,
+		nativeHostApi: api.nativeHost,
+		userThemeService: userThemes,
+		createContextMenuService: (options) =>
+			createElectronWorkbenchContextMenuService(
+				options,
+				api.nativeContextMenu,
+			),
+		createTitlebarPart: createElectronTitlebarPartFactory(
+			api.nativeMenubar,
+		),
+		switchWorkbenchMode: switchElectronWorkbenchMode,
+	});
+	const lifecycle = new DisposableStore();
+	const workspaceSubscription = api.workspace.onDidChange((workspace) => {
+		void applyWorkspaceChange(workbench, workspace);
+	});
+	lifecycle.defer(() => workspaceSubscription.dispose());
+	lifecycle.add(addDisposableListener(window, "pagehide", () => {
+		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
+			try {
+				lifecycle.dispose();
+				workbench.dispose();
+				userThemes.dispose();
+				disposableTracker?.assertNoLeaks();
+			} finally {
+				tracking?.[Symbol.dispose]();
+			}
+		});
+	}, { once: true }));
 }
 
 async function applyWorkspaceChange(workbench: Workbench, workspace: unknown): Promise<void> {
-  try {
-    await workbench.updateWorkspace(parseWorkspaceIdentifier(workspace));
-  } catch (error) {
-    console.error("Failed to switch Workbench workspace", error);
-    window.location.reload();
-  }
+	try {
+		await workbench.updateWorkspace(parseWorkspaceIdentifier(workspace));
+	} catch (error) {
+		console.error("Failed to switch Workbench workspace", error);
+		window.location.reload();
+	}
 }

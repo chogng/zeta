@@ -7,10 +7,10 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 
 export interface ModalEditorPartOptions {
-  readonly container: HTMLElement;
-  readonly title: string;
-  readonly content: HTMLElement;
-  readonly focusContent: () => void;
+	readonly container: HTMLElement;
+	readonly title: string;
+	readonly content: HTMLElement;
+	readonly focusContent: () => void;
 }
 
 let nextModalEditorId = 1;
@@ -22,102 +22,102 @@ let nextModalEditorId = 1;
  * presentation, its compact header, close requests, and focus containment.
  */
 export class ModalEditorPart extends DisposableOwner {
-  readonly element: HTMLElement;
-  readonly onDidRequestClose: Event<void>;
-  private readonly host: HTMLDivElement;
-  private readonly focusContent: () => void;
-  private readonly _onDidRequestClose = this.own(new Emitter<void>());
-  private focusToRestore: HTMLElement | undefined;
-  private visible = false;
+	readonly element: HTMLElement;
+	readonly onDidRequestClose: Event<void>;
+	private readonly host: HTMLDivElement;
+	private readonly focusContent: () => void;
+	private readonly _onDidRequestClose = this.own(new Emitter<void>());
+	private focusToRestore: HTMLElement | undefined;
+	private visible = false;
 
-  constructor(options: ModalEditorPartOptions) {
-    super();
-    this.focusContent = options.focusContent;
-    const ownerDocument = options.container.ownerDocument;
-    this.host = h(ownerDocument, "div");
-    this.host.className = "zeta-modal-editor-host";
-    this.host.hidden = true;
+	constructor(options: ModalEditorPartOptions) {
+		super();
+		this.focusContent = options.focusContent;
+		const ownerDocument = options.container.ownerDocument;
+		this.host = h(ownerDocument, "div");
+		this.host.className = "zeta-modal-editor-host";
+		this.host.hidden = true;
 
-    this.element = h(ownerDocument, "section");
-    this.element.className = "zeta-modal-editor";
-    this.element.tabIndex = -1;
-    this.element.setAttribute("role", "dialog");
-    this.element.setAttribute("aria-modal", "true");
+		this.element = h(ownerDocument, "section");
+		this.element.className = "zeta-modal-editor";
+		this.element.tabIndex = -1;
+		this.element.setAttribute("role", "dialog");
+		this.element.setAttribute("aria-modal", "true");
 
-    const header = h(ownerDocument, "header");
-    header.className = "zeta-modal-editor-header";
-    const heading = h(ownerDocument, "h2");
-    heading.className = "zeta-modal-editor-title";
-    heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
-    heading.textContent = options.title;
-    this.element.setAttribute("aria-labelledby", heading.id);
-    const closeButton = this.own(new Button(header, {
-      label: `Close ${options.title}`,
-      title: `Close ${options.title}`,
-      icon: lxiconsLibrary.close,
-      onClick: () => this.requestClose(),
-    }));
-    closeButton.element.classList.add("zeta-modal-editor-close");
-    header.append(heading, closeButton.element);
+		const header = h(ownerDocument, "header");
+		header.className = "zeta-modal-editor-header";
+		const heading = h(ownerDocument, "h2");
+		heading.className = "zeta-modal-editor-title";
+		heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
+		heading.textContent = options.title;
+		this.element.setAttribute("aria-labelledby", heading.id);
+		const closeButton = this.own(new Button(header, {
+			label: `Close ${options.title}`,
+			title: `Close ${options.title}`,
+			icon: lxiconsLibrary.close,
+			onClick: () => this.requestClose(),
+		}));
+		closeButton.element.classList.add("zeta-modal-editor-close");
+		header.append(heading, closeButton.element);
 
-    const content = h(ownerDocument, "div");
-    content.className = "zeta-modal-editor-content";
-    content.append(options.content);
-    this.element.append(header, content);
-    this.host.append(this.element);
-    options.container.append(this.host);
+		const content = h(ownerDocument, "div");
+		content.className = "zeta-modal-editor-content";
+		content.append(options.content);
+		this.element.append(header, content);
+		this.host.append(this.element);
+		options.container.append(this.host);
 
-    this.onDidRequestClose = this._onDidRequestClose.event;
-    this.own(trapTabFocus(this.element));
-    this.own(addDisposableListener(this.host, "mousedown", (event: MouseEvent) => {
-      if (event.target !== this.host) return;
-      stopEvent(event);
-      this.requestClose();
-    }));
-    this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
-      stopEvent(event);
-      this.requestClose();
-    }));
-    this.defer(() => {
-      this.hide();
-      this.host.remove();
-    });
-  }
+		this.onDidRequestClose = this._onDidRequestClose.event;
+		this.own(trapTabFocus(this.element));
+		this.own(addDisposableListener(this.host, "mousedown", (event: MouseEvent) => {
+			if (event.target !== this.host) return;
+			stopEvent(event);
+			this.requestClose();
+		}));
+		this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => {
+			if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
+			stopEvent(event);
+			this.requestClose();
+		}));
+		this.defer(() => {
+			this.hide();
+			this.host.remove();
+		});
+	}
 
-  get isVisible(): boolean {
-    return this.visible;
-  }
+	get isVisible(): boolean {
+		return this.visible;
+	}
 
-  show(): void {
-    if (this.visible) {
-      this.focusEditorContent();
-      return;
-    }
-    const activeElement = this.element.ownerDocument.activeElement;
-    this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
-    this.visible = true;
-    this.host.hidden = false;
-    this.focusEditorContent();
-  }
+	show(): void {
+		if (this.visible) {
+			this.focusEditorContent();
+			return;
+		}
+		const activeElement = this.element.ownerDocument.activeElement;
+		this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
+		this.visible = true;
+		this.host.hidden = false;
+		this.focusEditorContent();
+	}
 
-  hide(): void {
-    if (!this.visible) return;
-    this.visible = false;
-    this.host.hidden = true;
-    const focusToRestore = this.focusToRestore;
-    this.focusToRestore = undefined;
-    if (focusToRestore) restoreFocus(focusToRestore);
-  }
+	hide(): void {
+		if (!this.visible) return;
+		this.visible = false;
+		this.host.hidden = true;
+		const focusToRestore = this.focusToRestore;
+		this.focusToRestore = undefined;
+		if (focusToRestore) restoreFocus(focusToRestore);
+	}
 
-  private focusEditorContent(): void {
-    this.focusContent();
-    if (!this.element.contains(this.element.ownerDocument.activeElement)) {
-      if (!focusFirst(this.element)) this.element.focus();
-    }
-  }
+	private focusEditorContent(): void {
+		this.focusContent();
+		if (!this.element.contains(this.element.ownerDocument.activeElement)) {
+			if (!focusFirst(this.element)) this.element.focus();
+		}
+	}
 
-  private requestClose(): void {
-    this._onDidRequestClose.fire();
-  }
+	private requestClose(): void {
+		this._onDidRequestClose.fire();
+	}
 }

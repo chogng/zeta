@@ -10,23 +10,23 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
  * uses this contract for dirty state, save/revert commands, and resource coordination.
  */
 export interface IWorkingCopy extends IDisposable {
-  readonly resource: URI;
-  readonly backupKind: "text" | "structuredDocument";
-  readonly backupLanguageId?: string;
-  readonly backupContentType?: string;
-  readonly backupLabel?: string;
-  readonly isDirty: boolean;
-  readonly hasExternalChange: boolean;
-  readonly onDidChangeDirty: Event<void>;
-  readonly onDidChangeExternalChange: Event<void>;
-  readonly onDidChangeContent: Event<void>;
-  /** Current serialized editor-domain content used for crash recovery. */
-  backup(): string;
-  /** Replaces current content with a crash backup while retaining the persisted baseline. */
-  restoreBackup(content: string): void;
-  save(signal: AbortSignal): Promise<void>;
-  saveAs(resource: URI, signal: AbortSignal): Promise<void>;
-  revert(signal: AbortSignal): Promise<void>;
+	readonly resource: URI;
+	readonly backupKind: "text" | "structuredDocument";
+	readonly backupLanguageId?: string;
+	readonly backupContentType?: string;
+	readonly backupLabel?: string;
+	readonly isDirty: boolean;
+	readonly hasExternalChange: boolean;
+	readonly onDidChangeDirty: Event<void>;
+	readonly onDidChangeExternalChange: Event<void>;
+	readonly onDidChangeContent: Event<void>;
+	/** Current serialized editor-domain content used for crash recovery. */
+	backup(): string;
+	/** Replaces current content with a crash backup while retaining the persisted baseline. */
+	restoreBackup(content: string): void;
+	save(signal: AbortSignal): Promise<void>;
+	saveAs(resource: URI, signal: AbortSignal): Promise<void>;
+	revert(signal: AbortSignal): Promise<void>;
 }
 
 /**
@@ -36,11 +36,11 @@ export interface IWorkingCopy extends IDisposable {
  * working copy, while the service only indexes it for Workbench coordination.
  */
 export interface IWorkingCopyService extends IDisposable {
-  readonly onDidRegister: Event<IWorkingCopy>;
-  readonly onDidUnregister: Event<IWorkingCopy>;
-  register(workingCopy: IWorkingCopy): IDisposable;
-  get(resource: URI): readonly IWorkingCopy[];
-  getAll(): readonly IWorkingCopy[];
+	readonly onDidRegister: Event<IWorkingCopy>;
+	readonly onDidUnregister: Event<IWorkingCopy>;
+	register(workingCopy: IWorkingCopy): IDisposable;
+	get(resource: URI): readonly IWorkingCopy[];
+	getAll(): readonly IWorkingCopy[];
 }
 
 export const IWorkingCopyService = createServiceIdentifier<IWorkingCopyService>("workingCopyService");

@@ -9,42 +9,42 @@ export type AppServerHostPlatform = "posix" | "windows";
 
 /** Whether a variable may cross the Electron Main to App Server process boundary. */
 export function isAllowedAppServerEnvironmentKey(key: string): boolean {
-  const normalized = key.toUpperCase();
-  return ALL_HOST_ENVIRONMENT_KEYS.has(normalized) || ALL_PRODUCT_ENVIRONMENT_KEYS.has(normalized) || normalized.startsWith("LC_");
+	const normalized = key.toUpperCase();
+	return ALL_HOST_ENVIRONMENT_KEYS.has(normalized) || ALL_PRODUCT_ENVIRONMENT_KEYS.has(normalized) || normalized.startsWith("LC_");
 }
 
 /** Builds the explicit, secret-excluding environment supplied to the local App Server process. */
 export function buildAppServerEnvironment(source: Readonly<Record<string, string | undefined>>, platform: AppServerHostPlatform, productEnvironment: Readonly<Record<string, string>>): Readonly<Record<string, string>> {
-  const result: Record<string, string> = {};
-  const hostKeys = platform === "windows" ? [...COMMON_HOST_ENVIRONMENT_KEYS, ...WINDOWS_HOST_ENVIRONMENT_KEYS] : [...COMMON_HOST_ENVIRONMENT_KEYS, ...POSIX_HOST_ENVIRONMENT_KEYS];
-  for (const key of hostKeys) {
-    const value = environmentValue(source, key, platform);
-    if (isValidEnvironmentValue(value)) result[key] = value;
-  }
-  for (const [key, value] of Object.entries(source)) {
-    if (!key.toUpperCase().startsWith("LC_") || !isValidEnvironmentName(key) || !isValidEnvironmentValue(value)) continue;
-    result[platform === "windows" ? key.toUpperCase() : key] = value;
-  }
-  for (const [key, value] of Object.entries(productEnvironment)) {
-    const normalized = key.toUpperCase();
-    if (!ALL_PRODUCT_ENVIRONMENT_KEYS.has(normalized) || !isValidEnvironmentValue(value)) {
-      throw new Error(`Invalid App Server product environment variable: ${key}`);
-    }
-    result[normalized] = value;
-  }
-  return result;
+	const result: Record<string, string> = {};
+	const hostKeys = platform === "windows" ? [...COMMON_HOST_ENVIRONMENT_KEYS, ...WINDOWS_HOST_ENVIRONMENT_KEYS] : [...COMMON_HOST_ENVIRONMENT_KEYS, ...POSIX_HOST_ENVIRONMENT_KEYS];
+	for (const key of hostKeys) {
+		const value = environmentValue(source, key, platform);
+		if (isValidEnvironmentValue(value)) result[key] = value;
+	}
+	for (const [key, value] of Object.entries(source)) {
+		if (!key.toUpperCase().startsWith("LC_") || !isValidEnvironmentName(key) || !isValidEnvironmentValue(value)) continue;
+		result[platform === "windows" ? key.toUpperCase() : key] = value;
+	}
+	for (const [key, value] of Object.entries(productEnvironment)) {
+		const normalized = key.toUpperCase();
+		if (!ALL_PRODUCT_ENVIRONMENT_KEYS.has(normalized) || !isValidEnvironmentValue(value)) {
+			throw new Error(`Invalid App Server product environment variable: ${key}`);
+		}
+		result[normalized] = value;
+	}
+	return result;
 }
 
 function environmentValue(source: Readonly<Record<string, string | undefined>>, key: string, platform: AppServerHostPlatform): string | undefined {
-  if (platform === "posix") return source[key];
-  const entry = Object.entries(source).find(([candidate]) => candidate.toUpperCase() === key);
-  return entry?.[1];
+	if (platform === "posix") return source[key];
+	const entry = Object.entries(source).find(([candidate]) => candidate.toUpperCase() === key);
+	return entry?.[1];
 }
 
 function isValidEnvironmentName(name: string): boolean {
-  return name.length > 0 && !name.includes("=") && !name.includes("\0");
+	return name.length > 0 && !name.includes("=") && !name.includes("\0");
 }
 
 function isValidEnvironmentValue(value: string | undefined): value is string {
-  return value !== undefined && !value.includes("\0");
+	return value !== undefined && !value.includes("\0");
 }

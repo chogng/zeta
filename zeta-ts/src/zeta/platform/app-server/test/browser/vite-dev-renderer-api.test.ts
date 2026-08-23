@@ -5,120 +5,120 @@ import { connectViteDevRendererApi } from "../../../../platform/app-server/brows
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
 
 const connectorHostServices = {
-  openerService: { openExternal: async () => undefined },
-  clipboardService: { writeText: async () => undefined },
+	openerService: { openExternal: async () => undefined },
+	clipboardService: { writeText: async () => undefined },
 };
 
 class FakeHotContext implements ViteDevHotContext {
-  private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
-  readonly requests: Array<Record<string, unknown>> = [];
-  readonly sentEvents: string[] = [];
+	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
+	readonly requests: Array<Record<string, unknown>> = [];
+	readonly sentEvents: string[] = [];
 
-  on(event: string, listener: (payload: unknown) => void): void {
-    let listeners = this.listeners.get(event);
-    if (!listeners) {
-      listeners = new Set();
-      this.listeners.set(event, listeners);
-    }
-    listeners.add(listener);
-  }
+	on(event: string, listener: (payload: unknown) => void): void {
+		let listeners = this.listeners.get(event);
+		if (!listeners) {
+			listeners = new Set();
+			this.listeners.set(event, listeners);
+		}
+		listeners.add(listener);
+	}
 
-  off(event: string, listener: (payload: unknown) => void): void {
-    this.listeners.get(event)?.delete(listener);
-  }
+	off(event: string, listener: (payload: unknown) => void): void {
+		this.listeners.get(event)?.delete(listener);
+	}
 
-  send(event: string, payload?: unknown): void {
-    this.sentEvents.push(event);
-    if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-      this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
-        protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION,
-        workspaceId: "web-dev:test",
-        workspaceRoot: "C:\\workspace",
-      });
-      return;
-    }
-    if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== "string") return;
-    const request = JSON.parse(payload.frame) as Record<string, unknown>;
-    this.requests.push(request);
-    if (request.method === "initialize") {
-      this.respond(request, {
-        serverInfo: { name: "zeta-app-server", version: "0.1.0" },
-        schemaHash: APP_SERVER_SCHEMA_HASH,
-        capabilities: { sessions: true, threads: true, turns: true, extensionHost: true },
-        slashCommands: [],
-      });
-    } else if (request.method === "session/list") {
-      this.respond(request, { sessions: [] });
-    } else if (request.method === "syntax/analyze") {
-      this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-    } else if (request.method === "syntax/selectionRanges") {
-      this.respond(request, { revision: 4, ranges: [] });
-    }
-  }
+	send(event: string, payload?: unknown): void {
+		this.sentEvents.push(event);
+		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
+			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
+				protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION,
+				workspaceId: "web-dev:test",
+				workspaceRoot: "C:\\workspace",
+			});
+			return;
+		}
+		if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== "string") return;
+		const request = JSON.parse(payload.frame) as Record<string, unknown>;
+		this.requests.push(request);
+		if (request.method === "initialize") {
+			this.respond(request, {
+				serverInfo: { name: "zeta-app-server", version: "0.1.0" },
+				schemaHash: APP_SERVER_SCHEMA_HASH,
+				capabilities: { sessions: true, threads: true, turns: true, extensionHost: true },
+				slashCommands: [],
+			});
+		} else if (request.method === "session/list") {
+			this.respond(request, { sessions: [] });
+		} else if (request.method === "syntax/analyze") {
+			this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
+		} else if (request.method === "syntax/selectionRanges") {
+			this.respond(request, { revision: 4, ranges: [] });
+		}
+	}
 
-  emitNotification(notification: ServerNotification): void {
-    this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", ...notification }) });
-  }
+	emitNotification(notification: ServerNotification): void {
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", ...notification }) });
+	}
 
-  close(message: string): void {
-    this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message });
-  }
+	close(message: string): void {
+		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message });
+	}
 
-  private respond(request: Record<string, unknown>, result: unknown): void {
-    this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
-  }
+	private respond(request: Record<string, unknown>, result: unknown): void {
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
+	}
 
-  private emit(event: string, payload: unknown): void {
-    for (const listener of this.listeners.get(event) ?? []) listener(payload);
-  }
+	private emit(event: string, payload: unknown): void {
+		for (const listener of this.listeners.get(event) ?? []) listener(payload);
+	}
 }
 
 test("connects, initializes, maps renderer requests, and disposes the Vite bridge", async () => {
-  const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
-  assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
-  assert.equal(await connected.api.appServer.getConnectionState(), "ready");
-  assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
-  assert.deepEqual(await connected.api.session.list(), { sessions: [] });
-  assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
-  connected.dispose();
-  assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
+	assert.equal(await connected.api.appServer.getConnectionState(), "ready");
+	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
+	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
+	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
+	connected.dispose();
+	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
 
 test("delivers App Server notifications and reports bridge closure", async () => {
-  const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
-  const notifications: ServerNotification[] = [];
-  const states: string[] = [];
-  connected.api.events.subscribe((notification) => notifications.push(notification));
-  connected.api.appServer.onConnectionState((state) => states.push(state));
-  const notification: ServerNotification = { method: "fs/changed", params: { type: "pathsChanged", paths: ["README.md"] } };
-  hot.emitNotification(notification);
-  hot.close("test bridge closed");
-  assert.deepEqual(notifications, [notification]);
-  assert.deepEqual(states, ["crashed"]);
-  assert.equal(await connected.api.appServer.getConnectionState(), "crashed");
-  connected.dispose();
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const notifications: ServerNotification[] = [];
+	const states: string[] = [];
+	connected.api.events.subscribe((notification) => notifications.push(notification));
+	connected.api.appServer.onConnectionState((state) => states.push(state));
+	const notification: ServerNotification = { method: "fs/changed", params: { type: "pathsChanged", paths: ["README.md"] } };
+	hot.emitNotification(notification);
+	hot.close("test bridge closed");
+	assert.deepEqual(notifications, [notification]);
+	assert.deepEqual(states, ["crashed"]);
+	assert.equal(await connected.api.appServer.getConnectionState(), "crashed");
+	connected.dispose();
 });
 
 test("routes bounded syntax analysis through the connected renderer host", async () => {
-  const hot = new FakeHotContext();
-  const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeHotContext();
+	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
 
-  const result = await connected.api.syntax.analyze({
-    language: "rust",
-    revision: 4,
-    text: "fn main() {}\n",
-  });
+	const result = await connected.api.syntax.analyze({
+		language: "rust",
+		revision: 4,
+		text: "fn main() {}\n",
+	});
 
-  assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-  assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
+	assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
+	assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
 
-  assert.deepEqual(await connected.api.syntax.selectionRanges({ language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
-  assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
-  connected.dispose();
+	assert.deepEqual(await connected.api.syntax.selectionRanges({ language: "rust", revision: 4, text: "fn main() {}\n", ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
+	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
+	connected.dispose();
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

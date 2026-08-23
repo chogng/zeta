@@ -3,14 +3,14 @@ import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService }
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
 export class BrowserEditorService implements IEditorService {
-  constructor(private readonly editorPart: IEditorPart) {}
+	constructor(private readonly editorPart: IEditorPart) {}
 
-  async openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
-    await this.editorPart.openEditor(input, options, target);
-    if (options?.preserveFocus !== true) this.editorPart.focus();
-  }
+	async openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
+		await this.editorPart.openEditor(input, options, target);
+		if (options?.preserveFocus !== true) this.editorPart.focus();
+	}
 
-  focusActiveEditor(): void {
-    this.editorPart.focus();
-  }
+	focusActiveEditor(): void {
+		this.editorPart.focus();
+	}
 }

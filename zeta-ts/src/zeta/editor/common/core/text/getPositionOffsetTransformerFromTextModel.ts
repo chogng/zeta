@@ -2,8 +2,8 @@ import { LineBasedPositionOffsetTransformer } from "./positionToOffsetImpl.js";
 
 /** Minimal model surface needed by the core coordinate adapter. */
 export interface TextModelLineSource {
-  readonly lineCount: number;
-  getLineContent(lineIndex: number): string;
+	readonly lineCount: number;
+	getLineContent(lineIndex: number): string;
 }
 
 /**
@@ -13,6 +13,6 @@ export interface TextModelLineSource {
  * here would reverse the dependency from common/core into the mutable model.
  */
 export function getPositionOffsetTransformerFromTextModel(model: TextModelLineSource): LineBasedPositionOffsetTransformer {
-  const lines = Array.from({ length: model.lineCount }, (_, lineIndex) => model.getLineContent(lineIndex));
-  return new LineBasedPositionOffsetTransformer(lines);
+	const lines = Array.from({ length: model.lineCount }, (_, lineIndex) => model.getLineContent(lineIndex));
+	return new LineBasedPositionOffsetTransformer(lines);
 }

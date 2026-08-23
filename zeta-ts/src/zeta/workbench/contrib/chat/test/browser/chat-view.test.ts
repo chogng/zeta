@@ -35,1373 +35,1373 @@ import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
-  window: browserEnvironment.window,
-  document: browserEnvironment.window.document,
-  Node: browserEnvironment.window.Node,
-  Element: browserEnvironment.window.Element,
-  HTMLElement: browserEnvironment.window.HTMLElement,
-  Event: browserEnvironment.window.Event,
-  MouseEvent: browserEnvironment.window.MouseEvent,
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+	MouseEvent: browserEnvironment.window.MouseEvent,
 })) {
-  Object.defineProperty(globalThis, name, {
-    configurable: true,
-    value,
-  });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 const { registerChatViews } = await import(
-  "../../../../../workbench/contrib/chat/browser/chat.contribution.js"
+	"../../../../../workbench/contrib/chat/browser/chat.contribution.js"
 );
 const { BrowserContextViewService } = await import(
-  "../../../../../platform/contextview/browser/contextViewService.js"
+	"../../../../../platform/contextview/browser/contextViewService.js"
 );
 const { ChatViewPane } = await import(
-  "../../../../../workbench/contrib/chat/browser/view/chatViewPane.js"
+	"../../../../../workbench/contrib/chat/browser/view/chatViewPane.js"
 );
 const { ChatListWidget } = await import(
-  "../../../../../workbench/contrib/chat/browser/list/chatListWidget.js"
+	"../../../../../workbench/contrib/chat/browser/list/chatListWidget.js"
 );
 await import(
-  "../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
+	"../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
 test.after(() => {
-  browserEnvironment.window.close();
-  for (const name of [
-    "window",
-    "document",
-    "Node",
-    "Element",
-    "HTMLElement",
-    "Event",
-    "MouseEvent",
-  ]) {
-    Reflect.deleteProperty(globalThis, name);
-  }
+	browserEnvironment.window.close();
+	for (const name of [
+		"window",
+		"document",
+		"Node",
+		"Element",
+		"HTMLElement",
+		"Event",
+		"MouseEvent",
+	]) {
+		Reflect.deleteProperty(globalThis, name);
+	}
 });
 
 function chatTitleContent(pane: { readonly partTitleProjection: { readonly content?: HTMLElement } | undefined }): HTMLElement {
-  const content = pane.partTitleProjection?.content;
-  assert.ok(content);
-  return content;
+	const content = pane.partTitleProjection?.content;
+	assert.ok(content);
+	return content;
 }
 
 function chatTitleActions(pane: { readonly partTitleProjection: { readonly actions?: HTMLElement } | undefined }): HTMLElement {
-  const actions = pane.partTitleProjection?.actions;
-  assert.ok(actions);
-  return actions;
+	const actions = pane.partTitleProjection?.actions;
+	assert.ok(actions);
+	return actions;
 }
 
 test("Chat contribution owns the fixed Auxiliary Bar view", () => {
-  const registry = new WorkbenchViewRegistry();
+	const registry = new WorkbenchViewRegistry();
 
-  registerChatViews(registry);
+	registerChatViews(registry);
 
-  assert.equal(
-    registry.getDefaultViewContainer(ViewContainerLocation.AuxiliaryBar)?.id,
-    CHAT_VIEW_CONTAINER_ID,
-  );
-  assert.deepEqual(
-    registry.getViews(CHAT_VIEW_CONTAINER_ID).map((view) => view.id),
-    [CHAT_VIEW_ID],
-  );
-  assert.equal(
-    registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar)?.id,
-    CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
-  );
-  assert.deepEqual(
-    registry.getViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID).map((view) => view.id),
-    [CHAT_AGENT_SIDEBAR_VIEW_ID],
-  );
+	assert.equal(
+		registry.getDefaultViewContainer(ViewContainerLocation.AuxiliaryBar)?.id,
+		CHAT_VIEW_CONTAINER_ID,
+	);
+	assert.deepEqual(
+		registry.getViews(CHAT_VIEW_CONTAINER_ID).map((view) => view.id),
+		[CHAT_VIEW_ID],
+	);
+	assert.equal(
+		registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar)?.id,
+		CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
+	);
+	assert.deepEqual(
+		registry.getViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID).map((view) => view.id),
+		[CHAT_AGENT_SIDEBAR_VIEW_ID],
+	);
 });
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  dom.window.HTMLElement.prototype.scrollTo = () => {};
-  using contextViewService = new BrowserContextViewService(dom.window.document.body);
-  const subscriptionModel = {
-    model: { provider: "openai", model: "gpt-5.6-sol" },
-    displayName: "GPT-5.6 Sol",
-    access: "subscription" as const,
-  };
-  const fake = fakeApi({
-    sessions: [
-      { ...session("session-1", "thread-1"), model: subscriptionModel.model },
-      { ...session("session-2", "thread-2"), model: subscriptionModel.model },
-    ],
-    models: [subscriptionModel],
-  });
-  const api = fake.api;
-  using sessions = new AppServerSessionsManagementService(api);
-  using contextKeys = new ContextKeyService();
-  using viewDescriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry: new WorkbenchViewRegistry(),
-  });
-  const services = new ServiceCollection();
-  let openedSettingsSection: string | undefined;
-  const settings: ISettingsService = {
-    onDidChangeVisibility: () => toDisposable(() => {}),
-    onDidChangeActiveSection: () => toDisposable(() => {}),
-    isOpen: false,
-    activeSectionId: "general",
-    open: (sectionId) => {
-      openedSettingsSection = sectionId;
-    },
-    close() {},
-  };
-  services.set(ISettingsService, settings);
-  services.set(IContextKeyService, contextKeys);
-  using commands = new CommandService(services);
-  const menuService = new MenuService(commands, contextKeys);
-  const layout = testLayoutService();
-  let openedAgentSidebarViewId: string | undefined;
-  services.set(IWorkbenchLayoutService, layout);
-  services.set(IViewsService, {
-    openView: (viewId) => {
-      openedAgentSidebarViewId = viewId;
-      layout.showPart("agentSidebar");
-      return {
-        id: viewId,
-        focus() {},
-        isVisible: () => true,
-        setVisible() {},
-      };
-    },
-    focusView: () => true,
-  });
-  let shownContextMenuActions: readonly IAction[] = [];
-  const contextMenuService = {
-    showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
-      shownContextMenuActions = options.actions ?? [];
-    },
-  } as unknown as IContextMenuService;
-  using pane = new ChatViewPane(
-    dom.window.document.body,
-    {
-      id: CHAT_VIEW_ID,
-      title: "Chat",
-    },
-    createChatService(api),
-    sessions,
-    menuService,
-    contextMenuService,
-    contextViewService,
-    commands,
-    layout,
-  );
-  const title = h(dom.window.document, "div");
-  title.className = "zeta-pane-composite-title";
-  title.append(chatTitleContent(pane), chatTitleActions(pane));
-  dom.window.document.body.append(title, pane.element);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	dom.window.HTMLElement.prototype.scrollTo = () => {};
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	const subscriptionModel = {
+		model: { provider: "openai", model: "gpt-5.6-sol" },
+		displayName: "GPT-5.6 Sol",
+		access: "subscription" as const,
+	};
+	const fake = fakeApi({
+		sessions: [
+			{ ...session("session-1", "thread-1"), model: subscriptionModel.model },
+			{ ...session("session-2", "thread-2"), model: subscriptionModel.model },
+		],
+		models: [subscriptionModel],
+	});
+	const api = fake.api;
+	using sessions = new AppServerSessionsManagementService(api);
+	using contextKeys = new ContextKeyService();
+	using viewDescriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry: new WorkbenchViewRegistry(),
+	});
+	const services = new ServiceCollection();
+	let openedSettingsSection: string | undefined;
+	const settings: ISettingsService = {
+		onDidChangeVisibility: () => toDisposable(() => {}),
+		onDidChangeActiveSection: () => toDisposable(() => {}),
+		isOpen: false,
+		activeSectionId: "general",
+		open: (sectionId) => {
+			openedSettingsSection = sectionId;
+		},
+		close() {},
+	};
+	services.set(ISettingsService, settings);
+	services.set(IContextKeyService, contextKeys);
+	using commands = new CommandService(services);
+	const menuService = new MenuService(commands, contextKeys);
+	const layout = testLayoutService();
+	let openedAgentSidebarViewId: string | undefined;
+	services.set(IWorkbenchLayoutService, layout);
+	services.set(IViewsService, {
+		openView: (viewId) => {
+			openedAgentSidebarViewId = viewId;
+			layout.showPart("agentSidebar");
+			return {
+				id: viewId,
+				focus() {},
+				isVisible: () => true,
+				setVisible() {},
+			};
+		},
+		focusView: () => true,
+	});
+	let shownContextMenuActions: readonly IAction[] = [];
+	const contextMenuService = {
+		showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
+			shownContextMenuActions = options.actions ?? [];
+		},
+	} as unknown as IContextMenuService;
+	using pane = new ChatViewPane(
+		dom.window.document.body,
+		{
+			id: CHAT_VIEW_ID,
+			title: "Chat",
+		},
+		createChatService(api),
+		sessions,
+		menuService,
+		contextMenuService,
+		contextViewService,
+		commands,
+		layout,
+	);
+	const title = h(dom.window.document, "div");
+	title.className = "zeta-pane-composite-title";
+	title.append(chatTitleContent(pane), chatTitleActions(pane));
+	dom.window.document.body.append(title, pane.element);
 
-  await sessions.initialize();
-  await nextTask();
+	await sessions.initialize();
+	await nextTask();
 
-  const tablist = title.querySelector(
-    ".zeta-chat-tabs-control .zeta-action-bar",
-  );
-  const toolbar = title.querySelector(
-    ".zeta-chat-title-actions > .zeta-action-bar",
-  );
-  const layoutToolbar = title.querySelector<HTMLElement>(
-    ".zeta-chat-title-layout-actions",
-  );
-  assert.equal(tablist?.getAttribute("role"), "tablist");
-  assert.equal(toolbar?.getAttribute("role"), "toolbar");
-  assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
-  assert.equal(
-    chatTitleContent(pane).nextElementSibling,
-    chatTitleActions(pane),
-  );
-  assert.deepEqual(
-    [...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
-      .map((item) => item.dataset.actionId),
-    [
-      NEW_CHAT_COMMAND_ID,
-      SHOW_CHAT_HISTORY_COMMAND_ID,
-      "zeta.toolbar.moreActions",
-    ],
-  );
-  assert.deepEqual(
-    [...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
-      .map((button) => button.title),
-    ["New Chat", "Show Chat History", "More Actions"],
-  );
-  assert.equal(
-    toolbar?.querySelectorAll(".zeta-action-view-item.icon").length,
-    3,
-  );
-  assert.ok(toolbar?.querySelector(".zeta-button-label"));
-  assert.ok(toolbar?.querySelector("svg.zeta-icon"));
-  assert.ok(layoutToolbar?.querySelector(
-    `[data-action-id="${TOGGLE_AGENT_SIDEBAR_COMMAND_ID}"]`,
-  ));
-  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-  assert.equal(openedAgentSidebarViewId, CHAT_AGENT_SIDEBAR_VIEW_ID);
-  assert.equal(layout.isPartVisible("agentSidebar"), true);
-  assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
-  assert.equal(layoutToolbar?.hidden, true);
-  assert.deepEqual(
-    menuService.getMenuActions(MenuId.AgentSidebarTitle)
-      .flatMap(([, actions]) => actions)
-      .map((action) => action.id),
-    [TOGGLE_AGENT_SIDEBAR_COMMAND_ID],
-  );
-  await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-  assert.equal(layout.isPartVisible("agentSidebar"), false);
-  assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
-  assert.equal(layoutToolbar?.hidden, false);
-  const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
-    .filter(([group]) => group !== "navigation")
-    .flatMap(([, actions]) => actions);
-  assert.deepEqual(
-    chatActions.map((action) => ({
-      id: action.id,
-      label: action.label,
-      enabled: action.enabled,
-      icon: action.icon,
-    })),
-    [
-      {
-        id: OPEN_CHAT_BROWSER_COMMAND_ID,
-        label: "Open Browser",
-        enabled: false,
-        icon: lxiconsLibrary.browserWeb,
-      },
-      {
-        id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
-        label: "Move Chat to Editor Area",
-        enabled: false,
-        icon: lxiconsLibrary.layoutPanel,
-      },
-      {
-        id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
-        label: "Move Chat to New Window",
-        enabled: false,
-        icon: lxiconsLibrary.linkExternal,
-      },
-      {
-        id: OPEN_CHAT_SETTINGS_COMMAND_ID,
-        label: "Chat Settings",
-        enabled: true,
-        icon: lxiconsLibrary.settings,
-      },
-    ],
-  );
-  await chatActions[3]?.run();
-  assert.equal(openedSettingsSection, "chat");
-  const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
-  assert.equal(tabs?.length, 2);
-  assert.deepEqual(
-    [...(tabs ?? [])].map((tab) => tab.getAttribute("aria-selected")),
-    ["true", "false"],
-  );
-  const panel = pane.element.querySelector("[role='tabpanel']");
-  assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
-  assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
-  assert.equal(
-    chatTitleContent(pane).querySelector(
-      ".zeta-chat-tabs-control .zeta-scrollable-element",
-    )?.getAttribute("data-scroll-direction"),
-    "horizontal",
-  );
-  assert.equal(
-    pane.element.querySelector(
-      ".zeta-chat-transcript-scrollable",
-    )?.getAttribute("data-scroll-direction"),
-    "vertical",
-  );
-  const chatPanes = pane.element.querySelectorAll<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
-  assert.equal(chatPanes.length, 2);
-  for (const chatPane of chatPanes) {
-    assert.equal(chatPane.childElementCount, 2);
-    assert.equal(chatPane.classList.contains("empty"), true);
-    assert.equal(chatPane.classList.contains("has-conversation"), false);
-    assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
-    assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
-    const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbars");
-    assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
-    assert.deepEqual(
-      [...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
-      [
-        "zeta.chat.input.mode",
-        "zeta.chat.input.model",
-        "zeta.chat.input.attachment",
-        "zeta.chat.input.send",
-      ],
-    );
-    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
-    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button .zeta-button-label")?.textContent, "GPT-5.6 Sol");
-    assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "Subscription");
-    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
-    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
-  }
-  const firstChatPane = chatPanes[0]!;
-  firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.click();
-  assert.deepEqual(shownContextMenuActions.map(action => ({ label: action.label, badge: action.badge })), [
-    { label: "GPT-5.6 Sol", badge: "Subscription" },
-  ]);
-  shownContextMenuActions = [];
-  firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();
-  assert.deepEqual(shownContextMenuActions, []);
-  const modeMenu = dom.window.document.querySelector<HTMLElement>(".zeta-chat-input-mode-menu");
-  assert.equal(modeMenu?.closest(".zeta-context-view")?.parentElement, contextViewService.container);
-  assert.deepEqual(
-    [...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
-    ["Agent", "Plan", "Debug", "Multitask", "Ask"],
-  );
-  modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode.plan'] button")?.click();
-  assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Plan");
-  assert.equal(dom.window.document.querySelector(".zeta-chat-input-mode-menu"), null);
-  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-  const composerInputs = [...chatPanes].map((chatPane) => {
-    const input = chatPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
-    assert.ok(input);
-    return input;
-  });
-  typeAsterText(dom.window, composerInputs[0], "First draft");
-  assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
+	const tablist = title.querySelector(
+		".zeta-chat-tabs-control .zeta-action-bar",
+	);
+	const toolbar = title.querySelector(
+		".zeta-chat-title-actions > .zeta-action-bar",
+	);
+	const layoutToolbar = title.querySelector<HTMLElement>(
+		".zeta-chat-title-layout-actions",
+	);
+	assert.equal(tablist?.getAttribute("role"), "tablist");
+	assert.equal(toolbar?.getAttribute("role"), "toolbar");
+	assert.equal(toolbar?.classList.contains("zeta-toolbar"), true);
+	assert.equal(
+		chatTitleContent(pane).nextElementSibling,
+		chatTitleActions(pane),
+	);
+	assert.deepEqual(
+		[...toolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []]
+			.map((item) => item.dataset.actionId),
+		[
+			NEW_CHAT_COMMAND_ID,
+			SHOW_CHAT_HISTORY_COMMAND_ID,
+			"zeta.toolbar.moreActions",
+		],
+	);
+	assert.deepEqual(
+		[...toolbar?.querySelectorAll<HTMLButtonElement>("button") ?? []]
+			.map((button) => button.title),
+		["New Chat", "Show Chat History", "More Actions"],
+	);
+	assert.equal(
+		toolbar?.querySelectorAll(".zeta-action-view-item.icon").length,
+		3,
+	);
+	assert.ok(toolbar?.querySelector(".zeta-button-label"));
+	assert.ok(toolbar?.querySelector("svg.zeta-icon"));
+	assert.ok(layoutToolbar?.querySelector(
+		`[data-action-id="${TOGGLE_AGENT_SIDEBAR_COMMAND_ID}"]`,
+	));
+	await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
+	assert.equal(openedAgentSidebarViewId, CHAT_AGENT_SIDEBAR_VIEW_ID);
+	assert.equal(layout.isPartVisible("agentSidebar"), true);
+	assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
+	assert.equal(layoutToolbar?.hidden, true);
+	assert.deepEqual(
+		menuService.getMenuActions(MenuId.AgentSidebarTitle)
+			.flatMap(([, actions]) => actions)
+			.map((action) => action.id),
+		[TOGGLE_AGENT_SIDEBAR_COMMAND_ID],
+	);
+	await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
+	assert.equal(layout.isPartVisible("agentSidebar"), false);
+	assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
+	assert.equal(layoutToolbar?.hidden, false);
+	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
+		.filter(([group]) => group !== "navigation")
+		.flatMap(([, actions]) => actions);
+	assert.deepEqual(
+		chatActions.map((action) => ({
+			id: action.id,
+			label: action.label,
+			enabled: action.enabled,
+			icon: action.icon,
+		})),
+		[
+			{
+				id: OPEN_CHAT_BROWSER_COMMAND_ID,
+				label: "Open Browser",
+				enabled: false,
+				icon: lxiconsLibrary.browserWeb,
+			},
+			{
+				id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
+				label: "Move Chat to Editor Area",
+				enabled: false,
+				icon: lxiconsLibrary.layoutPanel,
+			},
+			{
+				id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
+				label: "Move Chat to New Window",
+				enabled: false,
+				icon: lxiconsLibrary.linkExternal,
+			},
+			{
+				id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+				label: "Chat Settings",
+				enabled: true,
+				icon: lxiconsLibrary.settings,
+			},
+		],
+	);
+	await chatActions[3]?.run();
+	assert.equal(openedSettingsSection, "chat");
+	const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
+	assert.equal(tabs?.length, 2);
+	assert.deepEqual(
+		[...(tabs ?? [])].map((tab) => tab.getAttribute("aria-selected")),
+		["true", "false"],
+	);
+	const panel = pane.element.querySelector("[role='tabpanel']");
+	assert.equal(panel?.id, tabs?.[0]?.getAttribute("aria-controls"));
+	assert.equal(panel?.getAttribute("aria-labelledby"), tabs?.[0]?.id);
+	assert.equal(
+		chatTitleContent(pane).querySelector(
+			".zeta-chat-tabs-control .zeta-scrollable-element",
+		)?.getAttribute("data-scroll-direction"),
+		"horizontal",
+	);
+	assert.equal(
+		pane.element.querySelector(
+			".zeta-chat-transcript-scrollable",
+		)?.getAttribute("data-scroll-direction"),
+		"vertical",
+	);
+	const chatPanes = pane.element.querySelectorAll<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
+	assert.equal(chatPanes.length, 2);
+	for (const chatPane of chatPanes) {
+		assert.equal(chatPane.childElementCount, 2);
+		assert.equal(chatPane.classList.contains("empty"), true);
+		assert.equal(chatPane.classList.contains("has-conversation"), false);
+		assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
+		assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
+		const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbars");
+		assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
+		assert.deepEqual(
+			[...inputToolbar?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map((item) => item.dataset.actionId),
+			[
+				"zeta.chat.input.mode",
+				"zeta.chat.input.model",
+				"zeta.chat.input.attachment",
+				"zeta.chat.input.send",
+			],
+		);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button .zeta-button-label")?.textContent, "GPT-5.6 Sol");
+		assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "Subscription");
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
+	}
+	const firstChatPane = chatPanes[0]!;
+	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.click();
+	assert.deepEqual(shownContextMenuActions.map(action => ({ label: action.label, badge: action.badge })), [
+		{ label: "GPT-5.6 Sol", badge: "Subscription" },
+	]);
+	shownContextMenuActions = [];
+	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();
+	assert.deepEqual(shownContextMenuActions, []);
+	const modeMenu = dom.window.document.querySelector<HTMLElement>(".zeta-chat-input-mode-menu");
+	assert.equal(modeMenu?.closest(".zeta-context-view")?.parentElement, contextViewService.container);
+	assert.deepEqual(
+		[...modeMenu?.querySelectorAll<HTMLElement>("[data-action-id]") ?? []].map(item => item.textContent),
+		["Agent", "Plan", "Debug", "Multitask", "Ask"],
+	);
+	modeMenu?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode.plan'] button")?.click();
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Plan");
+	assert.equal(dom.window.document.querySelector(".zeta-chat-input-mode-menu"), null);
+	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
+	const composerInputs = [...chatPanes].map((chatPane) => {
+		const input = chatPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+		assert.ok(input);
+		return input;
+	});
+	typeAsterText(dom.window, composerInputs[0], "First draft");
+	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
 
-  tabs?.[1]?.click();
-  assert.equal(sessions.active?.session.sessionId, "session-2");
-  assert.equal(sessions.active?.threadId, "thread-2");
-  assert.deepEqual(
-    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
-      .map((tab) => tab.getAttribute("aria-selected")),
-    ["false", "true"],
-  );
-  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
-  typeAsterText(dom.window, composerInputs[1], "Second draft");
-  chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
-  assert.equal(sessions.active?.session.sessionId, "session-1");
-  assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-  assert.equal(chatPanes[0]?.querySelector(".aster-editor-line-text")?.textContent, "First draft");
-  assert.equal(chatPanes[1]?.querySelector(".aster-editor-line-text")?.textContent, "Second draft");
+	tabs?.[1]?.click();
+	assert.equal(sessions.active?.session.sessionId, "session-2");
+	assert.equal(sessions.active?.threadId, "thread-2");
+	assert.deepEqual(
+		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
+			.map((tab) => tab.getAttribute("aria-selected")),
+		["false", "true"],
+	);
+	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
+	typeAsterText(dom.window, composerInputs[1], "Second draft");
+	chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
+	assert.equal(sessions.active?.session.sessionId, "session-1");
+	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
+	assert.equal(chatPanes[0]?.querySelector(".aster-editor-line-text")?.textContent, "First draft");
+	assert.equal(chatPanes[1]?.querySelector(".aster-editor-line-text")?.textContent, "Second draft");
 
-  const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
-    `[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
-  );
-  assert.equal(closeButtons.length, 2);
-  assert.deepEqual(
-    [...closeButtons].map((button) => button.title),
-    ["Close Session session-1", "Close Session session-2"],
-  );
-  closeButtons[0]?.click();
-  await nextTask();
+	const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
+		`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
+	);
+	assert.equal(closeButtons.length, 2);
+	assert.deepEqual(
+		[...closeButtons].map((button) => button.title),
+		["Close Session session-1", "Close Session session-2"],
+	);
+	closeButtons[0]?.click();
+	await nextTask();
 
-  assert.deepEqual(
-    fake.stopRequests.map(({ sessionId, expectedSequence }) => ({
-      sessionId,
-      expectedSequence,
-    })),
-    [{ sessionId: "session-1", expectedSequence: 2 }],
-  );
-  assert.equal(sessions.active?.session.sessionId, "session-2");
-  assert.deepEqual(
-    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
-      .map((tab) => ({
-        label: tab.textContent,
-        selected: tab.getAttribute("aria-selected"),
-      })),
-    [{ label: "Session session-2", selected: "true" }],
-  );
-  assert.equal(
-    pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat")
-      ?.dataset.sessionId,
-    "session-2",
-  );
+	assert.deepEqual(
+		fake.stopRequests.map(({ sessionId, expectedSequence }) => ({
+			sessionId,
+			expectedSequence,
+		})),
+		[{ sessionId: "session-1", expectedSequence: 2 }],
+	);
+	assert.equal(sessions.active?.session.sessionId, "session-2");
+	assert.deepEqual(
+		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")]
+			.map((tab) => ({
+				label: tab.textContent,
+				selected: tab.getAttribute("aria-selected"),
+			})),
+		[{ label: "Session session-2", selected: "true" }],
+	);
+	assert.equal(
+		pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat")
+			?.dataset.sessionId,
+		"session-2",
+	);
 
-  chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
-  await waitFor(() => !layout.isPartVisible("auxiliarybar"));
-  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
-  assert.equal(sessions.active, undefined);
-  assert.equal(sessions.untitledSessions.length, 0);
+	chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+	await waitFor(() => !layout.isPartVisible("auxiliarybar"));
+	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
+	assert.equal(sessions.active, undefined);
+	assert.equal(sessions.untitledSessions.length, 0);
 
-  layout.showPart("auxiliarybar");
-  await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 1);
-  assert.equal(chatTitleContent(pane).querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
-  assert.equal(sessions.untitledSessions.length, 1);
+	layout.showPart("auxiliarybar");
+	await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 1);
+	assert.equal(chatTitleContent(pane).querySelector<HTMLElement>("[role='tab']")?.textContent, "New Chat");
+	assert.equal(sessions.untitledSessions.length, 1);
 
-  chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
-  assert.equal(layout.isPartVisible("auxiliarybar"), false);
-  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
-  assert.equal(sessions.untitledSessions.length, 0);
+	chatTitleContent(pane).querySelector<HTMLButtonElement>(`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`)?.click();
+	assert.equal(layout.isPartVisible("auxiliarybar"), false);
+	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 0);
+	assert.equal(sessions.untitledSessions.length, 0);
 
-  dom.window.close();
+	dom.window.close();
 });
 
 test("Empty chat transcripts do not render a redundant placeholder", () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  using list = new ChatListWidget(dom.window.document.body);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using list = new ChatListWidget(dom.window.document.body);
 
-  list.render([]);
+	list.render([]);
 
-  assert.equal(list.element.querySelector(".zeta-chat-empty"), null);
-  assert.equal(list.element.textContent, "");
-  dom.window.close();
+	assert.equal(list.element.querySelector(".zeta-chat-empty"), null);
+	assert.equal(list.element.textContent, "");
+	dom.window.close();
 });
 
 test("an empty Session list opens an untitled session and persists it on its first send", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  using contextViewService = new BrowserContextViewService(dom.window.document.body);
-  const createdSession = session("session-1", undefined, "New Chat");
-  const attachedSession = session("session-1", "thread-1", "New Chat");
-  const fake = fakeApi({
-    sessions: [],
-    createSession: createdSession,
-    createThread: {
-      session: attachedSession,
-      threadId: "thread-1",
-    },
-  });
-  const api = fake.api;
-  const services = new ServiceCollection();
-  using sessions = new AppServerSessionsManagementService(api);
-  using contextKeys = new ContextKeyService();
-  using viewDescriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry: new WorkbenchViewRegistry(),
-  });
-  services.set(ISessionsManagementService, sessions);
-  services.set(IViewsService, {
-    openView: () => undefined,
-    focusView: () => true,
-  });
-  using commands = new CommandService(services);
-  const menuService = new MenuService(commands, contextKeys);
-  const layout = testLayoutService();
-  const contextMenuService = {
-    showContextMenu: () => undefined,
-  } as unknown as IContextMenuService;
-  using pane = new ChatViewPane(
-    dom.window.document.body,
-    {
-      id: CHAT_VIEW_ID,
-      title: "Chat",
-    },
-    createChatService(api),
-    sessions,
-    menuService,
-    contextMenuService,
-    contextViewService,
-    commands,
-    layout,
-  );
-  dom.window.document.body.append(pane.element);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	const createdSession = session("session-1", undefined, "New Chat");
+	const attachedSession = session("session-1", "thread-1", "New Chat");
+	const fake = fakeApi({
+		sessions: [],
+		createSession: createdSession,
+		createThread: {
+			session: attachedSession,
+			threadId: "thread-1",
+		},
+	});
+	const api = fake.api;
+	const services = new ServiceCollection();
+	using sessions = new AppServerSessionsManagementService(api);
+	using contextKeys = new ContextKeyService();
+	using viewDescriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry: new WorkbenchViewRegistry(),
+	});
+	services.set(ISessionsManagementService, sessions);
+	services.set(IViewsService, {
+		openView: () => undefined,
+		focusView: () => true,
+	});
+	using commands = new CommandService(services);
+	const menuService = new MenuService(commands, contextKeys);
+	const layout = testLayoutService();
+	const contextMenuService = {
+		showContextMenu: () => undefined,
+	} as unknown as IContextMenuService;
+	using pane = new ChatViewPane(
+		dom.window.document.body,
+		{
+			id: CHAT_VIEW_ID,
+			title: "Chat",
+		},
+		createChatService(api),
+		sessions,
+		menuService,
+		contextMenuService,
+		contextViewService,
+		commands,
+		layout,
+	);
+	dom.window.document.body.append(pane.element);
 
-  await sessions.initialize();
-  await nextTask();
+	await sessions.initialize();
+	await nextTask();
 
-  const tabs = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']");
-  assert.equal(tabs.length, 1);
-  assert.deepEqual(
-    [...tabs].map((tab) => ({
-      label: tab.textContent,
-      selected: tab.getAttribute("aria-selected"),
-    })),
-    [
-      { label: "New Chat", selected: "true" },
-    ],
-  );
-  assert.equal(pane.element.querySelector<HTMLElement>(".zeta-chat-view-empty")?.hidden, true);
-  assert.equal(fake.createSessionRequests.length, 0);
-  assert.equal(fake.createThreadRequests.length, 0);
-  assert.equal(sessions.sessions.length, 0);
-  assert.equal(sessions.untitledSessions.length, 1);
-  const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
-  assert.ok(untitledPane?.dataset.untitledSessionId);
-  const input = untitledPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
-  assert.ok(input);
-  assert.equal(untitledPane.classList.contains("empty"), true);
-  typeAsterText(dom.window, input, "Hello from an untitled session");
-  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Enter",
-  }));
-  assert.equal(untitledPane.classList.contains("empty"), false);
-  assert.equal(untitledPane.classList.contains("has-conversation"), true);
-  assert.ok(untitledPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
-  assert.ok(untitledPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
-  await waitFor(() => fake.turnStartRequests.length === 1);
+	const tabs = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']");
+	assert.equal(tabs.length, 1);
+	assert.deepEqual(
+		[...tabs].map((tab) => ({
+			label: tab.textContent,
+			selected: tab.getAttribute("aria-selected"),
+		})),
+		[
+			{ label: "New Chat", selected: "true" },
+		],
+	);
+	assert.equal(pane.element.querySelector<HTMLElement>(".zeta-chat-view-empty")?.hidden, true);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.createThreadRequests.length, 0);
+	assert.equal(sessions.sessions.length, 0);
+	assert.equal(sessions.untitledSessions.length, 1);
+	const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
+	assert.ok(untitledPane?.dataset.untitledSessionId);
+	const input = untitledPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+	assert.ok(input);
+	assert.equal(untitledPane.classList.contains("empty"), true);
+	typeAsterText(dom.window, input, "Hello from an untitled session");
+	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key: "Enter",
+	}));
+	assert.equal(untitledPane.classList.contains("empty"), false);
+	assert.equal(untitledPane.classList.contains("has-conversation"), true);
+	assert.ok(untitledPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
+	assert.ok(untitledPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
+	await waitFor(() => fake.turnStartRequests.length === 1);
 
-  assert.equal(fake.createSessionRequests.length, 1);
-  assert.equal(fake.createThreadRequests.length, 1);
-  assert.equal(fake.turnStartRequests.length, 1);
-  assert.equal(sessions.untitledSessions.length, 0);
-  assert.equal(sessions.active?.session.sessionId, "session-1");
-  assert.equal(sessions.active?.threadId, "thread-1");
-  assert.equal(
-    pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
-    "session-1",
-  );
-  assert.equal(
-    pane.element.querySelector("[role='tabpanel']")?.getAttribute(
-      "aria-labelledby",
-    ),
-    tabs[0]?.id,
-  );
+	assert.equal(fake.createSessionRequests.length, 1);
+	assert.equal(fake.createThreadRequests.length, 1);
+	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(sessions.untitledSessions.length, 0);
+	assert.equal(sessions.active?.session.sessionId, "session-1");
+	assert.equal(sessions.active?.threadId, "thread-1");
+	assert.equal(
+		pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.sessionId,
+		"session-1",
+	);
+	assert.equal(
+		pane.element.querySelector("[role='tabpanel']")?.getAttribute(
+			"aria-labelledby",
+		),
+		tabs[0]?.id,
+	);
 
-  pane.dispose();
-  dom.window.close();
+	pane.dispose();
+	dom.window.close();
 });
 
 test("the New Chat slash command opens an untitled session", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  using contextViewService = new BrowserContextViewService(dom.window.document.body);
-  const initialSession = session("session-1", "thread-1", "First Chat");
-  const fake = fakeApi({ sessions: [initialSession] });
-  const services = new ServiceCollection();
-  using sessions = new AppServerSessionsManagementService(fake.api);
-  using contextKeys = new ContextKeyService();
-  using viewDescriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry: new WorkbenchViewRegistry(),
-  });
-  services.set(ISessionsManagementService, sessions);
-  let focusedView: string | undefined;
-  services.set(IViewsService, {
-    openView: () => undefined,
-    focusView: (viewId) => {
-      focusedView = viewId;
-      return true;
-    },
-  });
-  using commands = new CommandService(services);
-  const menuService = new MenuService(commands, contextKeys);
-  const layout = testLayoutService();
-  const contextMenuService = {
-    showContextMenu: () => undefined,
-  } as unknown as IContextMenuService;
-  using pane = new ChatViewPane(
-    dom.window.document.body,
-    {
-      id: CHAT_VIEW_ID,
-      title: "Chat",
-    },
-    createChatService(fake.api),
-    sessions,
-    menuService,
-    contextMenuService,
-    contextViewService,
-    commands,
-    layout,
-  );
-  dom.window.document.body.append(pane.element);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	const initialSession = session("session-1", "thread-1", "First Chat");
+	const fake = fakeApi({ sessions: [initialSession] });
+	const services = new ServiceCollection();
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using contextKeys = new ContextKeyService();
+	using viewDescriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry: new WorkbenchViewRegistry(),
+	});
+	services.set(ISessionsManagementService, sessions);
+	let focusedView: string | undefined;
+	services.set(IViewsService, {
+		openView: () => undefined,
+		focusView: (viewId) => {
+			focusedView = viewId;
+			return true;
+		},
+	});
+	using commands = new CommandService(services);
+	const menuService = new MenuService(commands, contextKeys);
+	const layout = testLayoutService();
+	const contextMenuService = {
+		showContextMenu: () => undefined,
+	} as unknown as IContextMenuService;
+	using pane = new ChatViewPane(
+		dom.window.document.body,
+		{
+			id: CHAT_VIEW_ID,
+			title: "Chat",
+		},
+		createChatService(fake.api),
+		sessions,
+		menuService,
+		contextMenuService,
+		contextViewService,
+		commands,
+		layout,
+	);
+	dom.window.document.body.append(pane.element);
 
-  await sessions.initialize();
-  await nextTask();
+	await sessions.initialize();
+	await nextTask();
 
-  const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .aster-editor-input");
-  assert.ok(input);
-  typeAsterText(dom.window, input, "/new");
-  assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
-  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Enter",
-  }));
-  await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 2);
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .aster-editor-input");
+	assert.ok(input);
+	typeAsterText(dom.window, input, "/new");
+	assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
+	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key: "Enter",
+	}));
+	await waitFor(() => chatTitleContent(pane).querySelectorAll("[role='tab']").length === 2);
 
-  assert.deepEqual(
-    [...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
-      label: tab.textContent,
-      selected: tab.getAttribute("aria-selected"),
-    })),
-    [
-      { label: "New Chat", selected: "true" },
-      { label: "First Chat", selected: "false" },
-    ],
-  );
-  assert.equal(fake.createSessionRequests.length, 0);
-  assert.equal(fake.createThreadRequests.length, 0);
-  assert.equal(sessions.untitledSessions.length, 1);
-  assert.equal(focusedView, CHAT_VIEW_ID);
+	assert.deepEqual(
+		[...chatTitleContent(pane).querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => ({
+			label: tab.textContent,
+			selected: tab.getAttribute("aria-selected"),
+		})),
+		[
+			{ label: "New Chat", selected: "true" },
+			{ label: "First Chat", selected: "false" },
+		],
+	);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.createThreadRequests.length, 0);
+	assert.equal(sessions.untitledSessions.length, 1);
+	assert.equal(focusedView, CHAT_VIEW_ID);
 
-  dom.window.close();
+	dom.window.close();
 });
 
 test("failed first send keeps the untitled session and its input draft", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  using contextViewService = new BrowserContextViewService(dom.window.document.body);
-  const fake = fakeApi({
-    sessions: [],
-    createSessionError: new Error("Cannot create Session"),
-  });
-  const services = new ServiceCollection();
-  using sessions = new AppServerSessionsManagementService(fake.api);
-  using contextKeys = new ContextKeyService();
-  using viewDescriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry: new WorkbenchViewRegistry(),
-  });
-  services.set(ISessionsManagementService, sessions);
-  services.set(IViewsService, {
-    openView: () => undefined,
-    focusView: () => true,
-  });
-  using commands = new CommandService(services);
-  const menuService = new MenuService(commands, contextKeys);
-  const layout = testLayoutService();
-  const contextMenuService = {
-    showContextMenu: () => undefined,
-  } as unknown as IContextMenuService;
-  using pane = new ChatViewPane(
-    dom.window.document.body,
-    {
-      id: CHAT_VIEW_ID,
-      title: "Chat",
-    },
-    createChatService(fake.api),
-    sessions,
-    menuService,
-    contextMenuService,
-    contextViewService,
-    commands,
-    layout,
-  );
-  dom.window.document.body.append(pane.element);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	const fake = fakeApi({
+		sessions: [],
+		createSessionError: new Error("Cannot create Session"),
+	});
+	const services = new ServiceCollection();
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using contextKeys = new ContextKeyService();
+	using viewDescriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry: new WorkbenchViewRegistry(),
+	});
+	services.set(ISessionsManagementService, sessions);
+	services.set(IViewsService, {
+		openView: () => undefined,
+		focusView: () => true,
+	});
+	using commands = new CommandService(services);
+	const menuService = new MenuService(commands, contextKeys);
+	const layout = testLayoutService();
+	const contextMenuService = {
+		showContextMenu: () => undefined,
+	} as unknown as IContextMenuService;
+	using pane = new ChatViewPane(
+		dom.window.document.body,
+		{
+			id: CHAT_VIEW_ID,
+			title: "Chat",
+		},
+		createChatService(fake.api),
+		sessions,
+		menuService,
+		contextMenuService,
+		contextViewService,
+		commands,
+		layout,
+	);
+	dom.window.document.body.append(pane.element);
 
-  await sessions.initialize();
-  await nextTask();
+	await sessions.initialize();
+	await nextTask();
 
-  const input = pane.element.querySelector<HTMLTextAreaElement>(".aster-editor-input");
-  assert.ok(input);
-  typeAsterText(dom.window, input, "Keep this draft");
-  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Enter",
-  }));
-  await waitFor(() => pane.element.querySelector(".aster-editor-line-text")?.textContent === "Keep this draft");
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+	assert.ok(input);
+	typeAsterText(dom.window, input, "Keep this draft");
+	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key: "Enter",
+	}));
+	await waitFor(() => pane.element.querySelector(".aster-editor-line-text")?.textContent === "Keep this draft");
 
-  assert.equal(fake.createSessionRequests.length, 1);
-  assert.equal(sessions.sessions.length, 0);
-  assert.equal(sessions.untitledSessions.length, 1);
-  assert.equal(pane.element.querySelector(".aster-editor-line-text")?.textContent, "Keep this draft");
-  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
-  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
-  assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
-  assert.match(pane.element.querySelector<HTMLElement>(".zeta-chat-status")?.textContent ?? "", /Cannot create Session/);
+	assert.equal(fake.createSessionRequests.length, 1);
+	assert.equal(sessions.sessions.length, 0);
+	assert.equal(sessions.untitledSessions.length, 1);
+	assert.equal(pane.element.querySelector(".aster-editor-line-text")?.textContent, "Keep this draft");
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
+	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
+	assert.match(pane.element.querySelector<HTMLElement>(".zeta-chat-status")?.textContent ?? "", /Cannot create Session/);
 
-  dom.window.close();
+	dom.window.close();
 });
 
 test("one Session retains one Chat pane while its selected Thread changes", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  using contextViewService = new BrowserContextViewService(dom.window.document.body);
-  const multiThreadSession: Session = {
-    ...session("session-1", "thread-1", "One Chat"),
-    threads: [
-      { threadId: "thread-1", origin: { type: "root" }, status: "active" },
-      {
-        threadId: "thread-2",
-        origin: {
-          type: "fork",
-          parentThreadId: "thread-1",
-          parentSequence: 1,
-        },
-        status: "active",
-      },
-    ],
-  };
-  const api = fakeApi({ sessions: [multiThreadSession] }).api;
-  using sessions = new AppServerSessionsManagementService(api);
-  using contextKeys = new ContextKeyService();
-  using viewDescriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry: new WorkbenchViewRegistry(),
-  });
-  using commands = new CommandService(new ServiceCollection());
-  const menuService = new MenuService(commands, contextKeys);
-  const layout = testLayoutService();
-  const contextMenuService = {
-    showContextMenu: () => undefined,
-  } as unknown as IContextMenuService;
-  using pane = new ChatViewPane(
-    dom.window.document.body,
-    {
-      id: CHAT_VIEW_ID,
-      title: "Chat",
-    },
-    createChatService(api),
-    sessions,
-    menuService,
-    contextMenuService,
-    contextViewService,
-    commands,
-    layout,
-  );
-  dom.window.document.body.append(pane.element);
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using contextViewService = new BrowserContextViewService(dom.window.document.body);
+	const multiThreadSession: Session = {
+		...session("session-1", "thread-1", "One Chat"),
+		threads: [
+			{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
+			{
+				threadId: "thread-2",
+				origin: {
+					type: "fork",
+					parentThreadId: "thread-1",
+					parentSequence: 1,
+				},
+				status: "active",
+			},
+		],
+	};
+	const api = fakeApi({ sessions: [multiThreadSession] }).api;
+	using sessions = new AppServerSessionsManagementService(api);
+	using contextKeys = new ContextKeyService();
+	using viewDescriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry: new WorkbenchViewRegistry(),
+	});
+	using commands = new CommandService(new ServiceCollection());
+	const menuService = new MenuService(commands, contextKeys);
+	const layout = testLayoutService();
+	const contextMenuService = {
+		showContextMenu: () => undefined,
+	} as unknown as IContextMenuService;
+	using pane = new ChatViewPane(
+		dom.window.document.body,
+		{
+			id: CHAT_VIEW_ID,
+			title: "Chat",
+		},
+		createChatService(api),
+		sessions,
+		menuService,
+		contextMenuService,
+		contextViewService,
+		commands,
+		layout,
+	);
+	dom.window.document.body.append(pane.element);
 
-  await sessions.initialize();
-  await nextTask();
+	await sessions.initialize();
+	await nextTask();
 
-  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
-  const chatPane = pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
-  assert.ok(chatPane);
-  assert.equal(chatPane.dataset.sessionId, "session-1");
-  assert.equal(chatPane.dataset.threadId, "thread-1");
+	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
+	const chatPane = pane.element.querySelector<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
+	assert.ok(chatPane);
+	assert.equal(chatPane.dataset.sessionId, "session-1");
+	assert.equal(chatPane.dataset.threadId, "thread-1");
 
-  sessions.selectThread("session-1", "thread-2");
-  await nextTask();
+	sessions.selectThread("session-1", "thread-2");
+	await nextTask();
 
-  assert.strictEqual(
-    pane.element.querySelector(".zeta-chat-pane-host > .zeta-chat"),
-    chatPane,
-  );
-  assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
-  assert.equal(chatPane.dataset.threadId, "thread-2");
-  dom.window.close();
+	assert.strictEqual(
+		pane.element.querySelector(".zeta-chat-pane-host > .zeta-chat"),
+		chatPane,
+	);
+	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
+	assert.equal(chatPane.dataset.threadId, "thread-2");
+	dom.window.close();
 });
 
 test("Chat history selects an active Thread through Quick Pick", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  const api = fakeApi({
-    sessions: [
-      session("session-1", "thread-1", "First Chat"),
-      session("session-2", "thread-2", "Second Chat"),
-    ],
-  }).api;
-  const services = new ServiceCollection();
-  using sessions = new AppServerSessionsManagementService(api);
-  using contextKeys = new ContextKeyService();
-  using quickInput = new WorkbenchQuickInputService({
-    container: dom.window.document.body,
-    contextKeyService: contextKeys,
-  });
-  let focusedView: string | undefined;
-  services.set(ISessionsManagementService, sessions);
-  services.set(IQuickInputService, quickInput);
-  services.set(IViewsService, {
-    openView: () => undefined,
-    focusView: (viewId) => {
-      focusedView = viewId;
-      return true;
-    },
-  });
-  using commands = new CommandService(services);
-  await sessions.initialize();
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const api = fakeApi({
+		sessions: [
+			session("session-1", "thread-1", "First Chat"),
+			session("session-2", "thread-2", "Second Chat"),
+		],
+	}).api;
+	const services = new ServiceCollection();
+	using sessions = new AppServerSessionsManagementService(api);
+	using contextKeys = new ContextKeyService();
+	using quickInput = new WorkbenchQuickInputService({
+		container: dom.window.document.body,
+		contextKeyService: contextKeys,
+	});
+	let focusedView: string | undefined;
+	services.set(ISessionsManagementService, sessions);
+	services.set(IQuickInputService, quickInput);
+	services.set(IViewsService, {
+		openView: () => undefined,
+		focusView: (viewId) => {
+			focusedView = viewId;
+			return true;
+		},
+	});
+	using commands = new CommandService(services);
+	await sessions.initialize();
 
-  await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
-  assert.deepEqual(
-    [...dom.window.document.querySelectorAll(
-      ".zeta-quick-pick-row-label",
-    )].map((label) => label.textContent),
-    ["First Chat", "Second Chat"],
-  );
-  const input = dom.window.document.querySelector<HTMLInputElement>(
-    ".zeta-quick-pick-input input",
-  );
-  assert.ok(input);
-  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "ArrowDown",
-  }));
-  input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-    bubbles: true,
-    cancelable: true,
-    key: "Enter",
-  }));
+	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
+	assert.deepEqual(
+		[...dom.window.document.querySelectorAll(
+			".zeta-quick-pick-row-label",
+		)].map((label) => label.textContent),
+		["First Chat", "Second Chat"],
+	);
+	const input = dom.window.document.querySelector<HTMLInputElement>(
+		".zeta-quick-pick-input input",
+	);
+	assert.ok(input);
+	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key: "ArrowDown",
+	}));
+	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		key: "Enter",
+	}));
 
-  assert.equal(sessions.active?.session.sessionId, "session-2");
-  assert.equal(sessions.active?.threadId, "thread-2");
-  assert.equal(focusedView, CHAT_VIEW_ID);
-  assert.equal(
-    dom.window.document.querySelector(".zeta-quick-pick"),
-    null,
-  );
-  dom.window.close();
+	assert.equal(sessions.active?.session.sessionId, "session-2");
+	assert.equal(sessions.active?.threadId, "thread-2");
+	assert.equal(focusedView, CHAT_VIEW_ID);
+	assert.equal(
+		dom.window.document.querySelector(".zeta-quick-pick"),
+		null,
+	);
+	dom.window.close();
 });
 
 test("ViewsService resolves, opens, and focuses contributed views", () => {
-  const registry = new WorkbenchViewRegistry();
-  registerChatViews(registry);
-  using contextKeys = new ContextKeyService();
-  using descriptors = new ViewDescriptorService({
-    contextKeyService: contextKeys,
-    registry,
-  });
-  let focused = 0;
-  let opened = 0;
-  const view = {
-    id: CHAT_VIEW_ID,
-    focus: () => focused++,
-    isVisible: () => true,
-    setVisible: () => undefined,
-  };
-  const service = new ViewsService({
-    viewDescriptorService: descriptors,
-    openViewContainer: (container) => {
-      assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
-      return {
-        openView: (viewId: string) => {
-          assert.equal(viewId, CHAT_VIEW_ID);
-          opened++;
-          return view;
-        },
-      } as unknown as ViewPaneContainer;
-    },
-  });
+	const registry = new WorkbenchViewRegistry();
+	registerChatViews(registry);
+	using contextKeys = new ContextKeyService();
+	using descriptors = new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry,
+	});
+	let focused = 0;
+	let opened = 0;
+	const view = {
+		id: CHAT_VIEW_ID,
+		focus: () => focused++,
+		isVisible: () => true,
+		setVisible: () => undefined,
+	};
+	const service = new ViewsService({
+		viewDescriptorService: descriptors,
+		openViewContainer: (container) => {
+			assert.equal(container.id, CHAT_VIEW_CONTAINER_ID);
+			return {
+				openView: (viewId: string) => {
+					assert.equal(viewId, CHAT_VIEW_ID);
+					opened++;
+					return view;
+				},
+			} as unknown as ViewPaneContainer;
+		},
+	});
 
-  assert.equal(service.focusView(CHAT_VIEW_ID), true);
-  assert.equal(opened, 1);
-  assert.equal(focused, 1);
-  assert.equal(service.openView("missing"), undefined);
+	assert.equal(service.focusView(CHAT_VIEW_ID), true);
+	assert.equal(opened, 1);
+	assert.equal(focused, 1);
+	assert.equal(service.openView("missing"), undefined);
 });
 
 test("AppServerSessionsManagementService restores and creates active Threads", async () => {
-  const initialSession = session("session-1", "thread-1");
-  const createdSession = session("session-2");
-  const attachedSession = session("session-2", "thread-2");
-  const api = fakeApi({
-    sessions: [initialSession],
-    createSession: createdSession,
-    createThread: {
-      session: attachedSession,
-      threadId: "thread-2",
-    },
-  }).api;
-  using service = new AppServerSessionsManagementService(api);
+	const initialSession = session("session-1", "thread-1");
+	const createdSession = session("session-2");
+	const attachedSession = session("session-2", "thread-2");
+	const api = fakeApi({
+		sessions: [initialSession],
+		createSession: createdSession,
+		createThread: {
+			session: attachedSession,
+			threadId: "thread-2",
+		},
+	}).api;
+	using service = new AppServerSessionsManagementService(api);
 
-  await service.initialize();
-  assert.equal(service.active?.threadId, "thread-1");
-  assert.equal(service.active?.session.title, "Session session-1");
+	await service.initialize();
+	assert.equal(service.active?.threadId, "thread-1");
+	assert.equal(service.active?.session.title, "Session session-1");
 
-  const active = await service.startNewSession("Another");
-  assert.equal(active.threadId, "thread-2");
-  assert.equal(service.sessions[0].sessionId, "session-2");
-  assert.equal(service.state, "ready");
+	const active = await service.startNewSession("Another");
+	assert.equal(active.threadId, "thread-2");
+	assert.equal(service.sessions[0].sessionId, "session-2");
+	assert.equal(service.state, "ready");
 });
 
 test("AppServerSessionsManagementService archives a Session and selects the next active one", async () => {
-  const first = session("session-1", "thread-1");
-  const second = session("session-2", "thread-2");
-  const fake = fakeApi({ sessions: [first, second] });
-  using service = new AppServerSessionsManagementService(fake.api);
+	const first = session("session-1", "thread-1");
+	const second = session("session-2", "thread-2");
+	const fake = fakeApi({ sessions: [first, second] });
+	using service = new AppServerSessionsManagementService(fake.api);
 
-  await service.initialize();
-  await service.archiveSession("session-1");
+	await service.initialize();
+	await service.archiveSession("session-1");
 
-  assert.deepEqual(
-    fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
-      sessionId,
-      expectedSequence,
-    })),
-    [{ sessionId: "session-1", expectedSequence: 2 }],
-  );
-  assert.equal(
-    service.sessions.find(({ sessionId }) => sessionId === "session-1")
-      ?.status,
-    "archived",
-  );
-  assert.equal(service.active?.session.sessionId, "session-2");
-  assert.equal(service.active?.threadId, "thread-2");
-  assert.equal(service.state, "ready");
+	assert.deepEqual(
+		fake.archiveRequests.map(({ sessionId, expectedSequence }) => ({
+			sessionId,
+			expectedSequence,
+		})),
+		[{ sessionId: "session-1", expectedSequence: 2 }],
+	);
+	assert.equal(
+		service.sessions.find(({ sessionId }) => sessionId === "session-1")
+			?.status,
+		"archived",
+	);
+	assert.equal(service.active?.session.sessionId, "session-2");
+	assert.equal(service.active?.threadId, "thread-2");
+	assert.equal(service.state, "ready");
 });
 
 test("AppServerSessionsManagementService permits an empty selection when no durable Session remains", async () => {
-  const onlySession = session("session-1", "thread-1");
-  const fake = fakeApi({ sessions: [onlySession] });
-  using service = new AppServerSessionsManagementService(fake.api);
+	const onlySession = session("session-1", "thread-1");
+	const fake = fakeApi({ sessions: [onlySession] });
+	using service = new AppServerSessionsManagementService(fake.api);
 
-  await service.initialize();
-  await service.archiveSession("session-1");
+	await service.initialize();
+	await service.archiveSession("session-1");
 
-  assert.equal(service.active, undefined);
-  assert.equal(service.untitledSessions.length, 0);
-  assert.equal(service.activeUntitledSession, undefined);
-  assert.equal(fake.createSessionRequests.length, 0);
-  assert.equal(fake.createThreadRequests.length, 0);
+	assert.equal(service.active, undefined);
+	assert.equal(service.untitledSessions.length, 0);
+	assert.equal(service.activeUntitledSession, undefined);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.createThreadRequests.length, 0);
 });
 
 test("AppServerSessionsManagementService selects another untitled session and permits the last one to be discarded", async () => {
-  const fake = fakeApi();
-  using service = new AppServerSessionsManagementService(fake.api);
+	const fake = fakeApi();
+	using service = new AppServerSessionsManagementService(fake.api);
 
-  await service.initialize();
-  assert.equal(service.untitledSessions.length, 0);
-  const initialSession = service.createUntitledSession();
-  const nextSession = service.createUntitledSession();
+	await service.initialize();
+	assert.equal(service.untitledSessions.length, 0);
+	const initialSession = service.createUntitledSession();
+	const nextSession = service.createUntitledSession();
 
-  service.discardUntitledSession(nextSession.untitledSessionId);
-  assert.equal(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
+	service.discardUntitledSession(nextSession.untitledSessionId);
+	assert.equal(service.activeUntitledSession?.untitledSessionId, initialSession.untitledSessionId);
 
-  service.discardUntitledSession(initialSession.untitledSessionId);
-  assert.equal(service.untitledSessions.length, 0);
-  assert.equal(service.activeUntitledSession, undefined);
-  assert.equal(fake.createSessionRequests.length, 0);
-  assert.equal(fake.createThreadRequests.length, 0);
+	service.discardUntitledSession(initialSession.untitledSessionId);
+	assert.equal(service.untitledSessions.length, 0);
+	assert.equal(service.activeUntitledSession, undefined);
+	assert.equal(fake.createSessionRequests.length, 0);
+	assert.equal(fake.createThreadRequests.length, 0);
 });
 
 test("AppServerSessionsManagementService changes the model only for the selected Session", async () => {
-  const fake = fakeApi({
-    sessions: [
-      session("session-1", "thread-1"),
-      session("session-2", "thread-2"),
-    ],
-  });
-  using service = new AppServerSessionsManagementService(fake.api);
-  await service.initialize();
-  const model: ModelRef = { provider: "openai", model: "gpt-session" };
+	const fake = fakeApi({
+		sessions: [
+			session("session-1", "thread-1"),
+			session("session-2", "thread-2"),
+		],
+	});
+	using service = new AppServerSessionsManagementService(fake.api);
+	await service.initialize();
+	const model: ModelRef = { provider: "openai", model: "gpt-session" };
 
-  await service.setModel("session-1", model);
+	await service.setModel("session-1", model);
 
-  assert.deepEqual(fake.setModelRequests.map(({ sessionId, expectedSequence, model }) => ({
-    sessionId,
-    expectedSequence,
-    model,
-  })), [{ sessionId: "session-1", expectedSequence: 2, model }]);
-  assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
-  assert.equal(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, undefined);
-  assert.deepEqual(service.active?.session.model, model);
+	assert.deepEqual(fake.setModelRequests.map(({ sessionId, expectedSequence, model }) => ({
+		sessionId,
+		expectedSequence,
+		model,
+	})), [{ sessionId: "session-1", expectedSequence: 2, model }]);
+	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
+	assert.equal(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, undefined);
+	assert.deepEqual(service.active?.session.model, model);
 });
 
 test("ChatPaneModel layers transient deltas over canonical Thread state", async () => {
-  const activeSession = session("session-1", "thread-1");
-  let currentThread = thread();
-  const fake = fakeApi({
-    sessions: [activeSession],
-    thread: () => currentThread,
-  });
-  using sessions = new AppServerSessionsManagementService(fake.api);
-  using model = new ChatPaneModel(createChatService(fake.api), {
-    kind: "session",
-    active: {
-      session: activeSession,
-      threadId: "thread-1",
-    },
-  }, sessions);
+	const activeSession = session("session-1", "thread-1");
+	let currentThread = thread();
+	const fake = fakeApi({
+		sessions: [activeSession],
+		thread: () => currentThread,
+	});
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: {
+			session: activeSession,
+			threadId: "thread-1",
+		},
+	}, sessions);
 
-  await model.initialize();
-  fake.emit({
-    method: "session/thread/update",
-    params: {
-      sessionId: "session-1",
-      threadId: "thread-1",
-      durableSequence: 1,
-      streamCursor: {
-        streamInstanceId: "stream-1",
-        sequence: 1,
-      },
-      update: {
-        type: "itemStarted",
-        turnId: "turn-1",
-        item: {
-          type: "agentMessage",
-          itemId: "item-1",
-          turnId: "turn-1",
-          text: "",
-        },
-      },
-    },
-  });
-  fake.emit({
-    method: "session/thread/update",
-    params: {
-      sessionId: "session-1",
-      threadId: "thread-1",
-      durableSequence: 1,
-      streamCursor: {
-        streamInstanceId: "stream-1",
-        sequence: 2,
-      },
-      update: {
-        type: "itemDelta",
-        turnId: "turn-1",
-        itemId: "item-1",
-        delta: { type: "agentMessage", text: "Hello" },
-      },
-    },
-  });
+	await model.initialize();
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 1,
+			streamCursor: {
+				streamInstanceId: "stream-1",
+				sequence: 1,
+			},
+			update: {
+				type: "itemStarted",
+				turnId: "turn-1",
+				item: {
+					type: "agentMessage",
+					itemId: "item-1",
+					turnId: "turn-1",
+					text: "",
+				},
+			},
+		},
+	});
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 1,
+			streamCursor: {
+				streamInstanceId: "stream-1",
+				sequence: 2,
+			},
+			update: {
+				type: "itemDelta",
+				turnId: "turn-1",
+				itemId: "item-1",
+				delta: { type: "agentMessage", text: "Hello" },
+			},
+		},
+	});
 
-  assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
-  assert.equal(model.items[0].transient, true);
+	assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
+	assert.equal(model.items[0].transient, true);
 
-  currentThread = thread("Hello");
-  fake.emit({
-    method: "session/thread/update",
-    params: {
-      sessionId: "session-1",
-      threadId: "thread-1",
-      durableSequence: 4,
-      update: {
-        type: "committed",
-        event: {
-          type: "itemCompleted",
-          threadId: "thread-1",
-          turnId: "turn-1",
-          item: currentThread.turns[0].items[0],
-        },
-      },
-    },
-  });
-  await nextTask();
+	currentThread = thread("Hello");
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 4,
+			update: {
+				type: "committed",
+				event: {
+					type: "itemCompleted",
+					threadId: "thread-1",
+					turnId: "turn-1",
+					item: currentThread.turns[0].items[0],
+				},
+			},
+		},
+	});
+	await nextTask();
 
-  assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
-  assert.equal(model.items[0].transient, false);
-  assert.equal(model.thread?.sequence, 4);
+	assert.deepEqual(model.items.map((item) => item.text), ["Hello"]);
+	assert.equal(model.items[0].transient, false);
+	assert.equal(model.thread?.sequence, 4);
 });
 
 test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
-  const activeSession = session("session-1", "thread-1");
-  const failedThread: Thread = {
-    sessionId: "session-1",
-    threadId: "thread-1",
-    title: "Main",
-    status: "active",
-    sequence: 3,
-    turns: [{
-      turnId: "turn-1",
-      status: "failed",
-      items: [],
-      error: {
-        code: "providerAuth",
-        message: "Model provider authentication failed",
-        retryable: false,
-      },
-    }],
-  };
-  const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
-  using sessions = new AppServerSessionsManagementService(fake.api);
-  using model = new ChatPaneModel(createChatService(fake.api), {
-    kind: "session",
-    active: { session: activeSession, threadId: "thread-1" },
-  }, sessions);
+	const activeSession = session("session-1", "thread-1");
+	const failedThread: Thread = {
+		sessionId: "session-1",
+		threadId: "thread-1",
+		title: "Main",
+		status: "active",
+		sequence: 3,
+		turns: [{
+			turnId: "turn-1",
+			status: "failed",
+			items: [],
+			error: {
+				code: "providerAuth",
+				message: "Model provider authentication failed",
+				retryable: false,
+			},
+		}],
+	};
+	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: { session: activeSession, threadId: "thread-1" },
+	}, sessions);
 
-  await model.initialize();
+	await model.initialize();
 
-  assert.deepEqual(model.items, [{
-    id: "turn-error:turn-1",
-    type: "turnError",
-    text: "Model provider authentication failed",
-    transient: false,
-    isError: true,
-  }]);
-  assert.equal(model.state, "ready");
+	assert.deepEqual(model.items, [{
+		id: "turn-error:turn-1",
+		type: "turnError",
+		text: "Model provider authentication failed",
+		transient: false,
+		isError: true,
+	}]);
+	assert.equal(model.state, "ready");
 });
 
 interface FakeOptions {
-  readonly sessions?: readonly Session[];
-  readonly createSession?: Session;
-  readonly createSessionError?: Error;
-  readonly createThread?: {
-    readonly session: Session;
-    readonly threadId: string;
-  };
-  readonly thread?: () => Thread;
-  readonly skills?: readonly {
-    readonly id: { readonly source: string; readonly name: string };
-    readonly description: string;
-    readonly contentDigest: string;
-    readonly enabled: boolean;
-    readonly compatible: boolean;
-  }[];
-  readonly models?: readonly {
-    readonly model: ModelRef;
-    readonly displayName: string;
-    readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
-  }[];
+	readonly sessions?: readonly Session[];
+	readonly createSession?: Session;
+	readonly createSessionError?: Error;
+	readonly createThread?: {
+		readonly session: Session;
+		readonly threadId: string;
+	};
+	readonly thread?: () => Thread;
+	readonly skills?: readonly {
+		readonly id: { readonly source: string; readonly name: string };
+		readonly description: string;
+		readonly contentDigest: string;
+		readonly enabled: boolean;
+		readonly compatible: boolean;
+	}[];
+	readonly models?: readonly {
+		readonly model: ModelRef;
+		readonly displayName: string;
+		readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
+	}[];
 }
 
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
-  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
+	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
 }
 
 test("Chat service projects unique enabled Skills and submits the exact pinned reference", async () => {
-  const commit = {
-    id: { source: "user:skill-source:test", name: "commit" },
-    description: "Draft a commit message",
-    contentDigest: "sha256:commit",
-    enabled: true,
-    compatible: true,
-  };
-  const fake = fakeApi({ skills: [
-    commit,
-    { ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
-    { ...commit, id: { source: "workspace:one", name: "duplicate" } },
-    { ...commit, id: { source: "workspace:two", name: "duplicate" } },
-    { ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
-  ] });
-  using chat = createChatService(fake.api);
+	const commit = {
+		id: { source: "user:skill-source:test", name: "commit" },
+		description: "Draft a commit message",
+		contentDigest: "sha256:commit",
+		enabled: true,
+		compatible: true,
+	};
+	const fake = fakeApi({ skills: [
+		commit,
+		{ ...commit, id: { source: "workspace:disabled-commit", name: "commit" }, enabled: false },
+		{ ...commit, id: { source: "workspace:one", name: "duplicate" } },
+		{ ...commit, id: { source: "workspace:two", name: "duplicate" } },
+		{ ...commit, id: { source: "workspace:disabled", name: "disabled" }, enabled: false },
+	] });
+	using chat = createChatService(fake.api);
 
-  const commands = await chat.listSkillCommands();
+	const commands = await chat.listSkillCommands();
 
-  assert.deepEqual(commands, [{
-    name: "commit",
-    description: "Draft a commit message",
-    source: "user:skill-source:test",
-    skill: {
-      id: { source: "user:skill-source:test", name: "commit" },
-      version: { type: "pinnedDigest", digest: "sha256:commit" },
-    },
-  }]);
-  await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "/commit staged changes", skills: [commands[0]!.skill] });
-  assert.deepEqual(fake.turnStartRequests[0]?.input, [
-    { type: "skill", skill: commands[0]!.skill },
-    { type: "text", text: "/commit staged changes" },
-  ]);
+	assert.deepEqual(commands, [{
+		name: "commit",
+		description: "Draft a commit message",
+		source: "user:skill-source:test",
+		skill: {
+			id: { source: "user:skill-source:test", name: "commit" },
+			version: { type: "pinnedDigest", digest: "sha256:commit" },
+		},
+	}]);
+	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "/commit staged changes", skills: [commands[0]!.skill] });
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: "skill", skill: commands[0]!.skill },
+		{ type: "text", text: "/commit staged changes" },
+	]);
 });
 
 test("Chat service caches the static catalog and filters picker entries by user visibility", async () => {
-  const first = {
-    model: { provider: "openai", model: "gpt-5.6-sol" },
-    displayName: "GPT-5.6 Sol",
-    access: "subscription" as const,
-  };
-  const second = {
-    model: { provider: "anthropic", model: "claude-opus-5" },
-    displayName: "Claude Opus 5",
-    access: "apiKey" as const,
-  };
-  const third = {
-    model: { provider: "openai", model: "gpt-5.6" },
-    displayName: "GPT-5.6",
-    access: "apiKey" as const,
-  };
-  const fake = fakeApi({ models: [first, second, third] });
-  using configuration = new WorkbenchConfigurationService();
-  using chat = createChatService(fake.api, configuration);
+	const first = {
+		model: { provider: "openai", model: "gpt-5.6-sol" },
+		displayName: "GPT-5.6 Sol",
+		access: "subscription" as const,
+	};
+	const second = {
+		model: { provider: "anthropic", model: "claude-opus-5" },
+		displayName: "Claude Opus 5",
+		access: "apiKey" as const,
+	};
+	const third = {
+		model: { provider: "openai", model: "gpt-5.6" },
+		displayName: "GPT-5.6",
+		access: "apiKey" as const,
+	};
+	const fake = fakeApi({ models: [first, second, third] });
+	using configuration = new WorkbenchConfigurationService();
+	using chat = createChatService(fake.api, configuration);
 
-  assert.deepEqual(await chat.listModels(), [first, second, third]);
-  assert.deepEqual(await chat.listModelCatalog(), [first, second, third]);
-  assert.equal(fake.modelListRequests.length, 1);
+	assert.deepEqual(await chat.listModels(), [first, second, third]);
+	assert.deepEqual(await chat.listModelCatalog(), [first, second, third]);
+	assert.equal(fake.modelListRequests.length, 1);
 
-  await chat.setModelVisible(first.model, false);
+	await chat.setModelVisible(first.model, false);
 
-  assert.deepEqual(await chat.listModels(), [second, third]);
-  assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
-  await chat.refreshModels();
-  assert.equal(fake.modelListRequests.length, 2);
+	assert.deepEqual(await chat.listModels(), [second, third]);
+	assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
+	await chat.refreshModels();
+	assert.equal(fake.modelListRequests.length, 2);
 });
 
 test("Chat picker retains the selected Session model when it is hidden", async () => {
-  const entry = {
-    model: { provider: "openai", model: "gpt-5.6-sol" },
-    displayName: "GPT-5.6 Sol",
-    access: "subscription" as const,
-  };
-  const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
-  const fake = fakeApi({ sessions: [activeSession], models: [entry] });
-  using configuration = new WorkbenchConfigurationService();
-  await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
-  using chat = createChatService(fake.api, configuration);
-  using sessions = new AppServerSessionsManagementService(fake.api);
-  using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	const entry = {
+		model: { provider: "openai", model: "gpt-5.6-sol" },
+		displayName: "GPT-5.6 Sol",
+		access: "subscription" as const,
+	};
+	const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
+	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
 
-  await model.initialize();
+	await model.initialize();
 
-  assert.deepEqual(await chat.listModels(), []);
-  assert.deepEqual(model.models, [entry]);
-  assert.deepEqual(model.selectedModel, entry.model);
+	assert.deepEqual(await chat.listModels(), []);
+	assert.deepEqual(model.models, [entry]);
+	assert.deepEqual(model.selectedModel, entry.model);
 });
 
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
-  const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
-  const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
-  const updateVisibility = (partId: WorkbenchPartId, visible: boolean): void => {
-    if (visible === visibleParts.has(partId)) return;
-    if (visible) visibleParts.add(partId);
-    else visibleParts.delete(partId);
-    visibility.fire({ partId, visible });
-  };
-  return {
-    onDidChangePartVisibility: visibility.event,
-    isPartVisible: (partId) => visibleParts.has(partId),
-    showPart: (partId) => updateVisibility(partId, true),
-    showParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, true)),
-    hidePart: (partId) => updateVisibility(partId, false),
-    hideParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, false)),
-  } as IWorkbenchLayoutService;
+	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
+	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
+	const updateVisibility = (partId: WorkbenchPartId, visible: boolean): void => {
+		if (visible === visibleParts.has(partId)) return;
+		if (visible) visibleParts.add(partId);
+		else visibleParts.delete(partId);
+		visibility.fire({ partId, visible });
+	};
+	return {
+		onDidChangePartVisibility: visibility.event,
+		isPartVisible: (partId) => visibleParts.has(partId),
+		showPart: (partId) => updateVisibility(partId, true),
+		showParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, true)),
+		hidePart: (partId) => updateVisibility(partId, false),
+		hideParts: (partIds) => partIds.forEach((partId) => updateVisibility(partId, false)),
+	} as IWorkbenchLayoutService;
 }
 
 function fakeApi(options: FakeOptions = {}): {
-  readonly api: IRendererHost;
-  readonly archiveRequests: readonly SessionMutationParams[];
-  readonly stopRequests: readonly SessionMutationParams[];
-  readonly createSessionRequests: readonly SessionCreateParams[];
-  readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
-  readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
-  readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
-  readonly modelListRequests: readonly undefined[];
-  readonly emit: (notification: ServerNotification) => void;
+	readonly api: IRendererHost;
+	readonly archiveRequests: readonly SessionMutationParams[];
+	readonly stopRequests: readonly SessionMutationParams[];
+	readonly createSessionRequests: readonly SessionCreateParams[];
+	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
+	readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
+	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly modelListRequests: readonly undefined[];
+	readonly emit: (notification: ServerNotification) => void;
 } {
-  const listeners = new Set<(notification: ServerNotification) => void>();
-  const archiveRequests: SessionMutationParams[] = [];
-  const stopRequests: SessionMutationParams[] = [];
-  const createSessionRequests: SessionCreateParams[] = [];
-  const createThreadRequests: SessionOperationInput<"createThread">[] = [];
-  const setModelRequests: SessionOperationInput<"setModel">[] = [];
-  const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
-  const modelListRequests: undefined[] = [];
-  const currentThread = () => options.thread?.() ?? thread();
-  const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
-    ?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
-    ?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
-    ?? session(sessionId);
-  const api = {
-    appServer: {
-      getConnectionState: async () => "ready" as const,
-      getSlashCommands: async () => [],
-      onConnectionState: () => ({ dispose() {} }),
-    },
-    session: {
-      list: async () => ({ sessions: [...(options.sessions ?? [])] }),
-      read: async ({ sessionId }: { sessionId: string }) => ({
-        session: currentSession(sessionId),
-      }),
-      subscribe: async ({ sessionId }: { sessionId: string }) => ({
-        session: currentSession(sessionId),
-        updates: [],
-        threadProjections: [],
-      }),
-      unsubscribe: async () => undefined,
-      create: async (params: SessionCreateParams) => {
-        createSessionRequests.push(params);
-        if (options.createSessionError) throw options.createSessionError;
-        return { session: options.createSession ?? session("created") };
-      },
-      createThread: async (params: SessionOperationInput<"createThread">) => {
-        createThreadRequests.push(params);
-        return options.createThread ?? {
-          session: session("created", "created-thread"),
-          threadId: "created-thread",
-        };
-      },
-      archive: async (params: SessionMutationParams) => {
-        archiveRequests.push(params);
-        const archived = options.sessions?.find(
-          ({ sessionId }) => sessionId === params.sessionId,
-        ) ?? session(params.sessionId);
-        return {
-          session: {
-            ...archived,
-            status: "archived" as const,
-            sequence: archived.sequence + 1,
-          },
-        };
-      },
-      stop: async (params: SessionMutationParams) => {
-        stopRequests.push(params);
-        const stopped = options.sessions?.find(
-          ({ sessionId }) => sessionId === params.sessionId,
-        ) ?? session(params.sessionId);
-        return {
-          session: {
-            ...stopped,
-            status: "archived" as const,
-            sequence: stopped.sequence + 1,
-          },
-        };
-      },
-      setModel: async (params: SessionOperationInput<"setModel">) => {
-        setModelRequests.push(params);
-        const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
-        return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
-      },
-    },
-    model: {
-      list: async () => {
-        modelListRequests.push(undefined);
-        return { models: [...(options.models ?? [])] };
-      },
-    },
-    skills: {
-      list: async () => ({ generation: 1, skills: options.skills ?? [] }),
-    },
-    thread: {
-      read: async () => ({ thread: currentThread() }),
-      subscribe: async () => ({
-        thread: currentThread(),
-        updates: [],
-      }),
-      unsubscribe: async () => undefined,
-    },
-    turn: {
-      start: async (params: SessionOperationInput<"startTurn">) => {
-        turnStartRequests.push(params);
-        return { turnId: "turn-started", sequence: 2 };
-      },
-      interrupt: async () => ({ sequence: 3 }),
-      resolveInteraction: async () => ({ sequence: 3 }),
-    },
-    events: {
-      subscribe: (next: (notification: ServerNotification) => void) => {
-        listeners.add(next);
-        return { dispose: () => { listeners.delete(next); } };
-      },
-    },
-  } as unknown as IRendererHost;
-  return {
-    api,
-    archiveRequests,
-    stopRequests,
-    createSessionRequests,
-    createThreadRequests,
-    setModelRequests,
-    turnStartRequests,
-    modelListRequests,
-    emit: (notification) => {
-      for (const listener of listeners) listener(notification);
-    },
-  };
+	const listeners = new Set<(notification: ServerNotification) => void>();
+	const archiveRequests: SessionMutationParams[] = [];
+	const stopRequests: SessionMutationParams[] = [];
+	const createSessionRequests: SessionCreateParams[] = [];
+	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
+	const setModelRequests: SessionOperationInput<"setModel">[] = [];
+	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const modelListRequests: undefined[] = [];
+	const currentThread = () => options.thread?.() ?? thread();
+	const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
+		?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
+		?? (options.createSession?.sessionId === sessionId ? options.createSession : undefined)
+		?? session(sessionId);
+	const api = {
+		appServer: {
+			getConnectionState: async () => "ready" as const,
+			getSlashCommands: async () => [],
+			onConnectionState: () => ({ dispose() {} }),
+		},
+		session: {
+			list: async () => ({ sessions: [...(options.sessions ?? [])] }),
+			read: async ({ sessionId }: { sessionId: string }) => ({
+				session: currentSession(sessionId),
+			}),
+			subscribe: async ({ sessionId }: { sessionId: string }) => ({
+				session: currentSession(sessionId),
+				updates: [],
+				threadProjections: [],
+			}),
+			unsubscribe: async () => undefined,
+			create: async (params: SessionCreateParams) => {
+				createSessionRequests.push(params);
+				if (options.createSessionError) throw options.createSessionError;
+				return { session: options.createSession ?? session("created") };
+			},
+			createThread: async (params: SessionOperationInput<"createThread">) => {
+				createThreadRequests.push(params);
+				return options.createThread ?? {
+					session: session("created", "created-thread"),
+					threadId: "created-thread",
+				};
+			},
+			archive: async (params: SessionMutationParams) => {
+				archiveRequests.push(params);
+				const archived = options.sessions?.find(
+					({ sessionId }) => sessionId === params.sessionId,
+				) ?? session(params.sessionId);
+				return {
+					session: {
+						...archived,
+						status: "archived" as const,
+						sequence: archived.sequence + 1,
+					},
+				};
+			},
+			stop: async (params: SessionMutationParams) => {
+				stopRequests.push(params);
+				const stopped = options.sessions?.find(
+					({ sessionId }) => sessionId === params.sessionId,
+				) ?? session(params.sessionId);
+				return {
+					session: {
+						...stopped,
+						status: "archived" as const,
+						sequence: stopped.sequence + 1,
+					},
+				};
+			},
+			setModel: async (params: SessionOperationInput<"setModel">) => {
+				setModelRequests.push(params);
+				const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
+				return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
+			},
+		},
+		model: {
+			list: async () => {
+				modelListRequests.push(undefined);
+				return { models: [...(options.models ?? [])] };
+			},
+		},
+		skills: {
+			list: async () => ({ generation: 1, skills: options.skills ?? [] }),
+		},
+		thread: {
+			read: async () => ({ thread: currentThread() }),
+			subscribe: async () => ({
+				thread: currentThread(),
+				updates: [],
+			}),
+			unsubscribe: async () => undefined,
+		},
+		turn: {
+			start: async (params: SessionOperationInput<"startTurn">) => {
+				turnStartRequests.push(params);
+				return { turnId: "turn-started", sequence: 2 };
+			},
+			interrupt: async () => ({ sequence: 3 }),
+			resolveInteraction: async () => ({ sequence: 3 }),
+		},
+		events: {
+			subscribe: (next: (notification: ServerNotification) => void) => {
+				listeners.add(next);
+				return { dispose: () => { listeners.delete(next); } };
+			},
+		},
+	} as unknown as IRendererHost;
+	return {
+		api,
+		archiveRequests,
+		stopRequests,
+		createSessionRequests,
+		createThreadRequests,
+		setModelRequests,
+		turnStartRequests,
+		modelListRequests,
+		emit: (notification) => {
+			for (const listener of listeners) listener(notification);
+		},
+	};
 }
 
 function session(
-  id: string,
-  threadId?: string,
-  title = `Session ${id}`,
+	id: string,
+	threadId?: string,
+	title = `Session ${id}`,
 ): Session {
-  return {
-    sessionId: id,
-    title,
-    status: "active",
-    sequence: threadId ? 2 : 1,
-    threads: threadId
-      ? [{ threadId, origin: { type: "root" }, status: "active" }]
-      : [],
-  };
+	return {
+		sessionId: id,
+		title,
+		status: "active",
+		sequence: threadId ? 2 : 1,
+		threads: threadId
+			? [{ threadId, origin: { type: "root" }, status: "active" }]
+			: [],
+	};
 }
 
 function thread(agentText?: string): Thread {
-  return {
-    sessionId: "session-1",
-    threadId: "thread-1",
-    title: "Main",
-    status: "active",
-    sequence: agentText ? 4 : 1,
-    turns: agentText
-      ? [{
-        turnId: "turn-1",
-        status: "completed",
-        items: [{
-          type: "agentMessage",
-          itemId: "item-1",
-          turnId: "turn-1",
-          text: agentText,
-        }],
-      }]
-      : [],
-  };
+	return {
+		sessionId: "session-1",
+		threadId: "thread-1",
+		title: "Main",
+		status: "active",
+		sequence: agentText ? 4 : 1,
+		turns: agentText
+			? [{
+				turnId: "turn-1",
+				status: "completed",
+				items: [{
+					type: "agentMessage",
+					itemId: "item-1",
+					turnId: "turn-1",
+					text: agentText,
+				}],
+			}]
+			: [],
+	};
 }
 
 function typeAsterText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
-  input.dispatchEvent(new targetWindow.InputEvent("beforeinput", {
-    bubbles: true,
-    cancelable: true,
-    data: text,
-    inputType: "insertText",
-  }));
+	input.dispatchEvent(new targetWindow.InputEvent("beforeinput", {
+		bubbles: true,
+		cancelable: true,
+		data: text,
+		inputType: "insertText",
+	}));
 }
 
 function nextTask(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    if (predicate()) return;
-    await nextTask();
-  }
-  assert.fail("Timed out waiting for Chat view state");
+	for (let attempt = 0; attempt < 30; attempt += 1) {
+		if (predicate()) return;
+		await nextTask();
+	}
+	assert.fail("Timed out waiting for Chat view state");
 }

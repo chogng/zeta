@@ -4,46 +4,46 @@ import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
 
 const environment = new JSDOM(
-  "<!doctype html><html><head></head><body><main></main></body></html>",
+	"<!doctype html><html><head></head><body><main></main></body></html>",
 );
 for (const [name, value] of Object.entries({
-  window: environment.window,
-  document: environment.window.document,
-  Node: environment.window.Node,
+	window: environment.window,
+	document: environment.window.document,
+	Node: environment.window.Node,
 })) {
-  Object.defineProperty(globalThis, name, {
-    configurable: true,
-    value,
-  });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const {
-  BrowserContextViewService,
+	BrowserContextViewService,
 } = await import(
-  "../../../../platform/contextview/browser/contextViewService.js"
+	"../../../../platform/contextview/browser/contextViewService.js"
 );
 
 test("context view service hosts overlays inside its Workbench container", () => {
-  const container = environment.window.document.querySelector("main");
-  assert.ok(container);
-  const service = new BrowserContextViewService(container);
-  const content = h(environment.window.document, "div");
-  content.textContent = "Menu";
+	const container = environment.window.document.querySelector("main");
+	assert.ok(container);
+	const service = new BrowserContextViewService(container);
+	const content = h(environment.window.document, "div");
+	content.textContent = "Menu";
 
-  assert.equal(
-    service.show({
-      anchor: { left: 8, top: 12, width: 0, height: 0 },
-      content,
-    }),
-    true,
-  );
+	assert.equal(
+		service.show({
+			anchor: { left: 8, top: 12, width: 0, height: 0 },
+			content,
+		}),
+		true,
+	);
 
-  const contextView = container.querySelector(":scope > .zeta-context-view");
-  assert.ok(contextView);
-  assert.equal(contextView.contains(content), true);
+	const contextView = container.querySelector(":scope > .zeta-context-view");
+	assert.ok(contextView);
+	assert.equal(contextView.contains(content), true);
 
-  service.hide();
-  assert.equal(contextView.hasAttribute("hidden"), true);
-  service.dispose();
-  assert.equal(container.querySelector(".zeta-context-view"), null);
+	service.hide();
+	assert.equal(contextView.hasAttribute("hidden"), true);
+	service.dispose();
+	assert.equal(container.querySelector(".zeta-context-view"), null);
 });

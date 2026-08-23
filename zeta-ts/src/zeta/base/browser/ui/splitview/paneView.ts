@@ -7,10 +7,10 @@ import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 
 /** Construction inputs for a titled, collapsible pane. */
 export interface PaneViewOptions {
-  readonly id: string;
-  readonly title: string;
-  readonly collapsed?: boolean;
-  readonly headerActionsVisibility?: PaneViewHeaderActionsVisibility;
+	readonly id: string;
+	readonly title: string;
+	readonly collapsed?: boolean;
+	readonly headerActionsVisibility?: PaneViewHeaderActionsVisibility;
 }
 
 /** Determines whether a pane exposes its title actions while collapsed. */
@@ -26,94 +26,94 @@ export type PaneViewHeaderActionsVisibility = "always" | "whenExpanded";
  * header interaction internals.
  */
 export class PaneView extends DisposableOwner {
-  readonly element: HTMLElement;
-  readonly id: string;
-  protected readonly headerElement: HTMLDivElement;
-  protected readonly headerActionsElement: HTMLDivElement;
-  protected readonly contentElement: HTMLDivElement;
-  private readonly headerButton: HTMLButtonElement;
-  private readonly titleElement: HTMLHeadingElement;
-  private readonly focusTracker;
-  private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
-  private collapsed: boolean;
+	readonly element: HTMLElement;
+	readonly id: string;
+	protected readonly headerElement: HTMLDivElement;
+	protected readonly headerActionsElement: HTMLDivElement;
+	protected readonly contentElement: HTMLDivElement;
+	private readonly headerButton: HTMLButtonElement;
+	private readonly titleElement: HTMLHeadingElement;
+	private readonly focusTracker;
+	private readonly headerActionsVisibility: PaneViewHeaderActionsVisibility;
+	private collapsed: boolean;
 
-  readonly onDidFocus: Event<void>;
-  readonly onDidBlur: Event<void>;
+	readonly onDidFocus: Event<void>;
+	readonly onDidBlur: Event<void>;
 
-  constructor(container: HTMLElement, options: PaneViewOptions) {
-    super();
-    const { id, title } = options;
-    const ownerDocument = container.ownerDocument;
-    const element = h(ownerDocument, "section");
-    this.element = element;
-    this.defer(() => element.remove());
-    element.className = "zeta-pane-view";
-    element.dataset.paneViewId = id;
-    element.tabIndex = -1;
-    this.id = id;
-    this.headerActionsVisibility = options.headerActionsVisibility ?? "always";
+	constructor(container: HTMLElement, options: PaneViewOptions) {
+		super();
+		const { id, title } = options;
+		const ownerDocument = container.ownerDocument;
+		const element = h(ownerDocument, "section");
+		this.element = element;
+		this.defer(() => element.remove());
+		element.className = "zeta-pane-view";
+		element.dataset.paneViewId = id;
+		element.tabIndex = -1;
+		this.id = id;
+		this.headerActionsVisibility = options.headerActionsVisibility ?? "always";
 
-    this.headerElement = h(ownerDocument, "div");
-    this.headerElement.className = "zeta-pane-view-header";
-    this.headerButton = h(ownerDocument, "button");
-    this.headerButton.className = "zeta-pane-view-header-button";
-    this.headerButton.type = "button";
-    const twistyContainer = h(ownerDocument, "span");
-    twistyContainer.className = "zeta-pane-view-header-twisty-container";
-    twistyContainer.setAttribute("aria-hidden", "true");
-    const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, twistyContainer);
-    collapsedIcon.classList.add("zeta-pane-view-collapsed-icon");
-    const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, twistyContainer);
-    expandedIcon.classList.add("zeta-pane-view-expanded-icon");
-    this.titleElement = h(ownerDocument, "h3");
-    this.titleElement.className = "zeta-pane-view-header-title";
-    this.titleElement.textContent = title;
-    this.headerButton.append(twistyContainer, this.titleElement);
-    this.headerActionsElement = h(ownerDocument, "div");
-    this.headerActionsElement.className = "zeta-pane-view-header-actions";
-    this.headerElement.append(this.headerButton, this.headerActionsElement);
+		this.headerElement = h(ownerDocument, "div");
+		this.headerElement.className = "zeta-pane-view-header";
+		this.headerButton = h(ownerDocument, "button");
+		this.headerButton.className = "zeta-pane-view-header-button";
+		this.headerButton.type = "button";
+		const twistyContainer = h(ownerDocument, "span");
+		twistyContainer.className = "zeta-pane-view-header-twisty-container";
+		twistyContainer.setAttribute("aria-hidden", "true");
+		const collapsedIcon = appendIcon(lxiconsLibrary.chevronRight, twistyContainer);
+		collapsedIcon.classList.add("zeta-pane-view-collapsed-icon");
+		const expandedIcon = appendIcon(lxiconsLibrary.chevronDown, twistyContainer);
+		expandedIcon.classList.add("zeta-pane-view-expanded-icon");
+		this.titleElement = h(ownerDocument, "h3");
+		this.titleElement.className = "zeta-pane-view-header-title";
+		this.titleElement.textContent = title;
+		this.headerButton.append(twistyContainer, this.titleElement);
+		this.headerActionsElement = h(ownerDocument, "div");
+		this.headerActionsElement.className = "zeta-pane-view-header-actions";
+		this.headerElement.append(this.headerButton, this.headerActionsElement);
 
-    this.contentElement = h(ownerDocument, "div");
-    this.contentElement.className = "zeta-pane-view-content";
-    this.contentElement.id = `zeta-pane-view-content-${encodeURIComponent(id)}`;
-    this.headerButton.setAttribute("aria-controls", this.contentElement.id);
-    element.append(this.headerElement, this.contentElement);
-    container.append(element);
-    this.collapsed = options.collapsed === true;
-    this.renderCollapsedState();
-    this.own(addDisposableListener(this.headerButton, "click", () => {
-      this.setCollapsed(!this.collapsed);
-    }));
-    this.focusTracker = this.own(trackFocus(element));
-    this.onDidFocus = this.focusTracker.onDidFocus;
-    this.onDidBlur = this.focusTracker.onDidBlur;
-  }
+		this.contentElement = h(ownerDocument, "div");
+		this.contentElement.className = "zeta-pane-view-content";
+		this.contentElement.id = `zeta-pane-view-content-${encodeURIComponent(id)}`;
+		this.headerButton.setAttribute("aria-controls", this.contentElement.id);
+		element.append(this.headerElement, this.contentElement);
+		container.append(element);
+		this.collapsed = options.collapsed === true;
+		this.renderCollapsedState();
+		this.own(addDisposableListener(this.headerButton, "click", () => {
+			this.setCollapsed(!this.collapsed);
+		}));
+		this.focusTracker = this.own(trackFocus(element));
+		this.onDidFocus = this.focusTracker.onDidFocus;
+		this.onDidBlur = this.focusTracker.onDidBlur;
+	}
 
-  setTitle(title: string): void {
-    this.titleElement.textContent = title;
-  }
+	setTitle(title: string): void {
+		this.titleElement.textContent = title;
+	}
 
-  isCollapsed(): boolean {
-    return this.collapsed;
-  }
+	isCollapsed(): boolean {
+		return this.collapsed;
+	}
 
-  setCollapsed(collapsed: boolean): void {
-    if (this.collapsed === collapsed) return;
-    this.collapsed = collapsed;
-    this.renderCollapsedState();
-  }
+	setCollapsed(collapsed: boolean): void {
+		if (this.collapsed === collapsed) return;
+		this.collapsed = collapsed;
+		this.renderCollapsedState();
+	}
 
-  focus(): void {
-    this.element.focus();
-  }
+	focus(): void {
+		this.element.focus();
+	}
 
-  private renderCollapsedState(): void {
-    const expanded = !this.collapsed;
-    this.element.classList.toggle("collapsed", this.collapsed);
-    this.headerButton.classList.toggle("expanded", expanded);
-    this.headerButton.setAttribute("aria-expanded", String(expanded));
-    this.contentElement.classList.toggle("collapsed", this.collapsed);
-    this.contentElement.hidden = this.collapsed;
-    this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === "whenExpanded";
-  }
+	private renderCollapsedState(): void {
+		const expanded = !this.collapsed;
+		this.element.classList.toggle("collapsed", this.collapsed);
+		this.headerButton.classList.toggle("expanded", expanded);
+		this.headerButton.setAttribute("aria-expanded", String(expanded));
+		this.contentElement.classList.toggle("collapsed", this.collapsed);
+		this.contentElement.hidden = this.collapsed;
+		this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === "whenExpanded";
+	}
 }

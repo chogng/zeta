@@ -6,15 +6,15 @@ import { SessionsList } from "../common/sessionsList.js";
 
 /** Session navigation Part for the dedicated Sessions Workbench. */
 export class SessionsSidebarPart extends WorkbenchPart {
-  private readonly list: SessionsList;
+	private readonly list: SessionsList;
 
-  override get minimumWidth(): number { return 190; }
-  override get maximumWidth(): number { return 460; }
+	override get minimumWidth(): number { return 190; }
+	override get maximumWidth(): number { return 460; }
 
-  constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
-    super(container, "sidebar");
-    this.list = this.own(new SessionsList(this.contentElement, sessionService, viewService, "Sessions", "New session"));
-  }
+	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
+		super(container, "sidebar");
+		this.list = this.own(new SessionsList(this.contentElement, sessionService, viewService, "Sessions", "New session"));
+	}
 
-  focus(): void { this.list.focus(); }
+	focus(): void { this.list.focus(); }
 }

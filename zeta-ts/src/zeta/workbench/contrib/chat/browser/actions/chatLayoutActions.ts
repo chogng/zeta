@@ -13,126 +13,126 @@ const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable",
 const ChatNewWindowAvailable = ContextKeyExpr.equals("chatNewWindowAvailable", true);
 
 registerAction2(class ToggleAgentSidebarAction extends Action2 {
-  constructor() {
-    super({
-      id: TOGGLE_AGENT_SIDEBAR_COMMAND_ID,
-      title: "Show Agent Sidebar",
-      tooltip: "Show Agent Sidebar",
-      icon: lxiconsLibrary.layoutSidebarRightOff,
-      toggled: {
-        condition: AgentSidebarVisibleContext.isEqualTo(true),
-        title: "Hide Agent Sidebar",
-        tooltip: "Hide Agent Sidebar",
-        icon: lxiconsLibrary.layoutSidebarRight,
-      },
-      menu: [
-        {
-          id: MenuId.ChatTitleLayout,
-          when: ContextKeyExpr.not(AgentSidebarVisibleContext.key),
-          group: "navigation",
-          order: 1,
-        },
-        {
-          id: MenuId.AgentSidebarTitle,
-          when: AgentSidebarVisibleContext.isEqualTo(true),
-          group: "navigation",
-          order: 1,
-        },
-      ],
-      f1: true,
-    });
-  }
+	constructor() {
+		super({
+			id: TOGGLE_AGENT_SIDEBAR_COMMAND_ID,
+			title: "Show Agent Sidebar",
+			tooltip: "Show Agent Sidebar",
+			icon: lxiconsLibrary.layoutSidebarRightOff,
+			toggled: {
+				condition: AgentSidebarVisibleContext.isEqualTo(true),
+				title: "Hide Agent Sidebar",
+				tooltip: "Hide Agent Sidebar",
+				icon: lxiconsLibrary.layoutSidebarRight,
+			},
+			menu: [
+				{
+					id: MenuId.ChatTitleLayout,
+					when: ContextKeyExpr.not(AgentSidebarVisibleContext.key),
+					group: "navigation",
+					order: 1,
+				},
+				{
+					id: MenuId.AgentSidebarTitle,
+					when: AgentSidebarVisibleContext.isEqualTo(true),
+					group: "navigation",
+					order: 1,
+				},
+			],
+			f1: true,
+		});
+	}
 
-  override run(accessor: ServicesAccessor): void {
-    const contextKeys = accessor.get(IContextKeyService);
-    const layout = accessor.get(IWorkbenchLayoutService);
-    if (layout.isPartVisible("agentSidebar")) {
-      layout.hidePart("agentSidebar");
-      contextKeys.setContext(AgentSidebarVisibleContext.key, false);
-      return;
-    }
-    const agentSidebar = accessor.get(IViewsService).openView(
-      CHAT_AGENT_SIDEBAR_VIEW_ID,
-    );
-    contextKeys.setContext(AgentSidebarVisibleContext.key, agentSidebar !== undefined);
-  }
+	override run(accessor: ServicesAccessor): void {
+		const contextKeys = accessor.get(IContextKeyService);
+		const layout = accessor.get(IWorkbenchLayoutService);
+		if (layout.isPartVisible("agentSidebar")) {
+			layout.hidePart("agentSidebar");
+			contextKeys.setContext(AgentSidebarVisibleContext.key, false);
+			return;
+		}
+		const agentSidebar = accessor.get(IViewsService).openView(
+			CHAT_AGENT_SIDEBAR_VIEW_ID,
+		);
+		contextKeys.setContext(AgentSidebarVisibleContext.key, agentSidebar !== undefined);
+	}
 });
 
 registerAction2(class OpenChatBrowserAction extends Action2 {
-  constructor() {
-    super({
-      id: OPEN_CHAT_BROWSER_COMMAND_ID,
-      title: "Open Browser",
-      icon: lxiconsLibrary.browserWeb,
-      precondition: ChatBrowserAvailable,
-      menu: {
-        id: MenuId.ChatTitle,
-        group: "chatActions",
-        order: 1,
-      },
-    });
-  }
+	constructor() {
+		super({
+			id: OPEN_CHAT_BROWSER_COMMAND_ID,
+			title: "Open Browser",
+			icon: lxiconsLibrary.browserWeb,
+			precondition: ChatBrowserAvailable,
+			menu: {
+				id: MenuId.ChatTitle,
+				group: "chatActions",
+				order: 1,
+			},
+		});
+	}
 
-  override run(): never {
-    throw new Error("Open Browser is not available in this build.");
-  }
+	override run(): never {
+		throw new Error("Open Browser is not available in this build.");
+	}
 });
 
 registerAction2(class MoveChatToEditorAction extends Action2 {
-  constructor() {
-    super({
-      id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
-      title: "Move Chat to Editor Area",
-      icon: lxiconsLibrary.layoutPanel,
-      precondition: ChatEditorAreaAvailable,
-      menu: {
-        id: MenuId.ChatTitle,
-        group: "chatActions",
-        order: 2,
-      },
-    });
-  }
+	constructor() {
+		super({
+			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
+			title: "Move Chat to Editor Area",
+			icon: lxiconsLibrary.layoutPanel,
+			precondition: ChatEditorAreaAvailable,
+			menu: {
+				id: MenuId.ChatTitle,
+				group: "chatActions",
+				order: 2,
+			},
+		});
+	}
 
-  override run(): never {
-    throw new Error("Moving Chat to the Editor Area is not available in this build.");
-  }
+	override run(): never {
+		throw new Error("Moving Chat to the Editor Area is not available in this build.");
+	}
 });
 
 registerAction2(class MoveChatToNewWindowAction extends Action2 {
-  constructor() {
-    super({
-      id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
-      title: "Move Chat to New Window",
-      icon: lxiconsLibrary.linkExternal,
-      precondition: ChatNewWindowAvailable,
-      menu: {
-        id: MenuId.ChatTitle,
-        group: "chatActions",
-        order: 3,
-      },
-    });
-  }
+	constructor() {
+		super({
+			id: MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID,
+			title: "Move Chat to New Window",
+			icon: lxiconsLibrary.linkExternal,
+			precondition: ChatNewWindowAvailable,
+			menu: {
+				id: MenuId.ChatTitle,
+				group: "chatActions",
+				order: 3,
+			},
+		});
+	}
 
-  override run(): never {
-    throw new Error("Moving Chat to a New Window is not available in this build.");
-  }
+	override run(): never {
+		throw new Error("Moving Chat to a New Window is not available in this build.");
+	}
 });
 
 registerAction2(class OpenChatSettingsAction extends Action2 {
-  constructor() {
-    super({
-      id: OPEN_CHAT_SETTINGS_COMMAND_ID,
-      title: "Chat Settings",
-      icon: lxiconsLibrary.settings,
-      menu: {
-        id: MenuId.ChatTitle,
-        group: "chatActions",
-        order: 4,
-      },
-    });
-  }
+	constructor() {
+		super({
+			id: OPEN_CHAT_SETTINGS_COMMAND_ID,
+			title: "Chat Settings",
+			icon: lxiconsLibrary.settings,
+			menu: {
+				id: MenuId.ChatTitle,
+				group: "chatActions",
+				order: 4,
+			},
+		});
+	}
 
-  override run(accessor: ServicesAccessor): void {
-    accessor.get(ISettingsService).open("chat");
-  }
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(ISettingsService).open("chat");
+	}
 });

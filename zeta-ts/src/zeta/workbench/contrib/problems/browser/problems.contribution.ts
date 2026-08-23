@@ -13,27 +13,27 @@ export const PROBLEMS_VIEW_ID = "zeta.problems";
 
 /** Registers the Workbench-owned Problems panel. */
 export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Problems,
-    title: "Problems",
-    localizationKey: { bundle: "zeta.views", key: "problems" },
-    location: ViewContainerLocation.Panel,
-    order: 1,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Problems, [{
-    id: PROBLEMS_VIEW_ID,
-    title: "Problems",
-    localizationKey: { bundle: "zeta.views", key: "problems" },
-    order: 1,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(ProblemsViewPane, {
-      serviceDependencies: [ILanguageDiagnosticsService, IEditorService],
-    }),
-  }]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Problems,
+		title: "Problems",
+		localizationKey: { bundle: "zeta.views", key: "problems" },
+		location: ViewContainerLocation.Panel,
+		order: 1,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Problems, [{
+		id: PROBLEMS_VIEW_ID,
+		title: "Problems",
+		localizationKey: { bundle: "zeta.views", key: "problems" },
+		order: 1,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(ProblemsViewPane, {
+			serviceDependencies: [ILanguageDiagnosticsService, IEditorService],
+		}),
+	}]);
 }
 
 registerWorkbenchContribution("workbench.contrib.problemsStatus", WorkbenchPhase.BlockRestore, accessor => new ProblemsStatusContribution({
-  statusbarService: accessor.get(IStatusbarService),
-  diagnosticsService: accessor.get(ILanguageDiagnosticsService),
-  viewsService: accessor.get(IViewsService),
+	statusbarService: accessor.get(IStatusbarService),
+	diagnosticsService: accessor.get(ILanguageDiagnosticsService),
+	viewsService: accessor.get(IViewsService),
 }));

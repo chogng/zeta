@@ -4,19 +4,19 @@ import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 
 /** Loads the immutable bytes that Chromium's PDF Viewer renders for one editor input. */
 export interface IPdfDocumentLoader {
-  load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array>;
+	load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array>;
 }
 
 /** Reads PDF bytes through the workspace-confined file service. */
 export class WorkspacePdfDocumentLoader implements IPdfDocumentLoader {
-  constructor(private readonly fileService: IFileService) {}
+	constructor(private readonly fileService: IFileService) {}
 
-  async load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array> {
-    const content = await raceCancellation(
-      this.fileService.readFileBytes(input.resource),
-      signal,
-      "PDF document loading was cancelled",
-    );
-    return content.bytes;
-  }
+	async load(input: EditorInput, signal: AbortSignal): Promise<Uint8Array> {
+		const content = await raceCancellation(
+			this.fileService.readFileBytes(input.resource),
+			signal,
+			"PDF document loading was cancelled",
+		);
+		return content.bytes;
+	}
 }

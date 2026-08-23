@@ -4,64 +4,64 @@ import { JSDOM } from "jsdom";
 import type { IViewPaneOptions } from "../../../../../../workbench/browser/parts/views/viewPane.js";
 
 test("ViewPane title chevron tracks collapsed state", async () => {
-  const dom = new JSDOM("<!doctype html><body></body>");
-  const installedGlobals = installDomGlobals(dom);
-  try {
-    const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
-    class TestViewPane extends ViewPane {
-      constructor(container: HTMLElement, options: IViewPaneOptions) {
-        super(container, options);
-      }
-    }
-    using pane = new TestViewPane(dom.window.document.body, {
-      id: "test.pane",
-      title: "Test Pane",
-      collapsed: true,
-    });
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const installedGlobals = installDomGlobals(dom);
+	try {
+		const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
+		class TestViewPane extends ViewPane {
+			constructor(container: HTMLElement, options: IViewPaneOptions) {
+				super(container, options);
+			}
+		}
+		using pane = new TestViewPane(dom.window.document.body, {
+			id: "test.pane",
+			title: "Test Pane",
+			collapsed: true,
+		});
 
-    const title = pane.element.querySelector(".zeta-pane-view-header-title");
-    const button = pane.element.querySelector<HTMLButtonElement>(".zeta-pane-view-header-button");
-    const content = pane.element.querySelector<HTMLElement>(".zeta-pane-view-content");
-    assert.equal(title?.textContent, "Test Pane");
-    assert.equal(button?.getAttribute("aria-expanded"), "false");
-    assert.equal(button?.getAttribute("aria-controls"), content?.id);
-    assert.equal(button?.classList.contains("expanded"), false);
-    assert.equal(pane.element.classList.contains("collapsed"), true);
-    assert.equal(content?.hidden, true);
-    assert.equal(button?.querySelectorAll(".zeta-icon").length, 2);
+		const title = pane.element.querySelector(".zeta-pane-view-header-title");
+		const button = pane.element.querySelector<HTMLButtonElement>(".zeta-pane-view-header-button");
+		const content = pane.element.querySelector<HTMLElement>(".zeta-pane-view-content");
+		assert.equal(title?.textContent, "Test Pane");
+		assert.equal(button?.getAttribute("aria-expanded"), "false");
+		assert.equal(button?.getAttribute("aria-controls"), content?.id);
+		assert.equal(button?.classList.contains("expanded"), false);
+		assert.equal(pane.element.classList.contains("collapsed"), true);
+		assert.equal(content?.hidden, true);
+		assert.equal(button?.querySelectorAll(".zeta-icon").length, 2);
 
-    button?.click();
-    assert.equal(pane.isCollapsed(), false);
-    assert.equal(button?.getAttribute("aria-expanded"), "true");
-    assert.equal(button?.classList.contains("expanded"), true);
-    assert.equal(pane.element.classList.contains("collapsed"), false);
-    assert.equal(content?.hidden, false);
+		button?.click();
+		assert.equal(pane.isCollapsed(), false);
+		assert.equal(button?.getAttribute("aria-expanded"), "true");
+		assert.equal(button?.classList.contains("expanded"), true);
+		assert.equal(pane.element.classList.contains("collapsed"), false);
+		assert.equal(content?.hidden, false);
 
-    pane.setTitle("Renamed Pane");
-    assert.equal(title?.textContent, "Renamed Pane");
-    assert.equal(button?.querySelectorAll(".zeta-icon").length, 2);
-  } finally {
-    for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
-    dom.window.close();
-  }
+		pane.setTitle("Renamed Pane");
+		assert.equal(title?.textContent, "Renamed Pane");
+		assert.equal(button?.querySelectorAll(".zeta-icon").length, 2);
+	} finally {
+		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
+		dom.window.close();
+	}
 });
 
 function installDomGlobals(dom: JSDOM): readonly string[] {
-  const globals = {
-    window: dom.window,
-    document: dom.window.document,
-    Node: dom.window.Node,
-    Element: dom.window.Element,
-    HTMLElement: dom.window.HTMLElement,
-    Event: dom.window.Event,
-    MouseEvent: dom.window.MouseEvent,
-    navigator: dom.window.navigator,
-  };
-  for (const [name, value] of Object.entries(globals)) {
-    Object.defineProperty(globalThis, name, {
-      configurable: true,
-      value,
-    });
-  }
-  return Object.keys(globals);
+	const globals = {
+		window: dom.window,
+		document: dom.window.document,
+		Node: dom.window.Node,
+		Element: dom.window.Element,
+		HTMLElement: dom.window.HTMLElement,
+		Event: dom.window.Event,
+		MouseEvent: dom.window.MouseEvent,
+		navigator: dom.window.navigator,
+	};
+	for (const [name, value] of Object.entries(globals)) {
+		Object.defineProperty(globalThis, name, {
+			configurable: true,
+			value,
+		});
+	}
+	return Object.keys(globals);
 }

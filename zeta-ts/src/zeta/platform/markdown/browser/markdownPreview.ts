@@ -1,34 +1,34 @@
 import MarkdownIt from "markdown-it";
 import { DEFAULT_FONT_FAMILY } from "../../../base/browser/fonts.js";
 import {
-  isSafeMarkdownLink,
-  sanitizeMarkdownHtmlToString,
+	isSafeMarkdownLink,
+	sanitizeMarkdownHtmlToString,
 } from "../../../base/browser/markdownRenderer.js";
 import {
-  Emitter,
-  type Event,
+	Emitter,
+	type Event,
 } from "../../../base/common/event.js";
 import {
-  DisposableOwner,
+	DisposableOwner,
 } from "../../../base/common/lifecycle.js";
 import {
-  WebviewElement,
+	WebviewElement,
 } from "../../webview/browser/webviewElement.js";
 
 export interface MarkdownPreviewOptions {
-  readonly markdown?: string;
-  readonly title?: string;
+	readonly markdown?: string;
+	readonly title?: string;
 }
 
 interface OpenLinkMessage {
-  readonly type: "openLink";
-  readonly href: string;
+	readonly type: "openLink";
+	readonly href: string;
 }
 
 const markdownParser = new MarkdownIt({
-  breaks: true,
-  html: true,
-  linkify: true,
+	breaks: true,
+	html: true,
+	linkify: true,
 });
 const MAX_MARKDOWN_LENGTH = 4 * 1024 * 1024;
 
@@ -104,77 +104,77 @@ const LINK_BRIDGE_SCRIPT = `
  * Renders a full Markdown document inside the opaque-origin iframe boundary.
  */
 export class MarkdownPreview extends DisposableOwner {
-  private readonly ownerDocument: Document;
-  private readonly webview: WebviewElement;
-  private readonly _onDidOpenLink = this.own(new Emitter<string>());
-  private active = true;
+	private readonly ownerDocument: Document;
+	private readonly webview: WebviewElement;
+	private readonly _onDidOpenLink = this.own(new Emitter<string>());
+	private active = true;
 
-  readonly element: HTMLIFrameElement;
-  readonly onDidOpenLink: Event<string> = this._onDidOpenLink.event;
+	readonly element: HTMLIFrameElement;
+	readonly onDidOpenLink: Event<string> = this._onDidOpenLink.event;
 
-  constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
-    super();
-    this.ownerDocument = container.ownerDocument;
-    this.webview = this.own(new WebviewElement(container, {
-      title: options.title ?? "Markdown preview",
-    }));
-    this.element = this.webview.element;
-    this.own(this.webview.onDidMessage((message) => {
-      const openLink = validateOpenLinkMessage(message);
-      if (openLink) this._onDidOpenLink.fire(openLink.href);
-    }));
-    this.defer(() => {
-      this.active = false;
-    });
-    this.setMarkdown(options.markdown ?? "");
-  }
+	constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
+		super();
+		this.ownerDocument = container.ownerDocument;
+		this.webview = this.own(new WebviewElement(container, {
+			title: options.title ?? "Markdown preview",
+		}));
+		this.element = this.webview.element;
+		this.own(this.webview.onDidMessage((message) => {
+			const openLink = validateOpenLinkMessage(message);
+			if (openLink) this._onDidOpenLink.fire(openLink.href);
+		}));
+		this.defer(() => {
+			this.active = false;
+		});
+		this.setMarkdown(options.markdown ?? "");
+	}
 
-  setMarkdown(markdown: string): void {
-    this.requireActive();
-    if (typeof markdown !== "string") {
-      throw new TypeError("Markdown must be a string");
-    }
-    if (markdown.length > MAX_MARKDOWN_LENGTH) {
-      throw new Error("Markdown exceeds the supported size");
-    }
-    const parserHtml = markdownParser.render(markdown);
-    const safeHtml = sanitizeMarkdownHtmlToString({
-      ownerDocument: this.ownerDocument,
-    }, parserHtml);
-    this.webview.setHtml(
-      `<style>${PREVIEW_STYLE}</style>` +
-        `<main class="zeta-markdown-preview">${safeHtml}</main>` +
-        `<script>${LINK_BRIDGE_SCRIPT}</script>`,
-    );
-  }
+	setMarkdown(markdown: string): void {
+		this.requireActive();
+		if (typeof markdown !== "string") {
+			throw new TypeError("Markdown must be a string");
+		}
+		if (markdown.length > MAX_MARKDOWN_LENGTH) {
+			throw new Error("Markdown exceeds the supported size");
+		}
+		const parserHtml = markdownParser.render(markdown);
+		const safeHtml = sanitizeMarkdownHtmlToString({
+			ownerDocument: this.ownerDocument,
+		}, parserHtml);
+		this.webview.setHtml(
+			`<style>${PREVIEW_STYLE}</style>` +
+				`<main class="zeta-markdown-preview">${safeHtml}</main>` +
+				`<script>${LINK_BRIDGE_SCRIPT}</script>`,
+		);
+	}
 
-  focus(): void {
-    this.requireActive();
-    this.webview.focus();
-  }
+	focus(): void {
+		this.requireActive();
+		this.webview.focus();
+	}
 
-  private requireActive(): void {
-    if (!this.active) {
-      throw new ReferenceError("MarkdownPreview is already disposed");
-    }
-  }
+	private requireActive(): void {
+		if (!this.active) {
+			throw new ReferenceError("MarkdownPreview is already disposed");
+		}
+	}
 }
 
 function validateOpenLinkMessage(
-  message: unknown,
+	message: unknown,
 ): OpenLinkMessage | undefined {
-  if (typeof message !== "object" || message === null) return undefined;
-  const candidate = message as Record<string, unknown>;
-  if (
-    Object.keys(candidate).length !== 2 ||
-    candidate.type !== "openLink" ||
-    typeof candidate.href !== "string" ||
-    !isSafeMarkdownLink(candidate.href)
-  ) {
-    return undefined;
-  }
-  return {
-    type: "openLink",
-    href: candidate.href,
-  };
+	if (typeof message !== "object" || message === null) return undefined;
+	const candidate = message as Record<string, unknown>;
+	if (
+		Object.keys(candidate).length !== 2 ||
+		candidate.type !== "openLink" ||
+		typeof candidate.href !== "string" ||
+		!isSafeMarkdownLink(candidate.href)
+	) {
+		return undefined;
+	}
+	return {
+		type: "openLink",
+		href: candidate.href,
+	};
 }

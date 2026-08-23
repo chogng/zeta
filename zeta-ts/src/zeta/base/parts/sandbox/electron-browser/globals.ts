@@ -1,14 +1,14 @@
 import type {
-  ISandboxGlobals,
+	ISandboxGlobals,
 } from "../common/sandboxTypes.js";
 
 interface ISandboxGlobal {
-  readonly zeta?: ISandboxGlobals;
+	readonly zeta?: ISandboxGlobals;
 }
 
 const globals = (globalThis as unknown as ISandboxGlobal).zeta;
 if (!globals) {
-  throw new Error("Zeta sandbox preload bridge is unavailable");
+	throw new Error("Zeta sandbox preload bridge is unavailable");
 }
 
 /** IPC capability installed by the sandbox preload. */

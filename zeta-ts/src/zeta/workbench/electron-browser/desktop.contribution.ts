@@ -1,8 +1,8 @@
 import {
-  registerAction2,
+	registerAction2,
 } from "../../platform/actions/common/actions.js";
 import {
-  ToggleDeveloperToolsAction,
+	ToggleDeveloperToolsAction,
 } from "./actions/developerActions.js";
 import { OpenFolderAction } from "./actions/workspaceActions.js";
 import "./windowTheme.contribution.js";

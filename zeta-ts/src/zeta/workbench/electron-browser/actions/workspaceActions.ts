@@ -6,15 +6,15 @@ export const OpenFolderCommandId = "workbench.action.files.openFolder";
 
 /** Opens a native folder picker through the window workspace service. */
 export class OpenFolderAction extends Action2 {
-  constructor() {
-    super({
-      id: OpenFolderCommandId,
-      title: "Open Folder...",
-      f1: true,
-    });
-  }
+	constructor() {
+		super({
+			id: OpenFolderCommandId,
+			title: "Open Folder...",
+			f1: true,
+		});
+	}
 
-  override run(accessor: ServicesAccessor): Promise<void> {
-    return accessor.get(IWorkspaceOpenService).openFolder();
-  }
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IWorkspaceOpenService).openFolder();
+	}
 }

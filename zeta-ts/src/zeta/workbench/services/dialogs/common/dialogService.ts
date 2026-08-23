@@ -1,9 +1,9 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import {
-  type IConfirmationDialogOptions,
-  type IDialogService,
-  type IMessageDialogOptions,
-  DialogResult,
+	type IConfirmationDialogOptions,
+	type IDialogService,
+	type IMessageDialogOptions,
+	DialogResult,
 } from "../../../../platform/dialogs/common/dialogs.js";
 import { DialogsModel } from "../../../common/dialogs.js";
 
@@ -11,22 +11,22 @@ import { DialogsModel } from "../../../common/dialogs.js";
  * Maps the platform dialog API onto the workbench-owned dialog model.
  */
 export class DialogService extends DisposableOwner
-  implements IDialogService {
-  readonly model = this.own(new DialogsModel());
+	implements IDialogService {
+	readonly model = this.own(new DialogsModel());
 
-  async showMessage(options: IMessageDialogOptions): Promise<void> {
-    const handle = this.model.show({
-      kind: "message",
-      ...options,
-    });
-    await handle.result;
-  }
+	async showMessage(options: IMessageDialogOptions): Promise<void> {
+		const handle = this.model.show({
+			kind: "message",
+			...options,
+		});
+		await handle.result;
+	}
 
-  async confirm(options: IConfirmationDialogOptions): Promise<boolean> {
-    const handle = this.model.show({
-      kind: "confirmation",
-      ...options,
-    });
-    return await handle.result === DialogResult.Primary;
-  }
+	async confirm(options: IConfirmationDialogOptions): Promise<boolean> {
+		const handle = this.model.show({
+			kind: "confirmation",
+			...options,
+		});
+		return await handle.result === DialogResult.Primary;
+	}
 }

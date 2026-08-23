@@ -9,28 +9,28 @@ import { Emitter, type Event } from "./event.js";
  * without coupling themselves to the keybinding service.
  */
 export class InputMethodEditorState {
-  private readonly _onDidChange = new Emitter<boolean>();
-  private _enabled = true;
+	private readonly _onDidChange = new Emitter<boolean>();
+	private _enabled = true;
 
-  readonly onDidChange: Event<boolean> = this._onDidChange.event;
+	readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
-  get enabled(): boolean {
-    return this._enabled;
-  }
+	get enabled(): boolean {
+		return this._enabled;
+	}
 
-  enable(): void {
-    this.setEnabled(true);
-  }
+	enable(): void {
+		this.setEnabled(true);
+	}
 
-  disable(): void {
-    this.setEnabled(false);
-  }
+	disable(): void {
+		this.setEnabled(false);
+	}
 
-  private setEnabled(enabled: boolean): void {
-    if (this._enabled === enabled) return;
-    this._enabled = enabled;
-    this._onDidChange.fire(enabled);
-  }
+	private setEnabled(enabled: boolean): void {
+		if (this._enabled === enabled) return;
+		this._enabled = enabled;
+		this._onDidChange.fire(enabled);
+	}
 }
 
 /** Shared IME coordination state for the current JavaScript realm. */

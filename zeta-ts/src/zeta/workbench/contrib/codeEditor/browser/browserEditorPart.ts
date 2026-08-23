@@ -10,35 +10,35 @@ import { type TextMateScopeThemeSource } from "../../../services/textMate/common
 
 /** Creates the product browser editor part with Workbench TextMate and completion workers. */
 export interface BrowserEditorPartOptions extends EditorPartOptions {
-  /** Shared Workbench TextMate service. Direct callers may omit it to get a private browser service. */
-  readonly textMateService?: ITextMateService;
-  /** Product or extension grammar contributions owned by this browser editor part. */
-  readonly textMateGrammars?: readonly TextMateGrammarDefinition[];
-  /** Caller-owned serializable scope theme; later revisions reanalyze this editor part. */
-  readonly textMateScopeTheme?: TextMateScopeThemeSource;
+	/** Shared Workbench TextMate service. Direct callers may omit it to get a private browser service. */
+	readonly textMateService?: ITextMateService;
+	/** Product or extension grammar contributions owned by this browser editor part. */
+	readonly textMateGrammars?: readonly TextMateGrammarDefinition[];
+	/** Caller-owned serializable scope theme; later revisions reanalyze this editor part. */
+	readonly textMateScopeTheme?: TextMateScopeThemeSource;
 }
 
 /** Creates the product browser editor part with Workbench TextMate and completion workers. */
 export function createBrowserEditorPart(options: BrowserEditorPartOptions): EditorPart {
-  const textMateService = options.textMateService ?? new BrowserTextMateService(options.textMateGrammars, options.textMateScopeTheme);
-  const ownsTextMateService = options.textMateService === undefined;
-  const onDidChangeLanguageSupport: Event<void> = listener => {
-    const subscriptions = new DisposableStore();
-    subscriptions.add(textMateService.grammars.onDidChangeCatalog((_catalog: TextMateGrammarCatalog) => listener()));
-    subscriptions.add(textMateService.scopeTheme.onDidChangeTheme(() => listener()));
-    return subscriptions;
-  };
-  try {
-    return new EditorPart({
-      ...options,
-      syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
-      ...(options.languageFeaturesService ? {} : { completionWorkerFactory: createCompletionWorkerFactory() }),
-      ...(ownsTextMateService ? { languageSupport: textMateService } : {}),
-      onDidChangeLanguageSupport,
-      whenLanguageSupportReady: () => textMateService.grammars.whenReady(),
-    });
-  } catch (error) {
-    if (ownsTextMateService) textMateService.dispose();
-    throw error;
-  }
+	const textMateService = options.textMateService ?? new BrowserTextMateService(options.textMateGrammars, options.textMateScopeTheme);
+	const ownsTextMateService = options.textMateService === undefined;
+	const onDidChangeLanguageSupport: Event<void> = listener => {
+		const subscriptions = new DisposableStore();
+		subscriptions.add(textMateService.grammars.onDidChangeCatalog((_catalog: TextMateGrammarCatalog) => listener()));
+		subscriptions.add(textMateService.scopeTheme.onDidChangeTheme(() => listener()));
+		return subscriptions;
+	};
+	try {
+		return new EditorPart({
+			...options,
+			syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
+			...(options.languageFeaturesService ? {} : { completionWorkerFactory: createCompletionWorkerFactory() }),
+			...(ownsTextMateService ? { languageSupport: textMateService } : {}),
+			onDidChangeLanguageSupport,
+			whenLanguageSupportReady: () => textMateService.grammars.whenReady(),
+		});
+	} catch (error) {
+		if (ownsTextMateService) textMateService.dispose();
+		throw error;
+	}
 }

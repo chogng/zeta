@@ -10,19 +10,19 @@ const DarkColorSchemeQuery = "(prefers-color-scheme: dark)";
 
 /** Projects a system-matched Zeta color theme into a standalone Sessions page. */
 export function bindSessionsTheme(root: HTMLElement): IDisposable {
-  const ownerWindow = root.ownerDocument.defaultView;
-  if (!ownerWindow) throw new Error("Sessions theme requires an owner window");
-  const systemColorScheme = ownerWindow.matchMedia(DarkColorSchemeQuery);
-  const themeService = new ThemeService(selectTheme(systemColorScheme));
-  const handleSystemColorSchemeChange = (): void => themeService.setColorTheme(selectTheme(systemColorScheme));
-  systemColorScheme.addEventListener("change", handleSystemColorSchemeChange);
-  return combinedDisposable(
-    themeService,
-    bindColorTheme(themeService, root),
-    toDisposable(() => systemColorScheme.removeEventListener("change", handleSystemColorSchemeChange)),
-  );
+	const ownerWindow = root.ownerDocument.defaultView;
+	if (!ownerWindow) throw new Error("Sessions theme requires an owner window");
+	const systemColorScheme = ownerWindow.matchMedia(DarkColorSchemeQuery);
+	const themeService = new ThemeService(selectTheme(systemColorScheme));
+	const handleSystemColorSchemeChange = (): void => themeService.setColorTheme(selectTheme(systemColorScheme));
+	systemColorScheme.addEventListener("change", handleSystemColorSchemeChange);
+	return combinedDisposable(
+		themeService,
+		bindColorTheme(themeService, root),
+		toDisposable(() => systemColorScheme.removeEventListener("change", handleSystemColorSchemeChange)),
+	);
 }
 
 function selectTheme(systemColorScheme: MediaQueryList) {
-  return systemColorScheme.matches ? darkColorTheme : lightColorTheme;
+	return systemColorScheme.matches ? darkColorTheme : lightColorTheme;
 }

@@ -1,7 +1,7 @@
 export { WorkbenchLayout } from "./layout/workbenchLayout.js";
 export type {
-  WorkbenchLayoutOptions,
+	WorkbenchLayoutOptions,
 } from "./layout/workbenchLayout.js";
 export type {
-  WorkbenchLayoutState,
+	WorkbenchLayoutState,
 } from "./layout/workbenchLayoutState.js";

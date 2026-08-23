@@ -2,7 +2,7 @@ import type { IDisposable } from "../../base/common/lifecycle.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
 import type {
-  IAnyWorkspaceIdentifier,
+	IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchProfile } from "./workbenchProfile.js";
 import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
@@ -14,29 +14,29 @@ import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
  * obeys the same renderer contract as the Electron preload bridge.
  */
 export interface IWebWorkbenchHost {
-  readonly api: IRendererHost;
-  readonly workspace?: IAnyWorkspaceIdentifier;
-  readonly container?: HTMLElement | null;
-  readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
+	readonly api: IRendererHost;
+	readonly workspace?: IAnyWorkspaceIdentifier;
+	readonly container?: HTMLElement | null;
+	readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
-  readonly api: IRendererHost;
-  readonly profile: WorkbenchProfile;
-  readonly workspace?: IAnyWorkspaceIdentifier;
-  readonly container: HTMLElement;
-  readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
+	readonly api: IRendererHost;
+	readonly profile: WorkbenchProfile;
+	readonly workspace?: IAnyWorkspaceIdentifier;
+	readonly container: HTMLElement;
+	readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Lifecycle facade returned to a Web Workbench embedder. */
 export interface IWebWorkbench extends IDisposable {
-  shutdown(reason: ShutdownReason): Promise<void>;
+	shutdown(reason: ShutdownReason): Promise<void>;
 }
 
 declare global {
-  /**
-   * Optional host capabilities installed before the shared Workbench entry is imported.
-   */
-  var zetaWebWorkbenchHost: IWebWorkbenchHost | undefined;
+	/**
+	 * Optional host capabilities installed before the shared Workbench entry is imported.
+	 */
+	var zetaWebWorkbenchHost: IWebWorkbenchHost | undefined;
 }

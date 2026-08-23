@@ -7,18 +7,18 @@ import { findUnusualLineTerminators } from "../common/unusualLineTerminators.js"
 
 /** Highlights unusual Unicode line separators without changing the canonical LF model. */
 export class UnusualLineTerminatorsController extends DisposableOwner {
-  private lastVersion = -1;
+	private lastVersion = -1;
 
-  constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
-    super();
-    if (decorations.textModel !== model) throw new TypeError("Aster unusual line terminator dependencies must share a text model");
-    this.own(model.onDidChange(() => this.update()));
-    this.update();
-  }
+	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
+		super();
+		if (decorations.textModel !== model) throw new TypeError("Aster unusual line terminator dependencies must share a text model");
+		this.own(model.onDidChange(() => this.update()));
+		this.update();
+	}
 
-  private update(): void {
-    if (this.lastVersion === this.model.version) return;
-    this.lastVersion = this.model.version;
-    this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({ range, stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: undefined })));
-  }
+	private update(): void {
+		if (this.lastVersion === this.model.version) return;
+		this.lastVersion = this.model.version;
+		this.decorations.replaceAll(findUnusualLineTerminators(this.model).map(range => ({ range, stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: undefined })));
+	}
 }

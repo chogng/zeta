@@ -6,44 +6,44 @@ import type { ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerm
 
 /** Electron renderer implementation of the terminal process service. */
 export class ElectronTerminalProcessService implements ITerminalProcessService {
-  constructor(private readonly appServerApi: IAppServerApi) {}
+	constructor(private readonly appServerApi: IAppServerApi) {}
 
-  async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
-    const result = await invoke<TerminalProfileListResult>("zeta:terminal:profile-list");
-    return result.profiles;
-  }
+	async listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
+		const result = await invoke<TerminalProfileListResult>("zeta:terminal:profile-list");
+		return result.profiles;
+	}
 
-  create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-    const params: TerminalCreateParams = { ...options, lifecycle: { type: "connectionOwned" } };
-    return invoke<ITerminalProcessCreation>("zeta:terminal:create", params);
-  }
+	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
+		const params: TerminalCreateParams = { ...options, lifecycle: { type: "connectionOwned" } };
+		return invoke<ITerminalProcessCreation>("zeta:terminal:create", params);
+	}
 
-  write(options: ITerminalProcessWriteOptions): Promise<void> {
-    const params: TerminalWriteParams = options;
-    return invoke<void>("zeta:terminal:write", params);
-  }
+	write(options: ITerminalProcessWriteOptions): Promise<void> {
+		const params: TerminalWriteParams = options;
+		return invoke<void>("zeta:terminal:write", params);
+	}
 
-  resize(options: ITerminalProcessResizeOptions): Promise<void> {
-    const params: TerminalResizeParams = options;
-    return invoke<void>("zeta:terminal:resize", params);
-  }
+	resize(options: ITerminalProcessResizeOptions): Promise<void> {
+		const params: TerminalResizeParams = options;
+		return invoke<void>("zeta:terminal:resize", params);
+	}
 
-  read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
-    const params: TerminalReadParams = options;
-    return invoke<TerminalReadResult>("zeta:terminal:read", params);
-  }
+	read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
+		const params: TerminalReadParams = options;
+		return invoke<TerminalReadResult>("zeta:terminal:read", params);
+	}
 
-  close(options: ITerminalProcessCloseOptions): Promise<void> {
-    const params: TerminalCloseParams = options;
-    return invoke<void>("zeta:terminal:close", params);
-  }
+	close(options: ITerminalProcessCloseOptions): Promise<void> {
+		const params: TerminalCloseParams = options;
+		return invoke<void>("zeta:terminal:close", params);
+	}
 
-  getConnectionState(): Promise<TerminalProcessConnectionState> {
-    return this.appServerApi.getConnectionState();
-  }
+	getConnectionState(): Promise<TerminalProcessConnectionState> {
+		return this.appServerApi.getConnectionState();
+	}
 
-  onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable {
-    const subscription = this.appServerApi.onConnectionState(listener);
-    return toDisposable(() => subscription.dispose());
-  }
+	onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable {
+		const subscription = this.appServerApi.onConnectionState(listener);
+		return toDisposable(() => subscription.dispose());
+	}
 }

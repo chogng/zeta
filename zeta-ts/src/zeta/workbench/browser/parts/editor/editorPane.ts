@@ -1,12 +1,12 @@
 import type {
-  IDimension,
+	IDimension,
 } from "../../../../base/browser/geometry.js";
 import type {
-  IDisposable,
+	IDisposable,
 } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type {
-  IConfigurationService,
+	IConfigurationService,
 } from "../../../../platform/configuration/common/configurationService.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
@@ -28,8 +28,8 @@ import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 
 export enum EditorPaneVisibility {
-  Hidden,
-  Visible,
+	Hidden,
+	Visible,
 }
 
 /**
@@ -41,50 +41,50 @@ export enum EditorPaneVisibility {
  * disposes it after hiding it.
  */
 export interface IEditorPane extends IDisposable {
-  readonly id: string;
-  /** Optional format-specific document exposed through the shared Workbench lifecycle. */
-  readonly workingCopy?: IWorkingCopy;
+	readonly id: string;
+	/** Optional format-specific document exposed through the shared Workbench lifecycle. */
+	readonly workingCopy?: IWorkingCopy;
 
-  create(parent: HTMLElement): void;
-  setInput(input: EditorInput, signal: AbortSignal): Promise<void>;
-  clearInput(): void;
-  layout(dimension: IDimension): void;
-  setVisible(visibility: EditorPaneVisibility): void;
-  focus(): void;
-  /** Reveals an editor-owned text range when this pane supports text navigation. */
-  revealRange?(range: TextRange): void;
-  /** Persists the active editor's current resource when that editor is writable. */
-  save?(): Promise<void>;
-  /** Serializes and persists the active document to a new resource when supported. */
-  saveAs?(resource: URI): Promise<void>;
+	create(parent: HTMLElement): void;
+	setInput(input: EditorInput, signal: AbortSignal): Promise<void>;
+	clearInput(): void;
+	layout(dimension: IDimension): void;
+	setVisible(visibility: EditorPaneVisibility): void;
+	focus(): void;
+	/** Reveals an editor-owned text range when this pane supports text navigation. */
+	revealRange?(range: TextRange): void;
+	/** Persists the active editor's current resource when that editor is writable. */
+	save?(): Promise<void>;
+	/** Serializes and persists the active document to a new resource when supported. */
+	saveAs?(resource: URI): Promise<void>;
 }
 
 export interface EditorPaneCreationOptions {
-  /** The input used to choose a profile-specific pane implementation. */
-  readonly input?: EditorInput;
-  readonly configurationService?: IConfigurationService;
-  readonly fileService?: IFileService;
-  readonly textFileService?: ITextFileService;
-  readonly textMateService?: ITextMateService;
-  readonly languageFeaturesService?: ILanguageFeaturesService;
-  readonly diffApi?: IDiffApi;
-  readonly syntaxApi?: ISyntaxApi;
-  readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-  readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
-  readonly documentCollaborationApi?: IDocumentCollaborationApi;
-  readonly serverEvents?: IServerEventApi;
-  readonly workingCopyService?: IWorkingCopyService;
-  readonly onSave?: () => Promise<void | boolean>;
-  readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-  readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-  readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
-  readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
+	/** The input used to choose a profile-specific pane implementation. */
+	readonly input?: EditorInput;
+	readonly configurationService?: IConfigurationService;
+	readonly fileService?: IFileService;
+	readonly textFileService?: ITextFileService;
+	readonly textMateService?: ITextMateService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly diffApi?: IDiffApi;
+	readonly syntaxApi?: ISyntaxApi;
+	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
+	readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
+	readonly documentCollaborationApi?: IDocumentCollaborationApi;
+	readonly serverEvents?: IServerEventApi;
+	readonly workingCopyService?: IWorkingCopyService;
+	readonly onSave?: () => Promise<void | boolean>;
+	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
+	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
+	readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
+	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 }
 
 export enum EditorPaneMatch {
-  None,
-  Optional,
-  Default,
+	None,
+	Optional,
+	Default,
 }
 
 /**
@@ -94,8 +94,8 @@ export enum EditorPaneMatch {
  * descriptors before the Workbench creates its Editor Part.
  */
 export interface IEditorPaneDescriptor {
-  readonly id: string;
-  readonly name: string;
-  canOpen(input: EditorInput): EditorPaneMatch;
-  create(options: EditorPaneCreationOptions): IEditorPane;
+	readonly id: string;
+	readonly name: string;
+	canOpen(input: EditorInput): EditorPaneMatch;
+	create(options: EditorPaneCreationOptions): IEditorPane;
 }

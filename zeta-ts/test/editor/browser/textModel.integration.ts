@@ -8,18 +8,18 @@ import "../../../src/zeta/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
 interface IntegrationHarness {
-  readonly apiText: string;
-  getValue(): string;
-  save(): Promise<void>;
-  getSavedText(): string;
-  getSyntaxAnalysisCount(): number;
-  dispose(): void;
+	readonly apiText: string;
+	getValue(): string;
+	save(): Promise<void>;
+	getSavedText(): string;
+	getSyntaxAnalysisCount(): number;
+	dispose(): void;
 }
 
 declare global {
-  interface Window {
-    zetaTextModelIntegration: IntegrationHarness;
-  }
+	interface Window {
+		zetaTextModelIntegration: IntegrationHarness;
+	}
 }
 
 const root = requiredElement("#editor-root");
@@ -29,29 +29,29 @@ const resourceStore = new BrowserTextResourceStore(files);
 const models = new BrowserTextModelService(resourceStore);
 let syntaxAnalysisCount = 0;
 const pane = new CodeEditorPane(resourceStore, {
-  modelService: models,
-  createPart: createBrowserEditorPart,
-  syntaxApi: {
-    analyze: async params => {
-      syntaxAnalysisCount += 1;
-      return {
-        revision: params.revision,
-        hasErrors: true,
-        tokens: [
-          { kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
-          { kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
-        ],
-        foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
-        symbols: [{
-          name: "main",
-          kind: "function",
-          range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } },
-          selectionRange: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } },
-        }],
-        diagnostics: [{ kind: "missing", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 8 } } }],
-      };
-    },
-  },
+	modelService: models,
+	createPart: createBrowserEditorPart,
+	syntaxApi: {
+		analyze: async params => {
+			syntaxAnalysisCount += 1;
+			return {
+				revision: params.revision,
+				hasErrors: true,
+				tokens: [
+					{ kind: "keyword", range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } },
+					{ kind: "function", range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } } },
+				],
+				foldingRanges: [{ range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } } }],
+				symbols: [{
+					name: "main",
+					kind: "function",
+					range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 2, columnIndex: 1 } },
+					selectionRange: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } },
+				}],
+				diagnostics: [{ kind: "missing", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 8 } } }],
+			};
+		},
+	},
 });
 const apiModel = new TextModel("editor-api");
 
@@ -60,21 +60,21 @@ pane.layout({ width: 900, height: 420 });
 await pane.setInput({ resource, label: "main.rs" }, new AbortController().signal);
 
 window.zetaTextModelIntegration = {
-  apiText: apiModel.getText(),
-  getValue: () => pane.getValue(),
-  save: () => pane.save(),
-  getSavedText: () => files.read(resource),
-  getSyntaxAnalysisCount: () => syntaxAnalysisCount,
-  dispose: () => {
-    apiModel.dispose();
-    pane.dispose();
-    models.dispose();
-    files.dispose();
-  },
+	apiText: apiModel.getText(),
+	getValue: () => pane.getValue(),
+	save: () => pane.save(),
+	getSavedText: () => files.read(resource),
+	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
+	dispose: () => {
+		apiModel.dispose();
+		pane.dispose();
+		models.dispose();
+		files.dispose();
+	},
 };
 
 function requiredElement(selector: string): HTMLElement {
-  const element = document.querySelector<HTMLElement>(selector);
-  if (!element) throw new Error(`Missing editor integration root '${selector}'`);
-  return element;
+	const element = document.querySelector<HTMLElement>(selector);
+	if (!element) throw new Error(`Missing editor integration root '${selector}'`);
+	return element;
 }

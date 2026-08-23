@@ -10,24 +10,24 @@ export const SEARCH_VIEW_ID = "zeta.searchView";
 
 /** Registers the Search Sidebar container and its initial pane. */
 export function registerSearchViews(
-  registry: WorkbenchViewRegistry = ViewsRegistry,
+	registry: WorkbenchViewRegistry = ViewsRegistry,
 ): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Search,
-    title: "Search",
-    localizationKey: { bundle: "zeta.views", key: "search" },
-    location: ViewContainerLocation.Sidebar,
-    icon: lxiconsLibrary.search,
-    order: 2,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Search, [{
-    id: SEARCH_VIEW_ID,
-    title: "Search",
-    localizationKey: { bundle: "zeta.views", key: "search" },
-    order: 1,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(SearchViewPane, {
-      serviceDependencies: [IWorkspaceSearchService, IConfigurationService],
-    }),
-  }]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Search,
+		title: "Search",
+		localizationKey: { bundle: "zeta.views", key: "search" },
+		location: ViewContainerLocation.Sidebar,
+		icon: lxiconsLibrary.search,
+		order: 2,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Search, [{
+		id: SEARCH_VIEW_ID,
+		title: "Search",
+		localizationKey: { bundle: "zeta.views", key: "search" },
+		order: 1,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(SearchViewPane, {
+			serviceDependencies: [IWorkspaceSearchService, IConfigurationService],
+		}),
+	}]);
 }

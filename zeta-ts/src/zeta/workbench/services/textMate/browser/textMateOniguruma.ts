@@ -8,13 +8,13 @@ let onigLib: Promise<IOnigLib> | undefined;
 
 /** Loads the browser Worker's shared Oniguruma WASM runtime exactly once. */
 export function createBrowserTextMateOnigLib(): Promise<IOnigLib> {
-  onigLib ??= initialize();
-  return onigLib;
+	onigLib ??= initialize();
+	return onigLib;
 }
 
 async function initialize(): Promise<IOnigLib> {
-  const response = await fetch(onigurumaWasmUrl);
-  if (!response.ok) throw new Error(`Unable to load Oniguruma WASM (${response.status})`);
-  await loadWASM(response);
-  return Object.freeze({ createOnigScanner, createOnigString });
+	const response = await fetch(onigurumaWasmUrl);
+	if (!response.ok) throw new Error(`Unable to load Oniguruma WASM (${response.status})`);
+	await loadWASM(response);
+	return Object.freeze({ createOnigScanner, createOnigString });
 }

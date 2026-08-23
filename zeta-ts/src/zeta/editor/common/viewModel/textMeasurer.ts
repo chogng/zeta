@@ -6,7 +6,7 @@
  * refreshing cached metrics, but those operations do not belong in common.
  */
 export interface TextMeasurer {
-  readonly horizontalPadding: number;
-  readonly contentLeftPadding: number;
-  measureLineWidth(text: string): number;
+	readonly horizontalPadding: number;
+	readonly contentLeftPadding: number;
+	measureLineWidth(text: string): number;
 }

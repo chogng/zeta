@@ -5,10 +5,10 @@ import { TextDecorationCollection } from "../../../common/model/decorationCollec
 import { DecorationPresentation, createAsterDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 
 registerEditorContribution({ id: "editor.contrib.unusualLineTerminators", configure: context => {
-  const decorations = context.own(new TextDecorationCollection<void>(context.model));
-  context.provideCapability(TextEditorCapability.unusualLineTerminatorDecorations, decorations);
-  context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"));
+	const decorations = context.own(new TextDecorationCollection<void>(context.model));
+	context.provideCapability(TextEditorCapability.unusualLineTerminatorDecorations, decorations);
+	context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnusualLineTerminator, () => "Unusual line terminator"));
 }, install: context => {
-  if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-  context.own(new UnusualLineTerminatorsController(context.model, context.getCapability(TextEditorCapability.unusualLineTerminatorDecorations)));
+	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+	context.own(new UnusualLineTerminatorsController(context.model, context.getCapability(TextEditorCapability.unusualLineTerminatorDecorations)));
 } });

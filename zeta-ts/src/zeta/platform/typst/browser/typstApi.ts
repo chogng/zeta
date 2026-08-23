@@ -4,9 +4,9 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { ITypstApi } from "../common/typstApi.js";
 
 export function createDisconnectedTypstApi(unavailable: UnavailableOperation): ITypstApi {
-  return { compile: () => unavailable("typst.compile") };
+	return { compile: () => unavailable("typst.compile") };
 }
 
 export function createViteDevTypstApi(connection: ViteDevAppServerConnection): ITypstApi {
-  return { compile: (params) => viteDevRequest(connection, "document/typst/compile", params) };
+	return { compile: (params) => viteDevRequest(connection, "document/typst/compile", params) };
 }

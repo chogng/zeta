@@ -4,14 +4,14 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 /** The offsets required when positioning overlays inside a Workbench container. */
 export interface ILayoutOffsetInfo {
-  readonly top: number;
-  readonly quickInputTop: number;
+	readonly top: number;
+	readonly quickInputTop: number;
 }
 
 /** A generic browser-container layout event. */
 export interface ILayoutContainerEvent {
-  readonly container: HTMLElement;
-  readonly dimension: IDimension;
+	readonly container: HTMLElement;
+	readonly dimension: IDimension;
 }
 
 /**
@@ -22,27 +22,27 @@ export interface ILayoutContainerEvent {
  * persistence remain above this contract.
  */
 export interface ILayoutService {
-  readonly onDidLayoutMainContainer: Event<IDimension>;
-  readonly onDidLayoutContainer: Event<ILayoutContainerEvent>;
-  readonly onDidLayoutActiveContainer: Event<IDimension>;
-  readonly onDidChangeActiveContainer: Event<void>;
+	readonly onDidLayoutMainContainer: Event<IDimension>;
+	readonly onDidLayoutContainer: Event<ILayoutContainerEvent>;
+	readonly onDidLayoutActiveContainer: Event<IDimension>;
+	readonly onDidChangeActiveContainer: Event<void>;
 
-  readonly mainContainerDimension: IDimension;
-  readonly activeContainerDimension: IDimension;
-  readonly mainContainer: HTMLElement;
-  readonly activeContainer: HTMLElement;
-  readonly containers: Iterable<HTMLElement>;
+	readonly mainContainerDimension: IDimension;
+	readonly activeContainerDimension: IDimension;
+	readonly mainContainer: HTMLElement;
+	readonly activeContainer: HTMLElement;
+	readonly containers: Iterable<HTMLElement>;
 
-  getContainer(targetWindow: Window): HTMLElement;
-  whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined;
+	getContainer(targetWindow: Window): HTMLElement;
+	whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined;
 
-  readonly mainContainerOffset: ILayoutOffsetInfo;
-  readonly activeContainerOffset: ILayoutOffsetInfo;
+	readonly mainContainerOffset: ILayoutOffsetInfo;
+	readonly activeContainerOffset: ILayoutOffsetInfo;
 
-  /** Focuses the primary component hosted by the active container. */
-  focus(): void;
+	/** Focuses the primary component hosted by the active container. */
+	focus(): void;
 }
 
 export const ILayoutService = createServiceIdentifier<ILayoutService>(
-  "layoutService",
+	"layoutService",
 );

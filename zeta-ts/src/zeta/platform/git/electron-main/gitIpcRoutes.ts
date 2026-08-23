@@ -6,142 +6,142 @@ import { relativeWorkspacePath } from "../../workspace/electron-main/workspacePa
 
 /** Exact-shape IPC routes for Git query and mutation operations. */
 export function gitIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
-  return [
-    route({
-      channel: "zeta:git:status",
-      validate: emptyParams,
-      invoke: () => supervisor.request(APP_SERVER_METHODS["git/status"], {}),
-    }),
-    route({
-      channel: "zeta:git:history",
-      validate: emptyParams,
-      invoke: () => supervisor.request(APP_SERVER_METHODS["git/history"], {}),
-    }),
-    route({
-      channel: "zeta:git:graph",
-      validate: graphParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/graph"], params),
-    }),
-    route({
-      channel: "zeta:git:commit-changes",
-      validate: commitChangesParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitChanges"], params),
-    }),
-    route({
-      channel: "zeta:git:commit-file",
-      validate: commitFileParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitFile"], params),
-    }),
-    route({
-      channel: "zeta:git:change-file",
-      validate: changeFileParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/changeFile"], params),
-    }),
-    route({
-      channel: "zeta:git:stage",
-      validate: gitPathsParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/stage"], params),
-    }),
-    route({
-      channel: "zeta:git:unstage",
-      validate: gitPathsParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/unstage"], params),
-    }),
-    route({
-      channel: "zeta:git:discard-worktree",
-      validate: gitPathsParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/discardWorktree"], params),
-    }),
-    route({
-      channel: "zeta:git:commit",
-      validate: gitCommitParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commit"], params),
-    }),
-    route({
-      channel: "zeta:git:fetch",
-      validate: emptyParams,
-      invoke: () => supervisor.request(APP_SERVER_METHODS["git/fetch"], {}),
-    }),
-    route({
-      channel: "zeta:git:pull",
-      validate: emptyParams,
-      invoke: () => supervisor.request(APP_SERVER_METHODS["git/pull"], {}),
-    }),
-    route({
-      channel: "zeta:git:push",
-      validate: emptyParams,
-      invoke: () => supervisor.request(APP_SERVER_METHODS["git/push"], {}),
-    }),
-  ];
+	return [
+		route({
+			channel: "zeta:git:status",
+			validate: emptyParams,
+			invoke: () => supervisor.request(APP_SERVER_METHODS["git/status"], {}),
+		}),
+		route({
+			channel: "zeta:git:history",
+			validate: emptyParams,
+			invoke: () => supervisor.request(APP_SERVER_METHODS["git/history"], {}),
+		}),
+		route({
+			channel: "zeta:git:graph",
+			validate: graphParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/graph"], params),
+		}),
+		route({
+			channel: "zeta:git:commit-changes",
+			validate: commitChangesParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitChanges"], params),
+		}),
+		route({
+			channel: "zeta:git:commit-file",
+			validate: commitFileParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commitFile"], params),
+		}),
+		route({
+			channel: "zeta:git:change-file",
+			validate: changeFileParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/changeFile"], params),
+		}),
+		route({
+			channel: "zeta:git:stage",
+			validate: gitPathsParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/stage"], params),
+		}),
+		route({
+			channel: "zeta:git:unstage",
+			validate: gitPathsParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/unstage"], params),
+		}),
+		route({
+			channel: "zeta:git:discard-worktree",
+			validate: gitPathsParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/discardWorktree"], params),
+		}),
+		route({
+			channel: "zeta:git:commit",
+			validate: gitCommitParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["git/commit"], params),
+		}),
+		route({
+			channel: "zeta:git:fetch",
+			validate: emptyParams,
+			invoke: () => supervisor.request(APP_SERVER_METHODS["git/fetch"], {}),
+		}),
+		route({
+			channel: "zeta:git:pull",
+			validate: emptyParams,
+			invoke: () => supervisor.request(APP_SERVER_METHODS["git/pull"], {}),
+		}),
+		route({
+			channel: "zeta:git:push",
+			validate: emptyParams,
+			invoke: () => supervisor.request(APP_SERVER_METHODS["git/push"], {}),
+		}),
+	];
 }
 
 function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
-  return {
-    channel: definition.channel,
-    validate: definition.validate,
-    invoke: (params) => definition.invoke(params as P),
-  };
+	return {
+		channel: definition.channel,
+		validate: definition.validate,
+		invoke: (params) => definition.invoke(params as P),
+	};
 }
 
 function emptyParams(value: unknown): Record<string, never> {
-  if (value === undefined) return {};
-  return record(value, []) as Record<string, never>;
+	if (value === undefined) return {};
+	return record(value, []) as Record<string, never>;
 }
 
 function gitPathsParams(value: unknown): GitPathsParams {
-  const params = record(value, ["paths"]);
-  if (!Array.isArray(params.paths) || params.paths.length === 0 || params.paths.length > 5_000) {
-    throw new Error("paths must contain between 1 and 5000 entries");
-  }
-  return {
-    paths: params.paths.map((path, index) => {
-      const resolved = relativeWorkspacePath(path);
-      if (!resolved) throw new Error(`paths[${index}] must not be empty`);
-      return resolved;
-    }),
-  };
+	const params = record(value, ["paths"]);
+	if (!Array.isArray(params.paths) || params.paths.length === 0 || params.paths.length > 5_000) {
+		throw new Error("paths must contain between 1 and 5000 entries");
+	}
+	return {
+		paths: params.paths.map((path, index) => {
+			const resolved = relativeWorkspacePath(path);
+			if (!resolved) throw new Error(`paths[${index}] must not be empty`);
+			return resolved;
+		}),
+	};
 }
 
 function gitCommitParams(value: unknown): GitCommitParams {
-  const params = record(value, ["message"]);
-  const message = string(params.message, "message");
-  if (!message.trim() || message.includes("\0") || new TextEncoder().encode(message).byteLength > 65_536) {
-    throw new Error("message must be non-empty, NUL-free, and no larger than 65536 UTF-8 bytes");
-  }
-  return { message };
+	const params = record(value, ["message"]);
+	const message = string(params.message, "message");
+	if (!message.trim() || message.includes("\0") || new TextEncoder().encode(message).byteLength > 65_536) {
+		throw new Error("message must be non-empty, NUL-free, and no larger than 65536 UTF-8 bytes");
+	}
+	return { message };
 }
 
 function graphParams(value: unknown): GitGraphParams {
-  const params = record(value, ["limit"], ["cursor"]);
-  return {
-    limit: boundedPositiveInteger(params.limit, "limit", 1000),
-    ...(params.cursor === undefined ? {} : { cursor: string(params.cursor, "cursor") }),
-  };
+	const params = record(value, ["limit"], ["cursor"]);
+	return {
+		limit: boundedPositiveInteger(params.limit, "limit", 1000),
+		...(params.cursor === undefined ? {} : { cursor: string(params.cursor, "cursor") }),
+	};
 }
 
 function commitChangesParams(value: unknown): GitCommitChangesParams {
-  const params = record(value, ["objectId"]);
-  return { objectId: objectId(params.objectId) };
+	const params = record(value, ["objectId"]);
+	return { objectId: objectId(params.objectId) };
 }
 
 function commitFileParams(value: unknown): GitCommitFileParams {
-  const params = record(value, ["objectId", "path"]);
-  const path = relativeWorkspacePath(params.path);
-  if (!path) throw new Error("path must not be empty");
-  return { objectId: objectId(params.objectId), path };
+	const params = record(value, ["objectId", "path"]);
+	const path = relativeWorkspacePath(params.path);
+	if (!path) throw new Error("path must not be empty");
+	return { objectId: objectId(params.objectId), path };
 }
 
 function changeFileParams(value: unknown): GitChangeFileParams {
-  const params = record(value, ["path", "comparison"]);
-  const path = relativeWorkspacePath(params.path);
-  if (!path) throw new Error("path must not be empty");
-  const comparison = string(params.comparison, "comparison");
-  if (comparison !== "staged" && comparison !== "unstaged") throw new Error("comparison must be staged or unstaged");
-  return { path, comparison };
+	const params = record(value, ["path", "comparison"]);
+	const path = relativeWorkspacePath(params.path);
+	if (!path) throw new Error("path must not be empty");
+	const comparison = string(params.comparison, "comparison");
+	if (comparison !== "staged" && comparison !== "unstaged") throw new Error("comparison must be staged or unstaged");
+	return { path, comparison };
 }
 
 function objectId(value: unknown): string {
-  const objectId = string(value, "objectId");
-  if (!/^[0-9a-fA-F]{40,64}$/.test(objectId)) throw new Error("objectId must be a 40-64 character hexadecimal hash");
-  return objectId;
+	const objectId = string(value, "objectId");
+	if (!/^[0-9a-fA-F]{40,64}$/.test(objectId)) throw new Error("objectId must be a 40-64 character hexadecimal hash");
+	return objectId;
 }

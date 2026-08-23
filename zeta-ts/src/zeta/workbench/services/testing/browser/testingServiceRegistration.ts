@@ -5,7 +5,7 @@ import { ITestingService } from "../common/testingService.js";
 import { TestingService } from "./testingService.js";
 
 registerWorkbenchServiceContribution({
-  service: ITestingService,
-  dependencies: [ITaskService, ILogService],
-  install: context => context.own(new TestingService(context.services.get(ITaskService), context.services.get(ILogService))),
+	service: ITestingService,
+	dependencies: [ITaskService, ILogService],
+	install: context => context.own(new TestingService(context.services.get(ITaskService), context.services.get(ILogService))),
 });

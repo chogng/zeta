@@ -8,55 +8,55 @@ const MAX_RESULTS = 100;
 
 /** App Server transport adapter for the frontend symbol-index contract. */
 export class AppServerSymbolIndexService implements ISymbolIndexService {
-  constructor(private readonly api: ISymbolIndexApi) {}
+	constructor(private readonly api: ISymbolIndexApi) {}
 
-  async status(signal: AbortSignal = new AbortController().signal): Promise<SymbolIndexStatus> {
-    return status(await raceCancellation(this.api.status(), signal, "Symbol-index status was cancelled"));
-  }
+	async status(signal: AbortSignal = new AbortController().signal): Promise<SymbolIndexStatus> {
+		return status(await raceCancellation(this.api.status(), signal, "Symbol-index status was cancelled"));
+	}
 
-  async search(query: string, maxResults: number, signal: AbortSignal = new AbortController().signal): Promise<SymbolIndexSearchResult> {
-    if (typeof query !== "string" || new TextEncoder().encode(query).byteLength > MAX_QUERY_BYTES) throw new RangeError("Symbol-index query exceeds its byte limit");
-    if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) throw new RangeError("Symbol-index result limit is invalid");
-    const response = await raceCancellation(this.api.search({ query, maxResults }), signal, "Symbol-index search was cancelled");
-    return Object.freeze({
-      status: status(response.status),
-      matches: Object.freeze(response.hits.map(match)),
-      discardedStaleMatchCount: response.discardedStaleHitCount,
-    });
-  }
+	async search(query: string, maxResults: number, signal: AbortSignal = new AbortController().signal): Promise<SymbolIndexSearchResult> {
+		if (typeof query !== "string" || new TextEncoder().encode(query).byteLength > MAX_QUERY_BYTES) throw new RangeError("Symbol-index query exceeds its byte limit");
+		if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) throw new RangeError("Symbol-index result limit is invalid");
+		const response = await raceCancellation(this.api.search({ query, maxResults }), signal, "Symbol-index search was cancelled");
+		return Object.freeze({
+			status: status(response.status),
+			matches: Object.freeze(response.hits.map(match)),
+			discardedStaleMatchCount: response.discardedStaleHitCount,
+		});
+	}
 }
 
 function status(value: SymbolIndexStatusDto): SymbolIndexStatus {
-  return Object.freeze({
-    state: value.state,
-    rootId: value.rootId,
-    generation: value.generation,
-    sourceGeneration: value.sourceGeneration,
-    indexedSourceCount: value.indexedSourceCount,
-    indexedSymbolCount: value.indexedSymbolCount,
-    symbolLimitHit: value.symbolLimitHit,
-  });
+	return Object.freeze({
+		state: value.state,
+		rootId: value.rootId,
+		generation: value.generation,
+		sourceGeneration: value.sourceGeneration,
+		indexedSourceCount: value.indexedSourceCount,
+		indexedSymbolCount: value.indexedSymbolCount,
+		symbolLimitHit: value.symbolLimitHit,
+	});
 }
 
 function match(value: SymbolIndexSearchHitDto): SymbolIndexMatch {
-  return Object.freeze({
-    name: value.name,
-    kind: value.kind,
-    ...(value.containerName === null ? {} : { containerName: value.containerName }),
-    path: value.path,
-    language: value.language,
-    sourceRevision: value.sourceRevision,
-    declarationRange: range(value.declarationRange),
-    selectionRange: range(value.selectionRange),
-    score: value.score,
-    matchedIndices: Object.freeze([...value.matchedIndices]),
-  });
+	return Object.freeze({
+		name: value.name,
+		kind: value.kind,
+		...(value.containerName === null ? {} : { containerName: value.containerName }),
+		path: value.path,
+		language: value.language,
+		sourceRevision: value.sourceRevision,
+		declarationRange: range(value.declarationRange),
+		selectionRange: range(value.selectionRange),
+		score: value.score,
+		matchedIndices: Object.freeze([...value.matchedIndices]),
+	});
 }
 
 function range(value: SymbolIndexSearchHitDto["selectionRange"]): SymbolIndexRange {
-  return Object.freeze({ start: position(value.start), end: position(value.end) });
+	return Object.freeze({ start: position(value.start), end: position(value.end) });
 }
 
 function position(value: SymbolIndexSearchHitDto["selectionRange"]["start"]): SymbolIndexPosition {
-  return Object.freeze({ lineIndex: value.lineIndex, columnIndex: value.columnIndex });
+	return Object.freeze({ lineIndex: value.lineIndex, columnIndex: value.columnIndex });
 }

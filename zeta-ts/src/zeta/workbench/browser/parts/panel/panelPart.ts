@@ -7,36 +7,36 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
-  readonly viewDescriptorService: IViewDescriptorService;
-  readonly localizationService?: ILocalizationService;
-  readonly contextMenuProvider?: IContextMenuProvider;
-  readonly titleActions?: PaneCompositeTitleActions;
+	readonly viewDescriptorService: IViewDescriptorService;
+	readonly localizationService?: ILocalizationService;
+	readonly contextMenuProvider?: IContextMenuProvider;
+	readonly titleActions?: PaneCompositeTitleActions;
 }
 
 /** Bottom tool region with Panel tabs and a contextual title toolbar. */
 export class PanelPart extends PaneCompositePart {
-  override get minimumHeight(): number { return 80; }
+	override get minimumHeight(): number { return 80; }
 
-  constructor(container: HTMLElement, options: PanelPartOptions) {
-    super(container, {
-      viewDescriptorService: options.viewDescriptorService,
-      localizationService: options.localizationService,
-      id: "panel",
-      location: ViewContainerLocation.Panel,
-      ariaLabel: "Panel",
-      ariaLabelKey: { bundle: "zeta.regions", key: "panel" },
-      viewsAriaLabel: "Panel views",
-      viewsAriaLabelKey: { bundle: "zeta.regions", key: "panelViews" },
-      compositeBarPresentation: "label",
-      compositeBarContextMenuProvider: options.contextMenuProvider,
-      titleActions: options.titleActions,
-    });
-    this.titleElement.classList.add("zeta-panel-title-control");
-    this.titleActionsSlotElement.classList.add("zeta-panel-title-actions");
-  }
+	constructor(container: HTMLElement, options: PanelPartOptions) {
+		super(container, {
+			viewDescriptorService: options.viewDescriptorService,
+			localizationService: options.localizationService,
+			id: "panel",
+			location: ViewContainerLocation.Panel,
+			ariaLabel: "Panel",
+			ariaLabelKey: { bundle: "zeta.regions", key: "panel" },
+			viewsAriaLabel: "Panel views",
+			viewsAriaLabelKey: { bundle: "zeta.regions", key: "panelViews" },
+			compositeBarPresentation: "label",
+			compositeBarContextMenuProvider: options.contextMenuProvider,
+			titleActions: options.titleActions,
+		});
+		this.titleElement.classList.add("zeta-panel-title-control");
+		this.titleActionsSlotElement.classList.add("zeta-panel-title-actions");
+	}
 
-  override showComposite(compositeId: string): void {
-    super.showComposite(compositeId);
-    this.setTitleProjection(this.getComposite(compositeId)?.partTitleProjection);
-  }
+	override showComposite(compositeId: string): void {
+		super.showComposite(compositeId);
+		this.setTitleProjection(this.getComposite(compositeId)?.partTitleProjection);
+	}
 }

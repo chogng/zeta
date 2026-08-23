@@ -4,18 +4,18 @@ import { LanguageProviderModuleWireClient, LanguageProviderModuleWireServer, typ
 import { type LanguageWorkerWirePort } from "../languageWorkerWire.js";
 
 const COMPLETION_MODULE_WIRE: LanguageProviderModuleWireDescriptor = Object.freeze({
-  protocol: "zeta.language.completion-provider-modules",
-  version: 1,
+	protocol: "zeta.language.completion-provider-modules",
+	version: 1,
 });
 
 export class LanguageCompletionProviderModuleWireClient extends LanguageProviderModuleWireClient {
-  constructor(port: LanguageWorkerWirePort, invalidateWorker: (error: Error) => void) {
-    super(port, COMPLETION_MODULE_WIRE, invalidateWorker);
-  }
+	constructor(port: LanguageWorkerWirePort, invalidateWorker: (error: Error) => void) {
+		super(port, COMPLETION_MODULE_WIRE, invalidateWorker);
+	}
 }
 
 export class LanguageCompletionProviderModuleWireServer extends LanguageProviderModuleWireServer<LanguageCompletionProvider> {
-  constructor(port: LanguageWorkerWirePort, modules: LanguageCompletionProviderModuleRegistry, host: LanguageCompletionProviderModuleHost) {
-    super(port, COMPLETION_MODULE_WIRE, modules, host);
-  }
+	constructor(port: LanguageWorkerWirePort, modules: LanguageCompletionProviderModuleRegistry, host: LanguageCompletionProviderModuleHost) {
+		super(port, COMPLETION_MODULE_WIRE, modules, host);
+	}
 }

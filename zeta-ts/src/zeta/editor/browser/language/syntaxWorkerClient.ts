@@ -4,11 +4,11 @@ import { BrowserLanguageWorkerPort } from "./browserLanguageWorkerPort.js";
 
 /** Creates one shared token/diagnostic module Worker for the syntax service. */
 export function createSyntaxWorkerFactory(): SyntaxWorkerFactory {
-  return () => new SyntaxModuleWorkerClient(
-    new BrowserLanguageWorkerPort(new Worker(
-      new URL("./syntaxWorkerMain.ts", import.meta.url),
-      { type: "module", name: "zeta-syntax" },
-    )),
-    { requiredProviderModules: ["language.lexical"] },
-  );
+	return () => new SyntaxModuleWorkerClient(
+		new BrowserLanguageWorkerPort(new Worker(
+			new URL("./syntaxWorkerMain.ts", import.meta.url),
+			{ type: "module", name: "zeta-syntax" },
+		)),
+		{ requiredProviderModules: ["language.lexical"] },
+	);
 }

@@ -7,9 +7,9 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 
 /** Product services required to construct a context menu for one browser window. */
 export interface WorkbenchContextMenuServiceOptions {
-  readonly menuService: IMenuService;
-  readonly keybindingService: IKeybindingService;
-  readonly contextViewService: IContextViewService;
+	readonly menuService: IMenuService;
+	readonly keybindingService: IKeybindingService;
+	readonly contextViewService: IContextViewService;
 }
 
 /** Creates the host-specific browser context menu service for one Workbench. */
@@ -17,23 +17,23 @@ export type WorkbenchContextMenuServiceFactory = (options: WorkbenchContextMenuS
 
 /** Owns the host-selected context-menu implementation for one Workbench window. */
 export class WorkbenchContextMenuService extends DisposableOwner implements IContextMenuService {
-  private readonly implementation: IContextMenuService;
+	private readonly implementation: IContextMenuService;
 
-  readonly onDidShowContextMenu: Event<void>;
-  readonly onDidHideContextMenu: Event<void>;
+	readonly onDidShowContextMenu: Event<void>;
+	readonly onDidHideContextMenu: Event<void>;
 
-  constructor(implementation: IContextMenuService & IDisposable) {
-    super();
-    this.implementation = this.own(implementation);
-    this.onDidShowContextMenu = implementation.onDidShowContextMenu;
-    this.onDidHideContextMenu = implementation.onDidHideContextMenu;
-  }
+	constructor(implementation: IContextMenuService & IDisposable) {
+		super();
+		this.implementation = this.own(implementation);
+		this.onDidShowContextMenu = implementation.onDidShowContextMenu;
+		this.onDidHideContextMenu = implementation.onDidHideContextMenu;
+	}
 
-  showContextMenu(options: ContextMenuOptions): void {
-    this.implementation.showContextMenu(options);
-  }
+	showContextMenu(options: ContextMenuOptions): void {
+		this.implementation.showContextMenu(options);
+	}
 
-  hideContextMenu(): void {
-    this.implementation.hideContextMenu();
-  }
+	hideContextMenu(): void {
+		this.implementation.hideContextMenu();
+	}
 }

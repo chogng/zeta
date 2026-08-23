@@ -1,36 +1,36 @@
 import type { Event } from "../../../base/common/event.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import {
-  createServiceIdentifier,
+	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
 /** Presentation shared by searchable Quick Pick providers. */
 export interface IQuickPickItem {
-  readonly label: string;
-  readonly description?: string;
-  readonly detail?: string;
-  readonly keybinding?: string;
+	readonly label: string;
+	readonly description?: string;
+	readonly detail?: string;
+	readonly keybinding?: string;
 }
 
 /** A short-lived searchable selection UI hosted by the current window. */
 export interface IQuickPick<TItem extends IQuickPickItem>
-  extends IDisposable {
-  readonly onDidAccept: Event<TItem>;
-  readonly onDidChangeValue: Event<string>;
-  readonly onDidHide: Event<void>;
+	extends IDisposable {
+	readonly onDidAccept: Event<TItem>;
+	readonly onDidChangeValue: Event<string>;
+	readonly onDidHide: Event<void>;
 
-  items: readonly TItem[];
-  placeholder: string;
-  value: string;
+	items: readonly TItem[];
+	placeholder: string;
+	value: string;
 
-  show(): void;
-  hide(): void;
+	show(): void;
+	hide(): void;
 }
 
 /** Creates Quick Input controllers hosted by one Workbench window. */
 export interface IQuickInputService {
-  createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
+	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem>;
 }
 
 export const IQuickInputService =
-  createServiceIdentifier<IQuickInputService>("quickInputService");
+	createServiceIdentifier<IQuickInputService>("quickInputService");

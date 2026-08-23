@@ -16,42 +16,42 @@ import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } fro
 
 /** Language-aware typing adapter selected by the bracket-matching contribution. */
 export class LanguageEditingAdapter extends DisposableOwner implements TextInputLanguageEditingAdapter {
-  private readonly autoClosingTracker: LanguageAutoClosingTracker;
-  private readonly lexicalContext: LanguageLexicalContextSource;
+	private readonly autoClosingTracker: LanguageAutoClosingTracker;
+	private readonly lexicalContext: LanguageLexicalContextSource;
 
-  constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined, private readonly indentation: EditorIndentationOptions | undefined) {
-    super();
-    assertLanguageId(languageId);
-    if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Aster text input language requires a configuration source");
-    resolveEditorIndentationOptions(indentation);
-    if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Aster text input lexical context must match its model and language");
-    this.lexicalContext = lexicalContext ?? this.own(new LanguageLexicalContextIndex(textModel, languageId, configurations));
-    this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
-  }
+	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined, private readonly indentation: EditorIndentationOptions | undefined) {
+		super();
+		assertLanguageId(languageId);
+		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Aster text input language requires a configuration source");
+		resolveEditorIndentationOptions(indentation);
+		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Aster text input lexical context must match its model and language");
+		this.lexicalContext = lexicalContext ?? this.own(new LanguageLexicalContextIndex(textModel, languageId, configurations));
+		this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
+	}
 
-  createTypeCommand(selections: TextSelectionSet, text: string): TextInputLanguageTypeCommand | undefined {
-    const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
-    if (!result) return undefined;
-    return Object.freeze({
-      command: result.command,
-      insertedText: result.didInsertText,
-      afterExecute: (change: TextModelChange) => {
-        if (result.autoClosingActions.length > 0) this.autoClosingTracker.record(result.autoClosingActions, change.version);
-      },
-    });
-  }
+	createTypeCommand(selections: TextSelectionSet, text: string): TextInputLanguageTypeCommand | undefined {
+		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
+		if (!result) return undefined;
+		return Object.freeze({
+			command: result.command,
+			insertedText: result.didInsertText,
+			afterExecute: (change: TextModelChange) => {
+				if (result.autoClosingActions.length > 0) this.autoClosingTracker.record(result.autoClosingActions, change.version);
+			},
+		});
+	}
 
-  createEnterCommand(selections: TextSelectionSet): EditorEditCommand {
-    return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.active), { indentation: this.indentation, lexicalContext: this.lexicalContext });
-  }
+	createEnterCommand(selections: TextSelectionSet): EditorEditCommand {
+		return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.active), { indentation: this.indentation, lexicalContext: this.lexicalContext });
+	}
 
-  createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined {
-    return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.active), this.autoClosingTracker);
-  }
+	createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined {
+		return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.active), this.autoClosingTracker);
+	}
 
-  private configurationAt(position: TextSelectionSet["primary"]["active"]) {
-    return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
-  }
+	private configurationAt(position: TextSelectionSet["primary"]["active"]) {
+		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
+	}
 }
 
 registerTextInputLanguageEditingFactory((model, selections, language: TextInputLanguageOptions, indentation: TextInputIndentationOptions | undefined) => new LanguageEditingAdapter(model, selections, language.languageId, language.configurations, language.lexicalContext, indentation as EditorIndentationOptions | undefined));

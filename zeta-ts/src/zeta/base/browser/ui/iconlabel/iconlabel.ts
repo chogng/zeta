@@ -5,50 +5,50 @@ import { h } from "../../dom.js";
 
 /** Construction inputs for a semantic icon and text label. */
 export interface IconLabelOptions {
-  readonly label: string;
-  readonly icon?: Icon;
-  readonly renderIcon?: (container: HTMLSpanElement) => void;
-  readonly reserveIconSpace?: boolean;
-  readonly title?: string;
+	readonly label: string;
+	readonly icon?: Icon;
+	readonly renderIcon?: (container: HTMLSpanElement) => void;
+	readonly reserveIconSpace?: boolean;
+	readonly title?: string;
 }
 
 /**
  * Reusable label whose icon and text keep a stable, themeable DOM shape.
  */
 export class IconLabel extends DisposableOwner {
-  readonly element: HTMLSpanElement;
-  readonly iconElement: HTMLSpanElement;
-  readonly labelElement: HTMLSpanElement;
+	readonly element: HTMLSpanElement;
+	readonly iconElement: HTMLSpanElement;
+	readonly labelElement: HTMLSpanElement;
 
-  constructor(container: HTMLElement, options: IconLabelOptions) {
-    super();
-    if (options.icon && options.renderIcon) {
-      throw new TypeError(
-        "IconLabel accepts either a semantic icon or an icon renderer",
-      );
-    }
-    const ownerDocument = container.ownerDocument;
-    const element = h(ownerDocument, "span");
-    this.element = element;
-    this.defer(() => element.remove());
-    element.className = "zeta-icon-label";
-    if (options.title) element.title = options.title;
-    this.iconElement = h(ownerDocument, "span");
-    this.iconElement.className = "zeta-icon-label-icon";
-    this.iconElement.setAttribute("aria-hidden", "true");
-    this.iconElement.classList.toggle(
-      "is-reserved",
-      options.reserveIconSpace === true,
-    );
-    if (options.icon) {
-      appendIcon(options.icon, this.iconElement);
-    } else {
-      options.renderIcon?.(this.iconElement);
-    }
-    this.labelElement = h(ownerDocument, "span");
-    this.labelElement.className = "zeta-icon-label-text";
-    this.labelElement.textContent = options.label;
-    element.append(this.iconElement, this.labelElement);
-    container.append(element);
-  }
+	constructor(container: HTMLElement, options: IconLabelOptions) {
+		super();
+		if (options.icon && options.renderIcon) {
+			throw new TypeError(
+				"IconLabel accepts either a semantic icon or an icon renderer",
+			);
+		}
+		const ownerDocument = container.ownerDocument;
+		const element = h(ownerDocument, "span");
+		this.element = element;
+		this.defer(() => element.remove());
+		element.className = "zeta-icon-label";
+		if (options.title) element.title = options.title;
+		this.iconElement = h(ownerDocument, "span");
+		this.iconElement.className = "zeta-icon-label-icon";
+		this.iconElement.setAttribute("aria-hidden", "true");
+		this.iconElement.classList.toggle(
+			"is-reserved",
+			options.reserveIconSpace === true,
+		);
+		if (options.icon) {
+			appendIcon(options.icon, this.iconElement);
+		} else {
+			options.renderIcon?.(this.iconElement);
+		}
+		this.labelElement = h(ownerDocument, "span");
+		this.labelElement.className = "zeta-icon-label-text";
+		this.labelElement.textContent = options.label;
+		element.append(this.iconElement, this.labelElement);
+		container.append(element);
+	}
 }

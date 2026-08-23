@@ -10,21 +10,21 @@ import "./media/tasks.css";
 
 /** Contributes the Code task catalog as its own Panel destination. */
 export function registerTasksView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Tasks,
-    title: "Tasks",
-    localizationKey: { bundle: "zeta.views", key: "tasks" },
-    location: ViewContainerLocation.Panel,
-    order: 2.5,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Tasks, [{
-    id: TASKS_VIEW_ID,
-    title: "Tasks",
-    localizationKey: { bundle: "zeta.views", key: "tasks" },
-    order: 2,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),
-  }]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Tasks,
+		title: "Tasks",
+		localizationKey: { bundle: "zeta.views", key: "tasks" },
+		location: ViewContainerLocation.Panel,
+		order: 2.5,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Tasks, [{
+		id: TASKS_VIEW_ID,
+		title: "Tasks",
+		localizationKey: { bundle: "zeta.views", key: "tasks" },
+		order: 2,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(TasksViewPane, { serviceDependencies: [ITaskService, IViewsService, ITerminalService] }),
+	}]);
 }
 
 registerTasksView();

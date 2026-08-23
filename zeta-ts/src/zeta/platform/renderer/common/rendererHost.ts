@@ -26,53 +26,53 @@ import type { IWorkspaceTrustApi } from "../../workspaceTrust/common/workspaceTr
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
-  readonly debugAdapter?: IDebugAdapterProcessService;
+	readonly debugAdapter?: IDebugAdapterProcessService;
 }
 
 /** Merges product capabilities while rejecting two contributions that claim the same slot. */
 export function mergeRendererHostCapabilities(capabilities: readonly RendererHostCapabilities[]): RendererHostCapabilities {
-  const merged: Record<string, unknown> = {};
-  for (const capability of capabilities) {
-    for (const [name, value] of Object.entries(capability)) {
-      if (value === undefined) continue;
-      if (Object.hasOwn(merged, name)) throw new Error(`Renderer host capability '${name}' was contributed more than once`);
-      merged[name] = value;
-    }
-  }
-  return merged;
+	const merged: Record<string, unknown> = {};
+	for (const capability of capabilities) {
+		for (const [name, value] of Object.entries(capability)) {
+			if (value === undefined) continue;
+			if (Object.hasOwn(merged, name)) throw new Error(`Renderer host capability '${name}' was contributed more than once`);
+			merged[name] = value;
+		}
+	}
+	return merged;
 }
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
-  readonly appServer: IAppServerApi;
-  readonly remote?: IRemoteAgentApi;
-  /** Optional because web hosts cannot restart into a host-owned SSH connection. */
-  readonly remoteConnections?: IRemoteConnectionService;
-  /** Optional because web and disconnected hosts cannot own an SSH process. */
-  readonly remoteTunnels?: IRemoteTunnelService;
-  readonly session: ISessionApi;
-  readonly model: IModelApi;
-  readonly thread: IThreadApi;
-  readonly turn: ITurnApi;
-  readonly skills: ISkillApi;
-  readonly typst: ITypstApi;
-  readonly documentCollaboration: IDocumentCollaborationApi;
-  readonly resource: IResourceApi;
-  readonly extensions: IExtensionApi;
-  readonly extensionHost: IExtensionHostApi;
-  readonly fs: IFileApi;
-  readonly diff: IDiffApi;
-  readonly syntax: ISyntaxApi;
-  readonly language: ILanguageApi;
-  readonly git: IGitApi;
-  readonly workspaceSearch: IWorkspaceSearchApi;
-  readonly terminal: ITerminalProcessService;
-  readonly events: IServerEventApi;
-  readonly codeIndex: ICodeIndexApi;
-  readonly symbolIndex: ISymbolIndexApi;
-  readonly connectors: IConnectorApi;
-  readonly plugins: IPluginApi;
-  readonly marketplace: IMarketplaceApi;
-  readonly toolSearch: IToolSearchApi;
-  readonly workspaceTrust: IWorkspaceTrustApi;
+	readonly appServer: IAppServerApi;
+	readonly remote?: IRemoteAgentApi;
+	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
+	readonly remoteConnections?: IRemoteConnectionService;
+	/** Optional because web and disconnected hosts cannot own an SSH process. */
+	readonly remoteTunnels?: IRemoteTunnelService;
+	readonly session: ISessionApi;
+	readonly model: IModelApi;
+	readonly thread: IThreadApi;
+	readonly turn: ITurnApi;
+	readonly skills: ISkillApi;
+	readonly typst: ITypstApi;
+	readonly documentCollaboration: IDocumentCollaborationApi;
+	readonly resource: IResourceApi;
+	readonly extensions: IExtensionApi;
+	readonly extensionHost: IExtensionHostApi;
+	readonly fs: IFileApi;
+	readonly diff: IDiffApi;
+	readonly syntax: ISyntaxApi;
+	readonly language: ILanguageApi;
+	readonly git: IGitApi;
+	readonly workspaceSearch: IWorkspaceSearchApi;
+	readonly terminal: ITerminalProcessService;
+	readonly events: IServerEventApi;
+	readonly codeIndex: ICodeIndexApi;
+	readonly symbolIndex: ISymbolIndexApi;
+	readonly connectors: IConnectorApi;
+	readonly plugins: IPluginApi;
+	readonly marketplace: IMarketplaceApi;
+	readonly toolSearch: IToolSearchApi;
+	readonly workspaceTrust: IWorkspaceTrustApi;
 }

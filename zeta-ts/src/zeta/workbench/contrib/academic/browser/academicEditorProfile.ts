@@ -9,19 +9,19 @@ import { DOCUMENT_EDITOR_ID } from "../../documentEditor/browser/documentEditorI
 
 /** Academic profile; shared document editing semantics remain in editor browser/common. */
 export const academicProfile: EditorProfile = Object.freeze({
-  id: "academic",
-  editorId: DOCUMENT_EDITOR_ID,
-  editorName: "Structured Editor",
-  collaborationSchemaId: "aster-academic-v1",
-  input: Object.freeze({
-    contentTypes: [ACADEMIC_DOCUMENT_CONTENT_TYPE],
-    extensions: [".zeta-academic", ".zeta-paper"],
-  }),
-  createSchema: createAcademicDocumentSchema,
-  createEmptyDocument: createEmptyAcademicDocument,
-  outlineNavigator: true,
-  inlineNodeViews: citationInlineNodeViews,
-  toolbarActions: citationToolbarActions,
-  nodeViews: { ...profileNodeViews, ...citationNodeViews },
-  createPlugins: () => [createReferenceIndexPlugin()],
+	id: "academic",
+	editorId: DOCUMENT_EDITOR_ID,
+	editorName: "Structured Editor",
+	collaborationSchemaId: "aster-academic-v1",
+	input: Object.freeze({
+		contentTypes: [ACADEMIC_DOCUMENT_CONTENT_TYPE],
+		extensions: [".zeta-academic", ".zeta-paper"],
+	}),
+	createSchema: createAcademicDocumentSchema,
+	createEmptyDocument: createEmptyAcademicDocument,
+	outlineNavigator: true,
+	inlineNodeViews: citationInlineNodeViews,
+	toolbarActions: citationToolbarActions,
+	nodeViews: { ...profileNodeViews, ...citationNodeViews },
+	createPlugins: () => [createReferenceIndexPlugin()],
 });

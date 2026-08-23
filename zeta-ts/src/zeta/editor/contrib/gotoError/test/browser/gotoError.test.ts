@@ -17,28 +17,28 @@ const { EditorViewport } = await import("../../../../browser/view/editorViewport
 const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
-  const dom = new JSDOM("<!doctype html><body><main></main></body>");
-  const container = dom.window.document.querySelector<HTMLElement>("main")!;
-  using model = new TextModel("one\ntwo\nthree");
-  using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-  using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
-  diagnostics.add({ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("first") });
-  diagnostics.add({ range: TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("last") });
-  using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-  const input = h(dom.window.document, "textarea");
-  container.append(input);
-  using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);
-  const next = key(dom.window, false); input.dispatchEvent(next);
-  assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
-  assert.equal(viewport.element.querySelector(".aster-editor-accessibility-status")?.textContent, "warning: first");
-  input.dispatchEvent(key(dom.window, false));
-  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)));
-  const previous = key(dom.window, true);
-  assert.equal(previous.shiftKey, true);
-  input.dispatchEvent(previous);
-  assert.equal(previous.defaultPrevented, true);
-  assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
-  dom.window.close();
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = dom.window.document.querySelector<HTMLElement>("main")!;
+	using model = new TextModel("one\ntwo\nthree");
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
+	diagnostics.add({ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("first") });
+	diagnostics.add({ range: TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("last") });
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	const input = h(dom.window.document, "textarea");
+	container.append(input);
+	using controller = new DiagnosticNavigationController(input, viewport, selections, diagnostics);
+	const next = key(dom.window, false); input.dispatchEvent(next);
+	assert.equal(next.defaultPrevented, true); assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
+	assert.equal(viewport.element.querySelector(".aster-editor-accessibility-status")?.textContent, "warning: first");
+	input.dispatchEvent(key(dom.window, false));
+	assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)));
+	const previous = key(dom.window, true);
+	assert.equal(previous.shiftKey, true);
+	input.dispatchEvent(previous);
+	assert.equal(previous.defaultPrevented, true);
+	assert.deepEqual(selections.selections.primary.range, TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)));
+	dom.window.close();
 });
 
 function diagnostic(message: string): LanguageDiagnostic { return { range: TextRange.emptyAt(TextPosition.at(0, 0)), severity: LanguageDiagnosticSeverity.Warning, message }; }

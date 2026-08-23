@@ -10,20 +10,20 @@ import { createLanguageWordCompletionProvider } from "../../common/languages/com
 import { LanguageWorkerWireServer } from "../../common/languages/languageWorkerWire.js";
 
 start(({ port, resources }) => {
-  const registry = resources.add(new LanguageCompletionProviderRegistry());
-  const modules = resources.add(new LanguageCompletionProviderModuleRegistry());
-  resources.add(modules.register({
-    id: "language.word",
-    load: () => [createLanguageWordCompletionProvider()],
-  }));
-  const moduleHost = resources.add(new LanguageCompletionProviderModuleHost(modules, registry));
-  const providerWorker = new LanguageCompletionProviderWorker(registry);
-  resources.add(new LanguageWorkerWireServer(
-    port,
-    languageCompletionWireCodec,
-    providerWorker,
-  ));
-  resources.add(new LanguageCompletionCatalogWirePublisher(port, registry));
-  resources.add(new LanguageCompletionProviderModuleWireServer(port, modules, moduleHost));
-  resources.add(new LanguageCompletionResolveWireServer(port, providerWorker));
+	const registry = resources.add(new LanguageCompletionProviderRegistry());
+	const modules = resources.add(new LanguageCompletionProviderModuleRegistry());
+	resources.add(modules.register({
+		id: "language.word",
+		load: () => [createLanguageWordCompletionProvider()],
+	}));
+	const moduleHost = resources.add(new LanguageCompletionProviderModuleHost(modules, registry));
+	const providerWorker = new LanguageCompletionProviderWorker(registry);
+	resources.add(new LanguageWorkerWireServer(
+		port,
+		languageCompletionWireCodec,
+		providerWorker,
+	));
+	resources.add(new LanguageCompletionCatalogWirePublisher(port, registry));
+	resources.add(new LanguageCompletionProviderModuleWireServer(port, modules, moduleHost));
+	resources.add(new LanguageCompletionResolveWireServer(port, providerWorker));
 });

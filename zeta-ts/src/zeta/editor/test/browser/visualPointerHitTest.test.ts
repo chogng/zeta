@@ -7,39 +7,39 @@ import { hitTestAsterVisualEditorPoint, EditorHitTargetKind } from "../../common
 import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 
 test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions", () => {
-  using model = new TextModel("abcdef\ngh");
-  const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
-  const layout = {
-    lineHeight: 20,
-    viewportSize: { width: 200, height: 80 },
-    scrollPosition: { left: 0, top: 0 },
-  };
-  const metrics = { gutterWidth: 30, textLeft: 40 };
-  const measurer = new FixedTextMeasurer();
+	using model = new TextModel("abcdef\ngh");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
+	const layout = {
+		lineHeight: 20,
+		viewportSize: { width: 200, height: 80 },
+		scrollPosition: { left: 0, top: 0 },
+	};
+	const metrics = { gutterWidth: 30, textLeft: 40 };
+	const measurer = new FixedTextMeasurer();
 
-  assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 52, top: 25 }, metrics, measurer), {
-    kind: EditorHitTargetKind.Text,
-    position: TextPosition.at(0, 3),
-  });
-  assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 100, top: 45 }, metrics, measurer), {
-    kind: EditorHitTargetKind.EmptyContent,
-    position: TextPosition.at(0, 6),
-  });
-  assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 10, top: 65 }, metrics, measurer), {
-    kind: EditorHitTargetKind.Gutter,
-    position: TextPosition.at(1, 0),
-  });
+	assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 52, top: 25 }, metrics, measurer), {
+		kind: EditorHitTargetKind.Text,
+		position: TextPosition.at(0, 3),
+	});
+	assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 100, top: 45 }, metrics, measurer), {
+		kind: EditorHitTargetKind.EmptyContent,
+		position: TextPosition.at(0, 6),
+	});
+	assert.deepEqual(hitTestAsterVisualEditorPoint(model, projection, layout, { left: 10, top: 65 }, metrics, measurer), {
+		kind: EditorHitTargetKind.Gutter,
+		position: TextPosition.at(1, 0),
+	});
 });
 
 class FixedTextMeasurer implements TextMeasurer {
-  readonly horizontalPadding = 0;
-  readonly contentLeftPadding = 0;
+	readonly horizontalPadding = 0;
+	readonly contentLeftPadding = 0;
 
-  refresh(): boolean {
-    return false;
-  }
+	refresh(): boolean {
+		return false;
+	}
 
-  measureLineWidth(text: string): number {
-    return text.length * 10;
-  }
+	measureLineWidth(text: string): number {
+		return text.length * 10;
+	}
 }

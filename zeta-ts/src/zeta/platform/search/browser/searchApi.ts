@@ -4,17 +4,17 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { IWorkspaceSearchApi } from "../common/searchApi.js";
 
 export function createDisconnectedWorkspaceSearchApi(unavailable: UnavailableOperation): IWorkspaceSearchApi {
-  return {
-    start: () => unavailable("workspaceSearch.start"),
-    read: () => unavailable("workspaceSearch.read"),
-    cancel: () => unavailable("workspaceSearch.cancel"),
-  };
+	return {
+		start: () => unavailable("workspaceSearch.start"),
+		read: () => unavailable("workspaceSearch.read"),
+		cancel: () => unavailable("workspaceSearch.cancel"),
+	};
 }
 
 export function createViteDevWorkspaceSearchApi(connection: ViteDevAppServerConnection): IWorkspaceSearchApi {
-  return {
-    start: (params) => viteDevRequest(connection, "workspace/search/start", params),
-    read: (params) => viteDevRequest(connection, "workspace/search/read", params),
-    cancel: (params) => voidResult(viteDevRequest(connection, "workspace/search/cancel", params)),
-  };
+	return {
+		start: (params) => viteDevRequest(connection, "workspace/search/start", params),
+		read: (params) => viteDevRequest(connection, "workspace/search/read", params),
+		cancel: (params) => voidResult(viteDevRequest(connection, "workspace/search/cancel", params)),
+	};
 }

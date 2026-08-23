@@ -4,146 +4,146 @@ import { ColorScheme } from "./theme.js";
 export type ColorIdentifier = string;
 
 export interface ColorDefaults {
-  readonly dark: ColorValue;
-  readonly light: ColorValue;
-  readonly highContrastDark?: ColorValue;
-  readonly highContrastLight?: ColorValue;
+	readonly dark: ColorValue;
+	readonly light: ColorValue;
+	readonly highContrastDark?: ColorValue;
+	readonly highContrastLight?: ColorValue;
 }
 
 export type ColorTransform =
-  | { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number }
-  | { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number }
-  | { readonly op: "darken"; readonly value: ColorValue; readonly factor: number }
-  | { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number }
-  | { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue };
+	| { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: "darken"; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number }
+	| { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue };
 
 export type ColorValue = Color | string | ColorTransform | null;
 
 export interface ColorRegistrationMetadata {
-  readonly description: string;
-  readonly owner: string;
-  readonly needsTransparency?: boolean;
-  readonly deprecated?: string;
+	readonly description: string;
+	readonly owner: string;
+	readonly needsTransparency?: boolean;
+	readonly deprecated?: string;
 }
 
 export interface ColorContribution extends ColorRegistrationMetadata {
-  readonly id: ColorIdentifier;
-  readonly defaults: ColorDefaults;
+	readonly id: ColorIdentifier;
+	readonly defaults: ColorDefaults;
 }
 
 export interface ResolvedColorContribution extends ColorContribution {
-  readonly value: Color | null;
+	readonly value: Color | null;
 }
 
 export function transparent(value: ColorValue, factor: number): ColorTransform {
-  return { op: "transparent", value, factor };
+	return { op: "transparent", value, factor };
 }
 
 export function lighten(value: ColorValue, factor: number): ColorTransform {
-  return { op: "lighten", value, factor };
+	return { op: "lighten", value, factor };
 }
 
 export function darken(value: ColorValue, factor: number): ColorTransform {
-  return { op: "darken", value, factor };
+	return { op: "darken", value, factor };
 }
 
 export function mix(value: ColorValue, other: ColorValue, factor: number): ColorTransform {
-  return { op: "mix", value, other, factor };
+	return { op: "mix", value, other, factor };
 }
 
 export function opaque(value: ColorValue, background: ColorValue): ColorTransform {
-  return { op: "opaque", value, background };
+	return { op: "opaque", value, background };
 }
 
 export class ColorRegistry {
-  private readonly colors = new Map<ColorIdentifier, ColorContribution>();
-  private sealed = false;
+	private readonly colors = new Map<ColorIdentifier, ColorContribution>();
+	private sealed = false;
 
-  registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
-    if (this.sealed) throw new Error(`Color registry is sealed; cannot register: ${id}`);
-    validateTokenId(id, "color");
-    if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
-    const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
-    this.colors.set(id, contribution);
-    return id;
-  }
+	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
+		if (this.sealed) throw new Error(`Color registry is sealed; cannot register: ${id}`);
+		validateTokenId(id, "color");
+		if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
+		const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
+		this.colors.set(id, contribution);
+		return id;
+	}
 
-  getColors(): readonly ColorContribution[] {
-    return Object.freeze([...this.colors.values()]);
-  }
+	getColors(): readonly ColorContribution[] {
+		return Object.freeze([...this.colors.values()]);
+	}
 
-  seal(): void {
-    this.sealed = true;
-  }
+	seal(): void {
+		this.sealed = true;
+	}
 
-  resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {
-    const cache = new Map<string, Color | null>();
-    const resolving: string[] = [];
-    const resolveIdentifier = (id: string): Color | null => {
-      if (cache.has(id)) return cache.get(id) ?? null;
-      const cycleStart = resolving.indexOf(id);
-      if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(" -> ")}`);
-      const contribution = this.colors.get(id);
-      if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
-      resolving.push(id);
-      const source = Object.hasOwn(overrides, id) ? overrides[id] : defaultsForScheme(contribution.defaults, scheme);
-      const value = resolveColorValue(source, resolveIdentifier);
-      resolving.pop();
-      if (contribution.needsTransparency && value?.alpha === 1) {
-        throw new Error(`Color token '${id}' must be transparent`);
-      }
-      cache.set(id, value);
-      return value;
-    };
-    for (const id of Object.keys(overrides)) {
-      if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
-    }
-    return Object.freeze(this.getColors().map((contribution) => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
-  }
+	resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {
+		const cache = new Map<string, Color | null>();
+		const resolving: string[] = [];
+		const resolveIdentifier = (id: string): Color | null => {
+			if (cache.has(id)) return cache.get(id) ?? null;
+			const cycleStart = resolving.indexOf(id);
+			if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(" -> ")}`);
+			const contribution = this.colors.get(id);
+			if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
+			resolving.push(id);
+			const source = Object.hasOwn(overrides, id) ? overrides[id] : defaultsForScheme(contribution.defaults, scheme);
+			const value = resolveColorValue(source, resolveIdentifier);
+			resolving.pop();
+			if (contribution.needsTransparency && value?.alpha === 1) {
+				throw new Error(`Color token '${id}' must be transparent`);
+			}
+			cache.set(id, value);
+			return value;
+		};
+		for (const id of Object.keys(overrides)) {
+			if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
+		}
+		return Object.freeze(this.getColors().map((contribution) => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
+	}
 }
 
 function defaultsForScheme(defaults: ColorDefaults, scheme: ColorScheme): ColorValue {
-  switch (scheme) {
-    case ColorScheme.Dark: return defaults.dark;
-    case ColorScheme.Light: return defaults.light;
-    case ColorScheme.HighContrastDark: return defaults.highContrastDark ?? defaults.dark;
-    case ColorScheme.HighContrastLight: return defaults.highContrastLight ?? defaults.light;
-  }
+	switch (scheme) {
+		case ColorScheme.Dark: return defaults.dark;
+		case ColorScheme.Light: return defaults.light;
+		case ColorScheme.HighContrastDark: return defaults.highContrastDark ?? defaults.dark;
+		case ColorScheme.HighContrastLight: return defaults.highContrastLight ?? defaults.light;
+	}
 }
 
 function resolveColorValue(value: ColorValue, resolveIdentifier: (id: string) => Color | null): Color | null {
-  if (value === null) return null;
-  if (value instanceof Color) return value;
-  if (typeof value === "string") return value.startsWith("#") ? Color.fromHex(value) : resolveIdentifier(value);
-  const source = resolveColorValue(value.value, resolveIdentifier);
-  if (!source) return null;
-  switch (value.op) {
-    case "transparent": return source.transparent(value.factor);
-    case "lighten": return source.lighten(value.factor);
-    case "darken": return source.darken(value.factor);
-    case "mix": {
-      const other = resolveColorValue(value.other, resolveIdentifier);
-      return other ? source.mix(other, value.factor) : null;
-    }
-    case "opaque": {
-      const background = resolveColorValue(value.background, resolveIdentifier);
-      return background ? source.makeOpaque(background) : null;
-    }
-  }
+	if (value === null) return null;
+	if (value instanceof Color) return value;
+	if (typeof value === "string") return value.startsWith("#") ? Color.fromHex(value) : resolveIdentifier(value);
+	const source = resolveColorValue(value.value, resolveIdentifier);
+	if (!source) return null;
+	switch (value.op) {
+		case "transparent": return source.transparent(value.factor);
+		case "lighten": return source.lighten(value.factor);
+		case "darken": return source.darken(value.factor);
+		case "mix": {
+			const other = resolveColorValue(value.other, resolveIdentifier);
+			return other ? source.mix(other, value.factor) : null;
+		}
+		case "opaque": {
+			const background = resolveColorValue(value.background, resolveIdentifier);
+			return background ? source.makeOpaque(background) : null;
+		}
+	}
 }
 
 export function validateTokenId(id: string, kind: string): void {
-  if (!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/.test(id)) {
-    throw new TypeError(`Invalid ${kind} token ID '${id}'`);
-  }
+	if (!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/.test(id)) {
+		throw new TypeError(`Invalid ${kind} token ID '${id}'`);
+	}
 }
 
 export const Colors = new ColorRegistry();
 
 export function registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
-  return Colors.registerColor(id, defaults, metadata);
+	return Colors.registerColor(id, defaults, metadata);
 }
 
 export function colorCssVariable(id: ColorIdentifier): string {
-  return `--zeta-${id.replaceAll(".", "-").replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)}`;
+	return `--zeta-${id.replaceAll(".", "-").replace(/[A-Z]/g, (character) => `-${character.toLowerCase()}`)}`;
 }

@@ -11,52 +11,52 @@ import { matchDocumentEditor, type EditorInputMatcher } from "./documentEditorIn
 
 /** Product-neutral schema and browser composition for one document kind. */
 export interface EditorProfile {
-  readonly id: string;
-  readonly editorId: string;
-  readonly editorName: string;
-  readonly input: EditorInputMatcher;
-  readonly createSchema: () => DocumentSchema;
-  readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
-  readonly outline?: DocumentOutlineOptions;
-  readonly outlineNavigator?: boolean;
-  readonly nodeViews?: EditorWidgetOptions["nodeViews"];
-  readonly inlineNodeViews?: EditorWidgetOptions["inlineNodeViews"];
-  readonly toolbarActions?: EditorWidgetOptions["toolbarActions"];
-  readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
-  /** Stable compatibility ID for documents that join the same collaboration room. */
-  readonly collaborationSchemaId?: string;
+	readonly id: string;
+	readonly editorId: string;
+	readonly editorName: string;
+	readonly input: EditorInputMatcher;
+	readonly createSchema: () => DocumentSchema;
+	readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
+	readonly outline?: DocumentOutlineOptions;
+	readonly outlineNavigator?: boolean;
+	readonly nodeViews?: EditorWidgetOptions["nodeViews"];
+	readonly inlineNodeViews?: EditorWidgetOptions["inlineNodeViews"];
+	readonly toolbarActions?: EditorWidgetOptions["toolbarActions"];
+	readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
+	/** Stable compatibility ID for documents that join the same collaboration room. */
+	readonly collaborationSchemaId?: string;
 }
 
 export interface EditorRuntimeOptions {
-  readonly onSave?: EditorWidgetOptions["onSave"];
-  readonly embeddedTextEditorFactory?: EditorWidgetOptions["embeddedTextEditorFactory"];
-  readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
-  readonly documentCollaborationService?: IDocumentCollaborationService;
+	readonly onSave?: EditorWidgetOptions["onSave"];
+	readonly embeddedTextEditorFactory?: EditorWidgetOptions["embeddedTextEditorFactory"];
+	readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
+	readonly documentCollaborationService?: IDocumentCollaborationService;
 }
 
 /** Selects the first profile that claims one Workbench input. */
 export function findEditorProfile(input: EditorInput, profiles: readonly EditorProfile[]): EditorProfile | undefined {
-  return profiles.find(profile => matchDocumentEditor(input, profile.input) !== EditorPaneMatch.None);
+	return profiles.find(profile => matchDocumentEditor(input, profile.input) !== EditorPaneMatch.None);
 }
 
 /** Produces the editor-pane match used by a profile registry contribution. */
 export function matchEditorProfiles(input: EditorInput, profiles: readonly EditorProfile[]): EditorPaneMatch {
-  return findEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
+	return findEditorProfile(input, profiles) ? EditorPaneMatch.Default : EditorPaneMatch.None;
 }
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
 export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
-  const schema = profile.createSchema();
-  return {
-    ...runtime,
-    schema,
-    ...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
-    ...(profile.outline === undefined ? {} : { outline: profile.outline }),
-    ...(profile.outlineNavigator === undefined ? {} : { outlineNavigator: profile.outlineNavigator }),
-    ...(profile.nodeViews === undefined ? {} : { nodeViews: profile.nodeViews }),
-    ...(profile.inlineNodeViews === undefined ? {} : { inlineNodeViews: profile.inlineNodeViews }),
-    ...(profile.toolbarActions === undefined ? {} : { toolbarActions: profile.toolbarActions }),
-    ...(profile.createPlugins === undefined ? {} : { plugins: profile.createPlugins() }),
-    ...(profile.collaborationSchemaId === undefined ? {} : { collaborationSchemaId: profile.collaborationSchemaId }),
-  };
+	const schema = profile.createSchema();
+	return {
+		...runtime,
+		schema,
+		...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
+		...(profile.outline === undefined ? {} : { outline: profile.outline }),
+		...(profile.outlineNavigator === undefined ? {} : { outlineNavigator: profile.outlineNavigator }),
+		...(profile.nodeViews === undefined ? {} : { nodeViews: profile.nodeViews }),
+		...(profile.inlineNodeViews === undefined ? {} : { inlineNodeViews: profile.inlineNodeViews }),
+		...(profile.toolbarActions === undefined ? {} : { toolbarActions: profile.toolbarActions }),
+		...(profile.createPlugins === undefined ? {} : { plugins: profile.createPlugins() }),
+		...(profile.collaborationSchemaId === undefined ? {} : { collaborationSchemaId: profile.collaborationSchemaId }),
+	};
 }

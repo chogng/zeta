@@ -4,12 +4,12 @@ import { URI } from "./uri.js";
 export type ResourceMapKeyFn = (resource: URI) => string;
 
 interface ResourceMapEntry<T> {
-  readonly resource: URI;
-  readonly value: T;
+	readonly resource: URI;
+	readonly value: T;
 }
 
 function defaultResourceKey(resource: URI): string {
-  return resource.toString();
+	return resource.toString();
 }
 
 /**
@@ -20,125 +20,125 @@ function defaultResourceKey(resource: URI): string {
  * required.
  */
 export class ResourceMap<T> implements Map<URI, T> {
-  private readonly _entries = new Map<string, ResourceMapEntry<T>>();
-  private readonly toKey: ResourceMapKeyFn;
+	private readonly _entries = new Map<string, ResourceMapEntry<T>>();
+	private readonly toKey: ResourceMapKeyFn;
 
-  readonly [Symbol.toStringTag] = "ResourceMap";
+	readonly [Symbol.toStringTag] = "ResourceMap";
 
-  constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
-    this.toKey = toKey;
-  }
+	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
+		this.toKey = toKey;
+	}
 
-  get size(): number {
-    return this._entries.size;
-  }
+	get size(): number {
+		return this._entries.size;
+	}
 
-  has(resource: URI): boolean {
-    return this._entries.has(this.toKey(resource));
-  }
+	has(resource: URI): boolean {
+		return this._entries.has(this.toKey(resource));
+	}
 
-  get(resource: URI): T | undefined {
-    return this._entries.get(this.toKey(resource))?.value;
-  }
+	get(resource: URI): T | undefined {
+		return this._entries.get(this.toKey(resource))?.value;
+	}
 
-  set(resource: URI, value: T): this {
-    this._entries.set(this.toKey(resource), { resource, value });
-    return this;
-  }
+	set(resource: URI, value: T): this {
+		this._entries.set(this.toKey(resource), { resource, value });
+		return this;
+	}
 
-  delete(resource: URI): boolean {
-    return this._entries.delete(this.toKey(resource));
-  }
+	delete(resource: URI): boolean {
+		return this._entries.delete(this.toKey(resource));
+	}
 
-  clear(): void {
-    this._entries.clear();
-  }
+	clear(): void {
+		this._entries.clear();
+	}
 
-  forEach(
-    callback: (value: T, key: URI, map: Map<URI, T>) => void,
-    thisArg?: unknown,
-  ): void {
-    for (const entry of this._entries.values()) {
-      callback.call(thisArg, entry.value, entry.resource, this);
-    }
-  }
+	forEach(
+		callback: (value: T, key: URI, map: Map<URI, T>) => void,
+		thisArg?: unknown,
+	): void {
+		for (const entry of this._entries.values()) {
+			callback.call(thisArg, entry.value, entry.resource, this);
+		}
+	}
 
-  *keys(): MapIterator<URI> {
-    for (const entry of this._entries.values()) {
-      yield entry.resource;
-    }
-  }
+	*keys(): MapIterator<URI> {
+		for (const entry of this._entries.values()) {
+			yield entry.resource;
+		}
+	}
 
-  *values(): MapIterator<T> {
-    for (const entry of this._entries.values()) {
-      yield entry.value;
-    }
-  }
+	*values(): MapIterator<T> {
+		for (const entry of this._entries.values()) {
+			yield entry.value;
+		}
+	}
 
-  *entries(): MapIterator<[URI, T]> {
-    for (const entry of this._entries.values()) {
-      yield [entry.resource, entry.value];
-    }
-  }
+	*entries(): MapIterator<[URI, T]> {
+		for (const entry of this._entries.values()) {
+			yield [entry.resource, entry.value];
+		}
+	}
 
-  [Symbol.iterator](): MapIterator<[URI, T]> {
-    return this.entries();
-  }
+	[Symbol.iterator](): MapIterator<[URI, T]> {
+		return this.entries();
+	}
 }
 
 /** A set using the same URI key semantics as `ResourceMap`. */
 export class ResourceSet implements Set<URI> {
-  private readonly resources: ResourceMap<URI>;
+	private readonly resources: ResourceMap<URI>;
 
-  readonly [Symbol.toStringTag] = "ResourceSet";
+	readonly [Symbol.toStringTag] = "ResourceSet";
 
-  constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
-    this.resources = new ResourceMap(toKey);
-  }
+	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
+		this.resources = new ResourceMap(toKey);
+	}
 
-  get size(): number {
-    return this.resources.size;
-  }
+	get size(): number {
+		return this.resources.size;
+	}
 
-  has(resource: URI): boolean {
-    return this.resources.has(resource);
-  }
+	has(resource: URI): boolean {
+		return this.resources.has(resource);
+	}
 
-  add(resource: URI): this {
-    this.resources.set(resource, resource);
-    return this;
-  }
+	add(resource: URI): this {
+		this.resources.set(resource, resource);
+		return this;
+	}
 
-  delete(resource: URI): boolean {
-    return this.resources.delete(resource);
-  }
+	delete(resource: URI): boolean {
+		return this.resources.delete(resource);
+	}
 
-  clear(): void {
-    this.resources.clear();
-  }
+	clear(): void {
+		this.resources.clear();
+	}
 
-  forEach(
-    callback: (value: URI, value2: URI, set: Set<URI>) => void,
-    thisArg?: unknown,
-  ): void {
-    this.resources.forEach((_value, resource) => {
-      callback.call(thisArg, resource, resource, this);
-    });
-  }
+	forEach(
+		callback: (value: URI, value2: URI, set: Set<URI>) => void,
+		thisArg?: unknown,
+	): void {
+		this.resources.forEach((_value, resource) => {
+			callback.call(thisArg, resource, resource, this);
+		});
+	}
 
-  entries(): SetIterator<[URI, URI]> {
-    return this.resources.entries();
-  }
+	entries(): SetIterator<[URI, URI]> {
+		return this.resources.entries();
+	}
 
-  keys(): SetIterator<URI> {
-    return this.resources.keys();
-  }
+	keys(): SetIterator<URI> {
+		return this.resources.keys();
+	}
 
-  values(): SetIterator<URI> {
-    return this.resources.keys();
-  }
+	values(): SetIterator<URI> {
+		return this.resources.keys();
+	}
 
-  [Symbol.iterator](): SetIterator<URI> {
-    return this.values();
-  }
+	[Symbol.iterator](): SetIterator<URI> {
+		return this.values();
+	}
 }

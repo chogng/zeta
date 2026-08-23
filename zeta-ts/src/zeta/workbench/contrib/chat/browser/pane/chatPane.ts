@@ -14,130 +14,130 @@ import { h } from "../../../../../base/browser/dom.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends DisposableOwner {
-  readonly element: HTMLElement;
-  private readonly model: ChatPaneModel;
-  private readonly listWidget: ChatListWidget;
-  private readonly inputPart: ChatInputPart;
-  private submittedMessage = false;
+	readonly element: HTMLElement;
+	private readonly model: ChatPaneModel;
+	private readonly listWidget: ChatListWidget;
+	private readonly inputPart: ChatInputPart;
+	private submittedMessage = false;
 
-  constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.element = h(ownerDocument, "div");
-    this.element.id = panelId;
-    this.element.className = "zeta-chat";
-    this.element.setAttribute("role", "tabpanel");
-    this.element.hidden = true;
-    container.append(this.element);
-    this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
-    this.listWidget = this.own(new ChatListWidget(this.element));
-    const inputDelegate: ChatInputDelegate = {
-      send: (text, skills) => this.send(text, skills),
-      executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
-      interrupt: () => this.model.interrupt(),
-      selectModel: (model) => this.model.selectModel(model),
-      resolveInteraction: (response) => this.model.resolveInteraction(response),
-    };
-    this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
-    this.element.append(this.listWidget.element, this.inputPart.element);
-    this.own(this.model.onDidChange(() => this.render()));
-    this.defer(() => this.element.remove());
-    this.render();
-  }
+	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.element = h(ownerDocument, "div");
+		this.element.id = panelId;
+		this.element.className = "zeta-chat";
+		this.element.setAttribute("role", "tabpanel");
+		this.element.hidden = true;
+		container.append(this.element);
+		this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
+		this.listWidget = this.own(new ChatListWidget(this.element));
+		const inputDelegate: ChatInputDelegate = {
+			send: (text, skills) => this.send(text, skills),
+			executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
+			interrupt: () => this.model.interrupt(),
+			selectModel: (model) => this.model.selectModel(model),
+			resolveInteraction: (response) => this.model.resolveInteraction(response),
+		};
+		this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
+		this.element.append(this.listWidget.element, this.inputPart.element);
+		this.own(this.model.onDidChange(() => this.render()));
+		this.defer(() => this.element.remove());
+		this.render();
+	}
 
-  get sessionId(): SessionId | undefined {
-    return this.model.sessionId;
-  }
+	get sessionId(): SessionId | undefined {
+		return this.model.sessionId;
+	}
 
-  get untitledSessionId(): string | undefined {
-    return this.model.untitledSessionId;
-  }
+	get untitledSessionId(): string | undefined {
+		return this.model.untitledSessionId;
+	}
 
-  get threadId(): ThreadId | undefined {
-    return this.model.threadId;
-  }
+	get threadId(): ThreadId | undefined {
+		return this.model.threadId;
+	}
 
-  selectThread(active: IActiveSessionThread): Promise<void> {
-    if (active.session.sessionId !== this.sessionId) {
-      throw new Error(`ChatPane cannot select a Thread from another Session: ${active.session.sessionId}`);
-    }
-    if (active.threadId !== this.threadId) this.submittedMessage = false;
-    return this.model.selectThread(active);
-  }
+	selectThread(active: IActiveSessionThread): Promise<void> {
+		if (active.session.sessionId !== this.sessionId) {
+			throw new Error(`ChatPane cannot select a Thread from another Session: ${active.session.sessionId}`);
+		}
+		if (active.threadId !== this.threadId) this.submittedMessage = false;
+		return this.model.selectThread(active);
+	}
 
-  selectUntitledSession(session: IUntitledChatSession): void {
-    if (session.untitledSessionId !== this.untitledSessionId) {
-      throw new Error(`ChatPane cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
-    }
-    this.model.selectUntitledSession(session);
-  }
+	selectUntitledSession(session: IUntitledChatSession): void {
+		if (session.untitledSessionId !== this.untitledSessionId) {
+			throw new Error(`ChatPane cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
+		}
+		this.model.selectUntitledSession(session);
+	}
 
-  setTabId(tabId: string | undefined): void {
-    if (tabId) {
-      this.element.setAttribute("aria-labelledby", tabId);
-      this.element.removeAttribute("aria-label");
-    } else {
-      this.element.removeAttribute("aria-labelledby");
-      this.element.setAttribute("aria-label", "Chat");
-    }
-  }
+	setTabId(tabId: string | undefined): void {
+		if (tabId) {
+			this.element.setAttribute("aria-labelledby", tabId);
+			this.element.removeAttribute("aria-label");
+		} else {
+			this.element.removeAttribute("aria-labelledby");
+			this.element.setAttribute("aria-label", "Chat");
+		}
+	}
 
-  setVisible(visible: boolean): void {
-    this.element.hidden = !visible;
-    this.inputPart.setVisible(visible);
-    this.listWidget.setVisible(visible);
-  }
+	setVisible(visible: boolean): void {
+		this.element.hidden = !visible;
+		this.inputPart.setVisible(visible);
+		this.listWidget.setVisible(visible);
+	}
 
-  focus(): void {
-    this.inputPart.focus();
-  }
+	focus(): void {
+		this.inputPart.focus();
+	}
 
-  private async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
-    this.submittedMessage = true;
-    this.updateConversationState();
-    try {
-      await this.model.send(text, skills);
-    } catch (error) {
-      if (this.model.items.length === 0) {
-        this.submittedMessage = false;
-        this.updateConversationState();
-      }
-      throw error;
-    }
-  }
+	private async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
+		this.submittedMessage = true;
+		this.updateConversationState();
+		try {
+			await this.model.send(text, skills);
+		} catch (error) {
+			if (this.model.items.length === 0) {
+				this.submittedMessage = false;
+				this.updateConversationState();
+			}
+			throw error;
+		}
+	}
 
-  private render(): void {
-    this.syncIdentity();
-    const items = this.model.items;
-    this.updateConversationState(items.length > 0);
-    this.listWidget.render(items);
-    this.inputPart.render({
-      phase: this.model.state,
-      error: this.model.error,
-      canInterrupt: this.model.canInterrupt,
-      models: this.model.models,
-      slashCommands: this.model.slashCommands,
-      skillCommands: this.model.skillCommands,
-      selectedModel: this.model.selectedModel,
-      interaction: this.model.interaction,
-    });
-  }
+	private render(): void {
+		this.syncIdentity();
+		const items = this.model.items;
+		this.updateConversationState(items.length > 0);
+		this.listWidget.render(items);
+		this.inputPart.render({
+			phase: this.model.state,
+			error: this.model.error,
+			canInterrupt: this.model.canInterrupt,
+			models: this.model.models,
+			slashCommands: this.model.slashCommands,
+			skillCommands: this.model.skillCommands,
+			selectedModel: this.model.selectedModel,
+			interaction: this.model.interaction,
+		});
+	}
 
-  private updateConversationState(hasTranscript = this.model.items.length > 0): void {
-    const hasConversation = this.submittedMessage || hasTranscript;
-    this.element.classList.toggle("empty", !hasConversation);
-    this.element.classList.toggle("has-conversation", hasConversation);
-  }
+	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
+		const hasConversation = this.submittedMessage || hasTranscript;
+		this.element.classList.toggle("empty", !hasConversation);
+		this.element.classList.toggle("has-conversation", hasConversation);
+	}
 
-  private syncIdentity(): void {
-    const sessionId = this.model.sessionId;
-    const threadId = this.model.threadId;
-    const untitledSessionId = this.model.untitledSessionId;
-    if (sessionId) this.element.dataset.sessionId = sessionId;
-    else this.element.removeAttribute("data-session-id");
-    if (threadId) this.element.dataset.threadId = threadId;
-    else this.element.removeAttribute("data-thread-id");
-    if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
-    else this.element.removeAttribute("data-untitled-session-id");
-  }
+	private syncIdentity(): void {
+		const sessionId = this.model.sessionId;
+		const threadId = this.model.threadId;
+		const untitledSessionId = this.model.untitledSessionId;
+		if (sessionId) this.element.dataset.sessionId = sessionId;
+		else this.element.removeAttribute("data-session-id");
+		if (threadId) this.element.dataset.threadId = threadId;
+		else this.element.removeAttribute("data-thread-id");
+		if (untitledSessionId) this.element.dataset.untitledSessionId = untitledSessionId;
+		else this.element.removeAttribute("data-untitled-session-id");
+	}
 }

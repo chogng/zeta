@@ -1,36 +1,36 @@
 import {
-  type IDisposable,
-  markAsDisposed,
-  trackDisposable,
-  toDisposable,
+	type IDisposable,
+	markAsDisposed,
+	trackDisposable,
+	toDisposable,
 } from "./lifecycle.js";
 
 /** A function that subscribes a listener and returns its registration. */
 export interface Event<T> {
-  (listener: (event: T) => void): IDisposable;
+	(listener: (event: T) => void): IDisposable;
 }
 
 /** Error reporting policy for one event source. */
 export interface EmitterOptions {
-  /**
-   * Receives errors thrown by listeners after delivery continues to the other
-   * registrations.
-   */
-  readonly onListenerError?: (error: unknown) => void;
+	/**
+	 * Receives errors thrown by listeners after delivery continues to the other
+	 * registrations.
+	 */
+	readonly onListenerError?: (error: unknown) => void;
 }
 
 interface ListenerRegistration<T> {
-  readonly listener: (event: T) => void;
-  active: boolean;
+	readonly listener: (event: T) => void;
+	active: boolean;
 }
 
 interface EventDelivery<T> {
-  readonly registration: ListenerRegistration<T>;
-  readonly event: T;
+	readonly registration: ListenerRegistration<T>;
+	readonly event: T;
 }
 
 interface BufferedEventDelivery {
-  deliver(): void;
+	deliver(): void;
 }
 
 let activeEventBuffer: BufferedEventDelivery[] | undefined;
@@ -40,34 +40,34 @@ let activeEventBuffer: BufferedEventDelivery[] | undefined;
  * has completed. If the mutation throws, buffered events are discarded.
  */
 export function runWithBufferedEvents<T>(mutation: () => T): T {
-  if (typeof mutation !== "function") throw new TypeError("Buffered event mutation must be a function");
-  const inherited = activeEventBuffer;
-  if (inherited) {
-    const savepoint = inherited.length;
-    try { return mutation(); }
-    catch (error) {
-      inherited.length = savepoint;
-      throw error;
-    }
-  }
-  const buffer: BufferedEventDelivery[] = [];
-  activeEventBuffer = buffer;
-  let result!: T;
-  let failure: unknown;
-  let failed = false;
-  try {
-    result = mutation();
-    if (typeof (result as { readonly then?: unknown } | undefined)?.then === "function") throw new TypeError("Buffered event mutations must be synchronous");
-  } catch (error) {
-    buffer.length = 0;
-    failure = error;
-    failed = true;
-  } finally {
-    activeEventBuffer = undefined;
-  }
-  if (failed) throw failure;
-  for (const delivery of buffer) delivery.deliver();
-  return result;
+	if (typeof mutation !== "function") throw new TypeError("Buffered event mutation must be a function");
+	const inherited = activeEventBuffer;
+	if (inherited) {
+		const savepoint = inherited.length;
+		try { return mutation(); }
+		catch (error) {
+			inherited.length = savepoint;
+			throw error;
+		}
+	}
+	const buffer: BufferedEventDelivery[] = [];
+	activeEventBuffer = buffer;
+	let result!: T;
+	let failure: unknown;
+	let failed = false;
+	try {
+		result = mutation();
+		if (typeof (result as { readonly then?: unknown } | undefined)?.then === "function") throw new TypeError("Buffered event mutations must be synchronous");
+	} catch (error) {
+		buffer.length = 0;
+		failure = error;
+		failed = true;
+	} finally {
+		activeEventBuffer = undefined;
+	}
+	if (failed) throw failure;
+	for (const delivery of buffer) delivery.deliver();
+	return result;
 }
 
 /**
@@ -78,95 +78,95 @@ export function runWithBufferedEvents<T>(mutation: () => T): T {
  * so every listener observes events in FIFO order.
  */
 export class Emitter<T> implements IDisposable {
-  private readonly listeners = new Set<ListenerRegistration<T>>();
-  private readonly deliveryQueue: EventDelivery<T>[] = [];
-  private readonly onListenerError: (error: unknown) => void;
-  private delivering = false;
-  private disposed = false;
+	private readonly listeners = new Set<ListenerRegistration<T>>();
+	private readonly deliveryQueue: EventDelivery<T>[] = [];
+	private readonly onListenerError: (error: unknown) => void;
+	private delivering = false;
+	private disposed = false;
 
-  readonly event: Event<T> = (listener) => {
-    if (this.disposed) {
-      throw new ReferenceError("Emitter is already disposed");
-    }
-    const registration: ListenerRegistration<T> = {
-      listener,
-      active: true,
-    };
-    this.listeners.add(registration);
-    return toDisposable(() => {
-      registration.active = false;
-      this.listeners.delete(registration);
-    });
-  };
+	readonly event: Event<T> = (listener) => {
+		if (this.disposed) {
+			throw new ReferenceError("Emitter is already disposed");
+		}
+		const registration: ListenerRegistration<T> = {
+			listener,
+			active: true,
+		};
+		this.listeners.add(registration);
+		return toDisposable(() => {
+			registration.active = false;
+			this.listeners.delete(registration);
+		});
+	};
 
-  constructor(options: EmitterOptions = {}) {
-    this.onListenerError =
-      options.onListenerError ?? reportListenerError;
-    trackDisposable(this);
-  }
+	constructor(options: EmitterOptions = {}) {
+		this.onListenerError =
+			options.onListenerError ?? reportListenerError;
+		trackDisposable(this);
+	}
 
-  fire(event: T): void {
-    if (this.disposed) return;
-    const deliveries = [...this.listeners].map(registration => ({ registration, event }));
-    if (activeEventBuffer) {
-      activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });
-      return;
-    }
-    this.enqueue(deliveries);
-  }
+	fire(event: T): void {
+		if (this.disposed) return;
+		const deliveries = [...this.listeners].map(registration => ({ registration, event }));
+		if (activeEventBuffer) {
+			activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });
+			return;
+		}
+		this.enqueue(deliveries);
+	}
 
-  private enqueue(deliveries: readonly EventDelivery<T>[]): void {
-    this.deliveryQueue.push(...deliveries);
-    if (this.delivering) return;
-    this.delivering = true;
-    try {
-      for (let index = 0; index < this.deliveryQueue.length; index += 1) {
-        const delivery = this.deliveryQueue[index];
-        if (!delivery.registration.active) continue;
-        try {
-          delivery.registration.listener(delivery.event);
-        } catch (error) {
-          this.reportListenerError(error);
-        }
-      }
-    } finally {
-      this.deliveryQueue.length = 0;
-      this.delivering = false;
-    }
-  }
+	private enqueue(deliveries: readonly EventDelivery<T>[]): void {
+		this.deliveryQueue.push(...deliveries);
+		if (this.delivering) return;
+		this.delivering = true;
+		try {
+			for (let index = 0; index < this.deliveryQueue.length; index += 1) {
+				const delivery = this.deliveryQueue[index];
+				if (!delivery.registration.active) continue;
+				try {
+					delivery.registration.listener(delivery.event);
+				} catch (error) {
+					this.reportListenerError(error);
+				}
+			}
+		} finally {
+			this.deliveryQueue.length = 0;
+			this.delivering = false;
+		}
+	}
 
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    try {
-      for (const registration of this.listeners) {
-        registration.active = false;
-      }
-      this.listeners.clear();
-      this.deliveryQueue.length = 0;
-    } finally {
-      markAsDisposed(this);
-    }
-  }
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		try {
+			for (const registration of this.listeners) {
+				registration.active = false;
+			}
+			this.listeners.clear();
+			this.deliveryQueue.length = 0;
+		} finally {
+			markAsDisposed(this);
+		}
+	}
 
-  [Symbol.dispose](): void {
-    this.dispose();
-  }
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
 
-  private reportListenerError(error: unknown): void {
-    try {
-      this.onListenerError(error);
-    } catch (reportingError) {
-      reportListenerError(error);
-      reportListenerError(reportingError);
-    }
-  }
+	private reportListenerError(error: unknown): void {
+		try {
+			this.onListenerError(error);
+		} catch (reportingError) {
+			reportListenerError(error);
+			reportListenerError(reportingError);
+		}
+	}
 }
 
 function reportListenerError(error: unknown): void {
-  if (typeof globalThis.reportError === "function") {
-    globalThis.reportError(error);
-    return;
-  }
-  console.error("Unexpected error in event listener", error);
+	if (typeof globalThis.reportError === "function") {
+		globalThis.reportError(error);
+		return;
+	}
+	console.error("Unexpected error in event listener", error);
 }

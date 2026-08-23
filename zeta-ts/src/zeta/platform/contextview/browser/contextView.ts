@@ -1,8 +1,8 @@
 import type {
-  IContextViewProvider,
+	IContextViewProvider,
 } from "../../../base/browser/ui/contextview/contextview.js";
 import {
-  createServiceIdentifier,
+	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
 /**
@@ -12,8 +12,8 @@ import {
  * overlays are mounted and which platform, theme, and typography they inherit.
  */
 export interface IContextViewService extends IContextViewProvider {
-  readonly container: HTMLElement;
+	readonly container: HTMLElement;
 }
 
 export const IContextViewService =
-  createServiceIdentifier<IContextViewService>("contextViewService");
+	createServiceIdentifier<IContextViewService>("contextViewService");

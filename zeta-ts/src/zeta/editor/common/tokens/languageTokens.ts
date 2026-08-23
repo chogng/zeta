@@ -3,238 +3,238 @@ import { VersionedLanguageResultStore } from "../languages/languageResultStore.j
 import { type TextModel } from "../model/textModel.js";
 
 export interface LanguageToken {
-  readonly range: TextRange;
-  readonly tokenType: string;
-  readonly modifiers: readonly string[];
-  /** Embedded language selected by the grammar for this source range. */
-  readonly languageId?: string;
-  /** False when the grammar excludes this scope from structural bracket matching. */
-  readonly balancedBrackets?: false;
-  /** Optional syntax-theme presentation retained independently of the semantic token type. */
-  readonly presentation?: LanguageTokenPresentation;
+	readonly range: TextRange;
+	readonly tokenType: string;
+	readonly modifiers: readonly string[];
+	/** Embedded language selected by the grammar for this source range. */
+	readonly languageId?: string;
+	/** False when the grammar excludes this scope from structural bracket matching. */
+	readonly balancedBrackets?: false;
+	/** Optional syntax-theme presentation retained independently of the semantic token type. */
+	readonly presentation?: LanguageTokenPresentation;
 }
 
 export interface LanguageTokenPresentation {
-  readonly foreground?: string;
-  readonly background?: string;
-  readonly fontStyle?: readonly LanguageTokenFontStyle[];
+	readonly foreground?: string;
+	readonly background?: string;
+	readonly fontStyle?: readonly LanguageTokenFontStyle[];
 }
 
 export type LanguageTokenFontStyle = "italic" | "bold" | "underline" | "strikethrough";
 
 export interface LanguageTokenResult {
-  readonly tokens: readonly LanguageToken[];
+	readonly tokens: readonly LanguageToken[];
 }
 
 export interface LanguageTokenResultSplice {
-  readonly baseStartItemIndex: number;
-  readonly baseDeleteItemCount: number;
-  readonly resultStartItemIndex: number;
-  readonly resultInsertItemCount: number;
-  readonly lineDeltaBefore: number;
-  readonly lineDeltaAfter: number;
+	readonly baseStartItemIndex: number;
+	readonly baseDeleteItemCount: number;
+	readonly resultStartItemIndex: number;
+	readonly resultInsertItemCount: number;
+	readonly lineDeltaBefore: number;
+	readonly lineDeltaAfter: number;
 }
 
 export interface LanguageTokenResultDelta {
-  readonly baseRequestId: number;
-  readonly splices: readonly LanguageTokenResultSplice[];
+	readonly baseRequestId: number;
+	readonly splices: readonly LanguageTokenResultSplice[];
 }
 
 export function createLanguageTokenStore(model: TextModel): VersionedLanguageResultStore<LanguageTokenResult> {
-  return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(
-    value,
-    range => assertModelRange(currentModel, range, "Language token"),
-    true,
-  ));
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageTokenResult(
+		value,
+		range => assertModelRange(currentModel, range, "Language token"),
+		true,
+	));
 }
 
 export function createLanguageTokenSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageTokenResult) => LanguageTokenResult {
-  const lines = snapshot.getText().split("\n");
-  return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, "Language token"), false);
+	const lines = snapshot.getText().split("\n");
+	return value => normalizeLanguageTokenResult(value, range => assertSnapshotRange(lines, range, "Language token"), false);
 }
 
 export function attachLanguageTokenResultDelta(result: LanguageTokenResult, delta: LanguageTokenResultDelta): LanguageTokenResult {
-  if (!Object.isFrozen(result) || !Object.isFrozen(result.tokens)) {
-    throw new TypeError("Language token delta requires an immutable normalized result");
-  }
-  const normalized = normalizeLanguageTokenResultDelta(delta, result.tokens.length);
-  languageTokenResultDeltas.set(result, normalized);
-  return result;
+	if (!Object.isFrozen(result) || !Object.isFrozen(result.tokens)) {
+		throw new TypeError("Language token delta requires an immutable normalized result");
+	}
+	const normalized = normalizeLanguageTokenResultDelta(delta, result.tokens.length);
+	languageTokenResultDeltas.set(result, normalized);
+	return result;
 }
 
 export function getLanguageTokenResultDelta(result: LanguageTokenResult): LanguageTokenResultDelta | undefined {
-  return languageTokenResultDeltas.get(result);
+	return languageTokenResultDeltas.get(result);
 }
 
 const languageTokenResultDeltas = new WeakMap<LanguageTokenResult, LanguageTokenResultDelta>();
 
 function normalizeLanguageTokenResult(value: LanguageTokenResult, validateRange: (range: TextRange) => void, preserveDelta: boolean): LanguageTokenResult {
-  if (typeof value !== "object" || value === null || !Array.isArray(value.tokens)) {
-    throw new TypeError("Language token result must contain a tokens array");
-  }
-  const delta = preserveDelta ? getLanguageTokenResultDelta(value) : undefined;
-  const tokens: LanguageToken[] = [];
-  let previousEnd: TextPosition | undefined;
-  for (const token of value.tokens) {
-    if (typeof token !== "object" || token === null) {
-      throw new TypeError("Language token must be an object");
-    }
-    validateRange(token.range);
-    if (token.range.empty) {
-      throw new RangeError("Language token range must not be empty");
-    }
-    if (token.range.start.lineIndex !== token.range.end.lineIndex) {
-      throw new RangeError("Language token range must stay on one line");
-    }
-    if (previousEnd && previousEnd.compareTo(token.range.start) > 0) {
-      throw new RangeError("Language tokens must be sorted and non-overlapping");
-    }
-    assertIdentifier(token.tokenType, "Language token type");
-    if (!Array.isArray(token.modifiers)) {
-      throw new TypeError("Language token modifiers must be an array");
-    }
-    const modifiers = token.modifiers.map((modifier: unknown) => {
-      assertIdentifier(modifier, "Language token modifier");
-      return modifier;
-    });
-    if (new Set(modifiers).size !== modifiers.length) {
-      throw new RangeError("Language token modifiers must be unique");
-    }
-    const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, "Language token embedded language ID");
-    if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError("Language token balanced-bracket metadata can only exclude a range");
-    const presentation = token.presentation === undefined ? undefined : normalizePresentation(token.presentation);
-    tokens.push(Object.freeze({
-      range: token.range,
-      tokenType: token.tokenType,
-      modifiers: Object.freeze(modifiers),
-      ...(languageId === undefined ? {} : { languageId }),
-      ...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
-      ...(presentation === undefined ? {} : { presentation }),
-    }));
-    previousEnd = token.range.end;
-  }
-  const result = Object.freeze({ tokens: Object.freeze(tokens) });
-  return delta ? attachLanguageTokenResultDelta(result, delta) : result;
+	if (typeof value !== "object" || value === null || !Array.isArray(value.tokens)) {
+		throw new TypeError("Language token result must contain a tokens array");
+	}
+	const delta = preserveDelta ? getLanguageTokenResultDelta(value) : undefined;
+	const tokens: LanguageToken[] = [];
+	let previousEnd: TextPosition | undefined;
+	for (const token of value.tokens) {
+		if (typeof token !== "object" || token === null) {
+			throw new TypeError("Language token must be an object");
+		}
+		validateRange(token.range);
+		if (token.range.empty) {
+			throw new RangeError("Language token range must not be empty");
+		}
+		if (token.range.start.lineIndex !== token.range.end.lineIndex) {
+			throw new RangeError("Language token range must stay on one line");
+		}
+		if (previousEnd && previousEnd.compareTo(token.range.start) > 0) {
+			throw new RangeError("Language tokens must be sorted and non-overlapping");
+		}
+		assertIdentifier(token.tokenType, "Language token type");
+		if (!Array.isArray(token.modifiers)) {
+			throw new TypeError("Language token modifiers must be an array");
+		}
+		const modifiers = token.modifiers.map((modifier: unknown) => {
+			assertIdentifier(modifier, "Language token modifier");
+			return modifier;
+		});
+		if (new Set(modifiers).size !== modifiers.length) {
+			throw new RangeError("Language token modifiers must be unique");
+		}
+		const languageId = token.languageId === undefined ? undefined : normalizedIdentifier(token.languageId, "Language token embedded language ID");
+		if (token.balancedBrackets !== undefined && token.balancedBrackets !== false) throw new TypeError("Language token balanced-bracket metadata can only exclude a range");
+		const presentation = token.presentation === undefined ? undefined : normalizePresentation(token.presentation);
+		tokens.push(Object.freeze({
+			range: token.range,
+			tokenType: token.tokenType,
+			modifiers: Object.freeze(modifiers),
+			...(languageId === undefined ? {} : { languageId }),
+			...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
+			...(presentation === undefined ? {} : { presentation }),
+		}));
+		previousEnd = token.range.end;
+	}
+	const result = Object.freeze({ tokens: Object.freeze(tokens) });
+	return delta ? attachLanguageTokenResultDelta(result, delta) : result;
 }
 
 function normalizePresentation(value: LanguageTokenPresentation): LanguageTokenPresentation {
-  if (typeof value !== "object" || value === null) throw new TypeError("Language token presentation must be an object");
-  const foreground = value.foreground === undefined ? undefined : normalizedColor(value.foreground, "foreground");
-  const background = value.background === undefined ? undefined : normalizedColor(value.background, "background");
-  let fontStyle: readonly LanguageTokenFontStyle[] | undefined;
-  if (value.fontStyle !== undefined) {
-    if (!Array.isArray(value.fontStyle)) throw new TypeError("Language token font style must be an array");
-    const styles = value.fontStyle.map(style => {
-      if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported language token font style '${String(style)}'`);
-      return style;
-    });
-    if (new Set(styles).size !== styles.length) throw new RangeError("Language token font styles must be unique");
-    fontStyle = Object.freeze(styles);
-  }
-  return Object.freeze({ ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
+	if (typeof value !== "object" || value === null) throw new TypeError("Language token presentation must be an object");
+	const foreground = value.foreground === undefined ? undefined : normalizedColor(value.foreground, "foreground");
+	const background = value.background === undefined ? undefined : normalizedColor(value.background, "background");
+	let fontStyle: readonly LanguageTokenFontStyle[] | undefined;
+	if (value.fontStyle !== undefined) {
+		if (!Array.isArray(value.fontStyle)) throw new TypeError("Language token font style must be an array");
+		const styles = value.fontStyle.map(style => {
+			if (style !== "italic" && style !== "bold" && style !== "underline" && style !== "strikethrough") throw new TypeError(`Unsupported language token font style '${String(style)}'`);
+			return style;
+		});
+		if (new Set(styles).size !== styles.length) throw new RangeError("Language token font styles must be unique");
+		fontStyle = Object.freeze(styles);
+	}
+	return Object.freeze({ ...(foreground === undefined ? {} : { foreground }), ...(background === undefined ? {} : { background }), ...(fontStyle === undefined ? {} : { fontStyle }) });
 }
 
 function normalizedColor(value: unknown, kind: string): string {
-  if (typeof value !== "string" || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
-  return value;
+	if (typeof value !== "string" || !/^#[0-9a-f]{3,4}(?:[0-9a-f]{3,4})?$/iu.test(value)) throw new TypeError(`Language token ${kind} must be a hexadecimal color`);
+	return value;
 }
 
 function normalizedIdentifier(value: unknown, owner: string): string {
-  assertIdentifier(value, owner);
-  return value;
+	assertIdentifier(value, owner);
+	return value;
 }
 
 function normalizeLanguageTokenResultDelta(delta: LanguageTokenResultDelta, tokenCount: number): LanguageTokenResultDelta {
-  if (typeof delta !== "object" || delta === null) {
-    throw new TypeError("Language token result delta must be an object");
-  }
-  assertPositiveSafeInteger(delta.baseRequestId, "Language token delta base request ID");
-  if (!Array.isArray(delta.splices)) {
-    throw new TypeError("Language token delta splices must be an array");
-  }
-  let previousBaseEnd = 0;
-  let previousResultEnd = 0;
-  let previousLineDelta = 0;
-  const splices = delta.splices.map((splice, index) => {
-    if (typeof splice !== "object" || splice === null) {
-      throw new TypeError("Language token delta splice must be an object");
-    }
-    assertNonNegativeSafeInteger(splice.baseStartItemIndex, "Language token delta base start item index");
-    assertNonNegativeSafeInteger(splice.baseDeleteItemCount, "Language token delta base delete item count");
-    assertNonNegativeSafeInteger(splice.resultStartItemIndex, "Language token delta result start item index");
-    assertNonNegativeSafeInteger(splice.resultInsertItemCount, "Language token delta result insert item count");
-    assertSafeInteger(splice.lineDeltaBefore, "Language token delta preceding line shift");
-    assertSafeInteger(splice.lineDeltaAfter, "Language token delta following line shift");
-    if (splice.baseStartItemIndex < previousBaseEnd || splice.resultStartItemIndex < previousResultEnd) {
-      throw new RangeError("Language token delta splices must be ordered and non-overlapping");
-    }
-    if (splice.baseStartItemIndex - previousBaseEnd !== splice.resultStartItemIndex - previousResultEnd) {
-      throw new RangeError("Language token delta unchanged item spans must preserve their length");
-    }
-    if (splice.lineDeltaBefore !== previousLineDelta) {
-      throw new RangeError("Language token delta line shifts must form one continuous mapping");
-    }
-    if (splice.resultStartItemIndex + splice.resultInsertItemCount > tokenCount) {
-      throw new RangeError("Language token delta inserted items exceed the normalized result");
-    }
-    previousBaseEnd = splice.baseStartItemIndex + splice.baseDeleteItemCount;
-    previousResultEnd = splice.resultStartItemIndex + splice.resultInsertItemCount;
-    previousLineDelta = splice.lineDeltaAfter;
-    return Object.freeze({
-      baseStartItemIndex: splice.baseStartItemIndex,
-      baseDeleteItemCount: splice.baseDeleteItemCount,
-      resultStartItemIndex: splice.resultStartItemIndex,
-      resultInsertItemCount: splice.resultInsertItemCount,
-      lineDeltaBefore: splice.lineDeltaBefore,
-      lineDeltaAfter: splice.lineDeltaAfter,
-    });
-  });
-  if (tokenCount < previousResultEnd) {
-    throw new RangeError("Language token delta result item count is inconsistent");
-  }
-  return Object.freeze({
-    baseRequestId: delta.baseRequestId,
-    splices: Object.freeze(splices),
-  });
+	if (typeof delta !== "object" || delta === null) {
+		throw new TypeError("Language token result delta must be an object");
+	}
+	assertPositiveSafeInteger(delta.baseRequestId, "Language token delta base request ID");
+	if (!Array.isArray(delta.splices)) {
+		throw new TypeError("Language token delta splices must be an array");
+	}
+	let previousBaseEnd = 0;
+	let previousResultEnd = 0;
+	let previousLineDelta = 0;
+	const splices = delta.splices.map((splice, index) => {
+		if (typeof splice !== "object" || splice === null) {
+			throw new TypeError("Language token delta splice must be an object");
+		}
+		assertNonNegativeSafeInteger(splice.baseStartItemIndex, "Language token delta base start item index");
+		assertNonNegativeSafeInteger(splice.baseDeleteItemCount, "Language token delta base delete item count");
+		assertNonNegativeSafeInteger(splice.resultStartItemIndex, "Language token delta result start item index");
+		assertNonNegativeSafeInteger(splice.resultInsertItemCount, "Language token delta result insert item count");
+		assertSafeInteger(splice.lineDeltaBefore, "Language token delta preceding line shift");
+		assertSafeInteger(splice.lineDeltaAfter, "Language token delta following line shift");
+		if (splice.baseStartItemIndex < previousBaseEnd || splice.resultStartItemIndex < previousResultEnd) {
+			throw new RangeError("Language token delta splices must be ordered and non-overlapping");
+		}
+		if (splice.baseStartItemIndex - previousBaseEnd !== splice.resultStartItemIndex - previousResultEnd) {
+			throw new RangeError("Language token delta unchanged item spans must preserve their length");
+		}
+		if (splice.lineDeltaBefore !== previousLineDelta) {
+			throw new RangeError("Language token delta line shifts must form one continuous mapping");
+		}
+		if (splice.resultStartItemIndex + splice.resultInsertItemCount > tokenCount) {
+			throw new RangeError("Language token delta inserted items exceed the normalized result");
+		}
+		previousBaseEnd = splice.baseStartItemIndex + splice.baseDeleteItemCount;
+		previousResultEnd = splice.resultStartItemIndex + splice.resultInsertItemCount;
+		previousLineDelta = splice.lineDeltaAfter;
+		return Object.freeze({
+			baseStartItemIndex: splice.baseStartItemIndex,
+			baseDeleteItemCount: splice.baseDeleteItemCount,
+			resultStartItemIndex: splice.resultStartItemIndex,
+			resultInsertItemCount: splice.resultInsertItemCount,
+			lineDeltaBefore: splice.lineDeltaBefore,
+			lineDeltaAfter: splice.lineDeltaAfter,
+		});
+	});
+	if (tokenCount < previousResultEnd) {
+		throw new RangeError("Language token delta result item count is inconsistent");
+	}
+	return Object.freeze({
+		baseRequestId: delta.baseRequestId,
+		splices: Object.freeze(splices),
+	});
 }
 
 function assertModelRange(model: TextModel, range: TextRange, owner: string): void {
-  if (!(range instanceof TextRange)) {
-    throw new TypeError(`${owner} range must be a TextRange`);
-  }
-  model.offsetAt(range.start);
-  model.offsetAt(range.end);
+	if (!(range instanceof TextRange)) {
+		throw new TypeError(`${owner} range must be a TextRange`);
+	}
+	model.offsetAt(range.start);
+	model.offsetAt(range.end);
 }
 
 function assertSnapshotRange(lines: readonly string[], range: TextRange, owner: string): void {
-  if (!(range instanceof TextRange)) {
-    throw new TypeError(`${owner} range must be a TextRange`);
-  }
-  assertSnapshotPosition(lines, range.start, owner);
-  assertSnapshotPosition(lines, range.end, owner);
+	if (!(range instanceof TextRange)) {
+		throw new TypeError(`${owner} range must be a TextRange`);
+	}
+	assertSnapshotPosition(lines, range.start, owner);
+	assertSnapshotPosition(lines, range.end, owner);
 }
 
 function assertSnapshotPosition(lines: readonly string[], position: TextPosition, owner: string): void {
-  if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
-    throw new RangeError(`${owner} range is outside its snapshot`);
-  }
+	if (position.lineIndex >= lines.length || position.columnIndex > lines[position.lineIndex]!.length) {
+		throw new RangeError(`${owner} range is outside its snapshot`);
+	}
 }
 
 function assertIdentifier(value: unknown, owner: string): asserts value is string {
-  if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
-    throw new TypeError(`${owner} must be a non-empty trimmed string`);
-  }
+	if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+		throw new TypeError(`${owner} must be a non-empty trimmed string`);
+	}
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
-  if (!Number.isSafeInteger(value) || (value as number) <= 0) throw new RangeError(`${owner} must be a positive safe integer`);
+	if (!Number.isSafeInteger(value) || (value as number) <= 0) throw new RangeError(`${owner} must be a positive safe integer`);
 }
 
 function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts value is number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative safe integer`);
+	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative safe integer`);
 }
 
 function assertSafeInteger(value: unknown, owner: string): asserts value is number {
-  if (!Number.isSafeInteger(value)) throw new RangeError(`${owner} must be a safe integer`);
+	if (!Number.isSafeInteger(value)) throw new RangeError(`${owner} must be a safe integer`);
 }
 

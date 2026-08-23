@@ -12,128 +12,128 @@ export type LanguageNavigationKind = "definition" | "declaration" | "implementat
 
 /** Owns keyboard navigation and the multi-result Peek surface for one text editor. */
 export class LanguageNavigationController extends DisposableOwner {
-  private readonly peek = this.own(new ResettableDisposableGroup());
-  private request: AbortController | undefined;
+	private readonly peek = this.own(new ResettableDisposableGroup());
+	private request: AbortController | undefined;
 
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
-    super();
-    if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
-    this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-    this.own(viewport.textModel.onDidChange(() => this.closePeek()));
-    this.defer(() => this.cancelRequest());
-  }
+	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
+		super();
+		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
+		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+		this.own(viewport.textModel.onDidChange(() => this.closePeek()));
+		this.defer(() => this.cancelRequest());
+	}
 
-  navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
-    return this.requestLocations(kind, options);
-  }
+	navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
+		return this.requestLocations(kind, options);
+	}
 
-  private handleKeydown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph") || event.key !== "F12") return;
-    stopEvent(event);
-    if (event.shiftKey && (event.ctrlKey || event.metaKey)) {
-      void this.requestLocations("typeDefinition");
-    } else if (event.ctrlKey || event.metaKey) {
-      void this.requestLocations("implementation");
-    } else if (event.shiftKey) {
-      void this.requestLocations("references", { peek: true, includeDeclaration: true });
-    } else {
-      void this.requestLocations("definition", { peek: event.altKey });
-    }
-  }
+	private handleKeydown(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph") || event.key !== "F12") return;
+		stopEvent(event);
+		if (event.shiftKey && (event.ctrlKey || event.metaKey)) {
+			void this.requestLocations("typeDefinition");
+		} else if (event.ctrlKey || event.metaKey) {
+			void this.requestLocations("implementation");
+		} else if (event.shiftKey) {
+			void this.requestLocations("references", { peek: true, includeDeclaration: true });
+		} else {
+			void this.requestLocations("definition", { peek: event.altKey });
+		}
+	}
 
-  private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
-    this.cancelRequest();
-    const request = this.request = new AbortController();
-    const position = this.selections.selections.primary.active;
-    try {
-      const locations = await this.provide(kind, position, options.includeDeclaration ?? true, request.signal);
-      if (request.signal.aborted) return;
-      if (locations.length === 0) {
-        this.viewport.announceAccessibilityStatus(`No ${navigationLabel(kind)} found.`);
-        return;
-      }
-      if (options.peek || locations.length > 1) {
-        this.showPeek(kind, position, locations);
-        return;
-      }
-      await this.open(locations[0]!);
-    } catch (error) {
-      if (!request.signal.aborted) this.onError(error);
-    }
-  }
+	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
+		this.cancelRequest();
+		const request = this.request = new AbortController();
+		const position = this.selections.selections.primary.active;
+		try {
+			const locations = await this.provide(kind, position, options.includeDeclaration ?? true, request.signal);
+			if (request.signal.aborted) return;
+			if (locations.length === 0) {
+				this.viewport.announceAccessibilityStatus(`No ${navigationLabel(kind)} found.`);
+				return;
+			}
+			if (options.peek || locations.length > 1) {
+				this.showPeek(kind, position, locations);
+				return;
+			}
+			await this.open(locations[0]!);
+		} catch (error) {
+			if (!request.signal.aborted) this.onError(error);
+		}
+	}
 
-  private provide(kind: LanguageNavigationKind, position: TextPosition, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly LanguageLocation[]> {
-    switch (kind) {
-      case "definition": return this.service.provideDefinition(this.languageId, position, signal);
-      case "declaration": return this.service.provideDeclaration(this.languageId, position, signal);
-      case "implementation": return this.service.provideImplementation(this.languageId, position, signal);
-      case "typeDefinition": return this.service.provideTypeDefinition(this.languageId, position, signal);
-      case "references": return this.service.provideReferences(this.languageId, position, includeDeclaration, signal);
-    }
-  }
+	private provide(kind: LanguageNavigationKind, position: TextPosition, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly LanguageLocation[]> {
+		switch (kind) {
+			case "definition": return this.service.provideDefinition(this.languageId, position, signal);
+			case "declaration": return this.service.provideDeclaration(this.languageId, position, signal);
+			case "implementation": return this.service.provideImplementation(this.languageId, position, signal);
+			case "typeDefinition": return this.service.provideTypeDefinition(this.languageId, position, signal);
+			case "references": return this.service.provideReferences(this.languageId, position, includeDeclaration, signal);
+		}
+	}
 
-  private showPeek(kind: LanguageNavigationKind, anchor: TextPosition, locations: readonly LanguageLocation[]): void {
-    this.closePeek();
-    const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
-    const list = h(widget.element.ownerDocument, "div");
-    list.className = "aster-editor-language-locations";
-    list.setAttribute("role", "listbox");
-    for (const location of locations) {
-      const button = h(widget.element.ownerDocument, "button");
-      button.type = "button";
-      button.setAttribute("role", "option");
-      button.className = "aster-editor-language-location";
-      const selection = location.selectionRange ?? location.range;
-      button.textContent = `${resourceLabel(location.resource)}:${selection.start.lineIndex + 1}:${selection.start.columnIndex + 1}`;
-      this.peek.add(addDisposableListener(button, "click", () => void this.open(location)));
-      list.append(button);
-    }
-    widget.setBody(list);
-    widget.show();
-    (list.firstElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
-    this.peek.add(addDisposableListener(widget.element, "keydown", event => {
-      if (event.key !== "Escape") return;
-      stopEvent(event);
-      this.closePeek();
-      this.input.focus({ preventScroll: true });
-    }));
-    this.viewport.announceAccessibilityStatus(`${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"} found.`);
-  }
+	private showPeek(kind: LanguageNavigationKind, anchor: TextPosition, locations: readonly LanguageLocation[]): void {
+		this.closePeek();
+		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
+		const list = h(widget.element.ownerDocument, "div");
+		list.className = "aster-editor-language-locations";
+		list.setAttribute("role", "listbox");
+		for (const location of locations) {
+			const button = h(widget.element.ownerDocument, "button");
+			button.type = "button";
+			button.setAttribute("role", "option");
+			button.className = "aster-editor-language-location";
+			const selection = location.selectionRange ?? location.range;
+			button.textContent = `${resourceLabel(location.resource)}:${selection.start.lineIndex + 1}:${selection.start.columnIndex + 1}`;
+			this.peek.add(addDisposableListener(button, "click", () => void this.open(location)));
+			list.append(button);
+		}
+		widget.setBody(list);
+		widget.show();
+		(list.firstElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
+		this.peek.add(addDisposableListener(widget.element, "keydown", event => {
+			if (event.key !== "Escape") return;
+			stopEvent(event);
+			this.closePeek();
+			this.input.focus({ preventScroll: true });
+		}));
+		this.viewport.announceAccessibilityStatus(`${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"} found.`);
+	}
 
-  private async open(location: LanguageLocation): Promise<void> {
-    this.closePeek();
-    const range = location.selectionRange ?? location.range;
-    if (location.resource.toString() === this.resource.toString()) {
-      this.selections.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
-      this.viewport.revealPosition(range.start);
-      this.input.focus({ preventScroll: true });
-      return;
-    }
-    if (!this.openLocation) {
-      this.viewport.announceAccessibilityStatus("This editor host cannot open the target resource.");
-      return;
-    }
-    await this.openLocation(location);
-  }
+	private async open(location: LanguageLocation): Promise<void> {
+		this.closePeek();
+		const range = location.selectionRange ?? location.range;
+		if (location.resource.toString() === this.resource.toString()) {
+			this.selections.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
+			this.viewport.revealPosition(range.start);
+			this.input.focus({ preventScroll: true });
+			return;
+		}
+		if (!this.openLocation) {
+			this.viewport.announceAccessibilityStatus("This editor host cannot open the target resource.");
+			return;
+		}
+		await this.openLocation(location);
+	}
 
-  private closePeek(): void {
-    this.peek.clear();
-  }
+	private closePeek(): void {
+		this.peek.clear();
+	}
 
-  private cancelRequest(): void {
-    this.request?.abort();
-    this.request = undefined;
-  }
+	private cancelRequest(): void {
+		this.request?.abort();
+		this.request = undefined;
+	}
 }
 
 function navigationLabel(kind: LanguageNavigationKind): string {
-  switch (kind) {
-    case "typeDefinition": return "type definition";
-    default: return kind;
-  }
+	switch (kind) {
+		case "typeDefinition": return "type definition";
+		default: return kind;
+	}
 }
 
 function resourceLabel(resource: URI): string {
-  const path = decodeURIComponent(resource.path).replace(/\/+$/, "");
-  return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
+	const path = decodeURIComponent(resource.path).replace(/\/+$/, "");
+	return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
 }

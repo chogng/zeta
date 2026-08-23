@@ -1,23 +1,23 @@
 import type { Icon } from "../../../base/common/icon.js";
 import type {
-  ContextKeyExpression,
+	ContextKeyExpression,
 } from "../../contextkey/common/contextkey.js";
 import { localize } from "../../../nls.js";
 
 export interface ILocalizedString {
-  readonly value: string;
-  readonly original: string;
-  readonly bundle?: string;
-  readonly key?: string;
+	readonly value: string;
+	readonly original: string;
+	readonly bundle?: string;
+	readonly key?: string;
 }
 
 export type CommandActionTitle = string | ILocalizedString;
 
 export interface ICommandActionToggleInfo {
-  readonly condition: ContextKeyExpression;
-  readonly icon?: Icon;
-  readonly tooltip?: CommandActionTitle;
-  readonly title?: CommandActionTitle;
+	readonly condition: ContextKeyExpression;
+	readonly icon?: Icon;
+	readonly tooltip?: CommandActionTitle;
+	readonly title?: CommandActionTitle;
 }
 
 /**
@@ -27,26 +27,26 @@ export interface ICommandActionToggleInfo {
  * invoked from a toolbar, menu, keybinding, or programmatic call.
  */
 export interface ICommandAction {
-  readonly id: string;
-  readonly title: CommandActionTitle;
-  readonly shortTitle?: CommandActionTitle;
-  readonly tooltip?: CommandActionTitle;
-  readonly icon?: Icon;
-  readonly precondition?: ContextKeyExpression;
-  readonly toggled?: ContextKeyExpression | ICommandActionToggleInfo;
+	readonly id: string;
+	readonly title: CommandActionTitle;
+	readonly shortTitle?: CommandActionTitle;
+	readonly tooltip?: CommandActionTitle;
+	readonly icon?: Icon;
+	readonly precondition?: ContextKeyExpression;
+	readonly toggled?: ContextKeyExpression | ICommandActionToggleInfo;
 }
 
 export function localizedString(bundle: string, key: string, original: string): ILocalizedString {
-  return Object.freeze({ value: original, original, bundle, key });
+	return Object.freeze({ value: original, original, bundle, key });
 }
 
 export function commandActionLabel(title: CommandActionTitle): string {
-  if (typeof title === "string") return title;
-  return title.bundle && title.key ? localize(title.bundle, title.key, title.original) : title.value;
+	if (typeof title === "string") return title;
+	return title.bundle && title.key ? localize(title.bundle, title.key, title.original) : title.value;
 }
 
 export function isCommandActionToggleInfo(
-  value: ContextKeyExpression | ICommandActionToggleInfo,
+	value: ContextKeyExpression | ICommandActionToggleInfo,
 ): value is ICommandActionToggleInfo {
-  return "condition" in value;
+	return "condition" in value;
 }

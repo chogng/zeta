@@ -25,377 +25,377 @@ import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, IE
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from "../common/extensionDebugAdapter.js";
 
 export interface AppServerExtensionServiceOptions {
-  readonly api: IExtensionApi;
-  readonly eventApi?: IServerEventApi;
-  readonly textMateService: ITextMateService;
-  readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly api: IExtensionApi;
+	readonly eventApi?: IServerEventApi;
+	readonly textMateService: ITextMateService;
+	readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
 /** Loads Rust-discovered declarative extensions and projects their grammar contributions into TextMate. */
 export class AppServerExtensionService extends DisposableOwner implements IExtensionService {
-  private readonly changeEmitter = this.own(new Emitter<ExtensionCatalog>());
-  private readonly failureEmitter = this.own(new Emitter<ExtensionServiceFailure>());
-  private catalog: ExtensionCatalog = Object.freeze({
-    generation: 0,
-    extensions: Object.freeze([]),
-    diagnostics: Object.freeze([]),
-  });
-  private loading: Promise<void> | undefined;
-  private reloadQueued = false;
-  private disposed = false;
-  private readonly grammarRegistration: TextMateGrammarRegistration;
-  private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
-  private readonly languageConfigurationRegistration: LanguageConfigurationRegistration | undefined;
-  private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
-  private readonly workbenchThemeRegistration: WorkbenchThemeRegistration;
-  private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
-  private readonly themeRegistry: ExtensionThemeRegistry;
-  private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
-  private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
-  private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
-  private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
-  private activeLanguageConfigurations: readonly LanguageConfigurationContributionInput[] = Object.freeze([]);
-  private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
-  private activeWorkbenchThemes: readonly IColorTheme[] = Object.freeze([]);
-  private activeDebugAdapterFactories: readonly DebugAdapterFactory[] = Object.freeze([]);
-  readonly themes: ExtensionThemeSource;
-  readonly fileTemplates: ExtensionFileTemplateSource;
-  readonly debugAdapters: ExtensionDebugAdapterSource;
+	private readonly changeEmitter = this.own(new Emitter<ExtensionCatalog>());
+	private readonly failureEmitter = this.own(new Emitter<ExtensionServiceFailure>());
+	private catalog: ExtensionCatalog = Object.freeze({
+		generation: 0,
+		extensions: Object.freeze([]),
+		diagnostics: Object.freeze([]),
+	});
+	private loading: Promise<void> | undefined;
+	private reloadQueued = false;
+	private disposed = false;
+	private readonly grammarRegistration: TextMateGrammarRegistration;
+	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
+	private readonly languageConfigurationRegistration: LanguageConfigurationRegistration | undefined;
+	private readonly completionRegistration: LanguageCompletionProviderRegistration | undefined;
+	private readonly workbenchThemeRegistration: WorkbenchThemeRegistration;
+	private readonly debugAdapterFactoryRegistration: DebugAdapterFactoryRegistration;
+	private readonly themeRegistry: ExtensionThemeRegistry;
+	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
+	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
+	private activeGrammars: readonly TextMateGrammarDefinition[] = Object.freeze([]);
+	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
+	private activeLanguageConfigurations: readonly LanguageConfigurationContributionInput[] = Object.freeze([]);
+	private activeCompletionProviders: readonly LanguageCompletionProvider[] = Object.freeze([]);
+	private activeWorkbenchThemes: readonly IColorTheme[] = Object.freeze([]);
+	private activeDebugAdapterFactories: readonly DebugAdapterFactory[] = Object.freeze([]);
+	readonly themes: ExtensionThemeSource;
+	readonly fileTemplates: ExtensionFileTemplateSource;
+	readonly debugAdapters: ExtensionDebugAdapterSource;
 
-  readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
-  readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;
+	readonly onDidChange: Event<ExtensionCatalog> = this.changeEmitter.event;
+	readonly onDidFail: Event<ExtensionServiceFailure> = this.failureEmitter.event;
 
-  constructor(private readonly options: AppServerExtensionServiceOptions) {
-    super();
-    this.themeRegistry = this.own(new ExtensionThemeRegistry());
-    this.fileTemplateRegistry = this.own(new ExtensionFileTemplateRegistry());
-    this.debugAdapterRegistry = this.own(new ExtensionDebugAdapterRegistry());
-    const themeRegistry = this.themeRegistry;
-    const fileTemplateRegistry = this.fileTemplateRegistry;
-    const debugAdapterRegistry = this.debugAdapterRegistry;
-    this.themes = Object.freeze({ get currentCatalog() { return themeRegistry.currentCatalog; }, onDidChange: themeRegistry.onDidChange });
-    this.fileTemplates = Object.freeze({ get currentCatalog() { return fileTemplateRegistry.currentCatalog; }, onDidChange: fileTemplateRegistry.onDidChange });
-    this.debugAdapters = Object.freeze({ get definitions() { return debugAdapterRegistry.definitions; }, onDidChange: debugAdapterRegistry.onDidChange, get: (type: string) => debugAdapterRegistry.get(type) });
-    if (!options || typeof options !== "object") {
-      this.dispose();
-      throw new TypeError("App Server extension service options are required");
-    }
-    if (!options.api || typeof options.api.list !== "function" || typeof options.api.readResource !== "function") {
-      this.dispose();
-      throw new TypeError("App Server extension service requires an extension API");
-    }
-    const grammarService = options.textMateService?.grammars;
-    if (!grammarService || typeof grammarService.registerGrammars !== "function" || typeof grammarService.prepareGrammars !== "function" || typeof grammarService.whenReady !== "function") {
-      this.dispose();
-      throw new TypeError("App Server extension service requires a TextMate service");
-    }
-    this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
-    this.defer(() => this.grammarRegistration.dispose());
-    this.languageRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguages([])) : undefined;
-    this.languageConfigurationRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
-    this.completionRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
-    this.workbenchThemeRegistration = this.own(WorkbenchThemesRegistry.registerColorThemes([]));
-    this.debugAdapterFactoryRegistration = this.own(DebugAdapterFactoriesRegistry.registerFactories([]));
-    if (options.eventApi) {
-      let activationGeneration: number | undefined;
-      const subscription = options.eventApi.subscribe(event => {
-        if (event.method !== "plugin/changed" || event.params.activationGeneration === activationGeneration) return;
-        activationGeneration = event.params.activationGeneration;
-        void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
-      });
-      this.defer(() => subscription.dispose());
-    }
-  }
+	constructor(private readonly options: AppServerExtensionServiceOptions) {
+		super();
+		this.themeRegistry = this.own(new ExtensionThemeRegistry());
+		this.fileTemplateRegistry = this.own(new ExtensionFileTemplateRegistry());
+		this.debugAdapterRegistry = this.own(new ExtensionDebugAdapterRegistry());
+		const themeRegistry = this.themeRegistry;
+		const fileTemplateRegistry = this.fileTemplateRegistry;
+		const debugAdapterRegistry = this.debugAdapterRegistry;
+		this.themes = Object.freeze({ get currentCatalog() { return themeRegistry.currentCatalog; }, onDidChange: themeRegistry.onDidChange });
+		this.fileTemplates = Object.freeze({ get currentCatalog() { return fileTemplateRegistry.currentCatalog; }, onDidChange: fileTemplateRegistry.onDidChange });
+		this.debugAdapters = Object.freeze({ get definitions() { return debugAdapterRegistry.definitions; }, onDidChange: debugAdapterRegistry.onDidChange, get: (type: string) => debugAdapterRegistry.get(type) });
+		if (!options || typeof options !== "object") {
+			this.dispose();
+			throw new TypeError("App Server extension service options are required");
+		}
+		if (!options.api || typeof options.api.list !== "function" || typeof options.api.readResource !== "function") {
+			this.dispose();
+			throw new TypeError("App Server extension service requires an extension API");
+		}
+		const grammarService = options.textMateService?.grammars;
+		if (!grammarService || typeof grammarService.registerGrammars !== "function" || typeof grammarService.prepareGrammars !== "function" || typeof grammarService.whenReady !== "function") {
+			this.dispose();
+			throw new TypeError("App Server extension service requires a TextMate service");
+		}
+		this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
+		this.defer(() => this.grammarRegistration.dispose());
+		this.languageRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguages([])) : undefined;
+		this.languageConfigurationRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
+		this.completionRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
+		this.workbenchThemeRegistration = this.own(WorkbenchThemesRegistry.registerColorThemes([]));
+		this.debugAdapterFactoryRegistration = this.own(DebugAdapterFactoriesRegistry.registerFactories([]));
+		if (options.eventApi) {
+			let activationGeneration: number | undefined;
+			const subscription = options.eventApi.subscribe(event => {
+				if (event.method !== "plugin/changed" || event.params.activationGeneration === activationGeneration) return;
+				activationGeneration = event.params.activationGeneration;
+				void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
+			});
+			this.defer(() => subscription.dispose());
+		}
+	}
 
-  get currentCatalog(): ExtensionCatalog {
-    this.ensureAlive();
-    return this.catalog;
-  }
+	get currentCatalog(): ExtensionCatalog {
+		this.ensureAlive();
+		return this.catalog;
+	}
 
-  start(): Promise<void> {
-    this.ensureAlive();
-    return this.reload();
-  }
+	start(): Promise<void> {
+		this.ensureAlive();
+		return this.reload();
+	}
 
-  reload(): Promise<void> {
-    this.ensureAlive();
-    this.reloadQueued = true;
-    if (this.loading) return this.loading;
-    const operation = this.drainReloads();
-    this.loading = operation;
-    void operation.then(() => {
-      if (this.loading === operation) this.loading = undefined;
-    }, () => {
-      if (this.loading === operation) this.loading = undefined;
-    });
-    return operation;
-  }
+	reload(): Promise<void> {
+		this.ensureAlive();
+		this.reloadQueued = true;
+		if (this.loading) return this.loading;
+		const operation = this.drainReloads();
+		this.loading = operation;
+		void operation.then(() => {
+			if (this.loading === operation) this.loading = undefined;
+		}, () => {
+			if (this.loading === operation) this.loading = undefined;
+		});
+		return operation;
+	}
 
-  override dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.reloadQueued = false;
-    super.dispose();
-  }
+	override dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.reloadQueued = false;
+		super.dispose();
+	}
 
-  private async drainReloads(): Promise<void> {
-    let firstFailure: { readonly error: unknown } | undefined;
-    while (!this.disposed && this.reloadQueued) {
-      this.reloadQueued = false;
-      try {
-        await this.loadAndRegister();
-      } catch (error) {
-        firstFailure ??= { error };
-      }
-    }
-    if (!this.disposed && firstFailure) throw firstFailure.error;
-  }
+	private async drainReloads(): Promise<void> {
+		let firstFailure: { readonly error: unknown } | undefined;
+		while (!this.disposed && this.reloadQueued) {
+			this.reloadQueued = false;
+			try {
+				await this.loadAndRegister();
+			} catch (error) {
+				firstFailure ??= { error };
+			}
+		}
+		if (!this.disposed && firstFailure) throw firstFailure.error;
+	}
 
-  private async loadAndRegister(): Promise<void> {
-    const languages: LanguageDescriptionContribution[] = [];
-    const languageConfigurations: LanguageConfigurationContributionInput[] = [];
-    const completionProviders: LanguageCompletionProvider[] = [];
-    const grammars: TextMateGrammarDefinition[] = [];
-    const resources = new Map<string, Promise<Uint8Array>>();
-    const languageConfigurationResources = new Map<string, Promise<ReturnType<typeof parseLanguageConfiguration>>>();
-    const snippetFiles = new Map<string, Promise<readonly ExtensionSnippetDefinition[]>>();
-    const themes: ExtensionThemeDefinition[] = [];
-    const workbenchThemes: IColorTheme[] = [];
-    const fileTemplates: ExtensionFileTemplateDefinition[] = [];
-    const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
-    let activeExtension: ExtensionDescriptor | undefined;
-    try {
-      const transportCatalog = await this.options.api.list("refresh");
-      if (this.disposed) return;
-      const catalog = projectExtensionCatalog(transportCatalog);
-      for (const extension of transportCatalog.extensions) {
-        activeExtension = projectExtensionDescriptor(extension);
-        await verifyManifestDigest(extension);
-        if (this.disposed) return;
-        const manifest = parseExtensionManifest(extension.manifestJson, extension);
-        if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageFeaturesService) {
-          throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
-        }
-        for (const language of manifest.contributes.languages) {
-          languages.push({ description: {
-              id: language.id,
-              aliases: language.aliases,
-              extensions: language.extensions,
-              filenames: language.filenames,
-              filenamePatterns: language.filenamePatterns,
-              mimetypes: language.mimetypes,
-              ...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
-            }, options: { priority: 100 } });
-          if (language.configuration !== undefined) {
-            const key = `${extension.id}\0${language.configuration}`;
-            const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);
-            languageConfigurationResources.set(key, configuration);
-            const resolvedConfiguration = await configuration;
-            if (this.disposed) return;
-            languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, options: { priority: 100 } });
-          }
-        }
-        for (const [snippetIndex, snippet] of manifest.contributes.snippets.entries()) {
-          const key = `${extension.id}\0${snippet.path}`;
-          const definitions = snippetFiles.get(key) ?? this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
-          snippetFiles.set(key, definitions);
-          const parsed = await definitions;
-          if (this.disposed) return;
-          for (const languageId of snippet.language) {
-            const providerSnippets = parsed.filter(candidate => candidate.prefixes.length > 0 && (!candidate.scopes || candidate.scopes.includes(languageId)));
-            if (providerSnippets.length > 0) completionProviders.push(createExtensionSnippetProvider(`${extension.id}.snippet.${snippetIndex}.${languageId}`, languageId, providerSnippets));
-            const templates = parsed.filter(candidate => candidate.isFileTemplate && (!candidate.scopes || candidate.scopes.includes(languageId)));
-            for (const [templateIndex, template] of templates.entries()) fileTemplates.push(Object.freeze({
-              id: `${extension.id}.template.${snippetIndex}.${languageId}.${templateIndex}`,
-              extensionId: extension.id,
-              label: template.name,
-              languageId,
-              body: materializeExtensionFileTemplate(template),
-              ...(template.description === undefined ? {} : { description: template.description }),
-            }));
-          }
-        }
-        for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
-          const definition = await this.loadTheme(resources, catalog.generation, extension, themeIndex, theme.id, theme.label, theme.path, theme.uiTheme);
-          themes.push(definition);
-          workbenchThemes.push(createExtensionWorkbenchColorTheme(definition));
-          if (this.disposed) return;
-        }
-        for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
-        for (const grammar of manifest.contributes.grammars) {
-          const content = await this.loadGrammar(resources, catalog.generation, extension.id, grammar.path);
-          if (this.disposed) return;
-          const definition: TextMateGrammarDefinition = {
-            scopeName: grammar.scopeName,
-            ...(grammar.language === undefined ? {} : { languageId: grammar.language }),
-            injectTo: grammar.injectTo,
-            ...(grammar.embeddedLanguages === undefined ? {} : { embeddedLanguages: grammar.embeddedLanguages }),
-            ...(grammar.tokenTypes === undefined ? {} : { tokenTypes: grammar.tokenTypes }),
-            ...(grammar.balancedBracketScopes === undefined ? {} : { balancedBracketScopes: grammar.balancedBracketScopes }),
-            ...(grammar.unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes: grammar.unbalancedBracketScopes }),
-            filePath: grammar.path,
-            loadGrammar: () => content,
-          };
-          grammars.push(definition);
-        }
-      }
-      this.validateContributions(themes, workbenchThemes, fileTemplates, debugAdapters);
-      const debugAdapterFactories = debugAdapters.map(definition => createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments }));
-      const previousGrammars = this.activeGrammars;
-      const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
-      if (this.disposed) return;
-      try {
-        runWithBufferedEvents(() => {
-          preparedGrammars.commit();
-          this.replaceContributions(languages, languageConfigurations, completionProviders, themes, workbenchThemes, fileTemplates, debugAdapters, debugAdapterFactories);
-          this.activeGrammars = Object.freeze([...grammars]);
-          this.activeLanguages = Object.freeze([...languages]);
-          this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
-          this.activeCompletionProviders = Object.freeze([...completionProviders]);
-          this.activeWorkbenchThemes = Object.freeze([...workbenchThemes]);
-          this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
-          this.catalog = catalog;
-          this.changeEmitter.fire(catalog);
-        });
-      } catch (error) {
-        if (!this.disposed) await this.restoreActivation(previousGrammars, error);
-        throw error;
-      }
-    } catch (error) {
-      if (this.disposed) return;
-      this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));
-      throw error;
-    }
-  }
+	private async loadAndRegister(): Promise<void> {
+		const languages: LanguageDescriptionContribution[] = [];
+		const languageConfigurations: LanguageConfigurationContributionInput[] = [];
+		const completionProviders: LanguageCompletionProvider[] = [];
+		const grammars: TextMateGrammarDefinition[] = [];
+		const resources = new Map<string, Promise<Uint8Array>>();
+		const languageConfigurationResources = new Map<string, Promise<ReturnType<typeof parseLanguageConfiguration>>>();
+		const snippetFiles = new Map<string, Promise<readonly ExtensionSnippetDefinition[]>>();
+		const themes: ExtensionThemeDefinition[] = [];
+		const workbenchThemes: IColorTheme[] = [];
+		const fileTemplates: ExtensionFileTemplateDefinition[] = [];
+		const debugAdapters: ExtensionDebugAdapterDefinition[] = [];
+		let activeExtension: ExtensionDescriptor | undefined;
+		try {
+			const transportCatalog = await this.options.api.list("refresh");
+			if (this.disposed) return;
+			const catalog = projectExtensionCatalog(transportCatalog);
+			for (const extension of transportCatalog.extensions) {
+				activeExtension = projectExtensionDescriptor(extension);
+				await verifyManifestDigest(extension);
+				if (this.disposed) return;
+				const manifest = parseExtensionManifest(extension.manifestJson, extension);
+				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageFeaturesService) {
+					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
+				}
+				for (const language of manifest.contributes.languages) {
+					languages.push({ description: {
+							id: language.id,
+							aliases: language.aliases,
+							extensions: language.extensions,
+							filenames: language.filenames,
+							filenamePatterns: language.filenamePatterns,
+							mimetypes: language.mimetypes,
+							...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
+						}, options: { priority: 100 } });
+					if (language.configuration !== undefined) {
+						const key = `${extension.id}\0${language.configuration}`;
+						const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);
+						languageConfigurationResources.set(key, configuration);
+						const resolvedConfiguration = await configuration;
+						if (this.disposed) return;
+						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, options: { priority: 100 } });
+					}
+				}
+				for (const [snippetIndex, snippet] of manifest.contributes.snippets.entries()) {
+					const key = `${extension.id}\0${snippet.path}`;
+					const definitions = snippetFiles.get(key) ?? this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
+					snippetFiles.set(key, definitions);
+					const parsed = await definitions;
+					if (this.disposed) return;
+					for (const languageId of snippet.language) {
+						const providerSnippets = parsed.filter(candidate => candidate.prefixes.length > 0 && (!candidate.scopes || candidate.scopes.includes(languageId)));
+						if (providerSnippets.length > 0) completionProviders.push(createExtensionSnippetProvider(`${extension.id}.snippet.${snippetIndex}.${languageId}`, languageId, providerSnippets));
+						const templates = parsed.filter(candidate => candidate.isFileTemplate && (!candidate.scopes || candidate.scopes.includes(languageId)));
+						for (const [templateIndex, template] of templates.entries()) fileTemplates.push(Object.freeze({
+							id: `${extension.id}.template.${snippetIndex}.${languageId}.${templateIndex}`,
+							extensionId: extension.id,
+							label: template.name,
+							languageId,
+							body: materializeExtensionFileTemplate(template),
+							...(template.description === undefined ? {} : { description: template.description }),
+						}));
+					}
+				}
+				for (const [themeIndex, theme] of manifest.contributes.themes.entries()) {
+					const definition = await this.loadTheme(resources, catalog.generation, extension, themeIndex, theme.id, theme.label, theme.path, theme.uiTheme);
+					themes.push(definition);
+					workbenchThemes.push(createExtensionWorkbenchColorTheme(definition));
+					if (this.disposed) return;
+				}
+				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
+				for (const grammar of manifest.contributes.grammars) {
+					const content = await this.loadGrammar(resources, catalog.generation, extension.id, grammar.path);
+					if (this.disposed) return;
+					const definition: TextMateGrammarDefinition = {
+						scopeName: grammar.scopeName,
+						...(grammar.language === undefined ? {} : { languageId: grammar.language }),
+						injectTo: grammar.injectTo,
+						...(grammar.embeddedLanguages === undefined ? {} : { embeddedLanguages: grammar.embeddedLanguages }),
+						...(grammar.tokenTypes === undefined ? {} : { tokenTypes: grammar.tokenTypes }),
+						...(grammar.balancedBracketScopes === undefined ? {} : { balancedBracketScopes: grammar.balancedBracketScopes }),
+						...(grammar.unbalancedBracketScopes === undefined ? {} : { unbalancedBracketScopes: grammar.unbalancedBracketScopes }),
+						filePath: grammar.path,
+						loadGrammar: () => content,
+					};
+					grammars.push(definition);
+				}
+			}
+			this.validateContributions(themes, workbenchThemes, fileTemplates, debugAdapters);
+			const debugAdapterFactories = debugAdapters.map(definition => createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments }));
+			const previousGrammars = this.activeGrammars;
+			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
+			if (this.disposed) return;
+			try {
+				runWithBufferedEvents(() => {
+					preparedGrammars.commit();
+					this.replaceContributions(languages, languageConfigurations, completionProviders, themes, workbenchThemes, fileTemplates, debugAdapters, debugAdapterFactories);
+					this.activeGrammars = Object.freeze([...grammars]);
+					this.activeLanguages = Object.freeze([...languages]);
+					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
+					this.activeCompletionProviders = Object.freeze([...completionProviders]);
+					this.activeWorkbenchThemes = Object.freeze([...workbenchThemes]);
+					this.activeDebugAdapterFactories = Object.freeze([...debugAdapterFactories]);
+					this.catalog = catalog;
+					this.changeEmitter.fire(catalog);
+				});
+			} catch (error) {
+				if (!this.disposed) await this.restoreActivation(previousGrammars, error);
+				throw error;
+			}
+		} catch (error) {
+			if (this.disposed) return;
+			this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));
+			throw error;
+		}
+	}
 
-  private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContributionInput[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[]): void {
-    const previousThemes = this.themeRegistry.currentCatalog.themes;
-    const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
-    const previousDebugAdapters = this.debugAdapterRegistry.definitions;
-    try {
-      this.languageRegistration?.replace(languages);
-      this.languageConfigurationRegistration?.replace(languageConfigurations);
-      this.completionRegistration?.replace(completionProviders);
-      this.workbenchThemeRegistration.replace(workbenchThemes);
-      this.themeRegistry.replace(themes);
-      this.fileTemplateRegistry.replace(fileTemplates);
-      this.debugAdapterRegistry.replace(debugAdapters);
-      this.debugAdapterFactoryRegistration.replace(debugAdapterFactories);
-    } catch (error) {
-      try {
-        this.languageRegistration?.replace(this.activeLanguages);
-        this.languageConfigurationRegistration?.replace(this.activeLanguageConfigurations);
-        this.completionRegistration?.replace(this.activeCompletionProviders);
-        this.workbenchThemeRegistration.replace(this.activeWorkbenchThemes);
-        this.themeRegistry.replace(previousThemes);
-        this.fileTemplateRegistry.replace(previousFileTemplates);
-        this.debugAdapterRegistry.replace(previousDebugAdapters);
-        this.debugAdapterFactoryRegistration.replace(this.activeDebugAdapterFactories);
-      } catch (rollbackError) {
-        throw new AggregateError([error, rollbackError], "Extension contribution activation and rollback both failed");
-      }
-      throw error;
-    }
-  }
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContributionInput[], completionProviders: readonly LanguageCompletionProvider[], themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[]): void {
+		const previousThemes = this.themeRegistry.currentCatalog.themes;
+		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
+		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
+		try {
+			this.languageRegistration?.replace(languages);
+			this.languageConfigurationRegistration?.replace(languageConfigurations);
+			this.completionRegistration?.replace(completionProviders);
+			this.workbenchThemeRegistration.replace(workbenchThemes);
+			this.themeRegistry.replace(themes);
+			this.fileTemplateRegistry.replace(fileTemplates);
+			this.debugAdapterRegistry.replace(debugAdapters);
+			this.debugAdapterFactoryRegistration.replace(debugAdapterFactories);
+		} catch (error) {
+			try {
+				this.languageRegistration?.replace(this.activeLanguages);
+				this.languageConfigurationRegistration?.replace(this.activeLanguageConfigurations);
+				this.completionRegistration?.replace(this.activeCompletionProviders);
+				this.workbenchThemeRegistration.replace(this.activeWorkbenchThemes);
+				this.themeRegistry.replace(previousThemes);
+				this.fileTemplateRegistry.replace(previousFileTemplates);
+				this.debugAdapterRegistry.replace(previousDebugAdapters);
+				this.debugAdapterFactoryRegistration.replace(this.activeDebugAdapterFactories);
+			} catch (rollbackError) {
+				throw new AggregateError([error, rollbackError], "Extension contribution activation and rollback both failed");
+			}
+			throw error;
+		}
+	}
 
-  private validateContributions(themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {
-    const themeIds = new Set<string>();
-    for (const theme of workbenchThemes) {
-      if (themeIds.has(theme.id)) throw new Error(`Workbench color theme is already contributed: ${theme.id}`);
-      themeIds.add(theme.id);
-      const existing = WorkbenchThemesRegistry.getColorTheme(theme.id);
-      if (existing && !this.activeWorkbenchThemes.some(candidate => candidate.id === theme.id)) throw new Error(`Workbench color theme is already registered: ${theme.id}`);
-    }
-    const validationThemes = new ExtensionThemeRegistry();
-    try { validationThemes.replace(themes); }
-    finally { validationThemes.dispose(); }
-    const validationTemplates = new ExtensionFileTemplateRegistry();
-    try { validationTemplates.replace(fileTemplates); }
-    finally { validationTemplates.dispose(); }
-    validateExtensionDebugAdapterDefinitions(debugAdapters);
-    const themeCatalog = Object.freeze({ revision: 1, themes: Object.freeze([...themes]) });
-    for (const theme of themes) normalizeTextMateScopeTheme(projectExtensionTokenTheme(themeCatalog, ColorScheme.Dark, 1, theme.id));
-  }
+	private validateContributions(themes: readonly ExtensionThemeDefinition[], workbenchThemes: readonly IColorTheme[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[]): void {
+		const themeIds = new Set<string>();
+		for (const theme of workbenchThemes) {
+			if (themeIds.has(theme.id)) throw new Error(`Workbench color theme is already contributed: ${theme.id}`);
+			themeIds.add(theme.id);
+			const existing = WorkbenchThemesRegistry.getColorTheme(theme.id);
+			if (existing && !this.activeWorkbenchThemes.some(candidate => candidate.id === theme.id)) throw new Error(`Workbench color theme is already registered: ${theme.id}`);
+		}
+		const validationThemes = new ExtensionThemeRegistry();
+		try { validationThemes.replace(themes); }
+		finally { validationThemes.dispose(); }
+		const validationTemplates = new ExtensionFileTemplateRegistry();
+		try { validationTemplates.replace(fileTemplates); }
+		finally { validationTemplates.dispose(); }
+		validateExtensionDebugAdapterDefinitions(debugAdapters);
+		const themeCatalog = Object.freeze({ revision: 1, themes: Object.freeze([...themes]) });
+		for (const theme of themes) normalizeTextMateScopeTheme(projectExtensionTokenTheme(themeCatalog, ColorScheme.Dark, 1, theme.id));
+	}
 
-  private async restoreActivation(previous: readonly TextMateGrammarDefinition[], activationError: unknown): Promise<void> {
-    try {
-      this.grammarRegistration.replace(previous);
-      await this.options.textMateService.grammars.whenReady();
-    } catch (rollbackError) {
-      throw new AggregateError([activationError, rollbackError], "Extension activation and TextMate grammar rollback both failed");
-    }
-  }
+	private async restoreActivation(previous: readonly TextMateGrammarDefinition[], activationError: unknown): Promise<void> {
+		try {
+			this.grammarRegistration.replace(previous);
+			await this.options.textMateService.grammars.whenReady();
+		} catch (rollbackError) {
+			throw new AggregateError([activationError, rollbackError], "Extension activation and TextMate grammar rollback both failed");
+		}
+	}
 
-  private async loadGrammar(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
-    const bytes = await this.loadResource(resources, generation, extensionId, path);
-    try {
-      return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    } catch {
-      throw new TypeError(`Extension '${extensionId}' grammar '${path}' is not valid UTF-8`);
-    }
-  }
+	private async loadGrammar(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<string> {
+		const bytes = await this.loadResource(resources, generation, extensionId, path);
+		try {
+			return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		} catch {
+			throw new TypeError(`Extension '${extensionId}' grammar '${path}' is not valid UTF-8`);
+		}
+	}
 
-  private async loadLanguageConfiguration(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<ReturnType<typeof parseLanguageConfiguration>> {
-    const bytes = await this.loadResource(resources, generation, extensionId, path);
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
-  }
+	private async loadLanguageConfiguration(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<ReturnType<typeof parseLanguageConfiguration>> {
+		const bytes = await this.loadResource(resources, generation, extensionId, path);
+		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		return parseLanguageConfiguration(parseJsonc(text, `Extension '${extensionId}' language configuration '${path}'`), `Extension '${extensionId}' language configuration '${path}'`);
+	}
 
-  private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<readonly ExtensionSnippetDefinition[]> {
-    const bytes = await this.loadResource(resources, generation, extensionId, path);
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return parseExtensionSnippetFile(parseJsonc(text, `Extension '${extensionId}' snippet file '${path}'`), `Extension '${extensionId}' snippet file '${path}'`);
-  }
+	private async loadSnippetFile(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<readonly ExtensionSnippetDefinition[]> {
+		const bytes = await this.loadResource(resources, generation, extensionId, path);
+		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		return parseExtensionSnippetFile(parseJsonc(text, `Extension '${extensionId}' snippet file '${path}'`), `Extension '${extensionId}' snippet file '${path}'`);
+	}
 
-  private async loadTheme(resources: Map<string, Promise<Uint8Array>>, generation: number, extension: ExtensionDescriptor, index: number, contributionId: string | undefined, label: string, path: string, uiTheme: string | undefined): Promise<ExtensionThemeDefinition> {
-    const bytes = await this.loadResource(resources, generation, extension.id, path);
-    const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    return parseExtensionTheme(parseJsonc(text, `Extension '${extension.id}' theme '${path}'`), extensionWorkbenchThemeId(extension.id, contributionId, index), extension.id, label, uiTheme, `Extension '${extension.id}' theme '${path}'`);
-  }
+	private async loadTheme(resources: Map<string, Promise<Uint8Array>>, generation: number, extension: ExtensionDescriptor, index: number, contributionId: string | undefined, label: string, path: string, uiTheme: string | undefined): Promise<ExtensionThemeDefinition> {
+		const bytes = await this.loadResource(resources, generation, extension.id, path);
+		const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+		return parseExtensionTheme(parseJsonc(text, `Extension '${extension.id}' theme '${path}'`), extensionWorkbenchThemeId(extension.id, contributionId, index), extension.id, label, uiTheme, `Extension '${extension.id}' theme '${path}'`);
+	}
 
-  private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {
-    const key = `${extensionId}\0${path}`;
-    const cached = resources.get(key);
-    if (cached) return cached;
-    const loading = this.options.api.readResource({ generation, extensionId, path });
-    resources.set(key, loading);
-    return loading;
-  }
+	private loadResource(resources: Map<string, Promise<Uint8Array>>, generation: number, extensionId: string, path: string): Promise<Uint8Array> {
+		const key = `${extensionId}\0${path}`;
+		const cached = resources.get(key);
+		if (cached) return cached;
+		const loading = this.options.api.readResource({ generation, extensionId, path });
+		resources.set(key, loading);
+		return loading;
+	}
 
-  private ensureAlive(): void {
-    if (this.disposed) throw new ReferenceError("AppServerExtensionService is already disposed");
-  }
+	private ensureAlive(): void {
+		if (this.disposed) throw new ReferenceError("AppServerExtensionService is already disposed");
+	}
 }
 
 function projectExtensionCatalog(catalog: TransportExtensionCatalog): ExtensionCatalog {
-  return Object.freeze({
-    generation: catalog.generation,
-    extensions: Object.freeze(catalog.extensions.map(projectExtensionDescriptor)),
-    diagnostics: Object.freeze(catalog.diagnostics.map(diagnostic => Object.freeze({
-      source: diagnostic.source,
-      subject: diagnostic.subject,
-      code: diagnostic.code,
-      message: diagnostic.message,
-    }))),
-  });
+	return Object.freeze({
+		generation: catalog.generation,
+		extensions: Object.freeze(catalog.extensions.map(projectExtensionDescriptor)),
+		diagnostics: Object.freeze(catalog.diagnostics.map(diagnostic => Object.freeze({
+			source: diagnostic.source,
+			subject: diagnostic.subject,
+			code: diagnostic.code,
+			message: diagnostic.message,
+		}))),
+	});
 }
 
 function projectExtensionDescriptor(extension: TransportExtensionDescriptor): ExtensionDescriptor {
-  return Object.freeze({
-    id: extension.id,
-    name: extension.name,
-    publisher: extension.publisher,
-    version: extension.version,
-    displayName: extension.displayName,
-    sourceKind: extension.sourceKind,
-    manifestSha256: extension.manifestSha256,
-    packageSha256: extension.packageSha256,
-  });
+	return Object.freeze({
+		id: extension.id,
+		name: extension.name,
+		publisher: extension.publisher,
+		version: extension.version,
+		displayName: extension.displayName,
+		sourceKind: extension.sourceKind,
+		manifestSha256: extension.manifestSha256,
+		packageSha256: extension.packageSha256,
+	});
 }
 
 async function verifyManifestDigest(extension: TransportExtensionDescriptor): Promise<void> {
-  const bytes = new TextEncoder().encode(extension.manifestJson);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
-  if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
+	const bytes = new TextEncoder().encode(extension.manifestJson);
+	const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);
 }

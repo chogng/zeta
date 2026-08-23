@@ -8,7 +8,7 @@ import { ITaskService } from "../common/taskService.js";
 import { TaskService } from "./taskService.js";
 
 registerWorkbenchServiceContribution({
-  service: ITaskService,
-  dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IOutputService, ILogService],
-  install: context => context.own(new TaskService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.get(ITerminalService), context.services.get(IOutputService), context.services.get(ILogService))),
+	service: ITaskService,
+	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IOutputService, ILogService],
+	install: context => context.own(new TaskService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.get(ITerminalService), context.services.get(IOutputService), context.services.get(ILogService))),
 });

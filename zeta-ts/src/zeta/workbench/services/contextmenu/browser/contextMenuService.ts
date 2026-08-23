@@ -1,18 +1,18 @@
 import {
-  BrowserContextMenuService,
+	BrowserContextMenuService,
 } from "../../../../platform/contextview/browser/contextMenuService.js";
 import {
-  type WorkbenchContextMenuServiceOptions,
-  WorkbenchContextMenuService,
+	type WorkbenchContextMenuServiceOptions,
+	WorkbenchContextMenuService,
 } from "./workbenchContextMenuService.js";
 
 /** Creates the HTML context menu product service used by browser hosts. */
 export function createBrowserWorkbenchContextMenuService(
-  options: WorkbenchContextMenuServiceOptions,
+	options: WorkbenchContextMenuServiceOptions,
 ): WorkbenchContextMenuService {
-  return new WorkbenchContextMenuService(new BrowserContextMenuService(
-    options.menuService,
-    options.keybindingService,
-    options.contextViewService,
-  ));
+	return new WorkbenchContextMenuService(new BrowserContextMenuService(
+		options.menuService,
+		options.keybindingService,
+		options.contextViewService,
+	));
 }

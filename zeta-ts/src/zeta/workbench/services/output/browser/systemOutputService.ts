@@ -6,41 +6,41 @@ import type { IOutputChannel, IOutputService } from "../common/outputService.js"
 
 /** Owns built-in Window and App Server diagnostic Output channels. */
 export class SystemOutputService extends DisposableOwner implements ILogSink {
-  private readonly windowChannel: IOutputChannel;
-  private readonly appServerChannel: IOutputChannel;
-  private disposed = false;
+	private readonly windowChannel: IOutputChannel;
+	private readonly appServerChannel: IOutputChannel;
+	private disposed = false;
 
-  constructor(output: IOutputService, appServer: IAppServerApi, hostService: IWorkbenchHostService) {
-    super();
-    this.windowChannel = this.own(output.createChannel({ id: "window", label: "Window", kind: "log", source: "core" }));
-    this.appServerChannel = this.own(output.createChannel({ id: "app-server", label: "App Server", kind: "log", source: "core" }));
-    this.own(hostService.onDidError(error => this.windowChannel.appendLine({ severity: "error", category: "runtime", text: `${error.kind === "unhandledRejection" ? "Unhandled promise rejection: " : ""}${bounded(error.message)}${error.source ? ` (${error.source})` : ""}` })));
-    const connection = appServer.onConnectionState(state => this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : state === "restarting" ? "warning" : "information", category: "connection", text: `App Server connection is ${state}.` }));
-    this.own(toDisposable(() => connection.dispose()));
-    void appServer.getConnectionState().then(state => {
-      if (!this.disposed) this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : "information", category: "connection", text: `Initial App Server connection state: ${state}.` });
-    }).catch(error => {
-      if (!this.disposed) this.appServerChannel.appendLine({ severity: "error", category: "connection", text: `Could not read App Server connection state: ${errorMessage(error)}` });
-    });
-  }
+	constructor(output: IOutputService, appServer: IAppServerApi, hostService: IWorkbenchHostService) {
+		super();
+		this.windowChannel = this.own(output.createChannel({ id: "window", label: "Window", kind: "log", source: "core" }));
+		this.appServerChannel = this.own(output.createChannel({ id: "app-server", label: "App Server", kind: "log", source: "core" }));
+		this.own(hostService.onDidError(error => this.windowChannel.appendLine({ severity: "error", category: "runtime", text: `${error.kind === "unhandledRejection" ? "Unhandled promise rejection: " : ""}${bounded(error.message)}${error.source ? ` (${error.source})` : ""}` })));
+		const connection = appServer.onConnectionState(state => this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : state === "restarting" ? "warning" : "information", category: "connection", text: `App Server connection is ${state}.` }));
+		this.own(toDisposable(() => connection.dispose()));
+		void appServer.getConnectionState().then(state => {
+			if (!this.disposed) this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : "information", category: "connection", text: `Initial App Server connection state: ${state}.` });
+		}).catch(error => {
+			if (!this.disposed) this.appServerChannel.appendLine({ severity: "error", category: "connection", text: `Could not read App Server connection state: ${errorMessage(error)}` });
+		});
+	}
 
-  override dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    super.dispose();
-  }
+	override dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		super.dispose();
+	}
 
-  log(entry: LogEntry): void {
-    this.windowChannel.appendLine({ severity: entry.level, category: entry.category, text: `${entry.message}${entry.error === undefined ? "" : `: ${errorMessage(entry.error)}`}` });
-  }
+	log(entry: LogEntry): void {
+		this.windowChannel.appendLine({ severity: entry.level, category: entry.category, text: `${entry.message}${entry.error === undefined ? "" : `: ${errorMessage(entry.error)}`}` });
+	}
 
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.stack || error.message;
-  return String(error);
+	if (error instanceof Error) return error.stack || error.message;
+	return String(error);
 }
 
 function bounded(value: string): string {
-  return value.slice(0, 16 * 1024);
+	return value.slice(0, 16 * 1024);
 }

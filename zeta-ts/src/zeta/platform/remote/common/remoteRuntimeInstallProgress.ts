@@ -6,25 +6,25 @@ export const REMOTE_RUNTIME_INSTALL_PROGRESS_CHANGED_CHANNEL = "zeta:remote:runt
 
 /** Structured phases emitted by the shared Remote runtime installer. */
 export type RemoteRuntimeInstallProgress =
-  | { readonly phase: "downloadingCatalog" }
-  | { readonly phase: "downloadingArtifact"; readonly transferredBytes: number; readonly totalBytes: number }
-  | { readonly phase: "validatingDownload" }
-  | { readonly phase: "downloadComplete"; readonly disposition: "downloaded" | "reused" }
-  | { readonly phase: "validatingArtifact" }
-  | { readonly phase: "probingPlatform" }
-  | { readonly phase: "uploading"; readonly transferredBytes: number; readonly totalBytes: number }
-  | { readonly phase: "finalizingRemoteInstall" }
-  | { readonly phase: "complete"; readonly disposition: "installed" | "reused" };
+	| { readonly phase: "downloadingCatalog" }
+	| { readonly phase: "downloadingArtifact"; readonly transferredBytes: number; readonly totalBytes: number }
+	| { readonly phase: "validatingDownload" }
+	| { readonly phase: "downloadComplete"; readonly disposition: "downloaded" | "reused" }
+	| { readonly phase: "validatingArtifact" }
+	| { readonly phase: "probingPlatform" }
+	| { readonly phase: "uploading"; readonly transferredBytes: number; readonly totalBytes: number }
+	| { readonly phase: "finalizingRemoteInstall" }
+	| { readonly phase: "complete"; readonly disposition: "installed" | "reused" };
 
 /** Credential-free snapshot shown while Desktop prepares one Remote runtime. */
 export type RemoteRuntimeInstallProgressState = RemoteRuntimeInstallProgress & {
-  readonly host: string;
-  readonly status: "installing" | "cancelling";
+	readonly host: string;
+	readonly status: "installing" | "cancelling";
 };
 
 /** Dedicated bootstrap-renderer bridge for one Main-owned installation operation. */
 export interface IRemoteRuntimeInstallProgressApi {
-  getState(): Promise<RemoteRuntimeInstallProgressState | undefined>;
-  cancel(): Promise<void>;
-  onDidChange(listener: (state: RemoteRuntimeInstallProgressState | undefined) => void): DisposableHandle;
+	getState(): Promise<RemoteRuntimeInstallProgressState | undefined>;
+	cancel(): Promise<void>;
+	onDidChange(listener: (state: RemoteRuntimeInstallProgressState | undefined) => void): DisposableHandle;
 }

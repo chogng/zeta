@@ -4,11 +4,11 @@ import { BrowserLanguageWorkerPort } from "./browserLanguageWorkerPort.js";
 
 /** Creates a fresh module Worker client whenever the coordinator needs a host. */
 export function createCompletionWorkerFactory(): LanguageCompletionWorkerFactory {
-  return () => new LanguageCompletionCatalogWorkerClient(
-    new BrowserLanguageWorkerPort(new Worker(
-      new URL("./languageCompletionWorkerMain.ts", import.meta.url),
-      { type: "module", name: "aster-completion" },
-    )),
-    { requiredProviderModules: ["language.word"] },
-  );
+	return () => new LanguageCompletionCatalogWorkerClient(
+		new BrowserLanguageWorkerPort(new Worker(
+			new URL("./languageCompletionWorkerMain.ts", import.meta.url),
+			{ type: "module", name: "aster-completion" },
+		)),
+		{ requiredProviderModules: ["language.word"] },
+	);
 }

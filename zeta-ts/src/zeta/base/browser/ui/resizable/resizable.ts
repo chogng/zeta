@@ -7,226 +7,226 @@ import { h } from "../../dom.js";
 
 /** A control whose geometry is driven by an external container layout. */
 export interface IResizable {
-  /** Applies the current container dimension to the control. */
-  layout(dimension: IDimension): void;
+	/** Applies the current container dimension to the control. */
+	layout(dimension: IDimension): void;
 }
 
 /** Connects a container dimension event to a generic resizable control. */
 export function bindResizableLayout(event: Event<IDimension>, resizable: IResizable): IDisposable {
-  return event((dimension) => resizable.layout(dimension));
+	return event((dimension) => resizable.layout(dimension));
 }
 
 export interface IResizeEvent {
-  readonly dimension: Dimension;
-  readonly done: boolean;
-  readonly north?: boolean;
-  readonly east?: boolean;
-  readonly south?: boolean;
-  readonly west?: boolean;
+	readonly dimension: Dimension;
+	readonly done: boolean;
+	readonly north?: boolean;
+	readonly east?: boolean;
+	readonly south?: boolean;
+	readonly west?: boolean;
 }
 
 /** A four-edge resize surface for floating or otherwise independently sized UI. */
 export class ResizableHTMLElement extends DisposableOwner {
-  readonly domNode: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 
-  private readonly _onDidWillResize = this.own(new Emitter<void>());
-  readonly onDidWillResize: Event<void> = this._onDidWillResize.event;
-  private readonly _onDidResize = this.own(new Emitter<IResizeEvent>());
-  readonly onDidResize: Event<IResizeEvent> = this._onDidResize.event;
+	private readonly _onDidWillResize = this.own(new Emitter<void>());
+	readonly onDidWillResize: Event<void> = this._onDidWillResize.event;
+	private readonly _onDidResize = this.own(new Emitter<IResizeEvent>());
+	readonly onDidResize: Event<IResizeEvent> = this._onDidResize.event;
 
-  private readonly northSash: Sash;
-  private readonly eastSash: Sash;
-  private readonly southSash: Sash;
-  private readonly westSash: Sash;
+	private readonly northSash: Sash;
+	private readonly eastSash: Sash;
+	private readonly southSash: Sash;
+	private readonly westSash: Sash;
 
-  private _size = Dimension.Zero;
-  private _minSize = Dimension.Zero;
-  private _maxSize = new Dimension(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
-  private _preferredSize: Dimension | undefined;
-  private resizeStart: Dimension | undefined;
-  private deltaX = 0;
-  private deltaY = 0;
+	private _size = Dimension.Zero;
+	private _minSize = Dimension.Zero;
+	private _maxSize = new Dimension(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+	private _preferredSize: Dimension | undefined;
+	private resizeStart: Dimension | undefined;
+	private deltaX = 0;
+	private deltaY = 0;
 
-  constructor(container: HTMLElement) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.domNode = h(ownerDocument, "div");
-    this.domNode.className = "zeta-resizable";
-    this.defer(() => this.domNode.remove());
+	constructor(container: HTMLElement) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.domNode = h(ownerDocument, "div");
+		this.domNode.className = "zeta-resizable";
+		this.defer(() => this.domNode.remove());
 
-    container.append(this.domNode);
-    this.northSash = this.own(new Sash(this.domNode, "horizontal"));
-    this.eastSash = this.own(new Sash(this.domNode, "vertical"));
-    this.southSash = this.own(new Sash(this.domNode, "horizontal"));
-    this.westSash = this.own(new Sash(this.domNode, "vertical"));
+		container.append(this.domNode);
+		this.northSash = this.own(new Sash(this.domNode, "horizontal"));
+		this.eastSash = this.own(new Sash(this.domNode, "vertical"));
+		this.southSash = this.own(new Sash(this.domNode, "horizontal"));
+		this.westSash = this.own(new Sash(this.domNode, "vertical"));
 
-    this.connectSash(this.northSash, "north");
-    this.connectSash(this.eastSash, "east");
-    this.connectSash(this.southSash, "south");
-    this.connectSash(this.westSash, "west");
-    this.enableSashes(true, true, true, true);
-    this.layoutSashes();
-  }
+		this.connectSash(this.northSash, "north");
+		this.connectSash(this.eastSash, "east");
+		this.connectSash(this.southSash, "south");
+		this.connectSash(this.westSash, "west");
+		this.enableSashes(true, true, true, true);
+		this.layoutSashes();
+	}
 
-  enableSashes(north: boolean, east: boolean, south: boolean, west: boolean): void {
-    this.setSashEnabled(this.northSash, north);
-    this.setSashEnabled(this.eastSash, east);
-    this.setSashEnabled(this.southSash, south);
-    this.setSashEnabled(this.westSash, west);
-  }
+	enableSashes(north: boolean, east: boolean, south: boolean, west: boolean): void {
+		this.setSashEnabled(this.northSash, north);
+		this.setSashEnabled(this.eastSash, east);
+		this.setSashEnabled(this.southSash, south);
+		this.setSashEnabled(this.westSash, west);
+	}
 
-  layout(height: number = this.size.height, width: number = this.size.width): void {
-    assertNonNegativeFinite(height, "height");
-    assertNonNegativeFinite(width, "width");
-    const nextHeight = clamp(height, this.minSize.height, this.maxSize.height);
-    const nextWidth = clamp(width, this.minSize.width, this.maxSize.width);
-    const nextSize = new Dimension(nextWidth, nextHeight);
-    if (Dimension.equals(nextSize, this._size)) return;
+	layout(height: number = this.size.height, width: number = this.size.width): void {
+		assertNonNegativeFinite(height, "height");
+		assertNonNegativeFinite(width, "width");
+		const nextHeight = clamp(height, this.minSize.height, this.maxSize.height);
+		const nextWidth = clamp(width, this.minSize.width, this.maxSize.width);
+		const nextSize = new Dimension(nextWidth, nextHeight);
+		if (Dimension.equals(nextSize, this._size)) return;
 
-    this.domNode.style.height = `${nextHeight}px`;
-    this.domNode.style.width = `${nextWidth}px`;
-    this._size = nextSize;
-    this.layoutSashes();
-  }
+		this.domNode.style.height = `${nextHeight}px`;
+		this.domNode.style.width = `${nextWidth}px`;
+		this._size = nextSize;
+		this.layoutSashes();
+	}
 
-  clearSashHoverState(): void {
-    this.northSash.clearSashHoverState();
-    this.eastSash.clearSashHoverState();
-    this.southSash.clearSashHoverState();
-    this.westSash.clearSashHoverState();
-  }
+	clearSashHoverState(): void {
+		this.northSash.clearSashHoverState();
+		this.eastSash.clearSashHoverState();
+		this.southSash.clearSashHoverState();
+		this.westSash.clearSashHoverState();
+	}
 
-  get size(): Dimension {
-    return this._size;
-  }
+	get size(): Dimension {
+		return this._size;
+	}
 
-  set maxSize(value: Dimension) {
-    assertSize(value, "maximum size", true);
-    if (value.width < this.minSize.width || value.height < this.minSize.height) {
-      throw new RangeError("Resizable maximum size must not be smaller than its minimum size");
-    }
-    this._maxSize = value;
-  }
+	set maxSize(value: Dimension) {
+		assertSize(value, "maximum size", true);
+		if (value.width < this.minSize.width || value.height < this.minSize.height) {
+			throw new RangeError("Resizable maximum size must not be smaller than its minimum size");
+		}
+		this._maxSize = value;
+	}
 
-  get maxSize(): Dimension {
-    return this._maxSize;
-  }
+	get maxSize(): Dimension {
+		return this._maxSize;
+	}
 
-  set minSize(value: Dimension) {
-    assertSize(value, "minimum size");
-    if (value.width > this.maxSize.width || value.height > this.maxSize.height) {
-      throw new RangeError("Resizable minimum size must not exceed its maximum size");
-    }
-    this._minSize = value;
-  }
+	set minSize(value: Dimension) {
+		assertSize(value, "minimum size");
+		if (value.width > this.maxSize.width || value.height > this.maxSize.height) {
+			throw new RangeError("Resizable minimum size must not exceed its maximum size");
+		}
+		this._minSize = value;
+	}
 
-  get minSize(): Dimension {
-    return this._minSize;
-  }
+	get minSize(): Dimension {
+		return this._minSize;
+	}
 
-  set preferredSize(value: Dimension | undefined) {
-    if (value) assertSize(value, "preferred size");
-    this._preferredSize = value;
-  }
+	set preferredSize(value: Dimension | undefined) {
+		if (value) assertSize(value, "preferred size");
+		this._preferredSize = value;
+	}
 
-  get preferredSize(): Dimension | undefined {
-    return this._preferredSize;
-  }
+	get preferredSize(): Dimension | undefined {
+		return this._preferredSize;
+	}
 
-  private connectSash(sash: Sash, edge: "north" | "east" | "south" | "west"): void {
-    this.own(sash.onDidStart(() => {
-      if (this.resizeStart !== undefined) return;
-      this._onDidWillResize.fire();
-      this.resizeStart = this._size;
-      this.deltaX = 0;
-      this.deltaY = 0;
-    }));
-    this.own(sash.onDidChange((event) => {
-      if (this.resizeStart === undefined) return;
-      if (edge === "east") this.deltaX = event.delta;
-      if (edge === "west") this.deltaX = -event.delta;
-      if (edge === "south") this.deltaY = event.delta;
-      if (edge === "north") this.deltaY = -event.delta;
-      this.layout(
-        this.resizeStart.height + this.deltaY,
-        this.resizeStart.width + this.deltaX,
-      );
-      this._onDidResize.fire({
-        dimension: this._size,
-        done: false,
-        [edge]: true,
-      });
-    }));
-    this.own(sash.onDidReset(() => {
-      if (this.preferredSize === undefined) return;
-      const height = edge === "north" || edge === "south"
-        ? this.preferredSize.height
-        : this.size.height;
-      const width = edge === "east" || edge === "west"
-        ? this.preferredSize.width
-        : this.size.width;
-      this.layout(height, width);
-      this._onDidResize.fire({ dimension: this._size, done: true });
-    }));
-    this.own(sash.onDidEnd(() => {
-      if (this.resizeStart === undefined) return;
-      this.resizeStart = undefined;
-      this.deltaX = 0;
-      this.deltaY = 0;
-      this._onDidResize.fire({ dimension: this._size, done: true });
-    }));
-  }
+	private connectSash(sash: Sash, edge: "north" | "east" | "south" | "west"): void {
+		this.own(sash.onDidStart(() => {
+			if (this.resizeStart !== undefined) return;
+			this._onDidWillResize.fire();
+			this.resizeStart = this._size;
+			this.deltaX = 0;
+			this.deltaY = 0;
+		}));
+		this.own(sash.onDidChange((event) => {
+			if (this.resizeStart === undefined) return;
+			if (edge === "east") this.deltaX = event.delta;
+			if (edge === "west") this.deltaX = -event.delta;
+			if (edge === "south") this.deltaY = event.delta;
+			if (edge === "north") this.deltaY = -event.delta;
+			this.layout(
+				this.resizeStart.height + this.deltaY,
+				this.resizeStart.width + this.deltaX,
+			);
+			this._onDidResize.fire({
+				dimension: this._size,
+				done: false,
+				[edge]: true,
+			});
+		}));
+		this.own(sash.onDidReset(() => {
+			if (this.preferredSize === undefined) return;
+			const height = edge === "north" || edge === "south"
+				? this.preferredSize.height
+				: this.size.height;
+			const width = edge === "east" || edge === "west"
+				? this.preferredSize.width
+				: this.size.width;
+			this.layout(height, width);
+			this._onDidResize.fire({ dimension: this._size, done: true });
+		}));
+		this.own(sash.onDidEnd(() => {
+			if (this.resizeStart === undefined) return;
+			this.resizeStart = undefined;
+			this.deltaX = 0;
+			this.deltaY = 0;
+			this._onDidResize.fire({ dimension: this._size, done: true });
+		}));
+	}
 
-  private setSashEnabled(sash: Sash, enabled: boolean): void {
-    sash.state = enabled ? SashState.Enabled : SashState.Disabled;
-  }
+	private setSashEnabled(sash: Sash, enabled: boolean): void {
+		sash.state = enabled ? SashState.Enabled : SashState.Disabled;
+	}
 
-  private layoutSashes(): void {
-    setSashBounds(this.northSash, 0, 0, this.size.width, 1);
-    setSashBounds(this.eastSash, this.size.width, 0, 1, this.size.height);
-    setSashBounds(this.southSash, 0, this.size.height, this.size.width, 1);
-    setSashBounds(this.westSash, 0, 0, 1, this.size.height);
-  }
+	private layoutSashes(): void {
+		setSashBounds(this.northSash, 0, 0, this.size.width, 1);
+		setSashBounds(this.eastSash, this.size.width, 0, 1, this.size.height);
+		setSashBounds(this.southSash, 0, this.size.height, this.size.width, 1);
+		setSashBounds(this.westSash, 0, 0, 1, this.size.height);
+	}
 }
 
 /** Compatibility wrapper for callers that use the browser-native resize surface. */
 export class Resizable extends DisposableOwner {
-  readonly element: HTMLDivElement;
+	readonly element: HTMLDivElement;
 
-  constructor(container: HTMLElement, onResize?: (size: IDimension) => void) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.element = h(ownerDocument, "div");
-    this.element.className = "zeta-resizable";
-    this.element.style.resize = "both";
-    this.element.style.overflow = "auto";
-    this.defer(() => this.element.remove());
-    container.append(this.element);
-    this.own(observeElementSize(this.element, (size) => onResize?.(size)));
-  }
+	constructor(container: HTMLElement, onResize?: (size: IDimension) => void) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.element = h(ownerDocument, "div");
+		this.element.className = "zeta-resizable";
+		this.element.style.resize = "both";
+		this.element.style.overflow = "auto";
+		this.defer(() => this.element.remove());
+		container.append(this.element);
+		this.own(observeElementSize(this.element, (size) => onResize?.(size)));
+	}
 }
 
 function setSashBounds(sash: Sash, left: number, top: number, width: number, height: number): void {
-  sash.element.style.left = `${left}px`;
-  sash.element.style.top = `${top}px`;
-  sash.element.style.width = `${width}px`;
-  sash.element.style.height = `${height}px`;
+	sash.element.style.left = `${left}px`;
+	sash.element.style.top = `${top}px`;
+	sash.element.style.width = `${width}px`;
+	sash.element.style.height = `${height}px`;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
+	return Math.max(minimum, Math.min(maximum, value));
 }
 
 function assertSize(value: IDimension, name: string, allowInfinity = false): void {
-  const validWidth = value.width >= 0 && (allowInfinity || Number.isFinite(value.width));
-  const validHeight = value.height >= 0 && (allowInfinity || Number.isFinite(value.height));
-  if (!validWidth || !validHeight) {
-    throw new RangeError(`Resizable ${name} must be non-negative${allowInfinity ? "" : " and finite"}`);
-  }
+	const validWidth = value.width >= 0 && (allowInfinity || Number.isFinite(value.width));
+	const validHeight = value.height >= 0 && (allowInfinity || Number.isFinite(value.height));
+	if (!validWidth || !validHeight) {
+		throw new RangeError(`Resizable ${name} must be non-negative${allowInfinity ? "" : " and finite"}`);
+	}
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(`Resizable ${name} must be non-negative and finite`);
-  }
+	if (!Number.isFinite(value) || value < 0) {
+		throw new RangeError(`Resizable ${name} must be non-negative and finite`);
+	}
 }

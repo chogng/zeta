@@ -13,59 +13,59 @@ import { acceptWorkspaceSymbol } from "./workspaceSymbolNavigation.js";
 export const ShowAllSymbolsCommandId = "workbench.action.showAllSymbols";
 
 interface WorkspaceSymbolQuickPickItem extends IQuickPickItem {
-  readonly symbol: LanguageWorkspaceSymbol;
+	readonly symbol: LanguageWorkspaceSymbol;
 }
 
 registerAction2(class ShowAllSymbolsAction extends Action2 {
-  constructor() {
-    super({
-      id: ShowAllSymbolsCommandId,
-      title: "Go to Symbol in Workspace",
-      f1: true,
-      keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true })) },
-    });
-  }
+	constructor() {
+		super({
+			id: ShowAllSymbolsCommandId,
+			title: "Go to Symbol in Workspace",
+			f1: true,
+			keybinding: { primary: Keybinding.single(logicalKey("t", { primaryKey: true })) },
+		});
+	}
 
-  override run(accessor: ServicesAccessor): void {
-    const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
-    const editor = accessor.get(IEditorService);
-    const files = accessor.get(IFileService);
-    const workingCopies = accessor.get(IWorkingCopyService);
-    const quickPick = accessor.get(IQuickInputService).createQuickPick<WorkspaceSymbolQuickPickItem>();
-    const disposables = new DisposableStore();
-    let request: AbortController | undefined;
-    let requestGeneration = 0;
-    disposables.add(service);
-    disposables.add(quickPick);
-    quickPick.placeholder = "Type the name of a symbol in the workspace";
+	override run(accessor: ServicesAccessor): void {
+		const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
+		const editor = accessor.get(IEditorService);
+		const files = accessor.get(IFileService);
+		const workingCopies = accessor.get(IWorkingCopyService);
+		const quickPick = accessor.get(IQuickInputService).createQuickPick<WorkspaceSymbolQuickPickItem>();
+		const disposables = new DisposableStore();
+		let request: AbortController | undefined;
+		let requestGeneration = 0;
+		disposables.add(service);
+		disposables.add(quickPick);
+		quickPick.placeholder = "Type the name of a symbol in the workspace";
 
-    const update = (query: string): void => {
-      request?.abort();
-      const current = request = new AbortController();
-      const generation = ++requestGeneration;
-      const publish = (symbols: readonly LanguageWorkspaceSymbol[]): void => {
-        if (current.signal.aborted || generation !== requestGeneration) return;
-        quickPick.items = symbols.map(symbol => ({
-          symbol,
-          label: symbol.name,
-          description: symbol.containerName,
-          detail: `${resourceLabel(symbol.resource)}:${symbol.range.start.lineIndex + 1}`,
-        }));
-      };
-      void service.provideWorkspaceSymbols(query, current.signal, publish).then(publish).catch(error => {
-        if (!current.signal.aborted) console.error("Workspace symbol search failed", error);
-      });
-    };
+		const update = (query: string): void => {
+			request?.abort();
+			const current = request = new AbortController();
+			const generation = ++requestGeneration;
+			const publish = (symbols: readonly LanguageWorkspaceSymbol[]): void => {
+				if (current.signal.aborted || generation !== requestGeneration) return;
+				quickPick.items = symbols.map(symbol => ({
+					symbol,
+					label: symbol.name,
+					description: symbol.containerName,
+					detail: `${resourceLabel(symbol.resource)}:${symbol.range.start.lineIndex + 1}`,
+				}));
+			};
+			void service.provideWorkspaceSymbols(query, current.signal, publish).then(publish).catch(error => {
+				if (!current.signal.aborted) console.error("Workspace symbol search failed", error);
+			});
+		};
 
-    disposables.add(quickPick.onDidChangeValue(update));
-    disposables.add(quickPick.onDidAccept(item => void acceptWorkspaceSymbol(item.symbol, files, workingCopies, editor, quickPick, () => update(quickPick.value))));
-    disposables.add(quickPick.onDidHide(() => { request?.abort(); disposables.dispose(); }));
-    quickPick.show();
-    update("");
-  }
+		disposables.add(quickPick.onDidChangeValue(update));
+		disposables.add(quickPick.onDidAccept(item => void acceptWorkspaceSymbol(item.symbol, files, workingCopies, editor, quickPick, () => update(quickPick.value))));
+		disposables.add(quickPick.onDidHide(() => { request?.abort(); disposables.dispose(); }));
+		quickPick.show();
+		update("");
+	}
 });
 
 function resourceLabel(resource: LanguageWorkspaceSymbol["resource"]): string {
-  const path = decodeURIComponent(resource.path);
-  return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
+	const path = decodeURIComponent(resource.path);
+	return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
 }

@@ -4,22 +4,22 @@ declare const uuidBrand: unique symbol;
 export type UUID = string & { readonly [uuidBrand]: "UUID" };
 
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Returns whether an unknown value is a non-nil RFC 9562 UUID. */
 export function isUuid(value: unknown): value is UUID {
-  return typeof value === "string" && UUID_PATTERN.test(value);
+	return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
 /** Validates an external UUID value and returns its canonical representation. */
 export function parseUuid(value: unknown): UUID {
-  if (!isUuid(value)) {
-    throw new TypeError("Expected a valid UUID");
-  }
-  return value.toLowerCase() as UUID;
+	if (!isUuid(value)) {
+		throw new TypeError("Expected a valid UUID");
+	}
+	return value.toLowerCase() as UUID;
 }
 
 /** Creates a cryptographically random UUID. */
 export function createUuid(): UUID {
-  return globalThis.crypto.randomUUID() as UUID;
+	return globalThis.crypto.randomUUID() as UUID;
 }

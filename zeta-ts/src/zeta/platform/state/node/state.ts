@@ -5,9 +5,9 @@
  * persisted schema before use.
  */
 export interface IStateService {
-  getItem(key: string): unknown;
-  setItem(key: string, value: unknown): void;
-  removeItem(key: string): void;
-  flush(): Promise<void>;
-  close(): Promise<void>;
+	getItem(key: string): unknown;
+	setItem(key: string, value: unknown): void;
+	removeItem(key: string): void;
+	flush(): Promise<void>;
+	close(): Promise<void>;
 }

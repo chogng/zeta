@@ -11,252 +11,252 @@ import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  const first = deferred<LanguageCompletionProviderResult>();
-  const second = deferred<LanguageCompletionProviderResult>();
-  const started: string[] = [];
-  using firstRegistration = registry.register(provider("first", async () => {
-    started.push("first");
-    return first.promise;
-  }));
-  using secondRegistration = registry.register(provider("second", async () => {
-    started.push("second");
-    return second.promise;
-  }));
-  using model = new TextModel("con");
-  using service = new LanguageCompletionService(model, registry);
-  const request = service.request(
-    "typescript",
-    TextPosition.at(0, 3),
-    createLanguageCompletionInvokeContext(),
-  );
-  assert.deepEqual(started, ["first", "second"]);
-  second.resolve({
-    items: [item("same", "console", true)],
-    isIncomplete: true,
-  });
-  first.resolve({
-    items: [item("same", "const", true)],
-    isIncomplete: false,
-  });
+	using registry = new LanguageCompletionProviderRegistry();
+	const first = deferred<LanguageCompletionProviderResult>();
+	const second = deferred<LanguageCompletionProviderResult>();
+	const started: string[] = [];
+	using firstRegistration = registry.register(provider("first", async () => {
+		started.push("first");
+		return first.promise;
+	}));
+	using secondRegistration = registry.register(provider("second", async () => {
+		started.push("second");
+		return second.promise;
+	}));
+	using model = new TextModel("con");
+	using service = new LanguageCompletionService(model, registry);
+	const request = service.request(
+		"typescript",
+		TextPosition.at(0, 3),
+		createLanguageCompletionInvokeContext(),
+	);
+	assert.deepEqual(started, ["first", "second"]);
+	second.resolve({
+		items: [item("same", "console", true)],
+		isIncomplete: true,
+	});
+	first.resolve({
+		items: [item("same", "const", true)],
+		isIncomplete: false,
+	});
 
-  assert.deepEqual(await request, {
-    status: LanguageRequestStatus.Applied,
-    requestId: 1,
-    modelVersion: 1,
-  });
-  assert.deepEqual(service.results.result!.value.items.map(entry => ({
-    providerId: entry.providerId,
-    id: entry.id,
-    label: entry.label,
-    preselect: entry.preselect,
-  })), [{
-    providerId: "first",
-    id: "same",
-    label: "const",
-    preselect: true,
-  }, {
-    providerId: "second",
-    id: "same",
-    label: "console",
-    preselect: undefined,
-  }]);
-  assert.equal(service.results.result!.value.isIncomplete, true);
+	assert.deepEqual(await request, {
+		status: LanguageRequestStatus.Applied,
+		requestId: 1,
+		modelVersion: 1,
+	});
+	assert.deepEqual(service.results.result!.value.items.map(entry => ({
+		providerId: entry.providerId,
+		id: entry.id,
+		label: entry.label,
+		preselect: entry.preselect,
+	})), [{
+		providerId: "first",
+		id: "same",
+		label: "const",
+		preselect: true,
+	}, {
+		providerId: "second",
+		id: "same",
+		label: "console",
+		preselect: undefined,
+	}]);
+	assert.equal(service.results.result!.value.isIncomplete, true);
 });
 
 test("Trigger characters filter providers while invoke and refresh call all", async () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  const calls: Array<{ id: string; context: LanguageCompletionContext }> = [];
-  using dotRegistration = registry.register(provider("dot", request => {
-    calls.push({ id: "dot", context: request.context });
-    return result("dot");
-  }, ["."]));
-  using colonRegistration = registry.register(provider("colon", request => {
-    calls.push({ id: "colon", context: request.context });
-    return result("colon");
-  }, [":"]));
-  using plainRegistration = registry.register(provider("plain", request => {
-    calls.push({ id: "plain", context: request.context });
-    return result("plain");
-  }));
-  using model = new TextModel("con");
-  using service = new LanguageCompletionService(model, registry);
+	using registry = new LanguageCompletionProviderRegistry();
+	const calls: Array<{ id: string; context: LanguageCompletionContext }> = [];
+	using dotRegistration = registry.register(provider("dot", request => {
+		calls.push({ id: "dot", context: request.context });
+		return result("dot");
+	}, ["."]));
+	using colonRegistration = registry.register(provider("colon", request => {
+		calls.push({ id: "colon", context: request.context });
+		return result("colon");
+	}, [":"]));
+	using plainRegistration = registry.register(provider("plain", request => {
+		calls.push({ id: "plain", context: request.context });
+		return result("plain");
+	}));
+	using model = new TextModel("con");
+	using service = new LanguageCompletionService(model, registry);
 
-  await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionTriggerCharacterContext("."));
-  assert.deepEqual(calls.map(call => call.id), ["dot"]);
-  assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
+	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionTriggerCharacterContext("."));
+	assert.deepEqual(calls.map(call => call.id), ["dot"]);
+	assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.TriggerCharacter);
 
-  calls.length = 0;
-  await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
-  assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
+	calls.length = 0;
+	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
 
-  calls.length = 0;
-  await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionIncompleteRefreshContext());
-  assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
-  assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
+	calls.length = 0;
+	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionIncompleteRefreshContext());
+	assert.deepEqual(calls.map(call => call.id), ["dot", "colon", "plain"]);
+	assert.equal(calls[0]!.context.kind, LanguageCompletionTriggerKind.IncompleteRefresh);
 });
 
 test("Provider failures and invalid snapshots are isolated from healthy results", async () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  using rejectedRegistration = registry.register(provider("rejected", async () => {
-    throw new Error("provider crash");
-  }));
-  using invalidRegistration = registry.register(provider("invalid", () => ({
-    items: [item("invalid", "invalid", false, TextRange.from(
-      TextPosition.at(0, 0),
-      TextPosition.at(0, 4),
-    ))],
-    isIncomplete: false,
-  })));
-  using healthyRegistration = registry.register(provider("healthy", () => result("healthy")));
-  using model = new TextModel("con");
-  const errors: Array<{ providerId: string; error: unknown }> = [];
-  using service = new LanguageCompletionService(model, registry, {
-    onProviderError: (providerId, error) => errors.push({ providerId, error }),
-  });
+	using registry = new LanguageCompletionProviderRegistry();
+	using rejectedRegistration = registry.register(provider("rejected", async () => {
+		throw new Error("provider crash");
+	}));
+	using invalidRegistration = registry.register(provider("invalid", () => ({
+		items: [item("invalid", "invalid", false, TextRange.from(
+			TextPosition.at(0, 0),
+			TextPosition.at(0, 4),
+		))],
+		isIncomplete: false,
+	})));
+	using healthyRegistration = registry.register(provider("healthy", () => result("healthy")));
+	using model = new TextModel("con");
+	const errors: Array<{ providerId: string; error: unknown }> = [];
+	using service = new LanguageCompletionService(model, registry, {
+		onProviderError: (providerId, error) => errors.push({ providerId, error }),
+	});
 
-  const outcome = await service.request(
-    "typescript",
-    TextPosition.at(0, 3),
-    createLanguageCompletionInvokeContext(),
-  );
+	const outcome = await service.request(
+		"typescript",
+		TextPosition.at(0, 3),
+		createLanguageCompletionInvokeContext(),
+	);
 
-  assert.equal(outcome.status, LanguageRequestStatus.Applied);
-  assert.deepEqual(errors.map(entry => entry.providerId), ["rejected", "invalid"]);
-  assert.deepEqual(
-    service.results.result!.value.items.map(entry => entry.providerId),
-    ["healthy"],
-  );
+	assert.equal(outcome.status, LanguageRequestStatus.Applied);
+	assert.deepEqual(errors.map(entry => entry.providerId), ["rejected", "invalid"]);
+	assert.deepEqual(
+		service.results.result!.value.items.map(entry => entry.providerId),
+		["healthy"],
+	);
 });
 
 test("Model changes cancel provider work without reporting an external failure", async () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  let observedSignal: AbortSignal | undefined;
-  using registration = registry.register(provider("slow", (_request, signal) => {
-    observedSignal = signal;
-    return new Promise((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-    });
-  }));
-  using model = new TextModel("con");
-  const errors: unknown[] = [];
-  using service = new LanguageCompletionService(model, registry, {
-    onProviderError: (_providerId, error) => errors.push(error),
-  });
-  const request = service.request(
-    "typescript",
-    TextPosition.at(0, 3),
-    createLanguageCompletionInvokeContext(),
-  );
+	using registry = new LanguageCompletionProviderRegistry();
+	let observedSignal: AbortSignal | undefined;
+	using registration = registry.register(provider("slow", (_request, signal) => {
+		observedSignal = signal;
+		return new Promise((_resolve, reject) => {
+			signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+		});
+	}));
+	using model = new TextModel("con");
+	const errors: unknown[] = [];
+	using service = new LanguageCompletionService(model, registry, {
+		onProviderError: (_providerId, error) => errors.push(error),
+	});
+	const request = service.request(
+		"typescript",
+		TextPosition.at(0, 3),
+		createLanguageCompletionInvokeContext(),
+	);
 
-  model.applyEdits([{
-    range: TextRange.emptyAt(TextPosition.at(0, 3)),
-    text: "s",
-  }]);
+	model.applyEdits([{
+		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		text: "s",
+	}]);
 
-  assert.equal(observedSignal!.aborted, true);
-  assert.deepEqual(await request, {
-    status: LanguageRequestStatus.Cancelled,
-    requestId: 1,
-    modelVersion: 1,
-    reason: LanguageRequestCancellationReason.ModelChanged,
-  });
-  assert.equal(service.results.result, undefined);
-  assert.deepEqual(errors, []);
+	assert.equal(observedSignal!.aborted, true);
+	assert.deepEqual(await request, {
+		status: LanguageRequestStatus.Cancelled,
+		requestId: 1,
+		modelVersion: 1,
+		reason: LanguageRequestCancellationReason.ModelChanged,
+	});
+	assert.equal(service.results.result, undefined);
+	assert.deepEqual(errors, []);
 });
 
 test("Provider request flows through store, session, acceptance, and undo", async () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  using registration = registry.register(provider("typescript", request => {
-    assert.equal(request.snapshot.getText(), "con");
-    assert.equal(request.position.compareTo(TextPosition.at(0, 3)), 0);
-    return {
-      items: [item("console", "console", true)],
-      isIncomplete: false,
-    };
-  }));
-  using model = new TextModel("con");
-  using service = new LanguageCompletionService(model, registry);
-  using selections = new EditorSelectionController(
-    model,
-    TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))),
-  );
-  using session = new LanguageCompletionSessionController(service.results, selections);
+	using registry = new LanguageCompletionProviderRegistry();
+	using registration = registry.register(provider("typescript", request => {
+		assert.equal(request.snapshot.getText(), "con");
+		assert.equal(request.position.compareTo(TextPosition.at(0, 3)), 0);
+		return {
+			items: [item("console", "console", true)],
+			isIncomplete: false,
+		};
+	}));
+	using model = new TextModel("con");
+	using service = new LanguageCompletionService(model, registry);
+	using selections = new EditorSelectionController(
+		model,
+		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))),
+	);
+	using session = new LanguageCompletionSessionController(service.results, selections);
 
-  await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
-  assert.equal(session.state!.selectedItem.providerId, "typescript");
-  assert.equal(session.acceptSelected(), true);
-  assert.equal(model.getText(), "console");
-  assert.equal(session.state, undefined);
+	await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
+	assert.equal(session.state!.selectedItem.providerId, "typescript");
+	assert.equal(session.acceptSelected(), true);
+	assert.equal(model.getText(), "console");
+	assert.equal(session.state, undefined);
 
-  selections.undo();
-  assert.equal(model.getText(), "con");
-  assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
+	selections.undo();
+	assert.equal(model.getText(), "con");
+	assert.equal(selections.selections.primary.active.compareTo(TextPosition.at(0, 3)), 0);
 });
 
 test("Completion service disposal owns neither registry nor model", () => {
-  using registry = new LanguageCompletionProviderRegistry();
-  using registration = registry.register(provider("one", () => result("one")));
-  using model = new TextModel("con");
-  const service = new LanguageCompletionService(model, registry);
-  service.dispose();
+	using registry = new LanguageCompletionProviderRegistry();
+	using registration = registry.register(provider("one", () => result("one")));
+	using model = new TextModel("con");
+	const service = new LanguageCompletionService(model, registry);
+	service.dispose();
 
-  assert.deepEqual(
-    registry.getProviders("typescript", createLanguageCompletionInvokeContext()).map(entry => entry.id),
-    ["one"],
-  );
-  model.applyEdits([{
-    range: TextRange.emptyAt(TextPosition.at(0, 3)),
-    text: "!",
-  }]);
-  assert.equal(model.getText(), "con!");
+	assert.deepEqual(
+		registry.getProviders("typescript", createLanguageCompletionInvokeContext()).map(entry => entry.id),
+		["one"],
+	);
+	model.applyEdits([{
+		range: TextRange.emptyAt(TextPosition.at(0, 3)),
+		text: "!",
+	}]);
+	assert.equal(model.getText(), "con!");
 });
 
 function provider(
-  id: string,
-  provideCompletions: LanguageCompletionProvider["provideCompletions"],
-  triggerCharacters: readonly string[] = [],
+	id: string,
+	provideCompletions: LanguageCompletionProvider["provideCompletions"],
+	triggerCharacters: readonly string[] = [],
 ): LanguageCompletionProvider {
-  return {
-    id,
-    languageIds: ["typescript"],
-    triggerCharacters,
-    provideCompletions,
-  };
+	return {
+		id,
+		languageIds: ["typescript"],
+		triggerCharacters,
+		provideCompletions,
+	};
 }
 
 function result(label: string): LanguageCompletionProviderResult {
-  return {
-    items: [item(label, label)],
-    isIncomplete: false,
-  };
+	return {
+		items: [item(label, label)],
+		isIncomplete: false,
+	};
 }
 
 function item(
-  id: string,
-  label: string,
-  preselect = false,
-  range = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
+	id: string,
+	label: string,
+	preselect = false,
+	range = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
 ): LanguageCompletionProviderItem {
-  return {
-    id,
-    label,
-    kind: LanguageCompletionItemKind.Keyword,
-    range,
-    insertText: label,
-    ...(preselect ? { preselect } : {}),
-  };
+	return {
+		id,
+		label,
+		kind: LanguageCompletionItemKind.Keyword,
+		range,
+		insertText: label,
+		...(preselect ? { preselect } : {}),
+	};
 }
 
 interface Deferred<T> {
-  readonly promise: Promise<T>;
-  resolve(value: T): void;
+	readonly promise: Promise<T>;
+	resolve(value: T): void;
 }
 
 function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(accept => {
-    resolve = accept;
-  });
-  return { promise, resolve };
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>(accept => {
+		resolve = accept;
+	});
+	return { promise, resolve };
 }

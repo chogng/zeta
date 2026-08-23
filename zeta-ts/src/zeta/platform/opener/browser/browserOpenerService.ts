@@ -2,9 +2,9 @@ import { normalizeExternalUrl, type IOpenerService } from "../common/openerServi
 
 /** Browser popup adapter for validated external URLs. */
 export class BrowserOpenerService implements IOpenerService {
-  constructor(private readonly ownerWindow: Pick<Window, "open">) {}
+	constructor(private readonly ownerWindow: Pick<Window, "open">) {}
 
-  async openExternal(target: string): Promise<void> {
-    this.ownerWindow.open(normalizeExternalUrl(target), "_blank", "noopener,noreferrer");
-  }
+	async openExternal(target: string): Promise<void> {
+		this.ownerWindow.open(normalizeExternalUrl(target), "_blank", "noopener,noreferrer");
+	}
 }

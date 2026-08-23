@@ -3,17 +3,17 @@ import { type BracketColorizationSource as EditorBracketColorizationSource, type
 
 /** Adapts common lexical bracket nesting colors into Aster's closed DOM vocabulary. */
 export class BracketColorizationSource implements EditorBracketColorizationSource {
-  constructor(private readonly index: LanguageBracketColorizationIndex) {}
+	constructor(private readonly index: LanguageBracketColorizationIndex) {}
 
-  get textModel() {
-    return this.index.textModel;
-  }
+	get textModel() {
+		return this.index.textModel;
+	}
 
-  getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[] {
-    return Object.freeze(this.index.getLineColorizations(lineIndex).map(colorization => Object.freeze({
-      startColumn: colorization.startColumn,
-      endColumn: colorization.endColumn,
-      level: colorization.level,
-    })));
-  }
+	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[] {
+		return Object.freeze(this.index.getLineColorizations(lineIndex).map(colorization => Object.freeze({
+			startColumn: colorization.startColumn,
+			endColumn: colorization.endColumn,
+			level: colorization.level,
+		})));
+	}
 }

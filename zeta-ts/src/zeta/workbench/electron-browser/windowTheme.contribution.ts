@@ -4,22 +4,22 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../common/contrib
 import { INativeHostService } from "../common/services.js";
 
 registerWorkbenchContribution("workbench.contrib.nativeWindowTheme", WorkbenchPhase.BlockStartup, (accessor) => {
-  const nativeHost = accessor.get(INativeHostService);
-  const themeService = accessor.get(IThemeService);
-  const apply = (theme: IColorTheme): void => {
-    void nativeHost.setWindowTheme({
-      backgroundColor: requiredColor(theme, ColorId.titleBarBackground),
-      symbolColor: requiredColor(theme, ColorId.titleBarActionForeground),
-    }).catch((error: unknown) => {
-      console.error("Failed to apply native window theme", error);
-    });
-  };
-  apply(themeService.getColorTheme());
-  return themeService.onDidColorThemeChange(apply);
+	const nativeHost = accessor.get(INativeHostService);
+	const themeService = accessor.get(IThemeService);
+	const apply = (theme: IColorTheme): void => {
+		void nativeHost.setWindowTheme({
+			backgroundColor: requiredColor(theme, ColorId.titleBarBackground),
+			symbolColor: requiredColor(theme, ColorId.titleBarActionForeground),
+		}).catch((error: unknown) => {
+			console.error("Failed to apply native window theme", error);
+		});
+	};
+	apply(themeService.getColorTheme());
+	return themeService.onDidColorThemeChange(apply);
 });
 
 function requiredColor(theme: IColorTheme, id: string): string {
-  const color = theme.getColorCss(id);
-  if (!color) throw new Error(`Theme '${theme.id}' does not define native window color '${id}'`);
-  return color;
+	const color = theme.getColorCss(id);
+	if (!color) throw new Error(`Theme '${theme.id}' does not define native window color '${id}'`);
+	return color;
 }

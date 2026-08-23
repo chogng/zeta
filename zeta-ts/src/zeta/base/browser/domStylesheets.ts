@@ -1,42 +1,42 @@
 import {
-  DisposableOwner,
-  DisposableStore,
-  ResettableDisposableGroup,
-  type IDisposable,
-  toDisposable,
+	DisposableOwner,
+	DisposableStore,
+	ResettableDisposableGroup,
+	type IDisposable,
+	toDisposable,
 } from "../common/lifecycle.js";
 import { observeMutations } from "./observer.js";
 import {
-  type BrowserWindow,
-  getWindows,
-  onDidRegisterWindow,
-  onWillUnregisterWindow,
+	type BrowserWindow,
+	getWindows,
+	onDidRegisterWindow,
+	onWillUnregisterWindow,
 } from "./window.js";
 import { h } from "./dom.js";
 
 /** A disposable stylesheet attached to one document. */
 export class ManagedStyleSheet extends DisposableOwner {
-  readonly element: HTMLStyleElement;
+	readonly element: HTMLStyleElement;
 
-  constructor(
-    ownerDocument: Document,
-    cssText = "",
-  ) {
-    super();
-    const element = h(ownerDocument, "style");
-    this.element = element;
-    element.type = "text/css";
-    element.media = "screen";
-    element.textContent = cssText;
-    ownerDocument.head.append(element);
-    this.defer(() => element.remove());
-  }
+	constructor(
+		ownerDocument: Document,
+		cssText = "",
+	) {
+		super();
+		const element = h(ownerDocument, "style");
+		this.element = element;
+		element.type = "text/css";
+		element.media = "screen";
+		element.textContent = cssText;
+		ownerDocument.head.append(element);
+		this.defer(() => element.remove());
+	}
 
-  setText(cssText: string): void {
-    if (this.element.textContent !== cssText) {
-      this.element.textContent = cssText;
-    }
-  }
+	setText(cssText: string): void {
+		if (this.element.textContent !== cssText) {
+			this.element.textContent = cssText;
+		}
+	}
 }
 
 /**
@@ -44,58 +44,58 @@ export class ManagedStyleSheet extends DisposableOwner {
  * window.
  */
 export class GlobalStyleSheet extends DisposableOwner {
-  private readonly styles = new Map<BrowserWindow, ManagedStyleSheet>();
-  private cssText: string;
+	private readonly styles = new Map<BrowserWindow, ManagedStyleSheet>();
+	private cssText: string;
 
-  constructor(cssText = "") {
-    super();
-    this.cssText = cssText;
-    for (const registration of getWindows()) {
-      this.attach(registration.window);
-    }
-    this.own(onDidRegisterWindow(({ window }) => this.attach(window)));
-    this.own(onWillUnregisterWindow(({ window }) => this.detach(window)));
-    this.defer(() => this.styles.clear());
-  }
+	constructor(cssText = "") {
+		super();
+		this.cssText = cssText;
+		for (const registration of getWindows()) {
+			this.attach(registration.window);
+		}
+		this.own(onDidRegisterWindow(({ window }) => this.attach(window)));
+		this.own(onWillUnregisterWindow(({ window }) => this.detach(window)));
+		this.defer(() => this.styles.clear());
+	}
 
-  setText(cssText: string): void {
-    if (cssText === this.cssText) return;
-    this.cssText = cssText;
-    for (const style of this.styles.values()) style.setText(cssText);
-  }
+	setText(cssText: string): void {
+		if (cssText === this.cssText) return;
+		this.cssText = cssText;
+		for (const style of this.styles.values()) style.setText(cssText);
+	}
 
-  private attach(targetWindow: BrowserWindow): void {
-    if (this.styles.has(targetWindow)) return;
-    const style = this.own(
-      new ManagedStyleSheet(targetWindow.document, this.cssText),
-    );
-    this.styles.set(targetWindow, style);
-  }
+	private attach(targetWindow: BrowserWindow): void {
+		if (this.styles.has(targetWindow)) return;
+		const style = this.own(
+			new ManagedStyleSheet(targetWindow.document, this.cssText),
+		);
+		this.styles.set(targetWindow, style);
+	}
 
-  private detach(targetWindow: BrowserWindow): void {
-    const style = this.styles.get(targetWindow);
-    if (!style) return;
-    this.styles.delete(targetWindow);
-    style.dispose();
-  }
+	private detach(targetWindow: BrowserWindow): void {
+		const style = this.styles.get(targetWindow);
+		if (!style) return;
+		this.styles.delete(targetWindow);
+		style.dispose();
+	}
 }
 
 export function createStyleSheet(
-  ownerDocument: Document,
-  cssText = "",
+	ownerDocument: Document,
+	cssText = "",
 ): {
-  readonly element: HTMLStyleElement;
-  readonly registration: IDisposable;
+	readonly element: HTMLStyleElement;
+	readonly registration: IDisposable;
 } {
-  const element = h(ownerDocument, "style");
-  element.type = "text/css";
-  element.media = "screen";
-  element.textContent = cssText;
-  ownerDocument.head.append(element);
-  return {
-    element,
-    registration: toDisposable(() => element.remove()),
-  };
+	const element = h(ownerDocument, "style");
+	element.type = "text/css";
+	element.media = "screen";
+	element.textContent = cssText;
+	ownerDocument.head.append(element);
+	return {
+		element,
+		registration: toDisposable(() => element.remove()),
+	};
 }
 
 /**
@@ -103,37 +103,37 @@ export function createStyleSheet(
  * returned registration owns both the clones and mutation tracking.
  */
 export function cloneDocumentStyles(
-  sourceDocument: Document,
-  targetDocument: Document,
+	sourceDocument: Document,
+	targetDocument: Document,
 ): IDisposable {
-  const store = new DisposableStore();
-  const clones = store.add(new ResettableDisposableGroup());
-  const synchronize = (): void => {
-    clones.clear();
-    const styles = sourceDocument.head.querySelectorAll<
-      HTMLStyleElement | HTMLLinkElement
-    >('style, link[rel="stylesheet"]');
-    for (const source of styles) {
-      const clone = source.cloneNode(true) as
-        HTMLStyleElement | HTMLLinkElement;
-      if (source.tagName === "LINK") {
-        (clone as HTMLLinkElement).href =
-          (source as HTMLLinkElement).href;
-      }
-      targetDocument.head.append(clone);
-      clones.defer(() => clone.remove());
-    }
-  };
-  synchronize();
-  store.add(observeMutations(
-    sourceDocument.head,
-    synchronize,
-    {
-      attributes: true,
-      childList: true,
-      characterData: true,
-      subtree: true,
-    },
-  ));
-  return store;
+	const store = new DisposableStore();
+	const clones = store.add(new ResettableDisposableGroup());
+	const synchronize = (): void => {
+		clones.clear();
+		const styles = sourceDocument.head.querySelectorAll<
+			HTMLStyleElement | HTMLLinkElement
+		>('style, link[rel="stylesheet"]');
+		for (const source of styles) {
+			const clone = source.cloneNode(true) as
+				HTMLStyleElement | HTMLLinkElement;
+			if (source.tagName === "LINK") {
+				(clone as HTMLLinkElement).href =
+					(source as HTMLLinkElement).href;
+			}
+			targetDocument.head.append(clone);
+			clones.defer(() => clone.remove());
+		}
+	};
+	synchronize();
+	store.add(observeMutations(
+		sourceDocument.head,
+		synchronize,
+		{
+			attributes: true,
+			childList: true,
+			characterData: true,
+			subtree: true,
+		},
+	));
+	return store;
 }

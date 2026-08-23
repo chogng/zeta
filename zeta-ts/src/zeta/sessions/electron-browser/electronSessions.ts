@@ -10,22 +10,22 @@ import { createSessionsWindowApi } from "./sessionsWindowApi.js";
 
 /** Starts the Code-specific Electron Sessions page. */
 export function startElectronSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
-  installBaseUiStyles();
-  const api = createElectronRendererApi();
-  const sessions = new DisposableStore();
-  const container = document.querySelector<HTMLElement>("#app");
-  if (!container) throw new Error("Sessions renderer requires an #app container");
-  sessions.add(startSessionsWorkbench({
-    modeId,
-    profile,
-    api,
-    sessionsWindowApi: createSessionsWindowApi(),
-    workspaceApi: api.workspace,
-    configurationApi: api.configuration,
-    keybindingsResourceApi: api.keybindings,
-    createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
-    container,
-  }));
-  sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
-  return sessions;
+	installBaseUiStyles();
+	const api = createElectronRendererApi();
+	const sessions = new DisposableStore();
+	const container = document.querySelector<HTMLElement>("#app");
+	if (!container) throw new Error("Sessions renderer requires an #app container");
+	sessions.add(startSessionsWorkbench({
+		modeId,
+		profile,
+		api,
+		sessionsWindowApi: createSessionsWindowApi(),
+		workspaceApi: api.workspace,
+		configurationApi: api.configuration,
+		keybindingsResourceApi: api.keybindings,
+		createContextMenuService: options => createElectronWorkbenchContextMenuService(options, api.nativeContextMenu),
+		container,
+	}));
+	sessions.add(addDisposableListener(window, "pagehide", () => sessions.dispose(), { once: true }));
+	return sessions;
 }

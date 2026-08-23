@@ -1,15 +1,15 @@
 import {
-  DEFAULT_EMPTY_WINDOW_SIZE,
-  DEFAULT_WORKSPACE_WINDOW_SIZE,
+	DEFAULT_EMPTY_WINDOW_SIZE,
+	DEFAULT_WORKSPACE_WINDOW_SIZE,
 } from "../common/window.js";
 import {
-  WorkbenchState,
+	WorkbenchState,
 } from "../../workspace/common/workspace.js";
 
 export const WindowMode = {
-  Normal: "normal",
-  Maximized: "maximized",
-  Fullscreen: "fullscreen",
+	Normal: "normal",
+	Maximized: "maximized",
+	Fullscreen: "fullscreen",
 } as const;
 
 /** Stable string values used by runtime and persisted window state. */
@@ -17,10 +17,10 @@ export type WindowMode = typeof WindowMode[keyof typeof WindowMode];
 
 /** A complete operating-system window rectangle. */
 export interface IWindowBounds {
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+	readonly x: number;
+	readonly y: number;
+	readonly width: number;
+	readonly height: number;
 }
 
 /**
@@ -30,26 +30,26 @@ export interface IWindowBounds {
  * Restored states contain both `x` and `y` after validation.
  */
 export interface IWindowState {
-  readonly mode: WindowMode;
-  readonly width: number;
-  readonly height: number;
-  readonly x?: number;
-  readonly y?: number;
-  readonly displayId?: number;
+	readonly mode: WindowMode;
+	readonly width: number;
+	readonly height: number;
+	readonly x?: number;
+	readonly y?: number;
+	readonly displayId?: number;
 }
 
 /** Returns a fresh default state sized for the requested workbench state. */
 export function defaultWindowState(
-  workbenchState: WorkbenchState,
-  mode: WindowMode = WindowMode.Normal,
+	workbenchState: WorkbenchState,
+	mode: WindowMode = WindowMode.Normal,
 ): IWindowState {
-  const size = workbenchState === WorkbenchState.EMPTY
-    ? DEFAULT_EMPTY_WINDOW_SIZE
-    : DEFAULT_WORKSPACE_WINDOW_SIZE;
+	const size = workbenchState === WorkbenchState.EMPTY
+		? DEFAULT_EMPTY_WINDOW_SIZE
+		: DEFAULT_WORKSPACE_WINDOW_SIZE;
 
-  return {
-    mode,
-    width: size.width,
-    height: size.height,
-  };
+	return {
+		mode,
+		width: size.width,
+		height: size.height,
+	};
 }

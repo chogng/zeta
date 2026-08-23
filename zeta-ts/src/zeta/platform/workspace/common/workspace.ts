@@ -1,20 +1,20 @@
 import { URI } from "../../../base/common/uri.js";
 import type { Event } from "../../../base/common/event.js";
 import {
-  createServiceIdentifier,
+	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 import { getRemoteWorkspacePath, isRemoteResource } from "../../remote/common/remote.js";
 
 /** Describes whether a workbench contains no project, one folder, or a workspace. */
 export const enum WorkbenchState {
-  EMPTY = 1,
-  FOLDER,
-  WORKSPACE,
+	EMPTY = 1,
+	FOLDER,
+	WORKSPACE,
 }
 
 /** Identity shared by empty, single-folder, and multi-root workspaces. */
 export interface IBaseWorkspaceIdentifier {
-  readonly id: string;
+	readonly id: string;
 }
 
 /** Identifies an empty workbench window. */
@@ -23,26 +23,26 @@ export interface IEmptyWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
 
 /** Identifies a workbench opened on one folder. */
 export interface ISingleFolderWorkspaceIdentifier
-  extends IBaseWorkspaceIdentifier {
-  readonly uri: URI;
+	extends IBaseWorkspaceIdentifier {
+	readonly uri: URI;
 }
 
 /** Identifies a workbench opened from a multi-root workspace file. */
 export interface IWorkspaceIdentifier extends IBaseWorkspaceIdentifier {
-  readonly configPath: URI;
+	readonly configPath: URI;
 }
 
 /** Identifies the workspace, folder, or empty context hosted by one window. */
 export type IAnyWorkspaceIdentifier =
-  | IWorkspaceIdentifier
-  | ISingleFolderWorkspaceIdentifier
-  | IEmptyWorkspaceIdentifier;
+	| IWorkspaceIdentifier
+	| ISingleFolderWorkspaceIdentifier
+	| IEmptyWorkspaceIdentifier;
 
 /** A folder belonging to the current resolved workspace. */
 export interface IWorkspaceFolder {
-  readonly uri: URI;
-  readonly name: string;
-  readonly index: number;
+	readonly uri: URI;
+	readonly name: string;
+	readonly index: number;
 }
 
 /**
@@ -52,175 +52,175 @@ export interface IWorkspaceFolder {
  * authorization remain outside the renderer.
  */
 export interface IWorkspace {
-  readonly id: string;
-  readonly folders: readonly IWorkspaceFolder[];
-  readonly configuration?: URI;
-  readonly name?: string;
+	readonly id: string;
+	readonly folders: readonly IWorkspaceFolder[];
+	readonly configuration?: URI;
+	readonly name?: string;
 }
 
 /** One atomic replacement of the workspace hosted by a window. */
 export interface IWorkspaceChangeEvent {
-  readonly previous: IWorkspace;
-  readonly workspace: IWorkspace;
+	readonly previous: IWorkspace;
+	readonly workspace: IWorkspace;
 }
 
 /** Live workspace identity available to workbench contributions. */
 export interface IWorkspaceContextService {
-  readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
-  getWorkspace(): IWorkspace;
-  getWorkbenchState(): WorkbenchState;
+	readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
+	getWorkspace(): IWorkspace;
+	getWorkbenchState(): WorkbenchState;
 }
 
 export const IWorkspaceContextService =
-  createServiceIdentifier<IWorkspaceContextService>(
-    "workspaceContextService",
-  );
+	createServiceIdentifier<IWorkspaceContextService>(
+		"workspaceContextService",
+	);
 
 /** Fallback identity for a window whose durable empty-workspace ID is unknown. */
 export const UNKNOWN_EMPTY_WINDOW_WORKSPACE: IEmptyWorkspaceIdentifier =
-  Object.freeze({ id: "empty-window" });
+	Object.freeze({ id: "empty-window" });
 
 /** Returns whether a value identifies one folder. */
 export function isSingleFolderWorkspaceIdentifier(
-  value: unknown,
+	value: unknown,
 ): value is ISingleFolderWorkspaceIdentifier {
-  const candidate = value as Partial<ISingleFolderWorkspaceIdentifier> | null;
-  return isNonEmptyString(candidate?.id) && candidate?.uri instanceof URI;
+	const candidate = value as Partial<ISingleFolderWorkspaceIdentifier> | null;
+	return isNonEmptyString(candidate?.id) && candidate?.uri instanceof URI;
 }
 
 /** Returns whether a window is backed by a folder hosted through Remote. */
 export function isRemoteWorkspaceIdentifier(value: unknown): value is ISingleFolderWorkspaceIdentifier {
-  return isSingleFolderWorkspaceIdentifier(value) && isRemoteResource(value.uri);
+	return isSingleFolderWorkspaceIdentifier(value) && isRemoteResource(value.uri);
 }
 
 /** Returns whether a value identifies a multi-root workspace file. */
 export function isWorkspaceIdentifier(
-  value: unknown,
+	value: unknown,
 ): value is IWorkspaceIdentifier {
-  const candidate = value as Partial<IWorkspaceIdentifier> | null;
-  return isNonEmptyString(candidate?.id) &&
-    candidate?.configPath instanceof URI;
+	const candidate = value as Partial<IWorkspaceIdentifier> | null;
+	return isNonEmptyString(candidate?.id) &&
+		candidate?.configPath instanceof URI;
 }
 
 /** Returns whether a value identifies an empty workbench. */
 export function isEmptyWorkspaceIdentifier(
-  value: unknown,
+	value: unknown,
 ): value is IEmptyWorkspaceIdentifier {
-  const candidate = value as Partial<IEmptyWorkspaceIdentifier> | null;
-  return isNonEmptyString(candidate?.id) &&
-    !isSingleFolderWorkspaceIdentifier(value) &&
-    !isWorkspaceIdentifier(value);
+	const candidate = value as Partial<IEmptyWorkspaceIdentifier> | null;
+	return isNonEmptyString(candidate?.id) &&
+		!isSingleFolderWorkspaceIdentifier(value) &&
+		!isWorkspaceIdentifier(value);
 }
 
 /** Derives workbench state without storing a second workspace discriminator. */
 export function workbenchStateFromWorkspaceIdentifier(
-  workspace: IAnyWorkspaceIdentifier,
+	workspace: IAnyWorkspaceIdentifier,
 ): WorkbenchState {
-  if (isWorkspaceIdentifier(workspace)) {
-    return WorkbenchState.WORKSPACE;
-  }
-  if (isSingleFolderWorkspaceIdentifier(workspace)) {
-    return WorkbenchState.FOLDER;
-  }
-  return WorkbenchState.EMPTY;
+	if (isWorkspaceIdentifier(workspace)) {
+		return WorkbenchState.WORKSPACE;
+	}
+	if (isSingleFolderWorkspaceIdentifier(workspace)) {
+		return WorkbenchState.FOLDER;
+	}
+	return WorkbenchState.EMPTY;
 }
 
 /** Converts a workspace identity into an IPC-safe plain object. */
 export function serializeWorkspaceIdentifier(
-  workspace: IAnyWorkspaceIdentifier,
+	workspace: IAnyWorkspaceIdentifier,
 ): unknown {
-  if (isWorkspaceIdentifier(workspace)) {
-    return {
-      id: workspace.id,
-      configPath: workspace.configPath.toString(),
-    };
-  }
-  if (isSingleFolderWorkspaceIdentifier(workspace)) {
-    return {
-      id: workspace.id,
-      uri: workspace.uri.toString(),
-    };
-  }
-  return { id: workspace.id };
+	if (isWorkspaceIdentifier(workspace)) {
+		return {
+			id: workspace.id,
+			configPath: workspace.configPath.toString(),
+		};
+	}
+	if (isSingleFolderWorkspaceIdentifier(workspace)) {
+		return {
+			id: workspace.id,
+			uri: workspace.uri.toString(),
+		};
+	}
+	return { id: workspace.id };
 }
 
 /** Validates and revives a workspace identity received over IPC. */
 export function parseWorkspaceIdentifier(
-  value: unknown,
+	value: unknown,
 ): IAnyWorkspaceIdentifier {
-  const record = exactRecord(value);
-  const id = nonEmptyString(record.id, "workspace id");
-  if ("configPath" in record) {
-    requireExactKeys(record, ["configPath", "id"]);
-    return Object.freeze({
-      id,
-      configPath: fileWorkspaceConfigUri(record.configPath, "workspace config path"),
-    });
-  }
-  if ("uri" in record) {
-    requireExactKeys(record, ["id", "uri"]);
-    return Object.freeze({
-      id,
-      uri: workspaceResourceUri(record.uri, "workspace folder uri"),
-    });
-  }
-  requireExactKeys(record, ["id"]);
-  return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id
-    ? UNKNOWN_EMPTY_WINDOW_WORKSPACE
-    : Object.freeze({ id });
+	const record = exactRecord(value);
+	const id = nonEmptyString(record.id, "workspace id");
+	if ("configPath" in record) {
+		requireExactKeys(record, ["configPath", "id"]);
+		return Object.freeze({
+			id,
+			configPath: fileWorkspaceConfigUri(record.configPath, "workspace config path"),
+		});
+	}
+	if ("uri" in record) {
+		requireExactKeys(record, ["id", "uri"]);
+		return Object.freeze({
+			id,
+			uri: workspaceResourceUri(record.uri, "workspace folder uri"),
+		});
+	}
+	requireExactKeys(record, ["id"]);
+	return id === UNKNOWN_EMPTY_WINDOW_WORKSPACE.id
+		? UNKNOWN_EMPTY_WINDOW_WORKSPACE
+		: Object.freeze({ id });
 }
 
 function exactRecord(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("workspace identifier must be an object");
-  }
-  return value as Record<string, unknown>;
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		throw new Error("workspace identifier must be an object");
+	}
+	return value as Record<string, unknown>;
 }
 
 function requireExactKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
+	value: Record<string, unknown>,
+	expected: readonly string[],
 ): void {
-  const actual = Object.keys(value).sort();
-  if (
-    actual.length !== expected.length ||
-    actual.some((key, index) => key !== expected[index])
-  ) {
-    throw new Error(
-      `workspace identifier must contain exactly: ${expected.join(", ")}`,
-    );
-  }
+	const actual = Object.keys(value).sort();
+	if (
+		actual.length !== expected.length ||
+		actual.some((key, index) => key !== expected[index])
+	) {
+		throw new Error(
+			`workspace identifier must contain exactly: ${expected.join(", ")}`,
+		);
+	}
 }
 
 function workspaceResourceUri(value: unknown, field: string): URI {
-  if (typeof value !== "string") {
-    throw new Error(`${field} must be a string`);
-  }
-  const uri = URI.parse(value);
-  if (uri.query || uri.fragment) {
-    throw new Error(`${field} must not contain a query or fragment`);
-  }
-  if (uri.scheme === "file") return uri;
-  if (isRemoteResource(uri)) {
-    getRemoteWorkspacePath(uri);
-    return uri;
-  }
-  throw new Error(`${field} must use the file or zeta-remote scheme`);
+	if (typeof value !== "string") {
+		throw new Error(`${field} must be a string`);
+	}
+	const uri = URI.parse(value);
+	if (uri.query || uri.fragment) {
+		throw new Error(`${field} must not contain a query or fragment`);
+	}
+	if (uri.scheme === "file") return uri;
+	if (isRemoteResource(uri)) {
+		getRemoteWorkspacePath(uri);
+		return uri;
+	}
+	throw new Error(`${field} must use the file or zeta-remote scheme`);
 }
 
 function fileWorkspaceConfigUri(value: unknown, field: string): URI {
-  const uri = workspaceResourceUri(value, field);
-  if (uri.scheme !== "file") throw new Error(`${field} must use the file scheme`);
-  return uri;
+	const uri = workspaceResourceUri(value, field);
+	if (uri.scheme !== "file") throw new Error(`${field} must use the file scheme`);
+	return uri;
 }
 
 function nonEmptyString(value: unknown, field: string): string {
-  if (!isNonEmptyString(value)) {
-    throw new Error(`${field} must be a non-empty string`);
-  }
-  return value;
+	if (!isNonEmptyString(value)) {
+		throw new Error(`${field} must be a non-empty string`);
+	}
+	return value;
 }
 
 function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
+	return typeof value === "string" && value.trim().length > 0;
 }

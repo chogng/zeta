@@ -1,7 +1,7 @@
 import type { Event } from "../../../base/common/event.js";
 import type { URI } from "../../../base/common/uri.js";
 import {
-  createServiceIdentifier,
+	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
 /**
@@ -11,10 +11,10 @@ import {
  * consumers remain responsible for label structure and interaction affordances.
  */
 export interface IFileIconThemeService {
-  readonly onDidFileIconThemeChange: Event<void>;
+	readonly onDidFileIconThemeChange: Event<void>;
 
-  renderFileIcon(resource: URI, container: HTMLElement): void;
+	renderFileIcon(resource: URI, container: HTMLElement): void;
 }
 
 export const IFileIconThemeService =
-  createServiceIdentifier<IFileIconThemeService>("fileIconThemeService");
+	createServiceIdentifier<IFileIconThemeService>("fileIconThemeService");

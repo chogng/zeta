@@ -4,13 +4,13 @@ import type { ITerminalProfile } from "../../../../services/terminal/common/term
 
 /** Selects the product icon for a trusted terminal profile identity. */
 export function terminalProfileIcon(profile: Pick<ITerminalProfile, "profileId"> | undefined): Icon {
-  switch (profile?.profileId) {
-    case "cmd":
-    case "command-prompt":
-      return lxiconsLibrary.terminalCmd;
-    case "git-bash":
-      return lxiconsLibrary.terminalGitBash;
-    default:
-      return lxiconsLibrary.terminal;
-  }
+	switch (profile?.profileId) {
+		case "cmd":
+		case "command-prompt":
+			return lxiconsLibrary.terminalCmd;
+		case "git-bash":
+			return lxiconsLibrary.terminalGitBash;
+		default:
+			return lxiconsLibrary.terminal;
+	}
 }

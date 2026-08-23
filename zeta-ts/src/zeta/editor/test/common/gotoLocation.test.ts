@@ -5,30 +5,30 @@ import { TextModel } from "../../common/model/textModel.js";
 import { parseAsterGotoLocation } from "../../common/commands/gotoLocation.js";
 
 test("Go to Line parses one-based line and column inputs with clamping", () => {
-  using model = new TextModel("zero\none\ntwo");
-  assertLocation(parseAsterGotoLocation(model, "2"), TextPosition.at(1, 0));
-  assertLocation(parseAsterGotoLocation(model, ":2:3"), TextPosition.at(1, 2));
-  assertLocation(parseAsterGotoLocation(model, "3,99"), TextPosition.at(2, 3));
-  assertLocation(parseAsterGotoLocation(model, "0:0"), TextPosition.at(0, 0));
+	using model = new TextModel("zero\none\ntwo");
+	assertLocation(parseAsterGotoLocation(model, "2"), TextPosition.at(1, 0));
+	assertLocation(parseAsterGotoLocation(model, ":2:3"), TextPosition.at(1, 2));
+	assertLocation(parseAsterGotoLocation(model, "3,99"), TextPosition.at(2, 3));
+	assertLocation(parseAsterGotoLocation(model, "0:0"), TextPosition.at(0, 0));
 });
 
 test("Go to Line supports backwards line/column values and UTF-16 offsets", () => {
-  using model = new TextModel("alpha\n😊beta\ngamma");
-  assertLocation(parseAsterGotoLocation(model, "-1:-1"), TextPosition.at(2, 5));
-  assertLocation(parseAsterGotoLocation(model, "::8"), TextPosition.at(1, 1));
-  assertLocation(parseAsterGotoLocation(model, "::-1"), TextPosition.at(2, 4));
+	using model = new TextModel("alpha\n😊beta\ngamma");
+	assertLocation(parseAsterGotoLocation(model, "-1:-1"), TextPosition.at(2, 5));
+	assertLocation(parseAsterGotoLocation(model, "::8"), TextPosition.at(1, 1));
+	assertLocation(parseAsterGotoLocation(model, "::-1"), TextPosition.at(2, 4));
 });
 
 test("Go to Line reports incomplete and invalid input without changing the model", () => {
-  using model = new TextModel("alpha");
-  assert.equal(parseAsterGotoLocation(model, "").kind, "empty");
-  assert.equal(parseAsterGotoLocation(model, "line").kind, "invalid");
-  assert.equal(parseAsterGotoLocation(model, "1:").kind, "invalid");
-  assert.equal(parseAsterGotoLocation(model, "::offset").kind, "invalid");
-  assert.equal(model.getText(), "alpha");
+	using model = new TextModel("alpha");
+	assert.equal(parseAsterGotoLocation(model, "").kind, "empty");
+	assert.equal(parseAsterGotoLocation(model, "line").kind, "invalid");
+	assert.equal(parseAsterGotoLocation(model, "1:").kind, "invalid");
+	assert.equal(parseAsterGotoLocation(model, "::offset").kind, "invalid");
+	assert.equal(model.getText(), "alpha");
 });
 
 function assertLocation(result: ReturnType<typeof parseAsterGotoLocation>, position: TextPosition): void {
-  assert.equal(result.kind, "location");
-  if (result.kind === "location") assert.deepEqual(result.location.position, position);
+	assert.equal(result.kind, "location");
+	if (result.kind === "location") assert.deepEqual(result.location.position, position);
 }

@@ -11,83 +11,83 @@ import { parseDocument } from "./documentWorkingCopy.js";
 
 /** Browser implementation of Aster's structured document-model service. */
 export class BrowserDocumentModelService extends DisposableOwner implements IDocumentModelService {
-  constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
-    super();
-    if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
-      this.dispose();
-      throw new TypeError("Aster document model service requires a Workbench text file service");
-    }
-  }
+	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
+		super();
+		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
+			this.dispose();
+			throw new TypeError("Aster document model service requires a Workbench text file service");
+		}
+	}
 
-  async acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference> {
-    throwIfCancelled(signal, "Aster document model acquisition was cancelled");
-    const content = await this.textFiles.resolve({
-      resource: input.resource,
-      ...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
-    }, signal);
-    throwIfCancelled(signal, "Aster document model acquisition was cancelled");
-    const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
-    const model = new DocumentModel(input.schema, document, { plugins: input.plugins });
-    const workingCopy = new DocumentWorkingCopy({
-      resource: input.resource,
-      model,
-      initialDocument: document,
-      initialRevision: content.revision,
-      textFiles: this.textFiles,
-      workingCopyService: this.workingCopyService,
-      onSave: input.onSave,
-      createEmptyDocument: input.createEmptyDocument,
-    });
-    return new BrowserDocumentModelReference(model, workingCopy);
-  }
+	async acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference> {
+		throwIfCancelled(signal, "Aster document model acquisition was cancelled");
+		const content = await this.textFiles.resolve({
+			resource: input.resource,
+			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
+		}, signal);
+		throwIfCancelled(signal, "Aster document model acquisition was cancelled");
+		const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
+		const model = new DocumentModel(input.schema, document, { plugins: input.plugins });
+		const workingCopy = new DocumentWorkingCopy({
+			resource: input.resource,
+			model,
+			initialDocument: document,
+			initialRevision: content.revision,
+			textFiles: this.textFiles,
+			workingCopyService: this.workingCopyService,
+			onSave: input.onSave,
+			createEmptyDocument: input.createEmptyDocument,
+		});
+		return new BrowserDocumentModelReference(model, workingCopy);
+	}
 }
 
 class BrowserDocumentModelReference extends DisposableOwner implements DocumentModelReference {
-  readonly resource;
-  readonly model;
-  readonly onDidChangeDirty;
-  readonly onDidChangeExternalChange;
-  readonly onDidChangeContent;
-  readonly backupKind;
-  readonly backupContentType;
+	readonly resource;
+	readonly model;
+	readonly onDidChangeDirty;
+	readonly onDidChangeExternalChange;
+	readonly onDidChangeContent;
+	readonly backupKind;
+	readonly backupContentType;
 
-  constructor(model: DocumentModel, private readonly workingCopy: DocumentWorkingCopy) {
-    super();
-    this.model = this.own(model);
-    this.workingCopy = this.own(workingCopy);
-    this.resource = workingCopy.resource;
-    this.onDidChangeDirty = workingCopy.onDidChangeDirty;
-    this.onDidChangeExternalChange = workingCopy.onDidChangeExternalChange;
-    this.onDidChangeContent = workingCopy.onDidChangeContent;
-    this.backupKind = workingCopy.backupKind;
-    this.backupContentType = workingCopy.backupContentType;
-  }
+	constructor(model: DocumentModel, private readonly workingCopy: DocumentWorkingCopy) {
+		super();
+		this.model = this.own(model);
+		this.workingCopy = this.own(workingCopy);
+		this.resource = workingCopy.resource;
+		this.onDidChangeDirty = workingCopy.onDidChangeDirty;
+		this.onDidChangeExternalChange = workingCopy.onDidChangeExternalChange;
+		this.onDidChangeContent = workingCopy.onDidChangeContent;
+		this.backupKind = workingCopy.backupKind;
+		this.backupContentType = workingCopy.backupContentType;
+	}
 
-  get isDirty(): boolean {
-    return this.workingCopy.isDirty;
-  }
+	get isDirty(): boolean {
+		return this.workingCopy.isDirty;
+	}
 
-  get hasExternalChange(): boolean {
-    return this.workingCopy.hasExternalChange;
-  }
+	get hasExternalChange(): boolean {
+		return this.workingCopy.hasExternalChange;
+	}
 
-  backup(): string {
-    return this.workingCopy.backup();
-  }
+	backup(): string {
+		return this.workingCopy.backup();
+	}
 
-  restoreBackup(content: string): void {
-    this.workingCopy.restoreBackup(content);
-  }
+	restoreBackup(content: string): void {
+		this.workingCopy.restoreBackup(content);
+	}
 
-  save(signal: AbortSignal): Promise<void> {
-    return this.workingCopy.save(signal);
-  }
+	save(signal: AbortSignal): Promise<void> {
+		return this.workingCopy.save(signal);
+	}
 
-  saveAs(resource: DocumentModelReference["resource"], signal: AbortSignal): Promise<void> {
-    return this.workingCopy.saveAs(resource, signal);
-  }
+	saveAs(resource: DocumentModelReference["resource"], signal: AbortSignal): Promise<void> {
+		return this.workingCopy.saveAs(resource, signal);
+	}
 
-  revert(signal: AbortSignal): Promise<void> {
-    return this.workingCopy.revert(signal);
-  }
+	revert(signal: AbortSignal): Promise<void> {
+		return this.workingCopy.revert(signal);
+	}
 }

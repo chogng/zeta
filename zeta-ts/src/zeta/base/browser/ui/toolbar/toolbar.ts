@@ -9,19 +9,19 @@ import type { AnchorPosition } from "../contextview/contextview.js";
 import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
 
 export interface ToolBarOptions {
-  readonly contextMenuProvider: IContextMenuProvider;
-  readonly ariaLabel?: string;
-  readonly orientation?: ActionBarOrientation;
-  readonly actionViewItemProvider?: ActionViewItemProvider;
-  readonly presentation?: ToolBarPresentation;
-  readonly highlightToggledItems?: boolean;
-  readonly moreActionsPlacement?: MoreActionsPlacement;
-  readonly hoverAnchorPosition?: AnchorPosition;
+	readonly contextMenuProvider: IContextMenuProvider;
+	readonly ariaLabel?: string;
+	readonly orientation?: ActionBarOrientation;
+	readonly actionViewItemProvider?: ActionViewItemProvider;
+	readonly presentation?: ToolBarPresentation;
+	readonly highlightToggledItems?: boolean;
+	readonly moreActionsPlacement?: MoreActionsPlacement;
+	readonly hoverAnchorPosition?: AnchorPosition;
 }
 
 /** Places the synthetic More Actions item relative to a primary action. */
 export interface MoreActionsPlacement {
-  readonly beforeActionId: string;
+	readonly beforeActionId: string;
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
@@ -34,100 +34,100 @@ export type ToolBarPresentation = "default" | "inherit-foreground";
  * Actions item and delegates its secondary menu to the supplied provider.
  */
 export class ToolBar extends DisposableOwner {
-  readonly element: HTMLDivElement;
-  private readonly actionBar: ActionBar;
-  private readonly moreActions = new MoreActionsAction();
-  private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
-  private secondaryActions: readonly IAction[] = [];
+	readonly element: HTMLDivElement;
+	private readonly actionBar: ActionBar;
+	private readonly moreActions = new MoreActionsAction();
+	private readonly moreActionsPlacement: MoreActionsPlacement | undefined;
+	private secondaryActions: readonly IAction[] = [];
 
-  constructor(container: HTMLElement, options: ToolBarOptions) {
-    super();
-    this.moreActionsPlacement = options.moreActionsPlacement;
-    const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
-    this.actionBar = this.own(new ActionBar(container, {
-      ariaLabel: options.ariaLabel,
-      orientation: options.orientation,
-      highlightToggledItems: options.highlightToggledItems,
-      actionViewItemOptions,
-      actionViewItemProvider: (action, actionOptions) => {
-        if (action === this.moreActions) {
-          return new MoreActionsViewItem(
-            action,
-            () => this.secondaryActions,
-            options.contextMenuProvider,
-            actionOptions,
-          );
-        }
-        return options.actionViewItemProvider?.(action, actionOptions);
-      },
-    }));
-    this.element = this.actionBar.element;
-    this.element.classList.add("zeta-toolbar", `zeta-toolbar-${options.presentation ?? "default"}`);
-  }
+	constructor(container: HTMLElement, options: ToolBarOptions) {
+		super();
+		this.moreActionsPlacement = options.moreActionsPlacement;
+		const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
+		this.actionBar = this.own(new ActionBar(container, {
+			ariaLabel: options.ariaLabel,
+			orientation: options.orientation,
+			highlightToggledItems: options.highlightToggledItems,
+			actionViewItemOptions,
+			actionViewItemProvider: (action, actionOptions) => {
+				if (action === this.moreActions) {
+					return new MoreActionsViewItem(
+						action,
+						() => this.secondaryActions,
+						options.contextMenuProvider,
+						actionOptions,
+					);
+				}
+				return options.actionViewItemProvider?.(action, actionOptions);
+			},
+		}));
+		this.element = this.actionBar.element;
+		this.element.classList.add("zeta-toolbar", `zeta-toolbar-${options.presentation ?? "default"}`);
+	}
 
-  setActions(
-    primaryActions: readonly IAction[],
-    secondaryActions: readonly IAction[] = [],
-  ): void {
-    const primary = cleanSeparators(primaryActions);
-    this.secondaryActions = cleanSeparators(secondaryActions);
-    this.actionBar.setActions(this.withMoreActions(primary));
-  }
+	setActions(
+		primaryActions: readonly IAction[],
+		secondaryActions: readonly IAction[] = [],
+	): void {
+		const primary = cleanSeparators(primaryActions);
+		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.actionBar.setActions(this.withMoreActions(primary));
+	}
 
-  /** Refreshes retained action slots when their ordering and presence are unchanged. */
-  protected updateActions(
-    primaryActions: readonly IAction[],
-    secondaryActions: readonly IAction[] = [],
-  ): void {
-    const primary = cleanSeparators(primaryActions);
-    this.secondaryActions = cleanSeparators(secondaryActions);
-    this.actionBar.updateActions(this.withMoreActions(primary));
-  }
+	/** Refreshes retained action slots when their ordering and presence are unchanged. */
+	protected updateActions(
+		primaryActions: readonly IAction[],
+		secondaryActions: readonly IAction[] = [],
+	): void {
+		const primary = cleanSeparators(primaryActions);
+		this.secondaryActions = cleanSeparators(secondaryActions);
+		this.actionBar.updateActions(this.withMoreActions(primary));
+	}
 
-  private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
-    if (this.secondaryActions.length === 0) return primary;
-    const beforeActionId = this.moreActionsPlacement?.beforeActionId;
-    const index = beforeActionId === undefined
-      ? -1
-      : primary.findIndex((action) => action.id === beforeActionId);
-    if (index < 0) return [...primary, this.moreActions];
-    return [
-      ...primary.slice(0, index),
-      this.moreActions,
-      ...primary.slice(index),
-    ];
-  }
+	private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
+		if (this.secondaryActions.length === 0) return primary;
+		const beforeActionId = this.moreActionsPlacement?.beforeActionId;
+		const index = beforeActionId === undefined
+			? -1
+			: primary.findIndex((action) => action.id === beforeActionId);
+		if (index < 0) return [...primary, this.moreActions];
+		return [
+			...primary.slice(0, index),
+			this.moreActions,
+			...primary.slice(index),
+		];
+	}
 }
 
 class MoreActionsAction implements IAction {
-  readonly id = "zeta.toolbar.moreActions";
-  readonly label = "More Actions";
-  readonly tooltip = "More Actions";
-  readonly icon = lxiconsLibrary.ellipsis;
-  readonly enabled = true;
-  readonly checked = undefined;
+	readonly id = "zeta.toolbar.moreActions";
+	readonly label = "More Actions";
+	readonly tooltip = "More Actions";
+	readonly icon = lxiconsLibrary.ellipsis;
+	readonly enabled = true;
+	readonly checked = undefined;
 
-  run(): void {}
+	run(): void {}
 }
 
 class MoreActionsViewItem extends DropdownMenuActionViewItem {
-  override render(container: HTMLElement): void {
-    super.render(container);
-    container.classList.add("zeta-toolbar-more-actions");
-  }
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add("zeta-toolbar-more-actions");
+	}
 }
 
 function cleanSeparators(actions: readonly IAction[]): IAction[] {
-  const result: IAction[] = [];
-  for (const action of actions) {
-    if (
-      action instanceof Separator &&
-      (result.length === 0 || result[result.length - 1] instanceof Separator)
-    ) {
-      continue;
-    }
-    result.push(action);
-  }
-  if (result[result.length - 1] instanceof Separator) result.pop();
-  return result;
+	const result: IAction[] = [];
+	for (const action of actions) {
+		if (
+			action instanceof Separator &&
+			(result.length === 0 || result[result.length - 1] instanceof Separator)
+		) {
+			continue;
+		}
+		result.push(action);
+	}
+	if (result[result.length - 1] instanceof Separator) result.pop();
+	return result;
 }

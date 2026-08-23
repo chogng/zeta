@@ -15,31 +15,31 @@ const MAX_OCCURRENCE_HIGHLIGHTS = 10_000;
  * presentation or selection mutation.
  */
 export function getOccurrenceHighlightRanges(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): readonly TextRange[] {
-  const source = readOccurrenceSource(model, selections, wordPattern);
-  if (!source) return Object.freeze([]);
-  const matches = findTextMatches(model, {
-    pattern: source.text,
-    matchCase: true,
-    wholeWord: source.wholeWord && !wordPattern,
-  }, { resultLimit: MAX_OCCURRENCE_HIGHLIGHTS });
-  return Object.freeze(matches.flatMap(match => wordPattern && source.wholeWord && !isPatternWord(model, match.range, wordPattern) ? [] : [match.range]));
+	const source = readOccurrenceSource(model, selections, wordPattern);
+	if (!source) return Object.freeze([]);
+	const matches = findTextMatches(model, {
+		pattern: source.text,
+		matchCase: true,
+		wholeWord: source.wholeWord && !wordPattern,
+	}, { resultLimit: MAX_OCCURRENCE_HIGHLIGHTS });
+	return Object.freeze(matches.flatMap(match => wordPattern && source.wholeWord && !isPatternWord(model, match.range, wordPattern) ? [] : [match.range]));
 }
 
 function readOccurrenceSource(model: TextModel, selections: TextSelectionSet, wordPattern: RegExp | undefined): { readonly text: string; readonly wholeWord: boolean } | undefined {
-  const selection = selections.primary;
-  if (!selectionFitsModel(model, selection.range)) return undefined;
-  if (!selection.collapsed) {
-    if (selection.range.start.lineIndex !== selection.range.end.lineIndex) return undefined;
-    const text = model.getTextInRange(selection.range);
-    return text.length > 0 ? Object.freeze({ text, wholeWord: false }) : undefined;
-  }
-  const range = getWordSelectionRange(model, selection.active, wordPattern);
-  if (range.empty) return undefined;
-  const segment = wordPattern ? { wordLike: true } : getTextWordSegments(model.getLineContent(selection.active.lineIndex)).find(candidate =>
-    candidate.start === range.start.columnIndex && candidate.end === range.end.columnIndex
-  );
-  if (!segment?.wordLike) return undefined;
-  return Object.freeze({ text: model.getTextInRange(range), wholeWord: true });
+	const selection = selections.primary;
+	if (!selectionFitsModel(model, selection.range)) return undefined;
+	if (!selection.collapsed) {
+		if (selection.range.start.lineIndex !== selection.range.end.lineIndex) return undefined;
+		const text = model.getTextInRange(selection.range);
+		return text.length > 0 ? Object.freeze({ text, wholeWord: false }) : undefined;
+	}
+	const range = getWordSelectionRange(model, selection.active, wordPattern);
+	if (range.empty) return undefined;
+	const segment = wordPattern ? { wordLike: true } : getTextWordSegments(model.getLineContent(selection.active.lineIndex)).find(candidate =>
+		candidate.start === range.start.columnIndex && candidate.end === range.end.columnIndex
+	);
+	if (!segment?.wordLike) return undefined;
+	return Object.freeze({ text: model.getTextInRange(range), wholeWord: true });
 }
 
 /**
@@ -48,20 +48,20 @@ function readOccurrenceSource(model: TextModel, selections: TextSelectionSet, wo
  * having no occurrence source; the following selection event recomputes it.
  */
 function selectionFitsModel(model: TextModel, range: TextRange): boolean {
-  return positionFitsModel(model, range.start.lineIndex, range.start.columnIndex) &&
-    positionFitsModel(model, range.end.lineIndex, range.end.columnIndex);
+	return positionFitsModel(model, range.start.lineIndex, range.start.columnIndex) &&
+		positionFitsModel(model, range.end.lineIndex, range.end.columnIndex);
 }
 
 function positionFitsModel(model: TextModel, lineIndex: number, columnIndex: number): boolean {
-  return Number.isSafeInteger(lineIndex) &&
-    Number.isSafeInteger(columnIndex) &&
-    lineIndex >= 0 &&
-    columnIndex >= 0 &&
-    lineIndex < model.lineCount &&
-    columnIndex <= model.getLineLength(lineIndex);
+	return Number.isSafeInteger(lineIndex) &&
+		Number.isSafeInteger(columnIndex) &&
+		lineIndex >= 0 &&
+		columnIndex >= 0 &&
+		lineIndex < model.lineCount &&
+		columnIndex <= model.getLineLength(lineIndex);
 }
 
 function isPatternWord(model: TextModel, range: TextRange, wordPattern: RegExp): boolean {
-  const selected = getWordSelectionRange(model, range.start, wordPattern);
-  return selected.start.compareTo(range.start) === 0 && selected.end.compareTo(range.end) === 0;
+	const selected = getWordSelectionRange(model, range.start, wordPattern);
+	return selected.start.compareTo(range.start) === 0 && selected.end.compareTo(range.end) === 0;
 }

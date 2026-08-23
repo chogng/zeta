@@ -4,27 +4,27 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 export type LocaleId = string;
 
 export interface LanguagePackCatalog {
-  readonly schemaVersion: 1;
-  readonly locale: LocaleId;
-  readonly languageName: string;
-  readonly localizedLanguageName: string;
-  readonly catalogVersion: string;
-  readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
+	readonly schemaVersion: 1;
+	readonly locale: LocaleId;
+	readonly languageName: string;
+	readonly localizedLanguageName: string;
+	readonly catalogVersion: string;
+	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export interface LanguagePackInfo {
-  readonly locale: LocaleId;
-  readonly languageName: string;
-  readonly localizedLanguageName: string;
-  readonly source: "builtin" | "marketplace";
+	readonly locale: LocaleId;
+	readonly languageName: string;
+	readonly localizedLanguageName: string;
+	readonly source: "builtin" | "marketplace";
 }
 
 export interface LanguagePackPackage {
-  readonly id: string;
-  readonly version: string;
-  readonly displayName: string;
-  readonly description: string;
-  readonly installed: boolean;
+	readonly id: string;
+	readonly version: string;
+	readonly displayName: string;
+	readonly description: string;
+	readonly installed: boolean;
 }
 
 /**
@@ -35,15 +35,15 @@ export interface LanguagePackPackage {
  * contract without depending on Marketplace transport details.
  */
 export interface ILanguagePackService {
-  readonly onDidChange: Event<void>;
-  readonly whenReady: Promise<void>;
-  readonly catalogs: readonly LanguagePackCatalog[];
-  readonly availableLocales: readonly LanguagePackInfo[];
-  readonly installedPackages: readonly LanguagePackPackage[];
+	readonly onDidChange: Event<void>;
+	readonly whenReady: Promise<void>;
+	readonly catalogs: readonly LanguagePackCatalog[];
+	readonly availableLocales: readonly LanguagePackInfo[];
+	readonly installedPackages: readonly LanguagePackPackage[];
 
-  search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]>;
-  install(packageId: string, version?: string): Promise<void>;
-  refresh(): Promise<void>;
+	search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]>;
+	install(packageId: string, version?: string): Promise<void>;
+	refresh(): Promise<void>;
 }
 
 export const ILanguagePackService = createServiceIdentifier<ILanguagePackService>("languagePackService");

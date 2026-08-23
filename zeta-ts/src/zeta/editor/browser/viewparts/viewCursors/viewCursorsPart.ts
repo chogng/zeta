@@ -6,18 +6,18 @@ import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Projects primary and secondary carets without owning cursor positions. */
 export class ViewCursorsPart extends EditorOverlayPart {
-  private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: EditorSelectionController | undefined;
 
-  constructor(context: EditorViewContext, selectionController: EditorSelectionController | undefined) {
-    super(context);
-    this.selectionController = selectionController;
-  }
+	constructor(context: EditorViewContext, selectionController: EditorSelectionController | undefined) {
+		super(context);
+		this.selectionController = selectionController;
+	}
 
-  public render(layout: EditorViewportLayout): void {
-    const context = this.context.overlayContext(layout);
-    if (!context) {
-      return;
-    }
-    projectAsterCursorOverlays(context, this.selectionController);
-  }
+	public render(layout: EditorViewportLayout): void {
+		const context = this.context.overlayContext(layout);
+		if (!context) {
+			return;
+		}
+		projectAsterCursorOverlays(context, this.selectionController);
+	}
 }

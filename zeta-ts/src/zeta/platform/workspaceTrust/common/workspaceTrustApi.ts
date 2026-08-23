@@ -2,8 +2,8 @@ import type { ConfigCommandResult, WorkspaceTrustForgetParams, WorkspaceTrustLis
 
 /** Transport-only Workspace Trust management operations. */
 export interface IWorkspaceTrustApi {
-  list(): Promise<WorkspaceTrustListResult>;
-  read(params: WorkspaceTrustReadParams): Promise<WorkspaceTrustReadResult>;
-  set(params: WorkspaceTrustSetParams): Promise<ConfigCommandResult>;
-  forget(params: WorkspaceTrustForgetParams): Promise<ConfigCommandResult>;
+	list(): Promise<WorkspaceTrustListResult>;
+	read(params: WorkspaceTrustReadParams): Promise<WorkspaceTrustReadResult>;
+	set(params: WorkspaceTrustSetParams): Promise<ConfigCommandResult>;
+	forget(params: WorkspaceTrustForgetParams): Promise<ConfigCommandResult>;
 }

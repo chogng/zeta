@@ -16,45 +16,45 @@ export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | 
 
 /** Workbench-owned public identity for one discovered declarative extension. */
 export interface ExtensionDescriptor {
-  readonly id: string;
-  readonly name: string;
-  readonly publisher: string;
-  readonly version: string;
-  readonly displayName: string;
-  readonly sourceKind: ExtensionSourceKind;
-  readonly manifestSha256: string;
-  readonly packageSha256: string;
+	readonly id: string;
+	readonly name: string;
+	readonly publisher: string;
+	readonly version: string;
+	readonly displayName: string;
+	readonly sourceKind: ExtensionSourceKind;
+	readonly manifestSha256: string;
+	readonly packageSha256: string;
 }
 
 export interface ExtensionDiagnostic {
-  readonly source: string;
-  readonly subject: string | undefined;
-  readonly code: ExtensionDiagnosticCode;
-  readonly message: string;
+	readonly source: string;
+	readonly subject: string | undefined;
+	readonly code: ExtensionDiagnosticCode;
+	readonly message: string;
 }
 
 /** Immutable Workbench projection of the transport-owned extension catalog. */
 export interface ExtensionCatalog {
-  readonly generation: number;
-  readonly extensions: readonly ExtensionDescriptor[];
-  readonly diagnostics: readonly ExtensionDiagnostic[];
+	readonly generation: number;
+	readonly extensions: readonly ExtensionDescriptor[];
+	readonly diagnostics: readonly ExtensionDiagnostic[];
 }
 
 export interface ExtensionServiceFailure {
-  readonly extension: ExtensionDescriptor | undefined;
-  readonly error: unknown;
+	readonly extension: ExtensionDescriptor | undefined;
+	readonly error: unknown;
 }
 
 /** Workbench-owned extension lifecycle and declarative contribution boundary. */
 export interface IExtensionService extends IDisposable {
-  readonly currentCatalog: ExtensionCatalog;
-  readonly themes: ExtensionThemeSource;
-  readonly fileTemplates: ExtensionFileTemplateSource;
-  readonly debugAdapters: ExtensionDebugAdapterSource;
-  readonly onDidChange: Event<ExtensionCatalog>;
-  readonly onDidFail: Event<ExtensionServiceFailure>;
-  start(): Promise<void>;
-  reload(): Promise<void>;
+	readonly currentCatalog: ExtensionCatalog;
+	readonly themes: ExtensionThemeSource;
+	readonly fileTemplates: ExtensionFileTemplateSource;
+	readonly debugAdapters: ExtensionDebugAdapterSource;
+	readonly onDidChange: Event<ExtensionCatalog>;
+	readonly onDidFail: Event<ExtensionServiceFailure>;
+	start(): Promise<void>;
+	reload(): Promise<void>;
 }
 
 export const IExtensionService = createServiceIdentifier<IExtensionService>("extensionService");

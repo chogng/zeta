@@ -22,272 +22,272 @@ const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 
 /** Tabbed xterm panel whose persistent widgets preserve per-instance terminal state. */
 export class TerminalViewPane extends ViewPane {
-  private readonly terminalService: ITerminalService;
-  private readonly themeService: IThemeService;
-  private readonly titleActions: TerminalTitleActions;
-  private readonly statusElement: HTMLDivElement;
-  private readonly tabList: TabList<ITerminalInstance>;
-  private readonly tabsLayout: TerminalTabsLayout;
-  private readonly widgetsElement: HTMLDivElement;
-  private readonly items = new Map<ITerminalInstance, TerminalViewItem>();
-  private draggedTerminal: ITerminalInstance | undefined;
-  private creating = false;
-  private disposed = false;
+	private readonly terminalService: ITerminalService;
+	private readonly themeService: IThemeService;
+	private readonly titleActions: TerminalTitleActions;
+	private readonly statusElement: HTMLDivElement;
+	private readonly tabList: TabList<ITerminalInstance>;
+	private readonly tabsLayout: TerminalTabsLayout;
+	private readonly widgetsElement: HTMLDivElement;
+	private readonly items = new Map<ITerminalInstance, TerminalViewItem>();
+	private draggedTerminal: ITerminalInstance | undefined;
+	private creating = false;
+	private disposed = false;
 
-  constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
-    super(container, options);
-    this.defer(() => {
-      this.disposed = true;
-    });
-    this.terminalService = terminalService;
-    this.themeService = themeService;
-    this.element.classList.add("zeta-terminal-view");
-    this.headerElement.remove();
-    this.titleActions = this.own(new TerminalTitleActions(this.headerActionsElement, {
-      menuService,
-      contextMenuService,
-      contextKeyService,
-      createTerminal: (profileId) => this.createTerminal(profileId),
-      focusActive: () => this.focus(),
-      relaunchActive: () => this.relaunchActive(),
-      killActive: () => this.killActive(),
-      clearActive: () => this.clearActive(),
-    }));
+	constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
+		super(container, options);
+		this.defer(() => {
+			this.disposed = true;
+		});
+		this.terminalService = terminalService;
+		this.themeService = themeService;
+		this.element.classList.add("zeta-terminal-view");
+		this.headerElement.remove();
+		this.titleActions = this.own(new TerminalTitleActions(this.headerActionsElement, {
+			menuService,
+			contextMenuService,
+			contextKeyService,
+			createTerminal: (profileId) => this.createTerminal(profileId),
+			focusActive: () => this.focus(),
+			relaunchActive: () => this.relaunchActive(),
+			killActive: () => this.killActive(),
+			clearActive: () => this.clearActive(),
+		}));
 
-    this.contentElement.classList.add("zeta-terminal-content");
-    this.statusElement = h(container.ownerDocument, "div");
-    this.statusElement.className = "zeta-terminal-status";
-    this.statusElement.setAttribute("role", "status");
-    this.statusElement.hidden = true;
-    this.tabList = this.own(new TabList(this.contentElement, {
-      ariaLabel: "Terminal instances",
-      orientation: "vertical",
-      draggable: true,
-      dragAndDrop: {
-        canDrop: () => this.draggedTerminal !== undefined,
-        onDragStart: (instance) => {
-          this.draggedTerminal = instance;
-        },
-        onDrop: (target, position) => {
-          const source = this.draggedTerminal;
-          if (source) this.moveTerminalTab(source, target, position);
-        },
-        onDragEnd: () => {
-          this.draggedTerminal = undefined;
-        },
-      },
-      closeActionIcon: lxiconsLibrary.trash,
-      onActivate: (instance) => {
-        this.terminalService.setActiveInstance(instance);
-        this.focus();
-      },
-      onClose: (instance) => {
-        void this.terminalService.closeTerminal(instance).catch(() => {});
-      },
-    }));
-    this.tabList.element.classList.add("zeta-terminal-tabs");
-    this.widgetsElement = h(container.ownerDocument, "div");
-    this.widgetsElement.className = "zeta-terminal-widgets";
-    this.tabsLayout = this.own(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
-    this.contentElement.append(this.statusElement, this.tabsLayout.element);
+		this.contentElement.classList.add("zeta-terminal-content");
+		this.statusElement = h(container.ownerDocument, "div");
+		this.statusElement.className = "zeta-terminal-status";
+		this.statusElement.setAttribute("role", "status");
+		this.statusElement.hidden = true;
+		this.tabList = this.own(new TabList(this.contentElement, {
+			ariaLabel: "Terminal instances",
+			orientation: "vertical",
+			draggable: true,
+			dragAndDrop: {
+				canDrop: () => this.draggedTerminal !== undefined,
+				onDragStart: (instance) => {
+					this.draggedTerminal = instance;
+				},
+				onDrop: (target, position) => {
+					const source = this.draggedTerminal;
+					if (source) this.moveTerminalTab(source, target, position);
+				},
+				onDragEnd: () => {
+					this.draggedTerminal = undefined;
+				},
+			},
+			closeActionIcon: lxiconsLibrary.trash,
+			onActivate: (instance) => {
+				this.terminalService.setActiveInstance(instance);
+				this.focus();
+			},
+			onClose: (instance) => {
+				void this.terminalService.closeTerminal(instance).catch(() => {});
+			},
+		}));
+		this.tabList.element.classList.add("zeta-terminal-tabs");
+		this.widgetsElement = h(container.ownerDocument, "div");
+		this.widgetsElement.className = "zeta-terminal-widgets";
+		this.tabsLayout = this.own(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
+		this.contentElement.append(this.statusElement, this.tabsLayout.element);
 
-    for (const instance of terminalService.instances) this.addInstance(instance);
-    this.own(terminalService.onDidCreateInstance((instance) => {
-      this.addInstance(instance);
-      this.render();
-    }));
-    this.own(terminalService.onDidDisposeInstance((instance) => {
-      this.removeInstance(instance);
-      this.render();
-    }));
-    this.own(terminalService.onDidChangeActiveInstance(() => this.render()));
-    this.own(terminalService.onDidChangeInstances(() => this.render()));
-    this.own(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
-      if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
-        void this.createTerminal();
-      }
-    }));
-    this.own(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
-      if (workspace.folders.length === 1 && this.terminalService.instances.length === 0) void this.initialize();
-    }));
+		for (const instance of terminalService.instances) this.addInstance(instance);
+		this.own(terminalService.onDidCreateInstance((instance) => {
+			this.addInstance(instance);
+			this.render();
+		}));
+		this.own(terminalService.onDidDisposeInstance((instance) => {
+			this.removeInstance(instance);
+			this.render();
+		}));
+		this.own(terminalService.onDidChangeActiveInstance(() => this.render()));
+		this.own(terminalService.onDidChangeInstances(() => this.render()));
+		this.own(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
+			if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
+				void this.createTerminal();
+			}
+		}));
+		this.own(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+			if (workspace.folders.length === 1 && this.terminalService.instances.length === 0) void this.initialize();
+		}));
 
-    this.own(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
-      const bounds = this.tabsLayout.element.getBoundingClientRect();
-      this.tabsLayout.layout(bounds.width, bounds.height);
-      this.activeItem()?.widget.fit();
-    }));
-    this.render();
-    queueMicrotask(() => {
-      if (!this.disposed) void this.initialize();
-    });
-  }
+		this.own(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
+			const bounds = this.tabsLayout.element.getBoundingClientRect();
+			this.tabsLayout.layout(bounds.width, bounds.height);
+			this.activeItem()?.widget.fit();
+		}));
+		this.render();
+		queueMicrotask(() => {
+			if (!this.disposed) void this.initialize();
+		});
+	}
 
-  override focus(): void {
-    this.activeItem()?.widget.focus();
-  }
+	override focus(): void {
+		this.activeItem()?.widget.focus();
+	}
 
-  override get partTitleProjection(): PartTitleProjection {
-    return { actions: this.titleActions.element };
-  }
+	override get partTitleProjection(): PartTitleProjection {
+		return { actions: this.titleActions.element };
+	}
 
-  private async initialize(): Promise<void> {
-    if (!this.hasWorkspaceFolder()) {
-      this.titleActions.setProfiles([]);
-      this.setStatus("Open a folder to use the terminal.");
-      return;
-    }
-    try {
-      const profiles = await this.terminalService.getProfiles();
-      if (this.disposed) return;
-      this.titleActions.setProfiles(profiles);
-    } catch {
-      if (this.disposed) return;
-      this.titleActions.setProfiles([]);
-    }
-    if (!this.terminalService.activeInstance) await this.createTerminal();
-  }
+	private async initialize(): Promise<void> {
+		if (!this.hasWorkspaceFolder()) {
+			this.titleActions.setProfiles([]);
+			this.setStatus("Open a folder to use the terminal.");
+			return;
+		}
+		try {
+			const profiles = await this.terminalService.getProfiles();
+			if (this.disposed) return;
+			this.titleActions.setProfiles(profiles);
+		} catch {
+			if (this.disposed) return;
+			this.titleActions.setProfiles([]);
+		}
+		if (!this.terminalService.activeInstance) await this.createTerminal();
+	}
 
-  private async createTerminal(profileId?: string): Promise<void> {
-    if (this.creating || this.disposed) return;
-    if (!this.hasWorkspaceFolder()) {
-      this.setStatus("Open a folder to use the terminal.");
-      return;
-    }
-    this.creating = true;
-    this.titleActions.setCreating(true);
-    this.setStatus(undefined);
-    try {
-      await this.terminalService.createTerminal({
-        dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
-        profile: profileId ? { type: "profile", profileId } : { type: "default" },
-      });
-      if (!this.disposed) this.focus();
-    } catch (error) {
-      if (!this.disposed) {
-        this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
-      }
-    } finally {
-      this.creating = false;
-      if (!this.disposed) this.titleActions.setCreating(false);
-    }
-  }
+	private async createTerminal(profileId?: string): Promise<void> {
+		if (this.creating || this.disposed) return;
+		if (!this.hasWorkspaceFolder()) {
+			this.setStatus("Open a folder to use the terminal.");
+			return;
+		}
+		this.creating = true;
+		this.titleActions.setCreating(true);
+		this.setStatus(undefined);
+		try {
+			await this.terminalService.createTerminal({
+				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
+				profile: profileId ? { type: "profile", profileId } : { type: "default" },
+			});
+			if (!this.disposed) this.focus();
+		} catch (error) {
+			if (!this.disposed) {
+				this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
+			}
+		} finally {
+			this.creating = false;
+			if (!this.disposed) this.titleActions.setCreating(false);
+		}
+	}
 
-  private async relaunchActive(): Promise<void> {
-    const instance = this.terminalService.activeInstance;
-    const item = instance ? this.items.get(instance) : undefined;
-    if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
-    this.setStatus(undefined);
-    try {
-      await this.terminalService.relaunchTerminal(instance, item.widget.dimensions());
-      if (!this.disposed) item.widget.focus();
-    } catch (error) {
-      if (!this.disposed) {
-        this.setStatus(terminalErrorMessage(error, "Terminal relaunch failed"));
-      }
-    }
-  }
+	private async relaunchActive(): Promise<void> {
+		const instance = this.terminalService.activeInstance;
+		const item = instance ? this.items.get(instance) : undefined;
+		if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
+		this.setStatus(undefined);
+		try {
+			await this.terminalService.relaunchTerminal(instance, item.widget.dimensions());
+			if (!this.disposed) item.widget.focus();
+		} catch (error) {
+			if (!this.disposed) {
+				this.setStatus(terminalErrorMessage(error, "Terminal relaunch failed"));
+			}
+		}
+	}
 
-  private async killActive(): Promise<void> {
-    const instance = this.terminalService.activeInstance;
-    if (!instance) return;
-    await this.terminalService.closeTerminal(instance);
-    if (!this.disposed) this.layoutService.hidePart("panel");
-  }
+	private async killActive(): Promise<void> {
+		const instance = this.terminalService.activeInstance;
+		if (!instance) return;
+		await this.terminalService.closeTerminal(instance);
+		if (!this.disposed) this.layoutService.hidePart("panel");
+	}
 
-  private clearActive(): void {
-    this.activeItem()?.widget.clear();
-    this.focus();
-  }
+	private clearActive(): void {
+		this.activeItem()?.widget.clear();
+		this.focus();
+	}
 
-  private addInstance(instance: ITerminalInstance): void {
-    if (this.items.has(instance)) return;
-    const item = this.own(new TerminalViewItem(
-      instance,
-      new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
-      () => this.render(),
-    ));
-    this.items.set(instance, item);
-  }
+	private addInstance(instance: ITerminalInstance): void {
+		if (this.items.has(instance)) return;
+		const item = this.own(new TerminalViewItem(
+			instance,
+			new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
+			() => this.render(),
+		));
+		this.items.set(instance, item);
+	}
 
-  private removeInstance(instance: ITerminalInstance): void {
-    const item = this.items.get(instance);
-    if (!item) return;
-    this.items.delete(instance);
-    item.dispose();
-  }
+	private removeInstance(instance: ITerminalInstance): void {
+		const item = this.items.get(instance);
+		if (!item) return;
+		this.items.delete(instance);
+		item.dispose();
+	}
 
-  private render(): void {
-    if (this.disposed) return;
-    const active = this.terminalService.activeInstance;
-    const instanceSwitcherPlacement = this.terminalService.instances.length > 1 ? "list" : "title";
-    this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
-    this.tabsLayout.setInstanceListPresentation(instanceSwitcherPlacement === "list" ? "visible" : "hidden");
-    for (const [instance, item] of this.items) {
-      item.widget.setVisible(instance === active);
-    }
-    this.renderTabs();
-  }
+	private render(): void {
+		if (this.disposed) return;
+		const active = this.terminalService.activeInstance;
+		const instanceSwitcherPlacement = this.terminalService.instances.length > 1 ? "list" : "title";
+		this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
+		this.tabsLayout.setInstanceListPresentation(instanceSwitcherPlacement === "list" ? "visible" : "hidden");
+		for (const [instance, item] of this.items) {
+			item.widget.setVisible(instance === active);
+		}
+		this.renderTabs();
+	}
 
-  private renderTabs(): void {
-    const active = this.terminalService.activeInstance;
-    this.tabList.setTabs(this.terminalService.instances.map((instance) => ({
-      id: instance.id,
-      value: instance,
-      label: instance.title,
-      tooltip: instance.title,
-      icon: terminalProfileIcon(instance.profile),
-      state: instance.state,
-      tabId: `${instance.id}-tab`,
-    })), active?.id);
-  }
+	private renderTabs(): void {
+		const active = this.terminalService.activeInstance;
+		this.tabList.setTabs(this.terminalService.instances.map((instance) => ({
+			id: instance.id,
+			value: instance,
+			label: instance.title,
+			tooltip: instance.title,
+			icon: terminalProfileIcon(instance.profile),
+			state: instance.state,
+			tabId: `${instance.id}-tab`,
+		})), active?.id);
+	}
 
-  private moveTerminalTab(source: ITerminalInstance, target: ITerminalInstance | undefined, position: TabListDropPosition): void {
-    if (source === target) return;
-    const instances = this.terminalService.instances;
-    const sourceIndex = instances.indexOf(source);
-    if (sourceIndex < 0) return;
-    const targetIndex = target === undefined
-      ? instances.length
-      : instances.indexOf(target);
-    const insertionIndex = targetIndex < 0
-      ? instances.length - 1
-      : position === "before" ? targetIndex : targetIndex + 1;
-    this.terminalService.moveTerminal(source, insertionIndex > sourceIndex ? insertionIndex - 1 : insertionIndex);
-  }
+	private moveTerminalTab(source: ITerminalInstance, target: ITerminalInstance | undefined, position: TabListDropPosition): void {
+		if (source === target) return;
+		const instances = this.terminalService.instances;
+		const sourceIndex = instances.indexOf(source);
+		if (sourceIndex < 0) return;
+		const targetIndex = target === undefined
+			? instances.length
+			: instances.indexOf(target);
+		const insertionIndex = targetIndex < 0
+			? instances.length - 1
+			: position === "before" ? targetIndex : targetIndex + 1;
+		this.terminalService.moveTerminal(source, insertionIndex > sourceIndex ? insertionIndex - 1 : insertionIndex);
+	}
 
-  private activeItem(): TerminalViewItem | undefined {
-    const active = this.terminalService.activeInstance;
-    return active ? this.items.get(active) : undefined;
-  }
+	private activeItem(): TerminalViewItem | undefined {
+		const active = this.terminalService.activeInstance;
+		return active ? this.items.get(active) : undefined;
+	}
 
-  private setStatus(message: string | undefined): void {
-    this.statusElement.textContent = message ?? "";
-    this.statusElement.hidden = message === undefined;
-  }
+	private setStatus(message: string | undefined): void {
+		this.statusElement.textContent = message ?? "";
+		this.statusElement.hidden = message === undefined;
+	}
 
-  private hasWorkspaceFolder(): boolean {
-    return this.workspaceContext.getWorkspace().folders.length === 1;
-  }
+	private hasWorkspaceFolder(): boolean {
+		return this.workspaceContext.getWorkspace().folders.length === 1;
+	}
 
 }
 
 function terminalErrorMessage(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
-  if (/TerminalUnavailable/.test(errorName)) {
-    return "Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.";
-  }
-  return error instanceof Error ? error.message : fallback;
+	const message = error instanceof Error ? error.message : String(error);
+	const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
+	if (/TerminalUnavailable/.test(errorName)) {
+		return "Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.";
+	}
+	return error instanceof Error ? error.message : fallback;
 }
 
 class TerminalViewItem extends DisposableOwner {
-  constructor(
-    readonly instance: ITerminalInstance,
-    readonly widget: TerminalInstanceWidget,
-    onDidChangeState: () => void,
-  ) {
-    super();
-    this.own(widget);
-    this.own(instance.onDidChangeState(onDidChangeState));
-  }
+	constructor(
+		readonly instance: ITerminalInstance,
+		readonly widget: TerminalInstanceWidget,
+		onDidChangeState: () => void,
+	) {
+		super();
+		this.own(widget);
+		this.own(instance.onDidChangeState(onDidChangeState));
+	}
 }

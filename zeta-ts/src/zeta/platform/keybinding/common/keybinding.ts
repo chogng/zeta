@@ -1,36 +1,36 @@
 import type {
-  Event,
+	Event,
 } from "../../../base/common/event.js";
 import type {
-  Keybinding,
-  ResolvedKeybinding,
+	Keybinding,
+	ResolvedKeybinding,
 } from "../../../base/common/keybindings.js";
 import type {
-  CommandId,
+	CommandId,
 } from "../../commands/common/commands.js";
 import type {
-  Context,
+	Context,
 } from "../../contextkey/common/contextkey.js";
 import {
-  createServiceIdentifier,
+	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
 
 /** Provides resolved shortcuts for command presentation and dispatch. */
 export interface IKeybindingService {
-  readonly inChordMode: boolean;
-  readonly onDidUpdateKeybindings: Event<void>;
+	readonly inChordMode: boolean;
+	readonly onDidUpdateKeybindings: Event<void>;
 
-  resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding;
-  resolveUserBinding(userBinding: string): ResolvedKeybinding | undefined;
-  lookupKeybindings(
-    command: CommandId,
-    context?: Context,
-  ): readonly ResolvedKeybinding[];
-  lookupKeybinding(
-    command: CommandId,
-    context?: Context,
-  ): ResolvedKeybinding | undefined;
+	resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding;
+	resolveUserBinding(userBinding: string): ResolvedKeybinding | undefined;
+	lookupKeybindings(
+		command: CommandId,
+		context?: Context,
+	): readonly ResolvedKeybinding[];
+	lookupKeybinding(
+		command: CommandId,
+		context?: Context,
+	): ResolvedKeybinding | undefined;
 }
 
 export const IKeybindingService =
-  createServiceIdentifier<IKeybindingService>("keybindingService");
+	createServiceIdentifier<IKeybindingService>("keybindingService");

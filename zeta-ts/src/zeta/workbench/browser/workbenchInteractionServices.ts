@@ -26,12 +26,12 @@ import { WorkbenchQuickInputService } from "../services/quickinput/browser/quick
 import type { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 
 export interface WorkbenchInteractionServicesOptions {
-  readonly services: ServiceCollection;
-  readonly layoutService: ILayoutServiceContract;
-  readonly configurationService: IConfigurationServiceContract;
-  readonly keybindingsResourceApi?: IKeybindingsResourceApi;
-  readonly statusbarService?: IStatusbarService;
-  readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
+	readonly services: ServiceCollection;
+	readonly layoutService: ILayoutServiceContract;
+	readonly configurationService: IConfigurationServiceContract;
+	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
+	readonly statusbarService?: IStatusbarService;
+	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
 }
 
 /**
@@ -41,70 +41,70 @@ export interface WorkbenchInteractionServicesOptions {
  * quick-input, settings, and hover service graph.
  */
 export class WorkbenchInteractionServices extends DisposableOwner {
-  readonly commandService: CommandService;
-  readonly contextKeyService: ContextKeyService;
-  readonly menuService: MenuService;
-  readonly contextViewService: BrowserContextViewService;
-  readonly contextMenuService: IContextMenuService;
-  readonly keybindingService: WorkbenchKeybindingService;
+	readonly commandService: CommandService;
+	readonly contextKeyService: ContextKeyService;
+	readonly menuService: MenuService;
+	readonly contextViewService: BrowserContextViewService;
+	readonly contextMenuService: IContextMenuService;
+	readonly keybindingService: WorkbenchKeybindingService;
 
-  constructor(options: WorkbenchInteractionServicesOptions) {
-    super();
-    const ownerDocument = options.layoutService.activeContainer.ownerDocument;
-    const ownerWindow = ownerDocument.defaultView;
-    if (!ownerWindow) throw new Error("Workbench interaction services require an owner window");
-    const services = options.services;
-    services.set(ILayoutService, options.layoutService);
-    services.set(IConfigurationService, options.configurationService);
+	constructor(options: WorkbenchInteractionServicesOptions) {
+		super();
+		const ownerDocument = options.layoutService.activeContainer.ownerDocument;
+		const ownerWindow = ownerDocument.defaultView;
+		if (!ownerWindow) throw new Error("Workbench interaction services require an owner window");
+		const services = options.services;
+		services.set(ILayoutService, options.layoutService);
+		services.set(IConfigurationService, options.configurationService);
 
-    this.commandService = this.own(new CommandService(services));
-    services.set(ICommandService, this.commandService);
-    this.contextKeyService = this.own(new ContextKeyService());
-    services.set(IContextKeyService, this.contextKeyService);
+		this.commandService = this.own(new CommandService(services));
+		services.set(ICommandService, this.commandService);
+		this.contextKeyService = this.own(new ContextKeyService());
+		services.set(IContextKeyService, this.contextKeyService);
 
-    const keyboardLayoutService = this.own(new BrowserKeyboardLayoutService({
-      navigator: ownerWindow.navigator,
-    }));
-    services.set(IKeyboardLayoutService, keyboardLayoutService);
-    const keybindingsResourceService = this.own(new WorkbenchKeybindingsResourceService({
-      api: options.keybindingsResourceApi,
-    }));
-    services.set(IKeybindingsResourceService, keybindingsResourceService);
-    this.keybindingService = this.own(new WorkbenchKeybindingService({
-      ownerDocument,
-      commandService: this.commandService,
-      contextKeyService: this.contextKeyService,
-      keyboardLayoutService,
-      statusbarService: options.statusbarService,
-    }));
-    services.set(IKeybindingService, this.keybindingService);
+		const keyboardLayoutService = this.own(new BrowserKeyboardLayoutService({
+			navigator: ownerWindow.navigator,
+		}));
+		services.set(IKeyboardLayoutService, keyboardLayoutService);
+		const keybindingsResourceService = this.own(new WorkbenchKeybindingsResourceService({
+			api: options.keybindingsResourceApi,
+		}));
+		services.set(IKeybindingsResourceService, keybindingsResourceService);
+		this.keybindingService = this.own(new WorkbenchKeybindingService({
+			ownerDocument,
+			commandService: this.commandService,
+			contextKeyService: this.contextKeyService,
+			keyboardLayoutService,
+			statusbarService: options.statusbarService,
+		}));
+		services.set(IKeybindingService, this.keybindingService);
 
-    this.menuService = new MenuService(this.commandService, this.contextKeyService);
-    services.set(IMenuService, this.menuService);
-    this.contextViewService = this.own(new BrowserContextViewService(options.layoutService.activeContainer, options.layoutService));
-    services.set(IContextViewService, this.contextViewService);
-    const quickInputService = this.own(new WorkbenchQuickInputService({
-      container: options.layoutService.activeContainer,
-      contextKeyService: this.contextKeyService,
-      layoutService: options.layoutService,
-    }));
-    services.set(IQuickInputService, quickInputService);
-    services.set(ISettingsService, this.own(new SettingsService()));
-    this.contextMenuService = this.own(options.createContextMenuService({
-      menuService: this.menuService,
-      keybindingService: this.keybindingService,
-      contextViewService: this.contextViewService,
-    }));
-    services.set(IContextMenuService, this.contextMenuService);
-    const hoverService = this.own(new HoverService(options.configurationService, this.contextViewService, this.contextMenuService));
-    services.set(IHoverService, hoverService);
-    this.own(setHoverDelegate(hoverService));
+		this.menuService = new MenuService(this.commandService, this.contextKeyService);
+		services.set(IMenuService, this.menuService);
+		this.contextViewService = this.own(new BrowserContextViewService(options.layoutService.activeContainer, options.layoutService));
+		services.set(IContextViewService, this.contextViewService);
+		const quickInputService = this.own(new WorkbenchQuickInputService({
+			container: options.layoutService.activeContainer,
+			contextKeyService: this.contextKeyService,
+			layoutService: options.layoutService,
+		}));
+		services.set(IQuickInputService, quickInputService);
+		services.set(ISettingsService, this.own(new SettingsService()));
+		this.contextMenuService = this.own(options.createContextMenuService({
+			menuService: this.menuService,
+			keybindingService: this.keybindingService,
+			contextViewService: this.contextViewService,
+		}));
+		services.set(IContextMenuService, this.contextMenuService);
+		const hoverService = this.own(new HoverService(options.configurationService, this.contextViewService, this.contextMenuService));
+		services.set(IHoverService, hoverService);
+		this.own(setHoverDelegate(hoverService));
 
-    void options.configurationService.reload().catch((error: unknown) => {
-      console.error("Failed to initialize configuration", error);
-    });
-    void keybindingsResourceService.reload().catch((error: unknown) => {
-      console.error("Failed to initialize keybindings resource", error);
-    });
-  }
+		void options.configurationService.reload().catch((error: unknown) => {
+			console.error("Failed to initialize configuration", error);
+		});
+		void keybindingsResourceService.reload().catch((error: unknown) => {
+			console.error("Failed to initialize keybindings resource", error);
+		});
+	}
 }

@@ -7,17 +7,17 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */
 export class EditorStateController extends DisposableOwner {
-  constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly state: EditorStateModel) {
-    super();
-    this.own(addDisposableListener(input, "focus", () => state.setFocused(true)));
-    this.own(addDisposableListener(input, "blur", () => state.setFocused(false)));
-    this.own(selections.onDidChange(change => state.setSelections(change.selections)));
-    this.own(viewport.onDidChangeLayout(layout => state.setScrollPosition(layout.layout.scrollPosition.left, layout.layout.scrollPosition.top)));
-  }
+	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly state: EditorStateModel) {
+		super();
+		this.own(addDisposableListener(input, "focus", () => state.setFocused(true)));
+		this.own(addDisposableListener(input, "blur", () => state.setFocused(false)));
+		this.own(selections.onDidChange(change => state.setSelections(change.selections)));
+		this.own(viewport.onDidChangeLayout(layout => state.setScrollPosition(layout.layout.scrollPosition.left, layout.layout.scrollPosition.top)));
+	}
 }
 
 registerEditorContribution({ id: "editor.contrib.editorState", install: context => {
-  if (context.kind !== "text") return;
-  const state = context.own(new EditorStateModel(context.model, context.selections.selections));
-  context.own(new EditorStateController(context.textInput.element, context.viewport, context.selections, state));
+	if (context.kind !== "text") return;
+	const state = context.own(new EditorStateModel(context.model, context.selections.selections));
+	context.own(new EditorStateController(context.textInput.element, context.viewport, context.selections, state));
 } });

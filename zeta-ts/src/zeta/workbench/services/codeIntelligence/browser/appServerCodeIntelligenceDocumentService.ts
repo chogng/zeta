@@ -3,13 +3,13 @@ import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentSe
 
 /** App Server adapter for ephemeral code-intelligence document overlays. */
 export class AppServerCodeIntelligenceDocumentService implements ICodeIntelligenceDocumentService {
-  constructor(private readonly api: Pick<ISymbolIndexApi, "synchronize" | "close">) {}
+	constructor(private readonly api: Pick<ISymbolIndexApi, "synchronize" | "close">) {}
 
-  async synchronize(document: CodeIntelligenceDocumentSnapshot): Promise<void> {
-    await this.api.synchronize({ document });
-  }
+	async synchronize(document: CodeIntelligenceDocumentSnapshot): Promise<void> {
+		await this.api.synchronize({ document });
+	}
 
-  async close(path: string): Promise<void> {
-    await this.api.close({ path });
-  }
+	async close(path: string): Promise<void> {
+		await this.api.close({ path });
+	}
 }

@@ -14,16 +14,16 @@ import { CommandService } from "../../../commands/common/commandService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
-  window: browserEnvironment.window,
-  document: browserEnvironment.window.document,
-  Node: browserEnvironment.window.Node,
-  Element: browserEnvironment.window.Element,
-  HTMLElement: browserEnvironment.window.HTMLElement,
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
 })) {
-  Object.defineProperty(globalThis, name, {
-    configurable: true,
-    value,
-  });
+	Object.defineProperty(globalThis, name, {
+		configurable: true,
+		value,
+	});
 }
 
 const { IEditorPart } = await import("../../../../browser/parts/editor/editorPart.js");
@@ -32,112 +32,112 @@ const { NewFileFromTemplateCommandId, NewUntitledTextEditorCommandId } = await i
 test.after(() => browserEnvironment.window.close());
 
 test("untitled service creates stable virtual editor identities", () => {
-  using service = new BrowserUntitledTextEditorService();
-  const first = service.create();
-  const second = service.create({ initialText: "draft", languageId: "typescript" });
+	using service = new BrowserUntitledTextEditorService();
+	const first = service.create();
+	const second = service.create({ initialText: "draft", languageId: "typescript" });
 
-  assert.equal(first.resource.toString(), "untitled:/Untitled-1");
-  assert.equal(first.label, "Untitled-1");
-  assert.equal(first.initialText, "");
-  assert.equal(second.resource.toString(), "untitled:/Untitled-2");
-  assert.equal(second.initialText, "draft");
-  assert.equal(second.languageId, "typescript");
-  assert.equal(service.get(first.resource), first);
-  assert.equal(service.get(URI.file("C:\\project\\main.ts")), undefined);
-  assert.equal(service.isUntitled(first.resource), true);
-  assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
+	assert.equal(first.resource.toString(), "untitled:/Untitled-1");
+	assert.equal(first.label, "Untitled-1");
+	assert.equal(first.initialText, "");
+	assert.equal(second.resource.toString(), "untitled:/Untitled-2");
+	assert.equal(second.initialText, "draft");
+	assert.equal(second.languageId, "typescript");
+	assert.equal(service.get(first.resource), first);
+	assert.equal(service.get(URI.file("C:\\project\\main.ts")), undefined);
+	assert.equal(service.isUntitled(first.resource), true);
+	assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
 });
 
 test("New Untitled Text Editor opens a compatible text editor input", async () => {
-  using untitled = new BrowserUntitledTextEditorService();
-  const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
-  const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
-  const services = new ServiceCollection();
-  services.set(IUntitledTextEditorService, untitled);
-  services.set(IEditorPart, editorPart);
-  using commands = new CommandService(services);
+	using untitled = new BrowserUntitledTextEditorService();
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
+	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
+	const services = new ServiceCollection();
+	services.set(IUntitledTextEditorService, untitled);
+	services.set(IEditorPart, editorPart);
+	using commands = new CommandService(services);
 
-  await commands.executeCommand(NewUntitledTextEditorCommandId);
+	await commands.executeCommand(NewUntitledTextEditorCommandId);
 
-  assert.equal(opened.length, 1);
-  assert.equal(opened[0]?.resource.toString(), "untitled:/Untitled-1");
-  assert.equal(opened[0]?.label, "Untitled-1");
-  assert.equal(opened[0]?.initialText, "");
+	assert.equal(opened.length, 1);
+	assert.equal(opened[0]?.resource.toString(), "untitled:/Untitled-1");
+	assert.equal(opened[0]?.label, "Untitled-1");
+	assert.equal(opened[0]?.initialText, "");
 });
 
 test("New File from Template opens the selected extension template as an untitled editor", async () => {
-  using untitled = new BrowserUntitledTextEditorService();
-  using templates = new ExtensionFileTemplateRegistry();
-  templates.replace([{
-    id: "builtin.typescript.class",
-    extensionId: "zeta.typescript",
-    label: "TypeScript Class",
-    languageId: "typescript",
-    body: "export class Example {}\n",
-    description: "Create a class",
-  }]);
-  const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string }> = [];
-  const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
-  const quickInput = new TestQuickInputService();
-  const services = new ServiceCollection();
-  services.set(IUntitledTextEditorService, untitled);
-  services.set(IEditorPart, editorPart);
-  services.set(IQuickInputService, quickInput);
-  services.set(IExtensionService, { fileTemplates: templates } as unknown as IExtensionService);
-  using commands = new CommandService(services);
+	using untitled = new BrowserUntitledTextEditorService();
+	using templates = new ExtensionFileTemplateRegistry();
+	templates.replace([{
+		id: "builtin.typescript.class",
+		extensionId: "zeta.typescript",
+		label: "TypeScript Class",
+		languageId: "typescript",
+		body: "export class Example {}\n",
+		description: "Create a class",
+	}]);
+	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string }> = [];
+	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
+	const quickInput = new TestQuickInputService();
+	const services = new ServiceCollection();
+	services.set(IUntitledTextEditorService, untitled);
+	services.set(IEditorPart, editorPart);
+	services.set(IQuickInputService, quickInput);
+	services.set(IExtensionService, { fileTemplates: templates } as unknown as IExtensionService);
+	using commands = new CommandService(services);
 
-  await commands.executeCommand(NewFileFromTemplateCommandId);
-  quickInput.picker?.acceptFirst();
-  await Promise.resolve();
+	await commands.executeCommand(NewFileFromTemplateCommandId);
+	quickInput.picker?.acceptFirst();
+	await Promise.resolve();
 
-  assert.equal(quickInput.picker?.placeholder, "Select a file template");
-  assert.equal(quickInput.picker?.items[0]?.label, "TypeScript Class");
-  assert.equal(opened.length, 1);
-  assert.equal(opened[0]?.resource.toString(), "untitled:/Untitled-1");
-  assert.equal(opened[0]?.initialText, "export class Example {}\n");
-  assert.equal(opened[0]?.languageId, "typescript");
+	assert.equal(quickInput.picker?.placeholder, "Select a file template");
+	assert.equal(quickInput.picker?.items[0]?.label, "TypeScript Class");
+	assert.equal(opened.length, 1);
+	assert.equal(opened[0]?.resource.toString(), "untitled:/Untitled-1");
+	assert.equal(opened[0]?.initialText, "export class Example {}\n");
+	assert.equal(opened[0]?.languageId, "typescript");
 });
 
 class TestQuickInputService implements IQuickInputServiceContract {
-  picker: TestQuickPick<IQuickPickItem> | undefined;
+	picker: TestQuickPick<IQuickPickItem> | undefined;
 
-  createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
-    const picker = new TestQuickPick<TItem>();
-    this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
-    return picker;
-  }
+	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
+		const picker = new TestQuickPick<TItem>();
+		this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
+		return picker;
+	}
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> implements IQuickPick<TItem> {
-  private readonly acceptEmitter = new Emitter<TItem>();
-  private readonly valueEmitter = new Emitter<string>();
-  private readonly hideEmitter = new Emitter<void>();
+	private readonly acceptEmitter = new Emitter<TItem>();
+	private readonly valueEmitter = new Emitter<string>();
+	private readonly hideEmitter = new Emitter<void>();
 
-  readonly onDidAccept = this.acceptEmitter.event;
-  readonly onDidChangeValue = this.valueEmitter.event;
-  readonly onDidHide = this.hideEmitter.event;
-  items: readonly TItem[] = [];
-  placeholder = "";
-  value = "";
+	readonly onDidAccept = this.acceptEmitter.event;
+	readonly onDidChangeValue = this.valueEmitter.event;
+	readonly onDidHide = this.hideEmitter.event;
+	items: readonly TItem[] = [];
+	placeholder = "";
+	value = "";
 
-  acceptFirst(): void {
-    const item = this.items[0];
-    if (item) this.acceptEmitter.fire(item);
-  }
+	acceptFirst(): void {
+		const item = this.items[0];
+		if (item) this.acceptEmitter.fire(item);
+	}
 
-  show(): void {}
+	show(): void {}
 
-  hide(): void {
-    this.hideEmitter.fire();
-  }
+	hide(): void {
+		this.hideEmitter.fire();
+	}
 
-  dispose(): void {
-    this.acceptEmitter.dispose();
-    this.valueEmitter.dispose();
-    this.hideEmitter.dispose();
-  }
+	dispose(): void {
+		this.acceptEmitter.dispose();
+		this.valueEmitter.dispose();
+		this.hideEmitter.dispose();
+	}
 
-  [Symbol.dispose](): void {
-    this.dispose();
-  }
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
 }

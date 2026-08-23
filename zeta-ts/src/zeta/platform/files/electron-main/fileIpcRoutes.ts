@@ -6,83 +6,83 @@ import { relativeWorkspacePath } from "../../workspace/electron-main/workspacePa
 
 /** Exact-shape IPC routes for workspace file operations. */
 export function fileIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
-  return [
-    route({
-      channel: "zeta:fs:get-metadata",
-      validate: fsGetMetadataParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/getMetadata"], params),
-    }),
-    route({
-      channel: "zeta:fs:read-directory",
-      validate: fsReadDirectoryParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readDirectory"], params),
-    }),
-    route({
-      channel: "zeta:fs:read-file",
-      validate: fsReadFileParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readFile"], params),
-    }),
-    route({
-      channel: "zeta:fs:read-binary-file",
-      validate: fsReadBinaryFileParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readBinaryFile"], params),
-    }),
-    route({
-      channel: "zeta:fs:write-file",
-      validate: fsWriteFileParams,
-      invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/writeFile"], params),
-    }),
-    route({ channel: "zeta:fs:create-file", validate: fsCreateFileParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/createFile"], params) }),
-    route({ channel: "zeta:fs:rename", validate: fsRenameParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/rename"], params) }),
-    route({ channel: "zeta:fs:delete", validate: fsDeleteParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/delete"], params) }),
-  ];
+	return [
+		route({
+			channel: "zeta:fs:get-metadata",
+			validate: fsGetMetadataParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/getMetadata"], params),
+		}),
+		route({
+			channel: "zeta:fs:read-directory",
+			validate: fsReadDirectoryParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readDirectory"], params),
+		}),
+		route({
+			channel: "zeta:fs:read-file",
+			validate: fsReadFileParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readFile"], params),
+		}),
+		route({
+			channel: "zeta:fs:read-binary-file",
+			validate: fsReadBinaryFileParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/readBinaryFile"], params),
+		}),
+		route({
+			channel: "zeta:fs:write-file",
+			validate: fsWriteFileParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["fs/writeFile"], params),
+		}),
+		route({ channel: "zeta:fs:create-file", validate: fsCreateFileParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/createFile"], params) }),
+		route({ channel: "zeta:fs:rename", validate: fsRenameParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/rename"], params) }),
+		route({ channel: "zeta:fs:delete", validate: fsDeleteParams, invoke: params => supervisor.request(APP_SERVER_METHODS["fs/delete"], params) }),
+	];
 }
 
 function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
-  return {
-    channel: definition.channel,
-    validate: definition.validate,
-    invoke: (params) => definition.invoke(params as P),
-  };
+	return {
+		channel: definition.channel,
+		validate: definition.validate,
+		invoke: (params) => definition.invoke(params as P),
+	};
 }
 
 function fsGetMetadataParams(value: unknown): FsGetMetadataParams {
-  const params = record(value, ["path"]);
-  return { path: relativeWorkspacePath(params.path) };
+	const params = record(value, ["path"]);
+	return { path: relativeWorkspacePath(params.path) };
 }
 
 function fsReadDirectoryParams(value: unknown): FsReadDirectoryParams {
-  return fsGetMetadataParams(value);
+	return fsGetMetadataParams(value);
 }
 
 function fsReadFileParams(value: unknown): FsReadFileParams {
-  return fsGetMetadataParams(value);
+	return fsGetMetadataParams(value);
 }
 
 function fsReadBinaryFileParams(value: unknown): FsReadBinaryFileParams {
-  return fsGetMetadataParams(value);
+	return fsGetMetadataParams(value);
 }
 
 function fsWriteFileParams(value: unknown): FsWriteFileParams {
-  const params = record(value, ["path", "content"], ["expectedRevision"]);
-  return {
-    path: relativeWorkspacePath(params.path),
-    content: string(params.content, "content"),
-    ...(params.expectedRevision === undefined ? {} : { expectedRevision: string(params.expectedRevision, "expectedRevision") }),
-  };
+	const params = record(value, ["path", "content"], ["expectedRevision"]);
+	return {
+		path: relativeWorkspacePath(params.path),
+		content: string(params.content, "content"),
+		...(params.expectedRevision === undefined ? {} : { expectedRevision: string(params.expectedRevision, "expectedRevision") }),
+	};
 }
 
 function fsCreateFileParams(value: unknown): FsCreateFileParams {
-  const params = record(value, ["path", "existing"]);
-  return { path: relativeWorkspacePath(params.path), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+	const params = record(value, ["path", "existing"]);
+	return { path: relativeWorkspacePath(params.path), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
 }
 
 function fsRenameParams(value: unknown): FsRenameParams {
-  const params = record(value, ["source", "target", "existing"]);
-  return { source: relativeWorkspacePath(params.source), target: relativeWorkspacePath(params.target), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+	const params = record(value, ["source", "target", "existing"]);
+	return { source: relativeWorkspacePath(params.source), target: relativeWorkspacePath(params.target), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
 }
 
 function fsDeleteParams(value: unknown): FsDeleteParams {
-  const params = record(value, ["path", "missing", "mode"]);
-  return { path: relativeWorkspacePath(params.path), missing: stringEnum(params.missing, "missing", ["error", "ignore"] as const), mode: stringEnum(params.mode, "mode", ["fileOrEmptyDirectory", "recursive"] as const) };
+	const params = record(value, ["path", "missing", "mode"]);
+	return { path: relativeWorkspacePath(params.path), missing: stringEnum(params.missing, "missing", ["error", "ignore"] as const), mode: stringEnum(params.mode, "mode", ["fileOrEmptyDirectory", "recursive"] as const) };
 }

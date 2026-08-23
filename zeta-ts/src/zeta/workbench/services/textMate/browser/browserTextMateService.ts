@@ -8,32 +8,32 @@ import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.
 
 /** Browser implementation of the Workbench TextMate service. */
 export class BrowserTextMateService extends DisposableOwner implements ITextMateService {
-  readonly grammars = this.own(new BrowserTextMateGrammarService());
-  readonly scopeTheme: TextMateScopeThemeSource;
-  readonly mutableScopeTheme: TextMateScopeThemeModel | undefined;
-  readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly grammars = this.own(new BrowserTextMateGrammarService());
+	readonly scopeTheme: TextMateScopeThemeSource;
+	readonly mutableScopeTheme: TextMateScopeThemeModel | undefined;
+	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 
-  constructor(contributions: readonly TextMateGrammarDefinition[] = [], scopeTheme?: TextMateScopeThemeSource) {
-    super();
-    if (!Array.isArray(contributions)) {
-      this.dispose();
-      throw new TypeError("Browser TextMate grammar contributions must be an array");
-    }
-    try {
-      if (scopeTheme !== undefined && !isThemeSource(scopeTheme)) {
-        throw new TypeError("Browser TextMate scope theme must be a theme source");
-      }
-      this.mutableScopeTheme = scopeTheme === undefined ? this.own(new TextMateScopeThemeModel()) : undefined;
-      this.scopeTheme = scopeTheme ?? this.mutableScopeTheme!;
-      this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
-      for (const contribution of contributions) this.grammars.registerGrammar(contribution);
-    } catch (error) {
-      this.dispose();
-      throw error;
-    }
-  }
+	constructor(contributions: readonly TextMateGrammarDefinition[] = [], scopeTheme?: TextMateScopeThemeSource) {
+		super();
+		if (!Array.isArray(contributions)) {
+			this.dispose();
+			throw new TypeError("Browser TextMate grammar contributions must be an array");
+		}
+		try {
+			if (scopeTheme !== undefined && !isThemeSource(scopeTheme)) {
+				throw new TypeError("Browser TextMate scope theme must be a theme source");
+			}
+			this.mutableScopeTheme = scopeTheme === undefined ? this.own(new TextMateScopeThemeModel()) : undefined;
+			this.scopeTheme = scopeTheme ?? this.mutableScopeTheme!;
+			this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
+			for (const contribution of contributions) this.grammars.registerGrammar(contribution);
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
 }
 
 function isThemeSource(value: unknown): value is TextMateScopeThemeSource {
-  return typeof value === "object" && value !== null && "currentTheme" in value && typeof (value as TextMateScopeThemeSource).onDidChangeTheme === "function";
+	return typeof value === "object" && value !== null && "currentTheme" in value && typeof (value as TextMateScopeThemeSource).onDidChangeTheme === "function";
 }

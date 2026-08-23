@@ -9,32 +9,32 @@ import type { IExtensionService } from "../../../../services/extensions/common/e
 import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";
 
 test("remote extension recovery reloads only after a known non-connected state", async () => {
-  using remoteAgentService = new TestRemoteAgentService();
-  let reloads = 0;
-  const extensionService = { reload: async () => { reloads += 1; } } as unknown as IExtensionService;
-  using contribution = new RemoteExtensionRecoveryContribution({ extensionService, remoteAgentService });
+	using remoteAgentService = new TestRemoteAgentService();
+	let reloads = 0;
+	const extensionService = { reload: async () => { reloads += 1; } } as unknown as IExtensionService;
+	using contribution = new RemoteExtensionRecoveryContribution({ extensionService, remoteAgentService });
 
-  remoteAgentService.emit("connected");
-  remoteAgentService.emit("reconnecting");
-  remoteAgentService.emit("connected");
-  remoteAgentService.emit("connected");
-  await Promise.resolve();
+	remoteAgentService.emit("connected");
+	remoteAgentService.emit("reconnecting");
+	remoteAgentService.emit("connected");
+	remoteAgentService.emit("connected");
+	await Promise.resolve();
 
-  assert.equal(reloads, 1);
+	assert.equal(reloads, 1);
 });
 
 class TestRemoteAgentService extends DisposableOwner implements IRemoteAgentService {
-  private readonly stateEmitter = this.own(new Emitter<RemoteConnectionState>());
-  private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
-  connectionState: RemoteConnectionState | undefined;
-  connection: RemoteAgentConnection | undefined;
-  readonly onDidChangeConnectionState = this.stateEmitter.event;
-  readonly onDidChangeConnection = this.connectionEmitter.event;
-  async reconnect() { return { kind: "reconnected" } as const; }
-  async rollbackRuntime() { return { kind: "rolledBack" } as const; }
+	private readonly stateEmitter = this.own(new Emitter<RemoteConnectionState>());
+	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+	connectionState: RemoteConnectionState | undefined;
+	connection: RemoteAgentConnection | undefined;
+	readonly onDidChangeConnectionState = this.stateEmitter.event;
+	readonly onDidChangeConnection = this.connectionEmitter.event;
+	async reconnect() { return { kind: "reconnected" } as const; }
+	async rollbackRuntime() { return { kind: "rolledBack" } as const; }
 
-  emit(state: RemoteConnectionState): void {
-    this.connectionState = state;
-    this.stateEmitter.fire(state);
-  }
+	emit(state: RemoteConnectionState): void {
+		this.connectionState = state;
+		this.stateEmitter.fire(state);
+	}
 }

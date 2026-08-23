@@ -3,4 +3,4 @@ import { createServiceIdentifier } from "../../platform/instantiation/common/ins
 
 /** Native window capabilities available only in Electron workbenches. */
 export const INativeHostService =
-  createServiceIdentifier<INativeHostApi>("nativeHostService");
+	createServiceIdentifier<INativeHostApi>("nativeHostService");

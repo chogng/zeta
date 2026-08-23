@@ -16,76 +16,76 @@ export type DecorationsPartMarker = DiagnosticOverviewMarker | DiffOverviewMarke
 
 /** Owns decoration snapshots, visible-line lookup, inline DOM projection, and overview aggregation. */
 export class DecorationsPart extends EditorOverlayPart {
-  private readonly model: TextModel;
-  private readonly decorationSources: readonly DecorationSource[];
-  private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
-  private readonly changeEmitter = this.own(new Emitter<void>());
-  private decorationLineIndex = new DecorationLineIndex([]);
-  private markerRevision = 0;
+	private readonly model: TextModel;
+	private readonly decorationSources: readonly DecorationSource[];
+	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
+	private readonly changeEmitter = this.own(new Emitter<void>());
+	private decorationLineIndex = new DecorationLineIndex([]);
+	private markerRevision = 0;
 
-  public readonly onDidChange: Event<void> = this.changeEmitter.event;
+	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-  constructor(context: EditorViewContext, model: TextModel, decorationSources: readonly DecorationSource[]) {
-    super(context);
-    this.model = model;
-    this.decorationSources = Object.freeze([...decorationSources]);
-    this.own(this.model.onDidChange(() => {
-      this.markerRevision += 1;
-    }));
-    for (const source of this.decorationSources) {
-      this.decorationSnapshots.set(source, source.decorations);
-      this.own(source.onDidChange(() => {
-        this.decorationSnapshots.set(source, source.decorations);
-        this.rebuildDecorationLineIndex();
-        this.changeEmitter.fire();
-      }));
-    }
-    this.rebuildDecorationLineIndex();
-  }
+	constructor(context: EditorViewContext, model: TextModel, decorationSources: readonly DecorationSource[]) {
+		super(context);
+		this.model = model;
+		this.decorationSources = Object.freeze([...decorationSources]);
+		this.own(this.model.onDidChange(() => {
+			this.markerRevision += 1;
+		}));
+		for (const source of this.decorationSources) {
+			this.decorationSnapshots.set(source, source.decorations);
+			this.own(source.onDidChange(() => {
+				this.decorationSnapshots.set(source, source.decorations);
+				this.rebuildDecorationLineIndex();
+				this.changeEmitter.fire();
+			}));
+		}
+		this.rebuildDecorationLineIndex();
+	}
 
-  public get markersRevision(): number {
-    return this.markerRevision;
-  }
+	public get markersRevision(): number {
+		return this.markerRevision;
+	}
 
-  public render(layout: EditorViewportLayout): void {
-    const context = this.context.overlayContext(layout);
-    if (!context) {
-      return;
-    }
-    projectAsterDecorationOverlays(context, this.resolveVisibleDecorations(context));
-  }
+	public render(layout: EditorViewportLayout): void {
+		const context = this.context.overlayContext(layout);
+		if (!context) {
+			return;
+		}
+		projectAsterDecorationOverlays(context, this.resolveVisibleDecorations(context));
+	}
 
-  public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
-    return this.resolveVisibleDecorations(context);
-  }
+	public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
+		return this.resolveVisibleDecorations(context);
+	}
 
-  public overviewMarkers(): readonly DecorationsPartMarker[] {
-    const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
-    return Object.freeze([
-      ...createAsterDiagnosticOverviewMarkers(decorations, this.model.lineCount),
-      ...createAsterDiffOverviewMarkers(decorations, this.model.lineCount),
-    ]);
-  }
+	public overviewMarkers(): readonly DecorationsPartMarker[] {
+		const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
+		return Object.freeze([
+			...createAsterDiagnosticOverviewMarkers(decorations, this.model.lineCount),
+			...createAsterDiffOverviewMarkers(decorations, this.model.lineCount),
+		]);
+	}
 
-  private rebuildDecorationLineIndex(): void {
-    this.decorationLineIndex = new DecorationLineIndex(this.decorationSources.flatMap(
-      source => this.decorationSnapshots.get(source) ?? [],
-    ));
-    this.markerRevision += 1;
-  }
+	private rebuildDecorationLineIndex(): void {
+		this.decorationLineIndex = new DecorationLineIndex(this.decorationSources.flatMap(
+			source => this.decorationSnapshots.get(source) ?? [],
+		));
+		this.markerRevision += 1;
+	}
 
-  private resolveVisibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
-    const renderLines = context.renderLines;
-    let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
-    let maximumLogicalLineIndex = -1;
-    for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
-      const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
-      if (!visualLine) continue;
-      minimumLogicalLineIndex = Math.min(minimumLogicalLineIndex, visualLine.logicalLineIndex);
-      maximumLogicalLineIndex = Math.max(maximumLogicalLineIndex, visualLine.logicalLineIndex);
-    }
-    return maximumLogicalLineIndex < 0
-      ? []
-      : this.decorationLineIndex.getIntersectingLines(minimumLogicalLineIndex, maximumLogicalLineIndex);
-  }
+	private resolveVisibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
+		const renderLines = context.renderLines;
+		let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
+		let maximumLogicalLineIndex = -1;
+		for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+			const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
+			if (!visualLine) continue;
+			minimumLogicalLineIndex = Math.min(minimumLogicalLineIndex, visualLine.logicalLineIndex);
+			maximumLogicalLineIndex = Math.max(maximumLogicalLineIndex, visualLine.logicalLineIndex);
+		}
+		return maximumLogicalLineIndex < 0
+			? []
+			: this.decorationLineIndex.getIntersectingLines(minimumLogicalLineIndex, maximumLogicalLineIndex);
+	}
 }

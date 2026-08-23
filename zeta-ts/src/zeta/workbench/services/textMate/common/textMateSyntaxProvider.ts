@@ -7,14 +7,14 @@ export const TEXTMATE_TOKEN_PRIORITY = 100;
 
 /** Adapts one caller-owned TextMate runtime to Aster's Syntax provider contract. */
 export function createTextMateSyntaxProvider(tokenization: TextMateTokenizationService): SyntaxProvider {
-  if (!(tokenization instanceof TextMateTokenizationService)) {
-    throw new TypeError("TextMate syntax provider requires a tokenization service");
-  }
-  return Object.freeze({
-    id: TEXTMATE_SYNTAX_PROVIDER_ID,
-    languageIds: Object.freeze(["*"]),
-    tokenPriority: TEXTMATE_TOKEN_PRIORITY,
-    provideTokens: (request: SyntaxProviderRequest, signal: AbortSignal) => tokenization.tokenize(request.languageId, request.snapshot, signal),
-    synchronizeDocument: (synchronization: LanguageWorkerDocumentSynchronization) => tokenization.synchronizeDocument(synchronization),
-  });
+	if (!(tokenization instanceof TextMateTokenizationService)) {
+		throw new TypeError("TextMate syntax provider requires a tokenization service");
+	}
+	return Object.freeze({
+		id: TEXTMATE_SYNTAX_PROVIDER_ID,
+		languageIds: Object.freeze(["*"]),
+		tokenPriority: TEXTMATE_TOKEN_PRIORITY,
+		provideTokens: (request: SyntaxProviderRequest, signal: AbortSignal) => tokenization.tokenize(request.languageId, request.snapshot, signal),
+		synchronizeDocument: (synchronization: LanguageWorkerDocumentSynchronization) => tokenization.synchronizeDocument(synchronization),
+	});
 }

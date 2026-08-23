@@ -3,15 +3,15 @@ import { dirname, resolve } from "node:path";
 
 /** Finds the desktop package root from source and compiled architecture tests. */
 export function findDesktopRoot(start: string): string {
-  let candidate = resolve(start);
-  while (true) {
-    if (existsSync(resolve(candidate, "package.json")) && existsSync(resolve(candidate, "src/zeta"))) return candidate;
-    const nestedDesktop = resolve(candidate, "zeta-ts");
-    if (existsSync(resolve(nestedDesktop, "package.json")) && existsSync(resolve(nestedDesktop, "src/zeta"))) {
-      return nestedDesktop;
-    }
-    const parent = dirname(candidate);
-    if (parent === candidate) throw new Error(`Could not locate the desktop package from ${start}`);
-    candidate = parent;
-  }
+	let candidate = resolve(start);
+	while (true) {
+		if (existsSync(resolve(candidate, "package.json")) && existsSync(resolve(candidate, "src/zeta"))) return candidate;
+		const nestedDesktop = resolve(candidate, "zeta-ts");
+		if (existsSync(resolve(nestedDesktop, "package.json")) && existsSync(resolve(nestedDesktop, "src/zeta"))) {
+			return nestedDesktop;
+		}
+		const parent = dirname(candidate);
+		if (parent === candidate) throw new Error(`Could not locate the desktop package from ${start}`);
+		candidate = parent;
+	}
 }

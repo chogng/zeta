@@ -28,61 +28,61 @@ import { IChatService } from "../../../services/chat/common/chatService.js";
 export const OpenSettingsCommandId = "workbench.action.openSettings";
 
 registerAction2(class OpenSettingsAction extends Action2 {
-  constructor() {
-    super({
-      id: OpenSettingsCommandId,
-      title: "Zeta Settings",
-      tooltip: "Zeta Settings",
-      icon: lxiconsLibrary.gear,
-      menu: [
-        {
-          id: MenuId.TitleBar,
-          group: "navigation",
-          order: 100,
-        },
-        {
-          id: MenuId.EditorTitle,
-          group: "settings",
-          order: 100,
-        },
-      ],
-      keybinding: {
-        primary: Keybinding.single(logicalKey(",", {
-          primaryKey: true,
-        })),
-      },
-      f1: true,
-    });
-  }
+	constructor() {
+		super({
+			id: OpenSettingsCommandId,
+			title: "Zeta Settings",
+			tooltip: "Zeta Settings",
+			icon: lxiconsLibrary.gear,
+			menu: [
+				{
+					id: MenuId.TitleBar,
+					group: "navigation",
+					order: 100,
+				},
+				{
+					id: MenuId.EditorTitle,
+					group: "settings",
+					order: 100,
+				},
+			],
+			keybinding: {
+				primary: Keybinding.single(logicalKey(",", {
+					primaryKey: true,
+				})),
+			},
+			f1: true,
+		});
+	}
 
-  override run(accessor: ServicesAccessor): void {
-    accessor.get(ISettingsService).open();
-  }
+	override run(accessor: ServicesAccessor): void {
+		accessor.get(ISettingsService).open();
+	}
 });
 
 registerWorkbenchContribution(
-  "workbench.contrib.settingsEditor",
-  WorkbenchPhase.BlockStartup,
-  (accessor) => new SettingsEditorContribution({
-    configurationService: accessor.get(IConfigurationService),
-    container: accessor.get(ILayoutService).mainContainer,
-    contextViewProvider: accessor.get(IContextViewService),
-    dialogService: accessor.get(IDialogService),
-    settingsService: accessor.get(ISettingsService),
-    themeService: accessor.get(IThemeService),
-    userThemeService: accessor.get(IUserThemeService),
-    codeIndexService: accessor.get(ICodeIndexService),
-    connectorService: accessor.get(IConnectorService),
-    pluginService: accessor.get(IPluginService),
-    marketplaceService: accessor.get(IMarketplaceService),
-    languagePackService: accessor.get(ILanguagePackService),
-    localeService: accessor.get(ILocaleService),
-    localizationService: accessor.get(ILocalizationService),
-    toolSearchService: accessor.get(IToolSearchService),
-    workspaceTrustService: accessor.get(IWorkspaceTrustService),
-    workspaceOpenService: accessor.get(IWorkspaceOpenService),
-    workspaceContextService: accessor.get(IWorkspaceContextService),
-    workbenchModeService: accessor.get(IWorkbenchModeService),
-    modelCatalog: accessor.get(IChatService),
-  }),
+	"workbench.contrib.settingsEditor",
+	WorkbenchPhase.BlockStartup,
+	(accessor) => new SettingsEditorContribution({
+		configurationService: accessor.get(IConfigurationService),
+		container: accessor.get(ILayoutService).mainContainer,
+		contextViewProvider: accessor.get(IContextViewService),
+		dialogService: accessor.get(IDialogService),
+		settingsService: accessor.get(ISettingsService),
+		themeService: accessor.get(IThemeService),
+		userThemeService: accessor.get(IUserThemeService),
+		codeIndexService: accessor.get(ICodeIndexService),
+		connectorService: accessor.get(IConnectorService),
+		pluginService: accessor.get(IPluginService),
+		marketplaceService: accessor.get(IMarketplaceService),
+		languagePackService: accessor.get(ILanguagePackService),
+		localeService: accessor.get(ILocaleService),
+		localizationService: accessor.get(ILocalizationService),
+		toolSearchService: accessor.get(IToolSearchService),
+		workspaceTrustService: accessor.get(IWorkspaceTrustService),
+		workspaceOpenService: accessor.get(IWorkspaceOpenService),
+		workspaceContextService: accessor.get(IWorkspaceContextService),
+		workbenchModeService: accessor.get(IWorkbenchModeService),
+		modelCatalog: accessor.get(IChatService),
+	}),
 );

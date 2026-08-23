@@ -11,43 +11,43 @@ import { h } from "../../base/browser/dom.js";
  * delegates the resulting pixel dimensions through `layout`.
  */
 export abstract class WorkbenchPart extends DisposableOwner {
-  readonly element: HTMLElement;
-  protected readonly titleElement: HTMLDivElement;
-  protected readonly contentElement: HTMLDivElement;
-  private readonly _onDidChangeConstraints = this.own(new Emitter<void>());
+	readonly element: HTMLElement;
+	protected readonly titleElement: HTMLDivElement;
+	protected readonly contentElement: HTMLDivElement;
+	private readonly _onDidChangeConstraints = this.own(new Emitter<void>());
 
-  readonly onDidChangeConstraints: Event<void> =
-    this._onDidChangeConstraints.event;
+	readonly onDidChangeConstraints: Event<void> =
+		this._onDidChangeConstraints.event;
 
-  protected constructor(container: HTMLElement, id: string) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    const element = h(ownerDocument, "section");
-    this.element = element;
-    this.defer(() => element.remove());
-    element.className = `zeta-workbench-part zeta-workbench-${id}`;
-    element.dataset.part = id;
-    this.titleElement = h(ownerDocument, "div");
-    this.titleElement.className = "zeta-workbench-part-title";
-    this.contentElement = h(ownerDocument, "div");
-    this.contentElement.className = "zeta-workbench-part-content";
-    element.append(this.titleElement, this.contentElement);
-    container.append(element);
-  }
+	protected constructor(container: HTMLElement, id: string) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		const element = h(ownerDocument, "section");
+		this.element = element;
+		this.defer(() => element.remove());
+		element.className = `zeta-workbench-part zeta-workbench-${id}`;
+		element.dataset.part = id;
+		this.titleElement = h(ownerDocument, "div");
+		this.titleElement.className = "zeta-workbench-part-title";
+		this.contentElement = h(ownerDocument, "div");
+		this.contentElement.className = "zeta-workbench-part-content";
+		element.append(this.titleElement, this.contentElement);
+		container.append(element);
+	}
 
-  get minimumWidth(): number { return 0; }
-  get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
-  get minimumHeight(): number { return 0; }
-  get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
+	get minimumWidth(): number { return 0; }
+	get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
+	get minimumHeight(): number { return 0; }
+	get maximumHeight(): number { return Number.POSITIVE_INFINITY; }
 
-  layout(_dimension: IDimension): void {}
+	layout(_dimension: IDimension): void {}
 
-  setVisible(visible: boolean): void {
-    this.element.hidden = !visible;
-  }
+	setVisible(visible: boolean): void {
+		this.element.hidden = !visible;
+	}
 
-  /** Notifies the runtime layout after a subclass changes its constraints. */
-  protected notifyConstraintsChanged(): void {
-    this._onDidChangeConstraints.fire();
-  }
+	/** Notifies the runtime layout after a subclass changes its constraints. */
+	protected notifyConstraintsChanged(): void {
+		this._onDidChangeConstraints.fire();
+	}
 }

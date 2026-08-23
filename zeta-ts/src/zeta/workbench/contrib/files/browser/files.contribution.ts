@@ -17,36 +17,36 @@ export const EXPLORER_VIEW_ID = "zeta.explorer";
 
 /** Registers the file views after the core Workbench containers exist. */
 export function registerFilesViews(
-  registry: WorkbenchViewRegistry = ViewsRegistry,
+	registry: WorkbenchViewRegistry = ViewsRegistry,
 ): void {
-  registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [
-    {
-      id: EXPLORER_VIEW_ID,
-      title: "Explorer",
-      localizationKey: { bundle: "zeta.views", key: "explorer" },
-      order: 1,
-      when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
-      canToggleVisibility: false,
-      ctorDescriptor: new SyncDescriptor(ExplorerViewPane, {
-        serviceDependencies: [
-          IFileService,
-          IWorkspaceContextService,
-          IEditorService,
-          IFileIconThemeService,
-          IHoverService,
-          IConfigurationService,
-        ],
-      }),
-    },
-    {
-      id: EmptyView.ID,
-      title: EmptyView.TITLE,
-      order: 2,
-      when: WorkspaceFolderCountContext.isEqualTo(0),
-      canToggleVisibility: false,
-      ctorDescriptor: new SyncDescriptor(EmptyView, {
-        serviceDependencies: [IWorkspaceOpenService],
-      }),
-    },
-  ]);
+	registry.registerStaticViews(WorkbenchViewContainerId.Sidebar, [
+		{
+			id: EXPLORER_VIEW_ID,
+			title: "Explorer",
+			localizationKey: { bundle: "zeta.views", key: "explorer" },
+			order: 1,
+			when: ContextKeyExpr.notEquals(WorkspaceFolderCountContext.key, 0),
+			canToggleVisibility: false,
+			ctorDescriptor: new SyncDescriptor(ExplorerViewPane, {
+				serviceDependencies: [
+					IFileService,
+					IWorkspaceContextService,
+					IEditorService,
+					IFileIconThemeService,
+					IHoverService,
+					IConfigurationService,
+				],
+			}),
+		},
+		{
+			id: EmptyView.ID,
+			title: EmptyView.TITLE,
+			order: 2,
+			when: WorkspaceFolderCountContext.isEqualTo(0),
+			canToggleVisibility: false,
+			ctorDescriptor: new SyncDescriptor(EmptyView, {
+				serviceDependencies: [IWorkspaceOpenService],
+			}),
+		},
+	]);
 }

@@ -12,14 +12,14 @@ import { MenuItemAction, SubmenuItemAction } from "../common/actions.js";
  * ActionBar hosts.
  */
 export class MenuEntryActionViewItem extends ButtonActionViewItem {
-  constructor(action: MenuItemAction, options: ActionViewItemOptions = {}) {
-    super(action, options);
-  }
+	constructor(action: MenuItemAction, options: ActionViewItemOptions = {}) {
+		super(action, options);
+	}
 
-  override render(container: HTMLElement): void {
-    super.render(container);
-    container.classList.add("zeta-menu-entry");
-  }
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add("zeta-menu-entry");
+	}
 }
 
 /**
@@ -29,19 +29,19 @@ export class MenuEntryActionViewItem extends ButtonActionViewItem {
  * rendering, keyboard navigation, and nested submenus to base Menu.
  */
 export class SubmenuEntryActionViewItem
-  extends DropdownMenuActionViewItem {
-  constructor(
-    action: SubmenuItemAction,
-    contextMenuProvider: IContextMenuProvider,
-    options: ActionViewItemOptions = {},
-  ) {
-    super(action, () => action.actions, contextMenuProvider, options);
-  }
+	extends DropdownMenuActionViewItem {
+	constructor(
+		action: SubmenuItemAction,
+		contextMenuProvider: IContextMenuProvider,
+		options: ActionViewItemOptions = {},
+	) {
+		super(action, () => action.actions, contextMenuProvider, options);
+	}
 
-  override render(container: HTMLElement): void {
-    super.render(container);
-    container.classList.add("zeta-menu-entry");
-  }
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add("zeta-menu-entry");
+	}
 }
 
 /**
@@ -51,15 +51,15 @@ export class SubmenuEntryActionViewItem
  * that were not produced by the platform menu service.
  */
 export function createMenuEntryActionViewItem(
-  action: IAction,
-  contextMenuProvider: IContextMenuProvider,
-  options: ActionViewItemOptions = {},
+	action: IAction,
+	contextMenuProvider: IContextMenuProvider,
+	options: ActionViewItemOptions = {},
 ): ActionViewItem | undefined {
-  if (action instanceof MenuItemAction) {
-    return new MenuEntryActionViewItem(action, options);
-  }
-  if (action instanceof SubmenuItemAction) {
-    return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
-  }
-  return undefined;
+	if (action instanceof MenuItemAction) {
+		return new MenuEntryActionViewItem(action, options);
+	}
+	if (action instanceof SubmenuItemAction) {
+		return new SubmenuEntryActionViewItem(action, contextMenuProvider, options);
+	}
+	return undefined;
 }

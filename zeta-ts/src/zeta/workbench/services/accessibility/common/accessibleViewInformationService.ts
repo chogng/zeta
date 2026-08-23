@@ -5,18 +5,18 @@ import { IStorageService, StorageScope } from "../../../../platform/storage/comm
 
 /** Stores application-scoped accessible-view visibility history. */
 export interface IAccessibleViewInformationService {
-  hasShownAccessibleView(viewId: string): boolean;
+	hasShownAccessibleView(viewId: string): boolean;
 }
 
 export const IAccessibleViewInformationService = createServiceIdentifier<IAccessibleViewInformationService>("accessibleViewInformationService");
 
 /** Reads durable accessible-view history without owning accessible-view UI. */
 export class AccessibleViewInformationService extends DisposableOwner implements IAccessibleViewInformationService {
-  constructor(private readonly storageService: IStorageService) {
-    super();
-  }
+	constructor(private readonly storageService: IStorageService) {
+		super();
+	}
 
-  hasShownAccessibleView(viewId: string): boolean {
-    return this.storageService.getBoolean(`${ACCESSIBLE_VIEW_SHOWN_STORAGE_PREFIX}${viewId}`, StorageScope.APPLICATION, false) === true;
-  }
+	hasShownAccessibleView(viewId: string): boolean {
+		return this.storageService.getBoolean(`${ACCESSIBLE_VIEW_SHOWN_STORAGE_PREFIX}${viewId}`, StorageScope.APPLICATION, false) === true;
+	}
 }

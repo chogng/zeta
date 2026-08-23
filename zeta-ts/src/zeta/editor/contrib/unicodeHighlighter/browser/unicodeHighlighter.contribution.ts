@@ -6,11 +6,11 @@ import { DecorationPresentation, createAsterDecorationSource } from "../../../br
 import { type UnicodeHighlight } from "../common/unicodeHighlighter.js";
 
 registerEditorContribution({ id: "editor.contrib.unicodeHighlighter", configure: context => {
-  if (context.options.showUnicodeHighlights === false) return;
-  const decorations = context.own(new TextDecorationCollection<UnicodeHighlight>(context.model));
-  context.provideCapability(TextEditorCapability.unicodeDecorations, decorations);
-  context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`));
+	if (context.options.showUnicodeHighlights === false) return;
+	const decorations = context.own(new TextDecorationCollection<UnicodeHighlight>(context.model));
+	context.provideCapability(TextEditorCapability.unicodeDecorations, decorations);
+	context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`));
 }, install: context => {
-  if (context.kind !== "text" || context.options.showUnicodeHighlights === false || context.model.largeFile.tooLargeForTokenization) return;
-  context.own(new UnicodeHighlighterController(context.model, context.getCapability(TextEditorCapability.unicodeDecorations)));
+	if (context.kind !== "text" || context.options.showUnicodeHighlights === false || context.model.largeFile.tooLargeForTokenization) return;
+	context.own(new UnicodeHighlighterController(context.model, context.getCapability(TextEditorCapability.unicodeDecorations)));
 } });

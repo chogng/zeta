@@ -14,22 +14,22 @@ export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 
 /** Registers the integrated terminal in the Workbench panel. */
 export function registerTerminalView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({
-    id: WorkbenchViewContainerId.Terminal,
-    title: "Terminal",
-    localizationKey: { bundle: "zeta.views", key: "terminal" },
-    location: ViewContainerLocation.Panel,
-    order: 3,
-    isDefault: true,
-  });
-  registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [{
-    id: TERMINAL_VIEW_ID,
-    title: "Terminal",
-    localizationKey: { bundle: "zeta.views", key: "terminal" },
-    order: 1,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(TerminalViewPane, {
-      serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService, IWorkspaceContextService],
-    }),
-  }]);
+	registry.registerStaticViewContainer({
+		id: WorkbenchViewContainerId.Terminal,
+		title: "Terminal",
+		localizationKey: { bundle: "zeta.views", key: "terminal" },
+		location: ViewContainerLocation.Panel,
+		order: 3,
+		isDefault: true,
+	});
+	registry.registerStaticViews(WorkbenchViewContainerId.Terminal, [{
+		id: TERMINAL_VIEW_ID,
+		title: "Terminal",
+		localizationKey: { bundle: "zeta.views", key: "terminal" },
+		order: 1,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(TerminalViewPane, {
+			serviceDependencies: [ITerminalService, IThemeService, IMenuService, IContextMenuService, IContextKeyService, IWorkbenchLayoutService, IWorkspaceContextService],
+		}),
+	}]);
 }

@@ -8,33 +8,33 @@ import type { DocumentSchema } from "../model/documentSchema.js";
 
 /** Inputs required to acquire one structured Aster document model. */
 export interface DocumentModelInput {
-  readonly resource: URI;
-  readonly initialText?: string;
-  readonly schema: DocumentSchema;
-  readonly plugins?: readonly DocumentPlugin<unknown>[];
-  readonly createEmptyDocument?: () => DocumentNode;
-  readonly onSave?: () => Promise<void | boolean>;
+	readonly resource: URI;
+	readonly initialText?: string;
+	readonly schema: DocumentSchema;
+	readonly plugins?: readonly DocumentPlugin<unknown>[];
+	readonly createEmptyDocument?: () => DocumentNode;
+	readonly onSave?: () => Promise<void | boolean>;
 }
 
 /** A lifetime-bound structured document model with its persistence state. */
 export interface DocumentModelReference extends IDisposable {
-  readonly resource: URI;
-  readonly backupKind: "structuredDocument";
-  readonly backupContentType?: string;
-  readonly model: DocumentModel;
-  readonly isDirty: boolean;
-  readonly hasExternalChange: boolean;
-  readonly onDidChangeDirty: Event<void>;
-  readonly onDidChangeExternalChange: Event<void>;
-  readonly onDidChangeContent: Event<void>;
-  backup(): string;
-  restoreBackup(content: string): void;
-  save(signal: AbortSignal): Promise<void>;
-  saveAs(resource: URI, signal: AbortSignal): Promise<void>;
-  revert(signal: AbortSignal): Promise<void>;
+	readonly resource: URI;
+	readonly backupKind: "structuredDocument";
+	readonly backupContentType?: string;
+	readonly model: DocumentModel;
+	readonly isDirty: boolean;
+	readonly hasExternalChange: boolean;
+	readonly onDidChangeDirty: Event<void>;
+	readonly onDidChangeExternalChange: Event<void>;
+	readonly onDidChangeContent: Event<void>;
+	backup(): string;
+	restoreBackup(content: string): void;
+	save(signal: AbortSignal): Promise<void>;
+	saveAs(resource: URI, signal: AbortSignal): Promise<void>;
+	revert(signal: AbortSignal): Promise<void>;
 }
 
 /** Acquires lifetime-bound structured document model references. */
 export interface IDocumentModelService extends IDisposable {
-  acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference>;
+	acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference>;
 }

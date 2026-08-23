@@ -9,13 +9,13 @@ export type BulkEditPreviewMode = "never" | "always";
 
 /** Options that make a multi-resource edit application explicit at the call site. */
 export interface BulkEditApplyOptions {
-  readonly preview?: BulkEditPreviewMode;
-  readonly signal?: AbortSignal;
+	readonly preview?: BulkEditPreviewMode;
+	readonly signal?: AbortSignal;
 }
 
 /** Result of a bulk edit, including whether the user actually accepted it. */
 export interface BulkEditResult extends WorkspaceEditResult {
-  readonly applied: boolean;
+	readonly applied: boolean;
 }
 
 /** Workbench callback used by the preview contribution to filter an edit. */
@@ -23,9 +23,9 @@ export type BulkEditPreviewHandler = (edit: LanguageWorkspaceEdit, signal: Abort
 
 /** Workbench owner for preview policy around the lower-level workspace edit transaction. */
 export interface IBulkEditService {
-  apply(edit: LanguageWorkspaceEdit, options?: BulkEditApplyOptions): Promise<BulkEditResult>;
-  hasPreviewHandler(): boolean;
-  setPreviewHandler(handler: BulkEditPreviewHandler): IDisposable;
+	apply(edit: LanguageWorkspaceEdit, options?: BulkEditApplyOptions): Promise<BulkEditResult>;
+	hasPreviewHandler(): boolean;
+	setPreviewHandler(handler: BulkEditPreviewHandler): IDisposable;
 }
 
 export const IBulkEditService = createServiceIdentifier<IBulkEditService>("bulkEditService");
@@ -34,19 +34,19 @@ export type BulkEditPreviewEntryKind = "textDocument" | "create" | "rename" | "d
 
 /** One selectable row in the Workbench bulk-edit preview. */
 export interface BulkEditPreviewEntry {
-  readonly index: number;
-  readonly kind: BulkEditPreviewEntryKind;
-  readonly resource: URI;
-  readonly secondaryResource?: URI;
-  readonly detail: string;
-  readonly before?: string;
-  readonly after?: string;
-  readonly error?: string;
+	readonly index: number;
+	readonly kind: BulkEditPreviewEntryKind;
+	readonly resource: URI;
+	readonly secondaryResource?: URI;
+	readonly detail: string;
+	readonly before?: string;
+	readonly after?: string;
+	readonly error?: string;
 }
 
 /** Materialized preview data; the original ordered edit remains the apply contract. */
 export interface BulkEditPreviewModel {
-  readonly edit: LanguageWorkspaceEdit;
-  readonly entries: readonly BulkEditPreviewEntry[];
-  readonly canApply: boolean;
+	readonly edit: LanguageWorkspaceEdit;
+	readonly entries: readonly BulkEditPreviewEntry[];
+	readonly canApply: boolean;
 }

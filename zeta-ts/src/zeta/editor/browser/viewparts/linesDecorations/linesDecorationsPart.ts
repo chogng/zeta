@@ -6,18 +6,18 @@ import { projectAsterLinesDecorations } from "./linesDecorationsProjection.js";
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
 export class LinesDecorationsPart extends EditorOverlayPart {
-  private readonly decorations: DecorationsPart;
+	private readonly decorations: DecorationsPart;
 
-  constructor(context: EditorViewContext, decorations: DecorationsPart) {
-    super(context);
-    this.decorations = decorations;
-  }
+	constructor(context: EditorViewContext, decorations: DecorationsPart) {
+		super(context);
+		this.decorations = decorations;
+	}
 
-  public render(layout: EditorViewportLayout): void {
-    const context = this.context.overlayContext(layout);
-    if (!context) {
-      return;
-    }
-    projectAsterLinesDecorations(context, this.decorations.visibleDecorations(context));
-  }
+	public render(layout: EditorViewportLayout): void {
+		const context = this.context.overlayContext(layout);
+		if (!context) {
+			return;
+		}
+		projectAsterLinesDecorations(context, this.decorations.visibleDecorations(context));
+	}
 }

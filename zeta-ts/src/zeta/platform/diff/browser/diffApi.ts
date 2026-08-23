@@ -4,13 +4,13 @@ import type { UnavailableOperation } from "../../renderer/browser/disconnectedHo
 import type { IDiffApi } from "../common/diffApi.js";
 
 export function createDisconnectedDiffApi(unavailable: UnavailableOperation): IDiffApi {
-  return {
-    compute: () => unavailable("diff.compute"),
-  };
+	return {
+		compute: () => unavailable("diff.compute"),
+	};
 }
 
 export function createViteDevDiffApi(connection: ViteDevAppServerConnection): IDiffApi {
-  return {
-    compute: request => viteDevRequest(connection, "diff/compute", request),
-  };
+	return {
+		compute: request => viteDevRequest(connection, "diff/compute", request),
+	};
 }

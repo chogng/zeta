@@ -13,11 +13,11 @@ import { DebugConsoleService } from "./debugConsoleService.js";
 import { DebugService } from "./debugService.js";
 
 registerWorkbenchServiceContribution({
-  service: IDebugService,
-  dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IStorageService, ITaskService, ILogService],
-  install: context => {
-    const service = context.own(new DebugService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.getOptional(IDebugAdapterProcessService), context.services.get(ITerminalService), context.services.get(IStorageService), context.services.get(ITaskService), DebugAdapterFactoriesRegistry, context.services.get(ILogService)));
-    context.services.set(IDebugConsoleService, context.own(new DebugConsoleService(service)));
-    return service;
-  },
+	service: IDebugService,
+	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IStorageService, ITaskService, ILogService],
+	install: context => {
+		const service = context.own(new DebugService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.getOptional(IDebugAdapterProcessService), context.services.get(ITerminalService), context.services.get(IStorageService), context.services.get(ITaskService), DebugAdapterFactoriesRegistry, context.services.get(ILogService)));
+		context.services.set(IDebugConsoleService, context.own(new DebugConsoleService(service)));
+		return service;
+	},
 });

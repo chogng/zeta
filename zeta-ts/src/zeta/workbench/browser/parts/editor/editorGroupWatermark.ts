@@ -8,87 +8,87 @@ import { h } from "../../../../base/browser/dom.js";
 
 /** One command presented while an editor group has no active editor. */
 export interface IEditorGroupWatermarkEntry {
-  readonly id: string;
-  readonly label: string;
-  readonly command: CommandId;
+	readonly id: string;
+	readonly label: string;
+	readonly command: CommandId;
 }
 
 class EditorGroupWatermarkRegistry {
-  private readonly entries = new Map<string, IEditorGroupWatermarkEntry>();
-  private readonly _onDidChange = new Emitter<void>();
+	private readonly entries = new Map<string, IEditorGroupWatermarkEntry>();
+	private readonly _onDidChange = new Emitter<void>();
 
-  readonly onDidChange: Event<void> = this._onDidChange.event;
+	readonly onDidChange: Event<void> = this._onDidChange.event;
 
-  register(entry: IEditorGroupWatermarkEntry): IDisposable {
-    if (this.entries.has(entry.id)) {
-      throw new TypeError(
-        `Editor group watermark entry '${entry.id}' is already registered`,
-      );
-    }
-    this.entries.set(entry.id, entry);
-    this._onDidChange.fire();
-    return toDisposable(() => {
-      if (this.entries.delete(entry.id)) {
-        this._onDidChange.fire();
-      }
-    });
-  }
+	register(entry: IEditorGroupWatermarkEntry): IDisposable {
+		if (this.entries.has(entry.id)) {
+			throw new TypeError(
+				`Editor group watermark entry '${entry.id}' is already registered`,
+			);
+		}
+		this.entries.set(entry.id, entry);
+		this._onDidChange.fire();
+		return toDisposable(() => {
+			if (this.entries.delete(entry.id)) {
+				this._onDidChange.fire();
+			}
+		});
+	}
 
-  getEntries(): readonly IEditorGroupWatermarkEntry[] {
-    return [...this.entries.values()];
-  }
+	getEntries(): readonly IEditorGroupWatermarkEntry[] {
+		return [...this.entries.values()];
+	}
 }
 
 /** Registry populated by command contributions shown in the empty editor. */
 export const EditorGroupWatermarkEntries =
-  new EditorGroupWatermarkRegistry();
+	new EditorGroupWatermarkRegistry();
 
 /** Renders command shortcuts when an editor group has no active editor. */
 export class EditorGroupWatermark extends DisposableOwner {
-  readonly element: HTMLElement;
-  private readonly rendered = this.own(new ResettableDisposableGroup());
-  private readonly keybindingService: IKeybindingService;
+	readonly element: HTMLElement;
+	private readonly rendered = this.own(new ResettableDisposableGroup());
+	private readonly keybindingService: IKeybindingService;
 
-  constructor(
-    container: HTMLElement,
-    keybindingService: IKeybindingService,
-  ) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.keybindingService = keybindingService;
-    this.element = h(ownerDocument, "div");
-    this.element.className = "zeta-editor-group-watermark-shortcuts";
-    this.element.setAttribute("aria-label", "Editor shortcuts");
-    container.append(this.element);
-    this.defer(() => this.element.remove());
-    this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
-    this.own(
-      this.keybindingService.onDidUpdateKeybindings(() => this.render()),
-    );
-    this.render();
-  }
+	constructor(
+		container: HTMLElement,
+		keybindingService: IKeybindingService,
+	) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.keybindingService = keybindingService;
+		this.element = h(ownerDocument, "div");
+		this.element.className = "zeta-editor-group-watermark-shortcuts";
+		this.element.setAttribute("aria-label", "Editor shortcuts");
+		container.append(this.element);
+		this.defer(() => this.element.remove());
+		this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
+		this.own(
+			this.keybindingService.onDidUpdateKeybindings(() => this.render()),
+		);
+		this.render();
+	}
 
-  private render(): void {
-    this.rendered.clear();
-    const ownerDocument = this.element.ownerDocument;
-    const rows = EditorGroupWatermarkEntries.getEntries()
-      .flatMap((entry) => {
-        const keybinding =
-          this.keybindingService.lookupKeybinding(entry.command);
-        if (!keybinding) return [];
+	private render(): void {
+		this.rendered.clear();
+		const ownerDocument = this.element.ownerDocument;
+		const rows = EditorGroupWatermarkEntries.getEntries()
+			.flatMap((entry) => {
+				const keybinding =
+					this.keybindingService.lookupKeybinding(entry.command);
+				if (!keybinding) return [];
 
-        const row = h(ownerDocument, "div");
-        row.className = "zeta-editor-group-watermark-entry";
-        const label = h(ownerDocument, "span");
-        label.className = "zeta-editor-group-watermark-label";
-        label.textContent = entry.label;
-        const shortcut = this.rendered.add(new KeybindingLabel(row, {
-          keybinding,
-          presentation: "keycap",
-        }));
-        row.append(label, shortcut.element);
-        return [row];
-      });
-    this.element.replaceChildren(...rows);
-  }
+				const row = h(ownerDocument, "div");
+				row.className = "zeta-editor-group-watermark-entry";
+				const label = h(ownerDocument, "span");
+				label.className = "zeta-editor-group-watermark-label";
+				label.textContent = entry.label;
+				const shortcut = this.rendered.add(new KeybindingLabel(row, {
+					keybinding,
+					presentation: "keycap",
+				}));
+				row.append(label, shortcut.element);
+				return [row];
+			});
+		this.element.replaceChildren(...rows);
+	}
 }

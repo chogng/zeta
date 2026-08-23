@@ -6,8 +6,8 @@ import { PaneCompositePart } from "../paneCompositePart.js";
 
 /** Construction inputs for the fixed Auxiliary Bar Pane Composite host. */
 export interface AuxiliarybarPartOptions {
-  readonly viewDescriptorService: IViewDescriptorService;
-  readonly localizationService?: ILocalizationService;
+	readonly viewDescriptorService: IViewDescriptorService;
+	readonly localizationService?: ILocalizationService;
 }
 
 /**
@@ -18,27 +18,27 @@ export interface AuxiliarybarPartOptions {
  */
 export class AuxiliarybarPart extends PaneCompositePart {
 
-  override get minimumWidth(): number { return 180; }
-  override get maximumWidth(): number { return 600; }
+	override get minimumWidth(): number { return 180; }
+	override get maximumWidth(): number { return 600; }
 
-  constructor(container: HTMLElement, options: AuxiliarybarPartOptions) {
-    super(container, {
-      viewDescriptorService: options.viewDescriptorService,
-      localizationService: options.localizationService,
-      id: "auxiliarybar",
-      location: ViewContainerLocation.AuxiliaryBar,
-      ariaLabel: "Auxiliary sidebar",
-      ariaLabelKey: { bundle: "zeta.regions", key: "auxiliarySidebar" },
-      viewsAriaLabel: "Auxiliary sidebar views",
-      viewsAriaLabelKey: { bundle: "zeta.regions", key: "auxiliarySidebarViews" },
-      compositeBarVisible: false,
-    });
-    this.contentElement.classList.add("zeta-auxiliarybar-content");
-  }
+	constructor(container: HTMLElement, options: AuxiliarybarPartOptions) {
+		super(container, {
+			viewDescriptorService: options.viewDescriptorService,
+			localizationService: options.localizationService,
+			id: "auxiliarybar",
+			location: ViewContainerLocation.AuxiliaryBar,
+			ariaLabel: "Auxiliary sidebar",
+			ariaLabelKey: { bundle: "zeta.regions", key: "auxiliarySidebar" },
+			viewsAriaLabel: "Auxiliary sidebar views",
+			viewsAriaLabelKey: { bundle: "zeta.regions", key: "auxiliarySidebarViews" },
+			compositeBarVisible: false,
+		});
+		this.contentElement.classList.add("zeta-auxiliarybar-content");
+	}
 
-  override showComposite(compositeId: string): void {
-    super.showComposite(compositeId);
-    const composite = this.getComposite(compositeId);
-    this.setTitleProjection(composite?.partTitleProjection);
-  }
+	override showComposite(compositeId: string): void {
+		super.showComposite(compositeId);
+		const composite = this.getComposite(compositeId);
+		this.setTitleProjection(composite?.partTitleProjection);
+	}
 }

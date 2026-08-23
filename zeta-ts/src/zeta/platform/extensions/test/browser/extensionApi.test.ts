@@ -6,67 +6,67 @@ import { createViteDevExtensionApi } from "../../browser/extensionApi.js";
 import { MAX_EXTENSION_RESOURCE_BYTES } from "../../common/extensionApi.js";
 
 test("Vite extension resources reject oversized open metadata before reading", async () => {
-  let reads = 0;
-  const api = createViteDevExtensionApi(connectionReturning({
-    resource: metadata(MAX_EXTENSION_RESOURCE_BYTES + 1),
-  }), resourceApi({
-    read: async () => {
-      reads += 1;
-      throw new Error("resource read must not run");
-    },
-  }));
+	let reads = 0;
+	const api = createViteDevExtensionApi(connectionReturning({
+		resource: metadata(MAX_EXTENSION_RESOURCE_BYTES + 1),
+	}), resourceApi({
+		read: async () => {
+			reads += 1;
+			throw new Error("resource read must not run");
+		},
+	}));
 
-  await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /size/);
-  assert.equal(reads, 0);
+	await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /size/);
+	assert.equal(reads, 0);
 });
 
 test("Vite extension resources reject malformed chunks and release the handle", async () => {
-  let releases = 0;
-  const api = createViteDevExtensionApi(connectionReturning({ resource: metadata(1) }), resourceApi({
-    read: async () => ({
-      resourceId: "resource_0000000000000001",
-      offset: 0,
-      dataBase64: "YQ==",
-      decodedLength: 1,
-      eof: true,
-      unexpected: true,
-    } as never),
-    release: async () => { releases += 1; },
-  }));
+	let releases = 0;
+	const api = createViteDevExtensionApi(connectionReturning({ resource: metadata(1) }), resourceApi({
+		read: async () => ({
+			resourceId: "resource_0000000000000001",
+			offset: 0,
+			dataBase64: "YQ==",
+			decodedLength: 1,
+			eof: true,
+			unexpected: true,
+		} as never),
+		release: async () => { releases += 1; },
+	}));
 
-  await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /shape/);
-  assert.equal(releases, 1);
+	await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /shape/);
+	assert.equal(releases, 1);
 });
 
 test("Vite extension resources verify assembled bytes and release a corrupted handle", async () => {
-  let releases = 0;
-  const api = createViteDevExtensionApi(connectionReturning({ resource: metadata(1) }), resourceApi({
-    read: async () => ({ resourceId: "resource_0000000000000001", offset: 0, dataBase64: "YQ==", decodedLength: 1, eof: true }),
-    release: async () => { releases += 1; },
-  }));
+	let releases = 0;
+	const api = createViteDevExtensionApi(connectionReturning({ resource: metadata(1) }), resourceApi({
+		read: async () => ({ resourceId: "resource_0000000000000001", offset: 0, dataBase64: "YQ==", decodedLength: 1, eof: true }),
+		release: async () => { releases += 1; },
+	}));
 
-  await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /digest/);
-  assert.equal(releases, 1);
+	await assert.rejects(api.readResource({ generation: 1, extensionId: "zeta.demo", path: "demo.json" }), /digest/);
+	assert.equal(releases, 1);
 });
 
 function connectionReturning(result: unknown): ViteDevAppServerConnection {
-  return { request: async () => result } as unknown as ViteDevAppServerConnection;
+	return { request: async () => result } as unknown as ViteDevAppServerConnection;
 }
 
 function resourceApi(overrides: Partial<IResourceApi>): IResourceApi {
-  return {
-    metadata: async () => metadata(0),
-    read: async () => { throw new Error("resource read is unavailable"); },
-    release: async () => {},
-    ...overrides,
-  };
+	return {
+		metadata: async () => metadata(0),
+		read: async () => { throw new Error("resource read is unavailable"); },
+		release: async () => {},
+		...overrides,
+	};
 }
 
 function metadata(size: number) {
-  return {
-    resourceId: "resource_0000000000000001",
-    mimeType: "application/json",
-    size,
-    sha256: `sha256:${"a".repeat(64)}`,
-  };
+	return {
+		resourceId: "resource_0000000000000001",
+		mimeType: "application/json",
+		size,
+		sha256: `sha256:${"a".repeat(64)}`,
+	};
 }

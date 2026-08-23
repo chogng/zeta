@@ -5,21 +5,21 @@ import type { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeIns
 
 /** Trusted routes exposed only to the dedicated Remote installation bootstrap window. */
 export function remoteRuntimeInstallProgressIpcRoutes(service: RemoteRuntimeInstallProgressMainService): readonly IpcRoute<unknown, unknown>[] {
-  return [
-    {
-      channel: REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL,
-      validate: emptyParams,
-      invoke: () => service.getState(),
-    },
-    {
-      channel: REMOTE_RUNTIME_INSTALL_PROGRESS_CANCEL_CHANNEL,
-      validate: emptyParams,
-      invoke: () => service.cancel(),
-    },
-  ];
+	return [
+		{
+			channel: REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL,
+			validate: emptyParams,
+			invoke: () => service.getState(),
+		},
+		{
+			channel: REMOTE_RUNTIME_INSTALL_PROGRESS_CANCEL_CHANNEL,
+			validate: emptyParams,
+			invoke: () => service.cancel(),
+		},
+	];
 }
 
 function emptyParams(value: unknown): undefined {
-  if (value !== undefined) throw new Error("Remote runtime installation progress does not accept parameters");
-  return undefined;
+	if (value !== undefined) throw new Error("Remote runtime installation progress does not accept parameters");
+	return undefined;
 }

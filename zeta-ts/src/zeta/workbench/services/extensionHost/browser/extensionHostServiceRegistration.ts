@@ -9,19 +9,19 @@ import { IExtensionHostService } from "../common/extensionHostService.js";
 import { AppServerExtensionHostService } from "./appServerExtensionHostService.js";
 
 registerWorkbenchServiceContribution({
-  service: IExtensionHostService,
-  dependencies: [IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService],
-  install: context => {
-    const service = context.own(new AppServerExtensionHostService({
-      api: context.services.get(IExtensionHostApi),
-      languageFeatures: context.services.get(ILanguageFeaturesService),
-      tasks: context.services.get(ITaskService),
-      testing: context.services.get(ITestingService),
-      output: context.services.get(IOutputService),
-    }));
-    const ready = service.start();
-    context.blockRestorationUntil(ready);
-    void ready.catch(error => context.services.get(ILogService).error("extensionHost", "Executable Extension Host activation failed", error));
-    return service;
-  },
+	service: IExtensionHostService,
+	dependencies: [IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService],
+	install: context => {
+		const service = context.own(new AppServerExtensionHostService({
+			api: context.services.get(IExtensionHostApi),
+			languageFeatures: context.services.get(ILanguageFeaturesService),
+			tasks: context.services.get(ITaskService),
+			testing: context.services.get(ITestingService),
+			output: context.services.get(IOutputService),
+		}));
+		const ready = service.start();
+		context.blockRestorationUntil(ready);
+		void ready.catch(error => context.services.get(ILogService).error("extensionHost", "Executable Extension Host activation failed", error));
+		return service;
+	},
 });

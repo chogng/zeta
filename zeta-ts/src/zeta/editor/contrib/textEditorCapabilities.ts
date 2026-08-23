@@ -14,24 +14,24 @@ import { type SemanticTokensModelPart, type SemanticTokensService } from "./sema
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
-  bracketDecorations: capability<TextDecorationCollection<void>>("editor.capability.bracketDecorations"),
-  bracketMatcher: capability<LanguageBracketMatcher>("editor.capability.bracketMatcher"),
-  diagnosticDecorations: capability<TextDecorationCollection<LanguageDiagnostic>>("editor.capability.diagnosticDecorations"),
-  documentSymbolProviders: capability<readonly LanguageDocumentSymbolProvider[]>("editor.capability.documentSymbolProviders"),
-  folding: capability<EditorFoldingModel>("editor.capability.folding"),
-  languageLexicalContext: capability<LanguageLexicalContextSource>("editor.capability.languageLexicalContext"),
-  occurrenceDecorations: capability<TextDecorationCollection<void>>("editor.capability.occurrenceDecorations"),
-  rustSyntaxFacts: capability<RustSyntaxFactsService | undefined>("editor.capability.rustSyntaxFacts"),
-  searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
-  semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),
-  semanticTokens: capability<SemanticTokensService>("editor.capability.semanticTokens"),
-  semanticTokenOverlay: capability<SemanticTokensModelPart>("editor.capability.semanticTokenOverlay"),
-  syntax: capability<SyntaxService>("editor.capability.syntax"),
-  tokenization: capability<TokenizationTextModelPart>("editor.capability.tokenization"),
-  unicodeDecorations: capability<TextDecorationCollection<UnicodeHighlight>>("editor.capability.unicodeDecorations"),
-  unusualLineTerminatorDecorations: capability<TextDecorationCollection<void>>("editor.capability.unusualLineTerminatorDecorations"),
+	bracketDecorations: capability<TextDecorationCollection<void>>("editor.capability.bracketDecorations"),
+	bracketMatcher: capability<LanguageBracketMatcher>("editor.capability.bracketMatcher"),
+	diagnosticDecorations: capability<TextDecorationCollection<LanguageDiagnostic>>("editor.capability.diagnosticDecorations"),
+	documentSymbolProviders: capability<readonly LanguageDocumentSymbolProvider[]>("editor.capability.documentSymbolProviders"),
+	folding: capability<EditorFoldingModel>("editor.capability.folding"),
+	languageLexicalContext: capability<LanguageLexicalContextSource>("editor.capability.languageLexicalContext"),
+	occurrenceDecorations: capability<TextDecorationCollection<void>>("editor.capability.occurrenceDecorations"),
+	rustSyntaxFacts: capability<RustSyntaxFactsService | undefined>("editor.capability.rustSyntaxFacts"),
+	searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
+	semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),
+	semanticTokens: capability<SemanticTokensService>("editor.capability.semanticTokens"),
+	semanticTokenOverlay: capability<SemanticTokensModelPart>("editor.capability.semanticTokenOverlay"),
+	syntax: capability<SyntaxService>("editor.capability.syntax"),
+	tokenization: capability<TokenizationTextModelPart>("editor.capability.tokenization"),
+	unicodeDecorations: capability<TextDecorationCollection<UnicodeHighlight>>("editor.capability.unicodeDecorations"),
+	unusualLineTerminatorDecorations: capability<TextDecorationCollection<void>>("editor.capability.unusualLineTerminatorDecorations"),
 });
 
 function capability<T>(id: string): EditorCapability<T> {
-  return Object.freeze({ id });
+	return Object.freeze({ id });
 }

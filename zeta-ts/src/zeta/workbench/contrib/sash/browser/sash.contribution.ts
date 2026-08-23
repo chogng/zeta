@@ -4,10 +4,10 @@ import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/c
 import { SashSettingsController } from "./sash.js";
 
 registerWorkbenchContribution(
-  "workbench.contrib.sash",
-  WorkbenchPhase.AfterRestored,
-  (accessor) => new SashSettingsController(
-    accessor.get(IConfigurationService),
-    accessor.get(ILayoutService).mainContainer,
-  ),
+	"workbench.contrib.sash",
+	WorkbenchPhase.AfterRestored,
+	(accessor) => new SashSettingsController(
+		accessor.get(IConfigurationService),
+		accessor.get(ILayoutService).mainContainer,
+	),
 );

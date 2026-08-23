@@ -12,9 +12,9 @@ import { type TextMateScopeThemeSource } from "./textMateScopeTheme.js";
  * service itself.
  */
 export interface ITextMateService extends IDisposable {
-  readonly grammars: ITextMateGrammarService;
-  readonly scopeTheme: TextMateScopeThemeSource;
-  readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly grammars: ITextMateGrammarService;
+	readonly scopeTheme: TextMateScopeThemeSource;
+	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 }
 
 export const ITextMateService = createServiceIdentifier<ITextMateService>("textMateService");

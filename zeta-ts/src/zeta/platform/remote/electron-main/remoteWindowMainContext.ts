@@ -21,25 +21,25 @@ export type RemoteRuntimeRollbackConfirmation = "confirmed" | "cancelled";
 
 /** Electron-independent window operations needed by the Remote Main context. */
 export interface IRemoteWindowMainHost {
-  send(channel: string, payload: unknown): void;
-  confirmRuntimeRollback(): Promise<RemoteRuntimeRollbackConfirmation>;
-  reportRuntimeRollbackFailure(message: string): Promise<void>;
+	send(channel: string, payload: unknown): void;
+	confirmRuntimeRollback(): Promise<RemoteRuntimeRollbackConfirmation>;
+	reportRuntimeRollbackFailure(message: string): Promise<void>;
 }
 
 /** Window-owned Workspace identity observed by Remote transports and projections. */
 export interface IRemoteWindowWorkspaceContext {
-  readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent>;
-  getWorkspace(): IAnyWorkspaceIdentifier;
+	readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent>;
+	getWorkspace(): IAnyWorkspaceIdentifier;
 }
 
 export interface RemoteWindowMainContextOptions {
-  readonly supervisor: AppServerSupervisor;
-  readonly workspaceContext: IRemoteWindowWorkspaceContext;
-  readonly connections: IRemoteConnectionService;
-  readonly tunnels: IRemoteTunnelService & IDisposable;
-  readonly host: IRemoteWindowMainHost;
-  readonly prepareForRuntimeReplacement?: () => void;
-  readonly reportError?: (message: string, error: unknown) => void;
+	readonly supervisor: AppServerSupervisor;
+	readonly workspaceContext: IRemoteWindowWorkspaceContext;
+	readonly connections: IRemoteConnectionService;
+	readonly tunnels: IRemoteTunnelService & IDisposable;
+	readonly host: IRemoteWindowMainHost;
+	readonly prepareForRuntimeReplacement?: () => void;
+	readonly reportError?: (message: string, error: unknown) => void;
 }
 
 /**
@@ -50,62 +50,62 @@ export interface RemoteWindowMainContextOptions {
  * rollback scoped to the supervisor backing this exact window.
  */
 export class RemoteWindowMainContext extends DisposableOwner {
-  readonly ipcRoutes: readonly IpcRoute<unknown, unknown>[];
+	readonly ipcRoutes: readonly IpcRoute<unknown, unknown>[];
 
-  constructor(private readonly options: RemoteWindowMainContextOptions) {
-    super();
-    const recovery = this.createConnectionRecovery();
-    this.ipcRoutes = Object.freeze([
-      ...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery),
-      ...remoteConnectionIpcRoutes(options.connections),
-      ...remoteTunnelIpcRoutes(options.tunnels),
-    ]);
-    this.own(options.tunnels);
-    const tunnelChanges = options.tunnels.onDidChange(change => options.host.send(REMOTE_TUNNEL_CHANGED_CHANNEL, change));
-    this.defer(() => tunnelChanges.dispose());
-    this.own(options.workspaceContext.onDidChangeWorkspace(() => {
-      void options.tunnels.closeAll().catch(error => this.reportError("Failed to close Remote tunnels after Workspace change", error));
-    }));
-    this.own(options.supervisor.onStateChange(() => {
-      options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
-    }));
-  }
+	constructor(private readonly options: RemoteWindowMainContextOptions) {
+		super();
+		const recovery = this.createConnectionRecovery();
+		this.ipcRoutes = Object.freeze([
+			...remoteAgentIpcRoutes(options.supervisor, () => options.workspaceContext.getWorkspace(), recovery),
+			...remoteConnectionIpcRoutes(options.connections),
+			...remoteTunnelIpcRoutes(options.tunnels),
+		]);
+		this.own(options.tunnels);
+		const tunnelChanges = options.tunnels.onDidChange(change => options.host.send(REMOTE_TUNNEL_CHANGED_CHANNEL, change));
+		this.defer(() => tunnelChanges.dispose());
+		this.own(options.workspaceContext.onDidChangeWorkspace(() => {
+			void options.tunnels.closeAll().catch(error => this.reportError("Failed to close Remote tunnels after Workspace change", error));
+		}));
+		this.own(options.supervisor.onStateChange(() => {
+			options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
+		}));
+	}
 
-  private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {
-    const launcher = this.options.supervisor.options.processLauncher;
-    if (!(launcher instanceof SshAppServerProcessLauncher)) return undefined;
-    const prepareForRuntimeReplacement = (): void => {
-      try {
-        this.options.prepareForRuntimeReplacement?.();
-      } catch (error) {
-        this.reportError("Failed to prepare Remote terminals for runtime replacement", error);
-      }
-    };
-    const coordinator = new RemoteConnectionRecoveryCoordinator(this.options.supervisor, launcher, prepareForRuntimeReplacement);
-    return {
-      reconnect: () => coordinator.reconnect(),
-      rollback: async () => {
-        if (!launcher.runtimeRollbackAvailable) throw new Error("Remote runtime rollback is not available for this connection");
-        const confirmation = await this.options.host.confirmRuntimeRollback();
-        if (confirmation === "cancelled") return { kind: "cancelled" };
-        try {
-          await coordinator.rollback();
-          return { kind: "rolledBack" };
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Remote runtime rollback failed";
-          try {
-            await this.options.host.reportRuntimeRollbackFailure(message.slice(0, 8_000));
-          } catch (reportError) {
-            this.reportError("Failed to report Remote runtime rollback failure", reportError);
-          }
-          throw error;
-        }
-      },
-    };
-  }
+	private createConnectionRecovery(): IRemoteAgentRecoveryMainService | undefined {
+		const launcher = this.options.supervisor.options.processLauncher;
+		if (!(launcher instanceof SshAppServerProcessLauncher)) return undefined;
+		const prepareForRuntimeReplacement = (): void => {
+			try {
+				this.options.prepareForRuntimeReplacement?.();
+			} catch (error) {
+				this.reportError("Failed to prepare Remote terminals for runtime replacement", error);
+			}
+		};
+		const coordinator = new RemoteConnectionRecoveryCoordinator(this.options.supervisor, launcher, prepareForRuntimeReplacement);
+		return {
+			reconnect: () => coordinator.reconnect(),
+			rollback: async () => {
+				if (!launcher.runtimeRollbackAvailable) throw new Error("Remote runtime rollback is not available for this connection");
+				const confirmation = await this.options.host.confirmRuntimeRollback();
+				if (confirmation === "cancelled") return { kind: "cancelled" };
+				try {
+					await coordinator.rollback();
+					return { kind: "rolledBack" };
+				} catch (error) {
+					const message = error instanceof Error ? error.message : "Remote runtime rollback failed";
+					try {
+						await this.options.host.reportRuntimeRollbackFailure(message.slice(0, 8_000));
+					} catch (reportError) {
+						this.reportError("Failed to report Remote runtime rollback failure", reportError);
+					}
+					throw error;
+				}
+			},
+		};
+	}
 
-  private reportError(message: string, error: unknown): void {
-    if (this.options.reportError) this.options.reportError(message, error);
-    else console.error(message, error);
-  }
+	private reportError(message: string, error: unknown): void {
+		if (this.options.reportError) this.options.reportError(message, error);
+		else console.error(message, error);
+	}
 }

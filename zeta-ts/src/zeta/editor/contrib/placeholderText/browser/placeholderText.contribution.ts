@@ -2,9 +2,9 @@ import { registerEditorContribution } from "../../../browser/editorContribution.
 import { PlaceholderTextController } from "./placeholderTextController.js";
 
 registerEditorContribution({
-  id: "editor.contrib.placeholderText",
-  install: context => {
-    if (context.kind !== "text" || !context.options.placeholder) return;
-    context.own(new PlaceholderTextController(context.viewport, context.options.placeholder));
-  },
+	id: "editor.contrib.placeholderText",
+	install: context => {
+		if (context.kind !== "text" || !context.options.placeholder) return;
+		context.own(new PlaceholderTextController(context.viewport, context.options.placeholder));
+	},
 });

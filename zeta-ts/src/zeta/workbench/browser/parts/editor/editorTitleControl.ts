@@ -11,66 +11,66 @@ import { h } from "../../../../base/browser/dom.js";
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
-  readonly menuService: IMenuService;
-  readonly contextMenuProvider: IContextMenuProvider;
+	readonly menuService: IMenuService;
+	readonly contextMenuProvider: IContextMenuProvider;
 }
 
 /** Hosts one group's Editor tabs and its independent action toolbar. */
 export class EditorTitleControl extends DisposableOwner {
-  static readonly HEIGHT = 35;
+	static readonly HEIGHT = 35;
 
-  readonly element: HTMLDivElement;
-  private readonly tabs: EditorTabsControl;
-  private readonly toolbar: WorkbenchToolBar;
+	readonly element: HTMLDivElement;
+	private readonly tabs: EditorTabsControl;
+	private readonly toolbar: WorkbenchToolBar;
 
-  constructor(
-    container: HTMLElement,
-    delegate: EditorTabsDelegate,
-    titleActions?: EditorTitleActions,
-  ) {
-    super();
-    const ownerDocument = container.ownerDocument;
-    this.element = h(ownerDocument, "div");
-    this.element.className = "zeta-editor-title-control";
-    container.append(this.element);
-    const tabsAndActions = h(ownerDocument, "div");
-    tabsAndActions.className = "zeta-editor-tabs-and-actions";
-    this.element.append(tabsAndActions);
-    this.tabs = this.own(new MultiEditorTabsControl(tabsAndActions, delegate));
-    const actions = h(ownerDocument, "div");
-    actions.className = "zeta-editor-title-actions";
-    tabsAndActions.append(actions);
-    this.toolbar = this.own(titleActions
-      ? new MenuWorkbenchToolBar(
-        actions,
-        titleActions.menuService,
-        titleActions.contextMenuProvider,
-        MenuId.EditorTitle,
-        { highlightToggledItems: true },
-      )
-      : new WorkbenchToolBar(
-        actions,
-        emptyEditorToolbarContextMenuProvider,
-        {
-          ariaLabel: "Editor actions",
-          highlightToggledItems: true,
-        },
-      ));
-    this.defer(() => this.element.remove());
-  }
+	constructor(
+		container: HTMLElement,
+		delegate: EditorTabsDelegate,
+		titleActions?: EditorTitleActions,
+	) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		this.element = h(ownerDocument, "div");
+		this.element.className = "zeta-editor-title-control";
+		container.append(this.element);
+		const tabsAndActions = h(ownerDocument, "div");
+		tabsAndActions.className = "zeta-editor-tabs-and-actions";
+		this.element.append(tabsAndActions);
+		this.tabs = this.own(new MultiEditorTabsControl(tabsAndActions, delegate));
+		const actions = h(ownerDocument, "div");
+		actions.className = "zeta-editor-title-actions";
+		tabsAndActions.append(actions);
+		this.toolbar = this.own(titleActions
+			? new MenuWorkbenchToolBar(
+				actions,
+				titleActions.menuService,
+				titleActions.contextMenuProvider,
+				MenuId.EditorTitle,
+				{ highlightToggledItems: true },
+			)
+			: new WorkbenchToolBar(
+				actions,
+				emptyEditorToolbarContextMenuProvider,
+				{
+					ariaLabel: "Editor actions",
+					highlightToggledItems: true,
+				},
+			));
+		this.defer(() => this.element.remove());
+	}
 
-  setEditors(
-    editors: readonly EditorTabDescriptor[],
-    activeInput: EditorInput | undefined,
-  ): void {
-    this.tabs.setEditors(editors, activeInput);
-  }
+	setEditors(
+		editors: readonly EditorTabDescriptor[],
+		activeInput: EditorInput | undefined,
+	): void {
+		this.tabs.setEditors(editors, activeInput);
+	}
 }
 
 const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {
-  showContextMenu(): never {
-    throw new Error(
-      "The empty Editor toolbar cannot present secondary actions",
-    );
-  },
+	showContextMenu(): never {
+		throw new Error(
+			"The empty Editor toolbar cannot present secondary actions",
+		);
+	},
 };

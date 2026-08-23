@@ -1,39 +1,39 @@
 import type {
-  IRuntimeEnvironment,
+	IRuntimeEnvironment,
 } from "../../../base/common/environment.js";
 import type {
-  IBrowserViewApi,
+	IBrowserViewApi,
 } from "../../browser/common/browserView.js";
 import type { IRendererHost } from "../../renderer/common/rendererHost.js";
 import type {
-  IConfigurationApi,
+	IConfigurationApi,
 } from "../../configuration/common/configurationIpc.js";
 import type {
-  IKeybindingsResourceApi,
+	IKeybindingsResourceApi,
 } from "../../keybinding/common/keybindingsResource.js";
 import type {
-  INativeContextMenuApi,
+	INativeContextMenuApi,
 } from "../../../base/parts/contextmenu/common/contextmenu.js";
 import type {
-  INativeMenubarApi,
+	INativeMenubarApi,
 } from "../../menubar/common/nativeMenubar.js";
 import type {
-  IWorkspaceContextApi,
+	IWorkspaceContextApi,
 } from "../../workspace/common/workspaceIpc.js";
 import type { IUserThemeFilesApi } from "../../theme/common/userThemeFiles.js";
 import type {
-  INativeHostApi,
+	INativeHostApi,
 } from "./nativeHost.js";
 
 /** Capabilities exposed only by the Electron preload bridge. */
 export interface ZetaElectronRendererApi extends IRendererHost {
-  readonly environment: IRuntimeEnvironment;
-  readonly browserView: IBrowserViewApi;
-  readonly configuration: IConfigurationApi;
-  readonly keybindings: IKeybindingsResourceApi;
-  readonly nativeContextMenu: INativeContextMenuApi;
-  readonly nativeHost: INativeHostApi;
-  readonly nativeMenubar: INativeMenubarApi;
-  readonly userThemes: IUserThemeFilesApi;
-  readonly workspace: IWorkspaceContextApi;
+	readonly environment: IRuntimeEnvironment;
+	readonly browserView: IBrowserViewApi;
+	readonly configuration: IConfigurationApi;
+	readonly keybindings: IKeybindingsResourceApi;
+	readonly nativeContextMenu: INativeContextMenuApi;
+	readonly nativeHost: INativeHostApi;
+	readonly nativeMenubar: INativeMenubarApi;
+	readonly userThemes: IUserThemeFilesApi;
+	readonly workspace: IWorkspaceContextApi;
 }

@@ -5,27 +5,27 @@ import { ColorScheme } from "../../../../../platform/theme/common/theme.js";
 import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, parseExtensionTheme } from "../../common/extensionTheme.js";
 
 test("compiles a stable selectable Workbench theme from supported extension colors", () => {
-  const id = extensionWorkbenchThemeId("vscode.theme-defaults", "Visual Studio Dark", 0);
-  const definition = parseExtensionTheme({
-    name: "Dark (Visual Studio)",
-    colors: { "editor.background": "#1E1E1E", "unsupported.color": "#ffffff" },
-    tokenColors: [],
-  }, id, "vscode.theme-defaults", "%darkColorThemeLabel%", "vs-dark", "theme test");
+	const id = extensionWorkbenchThemeId("vscode.theme-defaults", "Visual Studio Dark", 0);
+	const definition = parseExtensionTheme({
+		name: "Dark (Visual Studio)",
+		colors: { "editor.background": "#1E1E1E", "unsupported.color": "#ffffff" },
+		tokenColors: [],
+	}, id, "vscode.theme-defaults", "%darkColorThemeLabel%", "vs-dark", "theme test");
 
-  const theme = createExtensionWorkbenchColorTheme(definition);
+	const theme = createExtensionWorkbenchColorTheme(definition);
 
-  assert.equal(id, "extension-vscode-theme-defaults-visual-studio-dark");
-  assert.equal(theme.label, "Dark (Visual Studio)");
-  assert.equal(theme.colorScheme, ColorScheme.Dark);
-  assert.equal(theme.getColorCss(ColorId.editorBackground), "#1e1e1e");
+	assert.equal(id, "extension-vscode-theme-defaults-visual-studio-dark");
+	assert.equal(theme.label, "Dark (Visual Studio)");
+	assert.equal(theme.colorScheme, ColorScheme.Dark);
+	assert.equal(theme.getColorCss(ColorId.editorBackground), "#1e1e1e");
 });
 
 test("rejects selectable extension themes without a supported UI scheme", () => {
-  const definition = parseExtensionTheme({ colors: {}, tokenColors: [] }, "extension-zeta-demo-one", "zeta.demo", "Demo", undefined, "theme test");
-  assert.throws(() => createExtensionWorkbenchColorTheme(definition), /uiTheme/);
+	const definition = parseExtensionTheme({ colors: {}, tokenColors: [] }, "extension-zeta-demo-one", "zeta.demo", "Demo", undefined, "theme test");
+	assert.throws(() => createExtensionWorkbenchColorTheme(definition), /uiTheme/);
 });
 
 test("rejects invalid token colors and font styles before a theme becomes active", () => {
-  assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-zeta-demo-one", "zeta.demo", "Demo", "vs-dark", "theme test"), /hexadecimal color/);
-  assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-zeta-demo-one", "zeta.demo", "Demo", "vs-dark", "theme test"), /unsupported style 'blink'/);
+	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-zeta-demo-one", "zeta.demo", "Demo", "vs-dark", "theme test"), /hexadecimal color/);
+	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-zeta-demo-one", "zeta.demo", "Demo", "vs-dark", "theme test"), /unsupported style 'blink'/);
 });

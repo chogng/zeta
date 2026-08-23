@@ -5,14 +5,14 @@ import { TextDecorationCollection } from "../../../common/model/decorationCollec
 import { DecorationPresentation, createAsterDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 
 registerEditorContribution({
-  id: "editor.contrib.find",
-  configure: context => {
-    const decorations = context.own(new TextDecorationCollection<void>(context.model));
-    context.provideCapability(TextEditorCapability.searchDecorations, decorations);
-    context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch));
-  },
-  install: context => {
-    if (context.kind !== "text") return;
-    context.own(new FindController(context.textInput.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
-  },
+	id: "editor.contrib.find",
+	configure: context => {
+		const decorations = context.own(new TextDecorationCollection<void>(context.model));
+		context.provideCapability(TextEditorCapability.searchDecorations, decorations);
+		context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch));
+	},
+	install: context => {
+		if (context.kind !== "text") return;
+		context.own(new FindController(context.textInput.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
+	},
 });

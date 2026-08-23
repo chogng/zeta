@@ -11,17 +11,17 @@ import { type IDisposable } from "../../../../base/common/lifecycle.js";
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
 export interface CodeEditorWidgetOptions {
-  readonly container: HTMLElement;
-  readonly model: TextModel;
-  readonly selectionController: EditorSelectionController;
-  readonly lineHeight: number;
-  readonly ariaLabel?: string;
-  /** Compatibility seam for hosts that explicitly register placeholder presentation. */
-  readonly placeholder?: string;
-  readonly viewport?: CodeEditorWidgetViewportOptions;
-  readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
-  readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
-  readonly pointerSelection?: PointerSelectionControllerOptions;
+	readonly container: HTMLElement;
+	readonly model: TextModel;
+	readonly selectionController: EditorSelectionController;
+	readonly lineHeight: number;
+	readonly ariaLabel?: string;
+	/** Compatibility seam for hosts that explicitly register placeholder presentation. */
+	readonly placeholder?: string;
+	readonly viewport?: CodeEditorWidgetViewportOptions;
+	readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
+	readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
+	readonly pointerSelection?: PointerSelectionControllerOptions;
 }
 
 /**
@@ -32,48 +32,48 @@ export interface CodeEditorWidgetOptions {
  * drop/paste behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends DisposableOwner {
-  readonly viewport: EditorViewport;
-  readonly textInput: TextInputController;
+	readonly viewport: EditorViewport;
+	readonly textInput: TextInputController;
 
-  constructor(options: CodeEditorWidgetOptions) {
-    super();
-    try {
-      validateOptions(options);
-      this.viewport = this.own(new EditorViewport({
-        ...options.viewport,
-        container: options.container,
-        model: options.model,
-        lineHeight: options.lineHeight,
-        ariaLabel: options.ariaLabel,
-        selectionController: options.selectionController,
-      }));
-      this.textInput = this.own(new TextInputController(this.viewport, options.selectionController, {
-        ...options.textInput,
-        ariaLabel: options.ariaLabel,
-      }));
-      if (options.placeholder) {
-        if (!placeholderFactory) throw new Error("Code editor placeholder requires the placeholder contribution");
-        this.own(placeholderFactory(this.viewport, options.placeholder));
-      }
-      this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
-      this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
-    } catch (error) {
-      this.dispose();
-      throw error;
-    }
-  }
+	constructor(options: CodeEditorWidgetOptions) {
+		super();
+		try {
+			validateOptions(options);
+			this.viewport = this.own(new EditorViewport({
+				...options.viewport,
+				container: options.container,
+				model: options.model,
+				lineHeight: options.lineHeight,
+				ariaLabel: options.ariaLabel,
+				selectionController: options.selectionController,
+			}));
+			this.textInput = this.own(new TextInputController(this.viewport, options.selectionController, {
+				...options.textInput,
+				ariaLabel: options.ariaLabel,
+			}));
+			if (options.placeholder) {
+				if (!placeholderFactory) throw new Error("Code editor placeholder requires the placeholder contribution");
+				this.own(placeholderFactory(this.viewport, options.placeholder));
+			}
+			this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
+			this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
 
-  get element(): HTMLDivElement {
-    return this.viewport.element;
-  }
+	get element(): HTMLDivElement {
+		return this.viewport.element;
+	}
 
-  layout(dimension: IDimension = getClientArea(this.element)): void {
-    this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
-  }
+	layout(dimension: IDimension = getClientArea(this.element)): void {
+		this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
+	}
 
-  focus(): void {
-    this.textInput.focus();
-  }
+	focus(): void {
+		this.textInput.focus();
+	}
 }
 
 export type CodeEditorPlaceholderFactory = (viewport: EditorViewport, placeholder: string) => IDisposable;
@@ -82,16 +82,16 @@ let placeholderFactory: CodeEditorPlaceholderFactory | undefined;
 
 /** Registers optional placeholder presentation without a widget-to-contrib dependency. */
 export function registerCodeEditorPlaceholderFactory(factory: CodeEditorPlaceholderFactory): void {
-  if (typeof factory !== "function") throw new TypeError("Code editor placeholder factory must be a function");
-  if (placeholderFactory && placeholderFactory !== factory) throw new Error("Code editor placeholder factory is already registered");
-  placeholderFactory = factory;
+	if (typeof factory !== "function") throw new TypeError("Code editor placeholder factory must be a function");
+	if (placeholderFactory && placeholderFactory !== factory) throw new Error("Code editor placeholder factory is already registered");
+	placeholderFactory = factory;
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-  if (!options || typeof options !== "object" || !options.container || !options.model || !options.selectionController) {
-    throw new TypeError("Aster code editor requires a container, text model, and selection controller");
-  }
-  if (options.selectionController.textModel !== options.model) {
-    throw new TypeError("Aster code editor model and selection controller must match");
-  }
+	if (!options || typeof options !== "object" || !options.container || !options.model || !options.selectionController) {
+		throw new TypeError("Aster code editor requires a container, text model, and selection controller");
+	}
+	if (options.selectionController.textModel !== options.model) {
+		throw new TypeError("Aster code editor model and selection controller must match");
+	}
 }

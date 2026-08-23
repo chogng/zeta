@@ -1,11 +1,11 @@
 import type {
-  ConfigurationMainService,
+	ConfigurationMainService,
 } from "../../configuration/electron-main/configurationMainService.js";
 import {
-  validateKeybindingsResource,
+	validateKeybindingsResource,
 } from "../common/keybindingsResource.js";
 import type {
-  KeybindingsResourceMainService,
+	KeybindingsResourceMainService,
 } from "./keybindingsResourceMainService.js";
 
 const legacyConfigurationKey = "keyboard.keybindings";
@@ -17,43 +17,43 @@ const legacyConfigurationKey = "keyboard.keybindings";
  * removed after it validates and any required standalone write succeeds.
  */
 export async function migrateLegacyKeybindings(
-  configuration: ConfigurationMainService,
-  keybindings: KeybindingsResourceMainService,
+	configuration: ConfigurationMainService,
+	keybindings: KeybindingsResourceMainService,
 ): Promise<boolean> {
-  const configurationSnapshot = configuration.read();
-  if (
-    !Object.hasOwn(
-      configurationSnapshot.document.values,
-      legacyConfigurationKey,
-    )
-  ) {
-    return false;
-  }
+	const configurationSnapshot = configuration.read();
+	if (
+		!Object.hasOwn(
+			configurationSnapshot.document.values,
+			legacyConfigurationKey,
+		)
+	) {
+		return false;
+	}
 
-  const migrated = validateKeybindingsResource(
-    configurationSnapshot.document.values[legacyConfigurationKey],
-  );
-  const keybindingsSnapshot = keybindings.read();
-  if (
-    keybindingsSnapshot.bindings.length === 0 &&
-    migrated.length > 0
-  ) {
-    await keybindings.update({
-      expectedRevision: keybindingsSnapshot.revision,
-      bindings: migrated,
-    });
-  }
+	const migrated = validateKeybindingsResource(
+		configurationSnapshot.document.values[legacyConfigurationKey],
+	);
+	const keybindingsSnapshot = keybindings.read();
+	if (
+		keybindingsSnapshot.bindings.length === 0 &&
+		migrated.length > 0
+	) {
+		await keybindings.update({
+			expectedRevision: keybindingsSnapshot.revision,
+			bindings: migrated,
+		});
+	}
 
-  const values = {
-    ...configurationSnapshot.document.values,
-  };
-  delete values[legacyConfigurationKey];
-  await configuration.update({
-    expectedRevision: configurationSnapshot.revision,
-    document: {
-      version: 1,
-      values,
-    },
-  });
-  return true;
+	const values = {
+		...configurationSnapshot.document.values,
+	};
+	delete values[legacyConfigurationKey];
+	await configuration.update({
+		expectedRevision: configurationSnapshot.revision,
+		document: {
+			version: 1,
+			values,
+		},
+	});
+	return true;
 }

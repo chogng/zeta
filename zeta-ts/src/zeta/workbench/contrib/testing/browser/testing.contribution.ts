@@ -10,15 +10,15 @@ import "./testingActions.js";
 import "./media/testing.css";
 
 export function registerTestingView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-  registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Testing, title: "Testing", localizationKey: { bundle: "zeta.views", key: "testing" }, location: ViewContainerLocation.Sidebar, icon: lxiconsLibrary.check, order: 4 });
-  registry.registerStaticViews(WorkbenchViewContainerId.Testing, [{
-    id: TESTING_VIEW_ID,
-    title: "Testing",
-    localizationKey: { bundle: "zeta.views", key: "testing" },
-    order: 1,
-    canToggleVisibility: false,
-    ctorDescriptor: new SyncDescriptor(TestingViewPane, { serviceDependencies: [ITestingService, ITerminalService, IViewsService] }),
-  }]);
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Testing, title: "Testing", localizationKey: { bundle: "zeta.views", key: "testing" }, location: ViewContainerLocation.Sidebar, icon: lxiconsLibrary.check, order: 4 });
+	registry.registerStaticViews(WorkbenchViewContainerId.Testing, [{
+		id: TESTING_VIEW_ID,
+		title: "Testing",
+		localizationKey: { bundle: "zeta.views", key: "testing" },
+		order: 1,
+		canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(TestingViewPane, { serviceDependencies: [ITestingService, ITerminalService, IViewsService] }),
+	}]);
 }
 
 registerTestingView();

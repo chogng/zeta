@@ -7,33 +7,33 @@ import { type RendererHostCapabilities } from "../../renderer/common/rendererHos
 
 /** Vite development adapter for App Server-owned DAP processes. */
 export class ViteDevDebugAdapterProcessService implements IDebugAdapterProcessService {
-  constructor(private readonly connection: ViteDevAppServerConnection, private readonly appServer: IAppServerApi) {}
+	constructor(private readonly connection: ViteDevAppServerConnection, private readonly appServer: IAppServerApi) {}
 
-  async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
-    return (await viteDevRequest(this.connection, "debug/adapter/start", { program: options.program, arguments: [...options.arguments] })).sessionId;
-  }
+	async start(options: IDebugAdapterProcessStartOptions): Promise<string> {
+		return (await viteDevRequest(this.connection, "debug/adapter/start", { program: options.program, arguments: [...options.arguments] })).sessionId;
+	}
 
-  send(sessionId: string, message: unknown): Promise<void> {
-    return voidResult(viteDevRequest(this.connection, "debug/adapter/send", { sessionId, message }));
-  }
+	send(sessionId: string, message: unknown): Promise<void> {
+		return voidResult(viteDevRequest(this.connection, "debug/adapter/send", { sessionId, message }));
+	}
 
-  read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
-    return viteDevRequest(this.connection, "debug/adapter/read", { sessionId, afterSequence, maxMessages });
-  }
+	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {
+		return viteDevRequest(this.connection, "debug/adapter/read", { sessionId, afterSequence, maxMessages });
+	}
 
-  close(sessionId: string): Promise<void> {
-    return voidResult(viteDevRequest(this.connection, "debug/adapter/close", { sessionId }));
-  }
+	close(sessionId: string): Promise<void> {
+		return voidResult(viteDevRequest(this.connection, "debug/adapter/close", { sessionId }));
+	}
 
-  getConnectionState() { return this.appServer.getConnectionState(); }
+	getConnectionState() { return this.appServer.getConnectionState(); }
 
-  onConnectionState(listener: Parameters<IAppServerApi["onConnectionState"]>[0]): IDisposable {
-    const subscription = this.appServer.onConnectionState(listener);
-    return toDisposable(() => subscription.dispose());
-  }
+	onConnectionState(listener: Parameters<IAppServerApi["onConnectionState"]>[0]): IDisposable {
+		const subscription = this.appServer.onConnectionState(listener);
+		return toDisposable(() => subscription.dispose());
+	}
 }
 
 /** Code product contribution for the connected Vite renderer host. */
 export function createViteDevDebugAdapterCapability(connection: ViteDevAppServerConnection, appServer: IAppServerApi): RendererHostCapabilities {
-  return { debugAdapter: new ViteDevDebugAdapterProcessService(connection, appServer) };
+	return { debugAdapter: new ViteDevDebugAdapterProcessService(connection, appServer) };
 }

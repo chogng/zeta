@@ -3,10 +3,10 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 /** Transport-only symbol-index operations. Product consumers use ISymbolIndexService. */
 export interface ISymbolIndexApi {
-  status(): Promise<SymbolIndexStatusResult>;
-  search(params: SymbolIndexSearchParams): Promise<SymbolIndexSearchResult>;
-  synchronize(params: WorkspaceDocumentOverlaySynchronizeParams): Promise<WorkspaceDocumentOverlayStatusResult>;
-  close(params: WorkspaceDocumentOverlayCloseParams): Promise<WorkspaceDocumentOverlayStatusResult>;
+	status(): Promise<SymbolIndexStatusResult>;
+	search(params: SymbolIndexSearchParams): Promise<SymbolIndexSearchResult>;
+	synchronize(params: WorkspaceDocumentOverlaySynchronizeParams): Promise<WorkspaceDocumentOverlayStatusResult>;
+	close(params: WorkspaceDocumentOverlayCloseParams): Promise<WorkspaceDocumentOverlayStatusResult>;
 }
 
 export const ISymbolIndexApi = createServiceIdentifier<ISymbolIndexApi>("symbolIndexApi");

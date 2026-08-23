@@ -8,8 +8,8 @@ import type { DocumentCollaborationSubmitResult } from "../../../../../generated
 
 /** Typed transport boundary for server-ordered structured-document collaboration. */
 export interface IDocumentCollaborationApi {
-  open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult>;
-  submit(params: DocumentCollaborationSubmitParams): Promise<DocumentCollaborationSubmitResult>;
-  publishPresence(params: DocumentCollaborationPresenceParams): Promise<DocumentCollaborationPresenceSnapshot>;
-  readPresence(params: DocumentCollaborationPresenceReadParams): Promise<DocumentCollaborationPresenceSnapshot>;
+	open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult>;
+	submit(params: DocumentCollaborationSubmitParams): Promise<DocumentCollaborationSubmitResult>;
+	publishPresence(params: DocumentCollaborationPresenceParams): Promise<DocumentCollaborationPresenceSnapshot>;
+	readPresence(params: DocumentCollaborationPresenceReadParams): Promise<DocumentCollaborationPresenceSnapshot>;
 }

@@ -20,141 +20,141 @@ export const ConnectToRemoteCommandId = "workbench.action.remote.connect";
 export const ManageRemoteConnectionsCommandId = "workbench.action.remote.manageConnections";
 
 interface RemoteConnectionQuickPickItem extends IQuickPickItem {
-  readonly connection: RemoteConnectionDefinition;
+	readonly connection: RemoteConnectionDefinition;
 }
 
 registerAction2(class ConnectToRemoteAction extends Action2 {
-  constructor() {
-    super({
-      id: ConnectToRemoteCommandId,
-      title: "Remote: Connect to Saved SSH Host",
-      f1: true,
-      precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
-    });
-  }
+	constructor() {
+		super({
+			id: ConnectToRemoteCommandId,
+			title: "Remote: Connect to Saved SSH Host",
+			f1: true,
+			precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
+		});
+	}
 
-  override run(accessor: ServicesAccessor): Promise<void> {
-    return showRemoteConnectionPicker(
-      accessor.get(IRemoteConnectionService),
-      accessor.get(IQuickInputService),
-      accessor.get(IDialogService),
-    );
-  }
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return showRemoteConnectionPicker(
+			accessor.get(IRemoteConnectionService),
+			accessor.get(IQuickInputService),
+			accessor.get(IDialogService),
+		);
+	}
 });
 
 registerAction2(class RollbackRemoteRuntimeAction extends Action2 {
-  constructor() {
-    super({
-      id: RollbackRemoteRuntimeCommandId,
-      title: "Remote: Roll Back Remote Runtime",
-      f1: true,
-      precondition: RemoteConnectionKindContext.isEqualTo("ssh"),
-    });
-  }
+	constructor() {
+		super({
+			id: RollbackRemoteRuntimeCommandId,
+			title: "Remote: Roll Back Remote Runtime",
+			f1: true,
+			precondition: RemoteConnectionKindContext.isEqualTo("ssh"),
+		});
+	}
 
-  override run(accessor: ServicesAccessor): Promise<void> {
-    return accessor.get(IRemoteAgentService).rollbackRuntime().then(() => undefined);
-  }
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IRemoteAgentService).rollbackRuntime().then(() => undefined);
+	}
 });
 
 registerAction2(class ReconnectRemoteAction extends Action2 {
-  constructor() {
-    super({
-      id: ReconnectRemoteCommandId,
-      title: "Remote: Reconnect to SSH Host",
-      f1: true,
-      precondition: ContextKeyExpr.and(RemoteConnectionKindContext.isEqualTo("ssh"), RemoteConnectionStateContext.isEqualTo("disconnected")),
-    });
-  }
+	constructor() {
+		super({
+			id: ReconnectRemoteCommandId,
+			title: "Remote: Reconnect to SSH Host",
+			f1: true,
+			precondition: ContextKeyExpr.and(RemoteConnectionKindContext.isEqualTo("ssh"), RemoteConnectionStateContext.isEqualTo("disconnected")),
+		});
+	}
 
-  override async run(accessor: ServicesAccessor): Promise<void> {
-    try {
-      await accessor.get(IRemoteAgentService).reconnect();
-    } catch (error) {
-      await showConnectionError(accessor.get(IDialogService), "Could not reconnect to the Remote Workspace", error);
-    }
-  }
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		try {
+			await accessor.get(IRemoteAgentService).reconnect();
+		} catch (error) {
+			await showConnectionError(accessor.get(IDialogService), "Could not reconnect to the Remote Workspace", error);
+		}
+	}
 });
 
 registerAction2(class ManageRemoteConnectionsAction extends Action2 {
-  constructor() {
-    super({
-      id: ManageRemoteConnectionsCommandId,
-      title: "Remote: Manage Saved SSH Hosts",
-      f1: true,
-      precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
-    });
-  }
+	constructor() {
+		super({
+			id: ManageRemoteConnectionsCommandId,
+			title: "Remote: Manage Saved SSH Hosts",
+			f1: true,
+			precondition: RemoteConnectionsAvailableContext.isEqualTo(true),
+		});
+	}
 
-  override run(accessor: ServicesAccessor): Promise<void> {
-    return showRemoteConnectionManager(
-      accessor.get(IRemoteConnectionService),
-      accessor.get(IQuickInputService),
-      accessor.get(IDialogService),
-    );
-  }
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return showRemoteConnectionManager(
+			accessor.get(IRemoteConnectionService),
+			accessor.get(IQuickInputService),
+			accessor.get(IDialogService),
+		);
+	}
 });
 
 export async function showRemoteConnectionPicker(
-  connections: IRemoteConnectionService,
-  quickInput: IQuickInputService,
-  dialogs: IDialogService,
+	connections: IRemoteConnectionService,
+	quickInput: IQuickInputService,
+	dialogs: IDialogService,
 ): Promise<void> {
-  let available: readonly RemoteConnectionDefinition[];
-  try {
-    available = await connections.list();
-  } catch (error) {
-    await showConnectionError(dialogs, "Could not load saved Remote connections", error);
-    return;
-  }
-  if (available.length === 0) {
-    await dialogs.showMessage({
-      severity: DialogSeverity.Info,
-      title: "No saved Remote connections",
-      message: "Add a credential-free SSH target before connecting.",
-      detail: "Run 'Remote: Manage Saved SSH Hosts' from the Command Palette.",
-    });
-    return;
-  }
+	let available: readonly RemoteConnectionDefinition[];
+	try {
+		available = await connections.list();
+	} catch (error) {
+		await showConnectionError(dialogs, "Could not load saved Remote connections", error);
+		return;
+	}
+	if (available.length === 0) {
+		await dialogs.showMessage({
+			severity: DialogSeverity.Info,
+			title: "No saved Remote connections",
+			message: "Add a credential-free SSH target before connecting.",
+			detail: "Run 'Remote: Manage Saved SSH Hosts' from the Command Palette.",
+		});
+		return;
+	}
 
-  const picker = quickInput.createQuickPick<RemoteConnectionQuickPickItem>();
-  const disposables = new DisposableStore();
-  disposables.add(picker);
-  picker.placeholder = "Select a Remote SSH connection";
-  picker.items = available.map(connection => ({
-    connection,
-    label: connection.name,
-    description: connection.host,
-    detail: connection.workspace,
-  }));
-  disposables.add(picker.onDidAccept(item => {
-    picker.hide();
-    void connectToRemote(item.connection, connections, dialogs);
-  }));
-  disposables.add(picker.onDidHide(() => disposables.dispose()));
-  picker.show();
+	const picker = quickInput.createQuickPick<RemoteConnectionQuickPickItem>();
+	const disposables = new DisposableStore();
+	disposables.add(picker);
+	picker.placeholder = "Select a Remote SSH connection";
+	picker.items = available.map(connection => ({
+		connection,
+		label: connection.name,
+		description: connection.host,
+		detail: connection.workspace,
+	}));
+	disposables.add(picker.onDidAccept(item => {
+		picker.hide();
+		void connectToRemote(item.connection, connections, dialogs);
+	}));
+	disposables.add(picker.onDidHide(() => disposables.dispose()));
+	picker.show();
 }
 
 async function connectToRemote(connection: RemoteConnectionDefinition, connections: IRemoteConnectionService, dialogs: IDialogService): Promise<void> {
-  const confirmed = await dialogs.confirm({
-    title: "Open Remote Window",
-    message: `Open a new Zeta window for '${connection.name}'?`,
-    detail: `${connection.host}:${connection.workspace}`,
-    primaryButton: "Open Remote Window",
-  });
-  if (!confirmed) return;
-  try {
-    await connections.connect(connection.name);
-  } catch (error) {
-    await showConnectionError(dialogs, "Could not connect to the Remote Workspace", error);
-  }
+	const confirmed = await dialogs.confirm({
+		title: "Open Remote Window",
+		message: `Open a new Zeta window for '${connection.name}'?`,
+		detail: `${connection.host}:${connection.workspace}`,
+		primaryButton: "Open Remote Window",
+	});
+	if (!confirmed) return;
+	try {
+		await connections.connect(connection.name);
+	} catch (error) {
+		await showConnectionError(dialogs, "Could not connect to the Remote Workspace", error);
+	}
 }
 
 function showConnectionError(dialogs: IDialogService, message: string, error: unknown): Promise<void> {
-  return dialogs.showMessage({
-    severity: DialogSeverity.Error,
-    title: "Remote connection failed",
-    message,
-    detail: error instanceof Error ? error.message : String(error),
-  });
+	return dialogs.showMessage({
+		severity: DialogSeverity.Error,
+		title: "Remote connection failed",
+		message,
+		detail: error instanceof Error ? error.message : String(error),
+	});
 }
