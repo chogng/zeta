@@ -37,6 +37,14 @@ pub struct TurnStartResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct TurnSteerResult {
+    pub turn_id: TurnId,
+    #[ts(type = "number")]
+    pub sequence: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct TurnInterruptResult {
     #[ts(type = "number")]
     pub sequence: u64,

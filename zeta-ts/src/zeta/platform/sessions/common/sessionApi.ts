@@ -1,4 +1,4 @@
-import type { ModelListResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult } from "../../../../../generated/app-server/types.js";
+import type { ModelListResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
 
 export type { SessionRequestResult };
 
@@ -26,6 +26,11 @@ export function turnStartResult(result: SessionRequestResult): TurnStartResult {
 
 export function turnInterruptResult(result: SessionRequestResult): TurnInterruptResult {
 	if (result.type !== "turnInterrupt") throw new Error(`Expected Turn interrupt result, received ${result.type}.`);
+	return result.value;
+}
+
+export function turnSteerResult(result: SessionRequestResult): TurnSteerResult {
+	if (result.type !== "turnSteer") throw new Error(`Expected Turn steer result, received ${result.type}.`);
 	return result.value;
 }
 
@@ -61,6 +66,7 @@ export interface IThreadApi {
 
 export interface ITurnApi {
 	start(params: SessionOperationInput<"startTurn">): Promise<TurnStartResult>;
+	steer(params: SessionOperationInput<"steerTurn">): Promise<TurnSteerResult>;
 	interrupt(params: SessionOperationInput<"interruptTurn">): Promise<TurnInterruptResult>;
 	resolveInteraction(params: SessionOperationInput<"resolveInteraction">): Promise<TurnInteractionResolveResult>;
 }

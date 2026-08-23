@@ -18800,6 +18800,34 @@
         },
         {
           "properties": {
+            "input": {
+              "items": {
+                "$ref": "#/$defs/InputItem"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "steerTurn",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "input"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
@@ -18917,6 +18945,22 @@
             },
             "value": {
               "$ref": "#/$defs/TurnStartResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "turnSteer",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/TurnSteerResult"
             }
           },
           "required": [
@@ -20942,6 +20986,57 @@
         },
         {
           "properties": {
+            "itemIds": {
+              "items": {
+                "$ref": "#/$defs/ItemId"
+              },
+              "type": "array"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "turnSteered",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "itemIds"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "commandId": {
+              "$ref": "#/$defs/CommandId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "turnSteerDelivered",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
+            "commandId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "backend": {
               "type": "string"
             },
@@ -22642,6 +22737,23 @@
         "interrupted"
       ],
       "type": "string"
+    },
+    "TurnSteerResult": {
+      "properties": {
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        }
+      },
+      "required": [
+        "turnId",
+        "sequence"
+      ],
+      "type": "object"
     },
     "TypstCompileParams": {
       "properties": {

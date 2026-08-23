@@ -564,7 +564,9 @@ IWorkbenchSessionService
 
 `IWorkbenchSessionService` 负责恢复和切换当前 session/thread；`IChatService` 隔离 model、
 thread、turn 和 App Server lifecycle transport，并把生成 DTO 映射为前端领域类型；`ChatPaneModel` 负责单个活动
-thread 的可释放订阅、已提交 transcript 与临时 stream projection。重新连接或 stream 序号
+thread 的可释放订阅、已提交 transcript 与临时 stream projection。活动 Turn 处于 running、
+waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `session/request::SteerTurn`，不会新建
+第二个 Turn；输入工具栏同时保留 Send 和 Stop，显式 Skill 只允许在新 Turn 接受边界选择。重新连接或 stream 序号
 不连续时，以 `thread.read` 返回的权威状态重建展示。`ChatViewPane` 当前支持文本发送、中断、
 审批、用户输入请求和经过统一 sanitizer 的 Markdown 展示。
 

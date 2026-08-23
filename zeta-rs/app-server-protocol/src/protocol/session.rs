@@ -91,6 +91,12 @@ pub enum SessionRequest {
         command: String,
         working_directory: String,
     },
+    SteerTurn {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        #[schemars(length(min = 1))]
+        input: Vec<InputItem>,
+    },
     InterruptTurn {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -240,6 +246,7 @@ pub enum SessionRequestResult {
     Session(SessionResult),
     Thread(SessionThreadResult),
     Turn(TurnStartResult),
+    TurnSteer(crate::protocol::turn::TurnSteerResult),
     TurnInterrupt(TurnInterruptResult),
     Interaction(TurnInteractionResolveResult),
 }

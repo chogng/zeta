@@ -376,6 +376,45 @@ impl CodexTurnDriver {
         parse_turn_id(&response)
     }
 
+    /// Appends text input to the exact active upstream Turn.
+    pub fn steer_turn(
+        &self,
+        thread_id: &CodexThreadId,
+        turn_id: &CodexTurnId,
+        input: &[String],
+    ) -> Result<(), CodexTurnError> {
+        if input.is_empty() || input.iter().any(|text| text.trim().is_empty()) {
+            return Err(CodexTurnError::invalid_input(
+                "Codex Turn steering requires non-empty text input",
+            ));
+        }
+        let response = self
+            .runtime
+            .request(
+                "turn/steer",
+                json!({
+                    "threadId": thread_id.as_str(),
+                    "expectedTurnId": turn_id.as_str(),
+                    "input": input
+                        .iter()
+                        .map(|text| json!({"type": "text", "text": text}))
+                        .collect::<Vec<_>>(),
+                }),
+            )
+            .map_err(turn_process_error)?;
+        let returned = CodexTurnId::new(required_string(
+            &response,
+            "/turnId",
+            "Turn steer response",
+        )?)?;
+        if &returned != turn_id {
+            return Err(CodexTurnError::incompatible(
+                "Turn steer response does not match the expected Turn",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn interrupt(
         &self,
         thread_id: &CodexThreadId,

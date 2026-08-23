@@ -28,7 +28,7 @@ use zeta_app_server_protocol::protocol::session::{
     SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::turn::{
-    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult,
+    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
 use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
@@ -36,12 +36,15 @@ use zeta_core::{
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
     RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
     SetSessionModelRequest, ShellTurnInvocation, StartShellTurnRequest, StartTurnDisposition,
-    StartTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
+    StartTurnRequest, SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend,
+    TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
+use zeta_protocol::StableTurnError;
 use zeta_protocol::UserInput;
 use zeta_typst::{
     TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
@@ -443,6 +446,13 @@ impl AppServer {
                 command,
                 working_directory,
             )?)),
+            SessionRequest::SteerTurn {
+                thread_id,
+                turn_id,
+                input,
+            } => result(&SessionRequestResult::TurnSteer(
+                self.steer_turn_request(mutation, thread_id, turn_id, input)?,
+            )),
             SessionRequest::InterruptTurn { thread_id, turn_id } => {
                 result(&SessionRequestResult::TurnInterrupt(
                     self.interrupt_turn_request(mutation, thread_id, turn_id)?,
@@ -1013,6 +1023,91 @@ impl AppServer {
         Ok(TurnInterruptResult {
             sequence: interrupted.sequence,
         })
+    }
+
+    fn steer_turn_request(
+        &self,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+        turn_id: zeta_protocol::TurnId,
+        input: Vec<InputItem>,
+    ) -> Result<TurnSteerResult, RpcError> {
+        let thread = self.read_session_thread(&mutation.session_id, &thread_id)?;
+        let turn = thread
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == turn_id)
+            .ok_or_else(|| RpcError::new(-32011, AppServerErrorName::CoreOperationFailed))?;
+        let subscription = turn.model.as_ref().is_some_and(|model| {
+            zeta_model_provider_config::find_static_model(model)
+                .is_some_and(|entry| entry.access == ModelAccess::Subscription)
+        });
+        if subscription
+            && input
+                .iter()
+                .any(|item| !matches!(item, InputItem::Text { .. }))
+        {
+            return Err(RpcError::new(
+                -32010,
+                AppServerErrorName::CoreOperationFailed,
+            ));
+        }
+        let input = input
+            .into_iter()
+            .map(|item| match item {
+                InputItem::Text { text } => UserInput::Text { text },
+                InputItem::ImageAttachment { attachment } => {
+                    UserInput::ImageAttachment { attachment }
+                }
+                InputItem::Image { url } => UserInput::Image { url },
+                InputItem::Skill { skill } => UserInput::Skill { skill },
+            })
+            .collect::<Vec<_>>();
+        let command_id = mutation.command_id.clone();
+        let steered = self
+            .sessions
+            .steer_turn(
+                &mutation.session_id,
+                &thread_id,
+                SteerTurnRequest {
+                    command_id: mutation.command_id,
+                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                    turn_id: turn_id.clone(),
+                    input: input.clone(),
+                },
+            )
+            .map_err(core_error)?;
+        let sequence = match steered.disposition {
+            SteerTurnDisposition::Steered => {
+                if let Err(error) =
+                    self.turn_backend
+                        .steer(&thread_id, &turn_id, &command_id, &input)
+                {
+                    let _ = self.sessions.threads().fail_turn(
+                        &thread_id,
+                        &turn_id,
+                        StableTurnError::model_invocation_failed(),
+                    );
+                    let _ = self.notify_thread_updates(&thread_id, mutation.expected_sequence);
+                    return Err(core_error(error));
+                }
+                self.sessions
+                    .threads()
+                    .mark_turn_steer_delivered(&thread_id, &turn_id, &command_id)
+                    .map_err(core_error)?
+            }
+            SteerTurnDisposition::Replayed => self
+                .sessions
+                .threads()
+                .read_thread(&thread_id)
+                .map_err(core_error)?
+                .steer_deliveries
+                .get(&command_id)
+                .copied()
+                .ok_or_else(|| RpcError::new(-32010, AppServerErrorName::CoreOperationFailed))?,
+        };
+        self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
+        Ok(TurnSteerResult { turn_id, sequence })
     }
 
     fn resolve_turn_interaction_request(

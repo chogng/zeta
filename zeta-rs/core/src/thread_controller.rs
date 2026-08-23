@@ -61,6 +61,7 @@ mod execution_binding;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
+mod steering;
 mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
@@ -149,6 +150,25 @@ pub struct InterruptTurnResult {
     pub disposition: InterruptTurnDisposition,
 }
 
+/// Retry-safe client command that appends user input to one active Turn.
+pub struct SteerTurnRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub turn_id: TurnId,
+    pub input: Vec<UserInput>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SteerTurnDisposition {
+    Steered,
+    Replayed,
+}
+
+pub struct SteerTurnResult {
+    pub sequence: u64,
+    pub disposition: SteerTurnDisposition,
+}
+
 /// Execution request to place a running Turn in a durable interaction wait state.
 pub struct RequestTurnInteraction {
     pub request_id: RequestId,
@@ -200,6 +220,16 @@ pub struct CancelledTurnInteraction {
 pub struct CompletedTurn {
     pub item: ThreadItem,
     pub sequence: u64,
+}
+
+pub(crate) enum CompleteModelInvocationResult {
+    Completed(CompletedTurn),
+    SupersededBySteer,
+}
+
+pub(crate) enum CommitModelInvocationItemsResult {
+    Committed,
+    SupersededBySteer,
 }
 
 pub struct RecordToolCallRequest {

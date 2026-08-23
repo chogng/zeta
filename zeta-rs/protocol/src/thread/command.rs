@@ -31,6 +31,10 @@ pub enum ThreadCommand {
     InterruptTurn {
         turn_id: TurnId,
     },
+    SteerTurn {
+        turn_id: TurnId,
+        input: Vec<UserInput>,
+    },
     ResolveApproval {
         turn_id: TurnId,
         request_id: RequestId,

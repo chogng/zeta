@@ -1,7 +1,7 @@
 import { APP_SERVER_METHODS, type SessionCreateParams, type SessionReadParams, type SessionSubscribeParams, type SessionThreadReadParams, type SessionThreadSubscribeParams, type SessionThreadUnsubscribeParams, type SessionUnsubscribeParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boolean, nonEmptyString, nonNegativeInteger, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
-import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult } from "../common/sessionApi.js";
+import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
 import type { SessionMutationParams, SessionOperationInput } from "../common/sessionApi.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
@@ -92,6 +92,11 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 			channel: "zeta:turn:start",
 			validate: turnStartParams,
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
+		}),
+		route({
+			channel: "zeta:turn:steer",
+			validate: turnSteerParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "steerTurn", threadId: params.threadId, turnId: params.turnId, input: params.input })).then(turnSteerResult),
 		}),
 		route({
 			channel: "zeta:turn:interrupt",
@@ -246,6 +251,25 @@ function turnInterruptParams(value: unknown): SessionOperationInput<"interruptTu
 		threadId: nonEmptyString(params.threadId, "threadId"),
 		turnId: nonEmptyString(params.turnId, "turnId"),
 		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+	};
+}
+
+function turnSteerParams(value: unknown): SessionOperationInput<"steerTurn"> {
+	const params = record(value, ["commandId", "sessionId", "threadId", "turnId", "expectedSequence", "input"]);
+	if (!Array.isArray(params.input) || params.input.length === 0) {
+		throw new Error("input must be a non-empty array");
+	}
+	return {
+		commandId: nonEmptyString(params.commandId, "commandId"),
+		sessionId: nonEmptyString(params.sessionId, "sessionId"),
+		threadId: nonEmptyString(params.threadId, "threadId"),
+		turnId: nonEmptyString(params.turnId, "turnId"),
+		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+		input: params.input.map((value, index) => {
+			const item = record(value, ["type", "text"]);
+			if (item.type !== "text") throw new Error(`input[${index}].type must be text`);
+			return { type: "text" as const, text: nonEmptyString(item.text, `input[${index}].text`) };
+		}),
 	};
 }
 

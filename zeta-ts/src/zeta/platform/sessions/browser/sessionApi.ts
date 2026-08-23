@@ -1,7 +1,7 @@
 import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
 import { viteDevRequest, voidResult } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult } from "../common/sessionApi.js";
+import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
 import type { IModelApi, ISessionApi, IThreadApi, ITurnApi } from "../common/sessionApi.js";
 
 export function createDisconnectedSessionApi(unavailable: UnavailableOperation): ISessionApi {
@@ -36,6 +36,7 @@ export function createDisconnectedThreadApi(unavailable: UnavailableOperation): 
 export function createDisconnectedTurnApi(unavailable: UnavailableOperation): ITurnApi {
 	return {
 		start: () => unavailable("turn.start"),
+		steer: () => unavailable("turn.steer"),
 		interrupt: () => unavailable("turn.interrupt"),
 		resolveInteraction: () => unavailable("turn.resolveInteraction"),
 	};
@@ -73,6 +74,7 @@ export function createViteDevThreadApi(connection: ViteDevAppServerConnection): 
 export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
 	return {
 		start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
+		steer: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "steerTurn", threadId: params.threadId, turnId: params.turnId, input: params.input })).then(turnSteerResult),
 		interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),
 		resolveInteraction: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "resolveInteraction", threadId: params.threadId, turnId: params.turnId, requestId: params.requestId, response: params.response })).then(turnInteractionResolveResult),
 	};

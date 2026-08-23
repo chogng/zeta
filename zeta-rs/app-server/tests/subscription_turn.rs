@@ -150,8 +150,42 @@ fn product_routes_selected_subscription_model_through_codex_turns() {
         started["result"]["type"], "turn",
         "start response: {started}"
     );
+    let turn_id = started["result"]["value"]["turnId"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let running = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":thread_id}
+        }),
+    );
+    let steered = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":8,"method":"session/request",
+            "params":{
+                "commandId":"steer-codex-product-turn",
+                "sessionId":session_id,
+                "expectedSequence":running["result"]["thread"]["sequence"],
+                "request":{
+                    "type":"steerTurn",
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "input":[{"type":"text","text":"focus on the product test"}]
+                }
+            }
+        }),
+    );
+    assert_eq!(
+        steered["result"]["type"], "turnSteer",
+        "steer response: {steered}"
+    );
 
-    let latest = wait_for_terminal_turn(&server, &mut connection, &session_id, &thread_id, 7);
+    let latest = wait_for_terminal_turn(&server, &mut connection, &session_id, &thread_id, 9);
     if latest["status"] == "failed" {
         let requests =
             std::fs::read_to_string(codex_root.path().join("requests.log")).unwrap_or_default();
@@ -184,6 +218,19 @@ fn product_routes_selected_subscription_model_through_codex_turns() {
             .filter(|request| request["method"] == "turn/start")
             .count(),
         1
+    );
+    let turn_steer = requests
+        .iter()
+        .find(|request| request["method"] == "turn/steer")
+        .unwrap();
+    assert_eq!(turn_steer["params"]["threadId"], "product-remote-thread");
+    assert_eq!(
+        turn_steer["params"]["expectedTurnId"],
+        "product-remote-turn"
+    );
+    assert_eq!(
+        turn_steer["params"]["input"][0]["text"],
+        "focus on the product test"
     );
     assert!(!requests.iter().any(|request| {
         matches!(
@@ -405,6 +452,9 @@ while IFS= read -r line; do
     *'"method":"turn/start"'*)
       printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"turn\":{{\"id\":\"product-remote-turn\",\"status\":\"inProgress\",\"items\":[]}}}}}}"
       printf '%s\n' '{{"jsonrpc":"2.0","method":"turn/started","params":{{"threadId":"product-remote-thread","turn":{{"id":"product-remote-turn","status":"inProgress","items":[]}}}}}}'
+      ;;
+    *'"method":"turn/steer"'*)
+      printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"turnId\":\"product-remote-turn\"}}}}"
       printf '%s\n' '{{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{{"threadId":"product-remote-thread","turnId":"product-remote-turn","itemId":"product-message","delta":"Product route complete"}}}}'
       printf '%s\n' '{{"jsonrpc":"2.0","method":"turn/completed","params":{{"threadId":"product-remote-thread","turn":{{"id":"product-remote-turn","status":"completed","items":[],"error":null}}}}}}'
       ;;

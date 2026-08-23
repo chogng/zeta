@@ -1029,6 +1029,165 @@ fn interrupt_turn_is_a_retry_safe_typed_command() {
 }
 
 #[test]
+fn steering_is_ordered_retry_safe_and_recovers_without_duplicate_items() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "steering");
+    let turn = start_turn(&threads, &thread, "steering-turn");
+    let request = |command_id: &str, text: &str| SteerTurnRequest {
+        command_id: CommandId::new(command_id).unwrap(),
+        expected_sequence: SequenceExpectation::Any,
+        turn_id: turn.clone(),
+        input: vec![UserInput::Text { text: text.into() }],
+    };
+
+    let first = threads
+        .steer_turn(&thread, request("steer-1", "first update"))
+        .unwrap();
+    let replayed = threads
+        .steer_turn(&thread, request("steer-1", "first update"))
+        .unwrap();
+    let delivered = threads
+        .mark_turn_steer_delivered(&thread, &turn, &CommandId::new("steer-1").unwrap())
+        .unwrap();
+    assert_eq!(
+        threads
+            .mark_turn_steer_delivered(&thread, &turn, &CommandId::new("steer-1").unwrap(),)
+            .unwrap(),
+        delivered
+    );
+    let second = threads
+        .steer_turn(&thread, request("steer-2", "second update"))
+        .unwrap();
+
+    assert_eq!(first.disposition, SteerTurnDisposition::Steered);
+    assert_eq!(replayed.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(replayed.sequence, first.sequence);
+    assert!(second.sequence > first.sequence);
+    let snapshot = threads.read_thread(&thread).unwrap();
+    let texts = snapshot
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ThreadItem::UserMessage { text, .. } => Some(text.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(texts, ["hello", "first update", "second update"]);
+
+    let recovered = ThreadController::with_store(store);
+    recovered.recover_thread(&thread).unwrap();
+    let recovered_replay = recovered
+        .steer_turn(&thread, request("steer-1", "first update"))
+        .unwrap();
+    assert_eq!(recovered_replay.disposition, SteerTurnDisposition::Replayed);
+    assert_eq!(
+        recovered
+            .read_thread(&thread)
+            .unwrap()
+            .steer_deliveries
+            .get(&CommandId::new("steer-1").unwrap()),
+        Some(&delivered)
+    );
+    assert_eq!(
+        recovered
+            .read_thread(&thread)
+            .unwrap()
+            .items
+            .iter()
+            .filter(|item| matches!(item, ThreadItem::UserMessage { text, .. } if text == "first update"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn steering_accepts_interaction_waits_and_rejects_terminal_turns() {
+    for (title, request) in [
+        ("approval steering", approval_interaction()),
+        ("user-input steering", user_input_interaction()),
+    ] {
+        let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+        let thread = create_thread(&threads, title);
+        let turn = start_turn(&threads, &thread, title);
+        threads
+            .request_turn_interaction(
+                &thread,
+                &turn,
+                RequestTurnInteraction {
+                    request_id: RequestId::new(format!("request-{title}")).unwrap(),
+                    item_id: None,
+                    request,
+                    deadline: None,
+                },
+            )
+            .unwrap();
+        threads
+            .steer_turn(
+                &thread,
+                SteerTurnRequest {
+                    command_id: CommandId::new(format!("steer-{title}")).unwrap(),
+                    expected_sequence: SequenceExpectation::Any,
+                    turn_id: turn.clone(),
+                    input: vec![UserInput::Text {
+                        text: "remember this".into(),
+                    }],
+                },
+            )
+            .unwrap();
+        let turn = threads
+            .read_thread(&thread)
+            .unwrap()
+            .turns
+            .into_iter()
+            .find(|candidate| candidate.turn_id == turn)
+            .unwrap();
+        assert!(matches!(
+            turn.status,
+            TurnStatus::WaitingForApproval | TurnStatus::WaitingForUserInput
+        ));
+    }
+
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "terminal steering");
+    let turn = start_turn(&threads, &thread, "terminal-steering-turn");
+    assert!(matches!(
+        threads.steer_turn(
+            &thread,
+            SteerTurnRequest {
+                command_id: CommandId::new("skill-steer").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn.clone(),
+                input: vec![UserInput::Skill {
+                    skill: zeta_protocol::SkillRef::follow_latest(zeta_protocol::SkillId::new(
+                        zeta_protocol::SkillSourceId::new("user:skill-source:test").unwrap(),
+                        zeta_protocol::SkillName::new("review").unwrap(),
+                    )),
+                }],
+            }
+        ),
+        Err(CoreError::InvalidInput(message)) if message.contains("frozen Skill")
+    ));
+    threads
+        .complete_turn(&thread, &turn, "done".into())
+        .unwrap();
+    assert!(matches!(
+        threads.steer_turn(
+            &thread,
+            SteerTurnRequest {
+                command_id: CommandId::new("late-steer").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn,
+                input: vec![UserInput::Text {
+                    text: "too late".into()
+                }],
+            }
+        ),
+        Err(CoreError::InvalidInput(message)) if message.contains("Completed")
+    ));
+}
+
+#[test]
 fn durable_projection_contains_messages_tools_and_session_identity() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = ThreadController::with_store(store.clone());

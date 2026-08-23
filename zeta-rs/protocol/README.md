@@ -83,7 +83,7 @@ SessionCommand
 └─ CreateThread / ForkThread / RewindThread / ArchiveThread
 
 ThreadCommand
-├─ StartTurn / InterruptTurn
+├─ StartTurn / SteerTurn / InterruptTurn
 └─ ResolveApproval / ResolveUserInput / ResolveDynamicTool
 ```
 
@@ -99,6 +99,10 @@ Command ID、expected sequence、receipt 和 idempotent replay 是 Core/store ex
 Thread。
 
 `ThreadEvent::ContextOverflowRecoveryCommitted` 将一个已验证 `ContextCheckpoint` 绑定到触发恢复的 Running Turn。Core reducer 用它保证同一 Turn 只做一次供应商溢出恢复；普通预算压缩继续使用不带 Turn 绑定的 `ContextCheckpointCommitted`。
+
+`ThreadEvent::TurnSteered` 把 exact `SteerTurn` receipt 绑定到紧邻、同序的 durable 用户 Item；
+`TurnSteerDelivered` 再记录 execution backend 已接受该 command。两者分离使本地执行器可以从
+canonical snapshot 重规划，也使 Codex 等委托 backend 在外部副作用结果未知时拒绝自动重发。
 
 ```text
 Command

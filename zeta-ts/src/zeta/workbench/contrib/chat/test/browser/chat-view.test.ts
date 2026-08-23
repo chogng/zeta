@@ -1196,6 +1196,41 @@ test("Chat picker retains the selected Session model when it is hidden", async (
 	assert.deepEqual(model.selectedModel, entry.model);
 });
 
+test("ChatPaneModel steers an active Turn instead of starting another Turn", async () => {
+	const activeSession = session("session-1", "thread-1");
+	const activeThread: Thread = {
+		...thread(),
+		sequence: 4,
+		turns: [{
+			turnId: "turn-running",
+			status: "running",
+			items: [{
+				type: "userMessage",
+				itemId: "item-user",
+				turnId: "turn-running",
+				text: "initial request",
+			}],
+		}],
+	};
+	const fake = fakeApi({ sessions: [activeSession], thread: () => activeThread });
+	using chat = createChatService(fake.api);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	await model.initialize();
+
+	await model.send("focus on the failing test");
+
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.deepEqual(fake.turnSteerRequests, [{
+		commandId: fake.turnSteerRequests[0]?.commandId,
+		sessionId: "session-1",
+		threadId: "thread-1",
+		turnId: "turn-running",
+		expectedSequence: 4,
+		input: [{ type: "text", text: "focus on the failing test" }],
+	}]);
+});
+
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
 	const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
 	const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
@@ -1223,6 +1258,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
 	readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
 	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
 	readonly emit: (notification: ServerNotification) => void;
 } {
@@ -1233,6 +1269,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
 	const setModelRequests: SessionOperationInput<"setModel">[] = [];
 	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
 	const currentThread = () => options.thread?.() ?? thread();
 	const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
@@ -1322,6 +1359,10 @@ function fakeApi(options: FakeOptions = {}): {
 				turnStartRequests.push(params);
 				return { turnId: "turn-started", sequence: 2 };
 			},
+			steer: async (params: SessionOperationInput<"steerTurn">) => {
+				turnSteerRequests.push(params);
+				return { turnId: params.turnId, sequence: params.expectedSequence + 2 };
+			},
 			interrupt: async () => ({ sequence: 3 }),
 			resolveInteraction: async () => ({ sequence: 3 }),
 		},
@@ -1340,6 +1381,7 @@ function fakeApi(options: FakeOptions = {}): {
 		createThreadRequests,
 		setModelRequests,
 		turnStartRequests,
+		turnSteerRequests,
 		modelListRequests,
 		emit: (notification) => {
 			for (const listener of listeners) listener(notification);

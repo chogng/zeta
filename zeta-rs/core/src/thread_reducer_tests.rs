@@ -102,6 +102,108 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
 }
 
 #[test]
+fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
+    let mut snapshot = None;
+    for event in [
+        envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "test".into(),
+            },
+        ),
+        envelope(
+            2,
+            ThreadEvent::TurnAccepted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                model: None,
+            },
+        ),
+        envelope(
+            3,
+            ThreadEvent::ItemCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                item: ThreadItem::UserMessage {
+                    item_id: ItemId::new("item_initial").unwrap(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    text: "initial".into(),
+                },
+            },
+        ),
+        envelope(
+            4,
+            ThreadEvent::TurnStarted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+        envelope(
+            5,
+            ThreadEvent::ItemCompleted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                item: ThreadItem::UserMessage {
+                    item_id: ItemId::new("item_steer").unwrap(),
+                    turn_id: TurnId::new("turn_1").unwrap(),
+                    text: "updated direction".into(),
+                },
+            },
+        ),
+    ] {
+        snapshot = Some(reduce_thread_event(snapshot, &event).unwrap());
+    }
+    let mut marker = envelope(
+        6,
+        ThreadEvent::TurnSteered {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            turn_id: TurnId::new("turn_1").unwrap(),
+            item_ids: vec![ItemId::new("item_steer").unwrap()],
+        },
+    );
+    marker.command = Some(ThreadCommandReceipt {
+        command_id: CommandId::new("steer_1").unwrap(),
+        command: ThreadCommand::SteerTurn {
+            turn_id: TurnId::new("turn_1").unwrap(),
+            input: vec![UserInput::Text {
+                text: "updated direction".into(),
+            }],
+        },
+    });
+
+    let rebuilt = reduce_thread_event(snapshot, &marker).unwrap();
+
+    assert!(matches!(
+        rebuilt.commands.last().unwrap().result,
+        ThreadCommandResult::TurnSteered { ref turn_id } if turn_id.as_str() == "turn_1"
+    ));
+    assert_eq!(rebuilt.commands.last().unwrap().response_sequence, 6);
+    let delivered = reduce_thread_event(
+        Some(rebuilt),
+        &envelope(
+            7,
+            ThreadEvent::TurnSteerDelivered {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+                command_id: CommandId::new("steer_1").unwrap(),
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        delivered
+            .steer_deliveries
+            .get(&CommandId::new("steer_1").unwrap()),
+        Some(&7)
+    );
+}
+
+#[test]
 fn reducer_replays_schema_v1_turns_with_legacy_policy_and_no_skills() {
     let thread = reduce_thread_event(
         None,

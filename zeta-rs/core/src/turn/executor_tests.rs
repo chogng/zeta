@@ -3,8 +3,8 @@ use crate::{
     ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
     ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
     InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
-    StartTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput,
-    ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
+    StartTurnRequest, SteerTurnRequest, ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts,
+    ToolExecutionOutput, ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
     TurnExecutionOutcome,
 };
 use serde_json::json;
@@ -64,6 +64,41 @@ fn completes_a_text_turn_from_durable_context() {
             .status,
         TurnStatus::Completed
     );
+}
+
+#[test]
+fn steering_during_a_model_call_discards_its_stale_completion_and_replans() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(SteeringModel {
+        threads: threads.clone(),
+        thread_id: thread_id.clone(),
+        turn_id: turn_id.clone(),
+        requests: Mutex::new(Vec::new()),
+    });
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert!(!request_contains(&requests[0], "steer toward tests"));
+    assert!(request_contains(&requests[1], "steer toward tests"));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(!snapshot.items.iter().any(
+        |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "stale answer")
+    ));
+    assert!(!snapshot.items.iter().any(
+        |item| matches!(item, ThreadItem::Reasoning { text, .. } if text == "stale reasoning")
+    ));
+    assert!(!snapshot.items.iter().any(
+        |item| matches!(item, ThreadItem::ToolCall { tool_call_id, .. } if tool_call_id.as_str() == "stale-call")
+    ));
+    assert!(snapshot.items.iter().any(
+        |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "steered answer")
+    ));
 }
 
 #[test]
@@ -1144,6 +1179,56 @@ fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+struct SteeringModel {
+    threads: Arc<ThreadController>,
+    thread_id: ThreadId,
+    turn_id: zeta_protocol::TurnId,
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl ModelService for SteeringModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let invocation = {
+            let mut requests = self.requests.lock().unwrap();
+            requests.push(request.clone());
+            requests.len()
+        };
+        if invocation == 1 {
+            let sequence = self.threads.read_thread(&self.thread_id)?.sequence;
+            self.threads.steer_turn(
+                &self.thread_id,
+                SteerTurnRequest {
+                    command_id: CommandId::new("steer-during-model").unwrap(),
+                    expected_sequence: SequenceExpectation::Exact(sequence),
+                    turn_id: self.turn_id.clone(),
+                    input: vec![UserInput::Text {
+                        text: "steer toward tests".into(),
+                    }],
+                },
+            )?;
+            Ok(ModelResponse {
+                output: vec![
+                    ResponseItem::Reasoning("stale reasoning".into()),
+                    ResponseItem::ToolCall(ToolCall {
+                        id: ToolCallId::new("stale-call").unwrap(),
+                        name: ToolName::new("stale-tool").unwrap(),
+                        arguments: json!({}),
+                    }),
+                ],
+                usage: None,
+                stop_reason: StopReason::ToolUse,
+            })
+        } else {
+            Ok(text_response("steered answer"))
+        }
+    }
 }
 
 struct CheckpointObservingModel {

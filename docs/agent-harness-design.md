@@ -16,7 +16,7 @@
 | 问题 | 结论 | 深入阅读 |
 | --- | --- | --- |
 | 模型调用失败怎么办？ | 按错误类别分流：退避重试 / 压缩后重试 / 立即失败 / 作为正常结果完成 | [§7](#7-turn-内循环与失败策略) |
-| Agent 运行中用户发消息怎么办？ | 排队 + 下一个安全点注入当前 Turn；reducer 已允许，缺一条 `turn/steer` 命令 | [§8](#8-引导与并发输入) |
+| Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，Codex 委托转发 exact `turn/steer` | [§8](#8-引导与并发输入) |
 | 提示词怎么做？ | 四层：静态身份/策略 + per-profile 工具指导 + 会话冻结环境快照 + 工作区指令；动态走 append-only reminder | [§4](#4-提示词) |
 | 工具选哪些？ | 共享七件套 + 按模型家族切编辑工具形态；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
@@ -34,7 +34,7 @@
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ❌ 只接了 `shell-command`；`file-system-tool`（仅 read/list/metadata）、`apply-patch`、`file-search` 是孤立 crate |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试和 Refusal 完成语义已接通 |
-| Steering | 运行中排队注入用户消息 | 部分：reducer 已允许向 Running Turn 追加 Item、executor 每轮重读 snapshot；缺 `turn/steer` 命令 |
+| Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop、本地重规划和 Codex 转发均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 部分：shell 有 256 KiB 执行上限，但无模型输入预算 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
 | 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
@@ -239,22 +239,25 @@ Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模�
 
 ## 8. 引导与并发输入
 
-Agent 运行中用户发来新消息：**排队 + 下一个安全点注入当前 Turn**，不打断进行中的模型调用
-或工具执行。
+Agent 运行中用户发来新消息：**durable 排队 + 下一个安全点注入当前 Turn**。Steer 不取消模型
+或工具 I/O；模型响应回到 Core 时与 steer 原子仲裁，已经过期的响应整体丢弃并用最新 snapshot
+重规划；正在执行的工具先按既有 once-only 规则收口，再由下一轮读取 steer。
 
 ```text
-turn/steer { command_id, expected_sequence, turn_id, input: Vec<UserInput> }
+session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, input }
 → 校验 Turn 处于 Running / WaitingForApproval / WaitingForUserInput
-→ durable 提交 UserMessage/UserImage Item（reducer 已允许向非终态 Turn 追加）
-→ command receipt 幂等回放
-→ executor 下一轮循环重读 snapshot，消息自然进入下一次模型调用
+→ 原子提交 UserMessage/UserImage Item + TurnSteered + command receipt
+→ execution backend 接受：local 读取 canonical snapshot；Codex 转发 exact remote turn/steer
+→ durable TurnSteerDelivered
+→ RPC 重试只回放 receipt/delivery result，不重复发送外部 steer
 ```
 
-- **机制已就绪**：reducer 只拒绝向 Cancelling/终态 Turn 追加 Item；executor 每轮循环重读
-  snapshot——所缺的只是 `ThreadCommand::SteerTurn` 命令 + App Server method（protocol
-  变更，归入阶段 A 的同批 schema 同步）；
-- 模型调用进行中：消息落盘等待，本次响应返回并处理完工具后，下一次调用可见；不自动
-  interrupt。客户端可提供"打断并说"= `session/request` InterruptTurn + 新 StartTurn；
+- **已实现**：`ThreadCommand::SteerTurn`、`TurnSteered`、`TurnSteerDelivered`、Core reducer、
+  App Server `session/request`、Desktop Send/Stop 双动作、本地 executor 与 Codex adapter 已形成纵向切片；
+- 模型调用进行中：消息先落盘；如果 steer 在该 invocation 的 source sequence 之后提交，reasoning、
+  文本和 Tool Call 不会部分落盘，整个旧响应被丢弃后立即重规划；不自动 cancel provider 请求；
+- 委托执行：`TurnSteered` 是外部副作用前 marker，upstream ack 后才写 delivery fact；进程或传输
+  在两者之间失败时把结果视为 unknown，不自动重发同一 Codex steer；
 - WaitingForApproval 期间：允许 steer，恢复执行后可见；
 - Cancelling/终态：拒绝（稳定错误），客户端引导开新 Turn；
 - 多条 steer 按提交顺序进入历史；append-only，缓存友好；
@@ -425,7 +428,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | --- | --- | --- | --- |
 | M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan`、逐项限幅和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
-| M2（部分具备）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal 和 overflow 恢复已实现；仍需重复失败熔断和 `turn/steer` | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
+| M2（部分具备）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复和 steering 已实现；仍需重复失败熔断 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（部分具备）限幅/预算/压缩 | ContextPlan、配置窗口、preflight 与 durable compaction 已实现；仍需逐项限幅、usage/cost 账本、资源预算、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 持久化 | usage durable fact |
 | M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |

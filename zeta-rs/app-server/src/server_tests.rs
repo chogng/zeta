@@ -1520,6 +1520,86 @@ struct CountingModel {
     calls: AtomicUsize,
 }
 
+#[derive(Default)]
+struct SteeringModelState {
+    requests: Vec<ModelRequest>,
+    first_call_started: bool,
+    release_first_call: bool,
+}
+
+#[derive(Default)]
+struct AppServerSteeringModel {
+    state: Mutex<SteeringModelState>,
+    changed: Condvar,
+}
+
+impl AppServerSteeringModel {
+    fn wait_for_first_call(&self) {
+        let deadline = Instant::now() + Duration::from_secs(2);
+        let mut state = self.state.lock().unwrap();
+        while !state.first_call_started {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(!remaining.is_zero(), "model invocation did not start");
+            let (next, _) = self.changed.wait_timeout(state, remaining).unwrap();
+            state = next;
+        }
+    }
+
+    fn release_first_call(&self) {
+        let mut state = self.state.lock().unwrap();
+        state.release_first_call = true;
+        self.changed.notify_all();
+    }
+
+    fn requests(&self) -> Vec<ModelRequest> {
+        self.state.lock().unwrap().requests.clone()
+    }
+}
+
+struct ReleaseSteeringModel(Arc<AppServerSteeringModel>);
+
+impl Drop for ReleaseSteeringModel {
+    fn drop(&mut self) {
+        self.0.release_first_call();
+    }
+}
+
+#[derive(Default)]
+struct FailingSteerBackend {
+    steers: AtomicUsize,
+}
+
+impl zeta_core::TurnExecutionBackend for FailingSteerBackend {
+    fn start(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn resume(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn steer(
+        &self,
+        _: &zeta_protocol::ThreadId,
+        _: &zeta_protocol::TurnId,
+        _: &CommandId,
+        _: &[UserInput],
+    ) -> Result<(), CoreError> {
+        self.steers.fetch_add(1, Ordering::Relaxed);
+        Err(CoreError::Execution(
+            "delegated steer outcome is unknown".into(),
+        ))
+    }
+}
+
 struct ShellTestTool;
 
 impl ToolService for ShellTestTool {
@@ -1698,6 +1778,32 @@ impl ModelService for CountingModel {
             .unwrap_or_default();
         Ok(ModelResponse {
             output: vec![ResponseItem::Text(format!("answer: {prompt}"))],
+            usage: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+impl ModelService for AppServerSteeringModel {
+    fn invoke(
+        &self,
+        _: zeta_core::ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let mut state = self.state.lock().unwrap();
+        let call = state.requests.len();
+        state.requests.push(request.clone());
+        if call == 0 {
+            state.first_call_started = true;
+            self.changed.notify_all();
+            while !state.release_first_call {
+                state = self.changed.wait(state).unwrap();
+            }
+        }
+        drop(state);
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(format!("response-{call}"))],
             usage: None,
             stop_reason: StopReason::Completed,
         })
@@ -1923,6 +2029,191 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
     assert_eq!(turn["result"]["type"], "turn");
     assert!(turn["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+}
+
+#[test]
+fn session_request_steers_a_running_turn_retry_safely_and_replans() {
+    let model = Arc::new(AppServerSteeringModel::default());
+    let _release_on_drop = ReleaseSteeringModel(Arc::clone(&model));
+    let server = server_with_model(model.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "steer-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "steer-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"start-steered-turn",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
+            }
+        }),
+    );
+    let turn_id = started["result"]["value"]["turnId"].as_str().unwrap();
+    let start_sequence = started["result"]["value"]["sequence"].as_u64().unwrap();
+    model.wait_for_first_call();
+
+    let steer_request = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0","id":id,"method":"session/request",
+            "params":{
+                "commandId":"steer-running-turn",
+                "sessionId":session_id,
+                "expectedSequence":start_sequence,
+                "request":{
+                    "type":"steerTurn",
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "input":[{"type":"text","text":"focus on the failing test"}]
+                }
+            }
+        })
+    };
+    let steered = call(&server, &mut connection, steer_request(5));
+    assert_eq!(steered["result"]["type"], "turnSteer");
+    assert_eq!(steered["result"]["value"]["turnId"], turn_id);
+    assert_eq!(
+        steered["result"]["value"]["sequence"].as_u64().unwrap(),
+        start_sequence + 3
+    );
+
+    let replayed = call(&server, &mut connection, steer_request(6));
+    assert_eq!(replayed["result"], steered["result"]);
+    let conflict = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request",
+            "params":{
+                "commandId":"steer-running-turn",
+                "sessionId":session_id,
+                "expectedSequence":start_sequence,
+                "request":{
+                    "type":"steerTurn",
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "input":[{"type":"text","text":"different payload"}]
+                }
+            }
+        }),
+    );
+    assert_eq!(conflict["error"]["message"], "CommandConflict");
+
+    let protocol_thread_id = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&protocol_thread_id)
+        .unwrap();
+    assert_eq!(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| matches!(
+                item,
+                zeta_protocol::ThreadItem::UserMessage { text, .. }
+                    if text == "focus on the failing test"
+            ))
+            .count(),
+        1
+    );
+
+    model.release_first_call();
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2);
+    assert!(requests[1].input.iter().any(|item| {
+        matches!(item, InputItem::Message(message) if message.content.iter().any(
+            |part| matches!(part, ContentPart::Text(text) if text == "focus on the failing test")
+        ))
+    }));
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&protocol_thread_id)
+        .unwrap();
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "response-1"
+    )));
+    assert!(!snapshot.items.iter().any(|item| matches!(
+        item,
+        zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "response-0"
+    )));
+}
+
+#[test]
+fn failed_delegated_steer_is_not_replayed_across_rpc_retry() {
+    let backend = Arc::new(FailingSteerBackend::default());
+    let server = server().with_turn_backend(backend.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "failed-steer-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "failed-steer-thread",
+        session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"start-failed-steer-turn",
+                "sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"startTurn","threadId":thread_id,"input":[{"type":"text","text":"initial"}]}
+            }
+        }),
+    );
+    let turn_id = started["result"]["value"]["turnId"].as_str().unwrap();
+    let sequence = started["result"]["value"]["sequence"].as_u64().unwrap();
+    let request = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0","id":id,"method":"session/request",
+            "params":{
+                "commandId":"failed-delegated-steer",
+                "sessionId":session_id,
+                "expectedSequence":sequence,
+                "request":{
+                    "type":"steerTurn",
+                    "threadId":thread_id,
+                    "turnId":turn_id,
+                    "input":[{"type":"text","text":"updated direction"}]
+                }
+            }
+        })
+    };
+
+    let failed = call(&server, &mut connection, request(5));
+    let replayed = call(&server, &mut connection, request(6));
+
+    assert_eq!(failed["error"]["message"], "CoreOperationFailed");
+    assert_eq!(replayed["error"]["message"], "CoreOperationFailed");
+    assert_eq!(backend.steers.load(Ordering::Relaxed), 1);
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Failed);
+    assert!(
+        !snapshot
+            .steer_deliveries
+            .contains_key(&CommandId::new("failed-delegated-steer").unwrap())
+    );
 }
 
 #[test]
@@ -2834,6 +3125,16 @@ impl zeta_core::TurnExecutionBackend for CountingResumeBackend {
     ) -> Result<(), CoreError> {
         self.resumes.fetch_add(1, Ordering::Relaxed);
         self.delegate.resume(thread_id, turn_id)
+    }
+
+    fn steer(
+        &self,
+        thread_id: &zeta_protocol::ThreadId,
+        turn_id: &zeta_protocol::TurnId,
+        command_id: &CommandId,
+        input: &[UserInput],
+    ) -> Result<(), CoreError> {
+        self.delegate.steer(thread_id, turn_id, command_id, input)
     }
 }
 

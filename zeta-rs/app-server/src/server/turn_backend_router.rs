@@ -6,10 +6,12 @@ use zeta_core::CoreError;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
 use zeta_model_provider_config::find_static_model;
+use zeta_protocol::CommandId;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
+use zeta_protocol::UserInput;
 use zeta_workspace::WorkspaceCapability;
 
 /// Stable backend handle shared by product Turn dispatch and multi-agent tools.
@@ -51,6 +53,16 @@ impl TurnExecutionBackend for TurnBackendHandle {
 
     fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         self.current().resume(thread_id, turn_id)
+    }
+
+    fn steer(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        command_id: &CommandId,
+        input: &[UserInput],
+    ) -> Result<(), CoreError> {
+        self.current().steer(thread_id, turn_id, command_id, input)
     }
 }
 
@@ -109,6 +121,17 @@ impl TurnExecutionBackend for TurnBackendRouter {
     fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         self.backend(thread_id, turn_id)?.resume(thread_id, turn_id)
     }
+
+    fn steer(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        command_id: &CommandId,
+        input: &[UserInput],
+    ) -> Result<(), CoreError> {
+        self.backend(thread_id, turn_id)?
+            .steer(thread_id, turn_id, command_id, input)
+    }
 }
 
 /// Delegates to the latest local executor installed for the active workspace.
@@ -144,6 +167,17 @@ impl TurnExecutionBackend for CurrentLocalTurnBackend {
 
     fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         self.executor()?.resume(thread_id, turn_id)
+    }
+
+    fn steer(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        command_id: &CommandId,
+        input: &[UserInput],
+    ) -> Result<(), CoreError> {
+        self.executor()?
+            .steer(thread_id, turn_id, command_id, input)
     }
 }
 

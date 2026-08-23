@@ -158,6 +158,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         item_sequences: BTreeMap::new(),
         event_digests: BTreeMap::new(),
         commands: Vec::new(),
+        steer_deliveries: BTreeMap::new(),
         seen_interaction_ids: BTreeSet::new(),
         resolved_interactions: Vec::new(),
         started_tool_calls: BTreeSet::new(),

@@ -14,8 +14,10 @@ use crate::StartCodexTurn;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::RecvTimeoutError;
@@ -35,6 +37,7 @@ use zeta_protocol::ActionApprovalDecision;
 use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
+use zeta_protocol::CommandId;
 use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
@@ -45,6 +48,7 @@ use zeta_protocol::ThreadItem;
 use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
 use zeta_protocol::UserInputOption;
 use zeta_protocol::UserInputQuestion;
 
@@ -80,6 +84,7 @@ struct BackendInner {
     updates: Arc<dyn ThreadUpdateSink>,
     options: CodexTurnExecutionBackendOptions,
     state: Mutex<BackendState>,
+    state_changed: Condvar,
 }
 
 #[derive(Default)]
@@ -88,6 +93,8 @@ struct BackendState {
     routes: BTreeMap<RouteKey, SyncSender<CodexTurnEvent>>,
     orphans: VecDeque<CodexTurnEvent>,
     pending_interactions: BTreeMap<RequestId, PendingUpstreamRequest>,
+    pending_turns: BTreeSet<LocalTurnKey>,
+    active_turns: BTreeMap<LocalTurnKey, RouteKey>,
     runtime_closed: bool,
 }
 
@@ -101,6 +108,12 @@ struct BoundRemoteThread {
 struct RouteKey {
     thread_id: CodexThreadId,
     turn_id: CodexTurnId,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct LocalTurnKey {
+    thread_id: ThreadId,
+    turn_id: TurnId,
 }
 
 struct PendingUpstreamRequest {
@@ -129,6 +142,7 @@ impl CodexTurnExecutionBackend {
                 updates,
                 options,
                 state: Mutex::new(BackendState::default()),
+                state_changed: Condvar::new(),
             }),
         };
         let weak = Arc::downgrade(&backend.inner);
@@ -172,6 +186,10 @@ impl CodexTurnExecutionBackend {
             turn_id: remote_turn.clone(),
         };
         let events = self.register_route(key.clone())?;
+        if let Err(error) = self.activate_local_turn(thread_id, turn_id, key.clone()) {
+            self.unregister_route(&key);
+            return Err(error);
+        }
         let mut projection = TurnProjection::new(
             Arc::clone(&self.inner.threads),
             Arc::clone(&self.inner.updates),
@@ -569,6 +587,80 @@ impl CodexTurnExecutionBackend {
         }
     }
 
+    fn register_pending_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<(), CoreError> {
+        let key = LocalTurnKey {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+        };
+        let mut state = self.inner.state.lock().map_err(state_error)?;
+        if state.runtime_closed || !state.pending_turns.insert(key) {
+            return Err(CoreError::Execution(
+                "Codex Turn execution route is unavailable".into(),
+            ));
+        }
+        self.inner.state_changed.notify_all();
+        Ok(())
+    }
+
+    fn activate_local_turn(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        route: RouteKey,
+    ) -> Result<(), CoreError> {
+        let key = LocalTurnKey {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+        };
+        let mut state = self.inner.state.lock().map_err(state_error)?;
+        if !state.pending_turns.contains(&key) || state.active_turns.insert(key, route).is_some() {
+            return Err(CoreError::Execution(
+                "Codex Turn execution route is inconsistent".into(),
+            ));
+        }
+        self.inner.state_changed.notify_all();
+        Ok(())
+    }
+
+    fn finish_local_turn(&self, thread_id: &ThreadId, turn_id: &TurnId) {
+        let key = LocalTurnKey {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+        };
+        if let Ok(mut state) = self.inner.state.lock() {
+            state.active_turns.remove(&key);
+            state.pending_turns.remove(&key);
+            self.inner.state_changed.notify_all();
+        }
+    }
+
+    fn await_active_route(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<RouteKey, CoreError> {
+        let key = LocalTurnKey {
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+        };
+        let mut state = self.inner.state.lock().map_err(state_error)?;
+        loop {
+            if let Some(route) = state.active_turns.get(&key) {
+                return Ok(route.clone());
+            }
+            if state.runtime_closed || !state.pending_turns.contains(&key) {
+                return Err(CoreError::Execution(
+                    "Codex Turn is no longer available for steering".into(),
+                ));
+            }
+            state = self.inner.state_changed.wait(state).map_err(state_error)?;
+        }
+    }
+
     fn resume_interaction(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         let snapshot = self.inner.threads.read_thread(thread_id)?;
         let resolved = snapshot
@@ -639,6 +731,10 @@ impl TurnExecutionBackend for CodexTurnExecutionBackend {
             self.inner.updates.publish(update);
         }
         debug_assert_eq!(sequence, before + 1);
+        if let Err(error) = self.register_pending_turn(thread_id, turn_id) {
+            self.fail_turn(thread_id, turn_id);
+            return Err(error);
+        }
         let backend = self.clone();
         let queued_thread_id = thread_id.clone();
         let queued_turn_id = turn_id.clone();
@@ -646,14 +742,16 @@ impl TurnExecutionBackend for CodexTurnExecutionBackend {
             self.inner
                 .threads
                 .enqueue_turn_execution(thread_id, turn_id, move |execution| {
-                    if let Err(error) =
-                        backend.execute(&queued_thread_id, &queued_turn_id, &execution)
+                    let result = backend.execute(&queued_thread_id, &queued_turn_id, &execution);
+                    backend.finish_local_turn(&queued_thread_id, &queued_turn_id);
+                    if let Err(error) = result
                         && !matches!(error, CoreError::Cancelled(_))
                     {
                         backend.fail_turn(&queued_thread_id, &queued_turn_id);
                     }
                 })
         {
+            self.finish_local_turn(thread_id, turn_id);
             self.fail_turn(thread_id, turn_id);
             return Err(error);
         }
@@ -668,6 +766,29 @@ impl TurnExecutionBackend for CodexTurnExecutionBackend {
                 Err(error)
             }
         }
+    }
+
+    fn steer(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        _: &CommandId,
+        input: &[UserInput],
+    ) -> Result<(), CoreError> {
+        let text = input
+            .iter()
+            .map(|input| match input {
+                UserInput::Text { text } => Ok(text.clone()),
+                _ => Err(CoreError::InvalidInput(
+                    "Codex Turn steering currently accepts text input only".into(),
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let route = self.await_active_route(thread_id, turn_id)?;
+        self.inner
+            .driver
+            .steer_turn(&route.thread_id, &route.turn_id, &text)
+            .map_err(codex_error)
     }
 }
 

@@ -76,6 +76,56 @@ fn delegated_turn_streams_and_commits_core_items() {
 
 #[test]
 #[cfg(unix)]
+fn delegated_turn_forwards_durable_steering_to_the_exact_remote_turn() {
+    let (root, program) = fake_codex_backend_program(BackendScenario::Steering);
+    let (backend, threads, thread_id, turn_id) =
+        backend_fixture(program, ApprovalMode::AskPermissions);
+    backend.start(&thread_id, &turn_id).unwrap();
+
+    let command_id = CommandId::new("steer-codex-turn").unwrap();
+    threads
+        .steer_turn(
+            &thread_id,
+            zeta_core::SteerTurnRequest {
+                command_id: command_id.clone(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn_id.clone(),
+                input: vec![UserInput::Text {
+                    text: "focus on the failing test".into(),
+                }],
+            },
+        )
+        .unwrap();
+    backend
+        .steer(
+            &thread_id,
+            &turn_id,
+            &command_id,
+            &[UserInput::Text {
+                text: "focus on the failing test".into(),
+            }],
+        )
+        .unwrap();
+    threads
+        .mark_turn_steer_delivered(&thread_id, &turn_id, &command_id)
+        .unwrap();
+
+    wait_until(|| turn_status(&threads, &thread_id, &turn_id) == TurnStatus::Completed);
+    let requests = std::fs::read_to_string(root.path().join("requests.log")).unwrap();
+    assert_eq!(requests.matches("\"method\":\"turn/steer\"").count(), 1);
+    assert!(requests.contains("\"threadId\":\"remote-thread\""));
+    assert!(requests.contains("\"expectedTurnId\":\"remote-turn\""));
+    assert!(requests.contains("\"text\":\"focus on the failing test\""));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.steer_deliveries.contains_key(&command_id));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::AgentMessage { text, .. } if text == "Steered"
+    )));
+}
+
+#[test]
+#[cfg(unix)]
 fn delegated_approval_is_durable_before_upstream_resume() {
     let (_root, program) = fake_codex_backend_program(BackendScenario::Approval);
     let (backend, threads, thread_id, turn_id) =
@@ -409,6 +459,7 @@ fn wait_until(mut predicate: impl FnMut() -> bool) {
 #[derive(Clone, Copy)]
 enum BackendScenario {
     Complete,
+    Steering,
     Approval,
     ExitAfterAcceptance,
 }
@@ -425,6 +476,9 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
       printf '%s\n' '{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"threadId":"remote-thread","turnId":"remote-turn","itemId":"message-1","delta":"Done"}}'
       printf '%s\n' '{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"completed","items":[],"error":null}}}'"#
         }
+        BackendScenario::Steering => {
+            r#"printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"inProgress","items":[]}}}'"#
+        }
         BackendScenario::Approval => {
             r#"printf '%s\n' '{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"inProgress","items":[]}}}'
       printf '%s\n' '{"jsonrpc":"2.0","id":"approval-backend","method":"item/commandExecution/requestApproval","params":{"threadId":"remote-thread","turnId":"remote-turn","itemId":"command-1","startedAtMs":1700000000000,"reason":"run command","command":"printf approved","cwd":"/tmp/zeta-project"}}'"#
@@ -435,7 +489,9 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
         }
     };
     let approval_response = match scenario {
-        BackendScenario::Complete | BackendScenario::ExitAfterAcceptance => "",
+        BackendScenario::Complete
+        | BackendScenario::Steering
+        | BackendScenario::ExitAfterAcceptance => "",
         BackendScenario::Approval => {
             r#"    *'"id":"approval-backend"'*)
       case "$line" in
@@ -446,6 +502,18 @@ fn fake_codex_backend_program(scenario: BackendScenario) -> (TempDir, PathBuf) {
       printf '%s\n' '{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"completed","items":[],"error":null}}}'
       ;;"#
         }
+    };
+    let steer_response = match scenario {
+        BackendScenario::Steering => {
+            r#"    *'"method":"turn/steer"'*)
+      printf '%s\n' "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"turnId\":\"remote-turn\"}}"
+      printf '%s\n' '{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"threadId":"remote-thread","turnId":"remote-turn","itemId":"message-1","delta":"Steered"}}'
+      printf '%s\n' '{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"remote-thread","turn":{"id":"remote-turn","status":"completed","items":[],"error":null}}}'
+      ;;"#
+        }
+        BackendScenario::Complete
+        | BackendScenario::Approval
+        | BackendScenario::ExitAfterAcceptance => "",
     };
     let script = format!(
         r#"#!/bin/sh
@@ -466,6 +534,7 @@ while IFS= read -r line; do
       printf '%s\n' "{{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{{\"turn\":{{\"id\":\"remote-turn\",\"status\":\"inProgress\",\"items\":[]}}}}}}"
       {turn_events}
       ;;
+{steer_response}
 {approval_response}
   esac
 done

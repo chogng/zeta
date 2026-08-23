@@ -174,7 +174,7 @@ SessionCommand
   Create / CreateThread / ForkThread / ArchiveThread / Complete / Archive
 
 ThreadCommand
-  StartTurn / InterruptTurn / ResolveUserInput / ResolveDynamicTool
+  StartTurn / SteerTurn / InterruptTurn / ResolveUserInput / ResolveDynamicTool
 ```
 
 Command 表达产品意图，不代表已经发生，也不能直接写入 projection。
@@ -204,6 +204,10 @@ CommandId
 重放时先匹配 receipt，再返回稳定结果，因此响应丢失后的安全重试不受 aggregate 后续 sequence
 前进影响。不得用 JSON-RPC method + serialized params、sidecar idempotency ledger 或裸 request
 ID 复制这套语义。
+
+`SteerTurn` 的 receipt 与 `TurnSteered` marker 原子绑定紧邻的用户 Item。需要跨进程委托时，
+execution backend 接受 exact active Turn 后再追加 `TurnSteerDelivered`；只有 delivery fact 已存在的
+RPC replay 才返回成功，marker 与 delivery 之间的未知结果不会触发第二次外部发送。
 
 `SessionCommandEnvelope`、`ThreadCommandEnvelope` 曾经只在 protocol 内定义，没有第二个
 执行层或 transport 消费者，已删除。Core command receipt 与 App Server params 各自属于其
@@ -580,6 +584,7 @@ zeta-rs/protocol/
 | Session/Thread 独立 sequence | 已完成 | model、store 和 fork lineage 已覆盖 |
 | durable Event 与 live Update 分离 | 基础完成 | store 类型只能接受 durable event |
 | typed Session/Thread command | 基础完成 | Core receipt 已使用；无消费者的 shared envelope 已删除 |
+| 运行中 Turn steering | 已完成 | typed receipt、durable Item/marker/delivery、App Server、Desktop、本地 executor 与 Codex 委托均已接通 |
 | Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/request` Stop → Core 内部停止编排；连接断开不触发停止 |
 | ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
 | transient Item streaming | 类型已定义 | 当前没有完整异步 model stream producer |

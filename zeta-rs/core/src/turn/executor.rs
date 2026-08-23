@@ -6,6 +6,8 @@ use crate::context::ContextOverflowRecoveryPreparation;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::thread_controller::CommitContextCheckpointRequest;
+use crate::thread_controller::CommitModelInvocationItemsResult;
+use crate::thread_controller::CompleteModelInvocationResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::turn::TurnExecutionBackend;
 use crate::{
@@ -619,12 +621,21 @@ impl TurnExecutor {
                     Err(error) => return Err(ExecutionFailure::service(error)),
                 }
             };
+            let source_thread_sequence = invocation.context().source_thread_sequence();
+            if !self
+                .threads
+                .model_invocation_is_current(thread_id, turn_id, source_thread_sequence)
+                .map_err(ExecutionFailure::persistence)?
+            {
+                measurement_policy.finish_invocation();
+                continue 'model_steps;
+            }
             measurement_policy.finish_invocation();
 
             let tool_calls = response.tool_calls().cloned().collect::<Vec<_>>();
             validate_model_tool_calls(&tool_calls, &request.tools)
                 .map_err(ExecutionFailure::model)?;
-            self.record_reasoning(thread_id, turn_id, &response, &mut stream)?;
+            let reasoning_items = self.model_reasoning_items(turn_id, &response, &mut stream);
             let text = final_text(&response, &stream);
             if tool_calls.is_empty() {
                 let text = response_refusal_message(&response).unwrap_or(text);
@@ -633,15 +644,28 @@ impl TurnExecutor {
                         response_failure_message(&response),
                     )));
                 }
-                let completion = match stream.text_item_id() {
-                    Some(item_id) => self
-                        .threads
-                        .complete_turn_with_agent_message(thread_id, turn_id, item_id, text),
-                    None => self.threads.complete_turn(thread_id, turn_id, text),
+                let item_id = stream
+                    .text_item_id()
+                    .unwrap_or_else(|| self.threads.next_stream_item_id());
+                let completion = match self
+                    .threads
+                    .complete_model_invocation_with_agent_message(
+                        thread_id,
+                        turn_id,
+                        source_thread_sequence,
+                        reasoning_items,
+                        item_id,
+                        text,
+                    )
+                    .map_err(ExecutionFailure::persistence)?
+                {
+                    CompleteModelInvocationResult::Completed(completion) => {
+                        TurnExecutionOutcome::Completed(completion)
+                    }
+                    CompleteModelInvocationResult::SupersededBySteer => {
+                        continue 'model_steps;
+                    }
                 };
-                let completion = completion
-                    .map(TurnExecutionOutcome::Completed)
-                    .map_err(ExecutionFailure::persistence)?;
                 let _ = self.hooks.turn_completed(
                     &TurnCompletedHookRequest {
                         thread_id: thread_id.clone(),
@@ -652,22 +676,41 @@ impl TurnExecutor {
                 return Ok(completion);
             }
 
+            let mut response_items = reasoning_items;
             if !text.trim().is_empty() {
-                match stream.text_item_id() {
-                    Some(item_id) => self
-                        .threads
-                        .record_agent_message_with_id(thread_id, turn_id, item_id, text),
-                    None => self.threads.record_agent_message(thread_id, turn_id, text),
-                }
-                .map_err(ExecutionFailure::persistence)?;
+                response_items.push(zeta_protocol::ThreadItem::AgentMessage {
+                    item_id: stream
+                        .text_item_id()
+                        .unwrap_or_else(|| self.threads.next_stream_item_id()),
+                    turn_id: turn_id.clone(),
+                    text,
+                });
             }
-            match self.execute_tools(
-                thread_id,
+            response_items.extend(self.bind_model_tool_calls(
                 turn_id,
                 &tool_calls,
                 &tool_catalog,
-                cancellation,
-            )? {
+            )?);
+            match self
+                .threads
+                .commit_model_invocation_items(
+                    thread_id,
+                    turn_id,
+                    source_thread_sequence,
+                    response_items,
+                )
+                .map_err(ExecutionFailure::persistence)?
+            {
+                CommitModelInvocationItemsResult::Committed => {}
+                CommitModelInvocationItemsResult::SupersededBySteer => {
+                    continue 'model_steps;
+                }
+            }
+            match self
+                .tool_scheduler()
+                .run_pending(thread_id, turn_id, cancellation)
+                .map_err(ExecutionFailure::service)?
+            {
                 ToolSchedulingProgress::Complete => {}
                 ToolSchedulingProgress::WaitingForApproval => {
                     return Ok(TurnExecutionOutcome::WaitingForApproval);
@@ -743,31 +786,36 @@ impl TurnExecutor {
         }
     }
 
-    fn record_reasoning(
+    fn model_reasoning_items(
         &self,
-        thread_id: &ThreadId,
         turn_id: &TurnId,
         response: &ModelResponse,
         stream: &mut InvocationStream,
-    ) -> Result<(), ExecutionFailure> {
+    ) -> Vec<zeta_protocol::ThreadItem> {
         if let Some((item_id, text)) = stream.take_reasoning() {
             if !text.trim().is_empty() {
-                self.threads
-                    .record_reasoning_with_id(thread_id, turn_id, item_id, text)
-                    .map_err(ExecutionFailure::persistence)?;
+                return vec![zeta_protocol::ThreadItem::Reasoning {
+                    item_id,
+                    turn_id: turn_id.clone(),
+                    text,
+                }];
             }
-            return Ok(());
+            return Vec::new();
         }
-        for item in &response.output {
-            if let ResponseItem::Reasoning(text) = item
-                && !text.trim().is_empty()
-            {
-                self.threads
-                    .record_reasoning(thread_id, turn_id, text.clone())
-                    .map_err(ExecutionFailure::persistence)?;
-            }
-        }
-        Ok(())
+        response
+            .output
+            .iter()
+            .filter_map(|item| match item {
+                ResponseItem::Reasoning(text) if !text.trim().is_empty() => {
+                    Some(zeta_protocol::ThreadItem::Reasoning {
+                        item_id: self.threads.next_stream_item_id(),
+                        turn_id: turn_id.clone(),
+                        text: text.clone(),
+                    })
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     fn publish_committed_after(&self, thread_id: &ThreadId, sequence: u64) {
@@ -778,34 +826,39 @@ impl TurnExecutor {
         }
     }
 
-    fn execute_tools(
+    fn bind_model_tool_calls(
         &self,
-        thread_id: &ThreadId,
         turn_id: &TurnId,
         calls: &[ToolCall],
         catalog: &crate::ModelToolCatalogSnapshot,
-        cancellation: &CancellationToken,
-    ) -> Result<ToolSchedulingProgress, ExecutionFailure> {
-        for call in calls {
-            let caller = zeta_protocol::ToolCallCaller::Direct;
-            let binding = match catalog.bind_call(call, caller.clone()) {
-                Some(binding) => binding,
-                None => self.tools.bind_call(call, caller),
-            }
-            .map_err(ExecutionFailure::service)?
-            .ok_or_else(|| {
-                ExecutionFailure::service(CoreError::Execution(format!(
-                    "tool service did not freeze a durable binding for {}",
-                    call.name
-                )))
-            })?;
-            self.threads
-                .record_model_tool_call(thread_id, turn_id, call, binding)
-                .map_err(ExecutionFailure::persistence)?;
-        }
-        self.tool_scheduler()
-            .run_pending(thread_id, turn_id, cancellation)
-            .map_err(ExecutionFailure::service)
+    ) -> Result<Vec<zeta_protocol::ThreadItem>, ExecutionFailure> {
+        calls
+            .iter()
+            .map(|call| {
+                let caller = zeta_protocol::ToolCallCaller::Direct;
+                let binding = match catalog.bind_call(call, caller.clone()) {
+                    Some(binding) => binding,
+                    None => self.tools.bind_call(call, caller),
+                }
+                .map_err(ExecutionFailure::service)?
+                .ok_or_else(|| {
+                    ExecutionFailure::service(CoreError::Execution(format!(
+                        "tool service did not freeze a durable binding for {}",
+                        call.name
+                    )))
+                })?;
+                Ok(zeta_protocol::ThreadItem::ToolCall {
+                    item_id: self.threads.next_stream_item_id(),
+                    turn_id: turn_id.clone(),
+                    tool_call_id: call.id.clone(),
+                    name: call.name.clone(),
+                    arguments_json: serde_json::to_string(&call.arguments).map_err(|error| {
+                        ExecutionFailure::model(CoreError::Context(error.to_string()))
+                    })?,
+                    binding: Some(binding),
+                })
+            })
+            .collect()
     }
 
     fn tool_scheduler(&self) -> ToolScheduler {
@@ -826,6 +879,17 @@ impl TurnExecutionBackend for TurnExecutor {
 
     fn resume(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError> {
         TurnExecutor::resume(self, thread_id, turn_id)
+    }
+
+    fn steer(
+        &self,
+        _: &ThreadId,
+        _: &TurnId,
+        _: &zeta_protocol::CommandId,
+        _: &[zeta_protocol::UserInput],
+    ) -> Result<(), CoreError> {
+        // The durable input is already visible to the next local model/tool safe point.
+        Ok(())
     }
 }
 
