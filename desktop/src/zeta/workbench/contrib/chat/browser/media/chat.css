@@ -189,7 +189,8 @@
 .zeta-chat-item-reasoning,
 .zeta-chat-item-plan,
 .zeta-chat-item-toolCall,
-.zeta-chat-item-toolResult {
+.zeta-chat-item-toolResult,
+.zeta-chat-item-turnError {
   border-left: 2px solid var(--zeta-border);
   padding-left: 8px;
   color: var(--zeta-description-foreground);

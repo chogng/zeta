@@ -1,0 +1,170 @@
+.zeta-model-settings {
+	display: flex;
+	max-width: 760px;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.zeta-model-settings-toolbar {
+	display: flex;
+	align-items: end;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.zeta-model-settings-search {
+	display: grid;
+	min-width: min(360px, 70%);
+	color: var(--zeta-description-foreground);
+	font-size: 12px;
+	gap: 4px;
+}
+
+.zeta-model-settings-search input {
+	min-width: 0;
+	padding: 7px 9px;
+	border: 1px solid var(--zeta-input-border);
+	border-radius: 4px;
+	outline: none;
+	color: var(--zeta-input-foreground);
+	background: var(--zeta-input-background);
+	font: inherit;
+}
+
+.zeta-model-settings-search input:focus {
+	border-color: var(--zeta-focus-border);
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: -1px;
+}
+
+.zeta-model-settings-refresh {
+	min-height: 30px;
+	padding: 4px 10px;
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 5px;
+	color: var(--zeta-button-foreground);
+	background: transparent;
+	cursor: pointer;
+	font: inherit;
+}
+
+.zeta-model-settings-refresh:hover:not(:disabled) {
+	background: var(--zeta-list-hover-background);
+}
+
+.zeta-model-settings-refresh:focus-visible {
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: 1px;
+}
+
+.zeta-model-settings-refresh:disabled {
+	cursor: wait;
+	opacity: 0.65;
+}
+
+.zeta-model-settings-list {
+	overflow: hidden;
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 8px;
+	background: var(--zeta-editor-background);
+}
+
+.zeta-model-settings-row {
+	display: grid;
+	min-height: 78px;
+	box-sizing: border-box;
+	align-items: center;
+	padding: 11px 14px;
+	gap: 18px;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.zeta-model-settings-row + .zeta-model-settings-row {
+	border-top: 1px solid var(--zeta-widget-border);
+}
+
+.zeta-model-settings-row:hover {
+	background: var(--zeta-list-hover-background);
+}
+
+.zeta-model-settings-copy {
+	min-width: 0;
+}
+
+.zeta-model-settings-heading {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 8px;
+}
+
+.zeta-model-settings-copy h4,
+.zeta-model-settings-copy p,
+.zeta-model-settings-status,
+.zeta-model-settings-empty {
+	margin: 0;
+}
+
+.zeta-model-settings-copy h4 {
+	overflow: hidden;
+	color: var(--zeta-foreground);
+	font-size: 14px;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.zeta-model-settings-access-badge {
+	flex: 0 0 auto;
+	padding: 1px 6px;
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 999px;
+	color: var(--zeta-description-foreground);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 16px;
+}
+
+.zeta-model-settings-copy p {
+	margin-top: 3px;
+	overflow: hidden;
+	color: var(--zeta-description-foreground);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.zeta-model-settings-control {
+	display: flex;
+	align-items: center;
+}
+
+.zeta-model-settings-status,
+.zeta-model-settings-empty {
+	color: var(--zeta-description-foreground);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.zeta-model-settings-status {
+	min-height: 18px;
+}
+
+.zeta-model-settings-status.is-error {
+	color: var(--zeta-error-foreground);
+}
+
+.zeta-model-settings-empty {
+	padding: 18px 14px;
+}
+
+@media (max-width: 720px) {
+	.zeta-model-settings-toolbar {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.zeta-model-settings-search {
+		min-width: 0;
+	}
+}

@@ -33,6 +33,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { DisposableStore, toDisposable } = await import("../../../../../base/common/lifecycle.js");
+const { Emitter } = await import("../../../../../base/common/event.js");
 const { KeybindingLabelStyle, getKeybindingLabel } = await import("../../../../../base/common/keybindingLabels.js");
 const { resolveKeybinding } = await import("../../../../../base/common/keybindings.js");
 const { lxiconsLibrary } = await import("../../../../../base/common/lxiconsLibrary.js");
@@ -250,6 +251,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
     root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
     "models",
   );
+  assert.ok(root.querySelector(".zeta-model-settings"));
 
   surface.dispatchEvent(new browserEnvironment.window.KeyboardEvent(
     "keydown",
@@ -493,14 +495,81 @@ test("Settings domains without writable services render honest capability overvi
     themeService: disposables.add(new ThemeService(darkColorTheme)),
     userThemeService: UnavailableUserThemeService,
   }));
-  const overviewSections = ["chat", "user", "agents", "models", "git", "worktrees", "rules", "skills-and-subagents", "tools-and-mcps", "hooks", "browser", "tabs", "experimental", "documentation"];
+  const overviewSections = ["chat", "user", "agents", "git", "worktrees", "rules", "skills-and-subagents", "tools-and-mcps", "hooks", "browser", "tabs", "experimental", "documentation"];
   for (const sectionId of overviewSections) {
     settings.open(sectionId);
     assert.ok(root.querySelectorAll(".zeta-settings-overview-item").length > 0, sectionId);
   }
+  settings.open("chat");
+  [...root.querySelectorAll<HTMLButtonElement>(".zeta-settings-overview-action")].find(button => button.textContent === "Open Models")?.click();
+  assert.equal(settings.activeSectionId, "models");
+});
+
+test("Models settings show catalog metadata and persist picker visibility", async () => {
+  using disposables = new DisposableStore();
+  const ownerDocument = browserEnvironment.window.document;
+  ownerDocument.body.replaceChildren();
+  const root = h(ownerDocument, "div");
+  ownerDocument.body.append(root);
+  const settings = disposables.add(new SettingsService());
+  const changes = disposables.add(new Emitter<void>());
+  const hidden = new Set<string>();
+  let refreshes = 0;
+  const catalog = [
+    {
+      model: { provider: "openai", model: "gpt-5.6-sol" },
+      displayName: "GPT-5.6 Sol",
+      access: "subscription" as const,
+    },
+    {
+      model: { provider: "anthropic", model: "claude-opus-5" },
+      displayName: "Claude Opus 5",
+      access: "apiKey" as const,
+    },
+    {
+      model: { provider: "openai", model: "gpt-5.6" },
+      displayName: "GPT-5.6",
+      access: "apiKey" as const,
+    },
+  ];
+  disposables.add(new SettingsEditorContribution({
+    configurationService: disposables.add(new WorkbenchConfigurationService()),
+    container: root,
+    contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+    dialogService: acceptingDialogService,
+    settingsService: settings,
+    themeService: disposables.add(new ThemeService(darkColorTheme)),
+    userThemeService: UnavailableUserThemeService,
+    modelCatalog: {
+      onDidChangeModels: changes.event,
+      listModelCatalog: async () => catalog,
+      refreshModels: async () => { refreshes += 1; return catalog; },
+      isModelVisible: model => !hidden.has(`${model.provider}/${model.model}`),
+      setModelVisible: async (model, visible) => {
+        const identity = `${model.provider}/${model.model}`;
+        if (visible) hidden.delete(identity);
+        else hidden.add(identity);
+        changes.fire();
+      },
+    },
+  }));
+
   settings.open("models");
-  root.querySelector<HTMLButtonElement>(".zeta-settings-overview-action")?.click();
-  assert.equal(settings.activeSectionId, "chat");
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["GPT-5.6 Sol", "Claude Opus 5", "GPT-5.6"]);
+  assert.equal(root.querySelector(".zeta-model-settings-access-badge")?.textContent, "Subscription");
+  assert.equal(root.querySelector(".zeta-model-settings-status")?.textContent, "3 models");
+  root.querySelector<HTMLInputElement>('.zeta-model-settings-row input[role="switch"]')?.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.deepEqual([...hidden], ["openai/gpt-5.6-sol"]);
+
+  const search = root.querySelector<HTMLInputElement>(".zeta-model-settings-search input")!;
+  search.value = "anthropic";
+  search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+  assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["Claude Opus 5"]);
+  root.querySelector<HTMLButtonElement>(".zeta-model-settings-refresh")?.click();
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  assert.equal(refreshes, 1);
 });
 
 test("Editor settings render supported controls and persist typed preferences", async () => {

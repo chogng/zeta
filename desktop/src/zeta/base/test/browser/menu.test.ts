@@ -38,6 +38,36 @@ test("Menu renders submenu actions with the shared SVG indicator", async () => {
   Reflect.deleteProperty(globalThis, "Node");
 });
 
+test("Menu renders action badges as trailing metadata", async () => {
+  const dom = new JSDOM("<!doctype html><body></body>");
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window,
+  });
+  Object.defineProperty(globalThis, "Node", {
+    configurable: true,
+    value: dom.window.Node,
+  });
+  const { Menu } = await import("../../browser/ui/menu/menu.js");
+  const menu = new Menu(dom.window.document.body, {
+    actions: [{
+      id: "test.badge",
+      label: "Model",
+      tooltip: "Model",
+      badge: "Subscription",
+      enabled: true,
+      run(): void {},
+    }],
+  });
+
+  assert.equal(menu.element.querySelector(".zeta-menu-badge")?.textContent, "Subscription");
+
+  menu.dispose();
+  dom.window.close();
+  Reflect.deleteProperty(globalThis, "window");
+  Reflect.deleteProperty(globalThis, "Node");
+});
+
 test("Menu projects one focused item for keyboard and pointer navigation", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   Object.defineProperty(globalThis, "window", {

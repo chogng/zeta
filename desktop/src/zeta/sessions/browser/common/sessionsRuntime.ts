@@ -2,6 +2,7 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { ServiceCollection } from "../../../platform/instantiation/common/instantiation.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IWorkspaceContextApi } from "../../../platform/workspace/common/workspaceIpc.js";
+import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
 import { isSingleFolderWorkspaceIdentifier, parseWorkspaceIdentifier } from "../../../platform/workspace/common/workspace.js";
 import { getRemoteWorkspacePath, isRemoteResource } from "../../../platform/remote/common/remote.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
@@ -15,6 +16,7 @@ import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
 export interface SessionsRuntimeOptions {
   readonly sessionsWindowApi?: ISessionsWindowApi;
   readonly workspaceApi?: IWorkspaceContextApi;
+  readonly configurationService?: IConfigurationService;
 }
 
 /** Shared App Server-backed state used by one dedicated Sessions renderer. */
@@ -46,6 +48,7 @@ export class SessionsRuntime extends DisposableOwner {
       skillApi: api.skills,
       appServerApi: api.appServer,
       eventApi: api.events,
+      ...(options.configurationService ? { configurationService: options.configurationService } : {}),
     }));
     this.services.set(ISessionsManagementService, this.sessions);
     this.services.set(ISessionsViewService, this.view);

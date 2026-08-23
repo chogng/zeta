@@ -8,6 +8,7 @@ export interface IAction {
   readonly icon?: Icon;
   readonly enabled: boolean;
   readonly checked?: boolean;
+  readonly badge?: string;
 
   run(...args: readonly unknown[]): unknown;
 }

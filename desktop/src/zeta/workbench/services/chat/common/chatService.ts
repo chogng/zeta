@@ -2,6 +2,9 @@ import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
+import type { ModelCatalogEntry } from "./modelCatalog.js";
+
+export type { ModelCatalogEntry } from "./modelCatalog.js";
 
 export interface ChatImageAttachment {
   readonly contentDigest: string;
@@ -9,11 +12,6 @@ export interface ChatImageAttachment {
   readonly encodedBytes: number;
   readonly width: number;
   readonly height: number;
-}
-
-export interface ModelCatalogEntry {
-  readonly model: ModelRef;
-  readonly displayName: string;
 }
 
 export interface SlashCommandDefinition {
@@ -41,11 +39,18 @@ export type ThreadItem =
 
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
+export interface TurnError {
+  readonly code: "modelInvocationFailed" | "completionPersistenceFailed" | "interactionDeadlineElapsed";
+  readonly message: string;
+  readonly retryable: boolean;
+}
+
 export interface Turn {
   readonly turnId: string;
   readonly status: TurnStatus;
   readonly model?: ModelRef | null;
   readonly items: readonly ThreadItem[];
+  readonly error?: TurnError | null;
 }
 
 export interface Thread {
@@ -117,8 +122,13 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 export interface IChatService {
   readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
   readonly onDidBecomeReady: Event<void>;
+  readonly onDidChangeModels: Event<void>;
   readonly onDidChangeSkills: Event<void>;
   listModels(): Promise<readonly ModelCatalogEntry[]>;
+  listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
+  refreshModels(): Promise<readonly ModelCatalogEntry[]>;
+  isModelVisible(model: ModelRef): boolean;
+  setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
   listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
   listSkillCommands(): Promise<readonly SkillCommandDefinition[]>;
   readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread>;

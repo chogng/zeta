@@ -87,8 +87,13 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
   const chatService: IChatService = {
     onDidUpdateThread: threadUpdates.event,
     onDidBecomeReady: ready.event,
+    onDidChangeModels: ready.event,
     onDidChangeSkills: ready.event,
     async listModels() { return []; },
+    async listModelCatalog() { return []; },
+    async refreshModels() { return []; },
+    isModelVisible() { return true; },
+    async setModelVisible() {},
     async listSlashCommands() { return []; },
     async listSkillCommands() { return []; },
     async readThread() { throw new Error("No active Thread"); },

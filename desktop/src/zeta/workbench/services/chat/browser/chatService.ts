@@ -2,11 +2,13 @@ import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRef
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
+import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
-import type { SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
+import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
   readonly modelApi: IModelApi;
@@ -15,16 +17,23 @@ export interface ChatServiceOptions {
   readonly skillApi: ISkillApi;
   readonly appServerApi: IAppServerApi;
   readonly eventApi: IServerEventApi;
+  readonly configurationService?: IConfigurationService;
 }
 
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends DisposableOwner implements IChatService {
   private readonly _onDidUpdateThread = this.own(new Emitter<ThreadUpdateEnvelope>());
   private readonly _onDidBecomeReady = this.own(new Emitter<void>());
+  private readonly _onDidChangeModels = this.own(new Emitter<void>());
   private readonly _onDidChangeSkills = this.own(new Emitter<void>());
+  private readonly hiddenModels = new Map<string, ModelRef>();
+  private modelCatalog: readonly ModelCatalogEntry[] = [];
+  private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
+  private hasLoadedModelCatalog = false;
 
   readonly onDidUpdateThread = this._onDidUpdateThread.event;
   readonly onDidBecomeReady = this._onDidBecomeReady.event;
+  readonly onDidChangeModels = this._onDidChangeModels.event;
   readonly onDidChangeSkills = this._onDidChangeSkills.event;
 
   constructor(private readonly options: ChatServiceOptions) {
@@ -35,14 +44,56 @@ export class ChatService extends DisposableOwner implements IChatService {
     });
     this.defer(() => events.dispose());
     const connection = options.appServerApi.onConnectionState((state) => {
-      if (state === "ready") this._onDidBecomeReady.fire();
+      if (state !== "ready") return;
+      const refresh = this.refreshModels();
+      this._onDidBecomeReady.fire();
+      void refresh.catch(() => undefined);
     });
     this.defer(() => connection.dispose());
+    this.acceptHiddenModels(options.configurationService?.getValue(ModelCatalogConfiguration.hiddenModels) ?? []);
+    if (options.configurationService) {
+      this.own(options.configurationService.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) return;
+        this.acceptHiddenModels(options.configurationService!.getValue(ModelCatalogConfiguration.hiddenModels));
+      }));
+    }
   }
 
   async listModels(): Promise<readonly ModelCatalogEntry[]> {
-    const result = await this.options.modelApi.list();
-    return result.models.map((entry) => ({ model: { ...entry.model }, displayName: entry.displayName }));
+    const catalog = await this.listModelCatalog();
+    return catalog.filter(entry => this.isModelVisible(entry.model));
+  }
+
+  async listModelCatalog(): Promise<readonly ModelCatalogEntry[]> {
+    if (this.hasLoadedModelCatalog) return this.modelCatalog;
+    return this.refreshModels();
+  }
+
+  async refreshModels(): Promise<readonly ModelCatalogEntry[]> {
+    if (this.modelCatalogLoad) return this.modelCatalogLoad;
+    const load = this.options.modelApi.list().then(result => this.acceptModelCatalog(result.models));
+    this.modelCatalogLoad = load;
+    try {
+      return await load;
+    } finally {
+      if (this.modelCatalogLoad === load) this.modelCatalogLoad = undefined;
+    }
+  }
+
+  isModelVisible(model: ModelRef): boolean {
+    return !this.hiddenModels.has(modelRefIdentity(model));
+  }
+
+  async setModelVisible(model: ModelRef, visible: boolean): Promise<void> {
+    const identity = modelRefIdentity(model);
+    if (visible === !this.hiddenModels.has(identity)) return;
+    const models = [...this.hiddenModels.values()].filter(candidate => modelRefIdentity(candidate) !== identity);
+    if (!visible) models.push({ ...model });
+    if (this.options.configurationService) {
+      await this.options.configurationService.updateValue(ModelCatalogConfiguration.hiddenModels, models);
+      return;
+    }
+    this.acceptHiddenModels(models);
   }
 
   async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
@@ -92,6 +143,51 @@ export class ChatService extends DisposableOwner implements IChatService {
   async resolveInteraction(options: ResolveInteractionOptions): Promise<void> {
     await this.options.turnApi.resolveInteraction({ commandId: commandId("interaction"), ...options, response: toAgentResponse(options.response) });
   }
+
+  private acceptModelCatalog(entries: readonly {
+    readonly model: ModelRef;
+    readonly displayName: string;
+    readonly access: ModelCatalogEntry["access"];
+  }[]): readonly ModelCatalogEntry[] {
+    const identities = new Set<string>();
+    const catalog = entries.map(entry => {
+      const identity = modelRefIdentity(entry.model);
+      if (identities.has(identity)) throw new Error(`Model catalog contains duplicate entry '${entry.model.provider}/${entry.model.model}'`);
+      identities.add(identity);
+      return Object.freeze({
+        model: Object.freeze({ ...entry.model }),
+        displayName: entry.displayName,
+        access: entry.access,
+      });
+    });
+    const changed = !sameModelCatalog(this.modelCatalog, catalog);
+    this.modelCatalog = Object.freeze(catalog);
+    this.hasLoadedModelCatalog = true;
+    if (changed) this._onDidChangeModels.fire();
+    return this.modelCatalog;
+  }
+
+  private acceptHiddenModels(models: readonly ModelRef[]): void {
+    const next = new Map(models.map(model => [modelRefIdentity(model), Object.freeze({ ...model })]));
+    if (sameKeys(this.hiddenModels, next)) return;
+    this.hiddenModels.clear();
+    for (const [identity, model] of next) this.hiddenModels.set(identity, model);
+    this._onDidChangeModels.fire();
+  }
+}
+
+function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly ModelCatalogEntry[]): boolean {
+  return left.length === right.length && left.every((entry, index) => {
+    const candidate = right[index];
+    return candidate !== undefined
+      && entry.displayName === candidate.displayName
+      && entry.access === candidate.access
+      && modelRefIdentity(entry.model) === modelRefIdentity(candidate.model);
+  });
+}
+
+function sameKeys(left: ReadonlyMap<string, unknown>, right: ReadonlyMap<string, unknown>): boolean {
+  return left.size === right.size && [...left.keys()].every(key => right.has(key));
 }
 
 function toThread(thread: ThreadDto): Thread {
@@ -101,7 +197,13 @@ function toThread(thread: ThreadDto): Thread {
     title: thread.title,
     status: thread.status,
     sequence: thread.sequence,
-    turns: thread.turns.map((turn) => ({ turnId: turn.turnId, status: turn.status, model: turn.model ? { ...turn.model } : turn.model, items: turn.items.map((item) => ({ ...item })) })),
+    turns: thread.turns.map((turn) => ({
+      turnId: turn.turnId,
+      status: turn.status,
+      model: turn.model ? { ...turn.model } : turn.model,
+      items: turn.items.map((item) => ({ ...item })),
+      error: turn.error ? { ...turn.error } : turn.error,
+    })),
   };
 }
 

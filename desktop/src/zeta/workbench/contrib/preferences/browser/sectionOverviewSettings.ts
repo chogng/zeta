@@ -76,26 +76,6 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
       ],
     },
   ],
-  models: [
-    {
-      id: "model-selection",
-      title: "Model selection",
-      description: "Each consumer owns the model operation it performs; there is no single global model that silently overrides every workflow.",
-      items: [
-        { title: "Chat and Agent model", description: "The active Session owns its selected generation model and keeps that choice with the conversation.", status: "Per Session", tone: "managed", targetSectionId: "chat", actionLabel: "Open Chat Settings" },
-        { title: "Embedding and rerank models", description: "Semantic code search and hybrid Tool Search use explicit model selections and Workspace authorization.", status: "Managed in Indexing", tone: "managed", targetSectionId: "indexing", actionLabel: "Configure Indexing" },
-      ],
-    },
-    {
-      id: "providers",
-      title: "Providers",
-      description: "Provider packages own authentication and endpoint-specific behavior.",
-      items: [
-        { title: "Model provider plugins", description: "Install provider capabilities without coupling the Workbench to one vendor.", status: "Marketplace packages", tone: "managed", targetSectionId: "marketplace", actionLabel: "Browse Marketplace" },
-        { title: "Model credentials", description: "Credential storage is not exposed as a generic plaintext setting; providers or connectors own their secrets.", status: "Provider-owned", tone: "managed", targetSectionId: "connectors", actionLabel: "Open Connectors" },
-      ],
-    },
-  ],
   git: [
     {
       id: "source-control",

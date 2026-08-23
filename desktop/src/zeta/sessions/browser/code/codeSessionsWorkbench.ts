@@ -1,12 +1,11 @@
 import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
-import type { IConfigurationApi } from "../../../platform/configuration/common/configurationIpc.js";
+import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
 import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { WorkbenchInteractionServices } from "../../../workbench/browser/workbenchInteractionServices.js";
-import { WorkbenchConfigurationService } from "../../../workbench/services/configuration/browser/configurationService.js";
 import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
@@ -24,7 +23,7 @@ export interface CodeSessionsWorkbenchOptions {
   readonly profile: SessionsProfile;
   readonly runtime: SessionsRuntime;
   readonly sessionsWindowApi?: ISessionsWindowApi;
-  readonly configurationApi?: IConfigurationApi;
+  readonly configurationService: IConfigurationService;
   readonly keybindingsResourceApi?: IKeybindingsResourceApi;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
   readonly storageService: IStorageService;
@@ -51,11 +50,10 @@ export class CodeSessionsWorkbench extends DisposableOwner {
       focus: () => sessionsPart?.focus(),
     }));
     this.layoutService = layoutService;
-    const configurationService = this.own(new WorkbenchConfigurationService({ api: options.configurationApi }));
     const interactionServices = this.own(new WorkbenchInteractionServices({
       services: runtime.services,
       layoutService,
-      configurationService,
+      configurationService: options.configurationService,
       keybindingsResourceApi: options.keybindingsResourceApi,
       createContextMenuService: options.createContextMenuService,
     }));

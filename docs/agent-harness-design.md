@@ -1,7 +1,6 @@
 # Agent Harness 设计
 
-> 状态：Accepted（2026-08-03；同日补齐 loop 失败策略、steering、skills/slash、provider
-> 差异矩阵与评测设计，达到可实现深度）
+> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-08-23。
 > 定位：回答"Core 的 agent loop 具体怎么搭起来"——一次模型调用长什么样、Turn 内循环与
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
@@ -17,12 +16,12 @@
 | 问题 | 结论 | 深入阅读 |
 | --- | --- | --- |
 | 模型调用失败怎么办？ | 按错误类别分流：退避重试 / 压缩后重试 / 立即失败 / 作为正常结果完成 | [§7](#7-turn-内循环与失败策略) |
-| Agent 运行中用户发消息怎么办？ | 排队 + 下一个安全点注入当前 Turn；reducer 已允许，缺一条 `turn/steer` 命令 | [§8](#8-steering-与并发输入) |
+| Agent 运行中用户发消息怎么办？ | 排队 + 下一个安全点注入当前 Turn；reducer 已允许，缺一条 `turn/steer` 命令 | [§8](#8-引导与并发输入) |
 | 提示词怎么做？ | 四层：静态身份/策略 + per-profile 工具指导 + 会话冻结环境快照 + 工作区指令；动态走 append-only reminder | [§4](#4-提示词) |
 | 工具选哪些？ | 共享七件套 + 按模型家族切编辑工具形态；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
-| 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-cache) |
+| 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-缓存) |
 | 怎么知道 harness 变好了？ | 三层任务集 + token/成功率指标 + 前缀稳定性回归断言 | [§14](#14-评测) |
 
 ## 1. 现状差距
@@ -65,7 +64,7 @@ ModelRequest
 三条硬规则，所有后续设计都从它们推导：
 
 1. **前缀稳定**：`instructions`、`tools`、已有 history 在 Turn 之间逐字节不变，新内容只
-   append（[§11](#11-prompt-cache) 的前提）。
+   append（[§11](#11-prompt-缓存) 的前提）。
 2. **语义单元完整**：Tool Call/Result 成对；一个 Turn 的内容原子保留或原子被 checkpoint
    吸收（[`core-context.md`](core-context.md) §6.3）。
 3. **变化走安全点**：工具面、模型、策略、环境快照只在 Turn 边界或压缩边界变化。
@@ -158,7 +157,7 @@ reminder 声明自己是背景信息而非用户指令。这是 Skill 激活、h
 3. **工具描述就是提示词**：进入每次调用的 tools 前缀，与 system prompt 同级打磨。
 4. **少而精**：v1 ≤ 10 个。
 
-### 5.2 工具面与 profile
+### 5.2 工具面与配置档案
 
 ```text
 ToolProfile = 共享核心 + 家族特定编辑工具
@@ -227,9 +226,7 @@ Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模�
 
 ### 7.3 失控防护
 
-- **重复失败调用**：同一工具 + 相同参数 digest 连续失败 ≥3 次 → 在下一条 Tool Result 附
-  reminder（"stop repeating this exact call; change approach or report the blocker"）；
-  ≥5 次 → Turn fail（stable error `tool_repetition`）。计数按 Turn 内连续窗口，成功即清零。
+- **重复失败调用**：同一工具 + 相同参数 digest 连续失败 ≥3 次 → 在下一条 Tool Result 附 reminder（"stop repeating this exact call; change approach or report the blocker"）；≥5 次 → Turn fail（stable error `tool_repetition`）。计数按 Turn 内连续窗口，成功即清零。
 - **Turn 资源上限**：durable usage 记账（§9.3）之上可配置 per-Turn token/成本上限，超限
   在下一个安全点终止（stable error `turn_budget_exhausted`）。v1 默认不设限，仅记账。
 - 无迭代次数硬上限（与 runtime 文档一致：上限应由可取消的资源策略表达，不用进程内计数器）。
@@ -243,7 +240,7 @@ Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模�
 - 重试循环位于 `ModelService` 之上的 executor 侧（重试是 harness 策略，不属于 provider
   adapter）。
 
-## 8. Steering 与并发输入
+## 8. 引导与并发输入
 
 Agent 运行中用户发来新消息：**排队 + 下一个安全点注入当前 Turn**，不打断进行中的模型调用
 或工具执行。
@@ -337,7 +334,7 @@ instructions（下一个 model safe point 重新冻结）
 + tail 原文
 ```
 
-## 11. Prompt cache
+## 11. Prompt 缓存
 
 ### 11.1 三家机制
 
@@ -373,7 +370,7 @@ instructions（下一个 model safe point 重新冻结）
   - 自动候选检索（推迟）：只注入被 selector 激活的 Skill，不能把整个 catalog 正文或清单随
     catalog 数量线性塞进 prompt。
 
-## 13. Provider 差异矩阵
+## 13. 供应商差异矩阵
 
 canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `zeta-api` 两个请求构造器。
 authoring 规则以最严格交集为准：
@@ -425,21 +422,19 @@ harness 的每层都直接影响成功率与 token 成本；没有评测回路�
 
 ## 15. 落地顺序
 
-与 [`zeta-agent-runtime-architecture.md` 阶段 A–E](zeta-agent-runtime-architecture.md#7-分阶段实施计划)
-的关系：M0–M2 不依赖阶段 A/B 可立即做；M3 落在阶段 B 内；M4–M6 与阶段 B/C 并行。
+M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺序。后续工作项、依赖、优先级和验收门由 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的 S1–S7 唯一拥有。
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0（部分完成）提示词接线 | SYSTEM_PROMPT、环境快照和 Global `.zeta/instructions` 已注入；工具指导仍待完成 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
-| M1 工具最小闭环 | 七件套 + profile + `parallel_tool_calls`；评测 T1/T2 建立 | `local_tools.rs`、`file-system-tool` 扩展、rg/file-search 封装、apply_patch 接入 | 家族→profile 映射进 `model-provider-config` |
-| M2 失败弹性 + steering | §7 重试/分类/失控防护；`turn/steer` | executor 重试层、`ApiError` 分类、SteerTurn command | protocol schema 同步（与阶段 A 的 R1 同批） |
-| M3（部分完成）限幅/预算/压缩 | ContextPlan、配置窗口与 durable compaction 已完成；逐工具限幅、usage 记账和 T4 仍待完成 | ContextPlan 选入路径、checkpoint、usage 持久化 | 无；窗口未知时 provider-managed |
-| M4 缓存 | §11.3 断点注入；前缀稳定回归断言 | `anthropic_messages`、组装快照测试 | 无 |
-| M5 MCP 策略 | §6 阈值平铺/检索式 | MCP registry snapshot 之上的策略层 | 无 |
-| M6（部分完成）Skills/slash | slash 与 explicit SkillRef 已接通；自动 selector 与 Desktop picker 待完成 | App Server 展开、frozen activation、ActivatedSkill layer | 无 |
+| M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
+| M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan`、逐项限幅和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
+| M2（部分具备）失败弹性 + steering | 429/过载/传输重试、空响应和 Refusal 已实现；仍需完整错误分类、overflow 恢复、重复失败熔断和 `turn/steer` | executor 重试层、Provider error mapping、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
+| M3（部分具备）限幅/预算/压缩 | ContextPlan、配置窗口、preflight 与 durable compaction 已实现；仍需逐项限幅、usage/cost 账本、资源预算、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 持久化 | usage durable fact |
+| M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
+| M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
+| M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 
-M0+M1（+M2 弹性子集）合起来构成"接入模型即可 coding"的最小闭环，其**文件级实施计划**见
-[`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md)。
+当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
 
 ## 16. 参考
 

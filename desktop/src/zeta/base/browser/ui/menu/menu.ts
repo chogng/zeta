@@ -62,6 +62,12 @@ class MenuActionViewItem extends ButtonActionViewItem {
       );
       this.button.element.removeAttribute("aria-pressed");
     }
+    if (this.action.badge) {
+      const badge = h(container.ownerDocument, "span");
+      badge.className = "zeta-menu-badge";
+      badge.textContent = this.action.badge;
+      this.button.element.append(badge);
+    }
     if (!this.keybinding) return;
     const label = this.own(new KeybindingLabel(this.button.element, {
       keybinding: this.keybinding,

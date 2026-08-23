@@ -113,8 +113,13 @@ function unavailableChatService(): IChatService {
   return {
     onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
     onDidBecomeReady: neverEvent<void>(),
+    onDidChangeModels: neverEvent<void>(),
     onDidChangeSkills: neverEvent<void>(),
     listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
+    listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
+    refreshModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
+    isModelVisible: () => true,
+    setModelVisible: () => pending as Promise<void>,
     listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
     listSkillCommands: () => pending as Promise<readonly SkillCommandDefinition[]>,
     readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<Thread>,

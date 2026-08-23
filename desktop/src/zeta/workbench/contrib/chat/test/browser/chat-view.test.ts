@@ -22,6 +22,8 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_
 import { ISettingsService } from "../../../../../workbench/services/preferences/common/settings.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
+import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
+import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { AppServerSessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
 import type { Session } from "../../../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
@@ -115,11 +117,17 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
   const dom = new JSDOM("<!doctype html><body></body>");
   dom.window.HTMLElement.prototype.scrollTo = () => {};
   using contextViewService = new BrowserContextViewService(dom.window.document.body);
+  const subscriptionModel = {
+    model: { provider: "openai", model: "gpt-5.6-sol" },
+    displayName: "GPT-5.6 Sol",
+    access: "subscription" as const,
+  };
   const fake = fakeApi({
     sessions: [
-      session("session-1", "thread-1"),
-      session("session-2", "thread-2"),
+      { ...session("session-1", "thread-1"), model: subscriptionModel.model },
+      { ...session("session-2", "thread-2"), model: subscriptionModel.model },
     ],
+    models: [subscriptionModel],
   });
   const api = fake.api;
   using sessions = new AppServerSessionsManagementService(api);
@@ -322,11 +330,17 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
       ],
     );
     assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
-    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.textContent, "Model");
+    assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button .zeta-button-label")?.textContent, "GPT-5.6 Sol");
+    assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "Subscription");
     assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
     assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
   }
   const firstChatPane = chatPanes[0]!;
+  firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.click();
+  assert.deepEqual(shownContextMenuActions.map(action => ({ label: action.label, badge: action.badge })), [
+    { label: "GPT-5.6 Sol", badge: "Subscription" },
+  ]);
+  shownContextMenuActions = [];
   firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();
   assert.deepEqual(shownContextMenuActions, []);
   const modeMenu = dom.window.document.querySelector<HTMLElement>(".zeta-chat-input-mode-menu");
@@ -1029,6 +1043,44 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
   assert.equal(model.thread?.sequence, 4);
 });
 
+test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
+  const activeSession = session("session-1", "thread-1");
+  const failedThread: Thread = {
+    sessionId: "session-1",
+    threadId: "thread-1",
+    title: "Main",
+    status: "active",
+    sequence: 3,
+    turns: [{
+      turnId: "turn-1",
+      status: "failed",
+      items: [],
+      error: {
+        code: "modelInvocationFailed",
+        message: "Model invocation failed",
+        retryable: true,
+      },
+    }],
+  };
+  const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
+  using sessions = new AppServerSessionsManagementService(fake.api);
+  using model = new ChatPaneModel(createChatService(fake.api), {
+    kind: "session",
+    active: { session: activeSession, threadId: "thread-1" },
+  }, sessions);
+
+  await model.initialize();
+
+  assert.deepEqual(model.items, [{
+    id: "turn-error:turn-1",
+    type: "turnError",
+    text: "Model invocation failed",
+    transient: false,
+    isError: true,
+  }]);
+  assert.equal(model.state, "ready");
+});
+
 interface FakeOptions {
   readonly sessions?: readonly Session[];
   readonly createSession?: Session;
@@ -1045,10 +1097,15 @@ interface FakeOptions {
     readonly enabled: boolean;
     readonly compatible: boolean;
   }[];
+  readonly models?: readonly {
+    readonly model: ModelRef;
+    readonly displayName: string;
+    readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
+  }[];
 }
 
-function createChatService(api: IRendererHost): ChatService {
-  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events });
+function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
+  return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
 }
 
 test("Chat service projects unique enabled Skills and submits the exact pinned reference", async () => {
@@ -1086,6 +1143,59 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
   ]);
 });
 
+test("Chat service caches the static catalog and filters picker entries by user visibility", async () => {
+  const first = {
+    model: { provider: "openai", model: "gpt-5.6-sol" },
+    displayName: "GPT-5.6 Sol",
+    access: "subscription" as const,
+  };
+  const second = {
+    model: { provider: "anthropic", model: "claude-opus-5" },
+    displayName: "Claude Opus 5",
+    access: "apiKey" as const,
+  };
+  const third = {
+    model: { provider: "openai", model: "gpt-5.6" },
+    displayName: "GPT-5.6",
+    access: "apiKey" as const,
+  };
+  const fake = fakeApi({ models: [first, second, third] });
+  using configuration = new WorkbenchConfigurationService();
+  using chat = createChatService(fake.api, configuration);
+
+  assert.deepEqual(await chat.listModels(), [first, second, third]);
+  assert.deepEqual(await chat.listModelCatalog(), [first, second, third]);
+  assert.equal(fake.modelListRequests.length, 1);
+
+  await chat.setModelVisible(first.model, false);
+
+  assert.deepEqual(await chat.listModels(), [second, third]);
+  assert.deepEqual(configuration.getValue(ModelCatalogConfiguration.hiddenModels), [first.model]);
+  await chat.refreshModels();
+  assert.equal(fake.modelListRequests.length, 2);
+});
+
+test("Chat picker retains the selected Session model when it is hidden", async () => {
+  const entry = {
+    model: { provider: "openai", model: "gpt-5.6-sol" },
+    displayName: "GPT-5.6 Sol",
+    access: "subscription" as const,
+  };
+  const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
+  const fake = fakeApi({ sessions: [activeSession], models: [entry] });
+  using configuration = new WorkbenchConfigurationService();
+  await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
+  using chat = createChatService(fake.api, configuration);
+  using sessions = new AppServerSessionsManagementService(fake.api);
+  using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+
+  await model.initialize();
+
+  assert.deepEqual(await chat.listModels(), []);
+  assert.deepEqual(model.models, [entry]);
+  assert.deepEqual(model.selectedModel, entry.model);
+});
+
 function testLayoutService(auxiliaryBarVisible = true): IWorkbenchLayoutService {
   const visibility = new Emitter<WorkbenchPartVisibilityChangeEvent>();
   const visibleParts = new Set<WorkbenchPartId>(auxiliaryBarVisible ? ["auxiliarybar"] : []);
@@ -1113,6 +1223,7 @@ function fakeApi(options: FakeOptions = {}): {
   readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
   readonly setModelRequests: readonly SessionOperationInput<"setModel">[];
   readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+  readonly modelListRequests: readonly undefined[];
   readonly emit: (notification: ServerNotification) => void;
 } {
   const listeners = new Set<(notification: ServerNotification) => void>();
@@ -1122,6 +1233,7 @@ function fakeApi(options: FakeOptions = {}): {
   const createThreadRequests: SessionOperationInput<"createThread">[] = [];
   const setModelRequests: SessionOperationInput<"setModel">[] = [];
   const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+  const modelListRequests: undefined[] = [];
   const currentThread = () => options.thread?.() ?? thread();
   const currentSession = (sessionId: string): Session => options.sessions?.find(candidate => candidate.sessionId === sessionId)
     ?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
@@ -1189,7 +1301,10 @@ function fakeApi(options: FakeOptions = {}): {
       },
     },
     model: {
-      list: async () => ({ models: [] }),
+      list: async () => {
+        modelListRequests.push(undefined);
+        return { models: [...(options.models ?? [])] };
+      },
     },
     skills: {
       list: async () => ({ generation: 1, skills: options.skills ?? [] }),
@@ -1225,6 +1340,7 @@ function fakeApi(options: FakeOptions = {}): {
     createThreadRequests,
     setModelRequests,
     turnStartRequests,
+    modelListRequests,
     emit: (notification) => {
       for (const listener of listeners) listener(notification);
     },

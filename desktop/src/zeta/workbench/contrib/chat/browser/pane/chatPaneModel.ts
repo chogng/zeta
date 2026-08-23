@@ -4,7 +4,7 @@ import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefini
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { chatListItem, type IChatListItem } from "../list/chatListItems.js";
+import { chatListItem, chatTurnErrorListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
   | "loading"
@@ -55,6 +55,7 @@ export class ChatPaneModel extends DisposableOwner {
     this.selection = selection;
     this.own(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
     this.own(chatService.onDidBecomeReady(() => void this.reconnect()));
+    this.own(chatService.onDidChangeModels(() => void this.loadModels()));
     this.own(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
     this.defer(() => {
       this.disposed = true;
@@ -110,9 +111,11 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   get items(): readonly IChatListItem[] {
-    const committed = this._thread?.turns.flatMap(
-      (turn) => turn.items.map((item) => chatListItem(item)),
-    ) ?? [];
+    const committed = this._thread?.turns.flatMap((turn) => {
+      const items = turn.items.map((item) => chatListItem(item));
+      const failure = chatTurnErrorListItem(turn);
+      return failure ? [...items, failure] : items;
+    }) ?? [];
     const committedIds = new Set(committed.map((item) => item.id));
     const transient = [...this.transientItems.values()]
       .filter((item) => !committedIds.has(item.itemId))
@@ -144,7 +147,7 @@ export class ChatPaneModel extends DisposableOwner {
     const previousModel = current.session.model;
     this.selection = { kind: "session", active };
     if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
-      if (!sameModel(previousModel, active.session.model)) this._onDidChange.fire();
+      if (!sameModel(previousModel, active.session.model)) void this.loadModels();
       return;
     }
     if (previousThreadId !== active.threadId) {
@@ -158,7 +161,7 @@ export class ChatPaneModel extends DisposableOwner {
       throw new Error(`ChatPaneModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
     }
     this.selection = { kind: "untitled", session };
-    this._onDidChange.fire();
+    void this.loadModels();
   }
 
   async selectModel(model: ModelRef): Promise<void> {
@@ -256,11 +259,32 @@ export class ChatPaneModel extends DisposableOwner {
   }
 
   private async loadCatalogs(): Promise<void> {
-    const [models, slashCommands, skillCommands] = await Promise.allSettled([this.chatService.listModels(), this.chatService.listSlashCommands(), this.chatService.listSkillCommands()]);
-    this._models = models.status === "fulfilled" ? models.value : [];
-    this._slashCommands = slashCommands.status === "fulfilled" ? slashCommands.value : [];
-    this._skillCommands = skillCommands.status === "fulfilled" ? skillCommands.value : [];
+    const [models, slashCommands, skillCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.chatService.listSkillCommands()]);
+    if (models.status === "fulfilled") this._models = models.value;
+    if (slashCommands.status === "fulfilled") this._slashCommands = slashCommands.value;
+    if (skillCommands.status === "fulfilled") this._skillCommands = skillCommands.value;
     this._onDidChange.fire();
+  }
+
+  private async loadModels(): Promise<void> {
+    try {
+      this._models = await this.modelEntries();
+      this._onDidChange.fire();
+    } catch {
+      // Keep the last valid catalog when a transient refresh fails.
+    }
+  }
+
+  private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {
+    const [visible, catalog] = await Promise.all([this.chatService.listModels(), this.chatService.listModelCatalog()]);
+    const selected = this.selectedModel;
+    if (!selected || visible.some(entry => sameModel(entry.model, selected))) return visible;
+    const selectedEntry = catalog.find(entry => sameModel(entry.model, selected)) ?? {
+      model: selected,
+      displayName: selected.model,
+      access: "unknown" as const,
+    };
+    return [...visible, selectedEntry];
   }
 
   private async loadSkillCommands(): Promise<void> {

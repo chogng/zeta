@@ -1,12 +1,24 @@
-import type { ThreadItem } from "../../../../services/chat/common/chatService.js";
+import type { ThreadItem, Turn } from "../../../../services/chat/common/chatService.js";
 
 /** Render-ready projection of one committed or transient Thread item. */
 export interface IChatListItem {
   readonly id: string;
-  readonly type: ThreadItem["type"];
+  readonly type: ThreadItem["type"] | "turnError";
   readonly text: string;
   readonly transient: boolean;
   readonly isError?: boolean;
+}
+
+/** Projects one durable Turn failure as a retryable conversation item. */
+export function chatTurnErrorListItem(turn: Turn): IChatListItem | undefined {
+  if (turn.status !== "failed") return undefined;
+  return {
+    id: `turn-error:${turn.turnId}`,
+    type: "turnError",
+    text: turn.error?.message ?? "Turn failed",
+    transient: false,
+    isError: true,
+  };
 }
 
 /** Maps a Chat Thread item without interpreting untrusted content. */

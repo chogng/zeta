@@ -96,5 +96,7 @@ function itemLabel(item: IChatListItem): string {
       return "Tool call";
     case "toolResult":
       return item.isError ? "Tool error" : "Tool result";
+    case "turnError":
+      return "Error";
   }
 }
