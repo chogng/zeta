@@ -6,7 +6,7 @@
 > - 当前实现：typed key/value、`load/store/delete` port、OS keyring、ephemeral memory、unavailable 与显式文件 backend
 > - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
 > - OS keyring adapter：[`zeta-rs/keyring-store/README.md`](../zeta-rs/keyring-store/README.md)
-> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
+> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Interactive login control plane：[`login.md`](login.md)
 > - App Server 登录控制面：[`zeta-app-server-api.md`](zeta-app-server-api.md#11-account-与登录)
 
@@ -111,11 +111,11 @@ pub trait SecretStore: Send + Sync {
 ```text
 provider/openai/account/{opaque-account-id}/api-key
 provider/openai/account/{opaque-account-id}/platform-service-token
+provider/kimi/current/oauth
 ```
 
 这里的 account segment 必须是 opaque ID，不能直接放 email、token 或 workspace name。
-ChatGPT/Codex subscription token 不在 Zeta namespace 中：它由 upstream Codex App Server own storage
-管理，Zeta 只能保存 redacted account reference。
+ChatGPT 与 Kimi subscription OAuth 都由本机 provider adapter 持有。`zeta-chatgpt` 将 ID/access/refresh token、expiry、脱敏账户 metadata 与 credential revision 编码成 opaque envelope，整体保存于 `provider/openai-chatgpt/current/oauth`；`zeta-kimi` 使用 `provider/kimi/current/oauth` 保存对应 envelope。只有各自 adapter 可以解释、刷新或删除自己的值。
 MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成通用 credential schema。
 
 ## 5. Backend 策略
@@ -237,6 +237,4 @@ Desktop renderer ──▶ SecretStore
 7. 本地 Connector composition 默认使用按 profile 隔离的 OS keyring；keyring operation 失败时明确
    fail closed，不自动读取文件副本。显式文件 backend 只由 host 主动注入，并只在能强制 0700/0600
    权限的 Unix host 启用。
-8. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把
-   `SecretStore` 注入 Connector/MCP credential adapter。ChatGPT/Codex 的凭据仍归 upstream Codex
-   App Server。
+8. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把 `SecretStore` 注入 Connector、MCP、ChatGPT 与 Kimi credential adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。

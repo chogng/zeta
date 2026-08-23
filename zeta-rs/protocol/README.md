@@ -101,8 +101,7 @@ Thread。
 `ThreadEvent::ContextOverflowRecoveryCommitted` 将一个已验证 `ContextCheckpoint` 绑定到触发恢复的 Running Turn。Core reducer 用它保证同一 Turn 只做一次供应商溢出恢复；普通预算压缩继续使用不带 Turn 绑定的 `ContextCheckpointCommitted`。
 
 `ThreadEvent::TurnSteered` 把 exact `SteerTurn` receipt 绑定到紧邻、同序的 durable 用户 Item；
-`TurnSteerDelivered` 再记录 execution backend 已接受该 command。两者分离使本地执行器可以从
-canonical snapshot 重规划，也使 Codex 等委托 backend 在外部副作用结果未知时拒绝自动重发。
+`TurnSteerDelivered` 再记录本地 execution backend 已接受该 command。两者分离使执行器可以从 canonical snapshot 重规划，并使进程恢复根据 durable receipt 判断是否需要重新唤醒执行，而不重复提交 steer。
 
 ```text
 Command

@@ -240,13 +240,7 @@ Session stored envelope 由 `zeta-session-store` 定义；Thread persisted recor
 - transient delta、delivery ack、RPC request 和 provider response 不进入 Event；
 - reducer policy 不编码进 Event helper。
 
-委托执行有两个 durable fact。`ThreadEvent::TurnExecutionAttempted` 在 backend 跨越外部副作用边界
-前写入 Turn；恢复时已有 attempt 的 in-flight Turn 结果未知，禁止重放。成功完成后，
-`ThreadEvent::TurnExecutionBound` 将 Thread 不可变地绑定到
-`{ backend, remoteThreadId, executionScope }`，并投影为
-`ThreadSnapshot.turn_execution_binding`。它不保存 access token、远端 Turn ID、pending request 或
-stream cursor；execution scope 是不含路径和凭据的 opaque Workspace authority identity，同一 Thread
-不能跨 scope 或改绑到另一个 backend/remote thread。
+协议仍保留 `ThreadEvent::TurnExecutionAttempted`、`ThreadEvent::TurnExecutionBound` 与 `ThreadSnapshot.turn_execution_binding`，仅用于读取曾经由外部完整 Turn backend 写入的历史记录。当前产品没有写入这些事实的 Core API，App Server 也不接受外部 Agent runtime；新事件流必须由 Zeta 本地 `TurnExecutor` 推进。删除这些 wire variant 需要独立的历史 schema 迁移，不能用破坏旧记录反序列化的方式完成架构清理。
 
 ### 4.3 更新：面向消费者的变化
 
@@ -585,7 +579,7 @@ zeta-rs/protocol/
 | Session/Thread 独立 sequence | 已完成 | model、store 和 fork lineage 已覆盖 |
 | durable Event 与 live Update 分离 | 基础完成 | store 类型只能接受 durable event |
 | typed Session/Thread command | 基础完成 | Core receipt 已使用；无消费者的 shared envelope 已删除 |
-| 运行中 Turn steering | 已完成 | typed receipt、durable Item/marker/delivery、App Server、Desktop、本地 executor 与 Codex 委托均已接通 |
+| 运行中 Turn steering | 已完成 | typed receipt、durable Item/marker/delivery、App Server、Desktop 与本地 executor 均已接通 |
 | Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/request` Stop → Core 内部停止编排；连接断开不触发停止 |
 | ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
 | transient Item streaming | 已完成 | 主力 Provider 原生 stream → Core incarnation/sequence → App Server writer → Desktop gap/resync 已贯通；显式 unary Provider 保留 final-response bridge |

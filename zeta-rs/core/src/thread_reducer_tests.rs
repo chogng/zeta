@@ -44,6 +44,70 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
 }
 
 #[test]
+fn reducer_keeps_legacy_external_execution_attempts_readable() {
+    let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
+    let turn_id = TurnId::new("turn_1").expect("test ID is non-empty");
+    let thread = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1")
+                    .expect("test ID is non-empty"),
+                thread_id: thread_id.clone(),
+                title: "test".into(),
+            },
+        ),
+    )
+    .unwrap();
+    let thread = reduce_thread_event(
+        Some(thread),
+        &envelope(
+            2,
+            ThreadEvent::TurnAccepted {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                model: None,
+                resource_budget: None,
+                tool_profile: None,
+            },
+        ),
+    )
+    .unwrap();
+    let thread = reduce_thread_event(
+        Some(thread),
+        &envelope(
+            3,
+            ThreadEvent::TurnStarted {
+                thread_id: thread_id.clone(),
+                turn_id: turn_id.clone(),
+            },
+        ),
+    )
+    .unwrap();
+    let thread = reduce_thread_event(
+        Some(thread),
+        &envelope(
+            4,
+            ThreadEvent::TurnExecutionAttempted {
+                thread_id,
+                turn_id: turn_id.clone(),
+                backend: "legacy-external-backend".into(),
+            },
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(
+        thread.turns[0].execution_backend_attempt.as_deref(),
+        Some("legacy-external-backend")
+    );
+}
+
+#[test]
 fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
     let thread = reduce_thread_event(
         None,

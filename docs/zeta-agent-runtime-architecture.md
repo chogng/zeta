@@ -91,7 +91,7 @@
 | per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction | 已实现 | `core/src/thread_controller/loaded_thread.rs` |
 | 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
 | TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
-| same-Turn steering + delegated delivery marker | 已实现 | `core/src/thread_controller/steering.rs`、`app-server/src/server/operations.rs`、`codex-app-server/src/turn_backend.rs` |
+| same-Turn steering + delivery marker | 已实现 | `core/src/thread_controller/steering.rs`、`app-server/src/server/operations.rs` |
 | ToolScheduler：durable one-time approval、sandbox escalation、rejection/repeated-failure circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs`、`core/src/tool_repetition.rs` |
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
@@ -431,5 +431,4 @@ pnpm --dir zeta-ts run test:main
 - [产品协议](protocol.md)
 - [zeta-rs 产品内核与统一对外层](zeta-rs-architecture.md)
 - [Zeta App Server API](zeta-app-server-api.md)
-- [OpenAI Codex App Server snapshot](https://github.com/openai/codex/blob/322d5b96cfa5c8fd52bd83ecfdb79cd9b330205f/codex-rs/app-server/README.md)
 - [Pi session format snapshot](https://github.com/earendil-works/pi/blob/5bc1c2c0a6f07e00e8c240304182f213ab8d311f/packages/coding-agent/docs/session-format.md)

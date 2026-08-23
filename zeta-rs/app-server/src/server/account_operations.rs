@@ -15,6 +15,7 @@ use zeta_app_server_protocol::protocol::account::AccountLoginFailureDto;
 use zeta_app_server_protocol::protocol::account::AccountLoginMethodDto;
 use zeta_app_server_protocol::protocol::account::AccountLoginStartParams;
 use zeta_app_server_protocol::protocol::account::AccountLoginStartResult;
+use zeta_app_server_protocol::protocol::account::AccountLogoutParams;
 use zeta_app_server_protocol::protocol::account::AccountLogoutResult;
 use zeta_app_server_protocol::protocol::account::AccountLogoutStatusDto;
 use zeta_app_server_protocol::protocol::account::AccountReadResult;
@@ -49,6 +50,7 @@ impl AppServer {
         let method = match params.method {
             AccountLoginMethodDto::OpenAiChatGptBrowser => LoginMethod::OpenAiChatGptBrowser,
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
+            AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
         };
         let started = self.login_service()?.begin(method).map_err(login_error)?;
         result(&match started {
@@ -85,8 +87,13 @@ impl AppServer {
         result(&AccountLoginCancelResult { status })
     }
 
-    pub(super) fn account_logout(&self) -> Result<Value, RpcError> {
-        let status = match self.login_service()?.logout().map_err(login_error)? {
+    pub(super) fn account_logout(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: AccountLogoutParams = decode(params)?;
+        let status = match self
+            .login_service()?
+            .logout_provider(&params.provider)
+            .map_err(login_error)?
+        {
             LogoutOutcome::LoggedOut => AccountLogoutStatusDto::LoggedOut,
             LogoutOutcome::AlreadyLoggedOut => AccountLogoutStatusDto::AlreadyLoggedOut,
         };
@@ -139,7 +146,7 @@ impl LoginEvents for AppServerLoginEvents {
 fn account_state_dto(state: AccountState) -> AccountReadResult {
     AccountReadResult {
         revision: state.revision,
-        account: state.account.map(account_dto),
+        accounts: state.accounts.into_iter().map(account_dto).collect(),
     }
 }
 

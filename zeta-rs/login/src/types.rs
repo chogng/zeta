@@ -61,7 +61,7 @@ pub struct AccountSnapshot {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct AccountState {
     pub revision: u64,
-    pub account: Option<AccountSnapshot>,
+    pub accounts: Vec<AccountSnapshot>,
 }
 
 /// Interactive login flow selected by a product client.
@@ -69,6 +69,16 @@ pub struct AccountState {
 pub enum LoginMethod {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
+    KimiDeviceCode,
+}
+
+impl LoginMethod {
+    pub fn provider_id(self) -> &'static str {
+        match self {
+            Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "openai-chatgpt",
+            Self::KimiDeviceCode => "kimi",
+        }
+    }
 }
 
 /// Provider-driver request carrying the service-owned login identity.

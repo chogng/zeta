@@ -1,0 +1,26 @@
+[package]
+name = "zeta-chatgpt"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_chatgpt"
+path = "src/lib.rs"
+
+[dependencies]
+base64 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+urlencoding = { workspace = true }
+zeroize = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-client = { workspace = true }
+zeta-http-client = { workspace = true }
+zeta-login = { workspace = true }
+zeta-secrets = { workspace = true }
+
+[lints]
+workspace = true

@@ -16,7 +16,7 @@
 | 问题 | 结论 | 深入阅读 |
 | --- | --- | --- |
 | 模型调用失败怎么办？ | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作 | [§7](#7-turn-内循环与失败策略) |
-| Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，Codex 委托转发 exact `turn/steer` | [§8](#8-引导与并发输入) |
+| Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，再从最新 snapshot 重规划 | [§8](#8-引导与并发输入) |
 | 提示词怎么做？ | 四层：静态身份/策略 + per-profile 工具指导 + 会话冻结环境快照 + 工作区指令；动态走 append-only reminder | [§4](#4-提示词) |
 | 工具选哪些？ | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
@@ -34,7 +34,7 @@
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
-| Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop、本地重规划和 Codex 转发均已接通 |
+| Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
 | 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
@@ -247,17 +247,15 @@ Agent 运行中用户发来新消息：**durable 排队 + 下一个安全点注�
 session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, input }
 → 校验 Turn 处于 Running / WaitingForApproval / WaitingForUserInput
 → 原子提交 UserMessage/UserImage Item + TurnSteered + command receipt
-→ execution backend 接受：local 读取 canonical snapshot；Codex 转发 exact remote turn/steer
+→ 本地 execution backend 接受并读取 canonical snapshot
 → durable TurnSteerDelivered
-→ RPC 重试只回放 receipt/delivery result，不重复发送外部 steer
+→ RPC 重试只回放 receipt/delivery result，不重复提交 steer
 ```
 
-- **已实现**：`ThreadCommand::SteerTurn`、`TurnSteered`、`TurnSteerDelivered`、Core reducer、
-  App Server `session/request`、Desktop Send/Stop 双动作、本地 executor 与 Codex adapter 已形成纵向切片；
+- **已实现**：`ThreadCommand::SteerTurn`、`TurnSteered`、`TurnSteerDelivered`、Core reducer、App Server `session/request`、Desktop Send/Stop 双动作与本地 executor 已形成纵向切片；
 - 模型调用进行中：消息先落盘；如果 steer 在该 invocation 的 source sequence 之后提交，reasoning、
   文本和 Tool Call 不会部分落盘，整个旧响应被丢弃后立即重规划；不自动 cancel provider 请求；
-- 委托执行：`TurnSteered` 是外部副作用前 marker，upstream ack 后才写 delivery fact；进程或传输
-  在两者之间失败时把结果视为 unknown，不自动重发同一 Codex steer；
+- 本地执行：`TurnSteered` 先提交，executor 接受最新 snapshot 后再写 delivery fact；进程在两者之间失败时由 command receipt 和 durable marker 恢复，不重复提交同一 steer；
 - WaitingForApproval 期间：允许 steer，恢复执行后可见；
 - Cancelling/终态：拒绝（稳定错误），客户端引导开新 Turn；
 - 多条 steer 按提交顺序进入历史；append-only，缓存友好；
@@ -276,7 +274,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 | read_file | 2000 行 / 行内 2000 字符 | 尾部提示用 offset 继续 |
 | grep / glob | 100 条 | 标注总命中数 |
 | MCP 工具结果 | 25 KiB | 同 shell |
-| 图片 | durable 附件保持原图；调用前按 provider/Codex 上限生成受控 clone | attachment authority + provider/Codex adapter |
+| 图片 | durable 附件保持原图；调用前按所选模型与供应商上限生成受控 clone | attachment authority + provider adapter |
 
 ### 9.2 历史选择：不做静默滑窗
 

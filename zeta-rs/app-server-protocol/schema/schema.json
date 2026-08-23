@@ -170,6 +170,18 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "kimiDeviceCode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -232,6 +244,17 @@
         }
       ]
     },
+    "AccountLogoutParams": {
+      "properties": {
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "type": "object"
+    },
     "AccountLogoutResult": {
       "properties": {
         "status": {
@@ -252,15 +275,11 @@
     },
     "AccountReadResult": {
       "properties": {
-        "account": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AccountDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "accounts": {
+          "items": {
+            "$ref": "#/$defs/AccountDto"
+          },
+          "type": "array"
         },
         "revision": {
           "format": "uint64",
@@ -269,7 +288,8 @@
         }
       },
       "required": [
-        "revision"
+        "revision",
+        "accounts"
       ],
       "type": "object"
     },
@@ -2947,7 +2967,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/AccountLogoutParams"
             }
           },
           "required": [
@@ -21203,6 +21223,7 @@
           "type": "object"
         },
         {
+          "description": "Legacy read-compatibility fact from the removed external full-Turn backend integration.\nCurrent product code does not append this event.",
           "properties": {
             "binding": {
               "$ref": "#/$defs/TurnExecutionBinding"
@@ -21454,6 +21475,7 @@
           "type": "object"
         },
         {
+          "description": "Legacy read-compatibility fact from the removed external full-Turn backend integration.\nCurrent product code does not append this event.",
           "properties": {
             "backend": {
               "type": "string"
@@ -23165,7 +23187,7 @@
       "type": "object"
     },
     "TurnExecutionBinding": {
-      "description": "Durable binding from a local Thread to an external full-Turn execution runtime.\n\nThe remote identity is opaque to Core. Adapters may use it only to resume a completed\nconversation; an in-flight Turn still has unknown outcome after process loss and is never\nreplayed from this binding.",
+      "description": "Legacy durable binding from a local Thread to an external full-Turn execution runtime.\n\nZeta no longer creates these bindings. The type remains serializable so existing Thread history\ncan still be read without discarding its original recovery facts.",
       "properties": {
         "backend": {
           "type": "string"

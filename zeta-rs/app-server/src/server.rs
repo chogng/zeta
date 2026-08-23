@@ -414,8 +414,9 @@ impl AppServer {
             Arc::clone(&sessions),
             AgentTreeLimits::default(),
         ));
-        let initial_backend: Arc<dyn TurnExecutionBackend> = Arc::new(turn_executor.clone());
-        let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(initial_backend));
+        let turn_backend = Arc::new(turn_backend_router::TurnBackendHandle::new(
+            turn_executor.clone(),
+        ));
         let workspace_runtime = Arc::new(RwLock::new(WorkspaceRuntime::empty(turn_executor)));
         Self {
             sessions,
@@ -940,7 +941,7 @@ impl AppServer {
             .turn_executor
             .clone()
             .with_extensions(Arc::clone(&agent_extensions));
-        self.turn_backend.replace(Arc::new(executor.clone()));
+        self.turn_backend.install_executor(executor.clone());
         self.workspace_runtime_mut().turn_executor = executor;
         self.agent_extensions = agent_extensions;
         self = self
@@ -1037,42 +1038,27 @@ impl AppServer {
         self
     }
 
+    /// Installs a synthetic backend for App Server unit tests.
+    #[cfg(test)]
     pub(crate) fn with_turn_backend(self, backend: Arc<dyn TurnExecutionBackend>) -> Self {
-        self.turn_backend.replace(backend);
+        self.turn_backend.replace_for_test(backend);
         self
     }
 
-    pub(crate) fn with_codex_turn_backend(self, codex: Arc<dyn TurnExecutionBackend>) -> Self {
-        let router = turn_backend_router::TurnBackendRouter::new(
-            self.sessions.threads().clone(),
-            self.turn_executor_backend(),
-            codex,
-        );
-        self.with_turn_backend(Arc::new(router))
-    }
-
     pub(super) fn use_current_local_turn_backend(&self) {
-        self.turn_backend.replace(self.turn_executor_backend());
+        self.turn_backend
+            .install_current_workspace(&self.workspace_runtime);
     }
 
+    #[cfg(test)]
     pub(crate) fn turn_executor_backend(&self) -> Arc<dyn TurnExecutionBackend> {
-        Arc::new(turn_backend_router::CurrentLocalTurnBackend::new(
-            &self.workspace_runtime,
-        ))
-    }
-
-    pub(crate) fn thread_update_sink(&self) -> Arc<dyn ThreadUpdateSink> {
-        Arc::new(AppServerThreadUpdates {
-            updates: Arc::clone(&self.updates),
-        })
-    }
-
-    pub(crate) fn codex_workspace_source(
-        &self,
-    ) -> Arc<dyn zeta_codex_app_server::CodexTurnWorkspaceSource> {
-        Arc::new(turn_backend_router::CurrentCodexWorkspace::new(
-            &self.workspace_runtime,
-        ))
+        Arc::new(
+            self.workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .turn_executor
+                .clone(),
+        )
     }
 
     /// Enables workspace-scoped Git queries without exposing arbitrary host paths to clients.
@@ -1146,7 +1132,7 @@ impl AppServer {
             updates: self.updates.clone(),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
-        self.turn_backend.replace(Arc::new(executor.clone()));
+        self.turn_backend.install_executor(executor.clone());
         self.workspace_runtime_mut().turn_executor = executor;
         self
     }
@@ -1565,7 +1551,7 @@ impl AppServer {
             Some(ClientMethod::AccountRead) => self.account_read(),
             Some(ClientMethod::AccountLoginStart) => self.account_login_start(&request.params),
             Some(ClientMethod::AccountLoginCancel) => self.account_login_cancel(&request.params),
-            Some(ClientMethod::AccountLogout) => self.account_logout(),
+            Some(ClientMethod::AccountLogout) => self.account_logout(&request.params),
             Some(ClientMethod::ConnectorList) => self.connector_list(),
             Some(ClientMethod::ConnectorApiTokenConnect) => {
                 self.connector_api_token_connect(std::mem::take(&mut request.params))

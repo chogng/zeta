@@ -32,7 +32,7 @@ pub struct AccountDto {
 #[ts(rename_all = "camelCase")]
 pub struct AccountReadResult {
     pub revision: u64,
-    pub account: Option<AccountDto>,
+    pub accounts: Vec<AccountDto>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -41,6 +41,7 @@ pub struct AccountReadResult {
 pub enum AccountLoginMethodDto {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
+    KimiDeviceCode,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -129,6 +130,13 @@ pub struct AccountUpdated {
 pub enum AccountLogoutStatusDto {
     LoggedOut,
     AlreadyLoggedOut,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountLogoutParams {
+    pub provider: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

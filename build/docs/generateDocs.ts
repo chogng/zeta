@@ -119,7 +119,7 @@ const groups: DocGroupDefinition[] = [
       "zeta-api-interface-template",
       "zeta-app-server-api",
       "app-server-client",
-      "codex-app-server",
+      "chatgpt-subscription",
       "protocol",
       "zeta-client",
     ],

@@ -28,9 +28,7 @@ JSONL / in-process caller
    ├─ protocol method dispatch
    ├─ SessionCoordinator / ThreadController
    ├─ MultiAgentCoordinator → child Thread spawn/context seed + durable delivery/join/cancellation
-   ├─ TurnBackendHandle → exact Turn.model provider router
-   │                   ├─ TurnExecutor (direct provider)
-   │                   └─ CodexTurnExecutionBackend (`openai` model with subscription access)
+   ├─ TurnBackendHandle → local TurnExecutor (API-key and subscription model targets)
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
@@ -99,14 +97,13 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports；正常 local composition 另在 Turn 接受时冻结 `coding-v1` snapshot |
 | `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
-| `AppServer::with_codex_turn_backend` | 将静态目录中 `access = subscription` 的模型路由到 Codex complete-Turn backend；不读取登录状态做隐式切换 |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
 | `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalProfileRuntime` | 单进程、单 profile 的 Session/Thread projection、Config 与跨 Workspace Session notification authority |
-| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + Codex App Server options + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
+| `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
 | `LocalAppServerOptions::with_profile_runtime` | 在 profile daemon 内复用 durable authority，同时为连接组合独立 Workspace runtime |
 | `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
 | `LocalAppServerOptions::with_marketplace_registry` | 组合进程内 Zeta Manager 与 product-pinned HTTPS/TUF registry client |
@@ -441,25 +438,20 @@ identity 提交 `ThreadEvent::PlanUpdated`，相同内容幂等，Desktop 只从
 `session/request::CompactContext` 校验 Thread 归属和 active Session，读取当前所选模型，再创建独立的
 `ThreadCommand::CompactContext` Turn。可选 retention prompt 会 trim、限制为 8 KiB 并冻结在 command
 receipt；相同 command replay 返回原 Turn 且不再次启动 backend。Core 拒绝在 Thread 存在任何非终态
-Turn 时开始压缩。本地模型只压缩完整 terminal 前缀，通过 durable usage/checkpoint 后从新 snapshot
-继续分批；订阅模型的无提示压缩转发 upstream `thread/compact/start`，带提示因 upstream contract
-不支持而明确失败。Desktop 的 server `/compact` 直接走此 mutation，不发送普通聊天文本。
+Turn 时开始压缩。所有模型只压缩完整 terminal 前缀，通过 durable usage/checkpoint 后从新 snapshot 继续分批。Desktop 的 server `/compact` 直接走此 mutation，不发送普通聊天文本。
 
 `session/request::SteerTurn` 只接受当前 Running、WaitingForApproval 或 WaitingForUserInput Turn。
 Core 先把输入 Item、`TurnSteered` 与 exact command receipt 原子提交；App Server 随后调用当前
 `TurnExecutionBackend::steer`，成功后再写 `TurnSteerDelivered`。本地 executor 的 backend ack 不做
-第二份排队，因为下一模型安全点直接读取 canonical snapshot；subscription 模型由 router 转给
-Codex exact active remote Turn。相同 command replay 只有在 delivery fact 已存在时返回原成功结果；
-如果外部调用的结果未知，则 Turn 稳定失败且不会再次发送。Desktop 的运行中 Send 走这条 mutation，
-Stop 仍独立映射 `InterruptTurn`。
+第二份排队，因为下一模型安全点直接读取 canonical snapshot。相同 command replay 只有在 delivery fact 已存在时返回原成功结果；
+进程若在 receipt 与 delivery fact 之间退出，恢复路径根据 canonical Thread 状态重新唤醒本地 executor，而不重复提交 steer。Desktop 的运行中 Send 走这条 mutation，Stop 仍独立映射 `InterruptTurn`。
 
 `model/list` 由 `ModelCatalog` adapter 投影 shared `zeta-models-manager` 中从
-`zeta-model-provider-config::STATIC_MODEL_CATALOG` 派生的 provider seed；`CombinedModelCatalog` 从同一
-静态目录合并 Codex 条目。列表统一携带 identity、display name、access、context window、automatic
+`zeta-model-provider-config::STATIC_MODEL_CATALOG` 派生的 provider seed。列表统一携带 identity、display name、access、context window、automatic
 compaction threshold、capabilities、reasoning efforts 和默认 personality，不读取 provider 配置、
 ChatGPT 账户或 upstream model catalog 做健康检查。`session/request::SetModel` 只校验 exact identity 属于静态
 产品目录再提交 Session command；配置、认证、entitlement、rate limit 和调用错误由实际 Turn backend
-处理并持久化为 Turn failure。App Server 不维护 direct provider 或 Codex 的第二份模型清单。全局
+处理并持久化为 Turn failure。App Server 不维护第二份模型清单。全局
 `preferredModel` 只作为新 Session 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
 `session/request::ResolveInteraction` 使用 exact durable

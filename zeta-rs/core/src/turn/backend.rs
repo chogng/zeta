@@ -6,10 +6,10 @@ use zeta_protocol::UserInput;
 
 /// Executes an already-created durable Turn without owning Thread persistence.
 ///
-/// Implementations may run Zeta's provider-independent model/tool loop or delegate the complete
-/// agent loop to another runtime. In both cases Core remains the authority for Thread state,
-/// interactions, cancellation, and terminal outcomes. A backend must never reinterpret itself as
-/// a raw model provider when it owns tool execution or approval requests.
+/// [`crate::TurnExecutor`] owns the production model/tool loop. Product hosts may wrap it with a
+/// stable local handle while rebuilding workspace-scoped services, but model providers and OAuth
+/// drivers must not implement or replace this port. Core remains the authority for Thread state,
+/// interactions, cancellation, and terminal outcomes.
 pub trait TurnExecutionBackend: Send + Sync {
     /// Accepts a newly created running Turn for asynchronous execution.
     fn start(&self, thread_id: &ThreadId, turn_id: &TurnId) -> Result<(), CoreError>;
@@ -19,9 +19,8 @@ pub trait TurnExecutionBackend: Send + Sync {
 
     /// Delivers one already-durable steering command to the active execution runtime.
     ///
-    /// Local executors may treat this as a wake-free acknowledgement because every model safe
-    /// point reads the canonical Thread snapshot. Delegated runtimes must not return success until
-    /// the exact active remote Turn accepted the input.
+    /// The local executor may treat this as a wake-free acknowledgement because every model safe
+    /// point reads the canonical Thread snapshot.
     fn steer(
         &self,
         _: &ThreadId,

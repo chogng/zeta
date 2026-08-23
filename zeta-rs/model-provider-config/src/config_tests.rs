@@ -384,6 +384,15 @@ fn static_model_catalog_has_unique_valid_rows() {
         if let Some(default) = spec.default_reasoning_effort {
             assert!(spec.supported_reasoning_efforts.contains(&default));
         }
+        match spec.access {
+            zeta_protocol::ModelAccess::Subscription => {
+                assert_ne!(spec.runtime, StaticModelRuntime::ProviderApi);
+            }
+            zeta_protocol::ModelAccess::ApiKey => {
+                assert_eq!(spec.runtime, StaticModelRuntime::ProviderApi);
+            }
+            _ => {}
+        }
         if let (
             zeta_protocol::ContextWindow::Known(context_window),
             Some(auto_compact_token_limit),
@@ -401,10 +410,7 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
     for definition in registry.providers() {
         let specs = STATIC_MODEL_CATALOG
             .iter()
-            .filter(|spec| {
-                spec.provider_id == definition.id.as_str()
-                    && spec.access != zeta_protocol::ModelAccess::Subscription
-            })
+            .filter(|spec| spec.provider_id == definition.id.as_str())
             .collect::<Vec<_>>();
         assert_eq!(
             definition.models,
@@ -432,7 +438,7 @@ fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
 
     for spec in STATIC_MODEL_CATALOG {
         assert!(registry.get(&provider_id(spec.provider_id)).is_some());
-        if spec.access == zeta_protocol::ModelAccess::Subscription {
+        if spec.runtime == StaticModelRuntime::ChatGptSubscription {
             assert_eq!(spec.provider_id, "openai");
             assert!(!spec.is_approval_review_default);
             assert!(!spec.supports_input_token_count);

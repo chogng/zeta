@@ -59,7 +59,6 @@ use zeta_thread_store::validate_append_batch;
 mod agent;
 mod context;
 mod execution;
-mod execution_binding;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
@@ -67,7 +66,6 @@ mod steering;
 mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
-pub use execution_binding::BoundTurnExecution;
 pub use mailbox::ThreadExecutionContext;
 
 pub struct StartTurnRequest {

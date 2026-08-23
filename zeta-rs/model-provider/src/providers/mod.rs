@@ -9,6 +9,7 @@ use zeta_api::ModelResponse;
 use zeta_api::ModelStreamEvent;
 use zeta_async_utils::CancellationToken;
 use zeta_client::OperationClient;
+use zeta_client::ResolvedApiTarget;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_model_provider_config::{
@@ -142,9 +143,13 @@ fn emit_final_response(
 pub(crate) fn instantiate(
     adapter: ProviderAdapterKind,
     config: &NormalizedModelProviderConfig,
+    target_override: Option<ResolvedApiTarget>,
 ) -> Arc<dyn ProviderAdapter> {
     match adapter {
-        ProviderAdapterKind::OpenAi => runtime_adapter(openai::OpenAiAdapter::new(config)),
+        ProviderAdapterKind::OpenAi => runtime_adapter(match target_override {
+            Some(target) => openai::OpenAiAdapter::with_target(config, target),
+            None => openai::OpenAiAdapter::new(config),
+        }),
         ProviderAdapterKind::OpenAiCompatible => {
             runtime_adapter(openai_compatible::OpenAiCompatibleAdapter::new(config))
         }
@@ -152,7 +157,10 @@ pub(crate) fn instantiate(
         ProviderAdapterKind::Google => runtime_adapter(google::GoogleAdapter::new(config)),
         ProviderAdapterKind::Xai => runtime_adapter(xai::XaiAdapter::new(config)),
         ProviderAdapterKind::Qwen => runtime_adapter(qwen::QwenAdapter::new(config)),
-        ProviderAdapterKind::Kimi => runtime_adapter(kimi::KimiAdapter::new(config)),
+        ProviderAdapterKind::Kimi => runtime_adapter(match target_override {
+            Some(target) => kimi::KimiAdapter::with_target(config, target),
+            None => kimi::KimiAdapter::new(config),
+        }),
         ProviderAdapterKind::DeepSeek => runtime_adapter(deepseek::DeepSeekAdapter::new(config)),
         ProviderAdapterKind::Ollama => runtime_adapter(ollama::OllamaAdapter::new(config)),
         ProviderAdapterKind::HuggingFace => {

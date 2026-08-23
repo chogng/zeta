@@ -612,17 +612,10 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 `ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
 当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
 
-`model/list` 的 direct provider seed 和 Codex 条目都派生自
-`zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display
-name、`access`、context window、automatic compaction threshold、capabilities、reasoning efforts 和默认
-personality；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
+`model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目都派生自 `zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display name、`access`、context window、automatic compaction threshold、capabilities、reasoning efforts 和默认 personality；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
 `session/request::SetModel` 只校验精确 identity 属于产品目录，然后把选择持久化到 Session。Provider
-配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由真正执行该模型的 Turn backend
-验证，并以该 Turn 的稳定错误出现在对话中；它们不回写模型列表，也不阻止用户预先选择。Codex 使用
-模型厂商 identity 始终是 `openai`；`access = subscription` 同时标明接入方式，并让产品组合选择 Codex
-complete-Turn backend。登录账户适配器内部仍使用独立的 `openai-chatgpt` account identity，但它不进入
-ModelRef。登录状态不会隐式改变 Session model。所有客户端读取同一个后端目录，并自行决定如何展示
-subscription metadata。
+配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由本地 `TurnExecutor` 调用的模型服务
+验证，并以该 Turn 的稳定错误出现在对话中；它们不回写模型列表，也不阻止用户预先选择。`access = subscription` 只表示接入方式；静态 row 的 `runtime` 选择 provider-specific authenticated target。OpenAI 与 Kimi subscription rows 都使用本地 `TurnExecutor`。登录账户适配器内部的 `openai-chatgpt` identity 不进入 ModelRef，Kimi account/model provider identity 都是 `kimi`。登录状态不会隐式改变 Session model。
 
 ## 7. Thread 与 Turn
 
@@ -883,19 +876,15 @@ account/updated
 pub enum AccountLoginMethod {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
+    KimiDeviceCode,
 }
 ```
 
-上述 RPC、revisioned account projection 和 `account/login/completed` / `account/updated` 主动通知已
-实现，并通过注入的 `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。本地默认组合
-安装 deferred `zeta-codex-app-server` driver，第一次 `account/read` 或 login command 才启动上游
-`codex app-server`；二进制缺失、握手失败或 account method 不兼容时返回稳定账户错误。API key 继续
-属于对应模型凭据领域，不进入 account/login payload。
+上述 RPC、revisioned `accounts[]` projection 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录 ChatGPT 与 Kimi 时误删另一账户。
 
-Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由
-[`zeta-login`](login.md) 的 exact driver 决定。对 ChatGPT/Codex subscription，该 driver 是
-[`zeta-codex-app-server`](codex-app-server.md)：它委托上游 Codex App Server 完成浏览器/设备码
-登录及 refresh。Zeta App Server 只编排和映射 redacted control plane：
+本地默认组合安装 native `zeta-chatgpt` 与 `zeta-kimi` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
+
+Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`zeta-login`](login.md) 的 exact driver 决定。ChatGPT 的 `zeta-chatgpt` 与 Kimi 的 `zeta-kimi` 都执行本地 device OAuth、SecretStore persistence 与 refresh。Zeta App Server 只编排和映射 redacted control plane：
 
 ```text
 app-server-protocol/src/protocol/account.rs
@@ -909,15 +898,17 @@ app-server/src/server/account/
 login/
   └─ user-visible login lifecycle 与 redacted account projection
 
-codex-app-server/
-  └─ upstream process、JSON-RPC、managed login 与 subscription runtime adapter
+chatgpt/
+  └─ native device OAuth、token refresh、SecretStore owner 与 authenticated Responses target
+
+kimi/
+  └─ native device OAuth、token refresh、SecretStore owner 与 authenticated API target
 
 zeta-secrets
   └─ direct-provider/API-key 或 exact OAuth-owner 的 opaque secret bytes
 ```
 
-Browser 打开、URL 展示和 device code UI 属于 Desktop/CLI/TUI。Renderer 可以接收 `loginId`、
-authorization URL、一次性 user code 和以下 redacted metadata：
+Browser 打开、URL 展示和 device code UI 属于 Desktop/CLI/TUI。Desktop 已提供 account IPC adapter 与 Models 设置页入口：Electron main 使用系统浏览器打开 Kimi 验证页并复制一次性 user code，Renderer 只接收 `loginId`、authorization URL、一次性 user code 和以下 redacted metadata：
 
 - opaque account ID；
 - email/display name（Provider 返回且 UI 需要时）；
@@ -932,20 +923,20 @@ authorization URL、一次性 user code 和以下 redacted metadata：
 - authorization/cookie header map；
 - PKCE verifier、authorization code；
 - secret-store key 的内部 namespace；
-- Codex internal/unstable `chatgptAuthTokens` login variant。
+- raw token、cookie 或其他绕过 provider-owned OAuth lifecycle 的 login variant。
 
-ChatGPT/Codex login 的顺序固定为：
+ChatGPT 订阅登录的顺序固定为：
 
 1. App Server 调用 `LoginService::begin`；
-2. Codex adapter 向上游发出 `account/login/start`，返回 authorization URL 或 device-code UI 指令；
-3. client 打开 URL 或展示 code；
-4. 上游 Codex 绑定 callback listener、验证 callback、持久化并刷新 credential；
-5. Codex adapter 转发 redacted completed/account-updated event；
+2. `zeta-chatgpt` 向 OpenAI authorization server 请求 device code，返回 authorization URL 与一次性 user code；
+3. client 打开 URL、展示并复制 code；
+4. `zeta-chatgpt` 在可取消窗口内轮询 token endpoint，成功后把 opaque credential envelope 写入本机 `SecretStore`；
+5. driver 向 `zeta-login` 提交 redacted completed/account-updated result；
 6. `zeta-login` 发布 account revision，Zeta App Server 返回 completed 并通知客户端。
 
-Zeta App Server 绝不接触 callback code、OAuth state、PKCE verifier、access/refresh token、
-`~/.codex/auth.json` 或上游 keychain entry。`account/login/cancel` 必须取消 exact upstream login；
-logout 转发 upstream logout，并将失败映射为稳定的 redacted diagnostic。
+Zeta App Server 绝不接触 OAuth access/refresh token、authorization header 或 provider secret-store envelope。`account/login/cancel` 必须取消 exact provider login；logout 只删除 exact provider credential，并将失败映射为稳定的 redacted diagnostic。
+
+Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App Server 返回 verification URL 与 user code，`zeta-kimi` 按 server interval 轮询 token endpoint，成功后先将 envelope 写入本机 SecretStore，再发布 completed/account-updated。模型调用前若 token 接近过期，`zeta-kimi` 在同一 refresh lock 下轮换 envelope，再构造只存活于该调用 runtime 的 bearer headers。
 
 ## 12. 权威来源
 

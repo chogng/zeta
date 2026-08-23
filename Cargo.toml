@@ -14,7 +14,7 @@ members = [
     "zeta-rs/code-index-cloud",
     "zeta-rs/code-index-semantic",
     "zeta-rs/code-retrieval",
-    "zeta-rs/codex-app-server",
+    "zeta-rs/chatgpt",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
     "zeta-rs/auto-review",
@@ -54,6 +54,7 @@ members = [
     "zeta-rs/instructions",
     "zeta-rs/keybinding",
     "zeta-rs/keyring-store",
+    "zeta-rs/kimi",
     "zeta-rs/language-server-catalog",
     "zeta-rs/language-service",
     "zeta-rs/login",
@@ -243,7 +244,7 @@ zeta-code-index = { path = "zeta-rs/code-index" }
 zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
 zeta-code-index-semantic = { path = "zeta-rs/code-index-semantic" }
 zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
-zeta-codex-app-server = { path = "zeta-rs/codex-app-server" }
+zeta-chatgpt = { path = "zeta-rs/chatgpt" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
 zeta-auto-review = { path = "zeta-rs/auto-review" }
@@ -284,6 +285,7 @@ zeta-install-context = { path = "zeta-rs/install-context" }
 zeta-input-classifier = { path = "zeta-rs/input-classifier" }
 zeta-instructions = { path = "zeta-rs/instructions" }
 zeta-keyring-store = { path = "zeta-rs/keyring-store" }
+zeta-kimi = { path = "zeta-rs/kimi" }
 zeta-keybinding = { path = "zeta-rs/keybinding" }
 zeta-composer = { path = "zeterm/composer" }
 zeta-layout = { path = "zeterm/layout" }

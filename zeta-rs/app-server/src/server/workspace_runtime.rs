@@ -1012,7 +1012,7 @@ impl AppServer {
             updates: Arc::clone(&self.updates),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
-        self.turn_backend.replace(Arc::new(executor.clone()));
+        self.turn_backend.install_executor(executor.clone());
         self.workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())

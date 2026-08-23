@@ -89,7 +89,6 @@ pub use session_reducer::{
 };
 pub use state::ItemStatus;
 pub use state::ToolCallStatus;
-pub use thread_controller::BoundTurnExecution;
 pub use thread_controller::CancelTurnInteractionRequest;
 pub use thread_controller::CancelledTurnInteraction;
 pub use thread_controller::CompletedTurn;

@@ -18,6 +18,9 @@ export type SemanticCodeIndexSelection =
 
 export type SemanticCodeIndexAutomaticContext = "off" | "firstInvocation";
 
+/** Stable Settings identity for the aggregate semantic-code-search policy. */
+export const SemanticCodeIndexSettingId = "codeIndex.semanticCodeIndex";
+
 export interface CodeIndexConfigurationSnapshot {
 	readonly revision: number;
 	readonly generation: number;

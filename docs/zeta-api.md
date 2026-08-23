@@ -10,10 +10,10 @@
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - Operation client：[`zeta-client.md`](zeta-client.md)
 > - 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
-> - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
+> - Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
-> - Subscription runtime adapter：[`codex-app-server.md`](codex-app-server.md)
+> - Subscription runtime adapter：[`chatgpt-subscription.md`](chatgpt-subscription.md)
 
 > Provider 官方资料核对日期：2026-07-26。请求字段、事件类型、缓存语义和错误结构会持续变化；
 > 实现必须以官方文档和脱敏 contract fixture 为准，不能仅凭 OpenAI-compatible 标签推断。
@@ -247,50 +247,11 @@ endpoint/    requests/    sse/    websocket/    ndjson/
 `ndjson/` 只解释由 `zeta-client::NdjsonRecord` 完成 framing 的 API object。未来若接入 WebSocket
 或 gRPC，也按真实协议增加同级 codec，不能伪装成 SSE。
 
-### 4.5 OpenAI Platform 与 ChatGPT/Codex 端点清单
+### 4.5 OpenAI Platform 与 ChatGPT 订阅服务端点清单
 
-此前把候选名仅与公开 OpenAI Platform `/v1` OpenAPI 比对，遗漏了 ChatGPT/Codex service
-surface。这是错误的。`../codex/codex-rs/codex-api/src/endpoint/mod.rs` 的 endpoint 集合明确包含
-`compact`、`images`、`memories`、`models`、`realtime_call`、`realtime_websocket`、`responses`、
-`responses_websocket` 与 `search`。
+OpenAI Platform 与 ChatGPT subscription 使用不同 base URL、credential、entitlement 和 operation allow-list，但当前模型调用共享 Responses request/SSE codec。`zeta-api` 只编解码 typed Responses contract；`zeta-model-provider` 选择 service target，`zeta-chatgpt` 持有 subscription OAuth 与 account routing headers。
 
-它们不能视为同一条 API：公开 Platform API 通常以 `https://api.openai.com/v1` 为 base，而 Codex
-service 使用 ChatGPT 登录态和独立的 Codex base。Zeta 不把后者变成一个 `zeta-api` API surface：
-`zeta-api` 的 OpenAI endpoint binding 只描述公开 Platform API，Codex subscription 交给其独立
-runtime adapter。
-
-```rust
-/// Selects a public OpenAI API surface with its own base URL,
-/// credential kind, headers, and supported endpoint set.
-pub enum OpenAiServiceSurface {
-    PlatformApi,
-}
-```
-
-`zeta-model-provider` 解析 `OpenAiServiceSurface` 和 direct-provider credential；Codex subscription
-则由 [`zeta-codex-app-server`](codex-app-server.md) 持有其独立 target/auth/runtime。`zeta-api` 仅根据
-已选 direct API surface 编解码对应 contract。绝不能用 Platform API key 访问 Codex profile，也不能让
-任意 custom OpenAI-compatible URL 冒充 ChatGPT/Codex service。Codex 官方的
-[Memories 文档](https://developers.openai.com/codex/memories)也确认：本地 Codex memory store 是
-独立能力；远端 summarization operation 只是其生成路径的一部分，不是 memory 的权威存储。
-
-ChatGPT subscription 登录与其 backend contract 不进入本 crate：`zeta-codex-app-server` 通过
-上游 Codex App Server 执行。特别禁止复制 `codex-api/src/endpoint/session.rs`，也禁止让
-`zeta-api` 接收 Codex token、ChatGPT account routing header 或私有 backend URL。
-
-上游模块是能力清单，不是 Zeta 要直接复刻的 HTTP endpoint 清单：
-
-| 上游 capability | Zeta 长期接入点 |
-| --- | --- |
-| ChatGPT login、token refresh、account/rate-limit、Codex thread/turn | `zeta-codex-app-server`，通过上游 JSON-RPC |
-| Codex thread/turn stream 与 approvals | Core `TurnExecutionBackend` 的 Codex adapter；不引入 ChatGPT backend URL 或 header |
-| Codex compact | 有明确产品语义和公开 App Server contract 后再增加单独 vertical slice |
-| memories、search、images、realtime | 只有 Zeta 的产品需求和上游公开 App Server contract 同时满足时，才在 Codex adapter 增加单独 vertical slice |
-| OpenAI Platform Responses/Chat/Images/Realtime | 继续按公开 Platform API 在 `zeta-api` 编解码 |
-
-上游 `responses_websocket`、`realtime_websocket` 的存在不等于 Zeta 应直连其 socket。对 subscription
-路径，连接与 protocol 由 upstream Codex 承担；对公开 Platform API，才按真实协议在
-`zeta-api::websocket`、`zeta-client` 和 `zeta-http-client` 分层实现。
+Platform API key 不能访问 subscription target，ChatGPT OAuth token 也不能用于 Platform target。任意 custom OpenAI-compatible URL 不得冒充 subscription service。新增 compact、images、memories、search 或 realtime 能力时，仍需独立验证其公开 contract；Responses codec 的复用不能推导其他 endpoint 兼容。
 
 ## 5. 供应商运行时联动
 
@@ -689,7 +650,7 @@ fixture 把三者重新绑定。目录不是创建空文件的要求；只有实
 | Provider runtime | API profile | Streaming | 已确认的协议差异 |
 | --- | --- | --- | --- |
 | OpenAI | Responses | typed Responses SSE | terminal event、prompt cache usage |
-| ChatGPT/Codex subscription | upstream Codex App Server semantic runtime | upstream event mapping | 不在 `zeta-api` 直连或编解码；由 `zeta-codex-app-server` adapter 验证 |
+| ChatGPT 订阅 | Responses + native OAuth target | typed Responses SSE | codec 与 Platform 共用；target、credential 和 entitlement 独立 |
 | Anthropic | Messages | named Messages SSE | `ping`、content-block lifecycle、cache creation/read |
 | OpenAI-compatible | Chat Completions | data SSE + `[DONE]` baseline | 只保证最小 configured contract |
 | Google | Interactions / GenerateContent / compatible Chat | typed SSE / GenerateContent SSE | profile 不得静默互换 |
@@ -759,7 +720,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - 已把现有 JSON conversion 物理移入 `requests/`；
 - 已删除 Provider 级空 facade。
 
-### 阶段 3：SSE 纵向切片（已完成首批 endpoint）
+### 阶段 3：SSE 纵向切片（已完成首批端点）
 
 - 在 client 实现 SSE framing；
 - 已在 API 实现 OpenAI Responses `sse/` decoder；
@@ -774,14 +735,12 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - Google native profiles；
 - 逐家补 error/cache/stream fixtures。
 
-### 阶段 4.5：ChatGPT/Codex 服务接口面
+### 阶段 4.5：ChatGPT 订阅服务接口面
 
-- 建立 [`zeta-codex-app-server`](codex-app-server.md)，由 upstream Codex managed login 提供
-  ChatGPT/Codex subscription runtime；
-- 将 Platform API key、Codex subscription runtime 和 custom-compatible target 设为互斥 binding；
-- 仅在 upstream App Server 的公开 JSON-RPC 支持范围内接入 models、thread/turn 和 stream；
-- 为 realtime call / WebSocket 三套 wire adapter 建立脱敏 contract fixture；
-- 不复制 Codex `EndpointSession` 的 transport/retry/telemetry 所有权。
+- 建立 [`zeta-chatgpt`](chatgpt-subscription.md)，提供 native OAuth、SecretStore lifecycle 与 fresh target；
+- 将 Platform API key、ChatGPT subscription OAuth 和 custom-compatible target 设为互斥 binding；
+- 复用已验证的 Responses codec，并为 subscription target、headers、refresh 和 streaming 建立脱敏 contract fixture；
+- 其他 endpoint 必须逐项验证，不能从 Responses 兼容性推断。
 
 ### 阶段 5：目录协议格式
 
@@ -805,10 +764,8 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 11. Provider error 不以 raw JSON/String 穿透产品 API。
 12. OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已接通 live HTTP/SSE
     execution；NDJSON、WebSocket 和未验证 provider profile 仍须按真实协议另行实现。
-13. `OpenAiServiceSurface` 只用于公开 Platform API endpoint binding；ChatGPT/Codex subscription
-    不共享 base URL、credential 或 custom endpoint override，而是独立 runtime。
-14. ChatGPT/Codex subscription auth 与 backend protocol 属于 upstream Codex App Server；本 crate
-    不定义其 OAuth wire codec、token/header value 或私有 backend target。
+13. ChatGPT subscription 不共享 Platform base URL、credential 或 custom endpoint override；只复用经过验证的 Responses codec。
+14. ChatGPT subscription OAuth wire、token/header value 与固定 backend target 属于 `zeta-chatgpt`，不进入本 crate 的公共 value。
 
 ## 18. 官方资料索引
 

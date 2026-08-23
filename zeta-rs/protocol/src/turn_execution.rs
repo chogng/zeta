@@ -3,11 +3,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
 
-/// Durable binding from a local Thread to an external full-Turn execution runtime.
+/// Legacy durable binding from a local Thread to an external full-Turn execution runtime.
 ///
-/// The remote identity is opaque to Core. Adapters may use it only to resume a completed
-/// conversation; an in-flight Turn still has unknown outcome after process loss and is never
-/// replayed from this binding.
+/// Zeta no longer creates these bindings. The type remains serializable so existing Thread history
+/// can still be read without discarding its original recovery facts.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnExecutionBinding {

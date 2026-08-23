@@ -1,3 +1,4 @@
+use crate::AccountSnapshot;
 use crate::AccountState;
 use crate::BeginLogin;
 use crate::BeginLoginRequest;
@@ -12,15 +13,16 @@ use crate::LoginEvents;
 use crate::LoginId;
 use crate::LoginMethod;
 use crate::LogoutOutcome;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-/// Coordinates stable login identities and revisioned redacted account state.
+/// Coordinates provider-scoped drivers, stable login identities, and revisioned redacted state.
 pub struct LoginService {
-    driver: Arc<dyn InteractiveLoginDriver>,
+    drivers: BTreeMap<String, Arc<dyn InteractiveLoginDriver>>,
     next_login_id: AtomicU64,
     state: Mutex<LoginServiceState>,
     events: Mutex<Option<Arc<dyn LoginEvents>>>,
@@ -28,42 +30,79 @@ pub struct LoginService {
 
 struct LoginServiceState {
     account: AccountState,
-    active_logins: BTreeSet<LoginId>,
-    initialized: bool,
+    active_logins: BTreeMap<LoginId, String>,
+    initialized_providers: BTreeSet<String>,
 }
 
 impl LoginService {
     pub fn new(driver: Arc<dyn InteractiveLoginDriver>) -> Result<Self, LoginError> {
-        let account = driver.read_account()?;
-        Ok(Self::from_account(driver, account, true))
+        Self::new_with_drivers([driver])
+    }
+
+    pub fn new_with_drivers(
+        drivers: impl IntoIterator<Item = Arc<dyn InteractiveLoginDriver>>,
+    ) -> Result<Self, LoginError> {
+        Self::from_drivers(drivers, true)
     }
 
     /// Creates a control plane without performing provider I/O during composition.
     ///
     /// Product hosts should use this for lazy process-backed drivers and call
-    /// [`Self::refresh`] when the first account projection is requested.
+    /// [`Self::read_or_refresh`] when the first account projection is requested.
     pub fn deferred(driver: Arc<dyn InteractiveLoginDriver>) -> Self {
-        Self::from_account(driver, None, false)
+        Self::deferred_with_drivers([driver]).expect("one driver cannot have a duplicate provider")
     }
 
-    fn from_account(
-        driver: Arc<dyn InteractiveLoginDriver>,
-        account: Option<crate::AccountSnapshot>,
-        initialized: bool,
-    ) -> Self {
-        Self {
-            driver,
+    pub fn deferred_with_drivers(
+        drivers: impl IntoIterator<Item = Arc<dyn InteractiveLoginDriver>>,
+    ) -> Result<Self, LoginError> {
+        Self::from_drivers(drivers, false)
+    }
+
+    fn from_drivers(
+        drivers: impl IntoIterator<Item = Arc<dyn InteractiveLoginDriver>>,
+        initialize: bool,
+    ) -> Result<Self, LoginError> {
+        let mut registered = BTreeMap::new();
+        let mut accounts = Vec::new();
+        let mut initialized_providers = BTreeSet::new();
+        for driver in drivers {
+            let provider = driver.provider_id();
+            if provider.trim().is_empty() || provider.chars().any(char::is_whitespace) {
+                return Err(LoginError::new(
+                    LoginErrorKind::InvalidInput,
+                    "login driver provider ID is invalid",
+                ));
+            }
+            if registered.contains_key(provider) {
+                return Err(LoginError::new(
+                    LoginErrorKind::Conflict,
+                    format!("multiple login drivers own provider '{provider}'"),
+                ));
+            }
+            if initialize {
+                if let Some(account) = driver.read_account()? {
+                    validate_account_provider(provider, &account)?;
+                    accounts.push(account);
+                }
+                initialized_providers.insert(provider.to_owned());
+            }
+            registered.insert(provider.to_owned(), driver);
+        }
+        accounts.sort_by(|left, right| left.account.provider.cmp(&right.account.provider));
+        Ok(Self {
+            drivers: registered,
             next_login_id: AtomicU64::new(1),
             state: Mutex::new(LoginServiceState {
                 account: AccountState {
-                    revision: u64::from(account.is_some()),
-                    account,
+                    revision: u64::from(!accounts.is_empty()),
+                    accounts,
                 },
-                active_logins: BTreeSet::new(),
-                initialized,
+                active_logins: BTreeMap::new(),
+                initialized_providers,
             }),
             events: Mutex::new(None),
-        }
+        })
     }
 
     pub fn install_events(&self, events: Arc<dyn LoginEvents>) -> Result<(), LoginError> {
@@ -77,7 +116,14 @@ impl LoginService {
 
     /// Reads the canonical projection, performing deferred provider I/O once.
     pub fn read_or_refresh(&self) -> Result<AccountState, LoginError> {
-        if self.state.lock().map_err(lock_error)?.initialized {
+        if self
+            .state
+            .lock()
+            .map_err(lock_error)?
+            .initialized_providers
+            .len()
+            == self.drivers.len()
+        {
             self.read()
         } else {
             self.refresh()
@@ -85,14 +131,21 @@ impl LoginService {
     }
 
     pub fn begin(&self, method: LoginMethod) -> Result<BeginLogin, LoginError> {
+        let provider = method.provider_id();
+        let driver = self.drivers.get(provider).ok_or_else(|| {
+            LoginError::new(
+                LoginErrorKind::Unavailable,
+                format!("login provider '{provider}' is unavailable"),
+            )
+        })?;
         let sequence = self.next_login_id.fetch_add(1, Ordering::Relaxed);
         let login_id = LoginId::new(format!("login-{sequence:016x}"))?;
         self.state
             .lock()
             .map_err(lock_error)?
             .active_logins
-            .insert(login_id.clone());
-        let started = match self.driver.begin(BeginLoginRequest {
+            .insert(login_id.clone(), provider.to_owned());
+        let started = match driver.begin(BeginLoginRequest {
             login_id: login_id.clone(),
             method,
         }) {
@@ -107,7 +160,7 @@ impl LoginService {
             }
         };
         if started.login_id() != &login_id {
-            let _ = self.driver.cancel(&login_id);
+            let _ = driver.cancel(&login_id);
             self.state
                 .lock()
                 .map_err(lock_error)?
@@ -122,16 +175,21 @@ impl LoginService {
     }
 
     pub fn cancel(&self, login_id: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
-        let active = self
+        let provider = self
             .state
             .lock()
             .map_err(lock_error)?
             .active_logins
-            .contains(login_id);
-        if !active {
+            .get(login_id)
+            .cloned();
+        let Some(provider) = provider else {
             return Ok(CancelLoginOutcome::NotFound);
-        }
-        let outcome = self.driver.cancel(login_id)?;
+        };
+        let driver = self
+            .drivers
+            .get(&provider)
+            .expect("active login provider was registered");
+        let outcome = driver.cancel(login_id)?;
         if matches!(
             outcome,
             CancelLoginOutcome::Cancelled | CancelLoginOutcome::NotFound
@@ -148,17 +206,22 @@ impl LoginService {
     pub fn complete(&self, completion: CompleteLogin) -> Result<(), LoginError> {
         let event = {
             let mut state = self.state.lock().map_err(lock_error)?;
-            if !state.active_logins.remove(&completion.login_id) {
+            let Some(provider) = state.active_logins.remove(&completion.login_id) else {
                 return Err(LoginError::new(
                     LoginErrorKind::NotFound,
                     "login attempt is not active",
                 ));
-            }
+            };
             if let LoginCompletionOutcome::Succeeded { account } = &completion.outcome {
+                validate_account_provider(&provider, account)?;
+                replace_provider_account(
+                    &mut state.account.accounts,
+                    &provider,
+                    Some(account.clone()),
+                );
                 state.account.revision = state.account.revision.saturating_add(1);
-                state.account.account = Some(account.clone());
             }
-            state.initialized = true;
+            state.initialized_providers.insert(provider);
             LoginCompletion {
                 login_id: completion.login_id,
                 outcome: completion.outcome,
@@ -175,15 +238,52 @@ impl LoginService {
     }
 
     pub fn refresh(&self) -> Result<AccountState, LoginError> {
-        let account = self.driver.read_account()?;
+        let mut observed = Vec::with_capacity(self.drivers.len());
+        let mut failed_providers = Vec::new();
+        let mut first_error = None;
+        for (provider, driver) in &self.drivers {
+            match driver.read_account().and_then(|account| {
+                if let Some(account) = &account {
+                    validate_account_provider(provider, account)?;
+                }
+                Ok(account)
+            }) {
+                Ok(account) => observed.push((provider.clone(), account)),
+                Err(error) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                    failed_providers.push(provider.clone());
+                }
+            }
+        }
+        if observed.is_empty()
+            && let Some(error) = first_error
+        {
+            return Err(error);
+        }
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
-            state.initialized = true;
-            if state.account.account == account {
+            let before = state.account.accounts.clone();
+            for (provider, account) in observed {
+                replace_provider_account(&mut state.account.accounts, &provider, account);
+                state.initialized_providers.insert(provider);
+            }
+            for provider in failed_providers {
+                state.initialized_providers.remove(&provider);
+                if let Some(account) = state
+                    .account
+                    .accounts
+                    .iter_mut()
+                    .find(|account| account.account.provider == provider)
+                {
+                    account.status = crate::AccountStatus::Unavailable;
+                }
+            }
+            if state.account.accounts == before {
                 None
             } else {
                 state.account.revision = state.account.revision.saturating_add(1);
-                state.account.account = account;
                 Some(state.account.clone())
             }
         };
@@ -197,19 +297,57 @@ impl LoginService {
         }
     }
 
-    pub fn logout(&self) -> Result<LogoutOutcome, LoginError> {
-        let account = self.read_or_refresh()?.account;
+    /// Accepts a provider-owned account projection after an internal credential rotation.
+    pub fn update_account(&self, account: AccountSnapshot) -> Result<AccountState, LoginError> {
+        let provider = account.account.provider.clone();
+        if !self.drivers.contains_key(&provider) {
+            return Err(LoginError::new(
+                LoginErrorKind::Unavailable,
+                format!("login provider '{provider}' is unavailable"),
+            ));
+        }
+        validate_account_provider(&provider, &account)?;
+        let updated = {
+            let mut state = self.state.lock().map_err(lock_error)?;
+            let before = state.account.accounts.clone();
+            replace_provider_account(&mut state.account.accounts, &provider, Some(account));
+            state.initialized_providers.insert(provider);
+            if state.account.accounts == before {
+                return Ok(state.account.clone());
+            }
+            state.account.revision = state.account.revision.saturating_add(1);
+            state.account.clone()
+        };
+        if let Some(events) = self.events()? {
+            events.account_updated(updated.clone());
+        }
+        Ok(updated)
+    }
+
+    pub fn logout_provider(&self, provider: &str) -> Result<LogoutOutcome, LoginError> {
+        let driver = self.drivers.get(provider).ok_or_else(|| {
+            LoginError::new(
+                LoginErrorKind::Unavailable,
+                format!("login provider '{provider}' is unavailable"),
+            )
+        })?;
+        let account = self
+            .read_or_refresh()?
+            .accounts
+            .into_iter()
+            .find(|account| account.account.provider == provider);
         let Some(account) = account else {
             return Ok(LogoutOutcome::AlreadyLoggedOut);
         };
-        self.driver.logout(&account.account)?;
+        driver.logout(&account.account)?;
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
-            if state.account.account.is_none() {
+            let before = state.account.accounts.len();
+            replace_provider_account(&mut state.account.accounts, provider, None);
+            if state.account.accounts.len() == before {
                 return Ok(LogoutOutcome::LoggedOut);
             }
             state.account.revision = state.account.revision.saturating_add(1);
-            state.account.account = None;
             state.account.clone()
         };
         if let Some(events) = self.events()? {
@@ -218,8 +356,47 @@ impl LoginService {
         Ok(LogoutOutcome::LoggedOut)
     }
 
+    /// Logs out the only registered provider for compatibility with single-driver hosts.
+    pub fn logout(&self) -> Result<LogoutOutcome, LoginError> {
+        if self.drivers.len() != 1 {
+            return Err(LoginError::new(
+                LoginErrorKind::InvalidInput,
+                "provider is required when multiple login drivers are registered",
+            ));
+        }
+        self.logout_provider(
+            self.drivers
+                .keys()
+                .next()
+                .expect("single driver has a provider"),
+        )
+    }
+
     fn events(&self) -> Result<Option<Arc<dyn LoginEvents>>, LoginError> {
         Ok(self.events.lock().map_err(lock_error)?.clone())
+    }
+}
+
+fn replace_provider_account(
+    accounts: &mut Vec<AccountSnapshot>,
+    provider: &str,
+    account: Option<AccountSnapshot>,
+) {
+    accounts.retain(|candidate| candidate.account.provider != provider);
+    if let Some(account) = account {
+        accounts.push(account);
+        accounts.sort_by(|left, right| left.account.provider.cmp(&right.account.provider));
+    }
+}
+
+fn validate_account_provider(provider: &str, account: &AccountSnapshot) -> Result<(), LoginError> {
+    if account.account.provider == provider {
+        Ok(())
+    } else {
+        Err(LoginError::new(
+            LoginErrorKind::Driver,
+            "login driver returned an account for a different provider",
+        ))
     }
 }
 

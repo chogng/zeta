@@ -3,7 +3,6 @@ use crate::InputTokenCountModelPolicy;
 use crate::ProviderDefinition;
 use crate::StaticModelSpec;
 use crate::static_model_spec::static_model;
-use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelId;
 use zeta_protocol::ModelRef;
 
@@ -21,30 +20,35 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         id: "gpt-5.6-sol",
         name: "GPT-5.6 Sol",
         access: subscription,
+        runtime: chatgpt_subscription,
     },
     static_model! {
         provider: "openai",
         id: "gpt-5.6-terra",
         name: "GPT-5.6 Terra",
         access: subscription,
+        runtime: chatgpt_subscription,
     },
     static_model! {
         provider: "openai",
         id: "gpt-5.6-luna",
         name: "GPT-5.6 Luna",
         access: subscription,
+        runtime: chatgpt_subscription,
     },
     static_model! {
         provider: "openai",
         id: "gpt-5.5",
         name: "GPT-5.5",
         access: subscription,
+        runtime: chatgpt_subscription,
     },
     static_model! {
         provider: "openai",
         id: "gpt-5.4",
         name: "GPT-5.4",
         access: subscription,
+        runtime: chatgpt_subscription,
     },
     // Direct API-key models.
     static_model! {
@@ -97,6 +101,13 @@ pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[
         approval_review_default: true,
     },
     static_model! {
+        provider: "kimi",
+        id: "kimi-k2.7-code",
+        name: "Kimi K2.7 Code",
+        access: subscription,
+        runtime: kimi_code,
+    },
+    static_model! {
         provider: "deepseek",
         id: "deepseek-v4-pro",
         name: "DeepSeek V4 Pro",
@@ -137,9 +148,6 @@ pub fn find_static_model(model: &ModelRef) -> Option<&'static StaticModelSpec> {
 
 pub(crate) fn attach_static_models(definitions: &mut [ProviderDefinition]) {
     for spec in STATIC_MODEL_CATALOG {
-        if spec.access == ModelAccess::Subscription {
-            continue;
-        }
         let definition = definitions
             .iter_mut()
             .find(|definition| definition.id.as_str() == spec.provider_id)

@@ -16,7 +16,7 @@
 > MCP runtime：[`mcp.md`](mcp.md)  
 > Skill runtime：[`skills.md`](skills.md)  
 > Agent 自定义对象与外部导入边界：[`agent-customizations.md`](agent-customizations.md)
-> Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
+> Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > Interactive login：[`login.md`](login.md)
 > Secret persistence：[`secrets.md`](secrets.md)
 > Hook runtime 实现：[`zeta-hooks`](../zeta-rs/hooks/README.md)

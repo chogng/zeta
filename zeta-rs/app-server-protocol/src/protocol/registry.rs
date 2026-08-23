@@ -8,6 +8,7 @@ use crate::protocol::account::AccountLoginFailureDto;
 use crate::protocol::account::AccountLoginMethodDto;
 use crate::protocol::account::AccountLoginStartParams;
 use crate::protocol::account::AccountLoginStartResult;
+use crate::protocol::account::AccountLogoutParams;
 use crate::protocol::account::AccountLogoutResult;
 use crate::protocol::account::AccountLogoutStatusDto;
 use crate::protocol::account::AccountReadResult;
@@ -952,7 +953,7 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     AccountLogout => "account/logout" {
-        params: EmptyParams,
+        params: AccountLogoutParams,
         response: AccountLogoutResult,
         serialization: GlobalExclusive,
     },
@@ -1870,6 +1871,7 @@ typescript_bindings! {
     AccountLoginStartParams,
     AccountLoginStartResult,
     AccountLogoutResult,
+    AccountLogoutParams,
     AccountLogoutStatusDto,
     AccountReadResult,
     AccountStatusDto,

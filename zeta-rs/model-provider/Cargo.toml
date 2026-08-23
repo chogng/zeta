@@ -13,9 +13,11 @@ path = "src/lib.rs"
 [dependencies]
 zeta-api = { workspace = true }
 zeta-async-utils = { workspace = true }
+zeta-chatgpt = { workspace = true }
 zeta-client = { workspace = true }
 zeta-context-engine = { workspace = true }
 zeta-http-client = { workspace = true }
+zeta-kimi = { workspace = true }
 zeta-model-provider-config = { workspace = true }
 zeta-models-manager = { workspace = true }
 zeta-model-tokenizer = { workspace = true }

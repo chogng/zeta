@@ -87,6 +87,10 @@ struct BlockingWriter {
 struct TestLoginDriver;
 
 impl InteractiveLoginDriver for TestLoginDriver {
+    fn provider_id(&self) -> &'static str {
+        "openai-chatgpt"
+    }
+
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
         Ok(None)
     }
@@ -1668,9 +1672,7 @@ impl zeta_core::TurnExecutionBackend for FailingSteerBackend {
         _: &[UserInput],
     ) -> Result<(), CoreError> {
         self.steers.fetch_add(1, Ordering::Relaxed);
-        Err(CoreError::Execution(
-            "delegated steer outcome is unknown".into(),
-        ))
+        Err(CoreError::Execution("backend steer failed".into()))
     }
 }
 
@@ -2242,7 +2244,7 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
 }
 
 #[test]
-fn failed_delegated_steer_is_not_replayed_across_rpc_retry() {
+fn failed_backend_steer_is_not_replayed_across_rpc_retry() {
     let backend = Arc::new(FailingSteerBackend::default());
     let server = server().with_turn_backend(backend.clone());
     let mut connection = server.connection();
@@ -2277,7 +2279,7 @@ fn failed_delegated_steer_is_not_replayed_across_rpc_retry() {
         serde_json::json!({
             "jsonrpc":"2.0","id":id,"method":"session/request",
             "params":{
-                "commandId":"failed-delegated-steer",
+                "commandId":"failed-backend-steer",
                 "sessionId":session_id,
                 "expectedSequence":sequence,
                 "request":{
@@ -2305,7 +2307,7 @@ fn failed_delegated_steer_is_not_replayed_across_rpc_retry() {
     assert!(
         !snapshot
             .steer_deliveries
-            .contains_key(&CommandId::new("failed-delegated-steer").unwrap())
+            .contains_key(&CommandId::new("failed-backend-steer").unwrap())
     );
 }
 
@@ -3780,7 +3782,7 @@ fn account_rpc_projects_login_completion_without_credentials() {
         &mut connection,
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
     );
-    assert!(initial["result"]["account"].is_null());
+    assert_eq!(initial["result"]["accounts"], serde_json::json!([]));
     let started = call(
         &server,
         &mut connection,
@@ -3831,8 +3833,8 @@ fn account_rpc_projects_login_completion_without_credentials() {
         &mut connection,
         serde_json::json!({"jsonrpc":"2.0","id":4,"method":"account/read","params":{}}),
     );
-    assert_eq!(read["result"]["account"]["plan"], "plus");
-    assert_eq!(read["result"]["account"]["credentialRevision"], 7);
+    assert_eq!(read["result"]["accounts"][0]["plan"], "plus");
+    assert_eq!(read["result"]["accounts"][0]["credentialRevision"], 7);
 }
 
 #[test]

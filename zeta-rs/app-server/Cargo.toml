@@ -34,7 +34,7 @@ zeta-code-index = { workspace = true }
 zeta-code-index-cloud = { workspace = true }
 zeta-code-index-semantic = { workspace = true }
 zeta-code-retrieval = { workspace = true }
-zeta-codex-app-server = { workspace = true }
+zeta-chatgpt = { workspace = true }
 zeta-config = { workspace = true }
 zeta-connectors = { workspace = true }
 zeta-connectors-extension = { workspace = true }
@@ -56,6 +56,7 @@ zeta-install-context = { workspace = true }
 zeta-tool-executor = { workspace = true }
 zeta-instructions = { workspace = true }
 zeta-keyring-store = { workspace = true }
+zeta-kimi = { workspace = true }
 zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-login = { workspace = true }

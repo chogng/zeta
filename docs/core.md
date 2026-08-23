@@ -9,7 +9,7 @@
 > [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md)
 > Tool shared contract、registry/binding 与 source adapter：[`tools.md`](tools.md)
 > Config、Plugin、MCP 与 Skill snapshot：[`config.md`](config.md)
-> Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据与-codex-边界)
+> Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > Secret persistence：[`secrets.md`](secrets.md)
 > Cancellation tree 实现：[`zeta-async-utils` README](../zeta-rs/async-utils/README.md)
 > Session/Thread store ports：[`zeta-session-store`](../zeta-rs/session-store/README.md) /
@@ -25,7 +25,7 @@ Core 是一次 Agent 工作的权威协调者：它推进 Turn、安排模型和
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
 | 一次工作保存在哪里？ | Session 聚合多个 Thread；每个 Thread 独立保存 Turn、Item 和逻辑序列 | [产品模型](#4-产品模型与执行模型) |
-| 谁推进一个 Turn？ | `ThreadController` 保持单写者顺序，选定的 `TurnExecutionBackend` 推进执行；默认实现是 `TurnExecutor` | [核心组件](#5-核心组件) |
+| 谁推进一个 Turn？ | `ThreadController` 保持单写者顺序，App Server 只把执行分派给当前工作区的本地 `TurnExecutor` | [核心组件](#5-核心组件) |
 | 模型、工具和策略由谁实现？ | Core 只拥有消费方端口和调用顺序，具体实现由外部服务注入 | [依赖方向](#6-依赖方向与服务端口) |
 | 什么时候算已经执行？ | 执行授权和开始事实必须先持久化，之后才能跨过副作用边界 | [提交与安全点](#7-durable-commit并发与安全点) |
 | Core 是否拥有 UI 或传输？ | 不拥有；Desktop、CLI、TUI 和 App Server 只是不同入口 | [所有权边界](#3-所有权边界) |
@@ -71,7 +71,7 @@ Agent 生命周期能够成为 authority 的前提。
 - `HookService` 的类型化 `beforeTool`、`afterTool` 与 durable Turn completion safe-point 调度；
 - `beforeTool` Hook 拒绝作为模型可见 Tool failure 提交，不把整个 Turn 变成执行错误；
 - Tool 内用户输入的 durable request、exact live waiter 唤醒、取消与重启后 unknown-outcome 收口；
-- `TurnExecutionBackend` 委托边界、Codex 完整 Turn adapter 与 immutable remote thread binding；
+- `TurnExecutionBackend` 本地分派边界，以及 App Server 在 Workspace 重组后切换到最新 `TurnExecutor` 的稳定句柄；
 - durable Turn policy revision binding 与 recovery fail-closed；
 - `ContextInput` / `ContextPlan`、纯 planner、per-loaded-Thread `ContextManager`、
   `ContextPlan → ModelRequest` 的 `ContextAssembler`；
@@ -303,14 +303,9 @@ Turn 就继续执行。安全边界应由可取消的 token/cost/deadline policy
 
 ### 5.5 TurnExecutionBackend（已实现）
 
-`TurnExecutionBackend` 是推进已创建 durable Turn 的 consumer-owned port。`TurnExecutor` 实现
-Zeta 自己的 provider-independent model/tool loop；外部 runtime 若同时拥有 Agent loop、Tool 和
-approval（例如 Codex App Server），则实现这个 port，而不是伪装成 `ModelService`。
+`TurnExecutionBackend` 是 Core 到产品 host 的窄分派端口，当前唯一生产实现是 `TurnExecutor`。App Server 的稳定句柄只用于在工具、Extension 或 Workspace 组合变化后安装最新的本地 executor；生产构造器不接受供应商或外部 Agent runtime 注入。
 
-Core 始终保留 Thread event、interaction、cancellation 和 terminal outcome authority。委托后端只能
-通过 `ThreadController` 提交 durable item/interaction；远端 thread continuity 使用 immutable
-`TurnExecutionBinding` 保存，并绑定 opaque execution scope。后端在第一次远程请求前写入
-`TurnExecutionAttempted`；因此 in-flight remote Turn 不可在未知结果后透明重放。
+Core 始终拥有 Thread event、interaction、cancellation、tool/approval loop 和 terminal outcome authority。OAuth driver 与模型供应商只能通过 `ModelService` 提供一次 provider-neutral invocation，不能实现或替换 `TurnExecutionBackend`。协议仍能读取旧历史中的 `TurnExecutionBinding` 与 `TurnExecutionAttempted`，但当前产品没有写入这些兼容事实的 API。
 
 ### 5.6 ContextManager 与 ContextAssembler（核心纵向切片已实现）
 
@@ -392,7 +387,7 @@ zeta-core → Desktop / CLI / TUI
 | `SessionStore` | 已实现 | Session load/append | storage adapter |
 | `ThreadStore` | 已实现 | Thread load/append | storage adapter |
 | `WriterLease<Id>` | 已实现 | aggregate 单写者 | storage/host |
-| `TurnExecutionBackend` | 已实现 | 推进完整 Turn，同时保留 Core state authority | `TurnExecutor` / Codex adapter |
+| `TurnExecutionBackend` | 已实现 | 把已创建的 Turn 分派给 Zeta 本地执行器 | `TurnExecutor` / App Server local handle |
 | `ModelService` | 已实现（同步；流式默认桥接见 `ModelStreamSink`） | provider-neutral model invocation | model-provider adapter |
 | `ToolService` | 已实现（含 `prepare` / `review_evidence` / `execute_streaming`） | 已物化 Tool call 的执行 | built-in/MCP host |
 | `ToolInteractionService` | 已实现 | 工具运行中提交 durable 用户输入请求，并等待 exact Thread/Turn/request 的响应或取消 | Core tool orchestrator；MCP adapter 消费 |

@@ -199,8 +199,8 @@ App Server composition
   ├──▶ zeta-model-provider
   └──▶ zeta-models-manager
 
-zeta-codex-app-server
-  └──▶ zeta-model-provider       # subscription runtime/catalog observation adapter
+zeta-chatgpt
+  └──▶ zeta-model-provider       # subscription authenticated-target adapter
 ```
 
 具体规则：

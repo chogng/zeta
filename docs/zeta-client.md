@@ -176,8 +176,7 @@ pub struct RetryPolicy {
 
 认证恢复不属于普通 retry loop。收到 `401 Unauthorized` 时，client 返回 response facts；
 `zeta-model-provider` 只可按 direct-provider credential 的正式语义执行一次受限 rebuild/refresh。
-client 不读取 `zeta-secrets`、不持有 refresh token，也不根据 401 自行重试。ChatGPT/Codex
-subscription refresh 归 upstream Codex App Server，Zeta 只接收稳定的 reauthentication outcome。
+client 不读取 `zeta-secrets`、不持有 refresh token，也不根据 401 自行重试。ChatGPT 与 Kimi 订阅凭据刷新分别归 `zeta-chatgpt` 与 `zeta-kimi`；`zeta-client` 只执行 adapter 已解析的单次 operation。
 
 `zeta-client` 不提供带登录状态的 `OAuthClient` facade。未来一个 officially supported OAuth adapter
 需要普通 HTTP execution 时，它可使用 `zeta-http-client`，但其生命周期属于 `zeta-login` 和 exact

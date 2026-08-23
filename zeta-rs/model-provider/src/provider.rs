@@ -13,12 +13,15 @@ use zeta_api::OutputItem;
 use zeta_api::StopReason;
 use zeta_async_utils::CancellationSource;
 use zeta_async_utils::CancellationToken;
+use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::ClientError;
 use zeta_client::OperationClient;
+use zeta_client::ResolvedApiTarget;
 use zeta_client::ZetaClient;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_http_client::UreqHttpClient;
+use zeta_kimi::KimiOAuth;
 use zeta_model_provider_config::Model;
 use zeta_model_provider_config::ModelId;
 use zeta_model_provider_config::ModelProviderConfig;
@@ -27,6 +30,8 @@ use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::ProviderDefinition;
 use zeta_model_provider_config::ProviderId;
+use zeta_model_provider_config::StaticModelRuntime;
+use zeta_model_provider_config::find_static_model;
 use zeta_model_tokenizer::LocalTokenizerRegistry;
 use zeta_model_tokenizer::LocalTokenizerService;
 use zeta_models_manager::ModelRequirements;
@@ -55,6 +60,7 @@ impl Provider {
         models: ModelsManager,
         client: Arc<dyn OperationClient>,
         local_tokenizers: Arc<dyn LocalTokenizerService>,
+        adapter_target: Option<ResolvedApiTarget>,
     ) -> Result<Self, ModelProviderError> {
         if definition.id != config.provider {
             return Err(ProviderConfigError::ProviderMismatch {
@@ -63,7 +69,7 @@ impl Provider {
             }
             .into());
         }
-        let adapter = providers::instantiate(definition.adapter, &config);
+        let adapter = providers::instantiate(definition.adapter, &config, adapter_target);
         let local_counter = providers::measurement::LocalInputTokenCounter::new(
             config.provider.clone(),
             local_tokenizers,
@@ -222,6 +228,8 @@ pub struct ModelProviderRuntime {
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     local_tokenizers: Arc<dyn LocalTokenizerService>,
+    chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
+    kimi_oauth: Option<Arc<KimiOAuth>>,
 }
 
 impl ModelProviderRuntime {
@@ -240,6 +248,8 @@ impl ModelProviderRuntime {
             client,
             secrets: Arc::new(UnavailableSecretStore),
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
+            chatgpt_oauth: None,
+            kimi_oauth: None,
         }
     }
 
@@ -255,6 +265,8 @@ impl ModelProviderRuntime {
             client,
             secrets,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
+            chatgpt_oauth: None,
+            kimi_oauth: None,
         }
     }
 
@@ -267,6 +279,18 @@ impl ModelProviderRuntime {
         local_tokenizers: Arc<dyn LocalTokenizerService>,
     ) -> Self {
         self.local_tokenizers = local_tokenizers;
+        self
+    }
+
+    /// Installs the native Kimi Code OAuth authority used by subscription model rows.
+    pub fn with_kimi_oauth(mut self, kimi_oauth: Arc<KimiOAuth>) -> Self {
+        self.kimi_oauth = Some(kimi_oauth);
+        self
+    }
+
+    /// Installs the native ChatGPT OAuth authority used by subscription model rows.
+    pub fn with_chatgpt_oauth(mut self, chatgpt_oauth: Arc<ChatGptOAuth>) -> Self {
+        self.chatgpt_oauth = Some(chatgpt_oauth);
         self
     }
 
@@ -297,7 +321,8 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        self.instantiate_normalized(normalized)?
+        let adapter_target = self.adapter_target(model_ref)?;
+        self.instantiate_normalized_with_target(normalized, adapter_target)?
             .build_model(&model_ref.model)
     }
 
@@ -308,13 +333,22 @@ impl ModelProviderRuntime {
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        self.instantiate_normalized(normalized)?
+        let adapter_target = self.adapter_target(model_ref)?;
+        self.instantiate_normalized_with_target(normalized, adapter_target)?
             .complete(&model_ref.model, request)
     }
 
     fn instantiate_normalized(
         &self,
         normalized: NormalizedModelProviderConfig,
+    ) -> Result<Provider, ModelProviderError> {
+        self.instantiate_normalized_with_target(normalized, None)
+    }
+
+    fn instantiate_normalized_with_target(
+        &self,
+        normalized: NormalizedModelProviderConfig,
+        adapter_target: Option<ResolvedApiTarget>,
     ) -> Result<Provider, ModelProviderError> {
         let definition = self
             .configs
@@ -327,7 +361,35 @@ impl ModelProviderRuntime {
             self.models.clone(),
             self.client.clone(),
             self.local_tokenizers.clone(),
+            adapter_target,
         )
+    }
+
+    fn adapter_target(
+        &self,
+        model: &ModelRef,
+    ) -> Result<Option<ResolvedApiTarget>, ModelProviderError> {
+        match find_static_model(model).map(|spec| spec.runtime) {
+            Some(StaticModelRuntime::KimiCode) => self
+                .kimi_oauth
+                .as_ref()
+                .ok_or_else(|| {
+                    ModelProviderError::Credential("Kimi Code OAuth is unavailable".into())
+                })?
+                .api_target()
+                .map(Some)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Some(StaticModelRuntime::ChatGptSubscription) => self
+                .chatgpt_oauth
+                .as_ref()
+                .ok_or_else(|| {
+                    ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
+                })?
+                .api_target()
+                .map(Some)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            Some(StaticModelRuntime::ProviderApi) | None => Ok(None),
+        }
     }
 }
 

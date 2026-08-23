@@ -58,31 +58,7 @@ impl ThreadController {
         })
     }
 
-    /// Durably records that a delegated backend is about to cross its external side-effect
-    /// boundary.
-    ///
-    /// A backend must append this fact before its first remote request and must never replay a
-    /// Turn that already carries an attempt after process recovery.
-    pub fn record_turn_execution_attempt(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-        backend: String,
-    ) -> Result<u64, CoreError> {
-        self.mutate_thread(thread_id, |snapshot| {
-            self.record_batch(
-                snapshot,
-                vec![ThreadEvent::TurnExecutionAttempted {
-                    thread_id: thread_id.clone(),
-                    turn_id: turn_id.clone(),
-                    backend,
-                }],
-            )?;
-            Ok(snapshot.sequence)
-        })
-    }
-
-    /// Completes a delegated Turn that intentionally produced no agent message.
+    /// Completes a Turn that intentionally produced no agent message.
     pub fn complete_turn_without_agent_message(
         &self,
         thread_id: &ThreadId,
@@ -374,7 +350,7 @@ impl ThreadController {
 
     /// Enqueues backend work on the Thread-owned bounded execution mailbox.
     ///
-    /// The task must keep all external Turn work inside the supplied cancellation scope. Returning
+    /// The task must keep all model and tool work inside the supplied cancellation scope. Returning
     /// releases the active operation; a later interaction continuation may enqueue another task.
     pub fn enqueue_turn_execution(
         &self,

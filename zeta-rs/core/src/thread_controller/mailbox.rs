@@ -41,7 +41,7 @@ struct ActiveExecution {
 /// Turn execution backends receive this value only from
 /// [`ThreadController::enqueue_turn_execution`](super::ThreadController::enqueue_turn_execution).
 /// They must check it before external side effects and observe its cancellation token while
-/// waiting on a delegated runtime.
+/// waiting on model or tool I/O.
 pub struct ThreadExecutionContext {
     thread_id: ThreadId,
     turn_id: TurnId,

@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use zeta_api::{ModelRequest, ModelStreamEvent, StopReason, ToolDefinition, ToolName};
 use zeta_async_utils::CancellationSource;
+use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::{
     ClientError, ClientRequest, ClientResponse, OperationClient, OperationStreamSink,
 };
@@ -14,6 +15,7 @@ use zeta_context_engine::ContextTokenMeasurementAccuracy;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_http_client::HttpHeader;
+use zeta_kimi::KimiOAuth;
 use zeta_model_provider_config::{
     ApiProfile, EndpointPolicy, ModelCatalogPolicy, ModelProviderConfig, ProviderAdapter,
     ProviderConfigError, ProviderConfigRegistry, ProviderDefinition,
@@ -22,6 +24,10 @@ use zeta_model_tokenizer::LocalTokenCount;
 use zeta_model_tokenizer::LocalTokenizationOutcome;
 use zeta_model_tokenizer::LocalTokenizerError;
 use zeta_model_tokenizer::LocalTokenizerService;
+use zeta_secrets::MemorySecretStore;
+use zeta_secrets::SecretKey;
+use zeta_secrets::SecretStore;
+use zeta_secrets::SecretValue;
 
 #[test]
 fn api_failure_categories_are_preserved_by_the_provider_boundary() {
@@ -556,6 +562,95 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
     assert_eq!(request["model"], "gpt-5.6");
     assert_eq!(request["input"][0]["role"], "user");
     assert_eq!(request["input"][0]["content"][0]["type"], "input_text");
+}
+
+#[test]
+fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
+    let transport = Arc::new(CapturingTransport::new(responses_response(
+        "Hello from ChatGPT",
+    )));
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &SecretKey::new("provider/openai-chatgpt/current/oauth").unwrap(),
+            &SecretValue::new(
+                br#"{"id_token":"header.payload.signature","access_token":"chatgpt-access","refresh_token":"chatgpt-refresh","expires_at":4102444800,"email":"person@example.com","plan":"plus","user_id":"user-1","account_id":"account-1","is_fedramp":false,"credential_revision":3}"#.to_vec(),
+            ),
+        )
+        .unwrap();
+    let chatgpt_oauth = ChatGptOAuth::with_client(secrets.clone(), transport.clone());
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    )
+    .with_chatgpt_oauth(chatgpt_oauth);
+    let model = runtime
+        .build_model(
+            &provider_config("openai"),
+            &model_ref("openai", "gpt-5.6-sol"),
+        )
+        .unwrap();
+
+    assert_eq!(invoke_text(model.as_ref(), "hello"), "Hello from ChatGPT");
+    let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://chatgpt.com/backend-api/codex/responses");
+    assert!(headers.iter().any(|header| {
+        header.name() == "Authorization" && header.value() == "Bearer chatgpt-access"
+    }));
+    assert!(
+        headers.iter().any(|header| {
+            header.name() == "ChatGPT-Account-ID" && header.value() == "account-1"
+        })
+    );
+    assert!(
+        headers
+            .iter()
+            .any(|header| header.name() == "Originator" && header.value() == "zeta")
+    );
+    assert_eq!(request["model"], "gpt-5.6-sol");
+}
+
+#[test]
+fn kimi_subscription_runtime_uses_local_oauth_and_the_coding_api() {
+    let transport = Arc::new(CapturingTransport::new(completion_response(
+        "Hello from Kimi Code",
+    )));
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &SecretKey::new("provider/kimi/current/oauth").unwrap(),
+            &SecretValue::new(
+                br#"{"access_token":"kimi-access","refresh_token":"kimi-refresh","token_type":"Bearer","scope":"coding","expires_at":4102444800,"device_id":"zeta-device","credential_revision":3}"#.to_vec(),
+            ),
+        )
+        .unwrap();
+    let kimi_oauth = KimiOAuth::with_client(secrets.clone(), transport.clone());
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    )
+    .with_kimi_oauth(kimi_oauth);
+    let model = runtime
+        .build_model(
+            &provider_config("kimi"),
+            &model_ref("kimi", "kimi-k2.7-code"),
+        )
+        .unwrap();
+
+    assert_eq!(invoke_text(model.as_ref(), "hello"), "Hello from Kimi Code");
+    let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://api.kimi.com/coding/v1/chat/completions");
+    assert!(headers.iter().any(|header| {
+        header.name() == "Authorization" && header.value() == "Bearer kimi-access"
+    }));
+    assert!(
+        headers
+            .iter()
+            .any(|header| { header.name() == "X-Msh-Platform" && header.value() == "Zeta" })
+    );
+    assert_eq!(request["model"], "kimi-for-coding");
 }
 
 #[test]

@@ -132,13 +132,11 @@ static_model! {
 ```
 
 `ProviderConfigRegistry::builtin()` 自动把 direct-provider rows 投影为 `ProviderDefinition.models`；App
-Server 从同一目录投影 Codex subscription rows。通用契约测试会对
+Server 从同一目录投影 ChatGPT subscription rows。通用契约测试会对
 每个新增 row 自动检查 identity 唯一性、metadata 一致性、provider 存在、default 唯一性和 count binding，
 无需再维护一份枚举式 expected-model 测试。
 
-`ModelAccess::Subscription` 是客户端可消费的接入方式 metadata，具体 UI 由各客户端自行决定；产品
-组合也用它选择 subscription complete-Turn backend。`ModelRef.provider` 只表示模型厂商。认证、
-entitlement 和远端可用性仍在真正执行 Turn 时验证，不能由 `ModelAccess` 推断。
+`ModelAccess::Subscription` 表示该模型要求登录系统中的用户订阅账户，`ModelAccess::ApiKey` 表示该模型要求模型凭据领域中的开发者 API key；两者不互相降级。具体执行面由独立的 `StaticModelRuntime` 选择，不能根据 `ModelAccess` 猜测。`ModelRef.provider` 只表示模型厂商，认证、订阅权益和远端可用性仍在真正执行 Turn 时验证。
 
 `InputTokenCountTarget::InvocationBase` 会跟随显式 endpoint override，适合 count 与 invocation 同一
 service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 provider 默认 endpoint 时启用；

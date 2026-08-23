@@ -1,7 +1,6 @@
 use crate::AppServer;
 use crate::CodeIndexSemanticModels;
 use crate::SlashCommandCatalog;
-use crate::model_catalog::CombinedModelCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
 use crate::server::WorkspaceSwitchTrustPolicy;
@@ -17,15 +16,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_async_utils::CancellationToken;
+use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::OperationClient;
 use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
-use zeta_codex_app_server::CodexAppServerLoginDriver;
-use zeta_codex_app_server::CodexAppServerOptions;
-use zeta_codex_app_server::CodexAppServerRuntime;
-use zeta_codex_app_server::CodexThreadAccess;
-use zeta_codex_app_server::CodexTurnDriver;
-use zeta_codex_app_server::CodexTurnExecutionBackend;
-use zeta_codex_app_server::CodexTurnExecutionBackendOptions;
 use zeta_config::McpServerId;
 use zeta_config::{
     ConfigStore, ResolvedConfig, ResolvedConfigSnapshot, WorkspaceConfigDocument,
@@ -50,7 +43,9 @@ use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_keyring_store::KeyringSecretStore;
+use zeta_kimi::KimiOAuth;
 use zeta_language_server_catalog::ManagedNodeRuntime;
+use zeta_login::InteractiveLoginDriver;
 use zeta_login::LoginService;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::McpCatalogUpdateSubscription;
@@ -73,7 +68,10 @@ use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider::TokenizerAssetCatalog;
 use zeta_model_provider::UnavailableModel;
 use zeta_model_provider_config::ModelCatalogPolicy;
+use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::ProviderConfigRegistry;
+use zeta_model_provider_config::StaticModelRuntime;
+use zeta_model_provider_config::find_static_model;
 use zeta_models_manager::CatalogQuery;
 use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
@@ -201,7 +199,6 @@ pub struct LocalAppServerOptions {
     local_marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
     language_server_providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
     product_services: Option<crate::LocalProductServicesConfig>,
-    codex_app_server: CodexAppServerOptions,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
 }
 
@@ -231,7 +228,6 @@ impl LocalAppServerOptions {
             language_server_providers:
                 zeta_language_server_catalog::LanguageServerProviderRegistry::new(),
             product_services: None,
-            codex_app_server: CodexAppServerOptions::default(),
             profile_runtime: None,
         }
     }
@@ -288,12 +284,6 @@ impl LocalAppServerOptions {
     /// complete App Server stack. Product hosts normally leave the lazy production client in use.
     pub fn with_model_operation_client(mut self, client: Arc<dyn OperationClient>) -> Self {
         self.model_operation_client = Some(client);
-        self
-    }
-
-    /// Selects the upstream Codex binary used for managed ChatGPT login.
-    pub fn with_codex_app_server(mut self, options: CodexAppServerOptions) -> Self {
-        self.codex_app_server = options;
         self
     }
 
@@ -490,7 +480,6 @@ impl PartialEq for LocalAppServerOptions {
                 .language_server_providers
                 .ptr_eq(&other.language_server_providers)
             && self.product_services == other.product_services
-            && self.codex_app_server == other.codex_app_server
     }
 }
 
@@ -939,7 +928,6 @@ pub fn open_local_app_server_with_code_index_providers(
             options = options.with_marketplace_registry(registry)?;
         }
     }
-    let codex_app_server = options.codex_app_server.clone();
     let marketplace_manager_client = options.marketplace_manager_client.take();
     let local_marketplace_manager = options.local_marketplace_manager.take();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
@@ -1057,6 +1045,10 @@ pub fn open_local_app_server_with_code_index_providers(
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;
     }
+    let profile_secrets = connector_runtime
+        .as_ref()
+        .map(|runtime| Arc::clone(&runtime.secrets))
+        .ok_or_else(|| OpenAppServerError("local SecretStore is unavailable".into()))?;
     let workspace = options.workspace.map(|workspace| {
         Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
             workspace.config_path,
@@ -1084,11 +1076,28 @@ pub fn open_local_app_server_with_code_index_providers(
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
     let provider_configs = ProviderConfigRegistry::builtin();
-    let model_provider = match options.model_operation_client.take() {
-        Some(client) => ModelProviderRuntime::with_client(provider_configs.clone(), client),
+    let model_operation_client = options.model_operation_client.take();
+    let chatgpt_oauth = match &model_operation_client {
+        Some(client) => ChatGptOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
+        None => ChatGptOAuth::production(Arc::clone(&profile_secrets))
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+    };
+    let kimi_oauth = match &model_operation_client {
+        Some(client) => KimiOAuth::with_client(Arc::clone(&profile_secrets), Arc::clone(client)),
+        None => KimiOAuth::production(Arc::clone(&profile_secrets))
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+    };
+    let model_provider = match model_operation_client {
+        Some(client) => ModelProviderRuntime::with_client_and_secrets(
+            provider_configs.clone(),
+            client,
+            Arc::clone(&profile_secrets),
+        ),
         None => ModelProviderRuntime::new(provider_configs.clone()),
     }
-    .with_local_tokenizers(local_tokenizers);
+    .with_local_tokenizers(local_tokenizers)
+    .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
+    .with_kimi_oauth(Arc::clone(&kimi_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let model = Arc::new(ConfigBackedModelService {
@@ -1113,14 +1122,19 @@ pub fn open_local_app_server_with_code_index_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
-    let codex_runtime = CodexAppServerRuntime::new(codex_app_server);
-    let codex_login_driver = CodexAppServerLoginDriver::with_runtime(Arc::clone(&codex_runtime));
-    let login_service = Arc::new(LoginService::deferred(codex_login_driver.clone()));
-    codex_login_driver
+    let login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> =
+        vec![chatgpt_oauth.clone(), kimi_oauth.clone()];
+    let login_service = Arc::new(
+        LoginService::deferred_with_drivers(login_drivers)
+            .map_err(|error| OpenAppServerError(error.to_string()))?,
+    );
+    chatgpt_oauth
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    kimi_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let direct_catalog: Arc<dyn ModelCatalog> = model.clone();
-    let combined_catalog = Arc::new(CombinedModelCatalog::new(direct_catalog));
     let update_workspace = if workspace.is_some() {
         options
             .workspace_root
@@ -1141,7 +1155,7 @@ pub fn open_local_app_server_with_code_index_providers(
         ),
         None => AppServer::new(sessions, model.clone()),
     }
-    .with_model_catalog(combined_catalog)
+    .with_model_catalog(direct_catalog)
     .with_approval_review_model(approval_review_model)
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)
@@ -1246,21 +1260,6 @@ pub fn open_local_app_server_with_code_index_providers(
     server
         .bind_active_workspace_session_extensions()
         .map_err(open_error)?;
-    let (codex_turn_driver, codex_turn_events) = CodexTurnDriver::new(codex_runtime);
-    let codex_turn_backend = Arc::new(
-        CodexTurnExecutionBackend::new(
-            codex_turn_driver,
-            codex_turn_events,
-            server.sessions().threads().clone(),
-            server.thread_update_sink(),
-            CodexTurnExecutionBackendOptions::from_source(
-                server.codex_workspace_source(),
-                CodexThreadAccess::WorkspaceWrite,
-            ),
-        )
-        .map_err(|error| OpenAppServerError(error.to_string()))?,
-    );
-    server = server.with_codex_turn_backend(codex_turn_backend);
     server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;
@@ -1655,16 +1654,19 @@ impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
                 "model is not configured; configure a provider and set preferredModel",
             ));
         };
-        let Some(provider) = config.selected_provider() else {
+        let provider = config.selected_provider().cloned().or_else(|| {
+            let model = config.preferred_model.as_ref()?;
+            let runtime = find_static_model(model)?.runtime;
+            (runtime != StaticModelRuntime::ProviderApi)
+                .then(|| ModelProviderConfig::new(model.provider.clone()))
+        });
+        let Some(provider) = provider else {
             return Arc::new(UnavailableModel::new(
                 "preferred model provider is not configured",
             ));
         };
         self.model_provider
-            .runtime(ModelRuntimeRequest::new(
-                model_ref.clone(),
-                provider.clone(),
-            ))
+            .runtime(ModelRuntimeRequest::new(model_ref.clone(), provider))
             .unwrap_or_else(|error| Arc::new(UnavailableModel::new(error.to_string())))
     }
 }

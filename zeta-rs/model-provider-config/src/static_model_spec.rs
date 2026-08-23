@@ -8,6 +8,14 @@ use zeta_protocol::Personality;
 use zeta_protocol::ProviderId;
 use zeta_protocol::ReasoningEffort;
 
+/// Product execution surface selected for one built-in model row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StaticModelRuntime {
+    ProviderApi,
+    ChatGptSubscription,
+    KimiCode,
+}
+
 /// One row in Zeta's product-level static model catalog.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StaticModelSpec {
@@ -15,6 +23,7 @@ pub struct StaticModelSpec {
     pub model_id: &'static str,
     pub display_name: &'static str,
     pub access: ModelAccess,
+    pub runtime: StaticModelRuntime,
     pub context_window: ContextWindow,
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
@@ -62,6 +71,7 @@ macro_rules! static_model {
         id: $model:expr,
         name: $name:expr,
         access: $access:ident,
+        $(runtime: $runtime:ident,)?
         $(context_window: $context_window:expr,)?
         $(auto_compact_token_limit: $auto_compact_token_limit:expr,)?
         $(capabilities: {
@@ -78,6 +88,7 @@ macro_rules! static_model {
             model_id: $model,
             display_name: $name,
             access: static_model!(@access $access),
+            runtime: static_model!(@runtime $($runtime)?),
             context_window: static_model!(@context_window $($context_window)?),
             auto_compact_token_limit: static_model!(@optional_u32 $($auto_compact_token_limit)?),
             capabilities: zeta_protocol::ModelCapabilities {
@@ -99,6 +110,11 @@ macro_rules! static_model {
     (@access local) => { zeta_protocol::ModelAccess::Local };
     (@access enterprise) => { zeta_protocol::ModelAccess::Enterprise };
     (@access unknown) => { zeta_protocol::ModelAccess::Unknown };
+
+    (@runtime) => { $crate::static_model_spec::StaticModelRuntime::ProviderApi };
+    (@runtime provider_api) => { $crate::static_model_spec::StaticModelRuntime::ProviderApi };
+    (@runtime chatgpt_subscription) => { $crate::static_model_spec::StaticModelRuntime::ChatGptSubscription };
+    (@runtime kimi_code) => { $crate::static_model_spec::StaticModelRuntime::KimiCode };
 
     (@context_window) => { zeta_protocol::ContextWindow::Unknown };
     (@context_window $tokens:expr) => { zeta_protocol::ContextWindow::Known($tokens) };
@@ -140,6 +156,7 @@ mod tests {
         id: "test-model",
         name: "Test Model",
         access: subscription,
+        runtime: kimi_code,
         context_window: 1_000_000,
         auto_compact_token_limit: 900_000,
         capabilities: {
@@ -156,6 +173,7 @@ mod tests {
     #[test]
     fn declaration_macro_applies_named_fields_and_explicit_defaults() {
         assert_eq!(COMPLETE_SPEC.access, ModelAccess::Subscription);
+        assert_eq!(COMPLETE_SPEC.runtime, StaticModelRuntime::KimiCode);
         assert_eq!(
             COMPLETE_SPEC.context_window,
             ContextWindow::Known(1_000_000)

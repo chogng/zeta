@@ -78,7 +78,7 @@ zeta-rs/
 ├── config/
 ├── secrets/              # provider-neutral secret persistence primitives
 ├── login/                # target interactive account-login control plane
-├── codex-app-server/     # target adapter for the external Codex App Server
+├── chatgpt/              # native ChatGPT subscription OAuth and authenticated target
 ├── model-provider-config/
 ├── model-provider/
 ├── zeta-api/
@@ -245,12 +245,7 @@ persistence 由 [`secrets.md`](secrets.md) 维护；interactive login control pl
 [`login.md`](login.md) 维护。Workspace 不创建统一 credential/OAuth crate，也不让 Core、API 或
 network client 读取 secret store。
 
-ChatGPT/Codex subscription 通过 [`codex-app-server.md`](codex-app-server.md) 接入：
-`zeta-codex-app-server` 启动并适配上游 `codex app-server`，由上游拥有 PKCE、callback、token
-persistence/refresh 和 Codex backend compatibility。Zeta App Server 只组合其 redacted login/account
-状态；完整 Codex Agent loop 通过 Core `TurnExecutionBackend` 委托，不进入 `model-provider`。产品
-composition 使用 exact ModelRef 对应静态 row 的 `access = subscription` 显式选择哪些 Turn 使用该 backend，
-不会由“已登录”隐式切换。Zeta 不复制 OAuth 实现，也不读取 `~/.codex/auth.json`。
+ChatGPT 订阅通过 [`chatgpt-subscription.md`](chatgpt-subscription.md) 接入：`zeta-chatgpt` 在本机执行 device OAuth、refresh 与 SecretStore persistence，并向 `zeta-model-provider` 提供 fresh authenticated target。完整 Agent loop 继续由 Zeta Core `TurnExecutor` 持有。产品 composition 使用 exact ModelRef 对应静态 row 的 `runtime = chatgpt_subscription` 选择 target，不会由“已登录”隐式切换模型。
 
 ## 3. Protocol 边界
 

@@ -74,6 +74,8 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    /// Legacy read-compatibility fact from the removed external full-Turn backend integration.
+    /// Current product code does not append this event.
     TurnExecutionBound {
         thread_id: ThreadId,
         binding: TurnExecutionBinding,
@@ -130,6 +132,8 @@ pub enum ThreadEvent {
         turn_id: TurnId,
         command_id: CommandId,
     },
+    /// Legacy read-compatibility fact from the removed external full-Turn backend integration.
+    /// Current product code does not append this event.
     TurnExecutionAttempted {
         thread_id: ThreadId,
         turn_id: TurnId,

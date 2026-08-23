@@ -9456,12 +9456,12 @@ dependencies = [
  "zeta-async-utils",
  "zeta-attachments",
  "zeta-auto-review",
+ "zeta-chatgpt",
  "zeta-client",
  "zeta-code-index",
  "zeta-code-index-cloud",
  "zeta-code-index-semantic",
  "zeta-code-retrieval",
- "zeta-codex-app-server",
  "zeta-collaboration",
  "zeta-config",
  "zeta-connectors",
@@ -9481,6 +9481,7 @@ dependencies = [
  "zeta-install-context",
  "zeta-instructions",
  "zeta-keyring-store",
+ "zeta-kimi",
  "zeta-language-server-catalog",
  "zeta-language-service",
  "zeta-linux-sandbox",
@@ -9608,6 +9609,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-chatgpt"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "zeroize",
+ "zeta-async-utils",
+ "zeta-client",
+ "zeta-http-client",
+ "zeta-login",
+ "zeta-secrets",
+]
+
+[[package]]
 name = "zeta-cli"
 version = "0.1.0"
 dependencies = [
@@ -9691,20 +9708,6 @@ dependencies = [
  "zeta-model-provider",
  "zeta-symbol-index",
  "zeta-workspace",
-]
-
-[[package]]
-name = "zeta-codex-app-server"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "zeta-app-server-transport",
- "zeta-core",
- "zeta-login",
- "zeta-protocol",
- "zeta-utils-image",
 ]
 
 [[package]]
@@ -10079,6 +10082,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-kimi"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "urlencoding",
+ "zeroize",
+ "zeta-async-utils",
+ "zeta-client",
+ "zeta-http-client",
+ "zeta-login",
+ "zeta-secrets",
+]
+
+[[package]]
 name = "zeta-language-server-catalog"
 version = "0.1.0"
 dependencies = [
@@ -10246,9 +10265,11 @@ dependencies = [
  "serde_json",
  "zeta-api",
  "zeta-async-utils",
+ "zeta-chatgpt",
  "zeta-client",
  "zeta-context-engine",
  "zeta-http-client",
+ "zeta-kimi",
  "zeta-model-provider-config",
  "zeta-model-tokenizer",
  "zeta-models-manager",

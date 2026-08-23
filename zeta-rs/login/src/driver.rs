@@ -14,6 +14,9 @@ use crate::LoginId;
 /// and persistence private. They may return only redacted account metadata and
 /// user-facing browser or device-code instructions.
 pub trait InteractiveLoginDriver: Send + Sync {
+    /// Returns the stable provider identity owned by this driver.
+    fn provider_id(&self) -> &'static str;
+
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError>;
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError>;

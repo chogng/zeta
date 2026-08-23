@@ -130,7 +130,6 @@ pub struct ApiProfilePolicy {
 pub enum ApiProfileConfig {
     OpenAiResponses,
     OpenAiChatCompletions,
-    ChatGptCodex,
     AnthropicMessages,
     GeminiInteractions,
     GeminiGenerateContent,
@@ -141,11 +140,7 @@ pub enum ApiProfileConfig {
 `ApiProfileConfig` 是可序列化的配置值，不是 `zeta-api` runtime object。`zeta-model-provider`
 负责把它映射为具体 endpoint implementation，配置 crate 不依赖 `zeta-api`。
 
-`ChatGptCodex` 不是“再加一个可填写 base URL 的 OpenAI-compatible profile”。它只能由 built-in
-definition 声明为需要已配置 Codex subscription runtime 的 service surface：target、credential 和
-backend selection 由 [`zeta-codex-app-server`](codex-app-server.md) 及 upstream Codex 管理，用户配置
-不得覆盖为任意 URL，Platform API key 也不得用于该 profile。上游提供的 memories/search/realtime
-能力不自动成为 `zeta-api` endpoint；只有通过公开 App Server contract 映射的能力才可接入。
+ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `zeta-model-provider` 从 `zeta-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 
 Provider-specific compatibility 也必须 typed：
 
@@ -217,18 +212,11 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-`STATIC_MODEL_CATALOG` 是产品内置模型的唯一声明点。每个 `StaticModelSpec` 可以声明 provider/model
-identity、display name、access kind、context window、automatic compaction threshold、capabilities、reasoning efforts、
-personality、input-token count eligibility 和 approval-review default。1M 模型用实际
-`context_window = 1_000_000` 表示，`has_one_million_context()` 由数值推导，不保存第二个布尔事实。
+`STATIC_MODEL_CATALOG` 是产品内置模型的唯一声明点。每个 `StaticModelSpec` 可以声明 provider/model identity、display name、access kind、execution runtime、context window、automatic compaction threshold、capabilities、reasoning efforts、personality、input-token count eligibility 和 approval-review default。1M 模型用实际 `context_window = 1_000_000` 表示，`has_one_million_context()` 由数值推导，不保存第二个布尔事实。
 
-`ProviderConfigRegistry::builtin()` 把 direct-provider rows 自动注入 `ProviderDefinition.models`、默认审核
-模型和 count eligibility；Codex subscription 目录也从同一数组投影。Provider 文件只拥有 endpoint、
-adapter、profile 和 transport 特例，不能再写一份产品模型名单。
+`ProviderConfigRegistry::builtin()` 把所有 rows 自动注入 `ProviderDefinition.models`、默认审核模型和 count eligibility。Provider 文件只拥有 endpoint、adapter、profile 和 transport 特例，不能再写一份产品模型名单。
 
-`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。它是后端静态目录
-向所有客户端统一提供的接入方式 metadata；各客户端可自行决定展示方式，产品组合也用它选择执行
-backend。`ModelRef.provider` 只表示模型厂商。认证、entitlement 和远端可用性仍只在实际 Turn 中验证。
+`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。`Subscription` 要求客户端使用登录系统中的用户账户，`ApiKey` 要求模型凭据领域中的开发者密钥；二者不能互相降级。它们不能承担 backend routing，`StaticModelRuntime::{ProviderApi, ChatGptSubscription, KimiCode}` 才是独立执行事实；`ModelRef.provider` 只表示模型厂商。认证、订阅权益和远端可用性仍只在实际 Turn 中验证。
 
 这些 rows 是：
 

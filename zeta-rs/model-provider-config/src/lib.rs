@@ -30,6 +30,7 @@ pub use model_catalog::STATIC_MODEL_CATALOG;
 pub use model_catalog::find_static_model;
 pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
+pub use static_model_spec::StaticModelRuntime;
 pub use static_model_spec::StaticModelSpec;
 pub use zeta_protocol::Model;
 pub use zeta_protocol::ModelId;

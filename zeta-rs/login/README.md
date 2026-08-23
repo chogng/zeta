@@ -1,13 +1,10 @@
 # `zeta-login`
 
-`zeta-login` owns Zeta's redacted interactive-account control plane. It assigns stable login IDs,
-tracks active attempts, projects revisioned account state, and emits completion/account events.
-Provider adapters retain OAuth protocol, callback, credential persistence, refresh, and logout I/O.
+`zeta-login` 拥有 Zeta 的脱敏多 Provider 交互式账户控制面。它按 stable provider ID 注册 driver、分配稳定的登录 ID、跟踪活动中的尝试、投影带版本的账户集合，并发布登录完成与账户事件。供应商适配器继续拥有 OAuth 协议、回调、凭据持久化、刷新和登出 I/O。
 
-## Ownership and execution
+## 所有权与执行
 
-`LoginService` is the state owner. `InteractiveLoginDriver` is its consumer-owned provider port;
-`LoginEvents` is the product-host output port. The normal path is:
+`LoginService` 是状态所有者，`InteractiveLoginDriver` 是由消费方拥有的供应商端口，`LoginEvents` 是产品宿主的输出端口。正常路径如下：
 
 ```text
 LoginService::begin
@@ -19,17 +16,12 @@ LoginService::begin
 → LoginEvents::account_updated on success
 ```
 
-`LoginService::cancel` only accepts an active exact `LoginId` and delegates idempotent cancellation.
-`LoginService::logout` passes only `AccountRef` to the driver, then clears the redacted projection and
-increments its revision. `refresh` reads a redacted driver snapshot and publishes only when it changed.
+`LoginService::cancel` 只接受仍处于活动状态的精确 `LoginId`，并委托给拥有该 provider 的 driver。`LoginService::logout_provider` 只向对应驱动传递 `AccountRef`，随后清除该 provider 的脱敏投影并递增版本号。`refresh` 读取全部 driver 的脱敏快照，并且只在账户集合变化时发布。
 
-## Failure and security contract
+## 失败与安全契约
 
-`LoginErrorKind` supplies stable internal categories; product protocols map those categories without
-forwarding provider payloads. Neither public types nor events contain access tokens, refresh tokens,
-API keys, cookies, authorization codes, PKCE state, secret-store references, or credential paths.
+`LoginErrorKind` 提供稳定的内部分类；产品协议映射这些分类，不转发供应商载荷。公共类型和事件均不得包含 access token、refresh token、API key、cookie、authorization code、PKCE state、secret-store reference 或 credential path。
 
-The production ChatGPT/Codex implementation lives in `zeta-codex-app-server` and delegates managed
-login to an upstream local Codex App Server. This crate remains provider-neutral and does not depend
-on that adapter. Tests here use a fake driver to keep identity, cancellation, revision, and event
-semantics independent of any provider process.
+用户订阅只在供应商提供并允许稳定的交互式 OAuth 时注册为 `LoginMethod`。没有受支持 OAuth 的供应商仍由模型凭据领域接受 API key；API key 不是登录方法，也不能作为 OAuth 失败后的隐式降级。
+
+生产环境的 ChatGPT 与 Kimi 订阅实现分别位于 `zeta-chatgpt` 和 `zeta-kimi`，都在本机执行 device OAuth、refresh 并使用 SecretStore。本 crate 保持供应商无关，也不依赖这些适配器。这里的测试使用 fake driver，使身份、取消、版本和事件语义不依赖任何供应商网络实现。

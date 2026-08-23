@@ -6,7 +6,6 @@ use std::sync::{Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::CancellationSource;
-use zeta_codex_app_server::CodexAppServerOptions;
 use zeta_config::{
     ConfigCommandRequest, ConfigRevision, PreferencesUpdate, ResolvedConfig, UserConfigCommand,
     WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
@@ -142,13 +141,12 @@ fn wait_for_connector_count(
 }
 
 #[test]
-fn local_composition_installs_the_deferred_codex_account_driver() {
+fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     let profile = tempfile::tempdir().unwrap();
     let server = open_local_app_server(
         LocalAppServerOptions::new(profile.path())
             .without_built_in_skills()
-            .with_session_state_mode(SessionStateMode::Ephemeral)
-            .with_codex_app_server(CodexAppServerOptions::new("/zeta/does/not/exist/codex")),
+            .with_session_state_mode(SessionStateMode::Ephemeral),
     )
     .unwrap();
     let mut connection = server.connection();
@@ -162,7 +160,8 @@ fn local_composition_installs_the_deferred_codex_account_driver() {
         &mut connection,
         r#"{"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}"#,
     );
-    assert!(account.contains("AccountUnavailable"));
+    let account: serde_json::Value = serde_json::from_str(&account).unwrap();
+    assert_eq!(account["result"]["accounts"], serde_json::json!([]));
 }
 
 #[test]
@@ -176,8 +175,7 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
             LocalAppServerOptions::new(profile.path())
                 .with_profile_runtime(Arc::clone(&runtime))
                 .with_workspace_root(workspace)
-                .without_built_in_skills()
-                .with_codex_app_server(CodexAppServerOptions::new("/zeta/does/not/exist/codex")),
+                .without_built_in_skills(),
         )
         .unwrap()
     };
@@ -636,6 +634,43 @@ impl ResponseGate {
 
 struct RecordingSnapshotResolver {
     gate: Arc<ResponseGate>,
+}
+
+#[derive(Default)]
+struct RecordingModelProvider {
+    request: Mutex<Option<ModelRuntimeRequest>>,
+}
+
+impl ModelProvider for RecordingModelProvider {
+    fn runtime(
+        &self,
+        request: ModelRuntimeRequest,
+    ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
+        *self.request.lock().unwrap() = Some(request);
+        Ok(Arc::new(UnavailableModel::new("recorded")))
+    }
+}
+
+#[test]
+fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
+    let provider = Arc::new(RecordingModelProvider::default());
+    let resolver = ModelProviderSnapshotResolver {
+        model_provider: provider.clone(),
+    };
+    let config = ResolvedConfig {
+        preferred_model: Some(ModelRef::new(
+            ProviderId::new("openai").unwrap(),
+            ModelId::new("gpt-5.6-sol").unwrap(),
+        )),
+        ..ResolvedConfig::default()
+    };
+
+    let _ = resolver.resolve(&config);
+
+    let request = provider.request.lock().unwrap().clone().unwrap();
+    assert_eq!(request.model, config.preferred_model.unwrap());
+    assert_eq!(request.config.provider.as_str(), "openai");
+    assert_eq!(request.config.base_url, None);
 }
 
 impl ModelSnapshotResolver for RecordingSnapshotResolver {

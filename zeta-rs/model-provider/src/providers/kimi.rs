@@ -31,6 +31,17 @@ impl KimiAdapter {
             endpoint: api_endpoint(config.api_profile),
         }
     }
+
+    pub(crate) fn with_target(
+        config: &NormalizedModelProviderConfig,
+        target: ResolvedApiTarget,
+    ) -> Self {
+        Self {
+            target,
+            token_counter: None,
+            endpoint: api_endpoint(config.api_profile),
+        }
+    }
 }
 
 impl ProviderAdapter for KimiAdapter {
@@ -78,6 +89,7 @@ impl ProviderAdapter for KimiAdapter {
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
+        let model = upstream_model(model);
         self.endpoint
             .complete_with_client_and_cancellation(
                 &self.target,
@@ -87,5 +99,13 @@ impl ProviderAdapter for KimiAdapter {
                 cancellation,
             )
             .map_err(Into::into)
+    }
+}
+
+fn upstream_model(model: &str) -> &str {
+    match model {
+        "kimi-k2.7-code" => "kimi-for-coding",
+        "kimi-k2.7-code-highspeed" => "kimi-for-coding-highspeed",
+        _ => model,
     }
 }

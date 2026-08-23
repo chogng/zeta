@@ -154,7 +154,7 @@ provider 名称或 `ApiProfile` 猜测；
 OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API key；Ollama 与
 OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
 credential 设置 UI、更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
-Codex subscription Agent loop 通过 Core `TurnExecutionBackend` 接入，不属于本 crate。
+ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Zeta Core `TurnExecutor` 持有。
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。
 

@@ -22,6 +22,9 @@ export interface ToolSearchConfiguration {
 	readonly embeddingModel?: ToolSearchModelReference;
 }
 
+/** Stable Settings identity for the aggregate Tool Search policy. */
+export const ToolSearchSettingId = "toolSearch.configuration";
+
 /** Frontend-owned configuration and readiness view for deferred Agent-tool retrieval. */
 export interface IToolSearchService {
 	readConfig(): Promise<ToolSearchSettings>;

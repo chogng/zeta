@@ -84,7 +84,7 @@
 [`zeta-app-server-api.md`](zeta-app-server-api.md)、[`app-server-client.md`](app-server-client.md)、
 [`zeta-api.md`](zeta-api.md)、[`zeta-api-interface-requirements.md`](zeta-api-interface-requirements.md)、
 [`zeta-api-interface-template.md`](zeta-api-interface-template.md)（模板）、
-[`zeta-client.md`](zeta-client.md)、[`codex-app-server.md`](codex-app-server.md)（参考）
+[`zeta-client.md`](zeta-client.md)、[`chatgpt-subscription.md`](chatgpt-subscription.md)（参考）
 
 ### 模型与配置
 
