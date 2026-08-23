@@ -1,5 +1,5 @@
 use super::default_provider;
-use crate::{ApiProfile, Model, ModelId, ProviderAdapter, ProviderDefinition};
+use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
 
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
@@ -9,8 +9,4 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://api.deepseek.com",
     )
-    .with_default_model(Model::new(
-        ModelId::new("deepseek-v4-pro").expect("valid model ID"),
-        "DeepSeek V4 Pro",
-    ))
 }

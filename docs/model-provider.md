@@ -247,8 +247,8 @@ zeta-app-server → zeta-login → zeta-codex-app-server → upstream Codex App 
 
 `TurnExecutionBackend` 是 Core 消费的窄 port。它接收已创建的 durable Turn，并把完整远端执行结果
 投影回 Core；它不接受 raw access token、header map 或 arbitrary ChatGPT base URL。产品 composition
-根据持久化 Turn model 的 exact provider 显式选择 default `TurnExecutor` 或 Codex backend；
-`openai-chatgpt` 由上游 account-filtered model catalog 提供，`zeta-model-provider` 不参与远端 Agent loop。
+根据持久化 Turn model 在静态目录中的 access 显式选择 default `TurnExecutor` 或 Codex backend；
+subscription row 的 provider 仍是 `openai`，`zeta-model-provider` 不参与远端 Agent loop。
 
 401 recovery 也按身份所有者处理：direct-provider credential 可由其 provider runtime 做一次受限
 refresh/rebuild；Codex subscription 由 upstream Codex 自己刷新，Zeta 只接收 reauthentication-required

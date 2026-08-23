@@ -249,7 +249,7 @@ ChatGPT/Codex subscription 通过 [`codex-app-server.md`](codex-app-server.md) �
 `zeta-codex-app-server` 启动并适配上游 `codex app-server`，由上游拥有 PKCE、callback、token
 persistence/refresh 和 Codex backend compatibility。Zeta App Server 只组合其 redacted login/account
 状态；完整 Codex Agent loop 通过 Core `TurnExecutionBackend` 委托，不进入 `model-provider`。产品
-composition 使用 `openai-chatgpt` provider 的 exact ModelRef 显式选择哪些 Turn 使用该 backend，
+composition 使用 exact ModelRef 对应静态 row 的 `access = subscription` 显式选择哪些 Turn 使用该 backend，
 不会由“已登录”隐式切换。Zeta 不复制 OAuth 实现，也不读取 `~/.codex/auth.json`。
 
 ## 3. Protocol 边界

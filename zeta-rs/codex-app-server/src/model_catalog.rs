@@ -9,9 +9,6 @@ const MODEL_PAGE_LIMIT: u32 = 100;
 const MAX_MODEL_PAGES: usize = 32;
 const MAX_MODELS: usize = 2_048;
 
-/// Stable provider identity used for models executed through a ChatGPT subscription.
-pub const CODEX_SUBSCRIPTION_PROVIDER_ID: &str = "openai-chatgpt";
-
 /// One redacted model advertised by the upstream Codex App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodexCatalogModel {

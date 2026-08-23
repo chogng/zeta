@@ -2,7 +2,7 @@ mod catalog;
 mod invocation;
 
 pub use catalog::{
-    CapabilitySupport, ContextWindow, InvalidModelIdentity, Model, ModelAvailability,
+    CapabilitySupport, ContextWindow, InvalidModelIdentity, Model, ModelAccess, ModelAvailability,
     ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo, ModelLifecycle,
     ModelMetadataQuality, ModelPreset, ModelRef, ProviderId, ReasoningEffort,
 };

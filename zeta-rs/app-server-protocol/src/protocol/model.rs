@@ -1,17 +1,90 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use zeta_protocol::ContextWindow;
+use zeta_protocol::ModelAccess;
+use zeta_protocol::ModelCapabilities;
+use zeta_protocol::ModelInfo;
 use zeta_protocol::ModelRef;
+use zeta_protocol::Personality;
+use zeta_protocol::ReasoningEffort;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
+    pub access: ModelAccess,
+    pub context_window: Option<u32>,
+    pub auto_compact_token_limit: Option<u32>,
+    pub capabilities: ModelCapabilities,
+    pub supported_reasoning_efforts: Vec<ReasoningEffort>,
+    pub default_reasoning_effort: Option<ReasoningEffort>,
+    pub default_personality: Option<Personality>,
+}
+
+impl ModelCatalogEntry {
+    /// Projects provider-neutral model metadata into the public App Server catalog DTO.
+    pub fn from_info(model: ModelRef, info: &ModelInfo) -> Self {
+        debug_assert_eq!(model.model, info.id);
+        Self {
+            model,
+            display_name: info.display_name.clone(),
+            access: info.access,
+            context_window: match info.context_window {
+                ContextWindow::Known(tokens) => Some(tokens),
+                ContextWindow::Unknown => None,
+            },
+            auto_compact_token_limit: info.auto_compact_token_limit,
+            capabilities: info.capabilities,
+            supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
+            default_reasoning_effort: info.default_reasoning_effort,
+            default_personality: info.default_personality,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelListResult {
     pub models: Vec<ModelCatalogEntry>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use zeta_protocol::CapabilitySupport;
+    use zeta_protocol::ModelId;
+    use zeta_protocol::ProviderId;
+
+    #[test]
+    fn catalog_entry_projects_all_public_static_metadata() {
+        let model = ModelRef::new(
+            ProviderId::new("test-provider").unwrap(),
+            ModelId::new("test-model").unwrap(),
+        );
+        let mut info = ModelInfo::new(model.model.clone(), "Test Model");
+        info.access = ModelAccess::Subscription;
+        info.context_window = ContextWindow::Known(1_000_000);
+        info.auto_compact_token_limit = Some(900_000);
+        info.capabilities.reasoning = CapabilitySupport::Supported;
+        info.supported_reasoning_efforts = vec![ReasoningEffort::Medium, ReasoningEffort::High];
+        info.default_reasoning_effort = Some(ReasoningEffort::High);
+        info.default_personality = Some(Personality::Pragmatic);
+
+        let entry = ModelCatalogEntry::from_info(model.clone(), &info);
+
+        assert_eq!(entry.model, model);
+        assert_eq!(entry.display_name, "Test Model");
+        assert_eq!(entry.access, ModelAccess::Subscription);
+        assert_eq!(entry.context_window, Some(1_000_000));
+        assert_eq!(entry.auto_compact_token_limit, Some(900_000));
+        assert_eq!(entry.capabilities.reasoning, CapabilitySupport::Supported);
+        assert_eq!(
+            entry.supported_reasoning_efforts,
+            vec![ReasoningEffort::Medium, ReasoningEffort::High]
+        );
+        assert_eq!(entry.default_reasoning_effort, Some(ReasoningEffort::High));
+        assert_eq!(entry.default_personality, Some(Personality::Pragmatic));
+    }
 }

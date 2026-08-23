@@ -2,7 +2,8 @@ use crate::config::{is_http_url, normalize_base_url};
 use crate::{
     ApprovalReviewModelDefault, BaseUrlNormalization, EndpointPolicy, InputTokenCountTarget,
     ModelCatalogPolicy, ModelProviderConfig, NormalizedInputTokenCountConfig,
-    NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId, providers,
+    NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId,
+    model_catalog, providers,
 };
 use std::collections::BTreeMap;
 use zeta_protocol::ModelRef;
@@ -24,7 +25,9 @@ impl ProviderConfigRegistry {
     }
 
     pub fn builtin() -> Self {
-        Self::from_definitions(providers::builtin())
+        let mut definitions = providers::builtin();
+        model_catalog::attach_static_models(&mut definitions);
+        Self::from_definitions(definitions)
             .expect("built-in provider definitions must be valid and unique")
     }
 

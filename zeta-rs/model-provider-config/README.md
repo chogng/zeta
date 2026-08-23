@@ -16,6 +16,7 @@ credential、secret、connection pool 或 process-local adapter。
 | `ProviderDefinition` | provider-owned declaration | adapter identity、API profile、endpoint/catalog/defaults |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
+| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 唯一 built-in model 目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `zeta-api::ApiEndpoint` |
 | `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
@@ -35,8 +36,9 @@ src/
 ├── config.rs       # user config、normalized config、URL helpers
 ├── definition.rs   # provider declaration 与 validation
 ├── input_token_count.rs # count profile、target、model policy 与 normalized snapshot
+├── model_catalog.rs # sole built-in model list 与 ProviderDefinition projection
 ├── registry.rs     # registration、merge、selection、normalization
-├── providers/      # one private built-in definition per provider
+├── providers/      # provider endpoint、adapter、profile 与 transport declarations
 ├── error.rs
 └── lib.rs
 ```
@@ -46,6 +48,8 @@ src/
 | `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
 | `ProviderDefinition::validate` | public method | name、default endpoint、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
+| `STATIC_MODEL_CATALOG` | public constant | 全部产品内置模型及静态 metadata | 新模型只能在这里增加一次 |
+| `attach_static_models` | crate-private function | catalog rows → provider models/default/count eligibility | registry validation 前自动执行 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
 | `ProviderConfigRegistry::normalize` | public method | config + definition → normalized snapshot | endpoint/default/profile precedence 在此唯一实现 |
@@ -94,11 +98,47 @@ Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造�
 
 ## 内置供应商定义
 
-每个 `providers/<name>.rs::definition()` 返回一个完整 `ProviderDefinition`。例如 OpenAI 选择
+每个 `providers/<name>.rs::definition()` 返回不含产品模型清单的 `ProviderDefinition`。例如 OpenAI 选择
 `OpenAiResponses` 与同 base 的 count profile；Google invocation 使用 compatible base，但
 `countTokens` 使用单独声明的 native base；Anthropic 选择 `AnthropicMessages` 并声明默认 max
-tokens。Kimi、Google 和 Z.AI 的 count model list 是 definition 数据，不由 runtime 按 ID 前缀猜测。
+tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transport definition 数据；进入产品
+目录的模型及其 count eligibility 由 `STATIC_MODEL_CATALOG` 自动注入，不由 runtime 按 ID 前缀猜测。
 Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
+
+## 统一静态模型清单
+
+产品内置模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。最小条目只写 provider、
+model ID、显示名和 access；1M context 直接写 `context_window: 1_000_000`，不再维护一个可能与 token
+数冲突的 `is1m` 布尔值。能力、reasoning、personality、自动压缩、input-token count 和 approval-review
+default 都是同一块中的可选命名字段。未填写的 metadata 明确保持 unknown、none 或 false：
+
+```rust
+static_model! {
+    provider: "provider-id",
+    id: "model-id",
+    name: "Display Name",
+    access: subscription,
+    context_window: 1_000_000,
+    capabilities: {
+        tools: supported,
+        reasoning: supported,
+    },
+    reasoning: [low, medium, high],
+    default_reasoning: medium,
+    default_personality: pragmatic,
+    input_token_count: true,
+    approval_review_default: true,
+}
+```
+
+`ProviderConfigRegistry::builtin()` 自动把 direct-provider rows 投影为 `ProviderDefinition.models`；App
+Server 从同一目录投影 Codex subscription rows。通用契约测试会对
+每个新增 row 自动检查 identity 唯一性、metadata 一致性、provider 存在、default 唯一性和 count binding，
+无需再维护一份枚举式 expected-model 测试。
+
+`ModelAccess::Subscription` 是客户端可消费的接入方式 metadata，具体 UI 由各客户端自行决定；产品
+组合也用它选择 subscription complete-Turn backend。`ModelRef.provider` 只表示模型厂商。认证、
+entitlement 和远端可用性仍在真正执行 Turn 时验证，不能由 `ModelAccess` 推断。
 
 `InputTokenCountTarget::InvocationBase` 会跟随显式 endpoint override，适合 count 与 invocation 同一
 service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 provider 默认 endpoint 时启用；
@@ -132,7 +172,7 @@ bazel test //zeta-rs/model-provider-config:model-provider-config-unit-tests
 ```
 
 测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/output/context tokens、merge semantics、
-automatic review model、catalog gate、built-in completeness 与 provider mismatch。
+automatic review model、统一静态目录投影与 metadata contract、catalog gate、built-in completeness 与 provider mismatch。
 
 当前 URL validator 只接受具有非空 authority 的 HTTP(S) shape，不解析 credential、DNS、route 或
 reachability。Catalog 也是 declarative snapshot，不代表 account entitlement。未来可以扩充 schema、

@@ -30,7 +30,7 @@ JSONL / in-process caller
    ├─ MultiAgentCoordinator → child Thread spawn/context seed + durable delivery/join/cancellation
    ├─ TurnBackendHandle → exact Turn.model provider router
    │                   ├─ TurnExecutor (direct provider)
-   │                   └─ CodexTurnExecutionBackend (openai-chatgpt subscription)
+   │                   └─ CodexTurnExecutionBackend (`openai` model with subscription access)
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
@@ -98,7 +98,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports |
 | `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
-| `AppServer::with_codex_turn_backend` | 将 `openai-chatgpt` 模型路由到 Codex complete-Turn backend；不读取登录状态做隐式切换 |
+| `AppServer::with_codex_turn_backend` | 将静态目录中 `access = subscription` 的模型路由到 Codex complete-Turn backend；不读取登录状态做隐式切换 |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
 | `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
@@ -432,11 +432,14 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 5. replay 时同时校验 input、model 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
-`model/list` 由 `ModelCatalog` adapter 投影 shared `zeta-models-manager` 中当前已配置 provider 的
-可选模型；`session/request::SetModel` 先通过同一个 manager 的 typed resolution 校验，再提交 Session
-command。App Server 不读取 `ProviderDefinition.models` 或维护第二份排序/allow-unlisted 判断。全局
-`preferredModel` 只作为新 Session
-和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
+`model/list` 由 `ModelCatalog` adapter 投影 shared `zeta-models-manager` 中从
+`zeta-model-provider-config::STATIC_MODEL_CATALOG` 派生的 provider seed；`CombinedModelCatalog` 从同一
+静态目录合并 Codex 条目。列表统一携带 identity、display name、access、context window、automatic
+compaction threshold、capabilities、reasoning efforts 和默认 personality，不读取 provider 配置、
+ChatGPT 账户或 upstream model catalog 做健康检查。`session/request::SetModel` 只校验 exact identity 属于静态
+产品目录再提交 Session command；配置、认证、entitlement、rate limit 和调用错误由实际 Turn backend
+处理并持久化为 Turn failure。App Server 不维护 direct provider 或 Codex 的第二份模型清单。全局
+`preferredModel` 只作为新 Session 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
 
 `session/request::ResolveInteraction` 使用 exact durable
 `RequestId`，且只接受 `UpdateBroker` 选出的、声明该 kind 并订阅 scope 的 connection；full request

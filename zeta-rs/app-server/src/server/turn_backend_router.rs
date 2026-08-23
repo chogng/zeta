@@ -5,8 +5,9 @@ use std::sync::Weak;
 use zeta_core::CoreError;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
+use zeta_model_provider_config::find_static_model;
+use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
-use zeta_protocol::ProviderId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 use zeta_workspace::WorkspaceCapability;
@@ -55,13 +56,12 @@ impl TurnExecutionBackend for TurnBackendHandle {
 
 /// Selects the complete-Turn backend from the model already persisted on a Core Turn.
 ///
-/// Direct-provider models use the local `TurnExecutor`; models owned by the exact Codex
-/// subscription provider use the injected Codex backend. Selection never consults login state,
-/// mutable UI state, or model-name heuristics.
+/// API-key models use the local `TurnExecutor`; static rows whose access mode is subscription use
+/// the injected Codex backend. Selection never consults login state, mutable UI state, or
+/// model-name heuristics.
 pub(crate) struct TurnBackendRouter {
     threads: Arc<ThreadController>,
     local: Arc<dyn TurnExecutionBackend>,
-    codex_provider: ProviderId,
     codex: Arc<dyn TurnExecutionBackend>,
 }
 
@@ -69,13 +69,11 @@ impl TurnBackendRouter {
     pub(crate) fn new(
         threads: Arc<ThreadController>,
         local: Arc<dyn TurnExecutionBackend>,
-        codex_provider: ProviderId,
         codex: Arc<dyn TurnExecutionBackend>,
     ) -> Self {
         Self {
             threads,
             local,
-            codex_provider,
             codex,
         }
     }
@@ -93,7 +91,9 @@ impl TurnBackendRouter {
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?
             .model
             .as_ref();
-        if model.is_some_and(|model: &ModelRef| model.provider == self.codex_provider) {
+        if model.is_some_and(|model: &ModelRef| {
+            find_static_model(model).is_some_and(|entry| entry.access == ModelAccess::Subscription)
+        }) {
             Ok(Arc::clone(&self.codex))
         } else {
             Ok(Arc::clone(&self.local))

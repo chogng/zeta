@@ -21,7 +21,6 @@ use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
 use zeta_codex_app_server::CodexAppServerLoginDriver;
 use zeta_codex_app_server::CodexAppServerOptions;
 use zeta_codex_app_server::CodexAppServerRuntime;
-use zeta_codex_app_server::CodexModelCatalog;
 use zeta_codex_app_server::CodexThreadAccess;
 use zeta_codex_app_server::CodexTurnDriver;
 use zeta_codex_app_server::CodexTurnExecutionBackend;
@@ -70,6 +69,7 @@ use zeta_model_provider::ModelProviderRuntime;
 use zeta_model_provider::ModelRuntimeRequest;
 use zeta_model_provider::TokenizerAssetCatalog;
 use zeta_model_provider::UnavailableModel;
+use zeta_model_provider_config::ModelCatalogPolicy;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_models_manager::CatalogQuery;
 use zeta_models_manager::ModelRequirements;
@@ -1106,13 +1106,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let direct_catalog: Arc<dyn ModelCatalog> = model.clone();
-    let combined_catalog = Arc::new(
-        CombinedModelCatalog::new(
-            direct_catalog,
-            CodexModelCatalog::new(Arc::clone(&codex_runtime)),
-        )
-        .map_err(|error| OpenAppServerError(error.to_string()))?,
-    );
+    let combined_catalog = Arc::new(CombinedModelCatalog::new(direct_catalog));
     let update_workspace = if workspace.is_some() {
         options
             .workspace_root
@@ -1248,9 +1242,7 @@ pub fn open_local_app_server_with_code_index_providers(
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     );
-    server = server
-        .with_codex_turn_backend(codex_turn_backend)
-        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    server = server.with_codex_turn_backend(codex_turn_backend);
     server
         .resume_recovered_agent_coordinations()
         .map_err(open_error)?;
@@ -1731,18 +1723,22 @@ impl ModelCatalog for ConfigBackedModelService {
         &self,
     ) -> Result<Vec<zeta_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
         let config = self.resolved_config()?;
-        let providers = config.providers.keys().cloned().collect::<Vec<_>>();
+        let providers = self
+            .provider_configs
+            .providers()
+            .map(|provider| provider.id.clone())
+            .collect::<Vec<_>>();
         let mut models = self
             .models_manager
-            .list_static(&providers, &CatalogQuery::selectable())
+            .list_static(&providers, &CatalogQuery::all())
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
-            .map(
-                |entry| zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                    model: entry.model().clone(),
-                    display_name: entry.info().display_name.clone(),
-                },
-            )
+            .map(|entry| {
+                zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                    entry.model().clone(),
+                    entry.info(),
+                )
+            })
             .collect::<Vec<_>>();
         if let Some(preferred) = config.preferred_model
             && !models.iter().any(|entry| entry.model == preferred)
@@ -1752,10 +1748,10 @@ impl ModelCatalog for ConfigBackedModelService {
                 .resolve_static(&preferred, &ModelRequirements::agent())
                 .map_err(|error| CoreError::Model(error.to_string()))?;
             models.push(
-                zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                    display_name: resolved.entry().info().display_name.clone(),
-                    model: preferred,
-                },
+                zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                    preferred,
+                    resolved.entry().info(),
+                ),
             );
         }
         models.sort_by(|left, right| {
@@ -1772,20 +1768,24 @@ impl ModelCatalog for ConfigBackedModelService {
     }
 
     fn validate(&self, model: &zeta_protocol::ModelRef) -> Result<(), CoreError> {
-        let config = self.resolved_config()?;
-        let provider = config.providers.get(&model.provider).ok_or_else(|| {
+        let definition = self.provider_configs.get(&model.provider).ok_or_else(|| {
             CoreError::Model(format!(
-                "model provider '{}' is not configured",
+                "model provider '{}' is not registered",
                 model.provider
             ))
         })?;
-        self.provider_configs
-            .normalize_for(provider, &model.provider)
-            .map_err(|error| CoreError::Model(error.to_string()))?;
-        self.models_manager
-            .resolve_static(model, &ModelRequirements::agent())
-            .map(|_| ())
-            .map_err(|error| CoreError::Model(error.to_string()))
+        if definition
+            .models
+            .iter()
+            .any(|entry| entry.id == model.model)
+            || definition.model_catalog_policy == ModelCatalogPolicy::AllowUnlisted
+        {
+            return Ok(());
+        }
+        Err(CoreError::Model(format!(
+            "model '{}/{}' is not registered in Zeta's static catalog",
+            model.provider, model.model
+        )))
     }
 }
 

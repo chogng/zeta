@@ -16,7 +16,7 @@
 
 | 读者首先会问 | 直接答案 | 深入阅读 |
 | --- | --- | --- |
-| 这里保存什么？ | 可序列化的供应商定义、API 配置档案、默认值和静态模型资料 | [目标配置模型](#4-目标配置模型) |
+| 这里保存什么？ | 可序列化的供应商定义、API 配置档案、默认值和唯一静态模型目录 | [静态模型元数据](#7-静态模型元数据) |
 | 用户覆盖如何生效？ | 按字段规则合并后进行确定性规范化，相同输入必须得到相同结果 | [合并与规范化](#5-合并与规范化) |
 | 可以在这里读取 API key 吗？ | 不可以；配置只能保存不敏感的凭据引用 | [拥有与不拥有](#2-拥有与不拥有) |
 | 可以探测端点是否可用吗？ | 不可以；网络、凭据和运行时状态不能参与静态配置校验 | [Base URL 边界](#6-base-url-与端点的边界) |
@@ -27,7 +27,7 @@
 `zeta-model-provider-config` 描述“一个 Provider 可以怎样被配置”。它只包含可序列化、可校验、
 可生成 schema 的声明值，不创建 HTTP client，不读取 credential，也不执行模型调用。
 
-这里的“静态”不是 Rust 编译期常量，而是指：
+这里的“静态”主要指校验不依赖运行时状态；其中 built-in model 目录确实由一个 Rust 常量维护：
 
 - 值可以在进程外持久化和传输；
 - 校验不依赖网络、credential 或当前进程状态；
@@ -55,7 +55,7 @@ zeta-http-client      负责底层网络传输
 - 允许选择的 API profile 及默认 profile；
 - input-token count profile、独立 target 与 model eligibility policy；
 - base URL normalization 规则；
-- 静态 seed models 和 model catalog policy；
+- 唯一 `STATIC_MODEL_CATALOG`、由它投影的 seed models 和 model catalog policy；
 - 非敏感调用默认值，例如最大输出 token；
 - 用户按模型 ID 提供的 context window 与 automatic compaction threshold；
 - 用户 `ModelProviderConfig`；
@@ -89,6 +89,7 @@ zeta-http-client      负责底层网络传输
 - `EndpointPolicy`；
 - `ModelCatalogPolicy`；
 - built-in Provider definitions；
+- `STATIC_MODEL_CATALOG` 与 `StaticModelSpec`；
 - 静态校验、registry merge 和 schema tests。
 
 当前需要演进的地方：
@@ -216,7 +217,20 @@ definition/runtime 显式声明。
 
 ## 7. 静态模型元数据
 
-`ProviderDefinition.seed_models` 是：
+`STATIC_MODEL_CATALOG` 是产品内置模型的唯一声明点。每个 `StaticModelSpec` 可以声明 provider/model
+identity、display name、access kind、context window、automatic compaction threshold、capabilities、reasoning efforts、
+personality、input-token count eligibility 和 approval-review default。1M 模型用实际
+`context_window = 1_000_000` 表示，`has_one_million_context()` 由数值推导，不保存第二个布尔事实。
+
+`ProviderConfigRegistry::builtin()` 把 direct-provider rows 自动注入 `ProviderDefinition.models`、默认审核
+模型和 count eligibility；Codex subscription 目录也从同一数组投影。Provider 文件只拥有 endpoint、
+adapter、profile 和 transport 特例，不能再写一份产品模型名单。
+
+`ModelAccess` 当前区分 `ApiKey`、`Subscription`、`Local`、`Enterprise` 和 `Unknown`。它是后端静态目录
+向所有客户端统一提供的接入方式 metadata；各客户端可自行决定展示方式，产品组合也用它选择执行
+backend。`ModelRef.provider` 只表示模型厂商。认证、entitlement 和远端可用性仍只在实际 Turn 中验证。
+
+这些 rows 是：
 
 - 启动 seed；
 - Provider 没有动态 discovery 时的静态来源；
@@ -232,7 +246,9 @@ definition/runtime 显式声明。
 
 动态发现、缓存、字段级 merge 和筛选属于
 [`zeta-models-manager`](models-manager.md)。`ListedOnly` / `AllowUnlisted` 的最终判断应逐步消费
-manager resolution，而不是让静态 definition 永久承担动态 catalog。
+manager resolution，而不是让静态 definition 永久承担动态 catalog。新增 row 会自动进入通用 contract
+tests；测试验证 identity 唯一、metadata 自洽、provider/default/count binding 有效，不维护第二份 expected
+model 枚举。
 
 ## 8. 依赖方向
 

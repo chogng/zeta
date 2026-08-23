@@ -179,7 +179,7 @@ impl crate::model_catalog::ModelCatalog for FixedModelCatalog {
             .iter()
             .any(|entry| &entry.model == model)
             .then_some(())
-            .ok_or_else(|| CoreError::Model("model is not available".into()))
+            .ok_or_else(|| CoreError::Model("model is not in the catalog".into()))
     }
 }
 
@@ -1168,16 +1168,20 @@ fn session_stop_archives_the_session_and_blocks_new_turns() {
 fn model_selection_is_catalog_backed_and_session_scoped() {
     let default = model_ref("gpt-default");
     let alternate = model_ref("gpt-alternate");
+    let mut default_info = zeta_protocol::ModelInfo::new(default.model.clone(), "Default");
+    default_info.access = zeta_protocol::ModelAccess::ApiKey;
+    let mut alternate_info = zeta_protocol::ModelInfo::new(alternate.model.clone(), "Alternate");
+    alternate_info.access = zeta_protocol::ModelAccess::ApiKey;
     let catalog = FixedModelCatalog {
         models: vec![
-            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                model: default.clone(),
-                display_name: "Default".into(),
-            },
-            zeta_app_server_protocol::protocol::model::ModelCatalogEntry {
-                model: alternate.clone(),
-                display_name: "Alternate".into(),
-            },
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                default.clone(),
+                &default_info,
+            ),
+            zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                alternate.clone(),
+                &alternate_info,
+            ),
         ],
         default,
     };

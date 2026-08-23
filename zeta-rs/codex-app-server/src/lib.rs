@@ -12,7 +12,6 @@ mod turn_backend;
 mod turn_driver;
 
 pub use login_driver::CodexAppServerLoginDriver;
-pub use model_catalog::CODEX_SUBSCRIPTION_PROVIDER_ID;
 pub use model_catalog::CodexCatalogModel;
 pub use model_catalog::CodexModelCatalog;
 pub use model_catalog::CodexModelCatalogError;
@@ -40,7 +39,6 @@ pub use turn_driver::CodexUserInputQuestion;
 pub use turn_driver::CodexUserInputRequest;
 pub use turn_driver::StartCodexThread;
 pub use turn_driver::StartCodexTurn;
-
 #[cfg(test)]
 #[path = "login_driver_tests.rs"]
 mod tests;

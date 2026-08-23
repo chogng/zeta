@@ -1,6 +1,7 @@
 use super::*;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 fn provider_id(value: &str) -> ProviderId {
     ProviderId::new(value).unwrap()
@@ -331,6 +332,89 @@ fn builtins_are_valid_and_include_all_supported_adapters() {
             .max_output_tokens,
         Some(1024)
     );
+}
+
+#[test]
+fn static_model_catalog_has_unique_valid_rows() {
+    let mut identities = BTreeSet::new();
+    for spec in STATIC_MODEL_CATALOG {
+        assert!(!spec.provider_id.trim().is_empty());
+        assert!(!spec.model_id.trim().is_empty());
+        assert!(!spec.display_name.trim().is_empty());
+        assert!(identities.insert((spec.provider_id, spec.model_id)));
+        assert_eq!(
+            spec.has_one_million_context(),
+            spec.context_window == zeta_protocol::ContextWindow::Known(1_000_000)
+        );
+        if let Some(default) = spec.default_reasoning_effort {
+            assert!(spec.supported_reasoning_efforts.contains(&default));
+        }
+        if let (
+            zeta_protocol::ContextWindow::Known(context_window),
+            Some(auto_compact_token_limit),
+        ) = (spec.context_window, spec.auto_compact_token_limit)
+        {
+            assert!(auto_compact_token_limit <= context_window);
+        }
+    }
+}
+
+#[test]
+fn builtin_provider_models_and_defaults_derive_from_static_catalog() {
+    let registry = ProviderConfigRegistry::builtin();
+
+    for definition in registry.providers() {
+        let specs = STATIC_MODEL_CATALOG
+            .iter()
+            .filter(|spec| {
+                spec.provider_id == definition.id.as_str()
+                    && spec.access != zeta_protocol::ModelAccess::Subscription
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            definition.models,
+            specs.iter().map(|spec| spec.model()).collect::<Vec<_>>()
+        );
+
+        let defaults = specs
+            .iter()
+            .filter(|spec| spec.is_approval_review_default)
+            .collect::<Vec<_>>();
+        assert!(defaults.len() <= 1);
+        match defaults.first() {
+            Some(default) => assert_eq!(
+                definition.defaults.approval_review_model,
+                ApprovalReviewModelDefault::Model {
+                    model: ModelId::new(default.model_id).unwrap(),
+                }
+            ),
+            None => assert_eq!(
+                definition.defaults.approval_review_model,
+                ApprovalReviewModelDefault::ActiveModel
+            ),
+        }
+    }
+
+    for spec in STATIC_MODEL_CATALOG {
+        assert!(registry.get(&provider_id(spec.provider_id)).is_some());
+        if spec.access == zeta_protocol::ModelAccess::Subscription {
+            assert_eq!(spec.provider_id, "openai");
+            assert!(!spec.is_approval_review_default);
+            assert!(!spec.supports_input_token_count);
+        }
+        if spec.supports_input_token_count {
+            assert!(
+                registry
+                    .get(&provider_id(spec.provider_id))
+                    .unwrap()
+                    .input_token_count
+                    .as_ref()
+                    .is_some_and(|definition| definition
+                        .models
+                        .supports(&ModelId::new(spec.model_id).unwrap()))
+            );
+        }
+    }
 }
 
 #[test]

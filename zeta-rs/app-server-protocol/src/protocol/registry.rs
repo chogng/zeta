@@ -365,10 +365,15 @@ use schemars::JsonSchema;
 use ts_rs::{Config, TS};
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ContentPart;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
+use zeta_protocol::ModelAccess;
+use zeta_protocol::ModelCapabilities;
+use zeta_protocol::Personality;
+use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
 use zeta_protocol::ToolSourceProvenance;
@@ -2163,6 +2168,11 @@ typescript_bindings! {
     SessionThreadResult,
     ThreadSnapshotHistory,
     ThreadHistoryBoundary,
+    CapabilitySupport,
+    ModelAccess,
+    ModelCapabilities,
+    ReasoningEffort,
+    Personality,
     ModelCatalogEntry,
     ModelListResult,
     StableTurnErrorCode,

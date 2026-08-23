@@ -1007,20 +1007,13 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_codex_turn_backend(
-        self,
-        codex: Arc<dyn TurnExecutionBackend>,
-    ) -> Result<Self, CoreError> {
-        let provider =
-            zeta_protocol::ProviderId::new(zeta_codex_app_server::CODEX_SUBSCRIPTION_PROVIDER_ID)
-                .map_err(|error| CoreError::Model(error.to_string()))?;
+    pub(crate) fn with_codex_turn_backend(self, codex: Arc<dyn TurnExecutionBackend>) -> Self {
         let router = turn_backend_router::TurnBackendRouter::new(
             self.sessions.threads().clone(),
             self.turn_executor_backend(),
-            provider,
             codex,
         );
-        Ok(self.with_turn_backend(Arc::new(router)))
+        self.with_turn_backend(Arc::new(router))
     }
 
     pub(super) fn use_current_local_turn_backend(&self) {

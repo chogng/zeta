@@ -3,7 +3,7 @@
 > 物理位置：`zeta-rs/codex-app-server/`
 > Rust crate：`zeta_codex_app_server`
 > 当前状态：managed account/login、thread/Turn streaming 与 Core Turn backend adapter 已实现；
-> 默认 App Server 已通过显式 `openai-chatgpt` 模型选择接入订阅 Turn
+> 默认 App Server 已通过显式选择 `provider = openai, access = subscription` 的模型接入订阅 Turn
 > 登录控制面：[`login.md`](login.md)
 > Core 执行边界：[`core.md`](core.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
@@ -43,7 +43,7 @@ backend compatibility 的所有权。Zeta 只适配可检查的本地 JSON-RPC c
 | command/file approval、structured user input | ✅ | 先建立 durable Core interaction，再 once-only 回答 exact upstream request |
 | Core `TurnExecutionBackend` adapter | ✅ | Core 保留 Thread authority；Codex 执行完整远端 Agent loop |
 | completed remote thread binding | ✅ | 成功 Turn 后持久化，重建后使用 thread/resume；不持久化或重放 in-flight Turn |
-| 默认产品执行 composition | ✅ | `model/list` 投影 account-filtered Codex models；持久化 Turn model 的 exact provider 决定路由 |
+| 默认产品执行 composition | ✅ | `model/list` 投影 Zeta 静态维护的 Codex 清单且不做账户探活；exact ModelRef 对应 row 的 access 决定路由，真实调用错误进入 Turn |
 | permission approval、diff/image/secret input、rate limit | 尚未完成 | 必须按独立语义切片接入或明确拒绝 |
 
 当前兼容门以 initialize response 与所需 method/shape 为准；还没有声明固定的上游 semver 范围。
@@ -120,9 +120,13 @@ ThreadController accepts/starts Turn
 upstream JSON-RPC request。重复 response、错误 response kind、旧 connection generation 或未知 request
 都被拒绝。含 secret 的 user input 当前直接拒绝，因为 Core 的 durable response 不能存 secret。
 
-默认产品组合把上游 `model/list` 的可用项投影成 `provider = openai-chatgpt` 的 ModelRef；只有用户将
-该精确 ModelRef 选入 Session，随后复制到 Turn，App Server 才会选择 Codex backend。登录状态本身
-不会切换已有 Session/Thread，也不会改变 direct-provider 路径。
+默认产品组合从 `zeta-model-provider-config::STATIC_MODEL_CATALOG` 投影 `provider = openai` 且
+`access = subscription` 的 rows。列目录和选择模型不会调用上游 `account/read` 或 `model/list`，也不会把
+某次探测结果变成 UI 状态或提交门禁。Session 选择只校验精确 ModelRef 属于静态产品目录；真正的
+账户、entitlement、rate limit 和模型支持性由 `thread/start` / `turn/start` 验证，失败时 Core 将该
+Turn 持久化为 `modelInvocationFailed`，由对话界面呈现。登录状态本身不会切换已有 Session/Thread，
+也不会改变 direct-provider 路径。静态 row 的 `access = subscription` 既作为统一目录 metadata 暴露给
+所有客户端，也用于选择 Codex backend，但不代表 entitlement 已验证。
 
 在第一次远程请求前，adapter 先追加 `TurnExecutionAttempted`。因此进程丢失后，已有 attempt 的
 in-flight Turn 被视为结果未知并失败，不能重放。成功完成后 adapter 追加 immutable

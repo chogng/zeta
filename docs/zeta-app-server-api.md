@@ -237,7 +237,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
 | `session/unsubscribe` | connection | 删除订阅 |
 | `session/request` | Session | 通过 tagged request 完成 Session、child Thread 和 Turn mutation |
-| `model/list` | global model catalog | 列出当前已配置 direct provider 与已登录 ChatGPT account 可选择的 Codex 模型 |
+| `model/list` | global model catalog | 返回 Zeta 静态模型 identity、display name、access、context、capabilities 与 defaults；不探测 provider 或 ChatGPT 账户 |
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
@@ -596,9 +596,17 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 `ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
 当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
 
-`model/list` 合并 App Server 当前已配置 direct provider 目录与 upstream Codex account-filtered
-目录。后者使用稳定 `openai-chatgpt` provider identity；选择时再次校验 exact model，实际 entitlement
-仍在 upstream 调用时最终验证。登录状态不会隐式改变 Session model。
+`model/list` 的 direct provider seed 和 Codex 条目都派生自
+`zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display
+name、`access`、context window、automatic compaction threshold、capabilities、reasoning efforts 和默认
+personality；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
+`session/request::SetModel` 只校验精确 identity 属于产品目录，然后把选择持久化到 Session。Provider
+配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由真正执行该模型的 Turn backend
+验证，并以该 Turn 的稳定错误出现在对话中；它们不回写模型列表，也不阻止用户预先选择。Codex 使用
+模型厂商 identity 始终是 `openai`；`access = subscription` 同时标明接入方式，并让产品组合选择 Codex
+complete-Turn backend。登录账户适配器内部仍使用独立的 `openai-chatgpt` account identity，但它不进入
+ModelRef。登录状态不会隐式改变 Session model。所有客户端读取同一个后端目录，并自行决定如何展示
+subscription metadata。
 
 ## 7. Thread 与 Turn
 

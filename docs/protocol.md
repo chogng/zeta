@@ -382,6 +382,7 @@ deserialize。JSON Schema 的最小长度只是外部提示，不能替代 Rust 
 `model/catalog.rs` 定义 model catalog metadata：
 
 - provider/model identity；
+- access kind（API key、subscription、local、enterprise 或 unknown）；
 - context window；
 - tools、reasoning、parallel tool call、personality capability；
 - reasoning effort；
@@ -389,8 +390,13 @@ deserialize。JSON Schema 的最小长度只是外部提示，不能替代 Rust 
 - model availability、catalog freshness、lifecycle 与 metadata quality 的跨 crate 值。
 
 目录 cache、scope、refresh、generation、字段 provenance 和 typed resolution 属于
-[`zeta-models-manager`](../zeta-rs/models-manager/README.md)，不进入纯 protocol value 层。完整
-snapshot wire wrapper 尚未落地；当前 App Server 仍投影精简 `model/list` DTO。
+[`zeta-models-manager`](../zeta-rs/models-manager/README.md)，不进入纯 protocol value 层。App Server 的
+`model/list` DTO 从后端静态目录统一投影模型 identity、display name、access kind、context window、
+automatic compaction threshold、capabilities、reasoning efforts 和默认 personality。Models Manager
+内部的 discovery availability 不进入产品模型列表，也不作为 Session 选择或发送消息的门禁；调用失败
+由对应 Turn 的稳定错误承载。
+Zeta 产品内置模型的具体 rows 只在 `zeta-model-provider-config::STATIC_MODEL_CATALOG` 维护，protocol
+只提供 rows 使用的通用 value types，不拥有另一份模型枚举。
 
 这里的 compaction 仅是声明信息。Context builder、token accounting policy、summary
 checkpoint 和 compaction 执行都不属于 protocol。

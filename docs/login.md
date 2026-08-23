@@ -3,7 +3,7 @@
 > 物理位置：`zeta-rs/login/`
 > Rust crate：`zeta_login`
 > 当前状态：控制面、App Server RPC、Codex managed-login driver 与 Codex Turn backend adapter 已实现；
-> 产品通过显式 `openai-chatgpt` 模型选择接入 subscription Turn
+> 产品通过显式选择 `provider = openai, access = subscription` 的模型接入 subscription Turn
 > ChatGPT/Codex subscription adapter：[`codex-app-server.md`](codex-app-server.md)
 > Provider runtime：[`model-provider.md`](model-provider.md)
 > Secret persistence：[`secrets.md`](secrets.md)
@@ -34,8 +34,9 @@ reauthentication-required 状态；它不把不同 Provider 的 credential 协�
 `account/login/completed` 与 `account/updated`。本地默认 composition 已安装
 **ChatGPT/Codex managed-login driver**：它懒启动上游 `codex app-server`，由上游完成 token 持久化
 和刷新；Zeta 不读取、保存、交换或刷新 ChatGPT token。上游 thread/Turn 已由
-`CodexTurnExecutionBackend` 映射到 Core。默认 App Server 将 ChatGPT account 可用的 Codex model
-投影为 `openai-chatgpt` provider；只有 Session 显式选中该 ModelRef 后，新 Turn 才走订阅后端。
+`CodexTurnExecutionBackend` 映射到 Core。默认 App Server 将订阅模型投影为 `provider = openai`、
+`access = subscription`；只有 Session 显式选中该 ModelRef 后，新 Turn 才走订阅后端。登录账户适配器
+内部的 `openai-chatgpt` identity 不进入模型目录。
 登录完成不会自动切换已有 Session 或 Thread 的执行路径。
 
 未来只有在 Provider 的官方条款和技术接口明确允许时，才增加新的登录 adapter。API key、AWS

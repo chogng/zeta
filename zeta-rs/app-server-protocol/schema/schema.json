@@ -1800,6 +1800,14 @@
         }
       ]
     },
+    "CapabilitySupport": {
+      "type": "string",
+      "enum": [
+        "supported",
+        "unsupported",
+        "unknown"
+      ]
+    },
     "ClientCapabilities": {
       "type": "object",
       "properties": {
@@ -16831,19 +16839,108 @@
         }
       ]
     },
+    "ModelAccess": {
+      "description": "How a user gains access to a model.\n\n[`ModelRef::provider`] identifies the model vendor. Product composition may use this access\nmode to choose an execution backend, but it is not proof of authentication, entitlement, or\nremote availability.",
+      "type": "string",
+      "enum": [
+        "apiKey",
+        "subscription",
+        "local",
+        "enterprise",
+        "unknown"
+      ]
+    },
+    "ModelCapabilities": {
+      "type": "object",
+      "properties": {
+        "imageDetailOriginal": {
+          "$ref": "#/$defs/CapabilitySupport",
+          "default": "unknown"
+        },
+        "parallelToolCalls": {
+          "$ref": "#/$defs/CapabilitySupport"
+        },
+        "personality": {
+          "$ref": "#/$defs/CapabilitySupport"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/CapabilitySupport"
+        },
+        "tools": {
+          "$ref": "#/$defs/CapabilitySupport"
+        }
+      },
+      "required": [
+        "tools",
+        "reasoning",
+        "parallelToolCalls",
+        "personality"
+      ]
+    },
     "ModelCatalogEntry": {
       "type": "object",
       "properties": {
+        "access": {
+          "$ref": "#/$defs/ModelAccess"
+        },
+        "autoCompactTokenLimit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "capabilities": {
+          "$ref": "#/$defs/ModelCapabilities"
+        },
+        "contextWindow": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "defaultPersonality": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Personality"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "defaultReasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "displayName": {
           "type": "string"
         },
         "model": {
           "$ref": "#/$defs/ModelRef"
+        },
+        "supportedReasoningEfforts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ReasoningEffort"
+          }
         }
       },
       "required": [
         "model",
-        "displayName"
+        "displayName",
+        "access",
+        "capabilities",
+        "supportedReasoningEfforts"
       ]
     },
     "ModelContextConfigDto": {
@@ -16951,6 +17048,14 @@
       "required": [
         "requestId",
         "kind"
+      ]
+    },
+    "Personality": {
+      "type": "string",
+      "enum": [
+        "friendly",
+        "pragmatic",
+        "none"
       ]
     },
     "PlanStep": {
@@ -17379,6 +17484,18 @@
         "commandId",
         "expectedRevision",
         "provider"
+      ]
+    },
+    "ReasoningEffort": {
+      "type": "string",
+      "enum": [
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "extraHigh",
+        "max"
       ]
     },
     "RequestId": {

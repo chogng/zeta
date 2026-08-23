@@ -1,12 +1,16 @@
 use std::sync::Arc;
 use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_core::CoreError;
+use zeta_model_provider_config::STATIC_MODEL_CATALOG;
+use zeta_model_provider_config::find_static_model;
+use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 
-/// Supplies the configured model catalog and validates Session-owned selections.
+/// Supplies the product model catalog and validates Session-owned identities.
 ///
-/// Implementations must return only models whose provider configuration is usable by the same
-/// App Server model runtime. Remote entitlement remains an invocation-time boundary.
+/// Catalog membership is presentation metadata, not evidence that a remote invocation will succeed.
+/// Runtime configuration, authentication, entitlement, rate limits, and transport are checked by the
+/// selected Turn backend and become errors on that Turn.
 pub(crate) trait ModelCatalog: Send + Sync {
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
     fn configured_default(&self) -> Result<Option<ModelRef>, CoreError>;
@@ -15,39 +19,20 @@ pub(crate) trait ModelCatalog: Send + Sync {
 
 pub(crate) struct CombinedModelCatalog {
     direct: Arc<dyn ModelCatalog>,
-    codex: zeta_codex_app_server::CodexModelCatalog,
-    codex_provider: zeta_protocol::ProviderId,
 }
 
 impl CombinedModelCatalog {
-    pub(crate) fn new(
-        direct: Arc<dyn ModelCatalog>,
-        codex: zeta_codex_app_server::CodexModelCatalog,
-    ) -> Result<Self, CoreError> {
-        Ok(Self {
-            direct,
-            codex,
-            codex_provider: zeta_protocol::ProviderId::new(
-                zeta_codex_app_server::CODEX_SUBSCRIPTION_PROVIDER_ID,
-            )
-            .map_err(|error| CoreError::Model(error.to_string()))?,
-        })
+    pub(crate) fn new(direct: Arc<dyn ModelCatalog>) -> Self {
+        Self { direct }
     }
 
-    fn codex_entries(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
-        self.codex
-            .list()
-            .map_err(|error| CoreError::Model(error.to_string()))?
-            .into_iter()
+    fn subscription_entries(&self) -> Vec<ModelCatalogEntry> {
+        STATIC_MODEL_CATALOG
+            .iter()
+            .filter(|model| model.access == ModelAccess::Subscription)
             .map(|model| {
-                Ok(ModelCatalogEntry {
-                    model: ModelRef::new(
-                        self.codex_provider.clone(),
-                        zeta_protocol::ModelId::new(model.id)
-                            .map_err(|error| CoreError::Model(error.to_string()))?,
-                    ),
-                    display_name: model.display_name,
-                })
+                let info = model.model();
+                ModelCatalogEntry::from_info(model.model_ref(), &info)
             })
             .collect()
     }
@@ -56,11 +41,12 @@ impl CombinedModelCatalog {
 impl ModelCatalog for CombinedModelCatalog {
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError> {
         let mut models = self.direct.list()?;
-        models.extend(self.codex_entries().unwrap_or_default());
+        models.extend(self.subscription_entries());
         models.sort_by(|left, right| {
             left.model
                 .provider
                 .cmp(&right.model.provider)
+                .then_with(|| static_model_rank(&left.model).cmp(&static_model_rank(&right.model)))
                 .then_with(|| left.model.model.cmp(&right.model.model))
         });
         Ok(models)
@@ -71,15 +57,21 @@ impl ModelCatalog for CombinedModelCatalog {
     }
 
     fn validate(&self, model: &ModelRef) -> Result<(), CoreError> {
-        if model.provider != self.codex_provider {
-            return self.direct.validate(model);
+        if find_static_model(model).is_some_and(|entry| entry.access == ModelAccess::Subscription) {
+            return Ok(());
         }
-        self.codex_entries()?
-            .iter()
-            .any(|entry| &entry.model == model)
-            .then_some(())
-            .ok_or_else(|| CoreError::Model("Codex subscription model is not available".into()))
+        self.direct.validate(model)
     }
+}
+
+fn static_model_rank(model: &ModelRef) -> usize {
+    STATIC_MODEL_CATALOG
+        .iter()
+        .position(|candidate| {
+            candidate.provider_id == model.provider.as_str()
+                && candidate.model_id == model.model.as_str()
+        })
+        .unwrap_or(usize::MAX)
 }
 
 pub(crate) struct UnavailableModelCatalog;

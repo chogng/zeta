@@ -676,7 +676,7 @@ model = "workspace-model"
 }
 
 #[test]
-fn local_catalog_projects_allow_unlisted_preferred_model_through_models_manager() {
+fn local_catalog_projects_static_models_without_runtime_availability() {
     let path = config_path("models-manager-catalog");
     let config = Arc::new(ConfigStore::open(&path).unwrap());
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
@@ -694,9 +694,30 @@ fn local_catalog_projects_allow_unlisted_preferred_model_through_models_manager(
 
     let models = model.list().unwrap();
 
-    assert_eq!(models.len(), 1);
-    assert_eq!(models[0].model, model_ref("custom-model"));
-    assert_eq!(models[0].display_name, "custom-model");
+    let custom = models
+        .iter()
+        .find(|entry| entry.model == model_ref("custom-model"))
+        .unwrap();
+    assert_eq!(custom.display_name, "custom-model");
+    assert_eq!(custom.access, zeta_protocol::ModelAccess::Unknown);
+    assert_eq!(custom.context_window, None);
+    assert_eq!(
+        custom.capabilities,
+        zeta_protocol::ModelCapabilities::UNKNOWN
+    );
+    let openai = models
+        .iter()
+        .find(|entry| {
+            entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.6"
+        })
+        .unwrap();
+    assert_eq!(openai.access, zeta_protocol::ModelAccess::ApiKey);
+    assert_eq!(openai.context_window, None);
+    assert_eq!(
+        openai.capabilities.image_detail_original,
+        zeta_protocol::CapabilitySupport::Supported
+    );
+    model.validate(&openai.model).unwrap();
     remove_config_files(&path);
 }
 

@@ -123,6 +123,22 @@ pub enum ModelMetadataQuality {
     Unknown,
 }
 
+/// How a user gains access to a model.
+///
+/// [`ModelRef::provider`] identifies the model vendor. Product composition may use this access
+/// mode to choose an execution backend, but it is not proof of authentication, entitlement, or
+/// remote availability.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelAccess {
+    ApiKey,
+    Subscription,
+    Local,
+    Enterprise,
+    #[default]
+    Unknown,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelCapabilities {
@@ -153,6 +169,8 @@ fn unknown_capability_support() -> CapabilitySupport {
 pub struct ModelInfo {
     pub id: ModelId,
     pub display_name: String,
+    #[serde(default)]
+    pub access: ModelAccess,
     pub context_window: ContextWindow,
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
@@ -166,6 +184,7 @@ impl ModelInfo {
         Self {
             id,
             display_name: display_name.into(),
+            access: ModelAccess::Unknown,
             context_window: ContextWindow::Unknown,
             auto_compact_token_limit: None,
             capabilities: ModelCapabilities::UNKNOWN,

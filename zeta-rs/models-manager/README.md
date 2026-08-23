@@ -6,7 +6,8 @@
 > [`zeta-model-provider`](../model-provider/README.md)。
 
 `zeta-models-manager` 是 provider-independent 的模型目录控制面。它从
-`ProviderDefinition.models` 建立静态 seed，把 provider discovery observation 合并到按 scope 隔离的
+`STATIC_MODEL_CATALOG` 经 `ProviderConfigRegistry::builtin()` 投影为 `ProviderDefinition.models` 静态
+seed，再把 provider discovery observation 合并到按 scope 隔离的
 内存目录，并发布带 generation 的 immutable snapshot。它拥有 freshness、singleflight、字段级 merge、
 筛选和 typed resolution；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
 Config persistence 或 UI。
@@ -134,7 +135,4 @@ Unknown merge、fresh/stale/expired、304 generation 稳定和 per-scope singlef
 scope 或 resolution 时必须同步相应 table test、本文和系统文档；新增 protocol-visible 字段还要同步
 App Server DTO/schema fixture。
 
-当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动、
-用户 trust/policy override 或 provider 动态 adapter。App Server 仍使用既有精简 `model/list` DTO，尚未
-暴露 snapshot generation/freshness/warnings，也没有 `model/refresh` / `model/updated`。这些是系统文档
-后续阶段，不应被描述为当前行为。
+当前实现只有进程内 memory cache，没有 persisted observation、全局/per-provider 并发上限、退避抖动、用户 trust/policy override 或 provider 动态 adapter。App Server 的 `model/list` DTO 投影静态 identity、display name、access、context、capabilities 与 defaults；本 crate 的 availability、generation、freshness 和 warnings 都不进入产品模型列表，也不作为发送消息的门禁。App Server 还没有 `model/refresh` / `model/updated` wire method；这些是系统文档后续阶段，不应被描述为当前行为。

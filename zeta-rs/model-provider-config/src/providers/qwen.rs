@@ -1,5 +1,5 @@
 use super::default_provider;
-use crate::{ApiProfile, Model, ModelId, ProviderAdapter, ProviderDefinition};
+use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
 
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
@@ -9,8 +9,4 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "https://dashscope.aliyuncs.com/compatible-mode/v1",
     )
-    .with_default_model(Model::new(
-        ModelId::new("qwen-plus").expect("valid model ID"),
-        "Qwen Plus",
-    ))
 }
