@@ -6,6 +6,7 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
 const buildRoot = resolve(desktopRoot, "../build/vite");
+const scriptsRoot = resolve(desktopRoot, "../scripts");
 
 test("hot reload separates the base runtime from Vite build integration", () => {
 	const runtime = read("src/zeta/base/common/hotReload.ts");
@@ -33,7 +34,7 @@ test("Vite build ownership does not leak back into Workbench sources or scripts"
 	assert.equal(existsSync(join(desktopRoot, "src/zeta/workbench/browser/devHotReload.ts")), false);
 	assert.doesNotMatch(read("src/zeta/workbench/workbench.web.main.ts"), /hotReload/u);
 	assert.doesNotMatch(read("src/zeta/workbench/workbench.desktop.main.ts"), /hotReload/u);
-	assert.deepEqual(readdirSync(join(desktopRoot, "scripts")).filter(file => /vite-plugin/u.test(file)), []);
+	assert.deepEqual(readdirSync(scriptsRoot).filter(file => /vite-plugin/u.test(file)), []);
 	for (const file of ["hotReloadAnalysis.ts", "hotReloadPlugin.ts", "productIconsPlugin.ts", "setup-dev.ts", "vite.config.ts", "webAppServerPlugin.ts", "workbenchEntryPlugin.ts"]) {
 		assert.equal(existsSync(join(buildRoot, file)), true, file);
 	}

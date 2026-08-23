@@ -2,7 +2,6 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2024",
-    "allowJs": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "exactOptionalPropertyTypes": false,
@@ -13,6 +12,5 @@
     "verbatimModuleSyntax": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "desktop/**/*.ts", "docs/**/*.ts", "download/**/*.ts", "lib/**/*.ts", "vite/**/*.ts", "zeterm/**/*.ts"],
-  "exclude": ["desktop/resources/designTokenCompiler.ts"]
+  "include": ["**/*.ts"]
 }
