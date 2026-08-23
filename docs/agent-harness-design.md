@@ -294,16 +294,23 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 - `zeta-context-engine` 已统一压力线、模型硬窗口、精准计量与带保守记账余量的估算结果；
 - 生产 planner 仍由 `deterministic-bytes-v1` 以 bytes/4 加结构开销做确定性估算，并在诊断中记录
   revision；最终 request 接近压力线或 compaction 后会调用声明式 model binding 对应的 remote
-  preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；本地 tokenizer adapter 尚未
-  接入；
+  preflight：OpenAI exact，Anthropic、Google、Kimi、Z.AI estimated；DeepSeek/Hugging Face 可按
+  exact model binding 使用带资产 revision 的本地整请求 tokenizer，其结果当前声明为 estimated；
 - 模型响应在输出验证、取消仲裁和 steering 仲裁之前写入 durable `ModelUsageRecorded`，因此
   空响应重试和被 steering 丢弃的响应仍分别计账；模型驱动的 compaction 在解析 summary 前通过
   service recorder 回调进入同一账本；reducer 同时维护 Turn 内投影和公开 Thread 聚合；
 - 每项聚合由 `reported` 与 `complete` 组成：缺失 usage 只让完整性变为 false，已报告值仍作为可验证
-  下限保留；分叉/回退导入历史内容时不重复计入源 Thread 已发生的调用成本。
+  下限保留；分叉/回退导入历史内容时不重复计入源 Thread 已发生的调用成本；
+- 有冻结 `ModelRef` 的普通调用和模型驱动 compaction 会在同一 usage event 旁记录调用前 input
+  estimate、estimator revision 与 calibration revision。reducer 只在 provider 报告 input usage 时，
+  按 Thread 内的模型与 estimator revision 重建低估比例：更高误差立即收紧，较低误差按非对称 EMA
+  渐进衰减，且永不把容量放大到配置值以上；
+- 校准投影只减少后续 Core-managed input capacity；`ContextWindow::Unknown` 仍为 provider-managed，
+  历史 `ModelUsage` 和已提交 checkpoint provenance 均不改写。legacy configured-default Turn 因没有
+  可验证模型身份而不生成校准样本。
 
-基于 provider usage 的 EMA 校准尚未实现；调用前估算与调用后 usage 仍是两类事实，不能把粗估写成
-精确 tokenizer 保证。
+调用前估算、preflight 计量与调用后 usage 仍是三类不同事实；EMA 只校准未来的保守规划，不能把
+粗估写成精确 tokenizer 保证。
 
 ## 10. 压缩
 
@@ -440,7 +447,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding 且模型输入逐项限幅已接线；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan` 和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本及冻结 token/cost Turn 预算已实现；仍需预算校准和 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | AL-205 预算校准 |
+| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；仍需 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | S7 T4 fixture |
 | M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |

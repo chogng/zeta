@@ -8,7 +8,7 @@ pub use catalog::{
 };
 pub use invocation::{
     ContentPart, ImageDetail, ImageDetailDecision, ImageDetailDecisionReason, InputItem, Message,
-    MessageRole, ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ModelUsageSummary,
-    ModelUsageTotal, ReasoningConfig, ResponseItem, StopReason, ToolCall, ToolChoice,
-    ToolDefinition, ToolResult,
+    MessageRole, ModelInputEstimate, ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage,
+    ModelUsageSummary, ModelUsageTotal, ReasoningConfig, ResponseItem, StopReason, ToolCall,
+    ToolChoice, ToolDefinition, ToolResult,
 };

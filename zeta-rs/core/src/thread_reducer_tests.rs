@@ -104,6 +104,100 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
 }
 
 #[test]
+fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() {
+    let model = zeta_protocol::ModelRef::new(
+        zeta_protocol::ProviderId::new("provider").unwrap(),
+        zeta_protocol::ModelId::new("model").unwrap(),
+    );
+    let mut accepted = envelope(
+        2,
+        ThreadEvent::TurnAccepted {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            turn_id: TurnId::new("turn_1").unwrap(),
+            policy_revision: "test-policy-v1".into(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            activated_skills: Vec::new(),
+            model: Some(model.clone()),
+            resource_budget: None,
+        },
+    );
+    accepted.command = Some(ThreadCommandReceipt {
+        command_id: CommandId::new("command_2").unwrap(),
+        command: ThreadCommand::StartTurn {
+            model: Some(model.clone()),
+            activated_skills: Vec::new(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            resource_budget: None,
+            input: vec![UserInput::Text {
+                text: "hello".into(),
+            }],
+        },
+    });
+    let events = [
+        envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                title: "test".into(),
+            },
+        ),
+        accepted,
+        envelope(
+            3,
+            ThreadEvent::TurnStarted {
+                thread_id: ThreadId::new("thread_1").unwrap(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        ),
+    ];
+    let snapshot = events
+        .iter()
+        .try_fold(None, |snapshot, event| {
+            reduce_thread_event(snapshot, event).map(Some)
+        })
+        .unwrap()
+        .unwrap();
+    let usage = zeta_protocol::ModelUsage {
+        input_tokens: Some(120),
+        output_tokens: Some(8),
+        cached_input_tokens: Some(0),
+        reasoning_tokens: None,
+    };
+    let invalid = ThreadEvent::ModelUsageRecorded {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        usage: Some(usage.clone()),
+        input_estimate: Some(zeta_protocol::ModelInputEstimate {
+            estimated_input_tokens: 100,
+            estimator_revision: crate::context::CONTEXT_ESTIMATOR_REVISION.into(),
+            calibration_revision: "unknown-calibration-v2".into(),
+        }),
+    };
+    assert!(reduce_thread_event(Some(snapshot.clone()), &envelope(4, invalid)).is_err());
+    assert_eq!(snapshot.usage.model_invocations, 0);
+
+    let valid = ThreadEvent::ModelUsageRecorded {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        usage: Some(usage),
+        input_estimate: Some(zeta_protocol::ModelInputEstimate {
+            estimated_input_tokens: 100,
+            estimator_revision: crate::context::CONTEXT_ESTIMATOR_REVISION.into(),
+            calibration_revision: crate::context::CONTEXT_CALIBRATION_REVISION.into(),
+        }),
+    };
+    let rebuilt = reduce_thread_event(Some(snapshot), &envelope(4, valid)).unwrap();
+
+    assert_eq!(rebuilt.usage.model_invocations, 1);
+    let calibration = rebuilt
+        .context_calibration(&model, crate::context::CONTEXT_ESTIMATOR_REVISION)
+        .unwrap();
+    assert_eq!(calibration.correction_ratio_ppm(), 1_200_000);
+    assert_eq!(calibration.samples(), 1);
+}
+
+#[test]
 fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
     let mut snapshot = None;
     for event in [

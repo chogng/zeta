@@ -554,6 +554,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_calibrations: Vec::new(),
         turns: turn_ids
             .into_iter()
             .map(|turn_id| TurnSnapshot {

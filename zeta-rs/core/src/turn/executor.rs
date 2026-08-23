@@ -1,11 +1,14 @@
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
 use crate::action_policy_service::UnavailableActionPolicyService;
+use crate::context::CONTEXT_CALIBRATION_REVISION;
+use crate::context::CONTEXT_ESTIMATOR_REVISION;
 use crate::context::ContextMeasurementDisposition;
 use crate::context::ContextMeasurementPolicy;
 use crate::context::ContextOverflowRecoveryPreparation;
 use crate::context::ManualContextCompactionPreparation;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
+use crate::context::calibrated_budget;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::CommitModelInvocationItemsResult;
 use crate::thread_controller::CompleteModelInvocationResult;
@@ -25,9 +28,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_protocol::{
-    ItemId, ModelResponse, ModelStreamEvent, ResponseItem, SessionId, StableTurnError,
-    StreamCursor, StreamInstanceId, ThreadCommand, ThreadId, ThreadItem, ThreadUpdate,
-    ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
+    ItemId, ModelInputEstimate, ModelResponse, ModelStreamEvent, ResponseItem, SessionId,
+    StableTurnError, StreamCursor, StreamInstanceId, ThreadCommand, ThreadId, ThreadItem,
+    ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
 };
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
@@ -482,7 +485,8 @@ impl TurnExecutor {
                 .iter()
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
-            let model = match turn.model.as_ref() {
+            let frozen_model = turn.model.clone();
+            let model = match frozen_model.as_ref() {
                 Some(model) => ModelSelection::Session(model),
                 None => ModelSelection::ConfiguredDefault,
             };
@@ -490,7 +494,12 @@ impl TurnExecutor {
                 .model
                 .context_budget(model)
                 .map_err(ExecutionFailure::model)?;
-            let budget = measurement_policy.adjusted_budget(configured_budget);
+            let calibration = frozen_model
+                .as_ref()
+                .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));
+            let base_budget = calibrated_budget(configured_budget, calibration)
+                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
+            let budget = measurement_policy.adjusted_budget(base_budget);
             let instructions = self.instructions.snapshot();
             let evidence = if is_first_model_invocation(&snapshot, turn_id) {
                 if first_invocation_evidence.is_none() {
@@ -571,12 +580,17 @@ impl TurnExecutor {
                 .map_err(ExecutionFailure::model)?;
             let model = invocation.model().as_service_selection();
             let estimated_input = invocation.context().budget().total_input();
+            let input_estimate = frozen_model.as_ref().map(|_| ModelInputEstimate {
+                estimated_input_tokens: u64::from(estimated_input.get()),
+                estimator_revision: invocation.context().budget().estimator_revision().into(),
+                calibration_revision: CONTEXT_CALIBRATION_REVISION.into(),
+            });
             let measurement_capability = self
                 .model
                 .input_token_measurement_capability(model)
                 .map_err(ExecutionFailure::service)?;
             let should_measure = measurement_policy
-                .should_measure(configured_budget, estimated_input, measurement_capability)
+                .should_measure(base_budget, estimated_input, measurement_capability)
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             if should_measure {
                 match retry_invalid_model_response(|| {
@@ -587,7 +601,7 @@ impl TurnExecutor {
                     ContextTokenMeasurementOutcome::Unavailable => {}
                     ContextTokenMeasurementOutcome::Measured(measurement) => {
                         let disposition = measurement_policy
-                            .assess(configured_budget, estimated_input, measurement)
+                            .assess(base_budget, estimated_input, measurement)
                             .map_err(|error| {
                                 ExecutionFailure::model(CoreError::Context(error.to_string()))
                             })?;
@@ -617,9 +631,22 @@ impl TurnExecutor {
                     .stream(model, &request, cancellation, &mut stream)
                 {
                     Ok(response) => {
-                        self.threads
-                            .record_model_usage(thread_id, turn_id, response.usage.clone())
-                            .map_err(ExecutionFailure::persistence)?;
+                        match &input_estimate {
+                            Some(input_estimate) => {
+                                self.threads.record_model_usage_with_input_estimate(
+                                    thread_id,
+                                    turn_id,
+                                    response.usage.clone(),
+                                    input_estimate.clone(),
+                                )
+                            }
+                            None => self.threads.record_model_usage(
+                                thread_id,
+                                turn_id,
+                                response.usage.clone(),
+                            ),
+                        }
+                        .map_err(ExecutionFailure::persistence)?;
                         check_cancellation(cancellation)?;
                         let tool_calls = response.tool_calls().count();
                         let text = final_text(&response, &stream);
@@ -770,14 +797,20 @@ impl TurnExecutor {
                 .iter()
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
-            let selection = match turn.model.as_ref() {
+            let frozen_model = turn.model.clone();
+            let selection = match frozen_model.as_ref() {
                 Some(model) => ModelSelection::Session(model),
                 None => ModelSelection::ConfiguredDefault,
             };
-            let budget = self
+            let configured_budget = self
                 .model
                 .context_budget(selection)
                 .map_err(ExecutionFailure::model)?;
+            let calibration = frozen_model
+                .as_ref()
+                .and_then(|model| snapshot.context_calibration(model, CONTEXT_ESTIMATOR_REVISION));
+            let budget = calibrated_budget(configured_budget, calibration)
+                .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             let (model, retention_prompt, plan) = match self
                 .threads
                 .prepare_manual_context_compaction(thread_id, turn_id, budget)
@@ -866,23 +899,47 @@ impl TurnExecutor {
     ) -> Result<(ContextCompactionResult, u64), ExecutionFailure> {
         let mut usage_sequence = None;
         let mut usage_recording_error = None;
-        let mut record_model_usage =
-            |usage| match self.threads.record_model_usage(thread_id, turn_id, usage) {
-                Ok(sequence) => {
-                    usage_sequence = Some(sequence);
-                    Ok(())
-                }
-                Err(error) => {
-                    usage_recording_error = Some(error.clone());
-                    Err(error)
+        let input_estimate = request
+            .generator_model()
+            .map(|_| {
+                request
+                    .estimated_input_tokens()
+                    .map(|estimated_input| ModelInputEstimate {
+                        estimated_input_tokens: u64::from(estimated_input.get()),
+                        estimator_revision: CONTEXT_ESTIMATOR_REVISION.into(),
+                        calibration_revision: CONTEXT_CALIBRATION_REVISION.into(),
+                    })
+            })
+            .transpose()
+            .map_err(ExecutionFailure::model)?;
+        let result = {
+            let mut record_model_usage = |usage| {
+                let recorded = match &input_estimate {
+                    Some(input_estimate) => self.threads.record_model_usage_with_input_estimate(
+                        thread_id,
+                        turn_id,
+                        usage,
+                        input_estimate.clone(),
+                    ),
+                    None => self.threads.record_model_usage(thread_id, turn_id, usage),
+                };
+                match recorded {
+                    Ok(sequence) => {
+                        usage_sequence = Some(sequence);
+                        Ok(())
+                    }
+                    Err(error) => {
+                        usage_recording_error = Some(error.clone());
+                        Err(error)
+                    }
                 }
             };
-        let result = retry_invalid_model_response(|| {
-            self.ensure_resource_budget_available(thread_id, turn_id)?;
-            self.compaction
-                .compact(&request, cancellation, &mut record_model_usage)
-        });
-        drop(record_model_usage);
+            retry_invalid_model_response(|| {
+                self.ensure_resource_budget_available(thread_id, turn_id)?;
+                self.compaction
+                    .compact(request, cancellation, &mut record_model_usage)
+            })
+        };
         if let Some(error) = usage_recording_error {
             return Err(ExecutionFailure::persistence(error));
         }

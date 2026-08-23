@@ -11,6 +11,7 @@ use crate::DelegationResult;
 use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
 use crate::ItemId;
+use crate::ModelInputEstimate;
 use crate::ModelRef;
 use crate::ModelUsage;
 use crate::RequestId;
@@ -133,6 +134,9 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
         usage: Option<ModelUsage>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        input_estimate: Option<ModelInputEstimate>,
     },
     ItemCompleted {
         thread_id: ThreadId,

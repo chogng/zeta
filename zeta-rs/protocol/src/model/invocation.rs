@@ -408,6 +408,19 @@ pub struct ModelUsage {
     pub reasoning_tokens: Option<u64>,
 }
 
+/// Invocation input estimate recorded beside provider usage for future budget calibration.
+///
+/// The estimate remains distinct from provider-reported usage: it describes the canonical request
+/// before the call, while [`ModelUsage`] describes what the provider reported after the call.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInputEstimate {
+    #[ts(type = "number")]
+    pub estimated_input_tokens: u64,
+    pub estimator_revision: String,
+    pub calibration_revision: String,
+}
+
 /// One aggregate token metric built only from values explicitly reported by providers.
 ///
 /// `reported` remains useful as a lower bound when one or more invocations omitted this metric;

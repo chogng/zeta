@@ -16964,6 +16964,28 @@
     "ModelId": {
       "type": "string"
     },
+    "ModelInputEstimate": {
+      "description": "Invocation input estimate recorded beside provider usage for future budget calibration.\n\nThe estimate remains distinct from provider-reported usage: it describes the canonical request\nbefore the call, while [`ModelUsage`] describes what the provider reported after the call.",
+      "properties": {
+        "calibrationRevision": {
+          "type": "string"
+        },
+        "estimatedInputTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "estimatorRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "estimatedInputTokens",
+        "estimatorRevision",
+        "calibrationRevision"
+      ],
+      "type": "object"
+    },
     "ModelListResult": {
       "properties": {
         "models": {
@@ -21250,6 +21272,16 @@
         },
         {
           "properties": {
+            "inputEstimate": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelInputEstimate"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },

@@ -70,6 +70,10 @@ fn completes_a_text_turn_from_durable_context() {
 #[test]
 fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() {
     let (threads, thread_id, history_turn_id) = started_turn();
+    let model_ref = ModelRef::new(
+        ProviderId::new("provider").unwrap(),
+        ModelId::new("compaction-model").unwrap(),
+    );
     threads
         .complete_turn(
             &thread_id,
@@ -83,7 +87,7 @@ fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() 
             StartContextCompactionRequest {
                 command_id: CommandId::new("manual-compact").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
-                model: None,
+                model: Some(model_ref.clone()),
                 policy_revision: "test-policy-v1".into(),
                 retention_prompt: Some("preserve the deployment decision".into()),
             },
@@ -118,6 +122,11 @@ fn manual_context_compaction_commits_a_checkpoint_and_usage_before_completing() 
     assert_eq!(snapshot.context_checkpoints.len(), 1);
     assert_eq!(snapshot.context_checkpoints[0].summary, "manual checkpoint");
     assert_eq!(snapshot.usage.model_invocations, 1);
+    assert!(
+        snapshot
+            .context_calibration(&model_ref, crate::context::CONTEXT_ESTIMATOR_REVISION)
+            .is_some()
+    );
     assert_eq!(
         snapshot
             .turns
@@ -1448,7 +1457,7 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
             StartTurnRequest {
                 command_id: CommandId::new("usage-recovery-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
-                model: Some(model_ref),
+                model: Some(model_ref.clone()),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 resource_budget: Some(resource_budget.clone()),
@@ -1474,6 +1483,10 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
         .unwrap();
     let before_restart = original.read_thread(&thread_id).unwrap();
+    let before_calibration = before_restart
+        .context_calibration(&model_ref, crate::context::CONTEXT_ESTIMATOR_REVISION)
+        .cloned()
+        .expect("selected-model invocation must derive a calibration sample");
 
     let recovered = ThreadController::with_store(store);
     let after_restart = recovered.recover_thread(&thread_id).unwrap();
@@ -1483,6 +1496,11 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
     assert_eq!(after_restart.usage.input_tokens.reported, 11);
     assert!(after_restart.usage.input_tokens.complete);
     assert!(!after_restart.usage.cached_input_tokens.complete);
+    assert_eq!(
+        after_restart.context_calibration(&model_ref, crate::context::CONTEXT_ESTIMATOR_REVISION),
+        Some(&before_calibration)
+    );
+    assert_eq!(before_calibration.samples(), 1);
     assert_eq!(
         after_restart.turns[0].resource_budget,
         Some(resource_budget)

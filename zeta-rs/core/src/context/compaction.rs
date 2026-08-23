@@ -92,6 +92,20 @@ impl ContextCompactionRequest {
         self.retention_prompt.as_deref()
     }
 
+    pub(crate) fn estimated_input_tokens(&self) -> Result<ContextTokenCount, CoreError> {
+        estimate_compaction_input(
+            self.covered,
+            self.previous_checkpoint.as_ref(),
+            &self.source_items,
+            self.retention_prompt.as_deref(),
+        )
+        .map_err(|error| {
+            CoreError::Context(format!(
+                "failed to estimate context compaction input: {error}"
+            ))
+        })
+    }
+
     fn model_selection(&self) -> ModelSelection<'_> {
         match &self.generator_model {
             Some(model) => ModelSelection::Session(model),

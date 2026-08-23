@@ -5,7 +5,8 @@
 > `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
 > 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact，以及
 > Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
-> tokenizer adapter 已接入；Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
+> tokenizer adapter 已接入；provider usage 会按冻结模型和估算 revision 校准未来 Core-managed
+> capacity，未知窗口仍为 provider-managed。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
 > 资产目录、prompt cache/reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
@@ -384,6 +385,13 @@ Core 保守估算”降级：OpenAI Responses 为 exact；Anthropic、Google nat
 estimate 与 Z.AI tokenizer 为 estimated remote；本地 `hf-chat-template + tokenizers` 结果为
 estimated。只有 provider definition 明确声明且 model policy 允许的 binding 才会触发远程计量。
 
+有冻结 `ModelRef` 的普通调用和模型驱动 compaction 会把调用前 input estimate、estimator revision
+与 calibration revision 附在同一 durable `ModelUsageRecorded` 上。reducer 仍先按原始 provider
+usage 维护 Thread/Turn 聚合，再按 Thread 内的模型与 estimator revision 重建低估比例：更大的低估
+立即收紧未来容量，较小误差按非对称 EMA 渐进衰减；缺失 provider input usage 时不生成样本。
+校准只减少后续 Core-managed budget，不能放大配置容量，不能改变历史 usage 或 checkpoint；
+`ProviderManaged` 没有本地可信容量，因此即使存在样本也保持原语义。
+
 ## 8. 压缩
 
 ### 8.1 持久化检查点
@@ -574,12 +582,13 @@ TurnExecutor
 | 通用预算与精准/估算计量契约 | ✅ 已实现 | `zeta-context-engine` 统一压力线、硬窗口和保守记账判定 |
 | provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
 | 请求级本地 token 计数 | 部分具备 | HF 公共模型按需发现/下载/缓存；其他 provider 需固定资产清单；多模态 processor 尚未接入 |
-| provider usage 校准 | 尚未完成 | usage 与调用前预算保持独立，尚未建立按模型隔离的校准数据 |
+| provider usage 校准 | ✅ 已实现 | estimate 与 usage 仍是独立 durable 字段；按 Thread、冻结模型和 estimator revision 重建只影响未来 Core-managed capacity 的非对称 EMA |
 | cache/reference baseline | 推迟 | 只有性能证据证明重复组装是瓶颈后才增加 |
 | Agent seed、跨 Thread 选择与 reference resources | 尚未完成 | 不能读取其他 live `ContextManager` |
 
-后续扩展不得先复制 mutable history。cache、baseline 或 usage estimate 必须是可丢弃派生状态；会
-改变恢复语义的内容必须先进入 durable Thread fact。
+后续扩展不得先复制 mutable history。cache、baseline 和校准投影必须是可丢弃派生状态；恢复校准
+所需的调用前 estimate/revision 与 provider usage 已进入 durable Thread fact。其他会改变恢复语义的
+内容也必须先进入 durable fact。
 
 ## 13. 验证
 

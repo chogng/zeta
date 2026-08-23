@@ -1,4 +1,6 @@
 use crate::CoreError;
+use crate::context::ContextCalibration;
+use crate::context::next_context_calibrations;
 use crate::multi_agent::validate_context_seed_digest;
 use crate::multi_agent::validate_delegation_result_digest;
 use crate::state::transition_turn_status;
@@ -57,6 +59,7 @@ pub struct ThreadSnapshot {
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub usage: ModelUsageSummary,
+    pub(crate) context_calibrations: Vec<ContextCalibration>,
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
     pub context_checkpoints: Vec<ContextCheckpoint>,
@@ -81,6 +84,16 @@ pub struct ThreadSnapshot {
 }
 
 impl ThreadSnapshot {
+    pub(crate) fn context_calibration(
+        &self,
+        model: &ModelRef,
+        estimator_revision: &str,
+    ) -> Option<&ContextCalibration> {
+        self.context_calibrations
+            .iter()
+            .find(|calibration| calibration.matches(model, estimator_revision))
+    }
+
     pub fn context_source_digest(
         &self,
         range: ContextSourceRange,
@@ -266,6 +279,7 @@ pub fn reduce_thread_event(
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
                     usage: ModelUsageSummary::default(),
+                    context_calibrations: Vec::new(),
                     turns: Vec::new(),
                     items: Vec::new(),
                     context_checkpoints: Vec::new(),
@@ -359,7 +373,12 @@ pub fn reduce_thread_event(
             }
             turn.execution_backend_attempt = Some(backend.clone());
         }
-        ThreadEvent::ModelUsageRecorded { turn_id, usage, .. } => {
+        ThreadEvent::ModelUsageRecorded {
+            turn_id,
+            usage,
+            input_estimate,
+            ..
+        } => {
             require_no_command(envelope)?;
             let next_thread_usage =
                 snapshot
@@ -368,11 +387,12 @@ pub fn reduce_thread_event(
                     .ok_or_else(|| {
                         CoreError::Journal("Thread model usage aggregate overflowed".into())
                     })?;
-            let turn = snapshot
+            let turn_index = snapshot
                 .turns
-                .iter_mut()
-                .find(|turn| &turn.turn_id == turn_id)
+                .iter()
+                .position(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let turn = &snapshot.turns[turn_index];
             if turn.status == TurnStatus::Created {
                 return Err(CoreError::Journal(
                     "model usage requires a Turn that has started execution".into(),
@@ -381,8 +401,30 @@ pub fn reduce_thread_event(
             let next_turn_usage = turn.usage.checked_record(usage.as_ref()).ok_or_else(|| {
                 CoreError::Journal("Turn model usage aggregate overflowed".into())
             })?;
-            turn.usage = next_turn_usage;
+            let next_calibrations = match input_estimate {
+                Some(estimate) => {
+                    let model = turn.model.as_ref().ok_or_else(|| {
+                        CoreError::Journal(
+                            "context calibration requires a frozen selected model".into(),
+                        )
+                    })?;
+                    Some(
+                        next_context_calibrations(
+                            &snapshot.context_calibrations,
+                            model,
+                            estimate,
+                            usage.as_ref(),
+                        )
+                        .map_err(|error| CoreError::Journal(error.to_string()))?,
+                    )
+                }
+                None => None,
+            };
+            snapshot.turns[turn_index].usage = next_turn_usage;
             snapshot.usage = next_thread_usage;
+            if let Some(next_calibrations) = next_calibrations {
+                snapshot.context_calibrations = next_calibrations;
+            }
         }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;

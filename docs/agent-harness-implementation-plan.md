@@ -6,14 +6,14 @@
 
 ## 快速理解
 
-Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/资源预算治理、模型输入逐项限幅和委托 Codex 的 Agent Loop。后续建设不再以“搭出第一轮模型调用”为目标，而是优先补齐预算校准、模型家族工具面和端到端评测，再扩展 Provider、Codex、Skills、MCP 与多 Agent 的产品完整性。
+Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/资源预算治理、按模型校准未来预算、模型输入逐项限幅和委托 Codex 的 Agent Loop。后续建设不再以“搭出第一轮模型调用”为目标，而是优先补齐模型家族工具面和端到端评测，再扩展 Provider、Codex、Skills、MCP 与多 Agent 的产品完整性。
 
 | 用户场景 | 当前表现 | 本计划完成后的结果 | 对应阶段 |
 | --- | --- | --- | --- |
 | 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持批准、取消和恢复 | 有稳定工具 profile、计划工具、输出限幅和可量化成功率 | S3、S7 |
 | Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；本地执行器在模型安全点重规划，Codex 委托转发 exact `turn/steer` | 增加后续评测与完整故障矩阵 | S1、S5 |
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
-| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage，以及冻结到 Turn 的 token/成本预算 | 再补齐预算校准 | S2 |
+| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、冻结到 Turn 的 token/成本预算，以及按模型和估算 revision 恢复的未来预算校准 | 以 T4 持续量化压缩后的质量与成本 | S2、S7 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | 模型选择已冻结，但模型可见工具面未按家族完整区分 | Turn 接受时冻结 ToolProfile，使用匹配训练分布的编辑工具 | S3 |
 | 使用 Codex 订阅模型 | 基础委托、流式、批准、用户输入和恢复已接通 | 增加能力协商、diff、图片、secret、rate-limit 与故障矩阵 | S5 |
 | 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整评测和故障验证 | S6、S7 |
@@ -70,7 +70,7 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `toolRepetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 已实现 | 交互错误 UI | Desktop 从 canonical `StableTurnErrorCode` 投影对话内错误卡片；可重试失败开始新 Turn，认证错误打开模型选择，上下文或预算耗尽创建新对话，无效请求与工具重复失败聚焦输入以修改方案 | UI 只按稳定错误码分流；仅最新失败 Turn 暴露动作；刷新和重连从 canonical Thread 重建相同卡片 |
 
-S1 已完成；AL-201 usage 账本、AL-202 Turn 资源预算、AL-203 模型输入逐项限幅和 AL-204 手动压缩也已落地，接下来构建 AL-205 预算校准。
+S1 与 S2 已完成；下一阶段从 AL-301 ToolProfile contract 开始收口模型家族工具面。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -80,9 +80,9 @@ S1 已完成；AL-201 usage 账本、AL-202 Turn 资源预算、AL-203 模型输
 | AL-202 | 已实现 | Turn 资源预算 | 可选 token 与成本上限随 start-Turn command 和 `TurnAccepted` 持久化；成本使用带 revision 的模型价格 snapshot，不读取运行中漂移的目录值；App Server 与 Desktop 保留 canonical projection | 默认只记账不设限；达到已报告下限后在下一个模型、压缩或工具安全点以 `turnBudgetExhausted` 终止；final answer 可在刚好到限时完成；恢复继续使用冻结预算 |
 | AL-203 | 已实现 | 模型输入逐项限幅 | ContextPlan 选入时对 shell、文件读取、搜索和 MCP 生成带 continuation 诊断的 bounded clone；图片保留 durable 原图并在 provider-bound materialization 时按模型策略降采样 | 普通调用和 compaction 共用 bounded clone；structured content 按实际内容计量；durable Tool Result 和附件对象不被静默改写 |
 | AL-204 | 已实现 | 手动压缩 | `/compact` 以独立、不可 steering 的 Turn 执行；可选保留提示冻结在 typed command receipt；本地路径复用 durable checkpoint/usage，订阅路径把无提示请求委托给 upstream `thread/compact/start` | 只覆盖完整 terminal durable 前缀；压缩 Turn 和未完成工具组不被吸收；超长 Core-managed 前缀分批提交；失败不提交半成品 checkpoint；command replay 不重复外部调用 |
-| AL-205 | 待构建 | 预算校准 | 使用已记录 usage 校准估算误差，并为可用模型接入精确 tokenizer/preflight | 估算 revision 可追踪；未知窗口继续使用 provider-managed，不猜测固定窗口；校准不能改变历史 durable usage |
+| AL-205 | 已实现 | 预算校准 | 普通调用和模型驱动的 compaction 把带 estimator/calibration revision 的调用前估算写入 `ModelUsageRecorded`；reducer 按冻结模型与 estimator revision 从 provider input usage 重建只收紧未来容量的非对称 EMA；现有 OpenAI exact preflight、其他声明式 remote preflight 与本地 tokenizer 降级路径继续作用于最终 request | 重启后校准一致；缺失 input usage 不生成样本；上调立即生效、下调渐进衰减；未知窗口仍为 provider-managed；历史 durable usage 聚合保持原值 |
 
-AL-201、AL-202、AL-203、AL-204 已完成。下一项是 AL-205；它只校准未来估算，不改写 AL-201 durable usage，也不改变 AL-204 已提交 checkpoint 的 provenance。
+AL-201 至 AL-205 已完成，S2 收口。下一项是 AL-301；它会在声明层建立模型家族到 ToolProfile 的映射，并把工具面冻结在 Turn 接受边界。
 
 ## 5. S3：模型家族工具面与计划工具（P1）
 
@@ -165,7 +165,7 @@ flowchart TD
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
 2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
-3. AL-201 durable usage 账本、AL-202 Turn 资源预算、AL-203 模型输入逐项限幅和 AL-204 手动压缩已完成；下一批构建 AL-205 预算校准，并可并行推进 S3、S4，每个阶段独立维护 protocol 和测试门。
+3. S2 的 AL-201 至 AL-205 已完成；下一批从 S3 的 AL-301 ToolProfile contract 开始，并可并行推进 S4，每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。
 
@@ -186,7 +186,7 @@ flowchart TD
 以下条件全部满足后，状态才从 Active build plan 改为 Completed：
 
 - S1 全部完成，运行中消息、错误恢复和失控防护形成稳定 contract；
-- S2 至少完成 AL-201、AL-202、AL-203，Thread 可以解释实际 usage 和终止原因；
+- S2 全部完成，Thread 可以解释实际 usage、终止原因和只影响未来规划的预算校准；
 - S3 全部完成，主力模型使用冻结且匹配家族的工具 profile；
 - S4 完成所有已声明主力 Provider 的流式、错误、usage 和 cache capability；
 - S5 全部完成，Codex 委托路径没有被静默丢弃的受支持交互或事件；
