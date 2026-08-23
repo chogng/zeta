@@ -284,4 +284,4 @@ corepack pnpm --dir zeta-ts typecheck:renderer
 
 Desktop 直接运行时依赖及其源码内保留的许可证文本见
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。发布打包必须包含该清单及
-`zeta-ts/licenses/`，并同时保留 Electron 与所选原生运行时随附的上游 notices。
+`zeta-ts/licenses/` 中的直接依赖许可证，并从清单引用的组件权威路径复制 Seti 与 Typst 许可证材料；同时保留 Electron 与所选原生运行时随附的上游 notices。源码树不保存这些组件许可证的第二份发布副本。

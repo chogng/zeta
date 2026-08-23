@@ -32,8 +32,6 @@
     "dev:docs": "corepack pnpm --dir docs-site dev",
     "fetch:pdfium": "node build/download/fetchPdfium.ts",
     "sync:file-icons": "node build/desktop/resources/syncFileIcons.ts",
-    "sync:desktop-licenses": "node build/desktop/resources/syncDesktopLicenses.ts",
-    "verify:desktop-licenses": "node build/desktop/resources/syncDesktopLicenses.ts --check",
     "package:zeta": "python3 -B build/release/build_zeta_package.py",
     "generate:protocol": "cargo run --quiet --manifest-path Cargo.toml -p zeta-app-server-protocol --bin write_schema_fixtures && node build/desktop/resources/syncAppServerProtocol.ts",
     "verify:file-icons": "cargo test --manifest-path Cargo.toml -p zeta-file-icons",

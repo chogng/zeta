@@ -9,7 +9,4 @@
 - `Typst-NOTICE.txt`：Typst 携带的第三方声明；
 - `Typst-Assets-NOTICE.txt`：内置字体和资源的许可证与声明。
 
-`zeta-ts/licenses/` 保存面向发布的副本。Typst 依赖、功能、字体或资源变化时，必须重新审查
-上游许可证材料，并保持两个位置逐字节一致。
-
-在仓库根目录运行 `corepack pnpm sync:desktop-licenses` 更新发布副本；`corepack pnpm verify:desktop-licenses` 只检查一致性，不修改文件。
+本目录是这些材料在仓库中的唯一权威来源。Desktop 发布流程从这里复制所需文件进入发布 staging，不在 `zeta-ts/licenses/` 保存第二份源码副本。Typst 依赖、功能、字体或资源变化时，必须重新审查上游许可证材料。
