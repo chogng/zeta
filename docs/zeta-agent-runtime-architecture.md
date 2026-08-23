@@ -108,7 +108,7 @@
 | `ContextInput` / `ContextPlan` / 纯内容选择 planner | 已实现 | B | [`core-context.md`](core-context.md) |
 | 通用 context budget / token measurement 判定 | 已实现 | B | [`zeta-context-engine`](../zeta-rs/context-engine/README.md)；OpenAI exact，Anthropic/Google/Kimi/Z.AI estimated remote preflight 已接入，local tokenizer 尚未接入 |
 | `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
-| compaction checkpoint schema + 压缩流程 | 已实现 | B | [`core-context.md`](core-context.md) §8 |
+| compaction checkpoint schema + 压缩流程 | 已实现 | B | 预算压缩和供应商溢出单次恢复均复用 durable checkpoint，见 [`core-context.md`](core-context.md) §8 |
 | `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |
 | provider wire-level SSE streaming | 仅设计 | C | 本文 §4.2 |
 | App Server 独立 outbound writer 线程 | 仅设计 | C | 本文 §4.2 |
@@ -413,7 +413,7 @@ pnpm --dir zeta-ts run test:main
 - 同 Thread 只有一个逻辑状态提交者；
 - 所有用户可见 final Item 在通知前 durable；
 - Turn 级策略环境冻结为 durable fact，恢复不产生静默放宽；
-- 上下文溢出产生显式 outcome，当前输入与安全约束永不被静默删除；
+- 上下文溢出只压缩 terminal 旧历史并以 durable 新快照重试一次；无可压缩前缀或再次溢出产生显式 outcome，当前输入与安全约束永不被静默删除；
 - provider/tool/execution 失败都有明确 terminal path；断连、取消、超时和 shutdown 不留下
   永久 pending；
 - Provider 切换不依赖旧 provider cache；Tool 副作用在 unknown outcome 下不被静默重放；

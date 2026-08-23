@@ -26,8 +26,9 @@ use zeta_protocol::{
     AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
     ModelRequest, ModelResponse, ModelStreamEvent, RequestUserInput, RequestUserInputResponse,
     ResponseItem, SessionId, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
-    StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
-    ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer, UserInputQuestion,
+    StableTurnErrorCode, StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope,
+    ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer,
+    UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -610,8 +611,12 @@ fn model_failure_durably_fails_the_turn() {
 fn retries_transient_model_failures_before_completing() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([
-        Err(CoreError::ModelTransient("temporary 429".into())),
-        Err(CoreError::ModelTransient("temporary 503".into())),
+        Err(CoreError::ModelTransient {
+            retry_after_ms: None,
+        }),
+        Err(CoreError::ModelTransient {
+            retry_after_ms: None,
+        }),
         Ok(text_response("recovered")),
     ]));
     let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
@@ -622,6 +627,262 @@ fn retries_transient_model_failures_before_completing() {
 
     assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
     assert_eq!(model.requests().len(), 3);
+}
+
+#[test]
+fn retries_an_invalid_model_response_once_before_failing_stably() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let model = Arc::new(ScriptedModel::new([
+        Err(CoreError::ModelInvalidResponse),
+        Err(CoreError::ModelInvalidResponse),
+        Ok(text_response("must not be reached")),
+    ]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+    assert!(matches!(
+        executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()),
+        Err(CoreError::ModelInvalidResponse)
+    ));
+    assert_eq!(model.requests().len(), 2);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let failure = snapshot.turns.last().unwrap().failure.as_ref().unwrap();
+    assert_eq!(failure.code, StableTurnErrorCode::InvalidResponse);
+    assert!(failure.retryable);
+}
+
+#[test]
+fn semantic_model_failures_do_not_retry_and_keep_stable_turn_codes() {
+    let cases = [
+        (
+            CoreError::ModelContextOverflow,
+            StableTurnErrorCode::ContextOverflow,
+            true,
+        ),
+        (
+            CoreError::ModelAuthFailed,
+            StableTurnErrorCode::ProviderAuth,
+            false,
+        ),
+        (
+            CoreError::ModelInvalidRequest,
+            StableTurnErrorCode::InvalidRequest,
+            false,
+        ),
+    ];
+
+    for (error, code, retryable) in cases {
+        let (threads, thread_id, turn_id) = started_turn();
+        let model = Arc::new(ScriptedModel::new([
+            Err(error.clone()),
+            Ok(text_response("must not be reached")),
+        ]));
+        let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+
+        assert_eq!(
+            executor
+                .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+                .err(),
+            Some(error)
+        );
+        assert_eq!(model.requests().len(), 1);
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        let failure = snapshot.turns.last().unwrap().failure.as_ref().unwrap();
+        assert_eq!(failure.code, code);
+        assert_eq!(failure.retryable, retryable);
+    }
+}
+
+#[test]
+fn context_overflow_commits_one_checkpoint_before_retrying_with_the_new_snapshot() {
+    let (threads, thread_id, turn_id) = started_turn_with_history();
+    let model = Arc::new(CheckpointObservingModel::new(
+        threads.clone(),
+        thread_id.clone(),
+        turn_id.clone(),
+        Ok(text_response("recovered")),
+    ));
+    let compaction = Arc::new(FixedOverflowCompaction::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_context_compaction_service(compaction.clone());
+
+    let outcome = executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(matches!(outcome, TurnExecutionOutcome::Completed(_)));
+    assert_eq!(model.requests().len(), 2);
+    assert_eq!(compaction.calls.load(Ordering::Relaxed), 1);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.context_checkpoints.len(), 1);
+    assert_eq!(snapshot.context_overflow_recoveries.len(), 1);
+    assert_eq!(
+        snapshot.context_overflow_recoveries.get(&turn_id),
+        Some(&snapshot.context_checkpoints[0].checkpoint_id)
+    );
+}
+
+#[test]
+fn a_second_context_overflow_fails_stably_without_another_compaction() {
+    let (threads, thread_id, turn_id) = started_turn_with_history();
+    let model = Arc::new(CheckpointObservingModel::new(
+        threads.clone(),
+        thread_id.clone(),
+        turn_id.clone(),
+        Err(CoreError::ModelContextOverflow),
+    ));
+    let compaction = Arc::new(FixedOverflowCompaction::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_context_compaction_service(compaction.clone());
+
+    assert_eq!(
+        executor
+            .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+            .err(),
+        Some(CoreError::ModelContextOverflow)
+    );
+
+    assert_eq!(model.requests().len(), 2);
+    assert_eq!(compaction.calls.load(Ordering::Relaxed), 1);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.context_checkpoints.len(), 1);
+    let failure = snapshot.turns.last().unwrap().failure.as_ref().unwrap();
+    assert_eq!(failure.code, StableTurnErrorCode::ContextOverflow);
+}
+
+#[test]
+fn cancellation_during_overflow_compaction_prevents_the_checkpoint_and_retry() {
+    let (threads, thread_id, turn_id) = started_turn_with_history();
+    let model = Arc::new(CheckpointObservingModel::new(
+        threads.clone(),
+        thread_id.clone(),
+        turn_id.clone(),
+        Ok(text_response("must not be reached")),
+    ));
+    let compaction = Arc::new(BlockingOverflowCompaction::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_context_compaction_service(compaction.clone());
+
+    executor.start(&thread_id, &turn_id).unwrap();
+    compaction.wait_until_entered();
+    threads
+        .interrupt_turn(
+            &thread_id,
+            crate::InterruptTurnRequest {
+                command_id: CommandId::new("cancel-overflow-compaction").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                turn_id: turn_id.clone(),
+            },
+        )
+        .unwrap();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Interrupted);
+    wait_for_flag(
+        &compaction.was_cancelled,
+        "overflow compaction was not cancelled",
+    );
+
+    assert_eq!(model.requests().len(), 1);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.context_checkpoints.is_empty());
+    assert!(snapshot.context_overflow_recoveries.is_empty());
+}
+
+#[test]
+fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let original = Arc::new(ThreadController::with_store(store.clone()));
+    let thread_id = ThreadId::new("overflow-restart-thread").unwrap();
+    original
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("overflow-restart-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "overflow restart".into(),
+        })
+        .unwrap();
+    let history_turn = original
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("overflow-restart-history").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "history".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    original
+        .complete_turn(&thread_id, &history_turn, "answer".repeat(100))
+        .unwrap();
+    let current_turn = original
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("overflow-restart-current").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let source = original.read_thread(&thread_id).unwrap();
+    let covered_end_sequence = source
+        .items
+        .iter()
+        .filter(|item| item.turn_id() == &history_turn)
+        .filter_map(|item| source.item_sequences.get(item.item_id()))
+        .copied()
+        .max()
+        .unwrap();
+    original
+        .commit_context_overflow_recovery(
+            &thread_id,
+            &current_turn,
+            CommitContextCheckpointRequest {
+                source_thread_sequence: source.sequence,
+                covered: zeta_protocol::ContextSourceRange {
+                    start_sequence: 1,
+                    end_sequence: covered_end_sequence,
+                },
+                summary: "overflow checkpoint".into(),
+                schema_revision: "context-checkpoint-v1".into(),
+                prompt_revision: "compaction-test-v1".into(),
+                context_policy_revision: "context-policy-v1".into(),
+                generator_model: None,
+            },
+        )
+        .unwrap();
+
+    let recovered = Arc::new(ThreadController::with_store(store));
+    let snapshot = recovered.recover_thread(&thread_id).unwrap();
+    let model = Arc::new(ScriptedModel::new([Ok(text_response(
+        "must not be invoked",
+    ))]));
+    let executor = TurnExecutor::without_tools(recovered, model.clone());
+
+    assert_eq!(executor.resume_recovered_tool_continuations().unwrap(), 0);
+    assert!(model.requests().is_empty());
+    assert_eq!(
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == current_turn)
+            .unwrap()
+            .status,
+        TurnStatus::Interrupted
+    );
+    assert_eq!(snapshot.context_checkpoints.len(), 1);
+    assert_eq!(snapshot.context_overflow_recoveries.len(), 1);
 }
 
 #[test]
@@ -883,6 +1144,134 @@ fn running_tool_user_input_is_durable_and_resumes_the_same_execution() {
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+struct CheckpointObservingModel {
+    threads: Arc<ThreadController>,
+    thread_id: ThreadId,
+    turn_id: TurnId,
+    second_response: Mutex<Option<Result<ModelResponse, CoreError>>>,
+    requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl CheckpointObservingModel {
+    fn new(
+        threads: Arc<ThreadController>,
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        second_response: Result<ModelResponse, CoreError>,
+    ) -> Self {
+        Self {
+            threads,
+            thread_id,
+            turn_id,
+            second_response: Mutex::new(Some(second_response)),
+            requests: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn requests(&self) -> Vec<ModelRequest> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+impl ModelService for CheckpointObservingModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let invocation = {
+            let mut requests = self.requests.lock().unwrap();
+            let invocation = requests.len();
+            requests.push(request.clone());
+            invocation
+        };
+        if invocation == 0 {
+            return Err(CoreError::ModelContextOverflow);
+        }
+        assert_eq!(invocation, 1, "overflow recovery may retry only once");
+        let snapshot = self.threads.read_thread(&self.thread_id).unwrap();
+        let checkpoint_id = snapshot
+            .context_overflow_recoveries
+            .get(&self.turn_id)
+            .expect("recovery marker must be durable before the retry");
+        assert_eq!(
+            Some(checkpoint_id),
+            snapshot
+                .context_checkpoints
+                .last()
+                .map(|checkpoint| &checkpoint.checkpoint_id)
+        );
+        assert!(request_contains(request, "overflow checkpoint"));
+        self.second_response
+            .lock()
+            .unwrap()
+            .take()
+            .expect("second response is configured")
+    }
+}
+
+#[derive(Default)]
+struct FixedOverflowCompaction {
+    calls: AtomicUsize,
+}
+
+impl ContextCompactionService for FixedOverflowCompaction {
+    fn compact(
+        &self,
+        request: &ContextCompactionRequest,
+        _: &CancellationToken,
+    ) -> Result<crate::ContextCompactionResult, CoreError> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        assert!(!request.source_items().is_empty());
+        Ok(crate::ContextCompactionResult::new(
+            "overflow checkpoint",
+            "context-checkpoint-v1",
+            "compaction-test-v1",
+            "context-policy-v1",
+        ))
+    }
+}
+
+#[derive(Default)]
+struct BlockingOverflowCompaction {
+    entered: AtomicBool,
+    was_cancelled: AtomicBool,
+    entered_lock: Mutex<()>,
+    entered_changed: Condvar,
+}
+
+impl BlockingOverflowCompaction {
+    fn wait_until_entered(&self) {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let mut lock = self.entered_lock.lock().unwrap();
+        while !self.entered.load(Ordering::Relaxed) {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            assert!(!remaining.is_zero(), "overflow compaction did not start");
+            let (next_lock, _) = self.entered_changed.wait_timeout(lock, remaining).unwrap();
+            lock = next_lock;
+        }
+    }
+}
+
+impl ContextCompactionService for BlockingOverflowCompaction {
+    fn compact(
+        &self,
+        _: &ContextCompactionRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<crate::ContextCompactionResult, CoreError> {
+        self.entered.store(true, Ordering::Relaxed);
+        self.entered_changed.notify_all();
+        loop {
+            if let Err(signal) = cancellation.check() {
+                self.was_cancelled.store(true, Ordering::Relaxed);
+                return Err(CoreError::Cancelled(signal.reason().to_string()));
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
 }
 
 struct FixedContextSource {
@@ -1552,6 +1941,31 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
                     text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    (threads, thread_id, turn_id)
+}
+
+fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
+    let (threads, thread_id, history_turn_id) = started_turn();
+    threads
+        .complete_turn(&thread_id, &history_turn_id, "durable history ".repeat(400))
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-overflow-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue after durable history".into(),
                 }],
             },
         )

@@ -85,6 +85,11 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         checkpoint: ContextCheckpoint,
     },
+    ContextOverflowRecoveryCommitted {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        checkpoint: ContextCheckpoint,
+    },
     TurnAccepted {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -220,6 +225,7 @@ impl ThreadEvent {
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
             Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
+            Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
@@ -255,6 +261,7 @@ impl ThreadEvent {
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
             | Self::ContextCheckpointCommitted { thread_id, .. }
+            | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }

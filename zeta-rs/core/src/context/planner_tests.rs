@@ -243,6 +243,66 @@ fn requests_compaction_for_an_oldest_prefix_without_dropping_current_input() {
 }
 
 #[test]
+fn overflow_recovery_compacts_the_complete_terminal_prefix_and_excludes_the_current_turn() {
+    let old_one = id::<TurnId>("overflow-old-one");
+    let old_two = id::<TurnId>("overflow-old-two");
+    let current = id::<TurnId>("overflow-current");
+    let snapshot = snapshot(
+        current.clone(),
+        vec![
+            user_item("overflow-old-one", old_one.clone(), &"a".repeat(4_000)),
+            user_item("overflow-old-two", old_two.clone(), &"b".repeat(4_000)),
+            user_item("overflow-current", current.clone(), &"c".repeat(4_000)),
+        ],
+    );
+    let input = ContextInput::new(
+        &snapshot,
+        current,
+        Vec::new(),
+        Vec::new(),
+        ContextBudget::provider_managed(),
+    );
+
+    let plan = ContextPlanner::prepare_overflow_recovery(&input).unwrap();
+
+    assert_eq!(plan.covered_turns, vec![old_one, old_two]);
+    assert_eq!(plan.covered.end_sequence, 3);
+    assert_eq!(
+        plan.source_items
+            .iter()
+            .map(|item| item.item_id().as_str())
+            .collect::<Vec<_>>(),
+        vec!["overflow-old-one", "overflow-old-two"]
+    );
+    assert!(plan.target_tokens.get() <= super::MAX_OVERFLOW_CHECKPOINT_TOKENS);
+}
+
+#[test]
+fn overflow_recovery_rejects_a_turn_without_completed_history() {
+    let current = id::<TurnId>("overflow-only-current");
+    let snapshot = snapshot(
+        current.clone(),
+        vec![user_item(
+            "overflow-only-current",
+            current.clone(),
+            &"current".repeat(100),
+        )],
+    );
+    let input = ContextInput::new(
+        &snapshot,
+        current,
+        Vec::new(),
+        Vec::new(),
+        ContextBudget::provider_managed(),
+    );
+
+    assert_eq!(
+        ContextPlanner::prepare_overflow_recovery(&input).unwrap_err(),
+        ContextPreparationError::NoCompactionCandidate
+    );
+}
+
+#[test]
 fn compaction_request_uses_the_hard_window_not_the_pressure_threshold() {
     let old_one = id::<TurnId>("pressure-old-one");
     let old_two = id::<TurnId>("pressure-old-two");
@@ -461,6 +521,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             .collect(),
         items,
         context_checkpoints: Vec::new(),
+        context_overflow_recoveries: BTreeMap::new(),
         item_sequences,
         event_digests: BTreeMap::new(),
         commands: Vec::<ThreadCommandSnapshot>::new(),

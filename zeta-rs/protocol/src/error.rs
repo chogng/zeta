@@ -19,6 +19,38 @@ impl StableTurnError {
         }
     }
 
+    pub fn context_overflow() -> Self {
+        Self {
+            code: StableTurnErrorCode::ContextOverflow,
+            message: "The model context window was exceeded".into(),
+            retryable: true,
+        }
+    }
+
+    pub fn provider_auth() -> Self {
+        Self {
+            code: StableTurnErrorCode::ProviderAuth,
+            message: "Model provider authentication failed".into(),
+            retryable: false,
+        }
+    }
+
+    pub fn invalid_request() -> Self {
+        Self {
+            code: StableTurnErrorCode::InvalidRequest,
+            message: "The model rejected an invalid request".into(),
+            retryable: false,
+        }
+    }
+
+    pub fn invalid_response() -> Self {
+        Self {
+            code: StableTurnErrorCode::InvalidResponse,
+            message: "The model returned an invalid response".into(),
+            retryable: true,
+        }
+    }
+
     pub fn completion_persistence_failed() -> Self {
         Self {
             code: StableTurnErrorCode::CompletionPersistenceFailed,
@@ -40,6 +72,10 @@ impl StableTurnError {
 #[serde(rename_all = "camelCase")]
 pub enum StableTurnErrorCode {
     ModelInvocationFailed,
+    ContextOverflow,
+    ProviderAuth,
+    InvalidRequest,
+    InvalidResponse,
     CompletionPersistenceFailed,
     InteractionDeadlineElapsed,
 }

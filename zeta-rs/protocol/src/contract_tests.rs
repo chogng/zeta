@@ -2,6 +2,29 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
+    let errors = [
+        StableTurnError::context_overflow(),
+        StableTurnError::provider_auth(),
+        StableTurnError::invalid_request(),
+        StableTurnError::invalid_response(),
+    ];
+
+    assert_eq!(
+        errors
+            .iter()
+            .map(|error| serde_json::to_value(error).unwrap()["code"].clone())
+            .collect::<Vec<_>>(),
+        vec![
+            json!("contextOverflow"),
+            json!("providerAuth"),
+            json!("invalidRequest"),
+            json!("invalidResponse"),
+        ]
+    );
+}
+
+#[test]
 fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
     let event = ThreadEvent::TurnStarted {
         thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
@@ -16,6 +39,38 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
             "turnId": "turn_1"
         })
     );
+}
+
+#[test]
+fn context_overflow_recovery_event_binds_the_checkpoint_to_one_turn() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let event = ThreadEvent::ContextOverflowRecoveryCommitted {
+        thread_id: thread_id.clone(),
+        turn_id: TurnId::new("turn_1").unwrap(),
+        checkpoint: ContextCheckpoint {
+            checkpoint_id: ContextCheckpointId::new("checkpoint_1").unwrap(),
+            source_thread_id: thread_id,
+            covered: ContextSourceRange {
+                start_sequence: 1,
+                end_sequence: 4,
+            },
+            referenced_items: vec![ItemId::new("item_1").unwrap()],
+            source_digest: ContextSourceDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap(),
+            summary: "earlier history".into(),
+            schema_revision: "context-checkpoint-v1".into(),
+            prompt_revision: "compaction-v1".into(),
+            context_policy_revision: "context-policy-v1".into(),
+            generator_model: None,
+            created_at_unix_ms: 42,
+            verification: ContextCheckpointVerification::Verified,
+        },
+    };
+
+    let encoded = serde_json::to_value(event).unwrap();
+    assert_eq!(encoded["type"], json!("contextOverflowRecoveryCommitted"));
+    assert_eq!(encoded["threadId"], json!("thread_1"));
+    assert_eq!(encoded["turnId"], json!("turn_1"));
+    assert_eq!(encoded["checkpoint"]["checkpointId"], json!("checkpoint_1"));
 }
 
 #[test]
@@ -92,6 +147,7 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
         title: "task".into(),
         status: SessionStatus::Active,
         model: None,
+        workspace: None,
         sequence: 2,
         threads: vec![
             SessionThread {

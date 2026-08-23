@@ -14,6 +14,7 @@ pub use compaction::ContextCompactionService;
 pub(crate) use compaction::ModelContextCompactionService;
 pub use instructions::HarnessInstructions;
 pub use instructions::HarnessInstructionsProvider;
+pub(crate) use invocation::ContextOverflowRecoveryPreparation;
 pub(crate) use invocation::FrozenModelSelection;
 pub(crate) use invocation::ModelInvocationPreparation;
 pub(crate) use invocation::ModelInvocationSnapshot;

@@ -12,7 +12,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、压缩上下文
 | --- | --- | --- | --- |
 | 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持批准、取消和恢复 | 有稳定工具 profile、计划工具、输出限幅和可量化成功率 | S3、S7 |
 | Agent 运行中追加要求 | 只能 interrupt 后开新 Turn | 消息 durable 追加到当前 Turn，并在下一个安全点生效 | S1 |
-| Provider 报上下文溢出或认证失败 | 基础瞬时错误可重试，但错误语义不完整 | 分类为稳定错误；上下文溢出自动压缩后只重试一次 | S1 |
+| 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
 | 长会话消耗大量 token | 有 ContextPlan 和自动压缩，但没有 Thread 级 usage/cost 账本 | usage durable、预算可配置、超限在安全点终止 | S2 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | 模型选择已冻结，但模型可见工具面未按家族完整区分 | Turn 接受时冻结 ToolProfile，使用匹配训练分布的编辑工具 | S3 |
 | 使用 Codex 订阅模型 | 基础委托、流式、批准、用户输入和恢复已接通 | 增加能力协商、diff、图片、secret、rate-limit 与故障矩阵 | S5 |
@@ -25,9 +25,9 @@ Zeta 已经具备可持续运行、调用工具、等待批准、压缩上下文
 | 能力 | 状态 | 当前边界 | 实现证据 |
 | --- | --- | --- | --- |
 | Turn 内循环 | 已实现 | 无固定模型调用轮数；每轮从 durable snapshot 重建输入 | `zeta-rs/core/src/turn/executor.rs` |
-| 模型基础弹性 | 已实现 | 429、过载、传输错误最多四次尝试；空响应重试一次；Refusal 正常完成 | `zeta-rs/model-provider/src/error.rs`、`zeta-rs/core/src/turn/executor.rs` |
+| 模型基础弹性 | 已实现 | 429、过载、传输错误最多四次尝试；上下文溢出持久化压缩后只重试一次；认证与无效请求不重试；无效响应和空响应各只重试一次；Refusal 正常完成 | `zeta-rs/zeta-api/src/requests/mod.rs`、`zeta-rs/model-provider/src/error.rs`、`zeta-rs/core/src/turn/executor.rs` |
 | 工具安全与恢复 | 已实现 | 工具绑定、策略版本、批准、sandbox escalation、未知结果不重放 | `zeta-rs/core/src/turn/tool_scheduler.rs` |
-| ContextPlan 与自动压缩 | 已实现 | durable checkpoint、source digest、压缩后重规划；手动压缩和 overflow 恢复尚缺 | `zeta-rs/core/src/context/` |
+| ContextPlan 与自动压缩 | 已实现 | durable checkpoint、source digest、预算压缩和供应商溢出恢复均在提交后重规划；手动压缩尚缺 | `zeta-rs/core/src/context/` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 部分具备 | `shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 可见；家族 profile、`update_plan` 和统一直接文件工具仍缺 | `zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
@@ -62,12 +62,12 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
 | AL-101 | 待构建 | 运行中 steering | 新增 durable `ThreadCommand::SteerTurn`、App Server `turn/steer`、幂等 command receipt、Desktop 运行中发送行为 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复 |
-| AL-102 | 待构建 | Provider 错误分类 | 增加 `ContextOverflow`、`AuthFailed`、`InvalidRequest`、`InvalidResponse` 和对应 stable Turn error；各 Provider 从状态码和错误体映射 | 401/403 不重试；无效响应只重试一次；错误码跨 App Server 和 Desktop 保持稳定；原始错误只进入受控日志 |
-| AL-103 | 待构建 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | compaction commit 前不发第二次调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
+| AL-102 | 已实现 | Provider 错误分类 | 增加 `ContextOverflow`、`AuthFailed`、`InvalidRequest`、`InvalidResponse` 和对应 stable Turn error；各 Provider 从状态码和错误体映射 | 401/403 不重试；无效响应只重试一次；错误码跨 App Server 和 Desktop 保持稳定；原始错误只进入受控日志 |
+| AL-103 | 已实现 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | checkpoint 与本 Turn 的恢复标记原子提交后才发重试调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
 | AL-104 | 待构建 | 重复失败工具熔断 | 按“工具名 + canonical arguments digest”记录 Turn 内连续失败 | 第 3 次附加 reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；不增加固定 loop 次数上限 |
 | AL-105 | 待构建 | 交互错误 UI | Desktop 区分可重试、认证、上下文、预算和工具重复错误，并提供对应下一步 | UI 不从错误字符串推断类别；刷新和重连后展示与 canonical Thread 状态一致 |
 
-S1 顺序：先完成 AL-102 的错误 contract，再实现 AL-103；AL-101 与 AL-104 可并行，最后接 AL-105。
+S1 顺序：AL-102 与 AL-103 已完成；接下来构建 AL-101 与 AL-104，最后接 AL-105。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -161,7 +161,7 @@ flowchart TD
 实际执行批次：
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
-2. 依次完成 AL-102、AL-103；并行推进 AL-101、AL-104，最后接 AL-105。
+2. 以已完成的 AL-102、AL-103 为失败语义基线，推进 AL-101、AL-104，最后接 AL-105。
 3. S1 稳定后并行推进 S2、S3、S4；每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。

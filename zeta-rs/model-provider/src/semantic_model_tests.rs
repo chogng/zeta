@@ -53,18 +53,18 @@ fn semantic_model(provider: &str, model: &str) -> ModelRef {
 fn embedding_response_rejects_inconsistent_dimensions_and_non_finite_values() {
     let first = EmbeddingVector::new(vec![1.0, 0.0]).expect("first vector");
     let second = EmbeddingVector::new(vec![1.0]).expect("second vector");
-    assert!(matches!(
+    assert_eq!(
         EmbeddingResponse::new(vec![first, second]),
         Err(ModelProviderError::InvalidResponse(
-            "embedding response dimensions must be consistent"
+            "embedding response dimensions must be consistent".into()
         ))
-    ));
-    assert!(matches!(
+    );
+    assert_eq!(
         EmbeddingVector::new(vec![f32::NAN]),
         Err(ModelProviderError::InvalidResponse(
-            "embedding vectors must be non-empty and finite"
+            "embedding vectors must be non-empty and finite".into()
         ))
-    ));
+    );
 }
 
 #[test]

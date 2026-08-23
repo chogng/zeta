@@ -1,3 +1,4 @@
+use crate::context::CompactionPlan;
 use crate::context::ContextInput;
 use crate::context::ContextPlanner;
 use crate::context::ContextPreparation;
@@ -18,6 +19,23 @@ impl ContextManager {
         &mut self,
         input: &ContextInput,
     ) -> Result<ContextPreparation, ContextPreparationError> {
+        self.validate_sequence(input)?;
+        let preparation = ContextPlanner::prepare(input)?;
+        self.observed_thread_sequence = input.source_thread_sequence();
+        Ok(preparation)
+    }
+
+    pub(crate) fn prepare_overflow_recovery(
+        &mut self,
+        input: &ContextInput,
+    ) -> Result<CompactionPlan, ContextPreparationError> {
+        self.validate_sequence(input)?;
+        let plan = ContextPlanner::prepare_overflow_recovery(input)?;
+        self.observed_thread_sequence = input.source_thread_sequence();
+        Ok(plan)
+    }
+
+    fn validate_sequence(&self, input: &ContextInput) -> Result<(), ContextPreparationError> {
         if input.source_thread_sequence() < self.observed_thread_sequence {
             return Err(ContextPreparationError::UnsupportedContextShape(format!(
                 "context input sequence {} is older than observed Thread sequence {}",
@@ -25,9 +43,7 @@ impl ContextManager {
                 self.observed_thread_sequence
             )));
         }
-        let preparation = ContextPlanner::prepare(input)?;
-        self.observed_thread_sequence = input.source_thread_sequence();
-        Ok(preparation)
+        Ok(())
     }
 }
 

@@ -1,7 +1,7 @@
 # 上下文系统
 
 > 状态：核心纵向切片已实现。`ContextInput`、纯规划器、`ContextPlan`、每个已加载 Thread 的
-> `ContextManager`、持久化 checkpoint、模型压缩编排和 `ContextAssembler` 已接入
+> `ContextManager`、持久化 checkpoint、预算压缩、供应商溢出恢复和 `ContextAssembler` 已接入
 > `TurnExecutor`。Skill 正文通过通用 `TurnInputContributor` 在 invocation safe point 注入；
 > 通用预算、精准/估算计量结果和边界判定已拆入 `zeta-context-engine`；OpenAI exact，以及
 > Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
@@ -25,7 +25,7 @@
 | Thread 历史就是模型上下文吗？ | 不是；历史是权威事实，上下文是按预算选择出的派生窗口 | [权威与派生关系](#3-权威与派生关系) |
 | 多个 Thread 会共享上下文吗？ | 不会；每个 Thread 有独立的 `ContextManager`、窗口和压缩检查点 | [为什么不放进 Session](#2-为什么不放进-session) |
 | 一次模型调用使用什么？ | 使用不可变的 `ContextPlan`，再由 `ContextAssembler` 组装请求 | [数据模型](#4-数据模型) |
-| 超出模型预算怎么办？ | 先按规则选择和裁剪；需要压缩时产生可恢复检查点 | [上下文预算](#7-上下文预算)、[压缩](#8-压缩) |
+| 超出模型预算或供应商实际窗口怎么办？ | 已知预算先规划压缩；供应商仍报溢出时持久化压缩旧历史并只重试一次 | [上下文预算](#7-上下文预算)、[压缩](#8-压缩) |
 | 模型或配置变化会污染旧窗口吗？ | 不会静默复用；相关 revision 变化会使派生状态失效并重建 | [供应商变更](#9-上下文窗口与供应商变更) |
 
 ## 1. 结论
@@ -115,8 +115,10 @@ struct ContextInput {
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
+    evidence: Vec<ContextEvidence>,
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
+    terminal_turns: BTreeSet<TurnId>,
     item_sequences: BTreeMap<ItemId, u64>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudget,
@@ -402,7 +404,25 @@ ContextManager detects pressure
 Summary model I/O 不持有 Thread writer。只有 checkpoint durable commit 后，后续 invocation 才能
 依赖它。
 
-### 8.3 恢复与失效
+### 8.3 供应商溢出恢复
+
+当普通请求已经发送、供应商仍返回 `ContextOverflow` 时，Core 不猜测一个新的模型窗口，也不清空对话。`ContextPlanner::prepare_overflow_recovery` 只选择当前 Turn 之前的 terminal 历史前缀；如已有 checkpoint，可连同未覆盖 tail 一起重新压缩。目标摘要最多 1024 个估算 token，并且必须小于被吸收历史的估算大小。
+
+```text
+provider ContextOverflow
+→ derive overflow CompactionPlan from latest durable ThreadSnapshot
+→ generate bounded summary without tools or current-Turn input
+→ atomically commit ContextOverflowRecoveryCommitted(checkpoint + turn_id)
+→ rebuild ModelInvocationSnapshot from the committed ThreadSnapshot
+→ retry the ordinary model request once
+→ second ContextOverflow becomes stable contextOverflow
+```
+
+`ContextOverflowRecoveryCommitted` 同时是 checkpoint 事实和 Turn 级单次恢复标记。reducer 只允许它绑定一个 Running Turn，验证 covered range 早于当前 Turn 的第一条 durable Item，并拒绝同一 Turn 的第二个恢复 checkpoint。取消发生在摘要生成或提交前时不会产生 checkpoint；取消与提交竞态时最多留下已验证 checkpoint，后续模型重试仍会先看到 cancellation。进程在提交后、重试前退出时，普通 model-only Running Turn 按既有恢复规则转为 Interrupted，不自动重放可能已经发生的模型调用。
+
+若当前 Turn 之前没有可压缩历史，或压缩请求本身溢出，当前 Turn 直接以稳定 `contextOverflow` 失败，不进入递归压缩。
+
+### 8.4 恢复与失效
 
 以下情况会使 checkpoint commit 或 event replay 失败即关闭，损坏的摘要不会进入 projection：
 
@@ -515,6 +535,7 @@ TurnExecutor
 | 不可变输入、纯规划器和调用快照 | ✅ 已实现 | 同一输入产生确定性选择；倒退 sequence 被拒绝 |
 | 通用 Skill 指令端口与预算行为 | ✅ 已实现 | 外部返回 `Required / BestEffort`；Core 不拥有 Skill 发现或选择 |
 | durable checkpoint、摘要生成、commit 后重规划 | ✅ 已实现 | 原始 event log 永不删除；压缩请求本身也受预算限制 |
+| 供应商上下文溢出恢复 | ✅ 已实现 | 只压缩 terminal 旧历史；checkpoint 与 Turn 恢复标记原子提交；最多重试一次 |
 | 已知模型窗口的生产启用 | ✅ 已实现 | 可通过 `model_context` 配置；未知模型退回 provider-managed |
 | 通用预算与精准/估算计量契约 | ✅ 已实现 | `zeta-context-engine` 统一压力线、硬窗口和保守记账判定 |
 | provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
@@ -541,6 +562,7 @@ TurnExecutor
 - ContextManager 丢失后从 durable facts 重建等价结果；
 - parent/child/sibling context 隔离（多 Agent 运行时落地后启用）；
 - compaction crash before/after durable commit；
+- provider overflow 的 commit-before-retry、二次溢出、取消与 restart no-replay；
 - current input 永不被静默删除。
 
 ## 14. 固定决策

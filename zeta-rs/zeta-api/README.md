@@ -142,11 +142,15 @@ end of stream
 | --- | --- |
 | canonical request 不满足基本 invariant | `InvalidRequest` |
 | `OperationClient` transport/operation failure | `Transport` |
-| unary response 为非 2xx | `HttpStatus(status)` |
+| HTTP 400 或供应商错误体中的 `invalid_request` | `InvalidRequest` |
+| HTTP 401/403 或供应商错误体中的认证失败 | `AuthFailed` |
+| 供应商错误体中的上下文上限 | `ContextOverflow` |
+| HTTP 429 | `RateLimited { retry_after_ms }` |
+| HTTP 5xx/529 或供应商错误体中的过载 | `Overloaded` |
+| 其他非 2xx | `HttpStatus(status)` |
 | response JSON、field 或 stream lifecycle 无效 | `InvalidResponse` |
 
-`From<zeta_client::ClientError>` 将 framing failure 映射为 `InvalidResponse`，其余 client failure
-映射为 `Transport`。Error text 不应包含 credential-bearing headers 或 raw sensitive payload。
+`requests::response_error` 与 `requests::stream_error` 在 HTTP 和 SSE 边界识别 OpenAI、Anthropic 与 Google 的已知错误码和消息。供应商错误体最多保留 4 KiB，且不包含凭据请求头；产品边界只把原始详情写入受控诊断日志，并在生成持久化 Turn 错误前移除。`From<zeta_client::ClientError>` 将分帧失败映射为 `InvalidResponse`，其余客户端失败映射为 `Transport`。
 
 ## 方向偏差检查
 

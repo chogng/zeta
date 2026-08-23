@@ -59,8 +59,89 @@ pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError
                 .map(|delay| delay.min(60_000)),
         },
         500..=599 => ApiError::Overloaded,
-        status => ApiError::HttpStatus(status),
+        401 | 403 => ApiError::AuthFailed(provider_error_detail(response.body())),
+        400 => classify_provider_error(response.body(), ProviderErrorFallback::InvalidRequest),
+        status => classify_provider_error(response.body(), ProviderErrorFallback::Status(status)),
     }
+}
+
+pub(crate) fn stream_error(body: &str) -> ApiError {
+    classify_provider_error(body.as_bytes(), ProviderErrorFallback::InvalidResponse)
+}
+
+#[derive(Clone, Copy)]
+enum ProviderErrorFallback {
+    InvalidRequest,
+    InvalidResponse,
+    Status(u16),
+}
+
+fn classify_provider_error(body: &[u8], fallback: ProviderErrorFallback) -> ApiError {
+    let detail = provider_error_detail(body);
+    let normalized = detail.to_ascii_lowercase();
+    if is_context_overflow(&normalized) {
+        return ApiError::ContextOverflow(detail);
+    }
+    if is_auth_failure(&normalized) {
+        return ApiError::AuthFailed(detail);
+    }
+    if is_overloaded(&normalized) {
+        return ApiError::Overloaded;
+    }
+    if is_invalid_request(&normalized) {
+        return ApiError::InvalidRequest(detail);
+    }
+    match fallback {
+        ProviderErrorFallback::InvalidRequest => ApiError::InvalidRequest(detail),
+        ProviderErrorFallback::InvalidResponse => ApiError::InvalidResponse(detail),
+        ProviderErrorFallback::Status(status) => ApiError::HttpStatus(status),
+    }
+}
+
+fn provider_error_detail(body: &[u8]) -> String {
+    const MAX_PROVIDER_ERROR_BYTES: usize = 4 * 1024;
+    let length = body.len().min(MAX_PROVIDER_ERROR_BYTES);
+    let mut detail = String::from_utf8_lossy(&body[..length]).into_owned();
+    if detail.trim().is_empty() {
+        return "provider returned an empty error body".into();
+    }
+    if body.len() > length {
+        detail.push_str(" [truncated]");
+    }
+    detail
+}
+
+fn is_context_overflow(detail: &str) -> bool {
+    detail.contains("context_length_exceeded")
+        || detail.contains("context window")
+        || detail.contains("maximum context length")
+        || detail.contains("prompt is too long")
+        || detail.contains("too many tokens")
+        || (detail.contains("input token")
+            && detail.contains("maximum")
+            && (detail.contains("exceed") || detail.contains("limit")))
+        || (detail.contains("context")
+            && (detail.contains("length") || detail.contains("token"))
+            && (detail.contains("exceed")
+                || detail.contains("limit")
+                || detail.contains("maximum")
+                || detail.contains("too long")))
+}
+
+fn is_auth_failure(detail: &str) -> bool {
+    detail.contains("authentication_error")
+        || detail.contains("invalid_api_key")
+        || detail.contains("invalid api key")
+        || detail.contains("incorrect api key")
+        || detail.contains("permission_denied")
+}
+
+fn is_overloaded(detail: &str) -> bool {
+    detail.contains("overloaded_error") || detail.contains("server_overloaded")
+}
+
+fn is_invalid_request(detail: &str) -> bool {
+    detail.contains("invalid_request_error") || detail.contains("invalid_argument")
 }
 
 pub(crate) mod anthropic_messages;

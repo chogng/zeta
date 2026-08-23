@@ -1056,9 +1056,9 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
       status: "failed",
       items: [],
       error: {
-        code: "modelInvocationFailed",
-        message: "Model invocation failed",
-        retryable: true,
+        code: "providerAuth",
+        message: "Model provider authentication failed",
+        retryable: false,
       },
     }],
   };
@@ -1074,7 +1074,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
   assert.deepEqual(model.items, [{
     id: "turn-error:turn-1",
     type: "turnError",
-    text: "Model invocation failed",
+    text: "Model provider authentication failed",
     transient: false,
     isError: true,
   }]);

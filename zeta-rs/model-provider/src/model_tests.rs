@@ -23,6 +23,26 @@ use zeta_model_tokenizer::LocalTokenizationOutcome;
 use zeta_model_tokenizer::LocalTokenizerError;
 use zeta_model_tokenizer::LocalTokenizerService;
 
+#[test]
+fn api_failure_categories_are_preserved_by_the_provider_boundary() {
+    assert_eq!(
+        ModelProviderError::from(ApiError::ContextOverflow("context detail".into())),
+        ModelProviderError::ContextOverflow("context detail".into())
+    );
+    assert_eq!(
+        ModelProviderError::from(ApiError::AuthFailed("auth detail".into())),
+        ModelProviderError::AuthFailed("auth detail".into())
+    );
+    assert_eq!(
+        ModelProviderError::from(ApiError::InvalidRequest("request detail".into())),
+        ModelProviderError::InvalidRequest("request detail".into())
+    );
+    assert_eq!(
+        ModelProviderError::from(ApiError::InvalidResponse("response detail".into())),
+        ModelProviderError::InvalidResponse("response detail".into())
+    );
+}
+
 struct CapturingTransport {
     request: Mutex<Option<(String, Vec<HttpHeader>, Value)>>,
     response: Value,

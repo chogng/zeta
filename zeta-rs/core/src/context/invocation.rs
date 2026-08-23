@@ -41,6 +41,16 @@ pub(crate) enum ModelInvocationPreparation {
     },
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum ContextOverflowRecoveryPreparation {
+    AlreadyAttempted,
+    Unavailable,
+    NeedsCompaction {
+        model: FrozenModelSelection,
+        plan: CompactionPlan,
+    },
+}
+
 impl ModelInvocationSnapshot {
     pub(crate) fn new(
         session_id: SessionId,

@@ -121,7 +121,7 @@ pub(crate) fn estimated_provider_measurement(
     source_revision: &'static str,
 ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
     let count = u32::try_from(count.get()).map_err(|_| {
-        ModelProviderError::InvalidResponse("input token count exceeds supported range")
+        ModelProviderError::InvalidResponse("input token count exceeds supported range".into())
     })?;
     let expected = ContextTokenCount::new(count);
     let uncertainty = ContextTokenCount::new(count.div_ceil(100).max(32));

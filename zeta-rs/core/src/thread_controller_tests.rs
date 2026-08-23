@@ -257,6 +257,81 @@ fn context_checkpoint_is_durable_before_projection_and_recovers_exactly() {
 }
 
 #[test]
+fn context_overflow_recovery_checkpoint_is_bound_once_to_the_running_turn() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "overflow-checkpoint");
+    let history_turn = start_turn(&threads, &thread, "overflow-history");
+    threads
+        .complete_turn(&thread, &history_turn, "history".repeat(100))
+        .unwrap();
+    let current_turn = start_turn(&threads, &thread, "overflow-current");
+    let source = threads.read_thread(&thread).unwrap();
+    let covered_end_sequence = source
+        .items
+        .iter()
+        .filter(|item| item.turn_id() == &history_turn)
+        .filter_map(|item| source.item_sequences.get(item.item_id()))
+        .copied()
+        .max()
+        .unwrap();
+
+    let checkpoint = threads
+        .commit_context_overflow_recovery(
+            &thread,
+            &current_turn,
+            checkpoint_request(source.sequence, covered_end_sequence),
+        )
+        .unwrap();
+
+    assert_eq!(
+        store.events().last().unwrap().event.kind(),
+        "context.overflow_recovery_committed"
+    );
+    let committed = threads.read_thread(&thread).unwrap();
+    assert_eq!(committed.context_checkpoints, vec![checkpoint.clone()]);
+    assert_eq!(
+        committed.context_overflow_recoveries.get(&current_turn),
+        Some(&checkpoint.checkpoint_id)
+    );
+    assert!(
+        threads
+            .commit_context_overflow_recovery(
+                &thread,
+                &current_turn,
+                checkpoint_request(committed.sequence, covered_end_sequence),
+            )
+            .is_err()
+    );
+    assert_eq!(
+        threads
+            .read_thread(&thread)
+            .unwrap()
+            .context_checkpoints
+            .len(),
+        1
+    );
+
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(
+        recovered.context_overflow_recoveries.get(&current_turn),
+        Some(&checkpoint.checkpoint_id)
+    );
+    assert_eq!(recovered.context_checkpoints, vec![checkpoint]);
+    assert_eq!(
+        recovered
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == current_turn)
+            .unwrap()
+            .status,
+        TurnStatus::Interrupted
+    );
+}
+
+#[test]
 fn failed_checkpoint_commit_does_not_expose_an_uncommitted_summary() {
     let store = Arc::new(ToggleStore {
         reject_writes: AtomicBool::new(false),

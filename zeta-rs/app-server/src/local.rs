@@ -3,6 +3,7 @@ use crate::CodeIndexSemanticModels;
 use crate::SlashCommandCatalog;
 use crate::model_catalog::CombinedModelCatalog;
 use crate::model_catalog::ModelCatalog;
+use crate::model_provider_error::map_model_provider_error;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use crate::server::WorkspaceToolPorts;
 use crate::server::update_broker::UpdateBroker;
@@ -2056,16 +2057,6 @@ impl ModelEventSink for CoreProviderStreamSink<'_> {
             ));
         }
         Ok(())
-    }
-}
-
-fn map_model_provider_error(error: zeta_model_provider::ModelProviderError) -> CoreError {
-    match error {
-        zeta_model_provider::ModelProviderError::Cancelled(message) => {
-            CoreError::Cancelled(message)
-        }
-        error if error.is_transient() => CoreError::ModelTransient(error.to_string()),
-        error => CoreError::Model(error.to_string()),
     }
 }
 

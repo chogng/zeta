@@ -49,6 +49,8 @@ serde / schemars / ts-rs
 derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema artifact 由
 `zeta-app-server-protocol` 负责，不在这里写文件。
 
+供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；它们只携带稳定用户文案和能否手动重试，不保存原始 HTTP 错误体。未细分的模型失败继续使用 `ModelInvocationFailed`。
+
 ## 内部接口地图
 
 本 crate 大部分代码是 public data shape，private interface 数量刻意很少。下面这些 helper 承载
@@ -95,6 +97,8 @@ Command ID、expected sequence、receipt 和 idempotent replay 是 Core/store ex
 `ThreadEvent::HistoryImported` 是 Rewind 子 Thread 的一次性 provenance-bearing 初始化事实；它
 只能紧跟 `ThreadCreated`，只包含 source checkpoint 之前的 terminal Turns，不会截断或改写 source
 Thread。
+
+`ThreadEvent::ContextOverflowRecoveryCommitted` 将一个已验证 `ContextCheckpoint` 绑定到触发恢复的 Running Turn。Core reducer 用它保证同一 Turn 只做一次供应商溢出恢复；普通预算压缩继续使用不带 Turn 绑定的 `ContextCheckpointCommitted`。
 
 ```text
 Command

@@ -5,8 +5,10 @@ use zeta_secrets::SecretStoreError;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProviderError {
-    InvalidRequest(&'static str),
-    InvalidResponse(&'static str),
+    InvalidRequest(String),
+    InvalidResponse(String),
+    ContextOverflow(String),
+    AuthFailed(String),
     Config(ProviderConfigError),
     ModelNotRegistered {
         provider: ProviderId,
@@ -25,6 +27,12 @@ impl fmt::Display for ModelProviderError {
             Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
             Self::InvalidResponse(message) => {
                 write!(formatter, "invalid model response: {message}")
+            }
+            Self::ContextOverflow(message) => {
+                write!(formatter, "model context window exceeded: {message}")
+            }
+            Self::AuthFailed(message) => {
+                write!(formatter, "model provider authentication failed: {message}")
             }
             Self::Config(error) => error.fmt(formatter),
             Self::ModelNotRegistered { provider, model } => write!(
@@ -61,6 +69,10 @@ impl From<ProviderConfigError> for ModelProviderError {
 impl From<ApiError> for ModelProviderError {
     fn from(error: ApiError) -> Self {
         match error {
+            ApiError::InvalidRequest(message) => Self::InvalidRequest(message),
+            ApiError::InvalidResponse(message) => Self::InvalidResponse(message),
+            ApiError::ContextOverflow(message) => Self::ContextOverflow(message),
+            ApiError::AuthFailed(message) => Self::AuthFailed(message),
             ApiError::Cancelled(message) => Self::Cancelled(message),
             error => Self::Api(error),
         }

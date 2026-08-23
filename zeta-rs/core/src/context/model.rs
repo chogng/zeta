@@ -2,6 +2,7 @@ use super::ContextBudget;
 use crate::ContextEvidence;
 use crate::ThreadSnapshot;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ItemId;
 use zeta_protocol::ThreadItem;
@@ -158,6 +159,7 @@ pub(crate) struct ContextInput {
     evidence: Vec<ContextEvidence>,
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
+    terminal_turns: BTreeSet<TurnId>,
     item_sequences: BTreeMap<ItemId, u64>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudget,
@@ -178,6 +180,19 @@ impl ContextInput {
             evidence: Vec::new(),
             items: snapshot.items.clone(),
             checkpoints: snapshot.context_checkpoints.clone(),
+            terminal_turns: snapshot
+                .turns
+                .iter()
+                .filter(|turn| {
+                    matches!(
+                        turn.status,
+                        zeta_protocol::TurnStatus::Completed
+                            | zeta_protocol::TurnStatus::Failed
+                            | zeta_protocol::TurnStatus::Interrupted
+                    )
+                })
+                .map(|turn| turn.turn_id.clone())
+                .collect(),
             item_sequences: snapshot.item_sequences.clone(),
             tools,
             budget,
@@ -211,6 +226,10 @@ impl ContextInput {
 
     pub(crate) fn checkpoints(&self) -> &[ContextCheckpoint] {
         &self.checkpoints
+    }
+
+    pub(crate) fn is_terminal_turn(&self, turn_id: &TurnId) -> bool {
+        self.terminal_turns.contains(turn_id)
     }
 
     pub(crate) fn item_sequence(&self, item_id: &ItemId) -> Option<u64> {

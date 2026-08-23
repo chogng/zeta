@@ -26,6 +26,7 @@ pub use semantic_models::RerankRequest;
 pub use semantic_models::RerankResponse;
 pub use semantic_models::RerankRuntimeRequest;
 pub use semantic_models::SemanticModelProvider;
+pub use zeta_api::ApiError;
 pub use zeta_api::ApiProtocol;
 pub use zeta_model_tokenizer::HttpTokenizerAssetDownloader;
 pub use zeta_model_tokenizer::HuggingFaceTokenizerAssetDiscoverer;

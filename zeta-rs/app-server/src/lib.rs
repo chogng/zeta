@@ -15,6 +15,7 @@ mod marketplace_connector_runtime;
 mod marketplace_editor_extensions;
 mod mcp_runtime;
 mod model_catalog;
+mod model_provider_error;
 mod product_services;
 mod resource_store;
 mod review;

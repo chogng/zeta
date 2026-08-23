@@ -75,3 +75,15 @@ fn responses_decoder_rejects_malformed_delta_events() {
         Err(ApiError::InvalidResponse(_))
     ));
 }
+
+#[test]
+fn responses_decoder_classifies_terminal_provider_failures() {
+    let mut decoder = OpenAiResponsesSseDecoder::new();
+    assert!(matches!(
+        decoder.decode(&event(
+            "response.failed",
+            r#"{"type":"response.failed","response":{"error":{"code":"context_length_exceeded"}}}"#,
+        )),
+        Err(ApiError::ContextOverflow(_))
+    ));
+}

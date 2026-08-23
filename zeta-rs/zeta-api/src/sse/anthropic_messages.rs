@@ -96,9 +96,7 @@ impl AnthropicMessagesSseDecoder {
             "message_delta" => self.update_message(&payload),
             "message_stop" => self.stop_message(),
             "ping" => Ok(Vec::new()),
-            "error" => Err(ApiError::InvalidResponse(
-                "Anthropic message stream reported an error event".into(),
-            )),
+            "error" => Err(crate::requests::stream_error(&event.data)),
             _ => Ok(Vec::new()),
         }
     }

@@ -315,6 +315,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         }],
         items,
         context_checkpoints: Vec::new(),
+        context_overflow_recoveries: BTreeMap::new(),
         item_sequences: BTreeMap::new(),
         event_digests: BTreeMap::new(),
         commands: Vec::<ThreadCommandSnapshot>::new(),

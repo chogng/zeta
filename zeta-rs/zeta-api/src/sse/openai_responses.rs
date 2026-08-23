@@ -82,9 +82,9 @@ impl OpenAiResponsesSseDecoder {
                 self.response = payload.get("response").cloned();
                 Ok(Vec::new())
             }
-            "response.failed" | "response.incomplete" => Err(ApiError::InvalidResponse(
-                "OpenAI response stream reported a terminal failure".into(),
-            )),
+            "response.failed" | "response.incomplete" => {
+                Err(crate::requests::stream_error(&event.data))
+            }
             _ => Ok(Vec::new()),
         }
     }

@@ -19,6 +19,7 @@ use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContextCheckpoint;
+use zeta_protocol::ContextCheckpointId;
 use zeta_protocol::ContextSourceDigest;
 use zeta_protocol::ContextSourceRange;
 use zeta_protocol::DelegationId;
@@ -55,6 +56,7 @@ pub struct ThreadSnapshot {
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
     pub context_checkpoints: Vec<ContextCheckpoint>,
+    pub context_overflow_recoveries: BTreeMap<TurnId, ContextCheckpointId>,
     pub item_sequences: BTreeMap<ItemId, u64>,
     pub event_digests: BTreeMap<u64, String>,
     pub commands: Vec<ThreadCommandSnapshot>,
@@ -253,6 +255,7 @@ pub fn reduce_thread_event(
                     turns: Vec::new(),
                     items: Vec::new(),
                     context_checkpoints: Vec::new(),
+                    context_overflow_recoveries: BTreeMap::new(),
                     item_sequences: BTreeMap::new(),
                     event_digests,
                     seen_interaction_ids: BTreeSet::new(),
@@ -373,6 +376,47 @@ pub fn reduce_thread_event(
         ThreadEvent::ContextCheckpointCommitted { checkpoint, .. } => {
             require_no_command(envelope)?;
             validate_context_checkpoint(&snapshot, checkpoint)?;
+            snapshot.context_checkpoints.push(checkpoint.clone());
+        }
+        ThreadEvent::ContextOverflowRecoveryCommitted {
+            turn_id,
+            checkpoint,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != TurnStatus::Running
+                || snapshot.context_overflow_recoveries.contains_key(turn_id)
+            {
+                return Err(CoreError::Journal(
+                    "context overflow recovery can be committed once for a running Turn".into(),
+                ));
+            }
+            let current_turn_start = snapshot
+                .items
+                .iter()
+                .filter(|item| item.turn_id() == turn_id)
+                .filter_map(|item| snapshot.item_sequences.get(item.item_id()))
+                .copied()
+                .min()
+                .ok_or_else(|| {
+                    CoreError::Journal(
+                        "context overflow recovery requires durable current-Turn input".into(),
+                    )
+                })?;
+            if checkpoint.covered.end_sequence >= current_turn_start {
+                return Err(CoreError::Journal(
+                    "context overflow recovery checkpoint cannot absorb the current Turn".into(),
+                ));
+            }
+            validate_context_checkpoint(&snapshot, checkpoint)?;
+            snapshot
+                .context_overflow_recoveries
+                .insert(turn_id.clone(), checkpoint.checkpoint_id.clone());
             snapshot.context_checkpoints.push(checkpoint.clone());
         }
         ThreadEvent::TurnAccepted {
@@ -1395,6 +1439,7 @@ fn import_history(
         .iter()
         .flat_map(|turn| turn.items.iter().cloned())
         .collect();
+    snapshot.context_overflow_recoveries.clear();
     Ok(())
 }
 

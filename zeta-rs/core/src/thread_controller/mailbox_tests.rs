@@ -154,6 +154,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         turns: Vec::new(),
         items: Vec::new(),
         context_checkpoints: Vec::new(),
+        context_overflow_recoveries: BTreeMap::new(),
         item_sequences: BTreeMap::new(),
         event_digests: BTreeMap::new(),
         commands: Vec::new(),

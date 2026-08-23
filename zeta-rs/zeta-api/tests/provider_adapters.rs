@@ -633,6 +633,70 @@ fn non_success_status_is_preserved_for_api_error_decoding() {
     );
 }
 
+#[test]
+fn provider_status_and_error_bodies_map_to_semantic_failures() {
+    let cases = [
+        (
+            401,
+            r#"{"error":{"message":"Incorrect API key"}}"#,
+            zeta_api::ApiError::AuthFailed(
+                r#"{"error":{"message":"Incorrect API key"}}"#.into(),
+            ),
+        ),
+        (
+            403,
+            r#"{"error":{"status":"PERMISSION_DENIED"}}"#,
+            zeta_api::ApiError::AuthFailed(
+                r#"{"error":{"status":"PERMISSION_DENIED"}}"#.into(),
+            ),
+        ),
+        (
+            400,
+            r#"{"error":{"code":"context_length_exceeded"}}"#,
+            zeta_api::ApiError::ContextOverflow(
+                r#"{"error":{"code":"context_length_exceeded"}}"#.into(),
+            ),
+        ),
+        (
+            400,
+            r#"{"error":{"type":"invalid_request_error","message":"prompt is too long"}}"#,
+            zeta_api::ApiError::ContextOverflow(
+                r#"{"error":{"type":"invalid_request_error","message":"prompt is too long"}}"#
+                    .into(),
+            ),
+        ),
+        (
+            400,
+            r#"{"error":{"status":"INVALID_ARGUMENT","message":"input token count exceeds the maximum"}}"#,
+            zeta_api::ApiError::ContextOverflow(
+                r#"{"error":{"status":"INVALID_ARGUMENT","message":"input token count exceeds the maximum"}}"#
+                    .into(),
+            ),
+        ),
+        (
+            400,
+            r#"{"error":{"type":"invalid_request_error","message":"unsupported tool"}}"#,
+            zeta_api::ApiError::InvalidRequest(
+                r#"{"error":{"type":"invalid_request_error","message":"unsupported tool"}}"#
+                    .into(),
+            ),
+        ),
+        (529, "overloaded", zeta_api::ApiError::Overloaded),
+    ];
+
+    for (status, body, expected) in cases {
+        let error = ApiEndpoint::OpenAiResponses
+            .complete_with_client(
+                &target(),
+                "gpt-test",
+                &ModelRequest::text("hello"),
+                &ErrorResponseClient { status, body },
+            )
+            .unwrap_err();
+        assert_eq!(error, expected);
+    }
+}
+
 struct StatusClient(u16);
 
 impl OperationClient for StatusClient {
@@ -641,6 +705,21 @@ impl OperationClient for StatusClient {
             self.0,
             Vec::new(),
             b"rate limited".to_vec(),
+        ))
+    }
+}
+
+struct ErrorResponseClient {
+    status: u16,
+    body: &'static str,
+}
+
+impl OperationClient for ErrorResponseClient {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        Ok(ClientResponse::new(
+            self.status,
+            Vec::new(),
+            self.body.as_bytes().to_vec(),
         ))
     }
 }

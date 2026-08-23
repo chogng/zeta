@@ -72,8 +72,7 @@ bazel test //zeta-rs/history:history-unit-tests
 
 ## 当前限制与演进
 
-当前新写入使用 schema version `3`，reader 仍接受 minimum version `1`；version 3 覆盖 Agent
-context seed、delegation、message/result facts 和自动 Skill activation command snapshot。本 crate
+当前新写入使用 schema version `6`，reader 仍接受 minimum version `1`；version 6 覆盖 Turn 级供应商上下文溢出恢复 checkpoint，早期版本覆盖 Agent context seed、delegation、message/result facts、自动 Skill activation command snapshot 和结构化工具绑定。本 crate
 只抽取已经在生产路径中使用的 Thread history record；Session envelope 仍由
 `zeta-session-store` 拥有。它没有照搬 Codex 尚无真实消费者的 `InitialHistory`、rollout JSONL
 line 或 harness metadata。未来只有当 Core、import/fork 或另一种持久化后端需要共同理解新的

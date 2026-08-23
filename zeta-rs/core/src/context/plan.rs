@@ -197,6 +197,7 @@ pub(crate) enum ContextPreparationError {
         required: ContextTokenCount,
         available: ContextTokenCount,
     },
+    NoCompactionCandidate,
     UnsupportedContextShape(String),
 }
 
@@ -238,6 +239,9 @@ impl fmt::Display for ContextPreparationError {
                 formatter,
                 "the next durable history prefix requires {required} tokens to compact but only {available} are available"
             ),
+            Self::NoCompactionCandidate => {
+                formatter.write_str("no completed history prefix is available for compaction")
+            }
             Self::UnsupportedContextShape(message) => formatter.write_str(message),
         }
     }

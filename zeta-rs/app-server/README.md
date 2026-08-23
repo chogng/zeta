@@ -578,9 +578,7 @@ Language-server preference
 每次 `ModelService::invoke` 重新读取 user config，与 optional workspace document 合并，再由
 `ModelSnapshotResolver` 生成 immutable invoker。因此 config change 影响下一次 invocation，不会
 改变已经运行的 invocation。`ProviderModelService` 把 Core token 传入
-`ModelInvoker::invoke_with_cancellation`；取消被保留为 `CoreError::Cancelled`，不会降级为普通
-model failure。production provider operation 会立即停止本地等待、禁止 retry，并丢弃同步 HTTP
-attempt 的迟到 response。
+`ModelInvoker::invoke_with_cancellation`；取消被保留为 `CoreError::Cancelled`，不会降级为普通模型失败。`model_provider_error::map_model_provider_error` 把上下文溢出、认证失败、无效请求和无效响应映射为不含原始供应商错误体的类型化 `CoreError`，原始详情只写入调试日志。Core 对首次上下文溢出持久化压缩 terminal 旧历史并以新快照重试一次，对无效响应只重试一次，401/403 不重试，最终失败通过持久化 `StableTurnError` 投影到对话。生产环境的供应商操作会立即停止本地等待、禁止重试，并丢弃同步 HTTP 尝试的迟到响应。
 
 ## Skill 目录运行时
 

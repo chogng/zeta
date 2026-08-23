@@ -71,7 +71,7 @@ impl ProviderAdapter for OpenAiAdapter {
         };
         let count = counter.count(model, request, client, cancellation)?;
         let count = u32::try_from(count.get()).map_err(|_| {
-            ModelProviderError::InvalidResponse("input token count exceeds supported range")
+            ModelProviderError::InvalidResponse("input token count exceeds supported range".into())
         })?;
         let source =
             ContextTokenMeasurementSource::provider_preflight("openai-responses-input-tokens-v1")

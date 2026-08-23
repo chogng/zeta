@@ -2,6 +2,7 @@ use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
 use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::ContextMeasurementDisposition;
 use crate::context::ContextMeasurementPolicy;
+use crate::context::ContextOverflowRecoveryPreparation;
 use crate::context::ModelContextCompactionService;
 use crate::context::ModelInvocationPreparation;
 use crate::thread_controller::CommitContextCheckpointRequest;
@@ -433,7 +434,7 @@ impl TurnExecutor {
         }
         let mut measurement_policy = ContextMeasurementPolicy::default();
         let mut first_invocation_evidence = None;
-        loop {
+        'model_steps: loop {
             check_cancellation(cancellation)?;
             let snapshot = self
                 .threads
@@ -515,10 +516,10 @@ impl TurnExecutor {
                 ModelInvocationPreparation::Ready(invocation) => invocation,
                 ModelInvocationPreparation::NeedsCompaction { model, plan } => {
                     let request = ContextCompactionRequest::from_plan(&plan, &model);
-                    let result = self
-                        .compaction
-                        .compact(&request, cancellation)
-                        .map_err(ExecutionFailure::model)?;
+                    let result = retry_invalid_model_response(|| {
+                        self.compaction.compact(&request, cancellation)
+                    })
+                    .map_err(ExecutionFailure::service)?;
                     check_cancellation(cancellation)?;
                     self.threads
                         .commit_context_checkpoint(
@@ -550,10 +551,10 @@ impl TurnExecutor {
                 .should_measure(configured_budget, estimated_input, measurement_capability)
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             if should_measure {
-                match self
-                    .model
-                    .measure_input(model, &request, cancellation)
-                    .map_err(ExecutionFailure::service)?
+                match retry_invalid_model_response(|| {
+                    self.model.measure_input(model, &request, cancellation)
+                })
+                .map_err(ExecutionFailure::service)?
                 {
                     ContextTokenMeasurementOutcome::Unavailable => {}
                     ContextTokenMeasurementOutcome::Measured(measurement) => {
@@ -569,6 +570,7 @@ impl TurnExecutor {
                 }
             }
             let mut transient_attempt = 0;
+            let mut invalid_response_attempt = false;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
                 let mut stream = InvocationStream::new(
@@ -602,9 +604,17 @@ impl TurnExecutor {
                         }
                         break (response, stream);
                     }
-                    Err(CoreError::ModelTransient(error)) if transient_attempt < 3 => {
-                        wait_for_model_retry(cancellation, transient_attempt, &error)?;
+                    Err(CoreError::ModelTransient { retry_after_ms }) if transient_attempt < 3 => {
+                        wait_for_model_retry(cancellation, transient_attempt, retry_after_ms)?;
                         transient_attempt += 1;
+                    }
+                    Err(CoreError::ModelInvalidResponse) if !invalid_response_attempt => {
+                        invalid_response_attempt = true;
+                    }
+                    Err(CoreError::ModelContextOverflow) => {
+                        self.recover_context_overflow(thread_id, turn_id, cancellation)?;
+                        measurement_policy.note_compaction();
+                        continue 'model_steps;
                     }
                     Err(error) => return Err(ExecutionFailure::service(error)),
                 }
@@ -667,6 +677,46 @@ impl TurnExecutor {
                 }
             }
         }
+    }
+
+    fn recover_context_overflow(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<(), ExecutionFailure> {
+        let (model, plan) = match self
+            .threads
+            .prepare_context_overflow_recovery(thread_id, turn_id)
+            .map_err(ExecutionFailure::model)?
+        {
+            ContextOverflowRecoveryPreparation::AlreadyAttempted
+            | ContextOverflowRecoveryPreparation::Unavailable => {
+                return Err(ExecutionFailure::service(CoreError::ModelContextOverflow));
+            }
+            ContextOverflowRecoveryPreparation::NeedsCompaction { model, plan } => (model, plan),
+        };
+        let request = ContextCompactionRequest::from_plan(&plan, &model);
+        let result =
+            retry_invalid_model_response(|| self.compaction.compact(&request, cancellation))
+                .map_err(ExecutionFailure::service)?;
+        check_cancellation(cancellation)?;
+        self.threads
+            .commit_context_overflow_recovery(
+                thread_id,
+                turn_id,
+                CommitContextCheckpointRequest {
+                    source_thread_sequence: request.source_thread_sequence(),
+                    covered: request.covered(),
+                    summary: result.summary().into(),
+                    schema_revision: result.schema_revision().into(),
+                    prompt_revision: result.prompt_revision().into(),
+                    context_policy_revision: result.context_policy_revision().into(),
+                    generator_model: request.generator_model().cloned(),
+                },
+            )
+            .map_err(ExecutionFailure::persistence)?;
+        Ok(())
     }
 
     fn require_running_turn(
@@ -1039,6 +1089,22 @@ impl ExecutionFailure {
         match error {
             CoreError::Cancelled(_) => Self::Cancelled(error),
             CoreError::PolicyCircuitBreaker(_) => Self::Interrupted(error),
+            error @ CoreError::ModelContextOverflow => Self::Failed {
+                error,
+                stable: StableTurnError::context_overflow(),
+            },
+            error @ CoreError::ModelAuthFailed => Self::Failed {
+                error,
+                stable: StableTurnError::provider_auth(),
+            },
+            error @ CoreError::ModelInvalidRequest => Self::Failed {
+                error,
+                stable: StableTurnError::invalid_request(),
+            },
+            error @ CoreError::ModelInvalidResponse => Self::Failed {
+                error,
+                stable: StableTurnError::invalid_response(),
+            },
             _ => Self::model(error),
         }
     }
@@ -1082,23 +1148,19 @@ fn response_refusal_message(response: &zeta_protocol::ModelResponse) -> Option<S
 fn wait_for_model_retry(
     cancellation: &CancellationToken,
     attempt: u32,
-    error: &str,
+    retry_after_ms: Option<u64>,
 ) -> Result<(), ExecutionFailure> {
-    let retry_after = error
-        .strip_prefix("model API rate limited; retry after ")
-        .and_then(|value| value.strip_suffix(" ms"))
-        .and_then(|value| value.parse::<u64>().ok())
-        .map(|value| value.min(60_000));
-    let delay_ms = retry_after
-        .unwrap_or_else(|| {
+    let delay_ms = match retry_after_ms {
+        Some(value) => value.min(60_000),
+        None => {
             let base = 1_000_u64.saturating_mul(2_u64.saturating_pow(attempt));
             let jitter = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|duration| duration.subsec_nanos() as u64 % 51)
                 .unwrap_or(25);
-            base.saturating_mul(75 + jitter) / 100
-        })
-        .min(30_000);
+            (base.saturating_mul(75 + jitter) / 100).min(30_000)
+        }
+    };
     let mut remaining = delay_ms;
     while remaining > 0 {
         check_cancellation(cancellation)?;
@@ -1107,6 +1169,15 @@ fn wait_for_model_retry(
         remaining -= step;
     }
     Ok(())
+}
+
+fn retry_invalid_model_response<T>(
+    mut operation: impl FnMut() -> Result<T, CoreError>,
+) -> Result<T, CoreError> {
+    match operation() {
+        Err(CoreError::ModelInvalidResponse) => operation(),
+        result => result,
+    }
 }
 
 #[cfg(test)]

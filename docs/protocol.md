@@ -227,6 +227,8 @@ Event 不携带 storage sequence、timestamp、schema version、event ID 或 com
 Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由
 `zeta-history` 定义。Core 构造 record，Store 只校验并提交。
 
+普通预算压缩使用 `ContextCheckpointCommitted`；供应商实际窗口拒绝普通请求时使用 `ContextOverflowRecoveryCommitted`，在同一个 durable fact 中携带 checkpoint 与触发恢复的 Turn ID。后者使 reducer 能在重放后继续拒绝同一 Turn 的第二次自动溢出恢复，而不把执行计数藏在进程内。
+
 必须保持：
 
 - Event 使用过去式事实命名；
@@ -584,8 +586,8 @@ zeta-rs/protocol/
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
 | waiting Turn lifecycle | 基础完成 | event/reducer/recovery 已实现；异步 Agent loop 的继续执行尚未实现 |
 | provider-independent model values | 基础完成 | provider adapters 已使用，tool name/call ID 已收敛 |
-| stable error taxonomy | 早期基础 | 当前只有少量 Turn error code |
-| usage/compaction provenance | 未完成 | 只有 model usage 与 threshold metadata |
+| 稳定错误分类 | 部分具备 | 供应商上下文、认证、无效请求和无效响应已有持久化错误码；预算、工具重复等后续类别仍缺 |
+| usage/compaction provenance | 部分具备 | checkpoint 有 source range/digest/revision；供应商溢出恢复有 durable Turn 绑定；usage 账本仍缺 |
 | ID validation | 已完成 | constructor 与 deserialize 都拒绝空的 canonical ID |
 | public API discipline | 已完成 | private modules、named exports 与 speculative envelope 清理已落地 |
 

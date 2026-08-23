@@ -127,6 +127,18 @@ fn messages_decoder_rejects_message_stop_with_open_blocks() {
 }
 
 #[test]
+fn messages_decoder_classifies_provider_error_events() {
+    let mut decoder = AnthropicMessagesSseDecoder::new();
+    assert_eq!(
+        decoder.decode(&event(
+            "error",
+            r#"{"type":"error","error":{"type":"overloaded_error","message":"busy"}}"#,
+        )),
+        Err(ApiError::Overloaded)
+    );
+}
+
+#[test]
 fn messages_decoder_assembles_terminal_text_tool_arguments_and_usage() {
     let mut decoder = AnthropicMessagesSseDecoder::new();
     decoder

@@ -1,0 +1,216 @@
+use super::CommitContextCheckpointRequest;
+use super::ContextCheckpointCommitKind;
+use super::PrepareModelInvocationRequest;
+use super::ThreadController;
+use crate::ContextBudget;
+use crate::CoreError;
+use crate::context::ContextInput;
+use crate::context::ContextOverflowRecoveryPreparation;
+use crate::context::ContextPreparation;
+use crate::context::FrozenModelSelection;
+use crate::context::ModelInvocationPreparation;
+use crate::context::ModelInvocationSnapshot;
+use zeta_protocol::ContextCheckpoint;
+use zeta_protocol::ContextCheckpointId;
+use zeta_protocol::ContextCheckpointVerification;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
+use zeta_thread_store::ThreadStoreError;
+
+impl ThreadController {
+    pub(crate) fn commit_context_checkpoint(
+        &self,
+        thread_id: &ThreadId,
+        request: CommitContextCheckpointRequest,
+    ) -> Result<ContextCheckpoint, CoreError> {
+        self.commit_context_checkpoint_with_kind(
+            thread_id,
+            request,
+            ContextCheckpointCommitKind::Automatic,
+        )
+    }
+
+    pub(crate) fn commit_context_overflow_recovery(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        request: CommitContextCheckpointRequest,
+    ) -> Result<ContextCheckpoint, CoreError> {
+        self.commit_context_checkpoint_with_kind(
+            thread_id,
+            request,
+            ContextCheckpointCommitKind::OverflowRecovery(turn_id.clone()),
+        )
+    }
+
+    fn commit_context_checkpoint_with_kind(
+        &self,
+        thread_id: &ThreadId,
+        request: CommitContextCheckpointRequest,
+        kind: ContextCheckpointCommitKind,
+    ) -> Result<ContextCheckpoint, CoreError> {
+        if request.summary.trim().is_empty()
+            || request.schema_revision.trim().is_empty()
+            || request.prompt_revision.trim().is_empty()
+            || request.context_policy_revision.trim().is_empty()
+        {
+            return Err(CoreError::InvalidInput(
+                "context checkpoint summary and revision identities must not be empty".into(),
+            ));
+        }
+        self.mutate_thread(thread_id, |snapshot| {
+            if snapshot.sequence != request.source_thread_sequence {
+                return Err(CoreError::ThreadStore(ThreadStoreError::SequenceConflict {
+                    expected: request.source_thread_sequence,
+                    actual: snapshot.sequence,
+                }));
+            }
+            let checkpoint = ContextCheckpoint {
+                checkpoint_id: ContextCheckpointId::new(self.next_identifier("context-checkpoint"))
+                    .expect("generated context checkpoint ID is non-empty"),
+                source_thread_id: snapshot.thread_id.clone(),
+                covered: request.covered,
+                referenced_items: snapshot
+                    .items
+                    .iter()
+                    .filter(|item| {
+                        snapshot
+                            .item_sequences
+                            .get(item.item_id())
+                            .is_some_and(|sequence| *sequence <= request.covered.end_sequence)
+                    })
+                    .map(|item| item.item_id().clone())
+                    .collect(),
+                source_digest: snapshot.context_source_digest(request.covered)?,
+                summary: request.summary,
+                schema_revision: request.schema_revision,
+                prompt_revision: request.prompt_revision,
+                context_policy_revision: request.context_policy_revision,
+                generator_model: request.generator_model,
+                created_at_unix_ms: u64::try_from(self.timestamp()?.0).map_err(|_| {
+                    CoreError::Journal("context checkpoint timestamp exceeds u64".into())
+                })?,
+                verification: ContextCheckpointVerification::Verified,
+            };
+            let event = match &kind {
+                ContextCheckpointCommitKind::Automatic => ThreadEvent::ContextCheckpointCommitted {
+                    thread_id: thread_id.clone(),
+                    checkpoint: checkpoint.clone(),
+                },
+                ContextCheckpointCommitKind::OverflowRecovery(turn_id) => {
+                    ThreadEvent::ContextOverflowRecoveryCommitted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                        checkpoint: checkpoint.clone(),
+                    }
+                }
+            };
+            self.record_batch(snapshot, vec![event])?;
+            Ok(checkpoint)
+        })
+    }
+
+    pub(crate) fn prepare_context_overflow_recovery(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+    ) -> Result<ContextOverflowRecoveryPreparation, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let turn = loaded
+                .snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status != zeta_protocol::TurnStatus::Running {
+                return Err(CoreError::InvalidInput(
+                    "context overflow recovery requires a running Turn".into(),
+                ));
+            }
+            if loaded
+                .snapshot
+                .context_overflow_recoveries
+                .contains_key(turn_id)
+            {
+                return Ok(ContextOverflowRecoveryPreparation::AlreadyAttempted);
+            }
+            let model = match &turn.model {
+                Some(model) => FrozenModelSelection::Selected(model.clone()),
+                None => FrozenModelSelection::ConfiguredDefault,
+            };
+            let input = ContextInput::new(
+                &loaded.snapshot,
+                turn_id.clone(),
+                Vec::new(),
+                Vec::new(),
+                ContextBudget::provider_managed(),
+            );
+            let plan = match loaded.context.prepare_overflow_recovery(&input) {
+                Ok(plan) => plan,
+                Err(crate::context::ContextPreparationError::NoCompactionCandidate) => {
+                    return Ok(ContextOverflowRecoveryPreparation::Unavailable);
+                }
+                Err(error) => return Err(CoreError::Context(error.to_string())),
+            };
+            Ok(ContextOverflowRecoveryPreparation::NeedsCompaction { model, plan })
+        })
+    }
+
+    pub(crate) fn prepare_model_invocation(
+        &self,
+        thread_id: &ThreadId,
+        request: PrepareModelInvocationRequest<'_>,
+    ) -> Result<ModelInvocationPreparation, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let turn = loaded
+                .snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == request.turn_id)
+                .ok_or_else(|| CoreError::NotFound(request.turn_id.to_string()))?;
+            let model = match &turn.model {
+                Some(model) => FrozenModelSelection::Selected(model.clone()),
+                None => FrozenModelSelection::ConfiguredDefault,
+            };
+            let mut instruction_fragments = request.instructions.context_fragments();
+            instruction_fragments.extend(crate::multi_agent::agent_context_fragments(
+                &loaded.snapshot,
+            ));
+            instruction_fragments.extend(
+                request
+                    .extension_fragments
+                    .into_iter()
+                    .map(crate::context::InstructionFragment::try_from)
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            let tools = crate::multi_agent::scope_agent_tools(&loaded.snapshot, request.tools);
+            let input = ContextInput::new(
+                &loaded.snapshot,
+                request.turn_id.clone(),
+                instruction_fragments,
+                tools,
+                request.budget,
+            )
+            .with_evidence(request.evidence);
+            match loaded
+                .context
+                .prepare(&input)
+                .map_err(|error| CoreError::Context(error.to_string()))?
+            {
+                ContextPreparation::Ready(context) => Ok(ModelInvocationPreparation::Ready(
+                    ModelInvocationSnapshot::new(
+                        loaded.snapshot.session_id.clone(),
+                        loaded.snapshot.thread_id.clone(),
+                        request.turn_id.clone(),
+                        model,
+                        context,
+                    ),
+                )),
+                ContextPreparation::NeedsCompaction(plan) => {
+                    Ok(ModelInvocationPreparation::NeedsCompaction { model, plan })
+                }
+            }
+        })
+    }
+}

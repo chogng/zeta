@@ -19743,6 +19743,10 @@
     "StableTurnErrorCode": {
       "enum": [
         "modelInvocationFailed",
+        "contextOverflow",
+        "providerAuth",
+        "invalidRequest",
+        "invalidResponse",
         "completionPersistenceFailed",
         "interactionDeadlineElapsed"
       ],
@@ -20843,6 +20847,30 @@
           "required": [
             "type",
             "threadId",
+            "checkpoint"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "checkpoint": {
+              "$ref": "#/$defs/ContextCheckpoint"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "contextOverflowRecoveryCommitted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId",
             "checkpoint"
           ],
           "type": "object"

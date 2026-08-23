@@ -111,8 +111,14 @@ profile，但只有 configuration definition 可以决定 profile。
 | --- | --- |
 | invalid/unknown/mismatched config | `ModelProviderError::Config` |
 | listed-only unknown model | `ModelNotRegistered` |
-| wire/operation/transport initialization failure | `Api(ApiError)` |
+| 供应商上下文上限 | `ContextOverflow` |
+| 供应商认证或授权失败 | `AuthFailed` |
+| 无效 canonical/供应商请求 | `InvalidRequest` |
+| 无效供应商响应 | `InvalidResponse` |
+| 传输、限流、过载或其他 HTTP 状态 | `Api(ApiError)` |
 | explicitly unavailable host model | `Unavailable` |
+
+`From<ApiError>` 将四个语义类别提升为直接的 `ModelProviderError` variant，其余操作类别保留在 `Api` 中。原始供应商详情只供产品宿主的受控日志使用；跨入 Core 时必须改成无原文的类型化 `CoreError`。
 
 `AllowUnlisted` 由 manager 生成 unverified metadata，不证明 entitlement、capability 或 remote
 availability。`ListedOnly` 由 manager 在任何 network call 前拒绝。

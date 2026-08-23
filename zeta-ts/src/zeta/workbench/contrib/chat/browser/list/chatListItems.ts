@@ -9,7 +9,7 @@ export interface IChatListItem {
   readonly isError?: boolean;
 }
 
-/** Projects one durable Turn failure as a retryable conversation item. */
+/** Projects one durable Turn failure as a conversation item. */
 export function chatTurnErrorListItem(turn: Turn): IChatListItem | undefined {
   if (turn.status !== "failed") return undefined;
   return {

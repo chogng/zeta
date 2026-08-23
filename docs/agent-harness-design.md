@@ -33,7 +33,7 @@
 | System prompt | 每次调用注入身份、策略、工具指导、环境 | 部分：`SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；per-profile 工具指导仍未完成 |
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ❌ 只接了 `shell-command`；`file-system-tool`（仅 read/list/metadata）、`apply-patch`、`file-search` 是孤立 crate |
-| 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ❌ 模型一报错 Turn 即 fail；`ApiError` 只有 `HttpStatus(u16)` 无分类 |
+| 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试和 Refusal 完成语义已接通 |
 | Steering | 运行中排队注入用户消息 | 部分：reducer 已允许向 Running Turn 追加 Item、executor 每轮重读 snapshot；缺 `turn/steer` 命令 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 部分：shell 有 256 KiB 执行上限，但无模型输入预算 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
@@ -206,10 +206,10 @@ Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模�
 | 限流 | HTTP 429 | 退避重试；优先遵循 `Retry-After`（上限 60s） |
 | 过载/服务端错误 | HTTP 5xx、529 | 退避重试 |
 | 传输失败 | `ApiError::Transport`（超时/断连） | 退避重试 |
-| 上下文溢出 | provider 错误体解析（**需新增分类**，见 §7.4） | 触发压缩（§10）→ 重试 1 次 → 仍溢出则 Turn fail（stable error `context_overflow`） |
-| 认证失败 | HTTP 401/403 | 不重试；Turn fail（stable error `provider_auth`），提示用户检查凭据 |
-| 无效请求 | HTTP 400 / `InvalidRequest` | 不重试；Turn fail——这是 harness bug 信号，错误体全文入日志 |
-| 无效响应 | `InvalidResponse` | 重试 1 次（可能是瞬时截断）→ fail |
+| 上下文溢出 | 供应商错误体解析 | 完整旧历史前缀持久化压缩后，以新快照重试一次；再次溢出以 `contextOverflow` 稳定失败 |
+| 认证失败 | HTTP 401/403 | 不重试；Turn fail（stable error `providerAuth`），提示用户检查凭据 |
+| 无效请求 | HTTP 400 / `InvalidRequest` | 不重试；Turn fail（stable error `invalidRequest`）；有界原始详情只进入受控日志 |
+| 无效响应 | `InvalidResponse` | 重试 1 次（可能是瞬时截断）→ `invalidResponse` |
 | 空响应 | 无文本、无 Tool Call、无 Refusal | 重试 1 次（同一请求）→ 仍空则 Turn fail（stable error `model_empty_response`） |
 | Refusal | `ResponseItem::Refusal` | **不是错误**：作为最终消息提交，Turn Completed |
 | 取消 | token 触发 | 传播；Turn → Interrupted |
@@ -231,14 +231,11 @@ Profile 解析发生在 Turn 接受安全点：`ModelSelection` 解析目标模�
   在下一个安全点终止（stable error `turn_budget_exhausted`）。v1 默认不设限，仅记账。
 - 无迭代次数硬上限（与 runtime 文档一致：上限应由可取消的资源策略表达，不用进程内计数器）。
 
-### 7.4 需要的接线（现状缺口）
+### 7.4 当前接线与剩余恢复
 
-- `ApiError` 增加分类：`RateLimited { retry_after }`、`Overloaded`、`ContextOverflow`、
-  `AuthFailed`——由各 provider 请求构造器从 HTTP 状态 + 错误体映射（Anthropic
-  `overloaded_error`/`invalid_request_error` + `context` 字样；OpenAI `context_length_exceeded`
-   等）。`ModelProviderError`/`CoreError` 透传类别；
-- 重试循环位于 `ModelService` 之上的 executor 侧（重试是 harness 策略，不属于 provider
-  adapter）。
+- **已实现**：`ApiError` 分类 `RateLimited { retry_after_ms }`、`Overloaded`、`ContextOverflow`、`AuthFailed`、`InvalidRequest` 和 `InvalidResponse`；HTTP/SSE 适配器从状态码和 OpenAI、Anthropic、Google 错误体映射，`ModelProviderError` 与 `CoreError` 透传类别。
+- **已实现**：重试循环位于 `ModelService` 之上的执行器；认证与无效请求不重试，无效响应只重试一次，瞬时错误保留类型化 `Retry-After`。
+- **已实现**：`ContextOverflow` 触发一次 durable compaction；`ContextOverflowRecoveryCommitted` 把 checkpoint 与 Turn 级恢复标记原子提交，执行器随后从新 snapshot 重试一次；再次溢出保持 `contextOverflow`。
 
 ## 8. 引导与并发输入
 
@@ -307,7 +304,7 @@ tokenizer 保证。
 - **自动（已实现）**：估算历史超过 Core-managed input budget → 下一个 model safe point 先压缩、
   durable commit，再从新 snapshot 重规划；
 - **手动（Proposed）**：`/compact` 与用户保留提示尚未实现；
-- **溢出恢复（Proposed）**：provider `ContextOverflow` 的压缩后单次重试仍依赖稳定错误分类。
+- **溢出恢复（已实现）**：provider `ContextOverflow` 会压缩全部可安全吸收的 terminal 历史前缀；checkpoint durable commit 后重试一次，当前 Turn 与未完成工具组不被吸收。
 
 ### 10.2 流程与精确规则
 
@@ -428,7 +425,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | --- | --- | --- | --- |
 | M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan`、逐项限幅和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
-| M2（部分具备）失败弹性 + steering | 429/过载/传输重试、空响应和 Refusal 已实现；仍需完整错误分类、overflow 恢复、重复失败熔断和 `turn/steer` | executor 重试层、Provider error mapping、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
+| M2（部分具备）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal 和 overflow 恢复已实现；仍需重复失败熔断和 `turn/steer` | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（部分具备）限幅/预算/压缩 | ContextPlan、配置窗口、preflight 与 durable compaction 已实现；仍需逐项限幅、usage/cost 账本、资源预算、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 持久化 | usage durable fact |
 | M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |

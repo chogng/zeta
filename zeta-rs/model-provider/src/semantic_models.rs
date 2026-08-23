@@ -13,7 +13,7 @@ impl EmbeddingRequest {
     pub fn new(inputs: Vec<String>) -> Result<Self, ModelProviderError> {
         if inputs.is_empty() || inputs.len() > MAX_BATCH_ITEMS {
             return Err(ModelProviderError::InvalidRequest(
-                "embedding batch must contain 1..=2048 inputs",
+                "embedding batch must contain 1..=2048 inputs".into(),
             ));
         }
         Ok(Self { inputs })
@@ -34,7 +34,7 @@ impl EmbeddingVector {
     pub fn new(values: Vec<f32>) -> Result<Self, ModelProviderError> {
         if values.is_empty() || values.iter().any(|value| !value.is_finite()) {
             return Err(ModelProviderError::InvalidResponse(
-                "embedding vectors must be non-empty and finite",
+                "embedding vectors must be non-empty and finite".into(),
             ));
         }
         Ok(Self { values })
@@ -55,7 +55,7 @@ impl EmbeddingResponse {
     pub fn new(vectors: Vec<EmbeddingVector>) -> Result<Self, ModelProviderError> {
         let Some(dimension) = vectors.first().map(|vector| vector.values.len()) else {
             return Err(ModelProviderError::InvalidResponse(
-                "embedding response must contain at least one vector",
+                "embedding response must contain at least one vector".into(),
             ));
         };
         if vectors
@@ -63,7 +63,7 @@ impl EmbeddingResponse {
             .any(|vector| vector.values.len() != dimension)
         {
             return Err(ModelProviderError::InvalidResponse(
-                "embedding response dimensions must be consistent",
+                "embedding response dimensions must be consistent".into(),
             ));
         }
         Ok(Self { vectors })
@@ -132,12 +132,12 @@ impl RerankRequest {
         let query = query.into();
         if query.trim().is_empty() {
             return Err(ModelProviderError::InvalidRequest(
-                "rerank query must contain non-whitespace text",
+                "rerank query must contain non-whitespace text".into(),
             ));
         }
         if documents.is_empty() || documents.len() > MAX_BATCH_ITEMS {
             return Err(ModelProviderError::InvalidRequest(
-                "rerank batch must contain 1..=2048 documents",
+                "rerank batch must contain 1..=2048 documents".into(),
             ));
         }
         Ok(Self { query, documents })
@@ -165,7 +165,7 @@ impl RerankResponse {
     pub fn new(scores: Vec<f32>) -> Result<Self, ModelProviderError> {
         if scores.is_empty() || scores.iter().any(|score| !score.is_finite()) {
             return Err(ModelProviderError::InvalidResponse(
-                "rerank scores must be non-empty and finite",
+                "rerank scores must be non-empty and finite".into(),
             ));
         }
         Ok(Self { scores })

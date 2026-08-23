@@ -4,6 +4,8 @@ use zeta_client::ClientError;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ApiError {
     InvalidRequest(String),
+    ContextOverflow(String),
+    AuthFailed(String),
     Cancelled(String),
     Transport(String),
     RateLimited { retry_after_ms: Option<u64> },
@@ -16,6 +18,12 @@ impl fmt::Display for ApiError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidRequest(message) => write!(formatter, "invalid model request: {message}"),
+            Self::ContextOverflow(message) => {
+                write!(formatter, "model context window exceeded: {message}")
+            }
+            Self::AuthFailed(message) => {
+                write!(formatter, "model provider authentication failed: {message}")
+            }
             Self::Cancelled(message) => write!(formatter, "model request cancelled: {message}"),
             Self::Transport(message) => write!(formatter, "model transport failed: {message}"),
             Self::RateLimited { retry_after_ms } => match retry_after_ms {

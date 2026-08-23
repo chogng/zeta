@@ -670,7 +670,7 @@ Thread {
 
 acceptance、user items 与 started facts 作为一个 atomic Thread batch 提交。最终 Agent item
 与 completed fact 也作为一个 atomic batch 提交。Provider 失败时持久化稳定
-`StableTurnError`；持久化失败时内存投影不得伪造终态。
+`StableTurnError`；持久化失败时内存投影不得伪造终态。直接供应商首次返回上下文溢出时，Core 会把完整 terminal 旧历史压缩成 durable checkpoint，以新 Thread snapshot 重试一次；没有可压缩前缀或再次溢出才投影 `contextOverflow`。认证失败、无效请求和无效响应分别投影为 `providerAuth`、`invalidRequest` 和 `invalidResponse`；原始供应商错误体不进入 RPC、Thread snapshot 或 Desktop 状态。未细分的模型失败继续使用 `modelInvocationFailed`。
 
 `input` 是保持顺序的非空 tagged union。文本项必须非空；新客户端应先调用
 `attachment/upload/start`，按服务端返回的 `maxChunkBytes` 顺序调用
