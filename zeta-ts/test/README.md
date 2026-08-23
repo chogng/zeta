@@ -13,9 +13,9 @@
 | Browser + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:browser:full` |
 | Electron Renderer 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:ui` |
 | Electron + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:desktop` |
-| 构建脚本测试 | `../build/**/*.test.ts` | `pnpm test:scripts` |
+| 构建工具测试 | `../build/**/*.test.ts` | `pnpm test:build-tools` |
 
-`pnpm test:main` 依次运行构建脚本测试和全部单元测试。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 启动 5174 的 Browser + Vite App Server 模式。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。默认的 `pnpm test:smoke` 和仓库根目录 `pnpm test:desktop:smoke` 均指向完整 Electron + App Server 模式；根目录 `pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。
+`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `scripts/test*.ts` 提供 VS Code 式的稳定操作入口，具体测试运行器和 Node loader 位于 `scripts/test/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 启动 5174 的 Browser + Vite App Server 模式。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。默认的 `pnpm test:smoke` 和仓库根目录 `pnpm test:desktop:smoke` 均指向完整 Electron + App Server 模式；根目录 `pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。
 
 新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
 # Test layout

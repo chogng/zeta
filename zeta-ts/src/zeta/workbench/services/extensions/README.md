@@ -114,7 +114,7 @@ corepack pnpm --dir zeta-ts test:extensions
 corepack pnpm --dir zeta-ts typecheck:extensions
 corepack pnpm --dir zeta-ts test:unit
 corepack pnpm --dir zeta-ts typecheck:renderer
-corepack pnpm --dir zeta-ts test:scripts
+corepack pnpm --dir zeta-ts test:build-tools
 ```
 
 Tests cover strict manifest/resource normalization, all supported contribution shapes, language

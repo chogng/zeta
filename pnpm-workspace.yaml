@@ -1,5 +1,6 @@
 packages:
   - build
+  - scripts
   - zeta-ts
   - docs-site
 storeDir: .tooling/pnpm/store

@@ -351,7 +351,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File zeta-rs/editor-extension-hos
 corepack pnpm --dir zeta-ts test:extensions
 corepack pnpm --dir zeta-ts typecheck:extensions
 corepack pnpm --dir zeta-ts test:unit
-corepack pnpm --dir zeta-ts test:scripts
+corepack pnpm --dir zeta-ts test:build-tools
 corepack pnpm --dir docs-site run check:docs
 ```
 
