@@ -501,6 +501,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         title: "test".into(),
         turn_execution_binding: None,
         sequence: items.len() as u64 + 2,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: turn_ids
             .into_iter()
             .map(|turn_id| TurnSnapshot {
@@ -517,6 +518,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 failure: None,
                 pending_interaction: None,
                 execution_backend_attempt: None,
+                usage: zeta_protocol::ModelUsageSummary::default(),
             })
             .collect(),
         items,

@@ -337,16 +337,14 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
 fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
     let usage = usage?;
     Some(ModelUsage {
-        input_tokens: usage.get("prompt_tokens")?.as_u64()?,
-        output_tokens: usage.get("completion_tokens")?.as_u64()?,
+        input_tokens: usage.get("prompt_tokens").and_then(Value::as_u64),
+        output_tokens: usage.get("completion_tokens").and_then(Value::as_u64),
         cached_input_tokens: usage
             .pointer("/prompt_tokens_details/cached_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+            .and_then(Value::as_u64),
         reasoning_tokens: usage
             .pointer("/completion_tokens_details/reasoning_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+            .and_then(Value::as_u64),
     })
 }
 

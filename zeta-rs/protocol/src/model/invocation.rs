@@ -391,13 +391,84 @@ pub enum ModelStreamEvent {
     ReasoningDelta(String),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelUsage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub cached_input_tokens: u64,
-    pub reasoning_tokens: u64,
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub input_tokens: Option<u64>,
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub output_tokens: Option<u64>,
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub cached_input_tokens: Option<u64>,
+    #[serde(default)]
+    #[ts(type = "number | null")]
+    pub reasoning_tokens: Option<u64>,
+}
+
+/// One aggregate token metric built only from values explicitly reported by providers.
+///
+/// `reported` remains useful as a lower bound when one or more invocations omitted this metric;
+/// `complete` says whether the reported value is also the exact aggregate.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelUsageTotal {
+    #[ts(type = "number")]
+    pub reported: u64,
+    pub complete: bool,
+}
+
+impl Default for ModelUsageTotal {
+    fn default() -> Self {
+        Self {
+            reported: 0,
+            complete: true,
+        }
+    }
+}
+
+impl ModelUsageTotal {
+    fn checked_record(&self, value: Option<u64>) -> Option<Self> {
+        Some(Self {
+            reported: self.reported.checked_add(value.unwrap_or_default())?,
+            complete: self.complete && value.is_some(),
+        })
+    }
+}
+
+/// Provider-reported usage aggregated across every model response in a Thread or Turn.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelUsageSummary {
+    #[ts(type = "number")]
+    pub model_invocations: u64,
+    pub input_tokens: ModelUsageTotal,
+    pub output_tokens: ModelUsageTotal,
+    pub cached_input_tokens: ModelUsageTotal,
+    pub reasoning_tokens: ModelUsageTotal,
+}
+
+impl ModelUsageSummary {
+    /// Returns the next exact projection, or `None` if any counter would overflow.
+    pub fn checked_record(&self, usage: Option<&ModelUsage>) -> Option<Self> {
+        Some(Self {
+            model_invocations: self.model_invocations.checked_add(1)?,
+            input_tokens: self
+                .input_tokens
+                .checked_record(usage.and_then(|usage| usage.input_tokens))?,
+            output_tokens: self
+                .output_tokens
+                .checked_record(usage.and_then(|usage| usage.output_tokens))?,
+            cached_input_tokens: self
+                .cached_input_tokens
+                .checked_record(usage.and_then(|usage| usage.cached_input_tokens))?,
+            reasoning_tokens: self
+                .reasoning_tokens
+                .checked_record(usage.and_then(|usage| usage.reasoning_tokens))?,
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

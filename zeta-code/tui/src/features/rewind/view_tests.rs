@@ -45,6 +45,7 @@ fn thread(messages: &[&str]) -> Thread {
         title: "thread".into(),
         status: ThreadStatus::Active,
         sequence: 1,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: messages
             .iter()
             .enumerate()

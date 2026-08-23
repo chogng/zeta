@@ -60,6 +60,59 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
 }
 
 #[test]
+fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
+    let first = ModelUsage {
+        input_tokens: Some(10),
+        output_tokens: Some(3),
+        cached_input_tokens: Some(2),
+        reasoning_tokens: None,
+    };
+    let second = ModelUsage {
+        input_tokens: Some(7),
+        output_tokens: None,
+        cached_input_tokens: None,
+        reasoning_tokens: Some(1),
+    };
+    let summary = ModelUsageSummary::default()
+        .checked_record(Some(&first))
+        .unwrap()
+        .checked_record(Some(&second))
+        .unwrap()
+        .checked_record(None)
+        .unwrap();
+
+    assert_eq!(summary.model_invocations, 3);
+    assert_eq!(summary.input_tokens.reported, 17);
+    assert!(!summary.input_tokens.complete);
+    assert_eq!(summary.output_tokens.reported, 3);
+    assert!(!summary.output_tokens.complete);
+    assert_eq!(summary.cached_input_tokens.reported, 2);
+    assert!(!summary.cached_input_tokens.complete);
+    assert_eq!(summary.reasoning_tokens.reported, 1);
+    assert!(!summary.reasoning_tokens.complete);
+
+    assert_eq!(
+        serde_json::to_value(ThreadEvent::ModelUsageRecorded {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            turn_id: TurnId::new("turn_1").unwrap(),
+            usage: Some(first),
+        })
+        .unwrap(),
+        json!({
+            "type": "modelUsageRecorded",
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "usage": {
+                "inputTokens": 10,
+                "outputTokens": 3,
+                "cachedInputTokens": 2,
+                "reasoningTokens": null
+            }
+        })
+    );
+}
+
+#[test]
 fn turn_steering_serializes_as_a_typed_command_and_durable_item_binding() {
     let turn_id = TurnId::new("turn_1").unwrap();
     let command = ThreadCommand::SteerTurn {

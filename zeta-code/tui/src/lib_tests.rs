@@ -75,6 +75,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 3,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: vec![turn.clone()],
     }));
 

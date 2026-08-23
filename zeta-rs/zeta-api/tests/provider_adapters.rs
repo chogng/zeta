@@ -175,7 +175,7 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
         response.tool_calls().next().unwrap().arguments,
         json!({"city": "Paris"})
     );
-    assert_eq!(response.usage.unwrap().reasoning_tokens, 2);
+    assert_eq!(response.usage.unwrap().reasoning_tokens, Some(2));
 }
 
 #[test]
@@ -294,7 +294,10 @@ fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
         response.tool_calls().next().unwrap().arguments,
         json!({"city": "Paris"})
     );
-    assert_eq!(response.usage.unwrap().output_tokens, 5);
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.output_tokens, Some(5));
+    assert_eq!(usage.cached_input_tokens, None);
+    assert_eq!(usage.reasoning_tokens, None);
     let request = transport.request.lock().unwrap();
     assert_eq!(request.as_ref().unwrap()["stream"], true);
     assert_eq!(
@@ -400,7 +403,10 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
         json!({"city": "Paris"})
     );
     assert_eq!(response.stop_reason, StopReason::ToolUse);
-    assert_eq!(response.usage.unwrap().output_tokens, 6);
+    let usage = response.usage.unwrap();
+    assert_eq!(usage.output_tokens, Some(6));
+    assert_eq!(usage.cached_input_tokens, None);
+    assert_eq!(usage.reasoning_tokens, None);
     assert_eq!(
         transport.request.lock().unwrap().as_ref().unwrap()["stream"],
         true

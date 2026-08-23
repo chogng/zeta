@@ -337,6 +337,7 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: Vec::new(),
     }
 }

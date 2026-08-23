@@ -655,7 +655,7 @@ Git、配置或 Thread。
 | preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为长/短文案 | 已实现 |
 | workspace | `TuiOptions::workspace_root` | 保留完整路径和 basename 两种展示值 | 已实现 |
 | Git branch/state | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch/dirty/count | 已实现 |
-| Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | contract 尚未提供完整 usage |
+| Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | Thread usage contract 已提供；status line 尚未接入 |
 | connection/runtime state | `client/` 与 `app/` 本地状态 | 只在已接受的用户场景中映射 | Potential；embedded TUI 当前无独立 connection UI 需求 |
 
 依赖方向固定为：

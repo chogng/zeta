@@ -70,6 +70,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         title: "test".into(),
         turn_execution_binding: None,
         sequence,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: vec![TurnSnapshot {
             turn_id: turn_id.clone(),
             status: TurnStatus::Running,
@@ -80,6 +81,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             failure: None,
             pending_interaction: None,
             execution_backend_attempt: None,
+            usage: zeta_protocol::ModelUsageSummary::default(),
         }],
         items: vec![ThreadItem::UserMessage {
             item_id: id::<ItemId>("item"),

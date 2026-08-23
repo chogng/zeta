@@ -318,6 +318,7 @@ fn thread_snapshot() -> Thread {
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 7,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,

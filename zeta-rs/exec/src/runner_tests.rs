@@ -293,6 +293,7 @@ fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
         title: "test run".into(),
         status: ThreadStatus::Active,
         sequence,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns,
     }
 }

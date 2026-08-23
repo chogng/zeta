@@ -122,6 +122,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         title: "thread".into(),
         status: ThreadStatus::Active,
         sequence: 5,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,

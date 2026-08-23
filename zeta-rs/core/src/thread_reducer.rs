@@ -28,6 +28,7 @@ use zeta_protocol::DelegationResult;
 use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ItemId;
 use zeta_protocol::ModelRef;
+use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
@@ -54,6 +55,7 @@ pub struct ThreadSnapshot {
     pub title: String,
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
+    pub usage: ModelUsageSummary,
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
     pub context_checkpoints: Vec<ContextCheckpoint>,
@@ -109,6 +111,7 @@ impl ThreadSnapshot {
             title: self.title.clone(),
             status: ThreadStatus::Active,
             sequence: self.sequence,
+            usage: self.usage.clone(),
             turns: self
                 .turns
                 .iter()
@@ -172,6 +175,7 @@ pub struct TurnSnapshot {
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
+    pub usage: ModelUsageSummary,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -257,6 +261,7 @@ pub fn reduce_thread_event(
                     title: title.clone(),
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
+                    usage: ModelUsageSummary::default(),
                     turns: Vec::new(),
                     items: Vec::new(),
                     context_checkpoints: Vec::new(),
@@ -349,6 +354,31 @@ pub fn reduce_thread_event(
                 ));
             }
             turn.execution_backend_attempt = Some(backend.clone());
+        }
+        ThreadEvent::ModelUsageRecorded { turn_id, usage, .. } => {
+            require_no_command(envelope)?;
+            let next_thread_usage =
+                snapshot
+                    .usage
+                    .checked_record(usage.as_ref())
+                    .ok_or_else(|| {
+                        CoreError::Journal("Thread model usage aggregate overflowed".into())
+                    })?;
+            let turn = snapshot
+                .turns
+                .iter_mut()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if turn.status == TurnStatus::Created {
+                return Err(CoreError::Journal(
+                    "model usage requires a Turn that has started execution".into(),
+                ));
+            }
+            let next_turn_usage = turn.usage.checked_record(usage.as_ref()).ok_or_else(|| {
+                CoreError::Journal("Turn model usage aggregate overflowed".into())
+            })?;
+            turn.usage = next_turn_usage;
+            snapshot.usage = next_thread_usage;
         }
         ThreadEvent::AgentContextSeedCommitted { seed, .. } => {
             require_no_command(envelope)?;
@@ -1576,6 +1606,7 @@ fn import_history(
             failure: turn.error.clone(),
             pending_interaction: None,
             execution_backend_attempt: None,
+            usage: ModelUsageSummary::default(),
         })
         .collect();
     snapshot.items = turns
@@ -1765,6 +1796,7 @@ fn create_turn(
         failure: None,
         pending_interaction: None,
         execution_backend_attempt: None,
+        usage: ModelUsageSummary::default(),
     });
     Ok(())
 }

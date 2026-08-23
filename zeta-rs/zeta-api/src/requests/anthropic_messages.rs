@@ -377,13 +377,10 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
 fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
     let usage = usage?;
     Some(ModelUsage {
-        input_tokens: usage.get("input_tokens")?.as_u64()?,
-        output_tokens: usage.get("output_tokens")?.as_u64()?,
-        cached_input_tokens: usage
-            .get("cache_read_input_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
-        reasoning_tokens: 0,
+        input_tokens: usage.get("input_tokens").and_then(Value::as_u64),
+        output_tokens: usage.get("output_tokens").and_then(Value::as_u64),
+        cached_input_tokens: usage.get("cache_read_input_tokens").and_then(Value::as_u64),
+        reasoning_tokens: None,
     })
 }
 

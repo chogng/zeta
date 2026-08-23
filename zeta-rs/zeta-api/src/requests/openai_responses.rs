@@ -374,16 +374,14 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
 fn parse_usage(usage: Option<&Value>) -> Option<ModelUsage> {
     let usage = usage?;
     Some(ModelUsage {
-        input_tokens: usage.get("input_tokens")?.as_u64()?,
-        output_tokens: usage.get("output_tokens")?.as_u64()?,
+        input_tokens: usage.get("input_tokens").and_then(Value::as_u64),
+        output_tokens: usage.get("output_tokens").and_then(Value::as_u64),
         cached_input_tokens: usage
             .pointer("/input_tokens_details/cached_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+            .and_then(Value::as_u64),
         reasoning_tokens: usage
             .pointer("/output_tokens_details/reasoning_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0),
+            .and_then(Value::as_u64),
     })
 }
 

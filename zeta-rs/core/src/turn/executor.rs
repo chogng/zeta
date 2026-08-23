@@ -12,9 +12,10 @@ use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::turn::TurnExecutionBackend;
 use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
-    ContextCompactionService, CoreError, HarnessInstructions, HarnessInstructionsProvider,
-    HookService, ModelSelection, ModelService, ModelStreamSink, NoHooks, NoThreadUpdates, NoTools,
-    ThreadController, ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
+    ContextCompactionResult, ContextCompactionService, CoreError, HarnessInstructions,
+    HarnessInstructionsProvider, HookService, ModelSelection, ModelService, ModelStreamSink,
+    NoHooks, NoThreadUpdates, NoTools, ThreadController, ThreadUpdateSink, ToolService,
+    TurnCompletedHookRequest,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -518,16 +519,14 @@ impl TurnExecutor {
                 ModelInvocationPreparation::Ready(invocation) => invocation,
                 ModelInvocationPreparation::NeedsCompaction { model, plan } => {
                     let request = ContextCompactionRequest::from_plan(&plan, &model);
-                    let result = retry_invalid_model_response(|| {
-                        self.compaction.compact(&request, cancellation)
-                    })
-                    .map_err(ExecutionFailure::service)?;
+                    let (result, source_thread_sequence) =
+                        self.compact_context(thread_id, turn_id, &request, cancellation)?;
                     check_cancellation(cancellation)?;
                     self.threads
                         .commit_context_checkpoint(
                             thread_id,
                             CommitContextCheckpointRequest {
-                                source_thread_sequence: request.source_thread_sequence(),
+                                source_thread_sequence,
                                 covered: request.covered(),
                                 summary: result.summary().into(),
                                 schema_revision: result.schema_revision().into(),
@@ -589,6 +588,9 @@ impl TurnExecutor {
                     .stream(model, &request, cancellation, &mut stream)
                 {
                     Ok(response) => {
+                        self.threads
+                            .record_model_usage(thread_id, turn_id, response.usage.clone())
+                            .map_err(ExecutionFailure::persistence)?;
                         check_cancellation(cancellation)?;
                         let tool_calls = response.tool_calls().count();
                         let text = final_text(&response, &stream);
@@ -740,16 +742,15 @@ impl TurnExecutor {
             ContextOverflowRecoveryPreparation::NeedsCompaction { model, plan } => (model, plan),
         };
         let request = ContextCompactionRequest::from_plan(&plan, &model);
-        let result =
-            retry_invalid_model_response(|| self.compaction.compact(&request, cancellation))
-                .map_err(ExecutionFailure::service)?;
+        let (result, source_thread_sequence) =
+            self.compact_context(thread_id, turn_id, &request, cancellation)?;
         check_cancellation(cancellation)?;
         self.threads
             .commit_context_overflow_recovery(
                 thread_id,
                 turn_id,
                 CommitContextCheckpointRequest {
-                    source_thread_sequence: request.source_thread_sequence(),
+                    source_thread_sequence,
                     covered: request.covered(),
                     summary: result.summary().into(),
                     schema_revision: result.schema_revision().into(),
@@ -760,6 +761,41 @@ impl TurnExecutor {
             )
             .map_err(ExecutionFailure::persistence)?;
         Ok(())
+    }
+
+    fn compact_context(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        request: &ContextCompactionRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<(ContextCompactionResult, u64), ExecutionFailure> {
+        let mut usage_sequence = None;
+        let mut usage_recording_error = None;
+        let mut record_model_usage =
+            |usage| match self.threads.record_model_usage(thread_id, turn_id, usage) {
+                Ok(sequence) => {
+                    usage_sequence = Some(sequence);
+                    Ok(())
+                }
+                Err(error) => {
+                    usage_recording_error = Some(error.clone());
+                    Err(error)
+                }
+            };
+        let result = retry_invalid_model_response(|| {
+            self.compaction
+                .compact(&request, cancellation, &mut record_model_usage)
+        });
+        drop(record_model_usage);
+        if let Some(error) = usage_recording_error {
+            return Err(ExecutionFailure::persistence(error));
+        }
+        let result = result.map_err(ExecutionFailure::service)?;
+        Ok((
+            result,
+            usage_sequence.unwrap_or(request.source_thread_sequence()),
+        ))
     }
 
     fn require_running_turn(

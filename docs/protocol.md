@@ -415,7 +415,7 @@ checkpoint 和 compaction 执行都不属于 protocol。
 | Tool arguments | `String`、`serde_json::Value` 并存 | 按 durable canonical 与 provider value 分层 |
 | Tool call ID | `ToolCallId` | 已用于 durable Item、dynamic tool 和 model contract |
 | Model response provenance | 无真实消费者 | 已删除 speculative `ResponseItemId` 与 provider raw response ID；有可证明的跨 provider 需求后再引入 |
-| Usage | model response 有 usage，Thread history 未建模 | 先明确 billing/diagnostic/product ownership |
+| Usage | `ModelUsageRecorded` 是 durable product fact；Thread 公开 `ModelUsageSummary`，每项用 `reported + complete` 区分已报告下限与精确总数 | cost/预算 policy 留在 Core，不进入 protocol |
 
 ## 7. Config 值的边界
 
@@ -592,7 +592,7 @@ zeta-rs/protocol/
 | waiting Turn lifecycle | 基础完成 | event/reducer/recovery 已实现；异步 Agent loop 的继续执行尚未实现 |
 | provider-independent model values | 基础完成 | provider adapters 已使用，tool name/call ID 已收敛 |
 | 稳定错误分类 | 部分具备 | 供应商上下文、认证、无效请求、无效响应和工具重复已有持久化错误码；预算等后续类别仍缺 |
-| usage/compaction provenance | 部分具备 | checkpoint 有 source range/digest/revision；供应商溢出恢复有 durable Turn 绑定；usage 账本仍缺 |
+| usage/compaction provenance | 已完成基础 contract | checkpoint 有 source range/digest/revision；供应商溢出恢复有 durable Turn 绑定；普通生成与模型驱动 compaction usage 均逐次持久化并聚合 |
 | ID validation | 已完成 | constructor 与 deserialize 都拒绝空的 canonical ID |
 | public API discipline | 已完成 | private modules、named exports 与 speculative envelope 清理已落地 |
 
@@ -648,7 +648,7 @@ zeta-rs/protocol/
 
 - 根据真实 streaming producer 增加最小必要 delta；
 - 明确 transient update 的 stream cursor 和重连降级；
-- 评审 usage 是否属于 durable product fact、diagnostic trace 或 billing projection；
+- usage 已确定为 durable product fact；协议只携带 provider report 与完整性聚合，不拥有价格、预算或 billing policy；
 - compaction checkpoint 必须引用其覆盖的原始历史范围；
 - 不在 protocol 中实现 token policy 或 summary 算法。
 

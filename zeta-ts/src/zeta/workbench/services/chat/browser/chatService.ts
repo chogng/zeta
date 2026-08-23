@@ -208,6 +208,13 @@ function toThread(thread: ThreadDto): Thread {
 		title: thread.title,
 		status: thread.status,
 		sequence: thread.sequence,
+		usage: {
+			modelInvocations: thread.usage.modelInvocations,
+			inputTokens: { ...thread.usage.inputTokens },
+			outputTokens: { ...thread.usage.outputTokens },
+			cachedInputTokens: { ...thread.usage.cachedInputTokens },
+			reasoningTokens: { ...thread.usage.reasoningTokens },
+		},
 		turns: thread.turns.map((turn) => ({
 			turnId: turn.turnId,
 			status: turn.status,

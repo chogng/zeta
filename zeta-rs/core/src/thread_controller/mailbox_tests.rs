@@ -151,6 +151,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         title: "test".into(),
         turn_execution_binding: None,
         sequence: 1,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         turns: Vec::new(),
         items: Vec::new(),
         context_checkpoints: Vec::new(),

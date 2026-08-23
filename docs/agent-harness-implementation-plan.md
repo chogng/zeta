@@ -13,7 +13,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持批准、取消和恢复 | 有稳定工具 profile、计划工具、输出限幅和可量化成功率 | S3、S7 |
 | Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；本地执行器在模型安全点重规划，Codex 委托转发 exact `turn/steer` | 增加后续评测与完整故障矩阵 | S1、S5 |
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
-| 长会话消耗大量 token | 有 ContextPlan 和自动压缩，但没有 Thread 级 usage/cost 账本 | usage durable、预算可配置、超限在安全点终止 | S2 |
+| 长会话消耗大量 token | 有 ContextPlan、自动压缩和 Thread 级 durable usage；成本与预算尚未接入 | 预算可配置、超限在安全点终止 | S2 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | 模型选择已冻结，但模型可见工具面未按家族完整区分 | Turn 接受时冻结 ToolProfile，使用匹配训练分布的编辑工具 | S3 |
 | 使用 Codex 订阅模型 | 基础委托、流式、批准、用户输入和恢复已接通 | 增加能力协商、diff、图片、secret、rate-limit 与故障矩阵 | S5 |
 | 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整评测和故障验证 | S6、S7 |
@@ -29,6 +29,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | 模型基础弹性 | 已实现 | 429、过载、传输错误最多四次尝试；上下文溢出持久化压缩后只重试一次；认证与无效请求不重试；无效响应和空响应各只重试一次；Refusal 正常完成 | `zeta-rs/zeta-api/src/requests/mod.rs`、`zeta-rs/model-provider/src/error.rs`、`zeta-rs/core/src/turn/executor.rs` |
 | 工具安全与恢复 | 已实现 | 工具绑定、策略版本、批准、sandbox escalation、未知结果不重放 | `zeta-rs/core/src/turn/tool_scheduler.rs` |
 | ContextPlan 与自动压缩 | 已实现 | durable checkpoint、source digest、预算压缩和供应商溢出恢复均在提交后重规划；手动压缩尚缺 | `zeta-rs/core/src/context/` |
+| Durable usage | 已实现 | 每个实际返回的模型调用在消费输出前独立写入，包括模型驱动的 compaction；Thread/Turn reducer 聚合已报告下限和完整性，恢复 replay 不变 | `zeta-rs/core/src/turn/executor.rs`、`zeta-rs/core/src/context/compaction.rs`、`zeta-rs/core/src/thread_reducer.rs` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 部分具备 | `shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 可见；家族 profile、`update_plan` 和统一直接文件工具仍缺 | `zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
@@ -68,19 +69,19 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `toolRepetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 已实现 | 交互错误 UI | Desktop 从 canonical `StableTurnErrorCode` 投影对话内错误卡片；可重试失败开始新 Turn，认证错误打开模型选择，上下文或预算耗尽创建新对话，无效请求与工具重复失败聚焦输入以修改方案 | UI 只按稳定错误码分流；仅最新失败 Turn 暴露动作；刷新和重连从 canonical Thread 重建相同卡片；预算错误的运行时生产者仍由 AL-202 构建 |
 
-S1 已完成；接下来从 AL-201 开始构建 durable usage 账本，再以该账本作为 AL-202 资源预算的前置。
+S1 已完成；AL-201 usage 账本也已落地，接下来构建 AL-202 Turn 资源预算。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-201 | 待构建 | Durable usage 账本 | 将 provider-reported input、cached input、output 和可用的 reasoning usage 作为 durable fact 记录并聚合到 Thread | crash/restart 前后聚合一致；重试调用分别记账；缺失或部分 usage 不伪造为精确值 |
+| AL-201 | 已实现 | Durable usage 账本 | 每次实际返回的模型调用写入 `ModelUsageRecorded`，模型驱动的 compaction 通过强制 recorder 回调进入同一账本；provider-reported input、cached input、output 和 reasoning usage 聚合到 Thread，并在 Turn 内保留预算所需投影 | crash/restart 前后聚合一致；空响应、compaction 等调用分别记账；缺失或部分 usage 用 `reported + complete` 表达，不伪造为精确值；分叉只导入对话内容，不重复计算源 Thread 成本 |
 | AL-202 | 待构建 | Turn 资源预算 | 在 AL-201 上增加可选 token 与成本上限；成本使用带版本的模型价格 snapshot，不读取运行中漂移的目录值 | 默认只记账不设限；超限在下一个模型/工具安全点终止；稳定错误为 `turnBudgetExhausted`；恢复后继续使用冻结预算 |
 | AL-203 | 待构建 | 模型输入逐项限幅 | 在 ContextPlan 选入时统一限制 shell、文件读取、搜索、MCP 和图片内容，并保留截断诊断 | 任何单条工具结果不能独占窗口；截断标记说明原始大小和继续读取方式；durable 原始结果不被静默改写 |
 | AL-204 | 待构建 | 手动压缩 | 增加 `/compact` 与可选保留提示，复用现有 durable checkpoint contract | 只覆盖完整 durable 前缀；当前 Turn 和未完成工具组不被吸收；失败不提交半成品 checkpoint |
 | AL-205 | 待构建 | 预算校准 | 使用已记录 usage 校准估算误差，并为可用模型接入精确 tokenizer/preflight | 估算 revision 可追踪；未知窗口继续使用 provider-managed，不猜测固定窗口；校准不能改变历史 durable usage |
 
-AL-201 是 S2 的前置；AL-202 和 AL-205 依赖它。AL-203、AL-204 可与 AL-201 并行，但 AL-204 不重复实现 AL-103 的 overflow retry。
+AL-201 已完成，AL-202 和 AL-205 可以在其 durable 投影上继续构建。下一项是 AL-202；AL-203、AL-204 可独立推进，但 AL-204 不重复实现 AL-103 的 overflow retry。
 
 ## 5. S3：模型家族工具面与计划工具（P1）
 
@@ -163,7 +164,7 @@ flowchart TD
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
 2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
-3. 下一批先构建 AL-201 durable usage 账本；随后可并行推进 S2 的其余工作和 S3、S4，每个阶段独立维护 protocol 和测试门。
+3. AL-201 durable usage 账本已完成；下一批构建 AL-202 Turn 资源预算，随后可并行推进 S2 的其余工作和 S3、S4，每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。
 

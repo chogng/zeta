@@ -24,11 +24,11 @@ use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_protocol::{
     AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
-    ModelRequest, ModelResponse, ModelStreamEvent, RequestUserInput, RequestUserInputResponse,
-    ResponseItem, SessionId, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
-    StableTurnErrorCode, StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope,
-    ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer,
-    UserInputQuestion,
+    ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, RequestUserInput,
+    RequestUserInputResponse, ResponseItem, SessionId, SkillActivationReason, SkillId, SkillName,
+    SkillRef, SkillSourceId, StableTurnErrorCode, StopReason, ThreadId, ThreadItem, ThreadUpdate,
+    ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName, TurnStatus, UserInput,
+    UserInputAnswer, UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -87,6 +87,7 @@ fn steering_during_a_model_call_discards_its_stale_completion_and_replans() {
     assert!(!request_contains(&requests[0], "steer toward tests"));
     assert!(request_contains(&requests[1], "steer toward tests"));
     let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.usage.model_invocations, 2);
     assert!(!snapshot.items.iter().any(
         |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "stale answer")
     ));
@@ -319,6 +320,11 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
         snapshot.context_checkpoints[0].summary,
         "bounded checkpoint"
     );
+    assert_eq!(snapshot.usage.model_invocations, 2);
+    assert_eq!(snapshot.usage.input_tokens.reported, 150);
+    assert!(snapshot.usage.input_tokens.complete);
+    assert_eq!(snapshot.usage.output_tokens.reported, 15);
+    assert!(snapshot.usage.output_tokens.complete);
     let requests = model.requests.lock().unwrap();
     assert_eq!(requests.len(), 2);
     assert!(
@@ -677,6 +683,32 @@ fn cancellation_interrupts_the_turn_before_invoking_the_model() {
 }
 
 #[test]
+fn cancellation_after_a_model_response_preserves_its_usage() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let cancellation = CancellationSource::new();
+    let model = Arc::new(CancellingResponseModel {
+        cancellation: cancellation.clone(),
+    });
+    let executor = TurnExecutor::without_tools(threads.clone(), model);
+
+    assert!(matches!(
+        executor.execute(&thread_id, &turn_id, &cancellation.token()),
+        Err(CoreError::Cancelled(_))
+    ));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns[0].status, TurnStatus::Interrupted);
+    assert_eq!(snapshot.usage.model_invocations, 1);
+    assert_eq!(snapshot.usage.input_tokens.reported, 9);
+    assert!(snapshot.usage.input_tokens.complete);
+    assert!(
+        !snapshot
+            .items
+            .iter()
+            .any(|item| matches!(item, ThreadItem::AgentMessage { .. }))
+    );
+}
+
+#[test]
 fn model_failure_durably_fails_the_turn() {
     let (threads, thread_id, turn_id) = started_turn();
     let model = Arc::new(ScriptedModel::new([Err(CoreError::Model(
@@ -988,12 +1020,22 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
     let model = Arc::new(ScriptedModel::new([
         Ok(ModelResponse {
             output: Vec::new(),
-            usage: None,
+            usage: Some(ModelUsage {
+                input_tokens: Some(10),
+                output_tokens: Some(1),
+                cached_input_tokens: Some(2),
+                reasoning_tokens: None,
+            }),
             stop_reason: StopReason::Completed,
         }),
         Ok(ModelResponse {
             output: vec![ResponseItem::Refusal("cannot comply".into())],
-            usage: None,
+            usage: Some(ModelUsage {
+                input_tokens: Some(12),
+                output_tokens: Some(3),
+                cached_input_tokens: None,
+                reasoning_tokens: Some(1),
+            }),
             stop_reason: StopReason::Completed,
         }),
     ]));
@@ -1011,6 +1053,71 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
         }) if text == "cannot comply"
     ));
     assert_eq!(model.requests().len(), 2);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.usage.model_invocations, 2);
+    assert_eq!(snapshot.usage.input_tokens.reported, 22);
+    assert!(snapshot.usage.input_tokens.complete);
+    assert_eq!(snapshot.usage.output_tokens.reported, 4);
+    assert!(snapshot.usage.output_tokens.complete);
+    assert_eq!(snapshot.usage.cached_input_tokens.reported, 2);
+    assert!(!snapshot.usage.cached_input_tokens.complete);
+    assert_eq!(snapshot.usage.reasoning_tokens.reported, 1);
+    assert!(!snapshot.usage.reasoning_tokens.complete);
+    assert_eq!(snapshot.turns[0].usage, snapshot.usage);
+}
+
+#[test]
+fn model_usage_projection_is_identical_after_recovery() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let original = Arc::new(ThreadController::with_store(store.clone()));
+    let thread_id = ThreadId::new("usage-recovery-thread").unwrap();
+    original
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("usage-recovery-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "usage recovery".into(),
+        })
+        .unwrap();
+    let turn_id = original
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("usage-recovery-start").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::Text("answer".into())],
+        usage: Some(ModelUsage {
+            input_tokens: Some(11),
+            output_tokens: Some(2),
+            cached_input_tokens: None,
+            reasoning_tokens: None,
+        }),
+        stop_reason: StopReason::Completed,
+    })]));
+    TurnExecutor::without_tools(original.clone(), model)
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let before_restart = original.read_thread(&thread_id).unwrap().usage;
+
+    let recovered = ThreadController::with_store(store);
+    let after_restart = recovered.recover_thread(&thread_id).unwrap().usage;
+
+    assert_eq!(after_restart, before_restart);
+    assert_eq!(after_restart.model_invocations, 1);
+    assert_eq!(after_restart.input_tokens.reported, 11);
+    assert!(after_restart.input_tokens.complete);
+    assert!(!after_restart.cached_input_tokens.complete);
 }
 
 #[test]
@@ -1243,6 +1350,41 @@ struct ScriptedModel {
     requests: Mutex<Vec<ModelRequest>>,
 }
 
+struct CancellingResponseModel {
+    cancellation: CancellationSource,
+}
+
+impl ModelService for CancellingResponseModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.cancellation.cancel();
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text("discarded after cancellation".into())],
+            usage: Some(ModelUsage {
+                input_tokens: Some(9),
+                output_tokens: Some(2),
+                cached_input_tokens: None,
+                reasoning_tokens: None,
+            }),
+            stop_reason: StopReason::Completed,
+        })
+    }
+
+    fn stream(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        _: &mut dyn ModelStreamSink,
+    ) -> Result<ModelResponse, CoreError> {
+        self.invoke(selection, request, cancellation)
+    }
+}
+
 struct SteeringModel {
     threads: Arc<ThreadController>,
     thread_id: ThreadId,
@@ -1370,6 +1512,7 @@ impl ContextCompactionService for FixedOverflowCompaction {
         &self,
         request: &ContextCompactionRequest,
         _: &CancellationToken,
+        _: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
         assert!(!request.source_items().is_empty());
@@ -1408,6 +1551,7 @@ impl ContextCompactionService for BlockingOverflowCompaction {
         &self,
         _: &ContextCompactionRequest,
         cancellation: &CancellationToken,
+        _: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.entered.store(true, Ordering::Relaxed);
         self.entered_changed.notify_all();
@@ -1558,15 +1702,22 @@ impl ModelService for CompactingModel {
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
         self.requests.lock().unwrap().push(request.clone());
-        if request
+        let is_compaction = request
             .instructions
             .as_deref()
-            .is_some_and(|body| body.contains("durable context checkpoint"))
-        {
-            Ok(text_response("bounded checkpoint"))
+            .is_some_and(|body| body.contains("durable context checkpoint"));
+        let mut response = if is_compaction {
+            text_response("bounded checkpoint")
         } else {
-            Ok(text_response("done"))
-        }
+            text_response("done")
+        };
+        response.usage = Some(ModelUsage {
+            input_tokens: Some(if is_compaction { 100 } else { 50 }),
+            output_tokens: Some(if is_compaction { 10 } else { 5 }),
+            cached_input_tokens: None,
+            reasoning_tokens: None,
+        });
+        Ok(response)
     }
 }
 

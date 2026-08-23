@@ -1071,6 +1071,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		title: "Main",
 		status: "active",
 		sequence: 3,
+		usage: emptyUsage(),
 		turns: [{
 			turnId: "turn-1",
 			status: "failed",
@@ -1532,6 +1533,7 @@ function thread(agentText?: string): Thread {
 		title: "Main",
 		status: "active",
 		sequence: agentText ? 4 : 1,
+		usage: emptyUsage(),
 		turns: agentText
 			? [{
 				turnId: "turn-1",
@@ -1563,7 +1565,18 @@ function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence
 		title: "Main",
 		status: "active",
 		sequence,
+		usage: emptyUsage(),
 		turns: [failedTurn(code, retryable)],
+	};
+}
+
+function emptyUsage(): Thread["usage"] {
+	return {
+		modelInvocations: 0,
+		inputTokens: { reported: 0, complete: true },
+		outputTokens: { reported: 0, complete: true },
+		cachedInputTokens: { reported: 0, complete: true },
+		reasoningTokens: { reported: 0, complete: true },
 	};
 }
 

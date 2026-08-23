@@ -15,6 +15,7 @@ use zeta_protocol::Message;
 use zeta_protocol::MessageRole;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelUsage;
 use zeta_protocol::ResponseItem;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ToolChoice;
@@ -126,10 +127,16 @@ impl ContextCompactionResult {
 
 /// Produces a bounded summary from immutable durable Thread facts.
 pub trait ContextCompactionService: Send + Sync {
+    /// Compacts one context prefix and accounts for every completed model response.
+    ///
+    /// Model-backed implementations must call `record_model_usage` immediately after each model
+    /// response, before validating or consuming its output. A compactor that performs no model
+    /// invocation must not call the recorder.
     fn compact(
         &self,
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
+        record_model_usage: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
     ) -> Result<ContextCompactionResult, CoreError>;
 }
 
@@ -148,6 +155,7 @@ impl ContextCompactionService for ModelContextCompactionService {
         &self,
         request: &ContextCompactionRequest,
         cancellation: &CancellationToken,
+        record_model_usage: &mut dyn FnMut(Option<ModelUsage>) -> Result<(), CoreError>,
     ) -> Result<ContextCompactionResult, CoreError> {
         let input = encode_compaction_input(
             request.covered,
@@ -175,6 +183,7 @@ impl ContextCompactionService for ModelContextCompactionService {
             },
             cancellation,
         )?;
+        record_model_usage(response.usage.clone())?;
         if response.tool_calls().next().is_some() {
             return Err(CoreError::Context(
                 "context compaction model returned an unsupported Tool Call".into(),

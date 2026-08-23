@@ -53,12 +53,26 @@ export interface Turn {
 	readonly error?: TurnError | null;
 }
 
+export interface ModelUsageTotal {
+	readonly reported: number;
+	readonly complete: boolean;
+}
+
+export interface ModelUsageSummary {
+	readonly modelInvocations: number;
+	readonly inputTokens: ModelUsageTotal;
+	readonly outputTokens: ModelUsageTotal;
+	readonly cachedInputTokens: ModelUsageTotal;
+	readonly reasoningTokens: ModelUsageTotal;
+}
+
 export interface Thread {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly title: string;
 	readonly status: "active" | "archived";
 	readonly sequence: number;
+	readonly usage: ModelUsageSummary;
 	readonly turns: readonly Turn[];
 }
 
@@ -92,7 +106,7 @@ export type ThreadCommittedEvent =
 	| { readonly type: "turnCompleted" }
 	| { readonly type: "turnFailed" }
 	| { readonly type: "turnInterrupted" }
-	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
+	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "modelUsageRecorded" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
 
 export type ThreadUpdate =
 	| { readonly type: "committed"; readonly event: ThreadCommittedEvent }

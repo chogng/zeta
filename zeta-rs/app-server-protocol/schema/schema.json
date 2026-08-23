@@ -17010,6 +17010,95 @@
       ],
       "type": "object"
     },
+    "ModelUsage": {
+      "properties": {
+        "cachedInputTokens": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "inputTokens": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "outputTokens": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "reasoningTokens": {
+          "default": null,
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ModelUsageSummary": {
+      "description": "Provider-reported usage aggregated across every model response in a Thread or Turn.",
+      "properties": {
+        "cachedInputTokens": {
+          "$ref": "#/$defs/ModelUsageTotal"
+        },
+        "inputTokens": {
+          "$ref": "#/$defs/ModelUsageTotal"
+        },
+        "modelInvocations": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "outputTokens": {
+          "$ref": "#/$defs/ModelUsageTotal"
+        },
+        "reasoningTokens": {
+          "$ref": "#/$defs/ModelUsageTotal"
+        }
+      },
+      "required": [
+        "modelInvocations",
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "reasoningTokens"
+      ],
+      "type": "object"
+    },
+    "ModelUsageTotal": {
+      "description": "One aggregate token metric built only from values explicitly reported by providers.\n\n`reported` remains useful as a lower bound when one or more invocations omitted this metric;\n`complete` says whether the reported value is also the exact aggregate.",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "reported": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reported",
+        "complete"
+      ],
+      "type": "object"
+    },
     "PendingInteraction": {
       "description": "Redaction-safe metadata for a Turn that is waiting on an interaction.\n\nThe full request payload stays in the durable interaction fact so an App Server can redeliver\nit to its selected owner after recovery. Readable Thread snapshots expose only this metadata,\npreventing a broad subscription from becoming an implicit interaction-delivery channel.",
       "properties": {
@@ -20767,6 +20856,28 @@
             "$ref": "#/$defs/Turn"
           },
           "type": "array"
+        },
+        "usage": {
+          "$ref": "#/$defs/ModelUsageSummary",
+          "default": {
+            "cachedInputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "inputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "modelInvocations": 0,
+            "outputTokens": {
+              "complete": true,
+              "reported": 0
+            },
+            "reasoningTokens": {
+              "complete": true,
+              "reported": 0
+            }
+          }
         }
       },
       "required": [
@@ -21058,6 +21169,36 @@
             "threadId",
             "turnId",
             "backend"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "modelUsageRecorded",
+              "type": "string"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ModelUsage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "turnId"
           ],
           "type": "object"
         },

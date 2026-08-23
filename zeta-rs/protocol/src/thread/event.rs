@@ -12,6 +12,7 @@ use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
 use crate::ItemId;
 use crate::ModelRef;
+use crate::ModelUsage;
 use crate::RequestId;
 use crate::SandboxDenialOutput;
 use crate::SessionId;
@@ -123,6 +124,11 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         turn_id: TurnId,
         backend: String,
+    },
+    ModelUsageRecorded {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        usage: Option<ModelUsage>,
     },
     ItemCompleted {
         thread_id: ThreadId,
@@ -243,6 +249,7 @@ impl ThreadEvent {
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
+            Self::ModelUsageRecorded { .. } => "model.usage_recorded",
             Self::ItemCompleted { .. } => "item.completed",
             Self::InteractionRequested { .. } => "interaction.requested",
             Self::InteractionResolved { .. } => "interaction.resolved",
@@ -281,6 +288,7 @@ impl ThreadEvent {
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }
+            | Self::ModelUsageRecorded { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }
             | Self::InteractionResolved { thread_id, .. }

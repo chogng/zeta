@@ -1,4 +1,4 @@
-use crate::{SessionId, ThreadId, ThreadStatus, Turn};
+use crate::{ModelUsageSummary, SessionId, ThreadId, ThreadStatus, Turn};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -13,5 +13,7 @@ pub struct Thread {
     pub status: ThreadStatus,
     #[ts(type = "number")]
     pub sequence: u64,
+    #[serde(default)]
+    pub usage: ModelUsageSummary,
     pub turns: Vec<Turn>,
 }

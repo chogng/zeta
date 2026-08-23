@@ -5,7 +5,7 @@ use super::{
 use crate::CoreError;
 use crate::ThreadCommandResult;
 use zeta_protocol::{
-    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, TurnId,
+    ItemId, ModelUsage, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, TurnId,
 };
 
 #[cfg(test)]
@@ -14,6 +14,26 @@ use super::RecordedToolCall;
 use zeta_protocol::{ToolCall, ToolCallBinding};
 
 impl ThreadController {
+    /// Durably accounts for one completed provider invocation before its output is consumed.
+    pub(crate) fn record_model_usage(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        usage: Option<ModelUsage>,
+    ) -> Result<u64, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ModelUsageRecorded {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    usage,
+                }],
+            )?;
+            Ok(snapshot.sequence)
+        })
+    }
+
     /// Durably records that a delegated backend is about to cross its external side-effect
     /// boundary.
     ///

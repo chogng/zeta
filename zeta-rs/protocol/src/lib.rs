@@ -39,8 +39,8 @@ pub use model::{
     ImageDetailDecisionReason, InputItem, InvalidModelIdentity, Message, MessageRole, Model,
     ModelAccess, ModelAvailability, ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo,
     ModelLifecycle, ModelMetadataQuality, ModelPreset, ModelRef, ModelRequest, ModelResponse,
-    ModelStreamEvent, ModelUsage, ProviderId, ReasoningConfig, ReasoningEffort, ResponseItem,
-    StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
+    ModelStreamEvent, ModelUsage, ModelUsageSummary, ModelUsageTotal, ProviderId, ReasoningConfig,
+    ReasoningEffort, ResponseItem, StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
 };
 pub use multi_agent::{
     AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource, AgentJoin,
