@@ -1,4 +1,6 @@
-//! Stable, domain-neutral identity and hard-link information for open files.
+//! Handle-derived, domain-neutral identity and hard-link information for open files.
+
+#![deny(unsafe_code)]
 
 use std::fs::File;
 use std::io;
@@ -11,15 +13,15 @@ mod platform;
 #[path = "windows.rs"]
 mod platform;
 
-/// Stable filesystem identity used to determine whether two handles name the same file.
+/// Filesystem identity used to compare observations within one validation operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct FileIdentity {
-    device: u64,
-    file: u64,
+struct FileIdentity {
+    volume: u64,
+    object: [u8; 16],
 }
 
 /// Identity and hard-link count captured from one open file handle.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub struct FileInformation {
     identity: FileIdentity,
     number_of_links: u64,
@@ -31,24 +33,31 @@ impl FileInformation {
         platform::inspect(file)
     }
 
-    /// Opens a controlled path and captures identity and link count from the resulting handle.
+    /// Opens a path and captures identity and link count from the resulting handle.
+    ///
+    /// This follows symbolic links and represents only this point-in-time observation. Callers
+    /// that make a trust decision about later reads must inspect the handle used for that read
+    /// with [`Self::from_file`] and compare the two observations.
     pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
         Self::from_file(&File::open(path)?)
     }
 
-    /// Returns the stable identity associated with the inspected handle.
-    pub fn identity(self) -> FileIdentity {
-        self.identity
+    /// Returns whether both contemporaneous observations identify the same filesystem object.
+    ///
+    /// This is not a durable object key: callers must not persist the result across deletion,
+    /// replacement, filesystem remounts, or process restarts.
+    pub fn same_file_as(self, other: Self) -> bool {
+        self.identity == other.identity
     }
 
-    /// Returns the filesystem hard-link count associated with the inspected handle.
-    pub fn number_of_links(self) -> u64 {
-        self.number_of_links
+    /// Returns whether the observed filesystem object has more than one hard link.
+    pub fn has_multiple_links(self) -> bool {
+        self.number_of_links > 1
     }
 
-    pub(crate) fn new(device: u64, file: u64, number_of_links: u64) -> Self {
+    pub(crate) fn new(volume: u64, object: [u8; 16], number_of_links: u64) -> Self {
         Self {
-            identity: FileIdentity { device, file },
+            identity: FileIdentity { volume, object },
             number_of_links,
         }
     }

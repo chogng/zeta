@@ -212,11 +212,15 @@ fn symbolic_links_are_rejected_even_when_they_currently_point_inside_the_root() 
 
     let directory = TestDirectory::new();
     create_package(directory.path(), "acme/review", "1.0.0", "icon");
-    symlink(
-        directory.path().join("assets/icon.txt"),
-        directory.path().join("assets/linked.txt"),
-    )
-    .unwrap();
+    if !super::super::test_support::link_capability_available(
+        symlink(
+            directory.path().join("assets/icon.txt"),
+            directory.path().join("assets/linked.txt"),
+        ),
+        "symbolic links",
+    ) {
+        return;
+    }
 
     let error = LocalPluginPackage::load(directory.path()).unwrap_err();
 
@@ -226,19 +230,22 @@ fn symbolic_links_are_rejected_even_when_they_currently_point_inside_the_root() 
 
 #[cfg(any(unix, windows))]
 #[test]
-fn hard_links_are_rejected_before_digesting_package_content() {
+fn local_discovery_leaves_hard_link_policy_to_installation() {
     let directory = TestDirectory::new();
     create_package(directory.path(), "acme/review", "1.0.0", "icon");
-    fs::hard_link(
-        directory.path().join("assets/icon.txt"),
-        directory.path().join("assets/linked.txt"),
-    )
-    .unwrap();
+    if !super::super::test_support::link_capability_available(
+        fs::hard_link(
+            directory.path().join("assets/icon.txt"),
+            directory.path().join("assets/linked.txt"),
+        ),
+        "hard links",
+    ) {
+        return;
+    }
 
-    let error = LocalPluginPackage::load(directory.path()).unwrap_err();
+    let package = LocalPluginPackage::load(directory.path()).unwrap();
 
-    assert_eq!(error.kind(), PluginErrorKind::PackageUnsafe);
-    assert!(error.to_string().contains("hard link"));
+    assert_eq!(package.stats().file_count, 6);
 }
 
 #[test]

@@ -24,10 +24,10 @@
 | `DeclarativeExtensionContribution` | 声明一个包含静态 `package.json` 的 package-relative 目录 | 解析 Editor contribution、执行代码 |
 | `EditorExtensionContribution` | 声明 exact executable program、Host RPC API、activation triggers 与 capability ceiling | 启动/监管进程、provider registry、RPC transport |
 | `EditorExtensionActivationEvent` | 区分 startup/command/language/on-demand 等 bounded activation trigger | 把 provider kind 当成隐式 activation |
-| `LocalPluginPackage::load` | 验证一个 exact root、digest 和所有 contribution path | copy/install/immutability |
+| `LocalPluginPackage::load` | 对本地根目录执行纯内容扫描，计算 digest 并验证所有 contribution path | copy/install/immutability、文件身份策略 |
 | `LocalPluginCatalog::discover` | 读取一个 package 或目录下的直接 package children | recursive marketplace search |
-| `PluginPackageStore::install_local` | stage、复制、复验 digest 并原子 promote immutable object | enablement、grant、activation |
-| `PluginPackageStore::read` | 按 exact installed ref 重新验证 object | authority lookup、版本选择 |
+| `PluginPackageStore::install_local` | 重试构造稳定 staging snapshot，并按内容摘要原子 promote object | enablement、grant、activation |
+| `PluginPackageStore::read` | 按 exact installed ref 重新计算摘要并验证 store-owned object | authority lookup、版本选择、可变来源身份检查 |
 | `PluginPackageStore::activate` | 把 exact installed refs 解析为一个 activation generation | installed/enable authority、live publish |
 | `PluginActivationSnapshot::resolve` | 拒绝重复 Plugin identity 并固定 immutable object handles | contribution runtime、profile resolution |
 | `PluginActivationAuthority` | installed/enable/disable/uninstall record、replay、generation 与 live publish | contribution parsing、runtime composition |
@@ -119,17 +119,19 @@ LocalPluginPackage::load
 ```text
 PluginPackageStore::install_local
 ├─ create unique staging root
-├─ copy_package_tree
-│  └─ reject changed link/special-file/file identity
-├─ LocalPluginPackage::load(staging)
-├─ compare exact id/version/digest with source snapshot
+├─ snapshot::create_stable_local_snapshot_with_observer (最多三次)
+│  ├─ reset staging
+│  ├─ copy_package_tree
+│  │  └─ reject link/special-file/hard-link and opened-handle identity changes
+│  ├─ LocalPluginPackage::load_with_digest_algorithm(staging)
+│  ├─ LocalPluginPackage::load_with_digest_algorithm(source)
+│  └─ require selected id/version and source digest == staging digest; otherwise retry
+├─ validate existing same-digest object, including concurrent promotion
 ├─ sync_directory_tree
 └─ rename staging → objects/<sha256>
 ```
 
-object 已存在时操作是幂等的，但仍重新加载并验证；source 在首次 validation 后被修改会失败，且不会
-promote partial object。这个 store 当前只接受 explicit local-development package，built-in release 和
-remote archive 由未来各自的 source/trust adapter 处理。
+同一 `PluginId` 和 `PluginVersion` 的 source 在 discovery 后发生变化时，安装会选择复制期间最新且稳定的内容，而不是继续绑定 discovery 时的旧 digest。复制期间继续变化的 source 会丢弃 staging 后重试；三次内未稳定则失败，identity/version 变化则按冲突失败。object 已存在或并发安装同时 promote 同一 digest 时仍重新加载验证，因此操作幂等且不会发布 partial object。这个 store 当前只接受 explicit local-development package，built-in release 和 remote archive 由各自的 source/trust adapter 处理。
 
 Digest 与 source root 无关，对 normalized relative path 和每个 regular file 的 bytes 敏感。
 当前 ingestion limits：
@@ -153,14 +155,14 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 | `UncheckedPluginManifest` | serde shape 与 unknown-field rejection | manifest tests、schema example |
 | `PluginManifest::validate` | 跨字段 semantic invariants | credential/contribution fixtures |
 | `digest::walk_directory` | file count/type/link/path limits | package security tests、limits table |
-| `digest::hash_file` | bytes 与 file-identity stability | digest fixtures、TOCTOU assumptions |
+| `digest::hash_file` | 与来源类型无关的流式内容摘要和读取 limits | digest fixtures、content identity |
 | `validate_contribution_paths` | contribution type、existence、containment | Skill/MCP/Editor Extension consumer contract |
 | `reject_duplicate_exact_versions` | local catalog exact-version uniqueness | future resolver semantics |
-| `PluginPackageStore::install_local` | staging/revalidation/atomic promotion boundary | authority commit、store recovery tests |
+| `snapshot::create_stable_local_snapshot_with_observer` | mutable source 到稳定 staging snapshot 的重试与一致性边界 | source mutation、link、platform filesystem tests |
+| `PluginPackageStore::install_local` | store-owned snapshot validation、并发幂等与 atomic promotion boundary | authority commit、store recovery tests |
 | `PluginActivationSnapshot::resolve` | exact package set 与 generation 的不可变发布边界 | profile resolver、consumer projection tests |
 | `PluginActivationAuthority::apply` | CAS mutation、atomic authority persistence、publish-before-drain | App Server reconcile、MCP fence tests |
 | `FileAuthorityPersistence` | bounded strict JSON、0600 staging、fsync + atomic rename | recovery tests、schema migration |
-| `copy_package_tree` | copy-time entry and file-identity checks | archive ingestion、platform link semantics |
 
 出现以下变化表示 ownership 漂移：
 
@@ -174,13 +176,9 @@ Digest 与 source root 无关，对 normalized relative path 和每个 regular f
 
 ## 失败语义与集成义务
 
-`PluginErrorKind` 区分 source unavailable、unsafe package、invalid manifest、invalid
-contribution 与 exact-version conflict。任何失败都不返回 partial package/catalog，也不改变
-filesystem。error message 只包含稳定 identity、relative path 与 sanitized 原因。
+`PluginErrorKind` 区分 source unavailable、unsafe package、invalid manifest、invalid contribution 与 exact-version conflict。任何失败都不返回 partial package/catalog 或发布新的 activation；local install 会清理当前 staging。进程若在 object promotion 与 authority commit 之间退出，store 会保留未引用 object，而 authority startup recovery 只清理 transient staging。error message 只包含稳定 identity、relative path 与 sanitized 原因。
 
-`LocalPluginPackage` 捕获的是已验证的 source snapshot identity，source directory
-仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore`
-复制、重新验证并从 content-addressed object root 绑定 contribution。
+`LocalPluginPackage` 捕获的是一次可变 source observation，source directory 仍可被外部修改。runtime consumer 不能把它当 immutable root；必须先通过 `PluginPackageStore` 构造稳定 snapshot，并从 content-addressed object root 绑定 contribution。`FileInformation` 只存在于私有 `snapshot` 安装模块，用来把复制所用句柄绑定到刚检查过的 source file；discovery、digest、store-owned object 读取和 runtime 均不依赖平台文件身份 API。硬链接因此属于安装准入策略：discovery 可以观察其内容，但 `install_local` 必须拒绝。
 
 正式 Marketplace package 不通过 `LocalPluginPackage` 或 `PluginPackageStore` 安装。
 Renderer 只能调用通用 Marketplace business API；Manager 返回 opaque installation/capability identity，
@@ -202,16 +200,7 @@ Extension v1 API/activation/capability/entrypoint、路径穿越/设备名/规�
 
 ## 当前限制与扩展点
 
-PL1 的 legacy content store、durable installed/enabled/granted/effective authority、exact snapshot 和
-live activation publish 已实现。Marketplace ingestion 与安装状态已经迁出到
-`zeta-marketplace-manager`。authority v1→v2 migration
-会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由
-“不暴露可写根路径 + digest revalidation”保证，
-尚未施加平台级 immutable flag，也没有 orphan staging startup recovery；失败 install commit 和 uninstall
-会精确回收无引用 object。该旧 store 仍只在 failed local install/uninstall 时精确回收，没有独立的全局
-orphan quota authority；不得重新接入远端 catalog。package-rooted MCP consumer
-已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private
-`authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
+PL1 的 legacy content store、durable installed/enabled/granted/effective authority、exact snapshot、live activation publish 和 transient staging startup recovery 已实现。Marketplace ingestion 与安装状态已经迁出到 `zeta-marketplace-manager`。authority v1→v2 migration 会把旧 active package 保守迁移为 enabled + granted。当前 object directory 的只读性由“不暴露可写根路径 + digest revalidation”保证，尚未施加平台级 immutable flag；同一宿主用户若绕过 API 直接改写 store，后续读取会失败，但系统不能阻止写入。失败 install commit 和 uninstall 会精确回收无引用 object；该旧 store 没有独立的全局 orphan quota authority，不得重新接入远端 catalog。package-rooted MCP consumer 已位于 `zeta-mcp-extension`，不能反向并入本 crate。这些能力应在新的 private `authority/resolution` modules 中接入，不扩大 loader/store 为隐式 enable manager。
 
 本 crate 只让 legacy 本地 Plugin 的声明式和可执行 Editor Extension 进入既有 digest 与
 enable/grant 控制面。声明式目录由 App Server 投影到 `zeta-extensions`；可执行声明被规范化为通用

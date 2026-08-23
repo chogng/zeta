@@ -116,11 +116,7 @@ Host。
 
 ## 2. 当前仓库审计
 
-当前 `zeta-plugins` 实现 legacy strict v1 manifest、Plugin identity/SemVer、portable
-package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，
-以及 stage-copy-revalidate-atomic-promote 的 local content-addressed store。实现细节、limits 与
-failure semantics 由 crate
-[`README`](../zeta-rs/plugins/README.md) 维护。
+当前 `zeta-plugins` 实现 legacy strict v1 manifest、Plugin identity/SemVer、portable package-relative path、本地 package 安全校验、确定性 digest、只读 local-development discovery，以及“稳定 staging snapshot—内容寻址 object—原子 activation generation”的 local store。实现细节、limits 与 failure semantics 由 crate [`README`](../zeta-rs/plugins/README.md) 维护。
 
 User/Workspace TOML 与 App Server 已能表达 exact legacy Plugin request 和 desired enablement。
 Package store 安全保存既有 local-development immutable object，
@@ -395,8 +391,7 @@ plugin-store/
 └── authority.json 或 typed database
 ```
 
-runtime 永远从 immutable object root 读取。不能原地修改 active package，也不能让 update 覆盖
-旧 version 目录。
+runtime 永远从 immutable object root 读取。不能原地修改 active package，也不能让 update 覆盖旧 version 目录；local-development source 的后续变化只影响下一次成功安装，不改变已经激活的 generation。
 
 安装流程：
 
@@ -413,7 +408,9 @@ resolve source
 → commit installed authority record
 ```
 
-任何一步失败都不改变 active snapshot。staging cleanup 可恢复且不得把 broad root 当删除目标。
+Local-development source 是可变目录：复制完成后必须重新验证 source 和 staging；只要所选 Plugin ID/version 不变，source 变化会丢弃 staging 并有限次重试，以最后一次稳定内容的 digest 建立 object。文件身份检查只属于这段本地复制过程，用于把打开的句柄绑定到刚检查过的 source file；discovery、digest、object read 和 runtime 都只依赖内容与 package contract。正式 Marketplace artifact 应由 Manager 提供已经固定 digest 的 immutable archive/blob，不依赖文件身份或这套可变目录重试。
+
+任何一步失败都不改变 active snapshot。staging cleanup 可恢复且不得把 broad root 当删除目标；update 只有在新 object、authority record 和新 generation 都准备完成后才原子切换，旧 generation 在 invocation lease 排空前继续读取旧 object。
 
 ### 7.2 权威与投影
 
@@ -787,12 +784,11 @@ zeta-rs/plugins/src/
   fixtures 随对应 source 一起加入；
 - App Server `plugin/list` 与 lifecycle mutation 已接入；任意 host path install 有意不开放给 Renderer。
 
-当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到
-content-addressed object、重新验证 exact digest，再原子 promote。mutable local root 不会被发布给 runtime。
+当前完成条件：任何 contribution path 都不能逃出已验证 local snapshot root；安装时必须复制到 staging、验证 staging digest 与复制后的 source observation 一致，再原子 promote 为 content-addressed object。mutable local root 不会被发布给 runtime。
 
 ### 阶段 PL1：权威+激活（已完成）
 
-- ✅ local content-addressed store：unique staging、copy-time validation、digest revalidation、atomic promote；
+- ✅ local content-addressed store：stable snapshot retry、copy-time identity validation、owned-object digest revalidation、concurrent idempotence 与 atomic promote；
 - ✅ install/enable/disable/grant/revoke/uninstall typed authority commands；
 - ✅ exact installed package resolution 与 activation snapshot generation；
 - ✅ durable install/enable/disable/uninstall authority record 与 typed command replay；
@@ -801,7 +797,7 @@ content-addressed object、重新验证 exact digest，再原子 promote。mutab
 - ✅ declarative Extension contribution 的 exact immutable source projection、precedence 与 live refresh；
 - ✅ Connector contribution 的 normalized projection；
 - ✅ legacy user-profile exact package reconcile；Workspace request 保持只读、不能自动 grant；
-- 尚未完成：startup orphan recovery。
+- ✅ startup transient staging recovery；未引用 object 的全局配额与垃圾回收仍未完成。
 
 完成条件：失败激活不改变上一 generation，重启可恢复唯一 active package set。
 

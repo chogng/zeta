@@ -4,11 +4,11 @@ use crate::PluginError;
 use crate::PluginErrorKind;
 use crate::PluginPackageDigest;
 use crate::PluginPackageSource;
+use crate::package::snapshot::create_stable_local_snapshot_with_observer;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use zeta_file_identity::FileInformation;
 
 /// Immutable package object selected for one Plugin activation generation.
 #[derive(Clone, Debug)]
@@ -140,6 +140,14 @@ impl PluginPackageStore {
         &self,
         package: &LocalPluginPackage,
     ) -> Result<InstalledPluginRef, PluginError> {
+        self.install_local_with_snapshot_observer(package, |_, _| {})
+    }
+
+    fn install_local_with_snapshot_observer(
+        &self,
+        package: &LocalPluginPackage,
+        mut after_snapshot: impl FnMut(usize, &Path),
+    ) -> Result<InstalledPluginRef, PluginError> {
         let PluginPackageSource::LocalDevelopment { canonical_path } = package.source() else {
             return Err(PluginError::new(
                 PluginErrorKind::SourceUnavailable,
@@ -149,36 +157,24 @@ impl PluginPackageStore {
         let operation_id = new_operation_id()?;
         let staging = self.root.join("staging").join(&operation_id);
         let result = (|| {
-            fs::create_dir(&staging).map_err(store_io)?;
-            copy_package_tree(canonical_path, &staging)?;
-            let installed = LocalPluginPackage::load_with_digest_algorithm(
+            let installed = create_stable_local_snapshot_with_observer(
+                package,
+                canonical_path,
                 &staging,
-                package.digest_algorithm(),
+                &mut after_snapshot,
             )?;
-            if installed.package_digest() != package.package_digest()
-                || installed.manifest().id != package.manifest().id
-                || installed.manifest().version != package.manifest().version
-            {
-                return Err(PluginError::new(
-                    PluginErrorKind::PackageConflict,
-                    "Plugin source changed while it was being installed",
-                ));
-            }
             let object = self.object_path(installed.package_digest());
             if object.exists() {
-                let existing = LocalPluginPackage::load_with_digest_algorithm(
-                    &object,
-                    package.digest_algorithm(),
-                )?;
-                if existing.package_digest() != installed.package_digest() {
-                    return Err(PluginError::new(
-                        PluginErrorKind::PackageConflict,
-                        "Plugin object path contains different content",
-                    ));
-                }
+                validate_object(&object, &installed)?;
             } else {
                 sync_directory_tree(&staging)?;
-                fs::rename(&staging, &object).map_err(store_io)?;
+                if let Err(error) = fs::rename(&staging, &object) {
+                    if object.exists() {
+                        validate_object(&object, &installed)?;
+                    } else {
+                        return Err(store_io(error));
+                    }
+                }
                 sync_directory(&self.root.join("objects"))?;
             }
             Ok(InstalledPluginRef {
@@ -262,6 +258,21 @@ impl PluginPackageStore {
     }
 }
 
+fn validate_object(object: &Path, snapshot: &LocalPluginPackage) -> Result<(), PluginError> {
+    let existing =
+        LocalPluginPackage::load_with_digest_algorithm(object, snapshot.digest_algorithm())?;
+    if existing.package_digest() != snapshot.package_digest()
+        || existing.manifest().id != snapshot.manifest().id
+        || existing.manifest().version != snapshot.manifest().version
+    {
+        return Err(PluginError::new(
+            PluginErrorKind::PackageConflict,
+            "Plugin object path contains different content",
+        ));
+    }
+    Ok(())
+}
+
 fn new_operation_id() -> Result<String, PluginError> {
     let mut random = [0_u8; 16];
     getrandom::getrandom(&mut random).map_err(|_| {
@@ -275,68 +286,6 @@ fn new_operation_id() -> Result<String, PluginError> {
         write!(value, "{byte:02x}").expect("writing to a String cannot fail");
     }
     Ok(value)
-}
-
-fn copy_package_tree(source: &Path, target: &Path) -> Result<(), PluginError> {
-    let mut entries = fs::read_dir(source)
-        .map_err(store_io)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(store_io)?;
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        let metadata = entry.file_type().map_err(store_io)?;
-        let destination = target.join(entry.file_name());
-        let inspected = fs::symlink_metadata(entry.path()).map_err(store_io)?;
-        if metadata.is_symlink()
-            || inspected.file_type().is_symlink()
-            || (!metadata.is_dir() && !metadata.is_file())
-        {
-            return Err(PluginError::new(
-                PluginErrorKind::PackageUnsafe,
-                "Plugin package changed to contain an unsafe entry during installation",
-            ));
-        }
-        if metadata.is_dir() {
-            fs::create_dir(&destination).map_err(store_io)?;
-            copy_package_tree(&entry.path(), &destination)?;
-        } else {
-            let inspected_information =
-                FileInformation::from_path(entry.path()).map_err(store_io)?;
-            if inspected_information.number_of_links() > 1 {
-                return Err(PluginError::new(
-                    PluginErrorKind::PackageUnsafe,
-                    "Plugin package changed to contain a hard-linked file during installation",
-                ));
-            }
-            copy_file(&entry.path(), &destination, &inspected_information)?;
-        }
-    }
-    Ok(())
-}
-
-fn copy_file(source: &Path, target: &Path, inspected: &FileInformation) -> Result<(), PluginError> {
-    let mut input = fs::File::open(source).map_err(store_io)?;
-    let opened = input.metadata().map_err(store_io)?;
-    let opened_information = FileInformation::from_file(&input).map_err(store_io)?;
-    if !opened.is_file()
-        || opened_information.identity() != inspected.identity()
-        || opened_information.number_of_links() > 1
-    {
-        return Err(PluginError::new(
-            PluginErrorKind::PackageUnsafe,
-            "Plugin package entry changed while it was being installed",
-        ));
-    }
-    let mut options = fs::OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut output = options.open(target).map_err(store_io)?;
-    std::io::copy(&mut input, &mut output).map_err(store_io)?;
-    output.sync_all().map_err(store_io)
 }
 
 fn sync_directory_tree(path: &Path) -> Result<(), PluginError> {

@@ -2,14 +2,13 @@ use crate::ContentDigest;
 use crate::SkillCatalog;
 use crate::SkillError;
 use crate::SkillErrorKind;
+use crate::file_snapshot::FileSnapshotFailure;
+use crate::file_snapshot::read_verified_file_snapshot;
 use std::ffi::OsStr;
 use std::fs;
-use std::fs::File;
-use std::io::Read;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
-use zeta_file_identity::FileInformation;
 use zeta_protocol::SkillRef;
 use zeta_protocol::SkillVersionSelector;
 
@@ -221,42 +220,16 @@ fn read_resource_file(
     relative_path: SkillResourcePath,
     skill_name: &str,
 ) -> Result<SkillResource, SkillError> {
-    let metadata = fs::symlink_metadata(&path).map_err(|_| unavailable(skill_name))?;
-    let information = FileInformation::from_path(&path).map_err(|_| unavailable(skill_name))?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || information.number_of_links() > 1
-        || metadata.len() > MAX_RESOURCE_FILE_BYTES
-    {
-        return Err(unavailable(skill_name));
-    }
-    let mut file = File::open(&path).map_err(|_| unavailable(skill_name))?;
-    let opened = FileInformation::from_file(&file).map_err(|_| unavailable(skill_name))?;
-    if opened.identity() != information.identity() || opened.number_of_links() > 1 {
-        return Err(content_changed(skill_name));
-    }
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    file.by_ref()
-        .take(MAX_RESOURCE_FILE_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| unavailable(skill_name))?;
-    let observed = fs::symlink_metadata(&path).map_err(|_| content_changed(skill_name))?;
-    let observed_information =
-        FileInformation::from_path(&path).map_err(|_| content_changed(skill_name))?;
-    if bytes.len() as u64 > MAX_RESOURCE_FILE_BYTES
-        || observed.file_type().is_symlink()
-        || !observed.is_file()
-        || observed.len() != bytes.len() as u64
-        || observed_information.identity() != opened.identity()
-        || observed_information.number_of_links() > 1
-    {
-        return Err(content_changed(skill_name));
-    }
-    let content_digest = ContentDigest::sha256(&bytes);
+    let snapshot = read_verified_file_snapshot(&path, MAX_RESOURCE_FILE_BYTES).map_err(
+        |failure| match failure {
+            FileSnapshotFailure::Unavailable => unavailable(skill_name),
+            FileSnapshotFailure::Changed => content_changed(skill_name),
+        },
+    )?;
     Ok(SkillResource {
         path: relative_path,
-        content_digest,
-        bytes,
+        content_digest: snapshot.content_digest,
+        bytes: snapshot.bytes,
     })
 }
 

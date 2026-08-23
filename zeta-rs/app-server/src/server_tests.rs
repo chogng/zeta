@@ -3,7 +3,6 @@ use base64::Engine;
 use std::io::Cursor;
 use std::io::Write;
 use std::net::Shutdown;
-use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -50,6 +49,7 @@ use zeta_protocol::{
     ToolExecutionOutput, ToolOutputStream, TurnStatus, UserInput,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_uds::UnixStream;
 use zeta_workspace::{
     TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
     WorkspaceTrustSource,

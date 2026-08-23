@@ -7,7 +7,7 @@ pub(super) fn inspect(file: &File) -> io::Result<FileInformation> {
     let metadata = file.metadata()?;
     Ok(FileInformation::new(
         metadata.dev(),
-        metadata.ino(),
+        u128::from(metadata.ino()).to_le_bytes(),
         metadata.nlink(),
     ))
 }

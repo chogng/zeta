@@ -170,7 +170,7 @@ fn read_bounded_file(
     }
     let inspected =
         FileInformation::from_path(path).map_err(|_| PackageSnapshotError::Unavailable)?;
-    if inspected.number_of_links() > 1 {
+    if inspected.has_multiple_links() {
         return Err(PackageSnapshotError::UnsafeEntry);
     }
     let canonical = fs::canonicalize(path).map_err(|_| PackageSnapshotError::Unavailable)?;
@@ -198,8 +198,8 @@ fn read_bounded_file_after_inspection(
         .map_err(|_| PackageSnapshotError::Unavailable)?;
     if !opened.is_file()
         || opened.len() != expected_length
-        || opened_information.identity() != inspected.identity()
-        || opened_information.number_of_links() > 1
+        || !opened_information.same_file_as(inspected)
+        || opened_information.has_multiple_links()
     {
         return Err(PackageSnapshotError::Unavailable);
     }
@@ -222,8 +222,8 @@ fn read_bounded_file_after_inspection(
         || current.len() != bytes.len() as u64
         || !is_within(root, &current_canonical)
         || current_canonical != canonical
-        || observed_information.identity() != opened_information.identity()
-        || observed_information.number_of_links() > 1
+        || !observed_information.same_file_as(opened_information)
+        || observed_information.has_multiple_links()
     {
         return Err(PackageSnapshotError::Unavailable);
     }

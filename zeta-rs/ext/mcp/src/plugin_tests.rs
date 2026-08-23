@@ -163,10 +163,8 @@ fn activation_materializes_package_rooted_stdio_with_exact_permission() {
     };
     assert!(std::path::Path::new(command.program()).is_absolute());
     assert!(
-        command
-            .program()
-            .to_string_lossy()
-            .ends_with("bin/review-server")
+        std::path::Path::new(command.program())
+            .ends_with(std::path::Path::new("bin").join("review-server"))
     );
 }
 
@@ -194,10 +192,8 @@ fn activation_materializes_connector_free_plugin_mcp_as_standalone() {
         panic!("expected stdio transport");
     };
     assert!(
-        command
-            .program()
-            .to_string_lossy()
-            .ends_with("bin/local-server")
+        std::path::Path::new(command.program())
+            .ends_with(std::path::Path::new("bin").join("local-server"))
     );
 }
 

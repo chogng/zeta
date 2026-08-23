@@ -2,10 +2,9 @@ use crate::ContentDigest;
 use crate::SkillCatalog;
 use crate::SkillError;
 use crate::SkillErrorKind;
+use crate::file_snapshot::FileSnapshotFailure;
+use crate::file_snapshot::read_verified_file_snapshot;
 use std::fs;
-use std::fs::File;
-use std::io::Read;
-use zeta_file_identity::FileInformation;
 use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::SkillRef;
@@ -88,7 +87,7 @@ pub(crate) fn load_exact_body_from_directory(
     skill_name: &str,
     expected_digest: &ContentDigest,
 ) -> Result<String, SkillError> {
-    let directory_metadata = fs::symlink_metadata(&directory)
+    let directory_metadata = fs::symlink_metadata(directory)
         .map_err(|_| unavailable(skill_name, "directory is unavailable"))?;
     if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
         return Err(unavailable(skill_name, "directory is not a real directory"));
@@ -101,20 +100,6 @@ pub(crate) fn load_exact_body_from_directory(
     }
 
     let path = directory.join("SKILL.md");
-    let metadata = fs::symlink_metadata(&path)
-        .map_err(|_| unavailable(skill_name, "SKILL.md is unavailable"))?;
-    let information = FileInformation::from_path(&path)
-        .map_err(|_| unavailable(skill_name, "SKILL.md cannot be inspected"))?;
-    if metadata.file_type().is_symlink()
-        || !metadata.is_file()
-        || information.number_of_links() > 1
-        || metadata.len() > MAX_SKILL_FILE_BYTES
-    {
-        return Err(unavailable(
-            skill_name,
-            "SKILL.md is not an admissible regular file",
-        ));
-    }
     let canonical_path = path
         .canonicalize()
         .map_err(|_| unavailable(skill_name, "SKILL.md cannot be resolved"))?;
@@ -125,34 +110,20 @@ pub(crate) fn load_exact_body_from_directory(
         ));
     }
 
-    let mut file =
-        File::open(&path).map_err(|_| unavailable(skill_name, "SKILL.md cannot be opened"))?;
-    let opened = FileInformation::from_file(&file)
-        .map_err(|_| unavailable(skill_name, "SKILL.md cannot be inspected"))?;
-    if opened.identity() != information.identity() || opened.number_of_links() > 1 {
+    let snapshot =
+        read_verified_file_snapshot(&path, MAX_SKILL_FILE_BYTES).map_err(
+            |failure| match failure {
+                FileSnapshotFailure::Unavailable => unavailable(
+                    skill_name,
+                    "SKILL.md is unavailable or is not an admissible regular file",
+                ),
+                FileSnapshotFailure::Changed => content_changed(skill_name),
+            },
+        )?;
+    if &snapshot.content_digest != expected_digest {
         return Err(content_changed(skill_name));
     }
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    file.by_ref()
-        .take(MAX_SKILL_FILE_BYTES + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|_| unavailable(skill_name, "SKILL.md cannot be read"))?;
-    let observed = fs::symlink_metadata(&path).map_err(|_| content_changed(skill_name))?;
-    let observed_information =
-        FileInformation::from_path(&path).map_err(|_| content_changed(skill_name))?;
-    if bytes.len() as u64 > MAX_SKILL_FILE_BYTES
-        || observed.file_type().is_symlink()
-        || !observed.is_file()
-        || observed.len() != bytes.len() as u64
-        || observed_information.identity() != opened.identity()
-        || observed_information.number_of_links() > 1
-    {
-        return Err(content_changed(skill_name));
-    }
-    if &ContentDigest::sha256(&bytes) != expected_digest {
-        return Err(content_changed(skill_name));
-    }
-    String::from_utf8(bytes).map_err(|_| {
+    String::from_utf8(snapshot.bytes).map_err(|_| {
         SkillError::new(
             SkillErrorKind::InvalidContent,
             format!("Skill '{skill_name}' SKILL.md is not valid UTF-8"),

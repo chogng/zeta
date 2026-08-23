@@ -208,7 +208,7 @@ fn scan_skill(
     if !manifest_metadata.is_file()
         || manifest_information
             .as_ref()
-            .map_or(true, |information| information.number_of_links() > 1)
+            .map_or(true, |information| information.has_multiple_links())
     {
         diagnostics.push(diagnostic(
             source,
@@ -311,8 +311,8 @@ fn scan_skill_file(
 ) -> Result<ScannedSkillFile, ScanFailure> {
     let mut file = File::open(path).map_err(|_| unavailable_file())?;
     let opened_information = FileInformation::from_file(&file).map_err(|_| unavailable_file())?;
-    if opened_information.identity() != expected_information.identity()
-        || opened_information.number_of_links() > 1
+    if !opened_information.same_file_as(*expected_information)
+        || opened_information.has_multiple_links()
     {
         return Err(unavailable_file());
     }
@@ -341,10 +341,10 @@ fn scan_skill_file(
     let observed_information = FileInformation::from_path(path).map_err(|_| unavailable_file())?;
     if observed_metadata.file_type().is_symlink()
         || !observed_metadata.is_file()
-        || observed_information.number_of_links() > 1
+        || observed_information.has_multiple_links()
         || observed_metadata.len() != expected_metadata.len()
         || total_bytes != expected_metadata.len()
-        || observed_information.identity() != opened_information.identity()
+        || !observed_information.same_file_as(opened_information)
     {
         return Err(ScanFailure {
             code: SkillDiagnosticCode::SourceUnavailable,

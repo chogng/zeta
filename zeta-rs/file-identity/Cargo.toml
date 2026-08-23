@@ -17,5 +17,5 @@ windows-sys = { workspace = true, features = [
 ] }
 
 [lints.rust]
-# Win32 exposes stable file identity and link count only through a narrow handle FFI.
+# The crate denies unsafe internally and re-allows it only in the private Windows FFI module.
 unsafe_code = "allow"

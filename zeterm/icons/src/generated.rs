@@ -42,7 +42,10 @@ pub(crate) mod artwork {
     pub(crate) const CHEVRON_UP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/chevron-up.svg"));
     pub(crate) const CLAUDE: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/claude.svg"));
     pub(crate) const CLOSE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/close.svg"));
+    pub(crate) const CLOUD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/cloud.svg"));
     pub(crate) const CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/code.svg"));
+    pub(crate) const CODE_REVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/code-review.svg"));
+    pub(crate) const COLAB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/colab.svg"));
     pub(crate) const COMMAND: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/command.svg"));
     pub(crate) const COPY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy.svg"));
     pub(crate) const COPY_CODE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/copy-code.svg"));
@@ -57,6 +60,7 @@ pub(crate) mod artwork {
     pub(crate) const CUSTOMIZE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/customize-filled.svg"));
     pub(crate) const DATABASE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database.svg"));
     pub(crate) const DATABASE_FLAT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/database-flat.svg"));
+    pub(crate) const DEBUG: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/debug.svg"));
     pub(crate) const DIAGNOSTICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diagnostics.svg"));
     pub(crate) const DIFF: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/diff.svg"));
     pub(crate) const DISCARD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/discard.svg"));
@@ -70,6 +74,7 @@ pub(crate) mod artwork {
     pub(crate) const ELLIPSIS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipsis.svg"));
     pub(crate) const ENTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/enter.svg"));
     pub(crate) const ERASER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eraser.svg"));
+    pub(crate) const ERROR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/error.svg"));
     pub(crate) const EXPORT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/export.svg"));
     pub(crate) const EXPORT_TRAY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/export-tray.svg"));
     pub(crate) const EYE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye.svg"));
@@ -80,10 +85,12 @@ pub(crate) mod artwork {
     pub(crate) const FILTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/filter.svg"));
     pub(crate) const FOLD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/fold.svg"));
     pub(crate) const FOLDER_DOWNLOADED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/folder-downloaded.svg"));
+    pub(crate) const FOLDERS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/folders.svg"));
     pub(crate) const GEAR: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/gear.svg"));
     pub(crate) const GIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git.svg"));
     pub(crate) const GIT_BRANCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-branch.svg"));
     pub(crate) const GIT_COMMIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/git-commit.svg"));
+    pub(crate) const GITHUB: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/github.svg"));
     pub(crate) const H1: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h1.svg"));
     pub(crate) const H2: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h2.svg"));
     pub(crate) const H3: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/h3.svg"));
@@ -121,6 +128,7 @@ pub(crate) mod artwork {
     pub(crate) const NEW_FOLDER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/new-folder.svg"));
     pub(crate) const OPENAI: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/openai.svg"));
     pub(crate) const ORIGIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/origin.svg"));
+    pub(crate) const PAPERCLIP: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/paperclip.svg"));
     pub(crate) const PARAMETERS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/parameters.svg"));
     pub(crate) const PASS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pass.svg"));
     pub(crate) const PASS_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pass-filled.svg"));
@@ -129,12 +137,14 @@ pub(crate) mod artwork {
     pub(crate) const PDF_FILLED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/pdf-filled.svg"));
     pub(crate) const PDF_RED: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/pdf-red.svg"));
     pub(crate) const PINNED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/pinned.svg"));
+    pub(crate) const PLAN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/plan.svg"));
     pub(crate) const PREVIEW: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/preview.svg"));
     pub(crate) const PROJECTS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects.svg"));
     pub(crate) const PROJECTS_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/projects-filled.svg"));
     pub(crate) const QUOTE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/quote.svg"));
     pub(crate) const QUOTES: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/quotes.svg"));
     pub(crate) const REFRESH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/refresh.svg"));
+    pub(crate) const REMOTE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/remote.svg"));
     pub(crate) const REMOVE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/remove.svg"));
     pub(crate) const REMOVE_SMALL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/remove-small.svg"));
     pub(crate) const REPO_FETCH: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/repo-fetch.svg"));
@@ -169,6 +179,7 @@ pub(crate) mod artwork {
     pub(crate) const TYPOGRAPHY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/typography.svg"));
     pub(crate) const UNDERLINE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/underline.svg"));
     pub(crate) const UNFOLD: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unfold.svg"));
+    pub(crate) const UNLIMITED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unlimited.svg"));
     pub(crate) const UNPIN: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/unpin.svg"));
     pub(crate) const WARNING: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/warning.svg"));
     pub(crate) const WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/write.svg"));
@@ -216,7 +227,10 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("chevron-up", artwork::CHEVRON_UP),
     ("claude", artwork::CLAUDE),
     ("close", artwork::CLOSE),
+    ("cloud", artwork::CLOUD),
     ("code", artwork::CODE),
+    ("code-review", artwork::CODE_REVIEW),
+    ("colab", artwork::COLAB),
     ("command", artwork::COMMAND),
     ("copy", artwork::COPY),
     ("copy-code", artwork::COPY_CODE),
@@ -231,6 +245,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("customize-filled", artwork::CUSTOMIZE_FILLED),
     ("database", artwork::DATABASE),
     ("database-flat", artwork::DATABASE_FLAT),
+    ("debug", artwork::DEBUG),
     ("diagnostics", artwork::DIAGNOSTICS),
     ("diff", artwork::DIFF),
     ("discard", artwork::DISCARD),
@@ -244,6 +259,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("ellipsis", artwork::ELLIPSIS),
     ("enter", artwork::ENTER),
     ("eraser", artwork::ERASER),
+    ("error", artwork::ERROR),
     ("export", artwork::EXPORT),
     ("export-tray", artwork::EXPORT_TRAY),
     ("eye", artwork::EYE),
@@ -254,10 +270,12 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("filter", artwork::FILTER),
     ("fold", artwork::FOLD),
     ("folder-downloaded", artwork::FOLDER_DOWNLOADED),
+    ("folders", artwork::FOLDERS),
     ("gear", artwork::GEAR),
     ("git", artwork::GIT),
     ("git-branch", artwork::GIT_BRANCH),
     ("git-commit", artwork::GIT_COMMIT),
+    ("github", artwork::GITHUB),
     ("h1", artwork::H1),
     ("h2", artwork::H2),
     ("h3", artwork::H3),
@@ -295,6 +313,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("new-folder", artwork::NEW_FOLDER),
     ("openai", artwork::OPENAI),
     ("origin", artwork::ORIGIN),
+    ("paperclip", artwork::PAPERCLIP),
     ("parameters", artwork::PARAMETERS),
     ("pass", artwork::PASS),
     ("pass-filled", artwork::PASS_FILLED),
@@ -303,12 +322,14 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("pdf-filled", artwork::PDF_FILLED),
     ("pdf-red", artwork::PDF_RED),
     ("pinned", artwork::PINNED),
+    ("plan", artwork::PLAN),
     ("preview", artwork::PREVIEW),
     ("projects", artwork::PROJECTS),
     ("projects-filled", artwork::PROJECTS_FILLED),
     ("quote", artwork::QUOTE),
     ("quotes", artwork::QUOTES),
     ("refresh", artwork::REFRESH),
+    ("remote", artwork::REMOTE),
     ("remove", artwork::REMOVE),
     ("remove-small", artwork::REMOVE_SMALL),
     ("repo-fetch", artwork::REPO_FETCH),
@@ -343,6 +364,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("typography", artwork::TYPOGRAPHY),
     ("underline", artwork::UNDERLINE),
     ("unfold", artwork::UNFOLD),
+    ("unlimited", artwork::UNLIMITED),
     ("unpin", artwork::UNPIN),
     ("warning", artwork::WARNING),
     ("write", artwork::WRITE),

@@ -1,5 +1,6 @@
 use crate::manifest::PluginManifest;
-use crate::package::digest::{ScannedEntryKind, scan_and_digest};
+use crate::package::digest::ScannedEntryKind;
+use crate::package::digest::scan_and_digest;
 use crate::{
     PluginError, PluginErrorKind, PluginId, PluginPackageDigest, PluginPath, PluginVersion,
 };
@@ -41,7 +42,7 @@ pub struct PackageFileStats {
     pub total_bytes: u64,
 }
 
-/// Validated snapshot of one explicit local-development Plugin package.
+/// Validated observation of one explicit local-development Plugin package.
 ///
 /// The canonical path is diagnostic provenance, not an immutable object root. Consumers that need
 /// stable runtime bytes must copy the package into the content-addressed store introduced by PL1

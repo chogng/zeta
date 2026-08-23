@@ -9,6 +9,7 @@ mod catalog;
 mod compatibility;
 mod diagnostic;
 mod error;
+mod file_snapshot;
 mod format;
 mod identity;
 mod resource;

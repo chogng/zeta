@@ -1,44 +1,62 @@
+#![allow(unsafe_code)]
+
 use crate::FileInformation;
 use std::fs::File;
 use std::io;
+use std::mem::size_of;
 use std::os::windows::io::AsRawHandle;
-use windows_sys::Win32::Foundation::{FILETIME, HANDLE};
+use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Storage::FileSystem::{
-    BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+    FILE_ID_128, FILE_ID_INFO, FILE_STANDARD_INFO, FileIdInfo, FileStandardInfo,
+    GetFileInformationByHandleEx,
 };
 
 pub(super) fn inspect(file: &File) -> io::Result<FileInformation> {
-    let mut information = BY_HANDLE_FILE_INFORMATION {
-        dwFileAttributes: 0,
-        ftCreationTime: empty_file_time(),
-        ftLastAccessTime: empty_file_time(),
-        ftLastWriteTime: empty_file_time(),
-        dwVolumeSerialNumber: 0,
-        nFileSizeHigh: 0,
-        nFileSizeLow: 0,
-        nNumberOfLinks: 0,
-        nFileIndexHigh: 0,
-        nFileIndexLow: 0,
+    let handle = file.as_raw_handle() as HANDLE;
+    let mut identity = FILE_ID_INFO {
+        VolumeSerialNumber: 0,
+        FileId: FILE_ID_128 {
+            Identifier: [0; 16],
+        },
     };
-    // SAFETY: `file` owns a live handle for the duration of the call and
-    // `information` points to writable storage of the exact Win32 output type.
-    let succeeded =
-        unsafe { GetFileInformationByHandle(file.as_raw_handle() as HANDLE, &mut information) };
-    if succeeded == 0 {
+    // SAFETY: `file` owns a live handle for the duration of the call, `identity` is the exact
+    // output type for `FileIdInfo`, and the supplied buffer size matches that type.
+    let identity_succeeded = unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileIdInfo,
+            (&raw mut identity).cast(),
+            size_of::<FILE_ID_INFO>() as u32,
+        )
+    };
+    if identity_succeeded == 0 {
         return Err(io::Error::last_os_error());
     }
-    let file_index =
-        (u64::from(information.nFileIndexHigh) << 32) | u64::from(information.nFileIndexLow);
-    Ok(FileInformation::new(
-        u64::from(information.dwVolumeSerialNumber),
-        file_index,
-        u64::from(information.nNumberOfLinks),
-    ))
-}
 
-fn empty_file_time() -> FILETIME {
-    FILETIME {
-        dwLowDateTime: 0,
-        dwHighDateTime: 0,
+    let mut standard = FILE_STANDARD_INFO {
+        AllocationSize: 0,
+        EndOfFile: 0,
+        NumberOfLinks: 0,
+        DeletePending: 0,
+        Directory: 0,
+    };
+    // SAFETY: `file` owns a live handle for the duration of the call, `standard` is the exact
+    // output type for `FileStandardInfo`, and the supplied buffer size matches that type.
+    let standard_succeeded = unsafe {
+        GetFileInformationByHandleEx(
+            handle,
+            FileStandardInfo,
+            (&raw mut standard).cast(),
+            size_of::<FILE_STANDARD_INFO>() as u32,
+        )
+    };
+    if standard_succeeded == 0 {
+        return Err(io::Error::last_os_error());
     }
+
+    Ok(FileInformation::new(
+        identity.VolumeSerialNumber,
+        identity.FileId.Identifier,
+        u64::from(standard.NumberOfLinks),
+    ))
 }

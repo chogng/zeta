@@ -118,6 +118,44 @@ fn authority_persists_install_enable_disable_and_exact_replay() {
 }
 
 #[test]
+fn formal_version_content_is_immutable_and_requires_a_version_bump() {
+    let profile = tempdir().unwrap();
+    let source = tempdir().unwrap();
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    let first = package(source.path(), "acme/review", "1.0.0");
+    let installed = authority
+        .install_local(
+            PluginAuthorityCommandId::new("install-first").unwrap(),
+            0,
+            &first,
+        )
+        .unwrap()
+        .package;
+    fs::write(source.path().join("mcp/test.json"), r#"{"changed":true}"#).unwrap();
+    let changed = LocalPluginPackage::load(source.path()).unwrap();
+
+    let error = authority
+        .install_local(
+            PluginAuthorityCommandId::new("install-changed").unwrap(),
+            1,
+            &changed,
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::PackageConflict);
+    assert_eq!(
+        authority.snapshot().installed(),
+        std::slice::from_ref(&installed)
+    );
+    assert_eq!(
+        fs::read_dir(profile.path().join("objects"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn failed_enable_does_not_change_the_published_generation() {
     let root = tempdir().unwrap();
     let store = PluginPackageStore::open(root.path()).unwrap();
@@ -492,6 +530,89 @@ fn disable_commits_then_waits_for_exact_invocation_drain() {
     completed_receiver
         .recv_timeout(Duration::from_secs(1))
         .unwrap();
+}
+
+#[test]
+fn enabling_a_new_version_switches_generation_without_mutating_the_old_object() {
+    let root = tempdir().unwrap();
+    let first_source = tempdir().unwrap();
+    let second_source = tempdir().unwrap();
+    let store = PluginPackageStore::open(root.path()).unwrap();
+    let first = store
+        .install_local(&package(first_source.path(), "acme/review", "1.0.0"))
+        .unwrap();
+    let second = store
+        .install_local(&package(second_source.path(), "acme/review", "2.0.0"))
+        .unwrap();
+    let authority = PluginActivationAuthority::in_memory(store.clone()).unwrap();
+    for (command_id, command) in [
+        (
+            "install-first",
+            PluginAuthorityCommand::Install {
+                package: first.clone(),
+            },
+        ),
+        (
+            "install-second",
+            PluginAuthorityCommand::Install {
+                package: second.clone(),
+            },
+        ),
+        (
+            "grant-first",
+            PluginAuthorityCommand::Grant {
+                package: first.clone(),
+            },
+        ),
+        (
+            "grant-second",
+            PluginAuthorityCommand::Grant {
+                package: second.clone(),
+            },
+        ),
+        (
+            "enable-first",
+            PluginAuthorityCommand::Enable {
+                package: first.clone(),
+            },
+        ),
+    ] {
+        authority
+            .apply(request(&authority, command_id, command))
+            .unwrap();
+    }
+    let first_active = authority.snapshot().activation().packages()[0].clone();
+    let first_fence = authority.invocation_fence(&first_active).unwrap();
+
+    authority
+        .apply(request(
+            &authority,
+            "enable-second",
+            PluginAuthorityCommand::Enable {
+                package: second.clone(),
+            },
+        ))
+        .unwrap();
+
+    let snapshot = authority.snapshot();
+    assert_eq!(snapshot.activation().generation(), 3);
+    assert_eq!(
+        snapshot.activation().packages()[0]
+            .manifest()
+            .version
+            .to_string(),
+        "2.0.0"
+    );
+    assert!(!first_fence.authorizes());
+    assert_eq!(
+        store
+            .activate(&first)
+            .unwrap()
+            .manifest()
+            .version
+            .to_string(),
+        "1.0.0"
+    );
 }
 
 #[test]

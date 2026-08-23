@@ -9503,6 +9503,7 @@ dependencies = [
  "zeta-tool-executor",
  "zeta-tools",
  "zeta-typst",
+ "zeta-uds",
  "zeta-utils-pty",
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
