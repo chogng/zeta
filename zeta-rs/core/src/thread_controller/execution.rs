@@ -1,12 +1,17 @@
 use super::{
-    CompletedTurn, RecordToolExecutionEscalation, RecordToolExecutionStart, RecordedToolCall,
-    ThreadController,
+    CommitModelInvocationItemsResult, CompleteModelInvocationResult, CompletedTurn,
+    RecordToolExecutionEscalation, RecordToolExecutionStart, ThreadController,
 };
 use crate::CoreError;
+use crate::ThreadCommandResult;
 use zeta_protocol::{
-    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, ToolCall,
-    ToolCallBinding, TurnId,
+    ItemId, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, TurnId,
 };
+
+#[cfg(test)]
+use super::RecordedToolCall;
+#[cfg(test)]
+use zeta_protocol::{ToolCall, ToolCallBinding};
 
 impl ThreadController {
     /// Durably records that a delegated backend is about to cross its external side-effect
@@ -51,6 +56,7 @@ impl ThreadController {
         })
     }
 
+    #[cfg(test)]
     pub(crate) fn record_model_tool_call(
         &self,
         thread_id: &ThreadId,
@@ -179,6 +185,93 @@ impl ThreadController {
         })
     }
 
+    /// Commits one local model completion unless durable steering arrived after its input snapshot.
+    pub(crate) fn complete_model_invocation_with_agent_message(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        source_thread_sequence: u64,
+        preceding_items: Vec<ThreadItem>,
+        item_id: ItemId,
+        output: String,
+    ) -> Result<CompleteModelInvocationResult, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            if has_steer_after(snapshot, turn_id, source_thread_sequence) {
+                return Ok(CompleteModelInvocationResult::SupersededBySteer);
+            }
+            let item = ThreadItem::AgentMessage {
+                item_id,
+                turn_id: turn_id.clone(),
+                text: output,
+            };
+            let mut events = preceding_items
+                .into_iter()
+                .map(|item| ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item,
+                })
+                .collect::<Vec<_>>();
+            events.extend([
+                ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item: item.clone(),
+                },
+                ThreadEvent::TurnCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                },
+            ]);
+            self.record_batch(snapshot, events)?;
+            Ok(CompleteModelInvocationResult::Completed(CompletedTurn {
+                item,
+                sequence: snapshot.sequence,
+            }))
+        })
+    }
+
+    /// Atomically commits non-terminal model output unless newer steering superseded its input.
+    pub(crate) fn commit_model_invocation_items(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        source_thread_sequence: u64,
+        items: Vec<ThreadItem>,
+    ) -> Result<CommitModelInvocationItemsResult, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            if has_steer_after(snapshot, turn_id, source_thread_sequence) {
+                return Ok(CommitModelInvocationItemsResult::SupersededBySteer);
+            }
+            let events = items
+                .into_iter()
+                .map(|item| ThreadEvent::ItemCompleted {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    item,
+                })
+                .collect();
+            self.record_batch(snapshot, events)?;
+            Ok(CommitModelInvocationItemsResult::Committed)
+        })
+    }
+
+    /// Returns whether a model response still precedes every accepted steering command.
+    pub(crate) fn model_invocation_is_current(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        source_thread_sequence: u64,
+    ) -> Result<bool, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            Ok(!has_steer_after(
+                &loaded.snapshot,
+                turn_id,
+                source_thread_sequence,
+            ))
+        })
+    }
+
     /// Allocates a process-unique Item ID for a backend's transient stream projection.
     pub fn next_stream_item_id(&self) -> ItemId {
         ItemId::new(self.next_identifier("item")).expect("generated Item ID is non-empty")
@@ -290,4 +383,20 @@ impl ThreadController {
     pub(crate) fn cancel_turn_execution(&self, thread_id: &ThreadId, turn_id: &TurnId) {
         self.execution_mailboxes.cancel(thread_id, turn_id);
     }
+}
+
+fn has_steer_after(
+    snapshot: &crate::ThreadSnapshot,
+    turn_id: &TurnId,
+    source_thread_sequence: u64,
+) -> bool {
+    snapshot.commands.iter().any(|command| {
+        command.response_sequence > source_thread_sequence
+            && matches!(
+                &command.result,
+                ThreadCommandResult::TurnSteered {
+                    turn_id: command_turn_id,
+                } if command_turn_id == turn_id
+            )
+    })
 }

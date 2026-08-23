@@ -19,8 +19,8 @@ upstream redacted account projection; upstream error text and all credential fie
 `zeta-model-provider-config::STATIC_MODEL_CATALOG` owns the static subscription models exposed by
 Zeta. `CodexModelCatalog` remains an explicit adapter for callers that need the upstream account
 catalog, but the default product model list and Session selection do not use it as a health check.
-`CodexTurnDriver` exposes typed thread/Turn streaming, command and file-change approvals, structured
-user input, interruption, and exact once-only server-request resolution.
+`CodexTurnDriver` exposes typed thread/Turn streaming, same-Turn steering, command and file-change
+approvals, structured user input, interruption, and exact once-only server-request resolution.
 `CodexTurnExecutionBackend` implements Core's `TurnExecutionBackend`: Core remains authoritative for
 durable Thread state, interactions, cancellation, and terminal outcomes while Codex owns its remote
 agent loop. A remote thread binding, including its opaque Workspace authority scope, is persisted only
@@ -28,6 +28,11 @@ after a successful Turn. The default App Server routes a Turn here only when its
 unique static catalog row declares subscription access; login state never changes execution
 implicitly. The model provider remains `openai`; `openai-chatgpt` is only the managed-login account
 adapter identity.
+
+For steering, the backend waits until the local Turn has an exact active remote `(thread, turn)`
+route, then sends upstream `turn/steer` with `expectedTurnId`. App Server persists the local steer
+marker before this request and its delivery fact only after the matching upstream acknowledgement;
+an unknown transport/process outcome fails closed and is never automatically resent.
 
 ## Failure semantics
 

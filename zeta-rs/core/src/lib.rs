@@ -17,6 +17,7 @@ mod state;
 mod test_image;
 mod thread_controller;
 mod thread_reducer;
+mod tool_repetition;
 mod turn;
 
 pub use action_policy_service::{ActionPolicyService, durable_approval_request};
@@ -106,6 +107,9 @@ pub use thread_controller::ResolveTurnInteractionRequest;
 pub use thread_controller::ResolveTurnInteractionResult;
 pub use thread_controller::StartTurnDisposition;
 pub use thread_controller::StartTurnResult;
+pub use thread_controller::SteerTurnDisposition;
+pub use thread_controller::SteerTurnRequest;
+pub use thread_controller::SteerTurnResult;
 pub use thread_controller::ThreadController;
 pub use thread_controller::ThreadExecutionContext;
 pub use thread_controller::ToolCallOutput;

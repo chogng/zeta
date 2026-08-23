@@ -616,6 +616,11 @@ model emits Tool Calls
 `ToolScheduler` 拥有校验、approval gate、并行计划、deadline、cancellation、operation correlation、
 deterministic result ordering、retry 与 unknown-outcome 决策。
 
+重复失败防护不使用进程内 loop counter。Core 从同一 Turn 的 durable Tool Call/Result 按工具名和
+canonical arguments digest 重建连续窗口：第 3 次失败把改变方法的 reminder 写入 Tool Result，
+第 5 次在 scheduler safe point 以稳定 `tool_repetition` 失败；成功、工具变化或参数变化清零，
+恢复也从同一 durable 窗口得到相同结论。
+
 `ToolService` adapter 拥有具体参数转换、MCP/process/browser/terminal I/O、sandbox enforcement、
 有界输出采集和 tool-specific reconciliation。Adapter 不得写 Thread store。
 
@@ -857,8 +862,8 @@ Fault-injection tests：
 4. 已引入独立 `context/` 与 `context_manager`，完成纯内容选择、checkpoint 与 compaction；通用预算
    数学和 token 计量契约已提取到 `zeta-context-engine`；
 5. 扩展现有 ToolScheduler：已完成 durable one-time approval、safe sandbox escalation、顺序
-   Tool 与 UnknownOutcome 基线，后续增加并行计划、deadline、声明式 retry、reconciliation 与
-   resource conflict；
+   Tool、UnknownOutcome 基线和重复失败熔断，后续增加并行计划、deadline、声明式 retry、
+   reconciliation 与 resource conflict；
 6. 已增加 `multi_agent.rs`、`MultiAgentCoordinator`、delegation protocol 与 Fresh context
    inheritance；Selected/ForkedPrefix、durable join 和 cancellation tree 继续演进；
 7. 完成 provider wire streaming、outbound writer 与 fault injection；

@@ -16,6 +16,7 @@ pub(super) fn pump_events(inner: Weak<BackendInner>, events: Receiver<CodexTurnE
                 .lock()
                 .map(|mut state| {
                     state.runtime_closed = true;
+                    inner.state_changed.notify_all();
                     state.routes.values().cloned().collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
@@ -39,6 +40,7 @@ pub(super) fn pump_events(inner: Weak<BackendInner>, events: Receiver<CodexTurnE
                 }
                 None => {
                     state.runtime_closed = true;
+                    inner.state_changed.notify_all();
                     (None, state.routes.values().cloned().collect::<Vec<_>>())
                 }
             }

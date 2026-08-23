@@ -1,7 +1,7 @@
 use crate::{
     CoreError, CreateAgentThreadRequest, CreateThreadRequest, LeaseGuard, SessionCommandResult,
-    SessionSnapshot, StartShellTurnRequest, StartTurnRequest, StartTurnResult, ThreadController,
-    WriterLease, reduce_session_event,
+    SessionSnapshot, StartShellTurnRequest, StartTurnRequest, StartTurnResult, SteerTurnRequest,
+    SteerTurnResult, ThreadController, WriterLease, reduce_session_event,
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -180,6 +180,21 @@ impl SessionCoordinator {
             .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
         self.validate_active_thread(&sessions, session_id, thread_id)?;
         self.threads.start_shell_turn(thread_id, request)
+    }
+
+    /// Appends user input to an active product Turn while its Session membership remains active.
+    pub fn steer_turn(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+        request: SteerTurnRequest,
+    ) -> Result<SteerTurnResult, CoreError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
+        self.validate_active_thread(&sessions, session_id, thread_id)?;
+        self.threads.steer_turn(thread_id, request)
     }
 
     pub fn create_session(

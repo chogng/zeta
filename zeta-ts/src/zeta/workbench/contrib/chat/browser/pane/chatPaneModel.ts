@@ -185,13 +185,30 @@ export class ChatPaneModel extends DisposableOwner {
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
 			}
-			await this.chatService.startTurn({
-				sessionId: active.session.sessionId,
-				threadId: active.threadId,
-				expectedSequence: thread.sequence,
-				text: input,
-				skills,
-			});
+			const turn = activeTurn(thread);
+			if (turn) {
+				if (!isSteerableTurn(turn)) {
+					throw new Error(`The active ${turn.status} Turn cannot accept steering`);
+				}
+				if (skills?.length) {
+					throw new Error("Skills can only be selected when starting a new Turn");
+				}
+				await this.chatService.steerTurn({
+					sessionId: active.session.sessionId,
+					threadId: active.threadId,
+					turnId: turn.turnId,
+					expectedSequence: thread.sequence,
+					text: input,
+				});
+			} else {
+				await this.chatService.startTurn({
+					sessionId: active.session.sessionId,
+					threadId: active.threadId,
+					expectedSequence: thread.sequence,
+					text: input,
+					skills,
+				});
+			}
 			await this.refreshThread();
 			this.setState("ready");
 		} catch (error) {
@@ -522,6 +539,10 @@ function activeTurn(thread: Thread | undefined): Turn | undefined {
 			turn.status === "waitingForCapability" ||
 			turn.status === "cancelling",
 	);
+}
+
+function isSteerableTurn(turn: Turn): boolean {
+	return turn.status === "running" || turn.status === "waitingForApproval" || turn.status === "waitingForUserInput";
 }
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {

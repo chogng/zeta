@@ -149,7 +149,7 @@ export class ChatInputPart extends DisposableOwner {
 		const input = parseSlashCommandInput(this.input.value, this.slashCommands);
 		const canSubmitIntent = input.kind === "message" ? input.text.trim().length > 0 : this.input.value.trim().length > 0;
 		const state: ChatInputToolbarState = {
-			canSubmit: canSubmitIntent && this.state.phase !== "submitting" && !this.state.canInterrupt,
+			canSubmit: canSubmitIntent && this.state.phase !== "submitting",
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === "message" ? "message" : "command",
 			models: this.state.models,
@@ -219,19 +219,23 @@ export class ChatInputPart extends DisposableOwner {
 			"attachment",
 			() => {},
 		);
-		const trailingAction = this.toolbarState.canInterrupt
-			? new ChatInputAction("zeta.chat.input.interrupt", "Stop", "Stop response", lxiconsLibrary.close, true, "interrupt", () => void this.delegate.interrupt())
-			: new ChatInputAction(
-				"zeta.chat.input.send",
-				"Send",
-				this.toolbarState.inputKind === "command" ? "Run command" : "Send message",
-				lxiconsLibrary.arrowUp,
-				this.toolbarState.canSubmit,
-				"send",
-				() => this.inputContainer.requestSubmit(),
-			);
+		const sendAction = new ChatInputAction(
+			"zeta.chat.input.send",
+			"Send",
+			this.toolbarState.inputKind === "command" ? "Run command" : "Send message",
+			lxiconsLibrary.arrowUp,
+			this.toolbarState.canSubmit,
+			"send",
+			() => this.inputContainer.requestSubmit(),
+		);
+		const trailingActions = this.toolbarState.canInterrupt
+			? [
+				sendAction,
+				new ChatInputAction("zeta.chat.input.interrupt", "Stop", "Stop response", lxiconsLibrary.close, true, "interrupt", () => void this.delegate.interrupt()),
+			]
+			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
-		this.inputToolbar.setActions([...inputActions, trailingAction]);
+		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
 	}
 
 	private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService, contextViewService: IContextViewService): ActionViewItem | undefined {

@@ -18,6 +18,7 @@ use zeta_protocol::AgentMessageId;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::CommandId;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextCheckpointId;
 use zeta_protocol::ContextSourceDigest;
@@ -60,6 +61,7 @@ pub struct ThreadSnapshot {
     pub item_sequences: BTreeMap<ItemId, u64>,
     pub event_digests: BTreeMap<u64, String>,
     pub commands: Vec<ThreadCommandSnapshot>,
+    pub steer_deliveries: BTreeMap<CommandId, u64>,
     pub seen_interaction_ids: BTreeSet<RequestId>,
     pub resolved_interactions: Vec<ResolvedTurnInteraction>,
     pub started_tool_calls: BTreeSet<ToolCallId>,
@@ -207,6 +209,9 @@ pub enum ThreadCommandResult {
     TurnAccepted {
         turn_id: TurnId,
     },
+    TurnSteered {
+        turn_id: TurnId,
+    },
     TurnInterrupted {
         turn_id: TurnId,
     },
@@ -275,6 +280,7 @@ pub fn reduce_thread_event(
                         require_no_command(envelope)?;
                         Vec::new()
                     },
+                    steer_deliveries: BTreeMap::new(),
                 })
             }
             _ => Err(CoreError::Journal(
@@ -500,6 +506,82 @@ pub fn reduce_thread_event(
                 )
             }) {
                 command.response_sequence = envelope.sequence;
+            }
+        }
+        ThreadEvent::TurnSteered {
+            turn_id, item_ids, ..
+        } => {
+            let turn = find_turn(&snapshot, turn_id)?;
+            if !matches!(
+                turn.status,
+                TurnStatus::Running
+                    | TurnStatus::WaitingForApproval
+                    | TurnStatus::WaitingForUserInput
+            ) {
+                return Err(CoreError::Journal(format!(
+                    "cannot steer a {:?} Turn",
+                    turn.status
+                )));
+            }
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("Turn steering requires a command receipt".into())
+            })?;
+            let input = match &receipt.command {
+                ThreadCommand::SteerTurn {
+                    turn_id: command_turn_id,
+                    input,
+                } if command_turn_id == turn_id => input,
+                _ => {
+                    return Err(CoreError::Journal(
+                        "Turn steering command does not match its event".into(),
+                    ));
+                }
+            };
+            validate_steered_items(&snapshot, turn_id, input, item_ids, envelope.sequence)?;
+            if snapshot
+                .commands
+                .iter()
+                .any(|existing| existing.receipt.command_id == receipt.command_id)
+            {
+                return Err(CoreError::Journal(
+                    "Thread command ID is already registered".into(),
+                ));
+            }
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::TurnSteered {
+                    turn_id: turn_id.clone(),
+                },
+                response_sequence: envelope.sequence,
+            });
+        }
+        ThreadEvent::TurnSteerDelivered {
+            turn_id,
+            command_id,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if !snapshot.commands.iter().any(|command| {
+                command.receipt.command_id == *command_id
+                    && matches!(
+                        &command.result,
+                        ThreadCommandResult::TurnSteered {
+                            turn_id: command_turn_id,
+                        } if command_turn_id == turn_id
+                    )
+            }) {
+                return Err(CoreError::Journal(
+                    "Turn steer delivery must reference its accepted command".into(),
+                ));
+            }
+            if snapshot
+                .steer_deliveries
+                .insert(command_id.clone(), envelope.sequence)
+                .is_some()
+            {
+                return Err(CoreError::Journal(
+                    "Turn steer command is already marked delivered".into(),
+                ));
             }
         }
         ThreadEvent::ItemCompleted { turn_id, item, .. } => {
@@ -1334,6 +1416,67 @@ fn turn_skill_activations_match(
                     activation.reason == zeta_protocol::SkillActivationReason::Explicit
                 })
                 .count()
+}
+
+fn validate_steered_items(
+    snapshot: &ThreadSnapshot,
+    turn_id: &TurnId,
+    input: &[zeta_protocol::UserInput],
+    item_ids: &[ItemId],
+    marker_sequence: u64,
+) -> Result<(), CoreError> {
+    if input.is_empty() || input.len() != item_ids.len() {
+        return Err(CoreError::Journal(
+            "Turn steering must bind every non-empty input to one durable Item".into(),
+        ));
+    }
+    let first_sequence = marker_sequence
+        .checked_sub(item_ids.len() as u64)
+        .ok_or_else(|| CoreError::Journal("Turn steering Item sequence underflow".into()))?;
+    let mut unique = BTreeSet::new();
+    for (index, (input, item_id)) in input.iter().zip(item_ids).enumerate() {
+        if !unique.insert(item_id) {
+            return Err(CoreError::Journal(
+                "Turn steering Item IDs must be unique".into(),
+            ));
+        }
+        let item = snapshot
+            .items
+            .iter()
+            .find(|item| item.item_id() == item_id)
+            .ok_or_else(|| CoreError::Journal(format!("steered Item does not exist: {item_id}")))?;
+        if item.turn_id() != turn_id
+            || snapshot.item_sequences.get(item_id).copied() != Some(first_sequence + index as u64)
+        {
+            return Err(CoreError::Journal(
+                "Turn steering Items must be the immediately preceding ordered Turn Items".into(),
+            ));
+        }
+        let matches = match (input, item) {
+            (
+                zeta_protocol::UserInput::Text { text: input_text },
+                ThreadItem::UserMessage {
+                    text: item_text, ..
+                },
+            ) => input_text == item_text,
+            (
+                zeta_protocol::UserInput::ImageAttachment {
+                    attachment: input_attachment,
+                },
+                ThreadItem::UserImageAttachment {
+                    attachment: item_attachment,
+                    ..
+                },
+            ) => input_attachment == item_attachment,
+            _ => false,
+        };
+        if !matches {
+            return Err(CoreError::Journal(
+                "Turn steering command input does not match its durable Items".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn import_history(

@@ -49,7 +49,7 @@ serde / schemars / ts-rs
 derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema artifact 由
 `zeta-app-server-protocol` 负责，不在这里写文件。
 
-供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；它们只携带稳定用户文案和能否手动重试，不保存原始 HTTP 错误体。未细分的模型失败继续使用 `ModelInvocationFailed`。
+供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；工具重复失败使用 `ToolRepetition`。它们只携带稳定用户文案和能否手动重试，不保存原始供应商或工具错误细节。未细分的模型失败继续使用 `ModelInvocationFailed`。
 
 ## 内部接口地图
 
@@ -83,7 +83,7 @@ SessionCommand
 └─ CreateThread / ForkThread / RewindThread / ArchiveThread
 
 ThreadCommand
-├─ StartTurn / InterruptTurn
+├─ StartTurn / SteerTurn / InterruptTurn
 └─ ResolveApproval / ResolveUserInput / ResolveDynamicTool
 ```
 
@@ -99,6 +99,10 @@ Command ID、expected sequence、receipt 和 idempotent replay 是 Core/store ex
 Thread。
 
 `ThreadEvent::ContextOverflowRecoveryCommitted` 将一个已验证 `ContextCheckpoint` 绑定到触发恢复的 Running Turn。Core reducer 用它保证同一 Turn 只做一次供应商溢出恢复；普通预算压缩继续使用不带 Turn 绑定的 `ContextCheckpointCommitted`。
+
+`ThreadEvent::TurnSteered` 把 exact `SteerTurn` receipt 绑定到紧邻、同序的 durable 用户 Item；
+`TurnSteerDelivered` 再记录 execution backend 已接受该 command。两者分离使本地执行器可以从
+canonical snapshot 重规划，也使 Codex 等委托 backend 在外部副作用结果未知时拒绝自动重发。
 
 ```text
 Command

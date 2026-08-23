@@ -100,6 +100,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async subscribeThread() { throw new Error("No active Thread"); },
 		async unsubscribeThread() {},
 		async startTurn() {},
+		async steerTurn() {},
 		async interruptTurn() {},
 		async resolveInteraction() {},
 	};

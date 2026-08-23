@@ -432,6 +432,14 @@ start/interrupt 与 interaction resolve，并以 tagged `SessionRequestResult` �
 5. replay 时同时校验 input、model 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`。
 
+`session/request::SteerTurn` 只接受当前 Running、WaitingForApproval 或 WaitingForUserInput Turn。
+Core 先把输入 Item、`TurnSteered` 与 exact command receipt 原子提交；App Server 随后调用当前
+`TurnExecutionBackend::steer`，成功后再写 `TurnSteerDelivered`。本地 executor 的 backend ack 不做
+第二份排队，因为下一模型安全点直接读取 canonical snapshot；subscription 模型由 router 转给
+Codex exact active remote Turn。相同 command replay 只有在 delivery fact 已存在时返回原成功结果；
+如果外部调用的结果未知，则 Turn 稳定失败且不会再次发送。Desktop 的运行中 Send 走这条 mutation，
+Stop 仍独立映射 `InterruptTurn`。
+
 `model/list` 由 `ModelCatalog` adapter 投影 shared `zeta-models-manager` 中从
 `zeta-model-provider-config::STATIC_MODEL_CATALOG` 派生的 provider seed；`CombinedModelCatalog` 从同一
 静态目录合并 Codex 条目。列表统一携带 identity、display name、access、context window、automatic

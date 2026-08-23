@@ -6,12 +6,12 @@
 
 ## 快速理解
 
-Zeta 已经具备可持续运行、调用工具、等待批准、压缩上下文、恢复执行和委托 Codex 的 Agent Loop。后续建设不再以“搭出第一轮模型调用”为目标，而是优先补齐运行中追问、可恢复错误、usage 记账、模型家族工具面和端到端评测，再扩展 Provider、Codex、Skills、MCP 与多 Agent 的产品完整性。
+Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、压缩上下文、恢复执行和委托 Codex 的 Agent Loop。后续建设不再以“搭出第一轮模型调用”为目标，而是优先补齐工具失控防护、交互错误 UI、usage 记账、模型家族工具面和端到端评测，再扩展 Provider、Codex、Skills、MCP 与多 Agent 的产品完整性。
 
 | 用户场景 | 当前表现 | 本计划完成后的结果 | 对应阶段 |
 | --- | --- | --- | --- |
 | 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持批准、取消和恢复 | 有稳定工具 profile、计划工具、输出限幅和可量化成功率 | S3、S7 |
-| Agent 运行中追加要求 | 只能 interrupt 后开新 Turn | 消息 durable 追加到当前 Turn，并在下一个安全点生效 | S1 |
+| Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；本地执行器在模型安全点重规划，Codex 委托转发 exact `turn/steer` | 增加后续评测与完整故障矩阵 | S1、S5 |
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
 | 长会话消耗大量 token | 有 ContextPlan 和自动压缩，但没有 Thread 级 usage/cost 账本 | usage durable、预算可配置、超限在安全点终止 | S2 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | 模型选择已冻结，但模型可见工具面未按家族完整区分 | Turn 接受时冻结 ToolProfile，使用匹配训练分布的编辑工具 | S3 |
@@ -25,13 +25,14 @@ Zeta 已经具备可持续运行、调用工具、等待批准、压缩上下文
 | 能力 | 状态 | 当前边界 | 实现证据 |
 | --- | --- | --- | --- |
 | Turn 内循环 | 已实现 | 无固定模型调用轮数；每轮从 durable snapshot 重建输入 | `zeta-rs/core/src/turn/executor.rs` |
+| 运行中 steering | 已实现 | Running、批准等待和用户输入等待可追加；模型输出与 steer 原子仲裁；本地和 Codex 路径均有 retry-safe delivery | `zeta-rs/core/src/thread_controller/steering.rs`、`zeta-rs/codex-app-server/src/turn_backend.rs` |
 | 模型基础弹性 | 已实现 | 429、过载、传输错误最多四次尝试；上下文溢出持久化压缩后只重试一次；认证与无效请求不重试；无效响应和空响应各只重试一次；Refusal 正常完成 | `zeta-rs/zeta-api/src/requests/mod.rs`、`zeta-rs/model-provider/src/error.rs`、`zeta-rs/core/src/turn/executor.rs` |
 | 工具安全与恢复 | 已实现 | 工具绑定、策略版本、批准、sandbox escalation、未知结果不重放 | `zeta-rs/core/src/turn/tool_scheduler.rs` |
 | ContextPlan 与自动压缩 | 已实现 | durable checkpoint、source digest、预算压缩和供应商溢出恢复均在提交后重规划；手动压缩尚缺 | `zeta-rs/core/src/context/` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 部分具备 | `shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 可见；家族 profile、`update_plan` 和统一直接文件工具仍缺 | `zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
-| Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
+| Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、运行中 steering、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
 | 多 Agent | 部分具备 | spawn/message/wait、Fresh/ForkedPrefix、all/any/quorum、取消树和恢复已实现 | `zeta-rs/core/src/multi_agent/`、`zeta-rs/app-server/src/server/multi_agent_tools.rs` |
 | 模型目录与选择 | 已实现 | 静态模型、access badge、隐藏设置和刷新已接通；目录不探活，运行错误归属对话 Turn | `zeta-rs/app-server/src/model_catalog.rs`、`zeta-ts/src/zeta/workbench/services/chat/` |
 
@@ -61,13 +62,13 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-101 | 待构建 | 运行中 steering | 新增 durable `ThreadCommand::SteerTurn`、App Server `turn/steer`、幂等 command receipt、Desktop 运行中发送行为 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复 |
+| AL-101 | 已实现 | 运行中 steering | durable `ThreadCommand::SteerTurn`、`TurnSteered`/delivery facts、App Server `session/request::SteerTurn`、Desktop 运行中发送，以及 Codex exact `turn/steer` 转发 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复；未知委托结果不重放 |
 | AL-102 | 已实现 | Provider 错误分类 | 增加 `ContextOverflow`、`AuthFailed`、`InvalidRequest`、`InvalidResponse` 和对应 stable Turn error；各 Provider 从状态码和错误体映射 | 401/403 不重试；无效响应只重试一次；错误码跨 App Server 和 Desktop 保持稳定；原始错误只进入受控日志 |
 | AL-103 | 已实现 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | checkpoint 与本 Turn 的恢复标记原子提交后才发重试调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
-| AL-104 | 待构建 | 重复失败工具熔断 | 按“工具名 + canonical arguments digest”记录 Turn 内连续失败 | 第 3 次附加 reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；不增加固定 loop 次数上限 |
+| AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 待构建 | 交互错误 UI | Desktop 区分可重试、认证、上下文、预算和工具重复错误，并提供对应下一步 | UI 不从错误字符串推断类别；刷新和重连后展示与 canonical Thread 状态一致 |
 
-S1 顺序：AL-102 与 AL-103 已完成；接下来构建 AL-101 与 AL-104，最后接 AL-105。
+S1 顺序：AL-101 至 AL-104 已完成；接下来构建最后一项 AL-105。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -161,7 +162,7 @@ flowchart TD
 实际执行批次：
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
-2. 以已完成的 AL-102、AL-103 为失败语义基线，推进 AL-101、AL-104，最后接 AL-105。
+2. 以已完成的 AL-101 至 AL-104 为交互与失败语义基线，推进 S1 最后一项 AL-105。
 3. S1 稳定后并行推进 S2、S3、S4；每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。

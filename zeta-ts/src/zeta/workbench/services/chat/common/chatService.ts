@@ -40,7 +40,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed";
+	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition";
 	readonly message: string;
 	readonly retryable: boolean;
 }
@@ -92,7 +92,7 @@ export type ThreadCommittedEvent =
 	| { readonly type: "turnCompleted" }
 	| { readonly type: "turnFailed" }
 	| { readonly type: "turnInterrupted" }
-	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
+	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
 
 export type ThreadUpdate =
 	| { readonly type: "committed"; readonly event: ThreadCommittedEvent }
@@ -115,6 +115,7 @@ export interface ThreadSubscription {
 }
 
 export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly skills?: readonly SkillReference[] }
+export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
 
@@ -135,6 +136,7 @@ export interface IChatService {
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
+	steerTurn(options: SteerTurnOptions): Promise<void>;
 	interruptTurn(options: InterruptTurnOptions): Promise<void>;
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
 }

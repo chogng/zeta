@@ -349,7 +349,7 @@ use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 use crate::protocol::terminal::TerminalWriteParams;
 use crate::protocol::turn::{
-    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult,
+    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
 use crate::protocol::workspace::WorkspaceSwitchParams;
 use crate::protocol::workspace::WorkspaceSwitchResult;
@@ -2237,6 +2237,7 @@ typescript_bindings! {
     ThreadUpdateEnvelope,
     InputItem,
     TurnStartResult,
+    TurnSteerResult,
     TurnInterruptResult,
     TurnInteractionResolveResult,
     TypstCompileParams,

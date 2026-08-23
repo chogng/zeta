@@ -8,6 +8,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
         StableTurnError::provider_auth(),
         StableTurnError::invalid_request(),
         StableTurnError::invalid_response(),
+        StableTurnError::tool_repetition(),
     ];
 
     assert_eq!(
@@ -20,6 +21,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
             json!("providerAuth"),
             json!("invalidRequest"),
             json!("invalidResponse"),
+            json!("toolRepetition"),
         ]
     );
 }
@@ -37,6 +39,54 @@ fn durable_thread_event_serializes_without_a_runtime_message_wrapper() {
             "type": "turnStarted",
             "threadId": "thread_1",
             "turnId": "turn_1"
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadEvent::TurnSteerDelivered {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            turn_id: TurnId::new("turn_1").unwrap(),
+            command_id: CommandId::new("steer_1").unwrap(),
+        })
+        .unwrap(),
+        json!({
+            "type": "turnSteerDelivered",
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "commandId": "steer_1"
+        })
+    );
+}
+
+#[test]
+fn turn_steering_serializes_as_a_typed_command_and_durable_item_binding() {
+    let turn_id = TurnId::new("turn_1").unwrap();
+    let command = ThreadCommand::SteerTurn {
+        turn_id: turn_id.clone(),
+        input: vec![UserInput::Text {
+            text: "focus on the failing test".into(),
+        }],
+    };
+    let event = ThreadEvent::TurnSteered {
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        turn_id,
+        item_ids: vec![ItemId::new("item_2").unwrap()],
+    };
+
+    assert_eq!(
+        serde_json::to_value(command).unwrap(),
+        json!({
+            "type": "steerTurn",
+            "turnId": "turn_1",
+            "input": [{"type": "text", "text": "focus on the failing test"}]
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(event).unwrap(),
+        json!({
+            "type": "turnSteered",
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "itemIds": ["item_2"]
         })
     );
 }

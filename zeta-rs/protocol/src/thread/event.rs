@@ -4,11 +4,13 @@ use crate::AgentJoinId;
 use crate::AgentMessage;
 use crate::AgentResponse;
 use crate::ApprovalMode;
+use crate::CommandId;
 use crate::ContextCheckpoint;
 use crate::DelegationId;
 use crate::DelegationResult;
 use crate::FrozenSkillActivation;
 use crate::InteractionCancelReason;
+use crate::ItemId;
 use crate::ModelRef;
 use crate::RequestId;
 use crate::SandboxDenialOutput;
@@ -106,6 +108,16 @@ pub enum ThreadEvent {
     TurnStarted {
         thread_id: ThreadId,
         turn_id: TurnId,
+    },
+    TurnSteered {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        item_ids: Vec<ItemId>,
+    },
+    TurnSteerDelivered {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        command_id: CommandId,
     },
     TurnExecutionAttempted {
         thread_id: ThreadId,
@@ -228,6 +240,8 @@ impl ThreadEvent {
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
+            Self::TurnSteered { .. } => "turn.steered",
+            Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
             Self::TurnExecutionAttempted { .. } => "turn.execution_attempted",
             Self::ItemCompleted { .. } => "item.completed",
             Self::InteractionRequested { .. } => "interaction.requested",
@@ -264,6 +278,8 @@ impl ThreadEvent {
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
+            | Self::TurnSteered { thread_id, .. }
+            | Self::TurnSteerDelivered { thread_id, .. }
             | Self::TurnExecutionAttempted { thread_id, .. }
             | Self::ItemCompleted { thread_id, .. }
             | Self::InteractionRequested { thread_id, .. }

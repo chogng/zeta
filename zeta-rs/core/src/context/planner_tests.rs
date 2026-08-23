@@ -525,6 +525,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         item_sequences,
         event_digests: BTreeMap::new(),
         commands: Vec::<ThreadCommandSnapshot>::new(),
+        steer_deliveries: BTreeMap::new(),
         seen_interaction_ids: BTreeSet::new(),
         resolved_interactions: Vec::new(),
         started_tool_calls: BTreeSet::new(),
