@@ -9,6 +9,7 @@ use crate::ListInstalledRequest;
 use crate::MarketplaceClientError;
 use crate::OpenResourceRequest;
 use crate::PackageDetails;
+use crate::ReleaseCapabilityOutcome;
 use crate::ReleaseCapabilityRequest;
 use crate::ResourceContent;
 use crate::SearchPackagesRequest;
@@ -58,7 +59,7 @@ pub trait MarketplaceServiceClient: Send + Sync {
     fn release_capability(
         &self,
         request: ReleaseCapabilityRequest,
-    ) -> Result<(), MarketplaceClientError>;
+    ) -> Result<ReleaseCapabilityOutcome, MarketplaceClientError>;
 
     fn open_resource(
         &self,

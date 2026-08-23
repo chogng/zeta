@@ -3,7 +3,9 @@ use super::map_event;
 use zeta_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
+use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_protocol::{SessionId, StreamInstanceId, ThreadEvent, ThreadId, ThreadUpdate};
 
 #[test]
@@ -24,6 +26,25 @@ fn connectors_changed_requests_a_connector_catalog_refresh() {
         )),
         Some(ClientEvent::ConnectorsChanged)
     );
+}
+
+#[test]
+fn package_source_changes_request_shared_capability_refresh() {
+    for notification in [
+        ServerNotification::MarketplaceChanged(MarketplaceChanged {
+            instance_id: "marketplace-runtime-1".into(),
+            generation: 3,
+        }),
+        ServerNotification::PluginsChanged(PluginsChanged {
+            revision: 4,
+            activation_generation: 2,
+        }),
+    ] {
+        assert_eq!(
+            map_event(AppServerEvent::Notification(notification)),
+            Some(ClientEvent::PackageSourcesChanged)
+        );
+    }
 }
 
 #[test]

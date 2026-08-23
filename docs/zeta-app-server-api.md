@@ -7,7 +7,7 @@ owner: zeta-rs
 consumers:
   - desktop
   - cli
-lastUpdated: 2026-08-13
+lastUpdated: 2026-08-23
 ```
 
 本文描述当前开发期的唯一 App Server 契约。项目不保留旧 wire API、旧 DTO 或旧持久化格式
@@ -36,6 +36,7 @@ Session、Thread、Turn 和更新流，不建立第二套领域模型。
 | 关闭一个 Session Tab | 前端通过 `session/request` 提交 `request.type = stop` | 持久化停止 Session，并中断其所有活动子 Turn；仅断开连接不会停止 Session |
 | 持续显示执行进度 | 订阅 Thread 更新并按序列消费 | 发现缺口时重新读取快照，不猜测丢失状态 |
 | 修改配置或资源 | 调用类型化方法并携带命令身份 | 重复命令可重放结果，冲突载荷会被拒绝 |
+| 同步 Marketplace 安装状态 | 同一 profile daemon 写入，收到 generation 失效提示后重新 list | Desktop、Zeta Code 与 zeterm 不建立第二份安装 authority |
 | 响应批准或用户输入 | 回复等待中的类型化请求 | 回复绑定精确请求和当前 Thread |
 | 让 Agent 操作 Desktop 浏览器 | Desktop 初始化时声明 browser host | Rust 保留批准和目标 owner，Electron Main 只执行语义动作 |
 | 连接本地 App Server | 先初始化并校验能力和模式哈希 | 初始化前不能调用产品方法 |
@@ -250,7 +251,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `plugin/list` | Plugin authority | 分别投影 installed/enabled/granted/effective package 状态 |
 | `plugin/enable` / `disable` / `grant` / `revokeGrant` / `uninstall` | Plugin authority | exact-package CAS lifecycle mutation |
 | `marketplace/search` / `get` / `install` / `update` / `uninstall` | Marketplace Manager | 通用 package discovery 与唯一安装状态；不自动授权或激活 capability |
-| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager | 查询唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer |
+| `marketplace/listInstalled` / `acquireCapability` / `releaseCapability` / `openResource` | Marketplace Manager | 返回当前 profile generation 与唯一安装状态，并通过 lease + opaque resource 完成 path-free capability handoff；本地可信 runtime adapter 不经过 Renderer |
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
@@ -357,6 +358,19 @@ Plugin request 是 config intent；legacy Plugin lifecycle authority 是另一�
 压成一个布尔值，而是分别返回 enabled、granted 与 effective，只有 exact installed package 同时 enabled
 且 granted 时才进入 activation。新的远端 package 只能通过 `marketplace/*` 方法进入
 `MarketplaceManager`；Plugin authority 不再拥有 Marketplace catalog 或安装入口。
+
+同一 profile 的 App Server daemon 是 Marketplace mutation 的 single writer。成功的
+install/update/uninstall 在 consumer reconcile 后推进共享 generation，并向该 profile 的全部
+Workspace connection 广播 `marketplace/changed { instanceId, generation }`。该通知只表示“本地安装投影可能
+过期”；客户端必须重新调用 `marketplace/listInstalled`，并以返回的 instanceId + generation + packages 为事实。
+`whenUnused` 卸载会先广播 pending-removal 状态；最后一个 capability lease 被释放或随连接关闭清理、删除
+真正提交时再广播一次，避免其他端长期保留已经消失的 Skill、Connector 或 Extension 投影。
+共享 profile runtime 为唯一 Manager 持有一个 committed-change watcher，所以内部运行时 lease 的异步释放
+也走同一广播；standalone App Server 才自行持有 watcher。broker 对 Manager generation 去重，同一 profile
+拒绝绑定第二个 Marketplace authority。
+重连不要求回放旧通知：新连接直接 list 即可补到当前 generation。客户端应忽略不大于已观察
+generation 的同 instance 重复或乱序通知；instanceId 变化表示 authority 已重启，新的低 generation
+也必须接受。
 
 Zeta account control plane 另见[第 11 节](#11-account-与登录)。其 Rust DTO、TypeScript 与 JSON Schema
 由同一个 registry 生成并同步提交。
@@ -699,6 +713,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `agent/request`，payload 为仅发送给 selected owner 的 full `AgentRequestEnvelope`；
 - `config/changed`，payload 为已提交的 Config `revision` 与 `generation`；
 - `skills/changed`，payload 为新的 catalog `generation`；
+- `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
 

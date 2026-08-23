@@ -202,15 +202,16 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
-    assert_eq!(
+    let projected_root = Path::new(
         created["result"]["session"]["workspace"]["root"]
             .as_str()
             .unwrap(),
-        first_workspace
-            .path()
-            .canonicalize()
-            .unwrap()
-            .to_string_lossy()
+    )
+    .canonicalize()
+    .unwrap();
+    assert_eq!(
+        projected_root,
+        first_workspace.path().canonicalize().unwrap()
     );
 
     let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
@@ -271,6 +272,38 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
     )
     .unwrap();
     assert_eq!(rejected["error"]["message"], "WorkspaceAuthorityMismatch");
+}
+
+#[test]
+fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
+    let profile = tempfile::tempdir().unwrap();
+    let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    let first_config = zeta_marketplace_client::RemoteMarketplaceConfig::new(
+        "https://marketplace.example/metadata/".parse().unwrap(),
+        "https://marketplace.example/targets/".parse().unwrap(),
+        vec![1],
+        profile.path().join("cache-a"),
+    )
+    .unwrap();
+    let first = runtime.marketplace_manager(first_config.clone()).unwrap();
+    let reused = runtime.marketplace_manager(first_config).unwrap();
+    assert!(Arc::ptr_eq(&first, &reused));
+
+    let second_config = zeta_marketplace_client::RemoteMarketplaceConfig::new(
+        "https://other.example/metadata/".parse().unwrap(),
+        "https://other.example/targets/".parse().unwrap(),
+        vec![2],
+        profile.path().join("cache-b"),
+    )
+    .unwrap();
+    let error = match runtime.marketplace_manager(second_config) {
+        Ok(_) => panic!("a second Marketplace authority must be rejected"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error.0,
+        "one profile runtime cannot use multiple Marketplace authorities"
+    );
 }
 
 #[test]

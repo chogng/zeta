@@ -154,7 +154,9 @@ pub fn typescript() -> String {
 }
 
 pub fn json_schema() -> String {
-    let schema = protocol_schema();
+    let mut schema =
+        serde_json::to_value(protocol_schema()).expect("protocol schema must serialize as JSON");
+    canonicalize_json(&mut schema);
     let mut output =
         serde_json::to_string_pretty(&schema).expect("protocol schema must serialize as JSON");
     output.push('\n');

@@ -49,6 +49,8 @@ Tool、approval policy 或 persistence。
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
+- 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
+  Connector Pane 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；

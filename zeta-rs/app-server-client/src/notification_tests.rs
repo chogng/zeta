@@ -11,6 +11,7 @@ use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 
 #[test]
@@ -285,6 +286,26 @@ fn decodes_plugins_changed_notification() {
         ServerNotification::PluginsChanged(PluginsChanged {
             revision: 7,
             activation_generation: 3,
+        })
+    );
+}
+
+#[test]
+fn decodes_marketplace_changed_notification() {
+    let notification = decode(
+        r#"{
+            "jsonrpc": "2.0",
+            "method": "marketplace/changed",
+            "params": {"instanceId": "marketplace-runtime-1", "generation": 4}
+        }"#,
+    )
+    .expect("Marketplace notification decodes");
+
+    assert_eq!(
+        notification,
+        ServerNotification::MarketplaceChanged(MarketplaceChanged {
+            instance_id: "marketplace-runtime-1".into(),
+            generation: 4,
         })
     );
 }

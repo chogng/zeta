@@ -82,6 +82,7 @@ mod marketplace_operations;
 #[path = "server/marketplace_operations_tests.rs"]
 mod marketplace_operations_tests;
 mod marketplace_projection;
+pub(crate) mod marketplace_runtime;
 mod marketplace_skill_sources;
 mod mcp_operations;
 pub(crate) mod multi_agent_tools;
@@ -203,6 +204,7 @@ pub struct AppServer {
     _config_watcher: Option<config_runtime::ConfigWatcher>,
     _connector_watcher: Option<connector_runtime::ConnectorWatcher>,
     _plugin_watcher: Option<plugin_runtime::PluginWatcher>,
+    _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
     updates: Arc<UpdateBroker>,
@@ -475,6 +477,7 @@ impl AppServer {
             _config_watcher: None,
             _connector_watcher: None,
             _plugin_watcher: None,
+            _marketplace_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
             updates,
@@ -521,6 +524,7 @@ impl AppServer {
         mut self,
         client: Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>,
     ) -> Self {
+        self._marketplace_watcher = None;
         self.local_marketplace_manager = None;
         self.marketplace_manager_client = Some(client);
         self
@@ -528,9 +532,29 @@ impl AppServer {
 
     /// Installs the concrete local Marketplace Manager and its trusted Skill projection.
     pub fn with_local_marketplace_manager(
-        mut self,
+        self,
         manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
     ) -> Self {
+        let watcher = marketplace_runtime::MarketplaceChangeWatcher::start(
+            &manager,
+            Arc::clone(&self.updates),
+        );
+        self.bind_local_marketplace_manager(manager, watcher)
+    }
+
+    pub(crate) fn with_profile_marketplace_manager(
+        self,
+        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+    ) -> Self {
+        self.bind_local_marketplace_manager(manager, None)
+    }
+
+    fn bind_local_marketplace_manager(
+        mut self,
+        manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+        watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
+    ) -> Self {
+        self._marketplace_watcher = watcher;
         let source: Arc<dyn zeta_skills_extension::DynamicSkillSourceProvider> = Arc::new(
             marketplace_skill_sources::MarketplaceSkillSourceProvider::new(Arc::clone(&manager)),
         );
@@ -569,10 +593,20 @@ impl AppServer {
             git.close_connection(connection.connection_id);
         }
         if let Some(marketplace) = &self.marketplace_manager_client {
+            let _change = self.updates.lock_marketplace_change();
             for lease_id in connection.marketplace_leases() {
-                let _ = marketplace.release_capability(
+                match marketplace.release_capability(
                     zeta_marketplace_client::ReleaseCapabilityRequest { lease_id },
-                );
+                ) {
+                    Ok(outcome) => {
+                        self.reconcile_released_marketplace_capability(outcome.installation_changed)
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "failed to release Marketplace capability on disconnect: {error}"
+                        );
+                    }
+                }
             }
         }
         self.browser_host.unregister(connection.connection_id);

@@ -35,8 +35,11 @@ use zeta_marketplace_client::SearchPackagesRequest;
 use zeta_marketplace_client::SearchPackagesResult;
 use zeta_marketplace_manager::MarketplaceManager;
 
+use super::UpdateBroker;
 use super::marketplace_extension_sources::MarketplaceExtensionSourceProvider;
 use super::marketplace_language_runtime::MarketplaceLanguageRuntime;
+use super::marketplace_runtime::MarketplaceChangeWatcher;
+use super::notification_queue::NotificationQueue;
 
 const LANGUAGE_MANIFEST: &[u8] = br#"{
   "name": "demo-language",
@@ -55,6 +58,36 @@ const THEME_MANIFEST: &[u8] = br#"{
   }]
 }"#;
 const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#;
+
+#[test]
+fn marketplace_manager_commit_watcher_broadcasts_the_authoritative_change() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Arc::new(
+        MarketplaceManager::open(root.path().join("manager"), Arc::new(LanguageRegistry)).unwrap(),
+    );
+    let updates = Arc::new(UpdateBroker::default());
+    let queue = NotificationQueue::default();
+    updates.register(updates.allocate_connection_id(), &queue);
+    let _watcher = MarketplaceChangeWatcher::start(&manager, Arc::clone(&updates)).unwrap();
+
+    manager
+        .install(InstallPackageRequest {
+            package_id: "example/demo-language".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    for _ in 0..50 {
+        if queue.len() > 0 {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(notifications[0]["method"], "marketplace/changed");
+    assert_eq!(notifications[0]["params"]["generation"], 2);
+}
 
 #[test]
 fn installed_language_package_projects_assets_and_packaged_server() {

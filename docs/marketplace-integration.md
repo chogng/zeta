@@ -198,7 +198,23 @@ Marketplace Manager executable。`zeta-app-server-client` 统一发现该发行�
 typed `LocalProductServicesConfig`；远端 zeterm session 由远端 `zeta-server` 注入。各客户端读取
 Marketplace 的方式始终是 App Server `marketplace/search`（空 query 即 list）等业务 RPC，而不是读取
 cache 文件。因此 PreferencesView 不拥有 cache，也不需要为 TUI/zeterm 维护第二份列表；三个产品的
-兼容连接共享同一个 live App Server snapshot 和磁盘 cache；各前端只维护可丢弃的展示 projection。
+兼容连接进入同一个 profile-scoped App Server daemon，共享一份 Manager、磁盘 cache 和安装状态；
+各前端只维护可丢弃的展示 projection。
+
+install/update/uninstall 成功提交后，profile broker 递增共享 generation，并向该 profile 的所有
+Workspace connection 广播 `marketplace/changed { instanceId, generation }`。若卸载因 live lease 延迟，
+最后一个 lease 被显式释放或随客户端退出清理、真正完成删除时会再推进一次 generation 并广播。
+`marketplace/listInstalled`
+同时返回当前 instance/generation；新连接或重连先 list 补读，在线连接把通知只当失效提示，再按需 list，不能把
+通知本身当成安装状态。Desktop 已按此规则失效 Browse snapshot；Zeta Code 把 Marketplace/Plugin
+source 变化投影为 Skill catalog 与已打开 Connector Pane 的刷新。zeterm 当前不缓存 Marketplace
+展示状态，可直接使用同一 typed client 方法；它尚无独立 Marketplace 浏览界面。
+
+广播不依赖某个 RPC 调用者“记得通知”。共享 profile runtime 为唯一 Manager 持有一个
+committed-change watcher；非共享的 standalone App Server 自己持有 watcher。同一 profile 的变更闸门保证
+显式写入先完成 consumer reconcile，再发布通知，内部 Connector/MCP/Editor Extension lease 异步释放造成的
+最终删除也由同一 stream 补发。broker 仍按 Manager stream + generation 去重，防止重复观察推进两次对外
+generation；同一 profile 也会拒绝绑定第二个 Marketplace authority。
 
 ## 安全和失败语义
 
@@ -223,6 +239,7 @@ relative path 和 size limits 约束。
 | Zeta 本地 artifact/install/update/uninstall state | ✅ |
 | immutable installation、lease、deferred removal | ✅ |
 | App Server Marketplace RPC 与 connection cleanup | ✅ |
+| profile-scoped single writer、`marketplace/changed` fan-out 与重连 instance/generation 补读 | ✅ |
 | Desktop 无独立 Manager binary / adapter | ✅ |
 | Marketplace Skill | ✅ 安装后进入共享 Skill catalog；完整内容仍按需加载 |
 | Marketplace MCP / Connector | ✅ HTTP/packaged stdio materialization、Connector credential binding、热重建与调用 lease |

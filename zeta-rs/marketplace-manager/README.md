@@ -37,6 +37,8 @@ App Server Marketplace RPC
 | `RuntimeState` / `LeaseRecord` | 只在进程内存在的 lease；重启时不持久化 |
 | `capability_reference` | 从 installation + capability kind + local ID 派生无碰撞 opaque identity；open 会迁移旧记录 |
 | `MarketplaceManager::{generation,subscribe}` | 向可信进程内 consumer 发布已提交的 installation-state 变化 |
+| `MarketplaceManager::change_source_id` | 标识当前进程内 Manager change stream，供 profile broker 跨 Workspace 去重 |
+| `ReleaseCapabilityOutcome::installation_changed` | 指明最后一个 lease 的释放是否同时提交了 deferred removal，供 App Server 精确 reconcile 与广播 |
 | `MarketplaceManager::local_capability_sources` | 在可信进程内 runtime 收到私有 host handle 前重验完整 immutable artifact |
 | `activation::acquire_spec` | 把已存 capability 转成 path-free Skill/MCP/Connector/Theme/Language/Executable activation contract |
 | `activation::open_resource` | 使用受 lease 授权的 bounded safe path 读取 opaque resource |

@@ -78,6 +78,7 @@ impl AppServer {
 
     pub(super) fn marketplace_install(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceInstallParams = decode(params)?;
+        let _change = self.updates.lock_marketplace_change();
         let installed = self
             .marketplace_manager()?
             .install(InstallPackageRequest {
@@ -86,11 +87,13 @@ impl AppServer {
             })
             .map_err(marketplace_error)?;
         self.reconcile_marketplace_consumers();
+        self.publish_committed_marketplace_change();
         result(&marketplace_projection::installed_package(installed))
     }
 
     pub(super) fn marketplace_update(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceUpdateParams = decode(params)?;
+        let _change = self.updates.lock_marketplace_change();
         let installed = self
             .marketplace_manager()?
             .update(UpdatePackageRequest {
@@ -99,11 +102,13 @@ impl AppServer {
             })
             .map_err(marketplace_error)?;
         self.reconcile_marketplace_consumers();
+        self.publish_committed_marketplace_change();
         result(&marketplace_projection::installed_package(installed))
     }
 
     pub(super) fn marketplace_uninstall(&self, params: &Value) -> Result<Value, RpcError> {
         let params: MarketplaceUninstallParams = decode(params)?;
+        let _change = self.updates.lock_marketplace_change();
         self.marketplace_manager()?
             .uninstall(UninstallPackageRequest {
                 installation_id: params.installation_id,
@@ -114,6 +119,7 @@ impl AppServer {
             })
             .map_err(marketplace_error)?;
         self.reconcile_marketplace_consumers();
+        self.publish_committed_marketplace_change();
         result(&())
     }
 
@@ -126,7 +132,11 @@ impl AppServer {
             .into_iter()
             .map(marketplace_projection::installed_package)
             .collect();
-        result(&MarketplaceListInstalledResult { packages })
+        result(&MarketplaceListInstalledResult {
+            instance_id: self.updates.marketplace_instance_id().to_owned(),
+            generation: self.updates.marketplace_generation(),
+            packages,
+        })
     }
 
     pub(super) fn marketplace_acquire_capability(
@@ -154,12 +164,15 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: MarketplaceReleaseCapabilityParams = decode(params)?;
         require_owned_lease(connection, &params.lease_id)?;
-        self.marketplace_manager()?
+        let _change = self.updates.lock_marketplace_change();
+        let outcome = self
+            .marketplace_manager()?
             .release_capability(ReleaseCapabilityRequest {
                 lease_id: params.lease_id.clone(),
             })
             .map_err(marketplace_error)?;
         connection.remove_marketplace_lease(&params.lease_id);
+        self.reconcile_released_marketplace_capability(outcome.installation_changed);
         result(&())
     }
 
@@ -188,6 +201,31 @@ impl AppServer {
         self.marketplace_manager_client
             .as_deref()
             .ok_or_else(|| RpcError::new(-32100, AppServerErrorName::MarketplaceUnavailable))
+    }
+
+    pub(super) fn reconcile_released_marketplace_capability(&self, installation_changed: bool) {
+        if installation_changed {
+            self.reconcile_marketplace_consumers();
+            self.publish_committed_marketplace_change();
+        }
+    }
+
+    fn publish_committed_marketplace_change(&self) {
+        if let Some(manager) = &self.local_marketplace_manager {
+            match manager.generation() {
+                Ok(generation) => {
+                    self.updates.publish_marketplace_manager_changed(
+                        manager.change_source_id(),
+                        generation,
+                    );
+                }
+                Err(error) => {
+                    log::error!("failed to read committed Marketplace generation: {error}");
+                }
+            }
+        } else {
+            self.updates.publish_marketplace_changed();
+        }
     }
 
     fn reconcile_marketplace_consumers(&self) {

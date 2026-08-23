@@ -12,6 +12,7 @@ pub(crate) enum ClientEvent {
     ConnectionClosed(ConnectionCloseReason),
     GitStatusChanged(GitStatusResult),
     ConnectorsChanged,
+    PackageSourcesChanged,
     SkillsChanged,
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
 }
@@ -29,7 +30,9 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::AgentRequest(Box::new(request)))
         }
         ServerNotification::ConnectorsChanged(_) => Some(ClientEvent::ConnectorsChanged),
-        ServerNotification::PluginsChanged(_) => None,
+        ServerNotification::MarketplaceChanged(_) | ServerNotification::PluginsChanged(_) => {
+            Some(ClientEvent::PackageSourcesChanged)
+        }
         ServerNotification::SkillsChanged(_) => Some(ClientEvent::SkillsChanged),
         ServerNotification::GitStatusChanged(changed) => {
             Some(ClientEvent::GitStatusChanged(changed.status))

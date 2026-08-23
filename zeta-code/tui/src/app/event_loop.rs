@@ -836,6 +836,11 @@ fn refresh_server_event(
             connectors: app.connector_view_open(),
             ..ServerRefresh::default()
         },
+        client::ClientEvent::PackageSourcesChanged => ServerRefresh {
+            connectors: app.connector_view_open(),
+            skills: true,
+            ..ServerRefresh::default()
+        },
         client::ClientEvent::ConnectionClosed(_) => {
             unreachable!("connection failures leave through the recovery boundary")
         }

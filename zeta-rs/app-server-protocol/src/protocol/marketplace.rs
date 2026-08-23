@@ -171,7 +171,18 @@ pub struct MarketplaceInstalledPackageDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketplaceListInstalledResult {
+    pub instance_id: String,
+    #[ts(type = "number")]
+    pub generation: u64,
     pub packages: Vec<MarketplaceInstalledPackageDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketplaceChanged {
+    pub instance_id: String,
+    #[ts(type = "number")]
+    pub generation: u64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

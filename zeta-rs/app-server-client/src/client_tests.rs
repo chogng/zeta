@@ -155,6 +155,19 @@ fn client_analyzes_syntax_through_the_typed_contract() {
 }
 
 #[test]
+fn client_reads_marketplace_generation_through_the_typed_contract() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":{"instanceId":"marketplace-runtime-1","generation":7,"packages":[]}}"#.into(),
+    ])));
+
+    let result = client.list_installed_marketplace_packages().unwrap();
+
+    assert_eq!(result.generation, 7);
+    assert_eq!(result.instance_id, "marketplace-runtime-1");
+    assert!(result.packages.is_empty());
+}
+
+#[test]
 fn client_drives_language_documents_and_requests_through_typed_methods() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
         r#"{"jsonrpc":"2.0","id":1,"result":null}"#.into(),

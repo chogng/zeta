@@ -203,6 +203,11 @@ impl MarketplaceManager {
         Ok(self.lock_runtime()?.generation)
     }
 
+    /// Identifies this process-local change stream for profile-level notification deduplication.
+    pub fn change_source_id(&self) -> &str {
+        &self.session_nonce
+    }
+
     /// Returns verified sources of one capability kind for trusted local runtime composition.
     ///
     /// The ordinary Marketplace service contract intentionally exposes no filesystem paths. This
@@ -473,7 +478,7 @@ impl MarketplaceServiceClient for MarketplaceManager {
     fn release_capability(
         &self,
         request: ReleaseCapabilityRequest,
-    ) -> Result<(), MarketplaceClientError> {
+    ) -> Result<zeta_marketplace_client::ReleaseCapabilityOutcome, MarketplaceClientError> {
         let mut runtime = self.lock_runtime()?;
         let lease = runtime
             .leases
@@ -484,18 +489,22 @@ impl MarketplaceServiceClient for MarketplaceManager {
             .leases
             .values()
             .any(|candidate| candidate.lease.installation_id == installation_id);
-        if !still_in_use
+        let installation_changed = !still_in_use
             && runtime
                 .durable
                 .installations
                 .get(&installation_id)
-                .is_some_and(|installation| installation.state == InstallationState::PendingRemoval)
-        {
+                .is_some_and(|installation| {
+                    installation.state == InstallationState::PendingRemoval
+                });
+        if installation_changed {
             runtime.durable.installations.remove(&installation_id);
             self.store.write_state(&runtime.durable)?;
             publish_change(&mut runtime)?;
         }
-        Ok(())
+        Ok(zeta_marketplace_client::ReleaseCapabilityOutcome {
+            installation_changed,
+        })
     }
 
     fn open_resource(

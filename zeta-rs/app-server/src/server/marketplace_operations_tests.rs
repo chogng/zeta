@@ -40,6 +40,18 @@ fn app_server_exposes_only_the_manager_business_contract() {
     );
     assert_eq!(initialized["result"]["capabilities"]["marketplace"], true);
 
+    let mut observer = server.connection();
+    call(
+        &server,
+        &mut observer,
+        21,
+        "initialize",
+        json!({
+            "clientInfo": {"name": "observer", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+
     let found = call(
         &server,
         &mut connection,
@@ -70,6 +82,33 @@ fn app_server_exposes_only_the_manager_business_contract() {
     assert_eq!(installed["result"]["installationId"], "ins_opaque");
     assert_eq!(installed["result"]["capabilities"][0]["kind"], "skill");
     assert!(installed.to_string().find("path").is_none());
+
+    let notifications = server.drain_notifications(&mut observer);
+    assert_eq!(notifications.len(), 1);
+    let changed: Value = serde_json::from_str(&notifications[0]).unwrap();
+    assert_eq!(changed["method"], "marketplace/changed");
+    assert!(changed["params"]["instanceId"].as_str().is_some());
+    assert_eq!(changed["params"]["generation"], 2);
+
+    let installed_snapshot = call(
+        &server,
+        &mut observer,
+        22,
+        "marketplace/listInstalled",
+        json!({}),
+    );
+    assert_eq!(
+        installed_snapshot["result"]["instanceId"],
+        changed["params"]["instanceId"]
+    );
+    assert_eq!(installed_snapshot["result"]["generation"], 2);
+    assert_eq!(
+        installed_snapshot["result"]["packages"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
 
     let acquired = call(
         &server,
@@ -108,6 +147,36 @@ fn app_server_exposes_only_the_manager_business_contract() {
         json!({"leaseId": "lease_opaque"}),
     );
     assert_eq!(released["result"], json!(null));
+    let notifications = server.drain_notifications(&mut observer);
+    assert_eq!(notifications.len(), 1);
+    let changed_after_release: Value = serde_json::from_str(&notifications[0]).unwrap();
+    assert_eq!(changed_after_release["method"], "marketplace/changed");
+    assert_eq!(changed_after_release["params"]["generation"], 3);
+
+    let mut disconnecting = server.connection();
+    call(
+        &server,
+        &mut disconnecting,
+        8,
+        "initialize",
+        json!({
+            "clientInfo": {"name": "disconnecting", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+    call(
+        &server,
+        &mut disconnecting,
+        9,
+        "marketplace/acquireCapability",
+        json!({"capability": {"id": "cap_opaque"}}),
+    );
+    server.close_connection(disconnecting);
+    let notifications = server.drain_notifications(&mut observer);
+    assert_eq!(notifications.len(), 1);
+    let changed_after_disconnect: Value = serde_json::from_str(&notifications[0]).unwrap();
+    assert_eq!(changed_after_disconnect["method"], "marketplace/changed");
+    assert_eq!(changed_after_disconnect["params"]["generation"], 4);
 }
 
 struct FakeMarketplaceManager;
@@ -222,7 +291,16 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
         Vec<zeta_marketplace_client::InstalledPackage>,
         zeta_marketplace_client::MarketplaceClientError,
     > {
-        unimplemented!()
+        Ok(vec![zeta_marketplace_client::InstalledPackage {
+            installation_id: "ins_opaque".to_owned(),
+            package: zeta_marketplace_client::PackageRef {
+                id: "marketplace/github".to_owned(),
+                version: "1.1.0".to_owned(),
+                digest: format!("sha256:{}", "a".repeat(64)),
+            },
+            state: zeta_marketplace_client::InstallationState::Installed,
+            capabilities: Vec::new(),
+        }])
     }
 
     fn acquire_capability(
@@ -254,8 +332,13 @@ impl MarketplaceServiceClient for FakeMarketplaceManager {
     fn release_capability(
         &self,
         _: zeta_marketplace_client::ReleaseCapabilityRequest,
-    ) -> Result<(), zeta_marketplace_client::MarketplaceClientError> {
-        Ok(())
+    ) -> Result<
+        zeta_marketplace_client::ReleaseCapabilityOutcome,
+        zeta_marketplace_client::MarketplaceClientError,
+    > {
+        Ok(zeta_marketplace_client::ReleaseCapabilityOutcome {
+            installation_changed: true,
+        })
     }
 
     fn open_resource(

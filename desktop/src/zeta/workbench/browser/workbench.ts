@@ -369,7 +369,7 @@ export class Workbench extends DisposableOwner {
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
     services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
-    const marketplaceService = this.own(new AppServerMarketplaceService(api.marketplace));
+    const marketplaceService = this.own(new AppServerMarketplaceService(api.marketplace, api.events));
     services.set(IMarketplaceService, marketplaceService);
     services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
     const workbenchState = workspaceContext.getWorkbenchState();

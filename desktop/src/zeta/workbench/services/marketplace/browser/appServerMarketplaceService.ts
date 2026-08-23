@@ -1,5 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
 import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
 
@@ -9,12 +10,23 @@ export class AppServerMarketplaceService extends DisposableOwner implements IMar
   private readonly browseRequests = new Map<string, Promise<MarketplaceBrowseSnapshot>>();
   private readonly details = new Map<string, Promise<MarketplacePackageDetails>>();
   private browseGeneration = 0;
+  private installedInstanceId: string | undefined;
+  private installedGeneration = 0;
   private readonly _onDidChangeInstalled = this.own(new Emitter<void>());
 
   readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
 
-  constructor(private readonly api: IMarketplaceApi) {
+  constructor(private readonly api: IMarketplaceApi, events: IServerEventApi) {
     super();
+    const subscription = events.subscribe(event => {
+      if (event.method !== "marketplace/changed") return;
+      if (event.params.instanceId === this.installedInstanceId && event.params.generation <= this.installedGeneration) return;
+      this.installedInstanceId = event.params.instanceId;
+      this.installedGeneration = event.params.generation;
+      this.invalidateBrowse();
+      this._onDidChangeInstalled.fire();
+    });
+    this.defer(() => subscription.dispose());
   }
 
   cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined {
@@ -44,27 +56,26 @@ export class AppServerMarketplaceService extends DisposableOwner implements IMar
   }
 
   async install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage> {
-    const installed = await this.api.install({ packageId, version: version ?? null });
-    this.invalidateBrowse();
-    this._onDidChangeInstalled.fire();
-    return installed;
+    return this.api.install({ packageId, version: version ?? null });
   }
 
   async update(installationId: string, version?: string): Promise<MarketplaceInstalledPackage> {
-    const installed = await this.api.update({ installationId, version: version ?? null });
-    this.invalidateBrowse();
-    this._onDidChangeInstalled.fire();
-    return installed;
+    return this.api.update({ installationId, version: version ?? null });
   }
 
   async uninstall(installationId: string, mode: "ifUnused" | "whenUnused" = "whenUnused"): Promise<void> {
     await this.api.uninstall({ installationId, mode });
-    this.invalidateBrowse();
-    this._onDidChangeInstalled.fire();
   }
 
   async listInstalled(): Promise<readonly MarketplaceInstalledPackage[]> {
-    return (await this.api.listInstalled()).packages;
+    const result = await this.api.listInstalled();
+    if (result.instanceId !== this.installedInstanceId) {
+      this.installedInstanceId = result.instanceId;
+      this.installedGeneration = result.generation;
+    } else {
+      this.installedGeneration = Math.max(this.installedGeneration, result.generation);
+    }
+    return result.packages;
   }
 
   acquireCapability(capabilityId: string): Promise<MarketplaceAcquiredCapability> {

@@ -750,9 +750,9 @@ impl std::error::Error for OpenAppServerError {}
 
 /// Process-wide durable authority shared by all Workspace runtimes for one profile.
 ///
-/// The profile runtime owns the single recovered Session projection, config store, and live
-/// Session notification graph. Workspace filesystem, terminal, Git, language, and execution
-/// services remain in separately composed [`AppServer`] instances.
+/// The profile runtime owns the single recovered Session projection, config store, Marketplace
+/// Manager/change watcher, and live profile notification graph. Workspace filesystem, terminal,
+/// Git, language, and execution services remain in separately composed [`AppServer`] instances.
 pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     database_path: PathBuf,
@@ -760,12 +760,13 @@ pub struct LocalProfileRuntime {
     config: Arc<ConfigStore>,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
-    marketplace: Mutex<
-        Vec<(
-            zeta_marketplace_client::RemoteMarketplaceConfig,
-            Arc<zeta_marketplace_manager::MarketplaceManager>,
-        )>,
-    >,
+    marketplace: Mutex<Option<ProfileMarketplaceAuthority>>,
+}
+
+struct ProfileMarketplaceAuthority {
+    config: zeta_marketplace_client::RemoteMarketplaceConfig,
+    manager: Arc<zeta_marketplace_manager::MarketplaceManager>,
+    _watcher: Option<crate::server::marketplace_runtime::MarketplaceChangeWatcher>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -812,7 +813,7 @@ impl LocalProfileRuntime {
             config,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
-            marketplace: Mutex::new(Vec::new()),
+            marketplace: Mutex::new(None),
         })
     }
 
@@ -840,11 +841,13 @@ impl LocalProfileRuntime {
             .marketplace
             .lock()
             .map_err(|_| OpenAppServerError("profile Marketplace lock poisoned".into()))?;
-        if let Some((_, manager)) = marketplace
-            .iter()
-            .find(|(existing_config, _)| existing_config == &config)
-        {
-            return Ok(Arc::clone(manager));
+        if let Some(authority) = marketplace.as_ref() {
+            if authority.config == config {
+                return Ok(Arc::clone(&authority.manager));
+            }
+            return Err(OpenAppServerError(
+                "one profile runtime cannot use multiple Marketplace authorities".into(),
+            ));
         }
         let registry = zeta_marketplace_client::MarketplaceRemoteClient::open(config.clone())
             .map_err(|error| OpenAppServerError(error.to_string()))?;
@@ -855,7 +858,15 @@ impl LocalProfileRuntime {
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        marketplace.push((config, Arc::clone(&manager)));
+        let watcher = crate::server::marketplace_runtime::MarketplaceChangeWatcher::start(
+            &manager,
+            Arc::clone(&self.updates),
+        );
+        *marketplace = Some(ProfileMarketplaceAuthority {
+            config,
+            manager: Arc::clone(&manager),
+            _watcher: watcher,
+        });
         Ok(manager)
     }
 }
@@ -1155,7 +1166,11 @@ pub fn open_local_app_server_with_code_index_providers(
             .map_err(OpenAppServerError)?;
     }
     if let Some(manager) = local_marketplace_manager {
-        server = server.with_local_marketplace_manager(manager);
+        server = if profile_runtime.is_some() {
+            server.with_profile_marketplace_manager(manager)
+        } else {
+            server.with_local_marketplace_manager(manager)
+        };
     } else if let Some(client) = marketplace_manager_client {
         server = server.with_marketplace_manager_client(client);
     }

@@ -22,6 +22,7 @@ use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotificatio
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerStateNotification;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
@@ -50,6 +51,10 @@ pub(crate) struct UpdateBroker {
     state: Arc<Mutex<BrokerState>>,
     next_connection_id: Arc<AtomicU64>,
     next_scope_id: Arc<AtomicU64>,
+    marketplace_instance_id: Arc<str>,
+    marketplace_generation: Arc<AtomicU64>,
+    marketplace_change_gate: Arc<Mutex<()>>,
+    marketplace_source_generations: Arc<Mutex<BTreeMap<String, u64>>>,
     scope_id: u64,
 }
 
@@ -82,6 +87,10 @@ impl Default for UpdateBroker {
             state: Arc::new(Mutex::new(BrokerState::default())),
             next_connection_id: Arc::new(AtomicU64::new(1)),
             next_scope_id: Arc::new(AtomicU64::new(2)),
+            marketplace_instance_id: Arc::from(new_marketplace_instance_id()),
+            marketplace_generation: Arc::new(AtomicU64::new(1)),
+            marketplace_change_gate: Arc::new(Mutex::new(())),
+            marketplace_source_generations: Arc::new(Mutex::new(BTreeMap::new())),
             scope_id: 1,
         }
     }
@@ -93,6 +102,10 @@ impl UpdateBroker {
             state: Arc::clone(&self.state),
             next_connection_id: Arc::clone(&self.next_connection_id),
             next_scope_id: Arc::clone(&self.next_scope_id),
+            marketplace_instance_id: Arc::clone(&self.marketplace_instance_id),
+            marketplace_generation: Arc::clone(&self.marketplace_generation),
+            marketplace_change_gate: Arc::clone(&self.marketplace_change_gate),
+            marketplace_source_generations: Arc::clone(&self.marketplace_source_generations),
             scope_id: self.next_scope_id.fetch_add(1, Ordering::Relaxed),
         }
     }
@@ -544,6 +557,59 @@ impl UpdateBroker {
         });
     }
 
+    pub(super) fn marketplace_generation(&self) -> u64 {
+        self.marketplace_generation.load(Ordering::Acquire)
+    }
+
+    pub(super) fn marketplace_instance_id(&self) -> &str {
+        &self.marketplace_instance_id
+    }
+
+    pub(super) fn lock_marketplace_change(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
+        self.marketplace_change_gate.lock().ok()
+    }
+
+    pub(super) fn publish_marketplace_changed(&self) -> u64 {
+        self.publish_next_marketplace_generation()
+    }
+
+    pub(super) fn publish_marketplace_manager_changed(
+        &self,
+        source_id: &str,
+        source_generation: u64,
+    ) -> u64 {
+        let Ok(mut sources) = self.marketplace_source_generations.lock() else {
+            return self.marketplace_generation();
+        };
+        if sources
+            .get(source_id)
+            .is_some_and(|observed| *observed >= source_generation)
+        {
+            return self.marketplace_generation();
+        }
+        sources.insert(source_id.to_owned(), source_generation);
+        drop(sources);
+        self.publish_next_marketplace_generation()
+    }
+
+    fn publish_next_marketplace_generation(&self) -> u64 {
+        let previous = self
+            .marketplace_generation
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |generation| {
+                Some(generation.saturating_add(1))
+            })
+            .unwrap_or_else(|generation| generation);
+        let generation = previous.saturating_add(1);
+        self.broadcast_notification(
+            ServerNotificationMethod::MarketplaceChanged,
+            &MarketplaceChanged {
+                instance_id: self.marketplace_instance_id.to_string(),
+                generation,
+            },
+        );
+        generation
+    }
+
     pub(super) fn publish_extension_host_changed(&self, generation: u64) {
         let Ok(mut state) = self.state.lock() else {
             return;
@@ -684,6 +750,24 @@ impl UpdateBroker {
             true
         });
     }
+}
+
+fn new_marketplace_instance_id() -> String {
+    let mut random = [0_u8; 16];
+    if getrandom::getrandom(&mut random).is_ok() {
+        return format!("marketplace-{}", hex_bytes(&random));
+    }
+    format!("marketplace-{}-{}", std::process::id(), unix_time_millis())
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut encoded = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        encoded.push(HEX[usize::from(byte >> 4)] as char);
+        encoded.push(HEX[usize::from(byte & 0x0f)] as char);
+    }
+    encoded
 }
 
 fn take_owned_dynamic_interactions(

@@ -232,6 +232,7 @@ use crate::protocol::marketplace::MarketplaceCapabilityDescriptorDto;
 use crate::protocol::marketplace::MarketplaceCapabilityKindDto;
 use crate::protocol::marketplace::MarketplaceCapabilityLeaseDto;
 use crate::protocol::marketplace::MarketplaceCapabilityRefDto;
+use crate::protocol::marketplace::MarketplaceChanged;
 use crate::protocol::marketplace::MarketplaceConnectorActivationSpecDto;
 use crate::protocol::marketplace::MarketplaceDownloadParams;
 use crate::protocol::marketplace::MarketplaceExecutableActivationSpecDto;
@@ -1811,6 +1812,9 @@ server_notifications! {
     PluginsChanged => "plugin/changed" {
         params: PluginsChanged,
     },
+    MarketplaceChanged => "marketplace/changed" {
+        params: MarketplaceChanged,
+    },
     SkillsChanged => "skills/changed" {
         params: SkillsChanged,
     },
@@ -1932,6 +1936,7 @@ typescript_bindings! {
     MarketplaceInstallationStateDto,
     MarketplaceInstalledPackageDto,
     MarketplaceListInstalledResult,
+    MarketplaceChanged,
     MarketplaceUninstallModeDto,
     MarketplaceUninstallParams,
     MarketplaceAcquireCapabilityParams,

@@ -90,11 +90,12 @@ fn local_manager_updates_uninstalls_and_owns_resource_leases() {
         })
         .unwrap();
     assert_eq!(STANDARD.decode(content.data_base64).unwrap(), SKILL_CONTENT);
-    manager
+    let release = manager
         .release_capability(ReleaseCapabilityRequest {
             lease_id: acquired.lease.id,
         })
         .unwrap();
+    assert!(!release.installation_changed);
 
     let updated = manager
         .update(UpdatePackageRequest {
@@ -113,6 +114,54 @@ fn local_manager_updates_uninstalls_and_owns_resource_leases() {
             mode: UninstallMode::IfUnused,
         })
         .unwrap();
+    assert!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn releasing_the_last_lease_reports_and_publishes_deferred_removal() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = MarketplaceManager::open(root.path(), Arc::new(FakeRegistry)).unwrap();
+    let changes = manager.subscribe().unwrap();
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example/demo".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    assert_eq!(changes.recv().unwrap(), 2);
+    let acquired = manager
+        .acquire_capability(AcquireCapabilityRequest {
+            capability: installed.capabilities[0].reference.clone(),
+        })
+        .unwrap();
+
+    manager
+        .uninstall(UninstallPackageRequest {
+            installation_id: installed.installation_id,
+            mode: UninstallMode::WhenUnused,
+        })
+        .unwrap();
+    assert_eq!(changes.recv().unwrap(), 3);
+    assert_eq!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .len(),
+        1
+    );
+
+    let release = manager
+        .release_capability(ReleaseCapabilityRequest {
+            lease_id: acquired.lease.id,
+        })
+        .unwrap();
+    assert!(release.installation_changed);
+    assert_eq!(changes.recv().unwrap(), 4);
     assert!(
         manager
             .list_installed(ListInstalledRequest {})

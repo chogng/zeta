@@ -82,6 +82,64 @@ fn profile_broker_shares_sessions_but_isolates_workspace_notifications() {
 }
 
 #[test]
+fn profile_broker_fans_out_marketplace_generations_across_workspace_scopes() {
+    let first_scope = UpdateBroker::default();
+    let second_scope = first_scope.fork_scope();
+    let first = NotificationQueue::default();
+    let second = NotificationQueue::default();
+    first_scope.register(first_scope.allocate_connection_id(), &first);
+    second_scope.register(second_scope.allocate_connection_id(), &second);
+
+    let instance_id = first_scope.marketplace_instance_id().to_owned();
+    assert_eq!(second_scope.marketplace_instance_id(), instance_id);
+    assert_eq!(first_scope.marketplace_generation(), 1);
+    assert_eq!(first_scope.publish_marketplace_changed(), 2);
+    assert_eq!(second_scope.publish_marketplace_changed(), 3);
+    assert_eq!(first_scope.marketplace_generation(), 3);
+    assert_eq!(second_scope.marketplace_generation(), 3);
+
+    for queue in [&first, &second] {
+        let notifications = queue.drain();
+        assert_eq!(notifications.len(), 2);
+        assert_eq!(notifications[0]["method"], "marketplace/changed");
+        assert_eq!(notifications[0]["params"]["instanceId"], instance_id);
+        assert_eq!(notifications[0]["params"]["generation"], 2);
+        assert_eq!(notifications[1]["params"]["generation"], 3);
+    }
+}
+
+#[test]
+fn profile_marketplace_broker_deduplicates_one_manager_commit_seen_by_multiple_scopes() {
+    let first_scope = UpdateBroker::default();
+    let second_scope = first_scope.fork_scope();
+    let queue = NotificationQueue::default();
+    first_scope.register(first_scope.allocate_connection_id(), &queue);
+
+    assert_eq!(
+        first_scope.publish_marketplace_manager_changed("manager-a", 2),
+        2
+    );
+    assert_eq!(
+        second_scope.publish_marketplace_manager_changed("manager-a", 2),
+        2
+    );
+    assert_eq!(
+        second_scope.publish_marketplace_manager_changed("manager-a", 3),
+        3
+    );
+    assert_eq!(
+        first_scope.publish_marketplace_manager_changed("manager-b", 2),
+        4
+    );
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 3);
+    assert_eq!(notifications[0]["params"]["generation"], 2);
+    assert_eq!(notifications[1]["params"]["generation"], 3);
+    assert_eq!(notifications[2]["params"]["generation"], 4);
+}
+
+#[test]
 fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     let broker = UpdateBroker::default();
     let queue = NotificationQueue::default();

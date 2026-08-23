@@ -59,7 +59,9 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
 | `AppServerClient::{synchronize_language_document,close_language_document,language_hover,language_completions,language_locations}` | CLI/native consumer 通过同一 request handle 调用 App Server-owned language authority；不在 client crate 启动 LSP 或转换产品坐标 |
 | `AppServerClient::open_skill_resource` | 以 exact Skill digest 打开 package resource；bytes 仍由 connection-owned Resource API 分块读取 |
+| `AppServerClient::{search_marketplace,get_marketplace_package,download_marketplace_package,install_marketplace_package,update_marketplace_package,uninstall_marketplace_package,list_installed_marketplace_packages,acquire_marketplace_capability,release_marketplace_capability,open_marketplace_resource}` | 三端共用的 typed Marketplace request surface；不读取 Manager store 或 cache path |
 | `ServerNotification::ConnectorsChanged` | `connector/changed` 的 typed generation invalidation；consumer 收到后重新 list |
+| `ServerNotification::MarketplaceChanged` | `marketplace/changed` 的 typed profile instance/generation invalidation；consumer 收到后重新 `list_installed_marketplace_packages`，重连也用该 list 补读 |
 
 正常入口示意（`options`/`params` 由 host 与 protocol DTO 构造）：
 
@@ -92,7 +94,7 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
 | `src/session_stdio_tests.rs` | child command 和 JSONL request/response identifier guard |
-| `src/client_tests.rs` | JSON-RPC pairing、schema、Session、Language typed methods、Skill catalog/watcher contract |
+| `src/client_tests.rs` | JSON-RPC pairing、schema、Session、Language/Marketplace typed methods、Skill catalog/watcher contract |
 
 ## 执行路径
 

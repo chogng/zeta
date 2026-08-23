@@ -66,6 +66,22 @@ use zeta_app_server_protocol::protocol::language::LanguageHoverResult;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsResult;
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceAcquireCapabilityParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceArtifactHandleDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceDownloadParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceGetParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceInstallParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceInstalledPackageDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceListInstalledResult;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceOpenResourceParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplacePackageDetailsDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceReleaseCapabilityParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceResourceContentDto;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceSearchParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceSearchResult;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceUninstallParams;
+use zeta_app_server_protocol::protocol::marketplace::MarketplaceUpdateParams;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
@@ -594,6 +610,75 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: ConnectorCredentialCleanupParams,
     ) -> Result<ConnectorCredentialCleanupDto, ClientError> {
         self.call(ClientMethod::ConnectorCredentialCleanupRetry, params)
+    }
+
+    pub fn search_marketplace(
+        &mut self,
+        params: MarketplaceSearchParams,
+    ) -> Result<MarketplaceSearchResult, ClientError> {
+        self.call(ClientMethod::MarketplaceSearch, params)
+    }
+
+    pub fn get_marketplace_package(
+        &mut self,
+        params: MarketplaceGetParams,
+    ) -> Result<MarketplacePackageDetailsDto, ClientError> {
+        self.call(ClientMethod::MarketplaceGet, params)
+    }
+
+    pub fn download_marketplace_package(
+        &mut self,
+        params: MarketplaceDownloadParams,
+    ) -> Result<MarketplaceArtifactHandleDto, ClientError> {
+        self.call(ClientMethod::MarketplaceDownload, params)
+    }
+
+    pub fn install_marketplace_package(
+        &mut self,
+        params: MarketplaceInstallParams,
+    ) -> Result<MarketplaceInstalledPackageDto, ClientError> {
+        self.call(ClientMethod::MarketplaceInstall, params)
+    }
+
+    pub fn update_marketplace_package(
+        &mut self,
+        params: MarketplaceUpdateParams,
+    ) -> Result<MarketplaceInstalledPackageDto, ClientError> {
+        self.call(ClientMethod::MarketplaceUpdate, params)
+    }
+
+    pub fn uninstall_marketplace_package(
+        &mut self,
+        params: MarketplaceUninstallParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::MarketplaceUninstall, params)
+    }
+
+    pub fn list_installed_marketplace_packages(
+        &mut self,
+    ) -> Result<MarketplaceListInstalledResult, ClientError> {
+        self.call(ClientMethod::MarketplaceListInstalled, EmptyParams {})
+    }
+
+    pub fn acquire_marketplace_capability(
+        &mut self,
+        params: MarketplaceAcquireCapabilityParams,
+    ) -> Result<MarketplaceAcquiredCapabilityDto, ClientError> {
+        self.call(ClientMethod::MarketplaceAcquireCapability, params)
+    }
+
+    pub fn release_marketplace_capability(
+        &mut self,
+        params: MarketplaceReleaseCapabilityParams,
+    ) -> Result<(), ClientError> {
+        self.call(ClientMethod::MarketplaceReleaseCapability, params)
+    }
+
+    pub fn open_marketplace_resource(
+        &mut self,
+        params: MarketplaceOpenResourceParams,
+    ) -> Result<MarketplaceResourceContentDto, ClientError> {
+        self.call(ClientMethod::MarketplaceOpenResource, params)
     }
 
     pub fn list_plugins(&mut self) -> Result<PluginListResult, ClientError> {

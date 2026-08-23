@@ -47,6 +47,7 @@ pub use model::PackageDetails;
 pub use model::PackageRef;
 pub use model::PackageSource;
 pub use model::PackageSummary;
+pub use model::ReleaseCapabilityOutcome;
 pub use model::ReleaseCapabilityRequest;
 pub use model::ResourceContent;
 pub use model::ResourceRef;

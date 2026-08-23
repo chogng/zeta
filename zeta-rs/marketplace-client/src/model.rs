@@ -224,6 +224,13 @@ pub struct ReleaseCapabilityRequest {
     pub lease_id: String,
 }
 
+/// Reports whether releasing the lease committed a deferred package removal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReleaseCapabilityOutcome {
+    pub installation_changed: bool,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 pub enum ActivationSpec {
