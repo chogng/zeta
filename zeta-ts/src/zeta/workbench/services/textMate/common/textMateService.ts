@@ -8,7 +8,7 @@ import { type TextMateScopeThemeSource } from "./textMateScopeTheme.js";
  * Workbench-owned TextMate composition used by editor products.
  *
  * The service owns grammar contributions and theme state; callers only receive
- * a factory for dedicated Aster syntax workers and must not own the shared
+ * a factory for dedicated Stanza syntax workers and must not own the shared
  * service itself.
  */
 export interface ITextMateService extends IDisposable {

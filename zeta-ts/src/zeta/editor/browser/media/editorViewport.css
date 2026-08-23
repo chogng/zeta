@@ -1,6 +1,6 @@
-.aster-editor {
-  --aster-editor-padding-left: 12px;
-  --aster-editor-padding-right: 12px;
+.stanza-editor {
+  --stanza-editor-padding-left: 12px;
+  --stanza-editor-padding-right: 12px;
 
   position: relative;
   box-sizing: border-box;
@@ -18,40 +18,40 @@
   contain: strict;
 }
 
-.aster-editor.horizontally-scrollable {
+.stanza-editor.horizontally-scrollable {
   overflow-x: auto;
 }
 
-.aster-editor.vertically-scrollable {
+.stanza-editor.vertically-scrollable {
   overflow-y: auto;
 }
 
-.aster-editor-focus-owner-editor:focus-visible,
-.aster-editor-focus-owner-editor.input-focused {
+.stanza-editor-focus-owner-editor:focus-visible,
+.stanza-editor-focus-owner-editor.input-focused {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.aster-editor-embedded {
+.stanza-editor-embedded {
   color: var(--zeta-input-foreground);
   background: transparent;
   font-family: inherit;
 }
 
-.aster-editor-embedded .aster-editor-line-number {
+.stanza-editor-embedded .stanza-editor-line-number {
   display: none;
 }
 
-.aster-editor.hide-line-numbers .aster-editor-line-number {
+.stanza-editor.hide-line-numbers .stanza-editor-line-number {
   display: none;
 }
 
-.aster-editor-content {
+.stanza-editor-content {
   position: relative;
   min-width: 100%;
 }
 
-.aster-editor-diagnostic-hover {
+.stanza-editor-diagnostic-hover {
   position: fixed;
   z-index: 100;
   box-sizing: border-box;
@@ -67,7 +67,7 @@
   box-shadow: 0 2px 8px color-mix(in srgb, var(--zeta-editor-foreground) 20%, transparent);
 }
 
-.aster-editor-accessibility-status {
+.stanza-editor-accessibility-status {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -78,19 +78,19 @@
 }
 
 @media (forced-colors: active) {
-  .aster-editor {
+  .stanza-editor {
     color: CanvasText;
     background: Canvas;
   }
 
-  .aster-editor-focus-owner-editor:focus-visible,
-  .aster-editor-focus-owner-editor.input-focused {
+  .stanza-editor-focus-owner-editor:focus-visible,
+  .stanza-editor-focus-owner-editor.input-focused {
     outline-color: Highlight;
   }
 
 }
 
-.aster-editor-input {
+.stanza-editor-input {
   position: absolute;
   top: 0;
   left: 0;
@@ -110,11 +110,11 @@
   outline: none;
 }
 
-.aster-editor-input.ime-input {
+.stanza-editor-input.ime-input {
   width: 2px;
 }
 
-.aster-editor-text-metrics {
+.stanza-editor-text-metrics {
   position: absolute;
   top: 0;
   left: 0;

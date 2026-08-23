@@ -9,23 +9,23 @@ import type { IWorkingCopyService } from "../../workingCopy/common/workingCopySe
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
 import { parseDocument } from "./documentWorkingCopy.js";
 
-/** Browser implementation of Aster's structured document-model service. */
+/** Browser implementation of Stanza's structured document-model service. */
 export class BrowserDocumentModelService extends DisposableOwner implements IDocumentModelService {
 	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
 		super();
 		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
 			this.dispose();
-			throw new TypeError("Aster document model service requires a Workbench text file service");
+			throw new TypeError("Stanza document model service requires a Workbench text file service");
 		}
 	}
 
 	async acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference> {
-		throwIfCancelled(signal, "Aster document model acquisition was cancelled");
+		throwIfCancelled(signal, "Stanza document model acquisition was cancelled");
 		const content = await this.textFiles.resolve({
 			resource: input.resource,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
 		}, signal);
-		throwIfCancelled(signal, "Aster document model acquisition was cancelled");
+		throwIfCancelled(signal, "Stanza document model acquisition was cancelled");
 		const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
 		const model = new DocumentModel(input.schema, document, { plugins: input.plugins });
 		const workingCopy = new DocumentWorkingCopy({

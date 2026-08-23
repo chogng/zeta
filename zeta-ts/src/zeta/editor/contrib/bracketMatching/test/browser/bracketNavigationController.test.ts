@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { BracketNavigationController } = await import("../../browser/bracketNavigationController.js");
 
-test("Go-to-bracket shortcut uses the Aster lexical bracket matcher", () => {
+test("Go-to-bracket shortcut uses the Stanza lexical bracket matcher", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("(value)");

@@ -11,14 +11,14 @@ export type GotoLocationParseResult =
 	| { readonly kind: "location"; readonly location: GotoLocation; readonly message: string };
 
 /**
- * Parses Aster's Go to Line input into a clamped model position.
+ * Parses Stanza's Go to Line input into a clamped model position.
  *
  * Line and column values are one-based UTF-16 positions. A negative line or
  * column counts backwards from its corresponding document boundary. `::N`
  * addresses the one-based UTF-16 offset N, with negative offsets counted from
  * the end of the document.
  */
-export function parseAsterGotoLocation(model: TextModel, value: string): GotoLocationParseResult {
+export function parseStanzaGotoLocation(model: TextModel, value: string): GotoLocationParseResult {
 	if (typeof value !== "string") throw new TypeError("Go to Line input must be text");
 	const input = value.trim().replace(/^:/u, "");
 	if (input.length === 0) {

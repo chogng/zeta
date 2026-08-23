@@ -77,29 +77,29 @@ test.after(() => browserEnvironment.window.close());
 test("editor registry resolves defaults and explicit Open With choices", () => {
 	const registry = new EditorPaneRegistry();
 	const alpha = descriptor(
-		"aster.editor.code",
+		"stanza.editor.code",
 		".ts",
-		() => new TestEditorPane("aster.editor.code"),
+		() => new TestEditorPane("stanza.editor.code"),
 	);
-	const textEditorWidget = descriptor(
-		"zeta.editor.textEditorWidget",
+	const codeBlockEditorWidget = descriptor(
+		"zeta.editor.codeBlockEditorWidget",
 		".md",
-		() => new TestEditorPane("zeta.editor.textEditorWidget"),
+		() => new TestEditorPane("zeta.editor.codeBlockEditorWidget"),
 	);
 	const alphaRegistration = registry.register(alpha);
-	const textEditorWidgetRegistration = registry.register(textEditorWidget);
+	const codeBlockEditorWidgetRegistration = registry.register(codeBlockEditorWidget);
 
 	const typescript = input("C:\\project\\main.ts");
 	const markdown = input("C:\\project\\paper.md");
 	assert.equal(registry.resolve(typescript), alpha);
-	assert.equal(registry.resolve(markdown), textEditorWidget);
+	assert.equal(registry.resolve(markdown), codeBlockEditorWidget);
 	assert.deepEqual(registry.getEditors(markdown), [
-		textEditorWidget,
+		codeBlockEditorWidget,
 		alpha,
 	]);
 	assert.equal(
 		registry.resolve(markdown, {
-			preferredEditorId: "aster.editor.code",
+			preferredEditorId: "stanza.editor.code",
 		}),
 		alpha,
 	);
@@ -114,7 +114,7 @@ test("editor registry resolves defaults and explicit Open With choices", () => {
 		/already registered/,
 	);
 
-	textEditorWidgetRegistration.dispose();
+	codeBlockEditorWidgetRegistration.dispose();
 	assert.equal(registry.resolve(markdown), alpha);
 	alphaRegistration.dispose();
 	assert.throws(() => registry.resolve(markdown), /No editor can open/);
@@ -166,9 +166,9 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	registry.register(descriptor(
-		"aster.editor.code",
+		"stanza.editor.code",
 		".ts",
-		() => new TestEditorPane("aster.editor.code"),
+		() => new TestEditorPane("stanza.editor.code"),
 	));
 	const keybindings = new TestKeybindingService();
 	keybindings.set(
@@ -333,14 +333,14 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
 	registry.register(descriptor(
-		"aster.editor.code",
+		"stanza.editor.code",
 		".ts",
-		() => trackPane(panes, "aster.editor.code"),
+		() => trackPane(panes, "stanza.editor.code"),
 	));
 	registry.register(descriptor(
-		"zeta.editor.textEditorWidget",
+		"zeta.editor.codeBlockEditorWidget",
 		".md",
-		() => trackPane(panes, "zeta.editor.textEditorWidget"),
+		() => trackPane(panes, "zeta.editor.codeBlockEditorWidget"),
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.element);
@@ -356,7 +356,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		editor.element.querySelector(
 			".zeta-editor-pane-host:not([hidden])",
 		)?.textContent,
-		"aster.editor.code",
+		"stanza.editor.code",
 	);
 	assert.deepEqual(panes[0]?.visibilities, [
 		EditorPaneVisibility.Hidden,
@@ -406,15 +406,15 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(panes[0]?.focusCount, 1);
 
 	const markdown = input("C:\\project\\paper.md");
-	const textEditorWidgetPane = await editor.openEditor(markdown);
-	assert.equal(editor.activePane, textEditorWidgetPane);
+	const codeBlockEditorWidgetPane = await editor.openEditor(markdown);
+	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
 	assert.equal(editor.activeInput, markdown);
 	assert.deepEqual(editor.activeGroup.inputs, [typescript, markdown]);
 	assert.equal(
 		editor.element.querySelector(
 			".zeta-editor-pane-host:not([hidden])",
 		)?.textContent,
-		"zeta.editor.textEditorWidget",
+		"zeta.editor.codeBlockEditorWidget",
 	);
 	assert.equal(panes[0]?.disposed, false);
 	assert.deepEqual(panes[0]?.visibilities.slice(-1), [
@@ -442,7 +442,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	)?.click();
 	assert.equal(panes[0]?.disposed, true);
 	assert.equal(editor.activeInput, markdown);
-	assert.equal(editor.activePane, textEditorWidgetPane);
+	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
 	assert.deepEqual(editor.activeGroup.inputs, [markdown]);
 	assert.equal(
 		editor.element.querySelectorAll("[role='tab']").length,
@@ -466,9 +466,9 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
 	registry.register(descriptor(
-		"aster.editor.code",
+		"stanza.editor.code",
 		".ts",
-		() => trackPane(panes, "aster.editor.code"),
+		() => trackPane(panes, "stanza.editor.code"),
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.element);
@@ -502,7 +502,7 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
-	registry.register(descriptor("aster.editor.code", ".ts", () => trackPane(panes, "aster.editor.code")));
+	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
 	dom.window.document.body.append(editor.element);
 	const sourceInput = input("C:\\project\\source.ts");
@@ -546,9 +546,9 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const registry = new EditorPaneRegistry();
 	const panes: TestEditorPane[] = [];
 	registry.register(descriptor(
-		"aster.editor.code",
+		"stanza.editor.code",
 		".ts",
-		() => trackPane(panes, "aster.editor.code"),
+		() => trackPane(panes, "stanza.editor.code"),
 	));
 	const services = new ServiceCollection();
 	using contextKeys = new ContextKeyService();

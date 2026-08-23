@@ -19,7 +19,7 @@ export interface ResolvedDocumentPosition {
 	readonly depth: number;
 }
 
-/** Returns the ProseMirror-style node size used by Aster's absolute positions. */
+/** Returns the ProseMirror-style node size used by Stanza's absolute positions. */
 export function documentNodeSize(node: DocumentNode, schema: DocumentSchema): number {
 	if (node.text !== undefined) return node.text.length;
 	if (isDocumentLeaf(node, schema)) return 1;

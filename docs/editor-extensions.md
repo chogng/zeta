@@ -55,7 +55,7 @@ flowchart TD
     parse --> prepare["准备语言、snippet、theme、grammar、debugger 注册"]
     prepare -->|任一步失败| previous["保留上一批可用注册并报告失败"]
     prepare --> commit["在统一事件屏障内提交 Workbench 注册"]
-    commit --> consumers["Aster / TextMate Worker / Debug service"]
+    commit --> consumers["Stanza / TextMate Worker / Debug service"]
 ```
 
 产品构建把仓库根目录 `extensions/` 复制到包内 `zeta-resources/extensions/`。App Server 同时把当前

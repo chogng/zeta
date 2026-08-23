@@ -71,7 +71,7 @@ export class DiffEditorWidget extends DisposableOwner {
 		this.rowsNode = new FastDomNode(this.rowsElement);
 		this.overviewRuler = new DiffOverviewRuler(this.element);
 		this.accessibilityStatusElement = h(ownerDocument, "div");
-		this.element.className = "aster-diff-editor";
+		this.element.className = "stanza-diff-editor";
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
 		if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
 		if (options.fontSize !== undefined) this.element.style.fontSize = `${options.fontSize}px`;
@@ -79,9 +79,9 @@ export class DiffEditorWidget extends DisposableOwner {
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
 		this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);
-		this.contentNode.setClassName("aster-diff-editor-content");
-		this.rowsNode.setClassName("aster-diff-editor-rows");
-		this.accessibilityStatusElement.className = "aster-diff-editor-accessibility-status";
+		this.contentNode.setClassName("stanza-diff-editor-content");
+		this.rowsNode.setClassName("stanza-diff-editor-rows");
+		this.accessibilityStatusElement.className = "stanza-diff-editor-accessibility-status";
 		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
 		this.contentElement.append(this.rowsElement);
@@ -150,12 +150,12 @@ export class DiffEditorWidget extends DisposableOwner {
 
 	private revealLine(side: "originalLineIndex" | "modifiedLineIndex", lineIndex: number): void {
 		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) {
-			throw new RangeError("Aster diff line index must be a non-negative safe integer");
+			throw new RangeError("Stanza diff line index must be a non-negative safe integer");
 		}
 		const diff = this.currentDiff;
 		if (!diff) throw new Error("Diff results are not ready");
 		const rowIndex = diff.rows.findIndex(row => row[side] === lineIndex);
-		if (rowIndex < 0) throw new RangeError("Aster diff line index is outside its source model");
+		if (rowIndex < 0) throw new RangeError("Stanza diff line index is outside its source model");
 		this.revealRow(rowIndex);
 	}
 
@@ -224,7 +224,7 @@ export class DiffEditorWidget extends DisposableOwner {
 
 function createDiffRow(ownerDocument: Document, row: LineDiffRow, original: DiffModel["original"], modified: DiffModel["modified"], lineHeight: number, active: boolean, showInlineChanges: boolean): HTMLDivElement {
 	const element = h(ownerDocument, "div");
-	element.className = `aster-diff-editor-row ${row.kind}`;
+	element.className = `stanza-diff-editor-row ${row.kind}`;
 	element.classList.toggle("active", active);
 	element.style.height = `${lineHeight}px`;
 	element.style.lineHeight = `${lineHeight}px`;
@@ -243,12 +243,12 @@ function diffRowLocation(row: LineDiffRow): string {
 
 function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: LineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly DiffRange[], showInlineChanges: boolean): HTMLDivElement {
 	const cell = h(ownerDocument, "div");
-	cell.className = `aster-diff-editor-cell ${side}`;
+	cell.className = `stanza-diff-editor-cell ${side}`;
 	const number = h(ownerDocument, "span");
-	number.className = "aster-diff-editor-line-number";
+	number.className = "stanza-diff-editor-line-number";
 	number.textContent = lineIndex === undefined ? "" : String(lineIndex + 1);
 	const content = h(ownerDocument, "span");
-	content.className = "aster-diff-editor-line-content";
+	content.className = "stanza-diff-editor-line-content";
 	if (text === undefined) {
 		cell.classList.add("missing");
 	} else {
@@ -268,7 +268,7 @@ function projectDiffText(ownerDocument: Document, target: HTMLElement, text: str
 	for (const change of changes) {
 		fragment.append(text.slice(previousEnd, change.startColumn));
 		const changed = h(ownerDocument, "span");
-		changed.className = `aster-diff-editor-inline ${changedKind}`;
+		changed.className = `stanza-diff-editor-inline ${changedKind}`;
 		changed.textContent = text.slice(change.startColumn, change.endColumn);
 		fragment.append(changed);
 		previousEnd = change.endColumn;

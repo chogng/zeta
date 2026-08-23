@@ -36,7 +36,7 @@ export class FontZoomController extends DisposableOwner {
 	}
 
 	private apply(): void {
-		this.viewport.element.style.setProperty("--aster-editor-font-scale", String(this.scale));
+		this.viewport.element.style.setProperty("--stanza-editor-font-scale", String(this.scale));
 		this.viewport.element.style.fontSize = this.baseFontSize === undefined ? `${this.scale}em` : `${this.baseFontSize * this.scale}px`;
 		this.viewport.setLineHeight(Math.max(1, Math.round(this.baseLineHeight * this.scale)));
 		this.viewport.refreshFontMetrics();
@@ -44,8 +44,8 @@ export class FontZoomController extends DisposableOwner {
 	}
 }
 
-function readScale(value: number): number { if (!Number.isFinite(value) || value < 0.5 || value > 3) throw new RangeError("Aster font zoom scale must be between 0.5 and 3"); return Math.round(value * 10) / 10; }
-function readPositive(value: number, name: string): number { if (!Number.isFinite(value) || value <= 0) throw new RangeError(`Aster ${name} must be positive`); return value; }
+function readScale(value: number): number { if (!Number.isFinite(value) || value < 0.5 || value > 3) throw new RangeError("Stanza font zoom scale must be between 0.5 and 3"); return Math.round(value * 10) / 10; }
+function readPositive(value: number, name: string): number { if (!Number.isFinite(value) || value <= 0) throw new RangeError(`Stanza ${name} must be positive`); return value; }
 
 registerEditorContribution({
 	id: "editor.contrib.fontZoom",

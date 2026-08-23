@@ -1,4 +1,4 @@
-.aster-editor-placeholder-text {
+.stanza-editor-placeholder-text {
   position: absolute;
   z-index: 7;
   color: var(--zeta-description-foreground);
@@ -6,6 +6,6 @@
   white-space: pre-wrap;
 }
 
-.aster-editor-embedded .aster-editor-placeholder-text {
+.stanza-editor-embedded .stanza-editor-placeholder-text {
   color: var(--zeta-input-placeholder-foreground);
 }

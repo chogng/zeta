@@ -3,7 +3,7 @@ import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
 import { type EditorLineRange } from "../viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "./textMeasurer.js";
-import { createAsterVisualRangeRectangles } from "./visualRangeGeometry.js";
+import { createStanzaVisualRangeRectangles } from "./visualRangeGeometry.js";
 
 export interface VisualSelectionRectangle {
 	readonly selectionIndex: number;
@@ -25,7 +25,7 @@ export interface VisualSelectionGeometry {
 }
 
 /** @internal */
-export function createAsterVisualSelectionGeometry(model: TextModel, selectionSet: TextSelectionSet, projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): VisualSelectionGeometry {
+export function createStanzaVisualSelectionGeometry(model: TextModel, selectionSet: TextSelectionSet, projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): VisualSelectionGeometry {
 	if (projection.modelVersion !== model.version) {
 		throw new Error("Visual selection geometry requires the current text model projection");
 	}
@@ -44,7 +44,7 @@ export function createAsterVisualSelectionGeometry(model: TextModel, selectionSe
 			primary: selectionIndex === selectionSet.primaryIndex,
 		}));
 	}
-	const selections = createAsterVisualRangeRectangles(
+	const selections = createStanzaVisualRangeRectangles(
 		model,
 		selectionSet.selections.map((selection, selectionIndex) => ({
 			range: selection.range,

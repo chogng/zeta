@@ -53,7 +53,7 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
 		this.readRenderedLines = options.readRenderedLines;
 		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("aster-editor-margin");
+		this.root.setClassName("stanza-editor-margin");
 		this.domNode.setAttribute("role", "presentation");
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
@@ -95,11 +95,11 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
 			if (!visualLine) continue;
 			this.lineGutterDecoration?.project(line.featureGutterElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
 		}
-		this.host.style.setProperty("--aster-editor-gutter-width", `${gutterWidth}px`);
-		this.host.style.setProperty("--aster-editor-feature-gutter-width", `${featureGutterWidth}px`);
-		this.host.style.setProperty("--aster-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
-		this.contentElement.style.setProperty("--aster-editor-gutter-width", `${gutterWidth}px`);
-		this.contentElement.style.setProperty("--aster-editor-feature-gutter-width", `${featureGutterWidth}px`);
-		this.contentElement.style.setProperty("--aster-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
+		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
+		this.host.style.setProperty("--stanza-editor-feature-gutter-width", `${featureGutterWidth}px`);
+		this.host.style.setProperty("--stanza-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
+		this.contentElement.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
+		this.contentElement.style.setProperty("--stanza-editor-feature-gutter-width", `${featureGutterWidth}px`);
+		this.contentElement.style.setProperty("--stanza-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
 	}
 }

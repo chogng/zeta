@@ -1,16 +1,16 @@
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
-import { DecorationPresentation, createAsterDecorationSource, type DecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource, type DecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 
 /**
- * Creates Aster's underline projection for caller-owned language diagnostics.
+ * Creates Stanza's underline projection for caller-owned language diagnostics.
  *
  * Every normalized severity maps to one component-owned underline presentation.
  */
-export function createAsterLanguageDiagnosticSource(collection: TextDecorationCollection<LanguageDiagnostic>): DecorationSource {
-	return createAsterDecorationSource(
+export function createStanzaLanguageDiagnosticSource(collection: TextDecorationCollection<LanguageDiagnostic>): DecorationSource {
+	return createStanzaDecorationSource(
 		collection,
-		decoration => resolveAsterLanguageDiagnosticPresentation(
+		decoration => resolveStanzaLanguageDiagnosticPresentation(
 			decoration.metadata.severity,
 		),
 		decoration => diagnosticHoverText(decoration.metadata),
@@ -22,7 +22,7 @@ function diagnosticHoverText(diagnostic: LanguageDiagnostic): string {
 	return prefix.length === 0 ? diagnostic.message : `${prefix}: ${diagnostic.message}`;
 }
 
-export function resolveAsterLanguageDiagnosticPresentation(severity: LanguageDiagnosticSeverity): DecorationPresentation | undefined {
+export function resolveStanzaLanguageDiagnosticPresentation(severity: LanguageDiagnosticSeverity): DecorationPresentation | undefined {
 	switch (severity) {
 		case LanguageDiagnosticSeverity.Error:
 			return DecorationPresentation.ErrorUnderline;

@@ -37,7 +37,7 @@ interface ResolvedInitialMeasurement {
 	readonly schedule: VisualLineMeasurementScheduler;
 }
 
-/** Browser-measured, DOM-free visual-line projection for one Aster TextModel. */
+/** Browser-measured, DOM-free visual-line projection for one Stanza TextModel. */
 export class VisualLineProjection extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<void>());
 	private readonly lineCountChangeEmitter = this.own(new Emitter<void>());
@@ -198,7 +198,7 @@ export class VisualLineProjection extends DisposableOwner {
 
 	private createProjectionFromPendingBreaks(): EditorVisualLineProjection {
 		const breaks = this.pendingBreakColumns;
-		if (!breaks) throw new Error("Aster visual-line measurement is not active");
+		if (!breaks) throw new Error("Stanza visual-line measurement is not active");
 		return EditorVisualLineProjection.fromBreakColumns(this.model, breaks);
 	}
 
@@ -220,7 +220,7 @@ export class VisualLineProjection extends DisposableOwner {
 			const column = boundaries[index]!;
 			const width = this.textMeasurer.measureLineWidth(text.slice(startColumn, column));
 			if (!Number.isFinite(width) || width < 0) {
-				throw new RangeError("Aster wrapped line measurement must be finite and non-negative");
+				throw new RangeError("Stanza wrapped line measurement must be finite and non-negative");
 			}
 			if (width > this.wrapWidth && previousColumn > startColumn) {
 				breaks.push(previousColumn);
@@ -236,7 +236,7 @@ export class VisualLineProjection extends DisposableOwner {
 function readWrapping(value: EditorLineWrapping | undefined): EditorLineWrapping {
 	const wrapping = value ?? EditorLineWrapping.Off;
 	if (!Object.values(EditorLineWrapping).includes(wrapping)) {
-		throw new TypeError("Unknown Aster editor line wrapping mode");
+		throw new TypeError("Unknown Stanza editor line wrapping mode");
 	}
 	return wrapping;
 }
@@ -244,7 +244,7 @@ function readWrapping(value: EditorLineWrapping | undefined): EditorLineWrapping
 function readWrapWidth(value: number | undefined): number {
 	const width = value ?? 0;
 	if (!Number.isFinite(width) || width < 0) {
-		throw new RangeError("Aster editor wrap width must be finite and non-negative");
+		throw new RangeError("Stanza editor wrap width must be finite and non-negative");
 	}
 	return width;
 }
@@ -252,15 +252,15 @@ function readWrapWidth(value: number | undefined): number {
 function readInitialMeasurement(value: VisualLineInitialMeasurementOptions | undefined): ResolvedInitialMeasurement | undefined {
 	if (value === undefined) return undefined;
 	if (!value || typeof value.schedule !== "function") {
-		throw new TypeError("Aster initial visual-line measurement requires a scheduler");
+		throw new TypeError("Stanza initial visual-line measurement requires a scheduler");
 	}
 	const initialLineCount = value.initialLineCount ?? 512;
 	const linesPerSlice = value.linesPerSlice ?? initialLineCount;
 	if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
-		throw new RangeError("Aster initial visual-line measurement count must be a positive safe integer");
+		throw new RangeError("Stanza initial visual-line measurement count must be a positive safe integer");
 	}
 	if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
-		throw new RangeError("Aster visual-line measurement slice size must be a positive safe integer");
+		throw new RangeError("Stanza visual-line measurement slice size must be a positive safe integer");
 	}
 	return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });
 }

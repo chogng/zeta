@@ -7,8 +7,8 @@ import { type DocumentSelection } from "../core/documentSelection.js";
 export function extractDocumentFragment(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
 	if (selection.kind === "all") return Object.freeze({ content: Object.freeze([...document.content]) });
 	if (selection.kind !== "text") return undefined;
-	const anchor = findTextBlockLocation(document, selection.anchor.nodeId);
-	const head = findTextBlockLocation(document, selection.head.nodeId);
+	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
+	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
 	if (anchor.block.id === head.block.id) {
 		const forward = anchor.textIndex < head.textIndex || (anchor.textIndex === head.textIndex && selection.anchor.offset <= selection.head.offset);
@@ -25,7 +25,7 @@ export function extractDocumentFragment(schema: DocumentSchema, document: Docume
 	const blocks: DocumentNode[] = [];
 	for (let index = start.location.parentIndex; index <= end.location.parentIndex; index += 1) {
 		const block = start.location.parent.content[index];
-		if (!block || !isTextBlock(block)) return undefined;
+		if (!block || !isTextBearingBlock(block)) return undefined;
 		if (index === start.location.parentIndex) {
 			const content = sliceInlineContent(schema, block, start.location.textIndex, start.point.offset, block.content.length - 1, Number.MAX_SAFE_INTEGER);
 			blocks.push(createBlock(schema, block, content));
@@ -39,17 +39,17 @@ export function extractDocumentFragment(schema: DocumentSchema, document: Docume
 	return Object.freeze({ content: Object.freeze(blocks) });
 }
 
-interface TextBlockLocation {
+interface TextBearingBlockLocation {
 	readonly block: DocumentNode;
 	readonly parent: DocumentNode;
 	readonly parentIndex: number;
 	readonly textIndex: number;
 }
 
-function findTextBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBlockLocation | undefined {
+function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBearingBlockLocation | undefined {
 	const textLocation = findDocumentNode(root, textNodeId);
 	const block = textLocation?.parent;
-	if (!block || !isTextBlock(block)) return undefined;
+	if (!block || !isTextBearingBlock(block)) return undefined;
 	const blockLocation = findDocumentNode(root, block.id);
 	const textIndex = block.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	if (!blockLocation?.parent || textIndex < 0) return undefined;
@@ -77,6 +77,6 @@ function createBlock(schema: DocumentSchema, source: DocumentNode, content: read
 	return schema.createNode(source.type, { id: source.id, attrs: source.attrs, content });
 }
 
-function isTextBlock(node: DocumentNode): boolean {
-	return node.type === "paragraph" || node.type === "heading" || node.type === "textBlock";
+function isTextBearingBlock(node: DocumentNode): boolean {
+	return node.type === "paragraph" || node.type === "heading" || node.type === "codeBlock";
 }

@@ -1,4 +1,4 @@
-// Standard Aster profile shared by the Code and Academic products.
+// Standard Stanza profile shared by the Code and Academic products.
 import "./contrib/codeEditorPart.contribution.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";
 import "./contrib/anchorSelect/browser/anchorSelectController.js";

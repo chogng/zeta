@@ -3,7 +3,7 @@ import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { projectAsterCompositionOverlay } from "./compositionProjection.js";
+import { projectStanzaCompositionOverlay } from "./compositionProjection.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Owns tracked IME range presentation while the input controller owns composition state. */
@@ -31,6 +31,6 @@ export class CompositionPart extends EditorOverlayPart {
 		if (!context) {
 			return;
 		}
-		projectAsterCompositionOverlay(context, this.compositionRange?.range);
+		projectStanzaCompositionOverlay(context, this.compositionRange?.range);
 	}
 }

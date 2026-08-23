@@ -47,7 +47,7 @@ export class CollaborationContribution extends DisposableOwner {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
-		element.className = "zeta-document-collaboration-toolbar";
+		element.className = "stanza-document-collaboration-toolbar";
 		element.hidden = true;
 		element.setAttribute("role", "group");
 		element.setAttribute("aria-label", "Document collaboration");
@@ -59,37 +59,37 @@ export class CollaborationContribution extends DisposableOwner {
 			ariaLabel: "Document collaboration",
 			highlightToggledItems: true,
 		}));
-		this.toolbar.element.classList.add("zeta-document-collaboration-actions");
+		this.toolbar.element.classList.add("stanza-document-collaboration-actions");
 		this.toolbar.element.addEventListener("mousedown", event => event.preventDefault());
 		const status = h(ownerDocument, "span");
-		status.className = "zeta-document-collaboration-status";
+		status.className = "stanza-document-collaboration-status";
 		status.setAttribute("role", "status");
 		this.status = status;
 		const invitation = h(ownerDocument, "div");
-		invitation.className = "zeta-document-collaboration-invitation";
+		invitation.className = "stanza-document-collaboration-invitation";
 		invitation.hidden = true;
 		invitation.setAttribute("role", "group");
 		invitation.setAttribute("aria-label", "Collaboration invitation");
 		this.invitation = invitation;
 		const invitationToken = h(ownerDocument, "pre");
-		invitationToken.className = "zeta-document-collaboration-invitation-token";
+		invitationToken.className = "stanza-document-collaboration-invitation-token";
 		invitationToken.tabIndex = 0;
 		invitationToken.setAttribute("aria-label", "Invitation credentials");
 		this.invitationToken = invitationToken;
 		const dismissInvitation = h(ownerDocument, "button");
-		dismissInvitation.className = "zeta-document-collaboration-invitation-dismiss";
+		dismissInvitation.className = "stanza-document-collaboration-invitation-dismiss";
 		dismissInvitation.type = "button";
 		dismissInvitation.textContent = "Dismiss";
 		dismissInvitation.addEventListener("click", () => this.clearInvitation());
 		invitation.append(invitationToken, dismissInvitation);
 		const members = h(ownerDocument, "div");
-		members.className = "zeta-document-collaboration-members";
+		members.className = "stanza-document-collaboration-members";
 		members.hidden = true;
 		members.setAttribute("role", "group");
 		members.setAttribute("aria-label", "Collaboration members");
 		this.members = members;
 		const memberList = h(ownerDocument, "div");
-		memberList.className = "zeta-document-collaboration-member-list";
+		memberList.className = "stanza-document-collaboration-member-list";
 		memberList.setAttribute("role", "list");
 		this.memberList = memberList;
 		members.append(memberList);
@@ -224,24 +224,24 @@ export class CollaborationContribution extends DisposableOwner {
 		const fragment = createFragment(document);
 		if (members.length === 0) {
 			const empty = h(document, "div");
-			empty.className = "zeta-document-collaboration-members-empty";
+			empty.className = "stanza-document-collaboration-members-empty";
 			empty.setAttribute("role", "listitem");
 			empty.textContent = "No active collaborators";
 			fragment.append(empty);
 		}
 		for (const member of members) {
 			const item = h(document, "div");
-			item.className = "zeta-document-collaboration-member";
+			item.className = "stanza-document-collaboration-member";
 			item.setAttribute("role", "listitem");
 			item.dataset.principalId = member.principalId;
 			const identity = h(document, "span");
-			identity.className = "zeta-document-collaboration-member-identity";
+			identity.className = "stanza-document-collaboration-member-identity";
 			identity.textContent = member.displayName;
 			const details = h(document, "span");
-			details.className = "zeta-document-collaboration-member-details";
+			details.className = "stanza-document-collaboration-member-details";
 			details.textContent = `${member.role} · ${member.principalId}`;
 			const actions = h(document, "span");
-			actions.className = "zeta-document-collaboration-member-actions";
+			actions.className = "stanza-document-collaboration-member-actions";
 			const rotate = h(document, "button");
 			rotate.type = "button";
 			rotate.textContent = "Rotate token";

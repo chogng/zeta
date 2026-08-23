@@ -16,22 +16,22 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
-test("document-model editor API, structured editing, and embedded text block run in real browsers", async ({ page }) => {
+test("document-model editor API, structured editing, and embedded code block run in real browsers", async ({ page }) => {
 	await page.goto("/documentModel.html");
-	await expect(page.locator("#text-block .aster-editor")).toBeVisible();
-	await expect(page.locator("#text-block .zeta-structured-format-toolbar")).toHaveAttribute("data-context", "code");
-	await expect(page.locator("#text-block .zeta-structured-format-code-context")).toHaveText("Code block · Text editor");
+	await expect(page.locator("#code-block .stanza-editor")).toBeVisible();
+	await expect(page.locator("#code-block .stanza-structured-format-toolbar")).toHaveAttribute("data-context", "code");
+	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Stanza Code");
 	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.apiDocumentType)).toBe("doc");
 
-	const textBlockInput = page.locator("#text-block .aster-editor-input");
-	await textBlockInput.focus();
+	const codeBlockInput = page.locator("#code-block .stanza-editor-input");
+	await codeBlockInput.focus();
 	await page.keyboard.press("Control+Home");
 	await page.keyboard.type("// bridge\n");
-	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.getTextBlockText())).toBe("// bridge\nconst editor = 1;");
-	await page.evaluate(() => window.zetaDocumentModelIntegration.saveTextBlock());
-	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.getSavedTextBlock())).toContain("// bridge\\nconst editor = 1;");
+	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.getCodeBlockText())).toBe("// bridge\nconst editor = 1;");
+	await page.evaluate(() => window.zetaDocumentModelIntegration.saveCodeBlock());
+	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.getSavedCodeBlock())).toContain("// bridge\\nconst editor = 1;");
 
-	const structuredInput = page.locator("#document-editor textarea.zeta-document-text-input").first();
+	const structuredInput = page.locator("#document-editor textarea.stanza-document-text-input").first();
 	await structuredInput.focus();
 	await page.keyboard.press("End");
 	await page.keyboard.press("Enter");
@@ -42,7 +42,7 @@ test("document-model editor API, structured editing, and embedded text block run
 
 test("document-model editor persists selected font, size, and emphasis formatting", async ({ page }) => {
 	await page.goto("/documentModel.html");
-	const input = page.locator("#document-editor textarea.zeta-document-text-input").first();
+	const input = page.locator("#document-editor textarea.stanza-document-text-input").first();
 	const fontFamily = page.locator("#document-editor select[aria-label='Font family']");
 	const fontSize = page.locator("#document-editor select[aria-label='Font size']");
 	await input.evaluate(element => {
@@ -66,7 +66,7 @@ test("document-model editor persists selected font, size, and emphasis formattin
 		{ type: "strong", attrs: {} },
 	]);
 
-	const styled = page.locator("#document-editor .zeta-document-mark-textStyle[data-font-family='serif']");
+	const styled = page.locator("#document-editor .stanza-document-mark-textStyle[data-font-family='serif']");
 	await expect(styled).toHaveText("Title");
 	await expect(styled).toHaveCSS("font-size", "18px");
 	await expect(bold).toHaveAttribute("aria-pressed", "true");
@@ -78,12 +78,12 @@ test("document-model editor exposes collaboration as a separate contribution", a
 		const responses = ["", "editor-browser-room"];
 		window.prompt = () => responses.shift() ?? null;
 	});
-	const toolbar = page.locator("#document-editor .zeta-document-collaboration-toolbar");
+	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	const start = toolbar.locator("[data-action-id='startCollaboration'] button");
 	await expect(toolbar).toHaveAttribute("data-state", "inactive");
 	await start.click();
 	await expect(toolbar).toHaveAttribute("data-state", "connected");
-	await expect(toolbar.locator(".zeta-document-collaboration-status")).toHaveText("Room: editor-browser-room");
+	await expect(toolbar.locator(".stanza-document-collaboration-status")).toHaveText("Room: editor-browser-room");
 });
 
 test("document-model editor exposes remote-owner invitations", async ({ page }) => {
@@ -92,26 +92,26 @@ test("document-model editor exposes remote-owner invitations", async ({ page }) 
 	await page.evaluate(({ prompts }) => {
 		window.prompt = () => prompts.shift() ?? null;
 	}, { prompts });
-	const toolbar = page.locator("#document-editor .zeta-document-collaboration-toolbar");
+	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
 	await toolbar.locator("[data-action-id='startCollaboration'] button").click();
 	await expect(toolbar.locator("[data-action-id='inviteCollaborator'] button")).toBeVisible();
 	await toolbar.locator("[data-action-id='inviteCollaborator'] button").click();
-	await expect(toolbar.locator(".zeta-document-collaboration-status")).toContainText("Invitation created for Writer");
-	await expect(toolbar.locator(".zeta-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-member-token");
+	await expect(toolbar.locator(".stanza-document-collaboration-status")).toContainText("Invitation created for Writer");
+	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-member-token");
 	await toolbar.locator("[data-action-id='manageCollaborators'] button").click();
 	await expect(toolbar.locator("[data-principal-id='browser-member']")).toContainText("Writereditor · browser-member");
 	await toolbar.locator("[data-principal-id='browser-member'] button").first().click();
-	await expect(toolbar.locator(".zeta-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-rotated-token");
+	await expect(toolbar.locator(".stanza-document-collaboration-invitation-token")).toHaveText("Room ID: editor-browser-room\nAccess token: editor-browser-rotated-token");
 });
 
 test("document-model editor has the accessibility contract", async ({ page }) => {
 	await page.goto("/documentModel.html");
-	const toolbar = page.locator("#document-editor .zeta-structured-format-toolbar");
-	const structuredInput = page.locator("#document-editor textarea.zeta-document-text-input").first();
+	const toolbar = page.locator("#document-editor .stanza-structured-format-toolbar");
+	const structuredInput = page.locator("#document-editor textarea.stanza-document-text-input").first();
 	await expect(toolbar).toHaveAttribute("role", "group");
 	await expect(toolbar).toHaveAttribute("aria-label", "Document formatting");
-	await expect(toolbar.locator(".zeta-structured-format-inline-actions")).toHaveAttribute("role", "toolbar");
-	await expect(toolbar.locator(".zeta-structured-format-document-actions button")).toHaveCount(13);
+	await expect(toolbar.locator(".stanza-structured-format-inline-actions")).toHaveAttribute("role", "toolbar");
+	await expect(toolbar.locator(".stanza-structured-format-document-actions button")).toHaveCount(13);
 	await expect(toolbar.locator("select[aria-label='Font family']")).toBeVisible();
 	await expect(toolbar.locator("select[aria-label='Font size']")).toBeVisible();
 	await expect(structuredInput).toBeVisible();

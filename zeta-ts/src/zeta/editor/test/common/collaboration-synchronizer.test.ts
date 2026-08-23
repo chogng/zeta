@@ -11,7 +11,7 @@ function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
 }
 
-test("Aster collaboration synchronizer keeps canonical and optimistic snapshots separate", () => {
+test("Stanza collaboration synchronizer keeps canonical and optimistic snapshots separate", () => {
 	const schema = createDefaultDocumentSchema();
 	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 1 });
 	const kinds: string[] = [];
@@ -56,7 +56,7 @@ test("Aster collaboration synchronizer keeps canonical and optimistic snapshots 
 	assert.deepEqual(kinds, ["local", "remote", "local", "acknowledged"]);
 });
 
-test("Aster collaboration synchronizer buffers typing while one ordered update is in flight", () => {
+test("Stanza collaboration synchronizer buffers typing while one ordered update is in flight", () => {
 	const schema = createDefaultDocumentSchema();
 	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a" });
 
@@ -75,7 +75,7 @@ test("Aster collaboration synchronizer buffers typing while one ordered update i
 	assert.equal(synchronizer.document.content[0]?.content[0]?.text, "ABHello");
 });
 
-test("Aster collaboration synchronizer envelopes round-trip local and remote transaction versions", () => {
+test("Stanza collaboration synchronizer envelopes round-trip local and remote transaction versions", () => {
 	const schema = createDefaultDocumentSchema();
 	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 3 });
 	const local = synchronizer.dispatchLocal(new DocumentTransaction().replaceText("text-1", 0, 0, "L"));
@@ -93,7 +93,7 @@ test("Aster collaboration synchronizer envelopes round-trip local and remote tra
 	assert.throws(() => deserializeDocumentCollaborationEnvelope("{\"format\":\"zeta.document.collaboration\",\"version\":99}", schema), DocumentSerializationError);
 });
 
-test("Aster collaboration synchronizer rejects stale updates and local echoes", () => {
+test("Stanza collaboration synchronizer rejects stale updates and local echoes", () => {
 	const schema = createDefaultDocumentSchema();
 	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 4 });
 
@@ -103,7 +103,7 @@ test("Aster collaboration synchronizer rejects stale updates and local echoes", 
 	assert.equal(synchronizer.document.content[0]?.content[0]?.text, "Hello");
 });
 
-test("Aster collaboration synchronizer reports dropped pending steps after remote deletion", () => {
+test("Stanza collaboration synchronizer reports dropped pending steps after remote deletion", () => {
 	const schema = createDefaultDocumentSchema();
 	const document = schema.createDocument([
 		schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("One", { id: "text-1" })] }),

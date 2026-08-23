@@ -6,7 +6,7 @@ import { academicProfile } from "../../browser/academicEditorProfile.js";
 import { matchDocumentEditor } from "../../../documentEditor/browser/documentEditorInput.js";
 import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles } from "../../../documentEditor/browser/editorProfile.js";
 
-test("Aster input matching is supplied by the active Workbench profile", () => {
+test("Stanza input matching is supplied by the active Workbench profile", () => {
 	const matcher = { contentTypes: ["application/vnd.zeta.document+json"], extensions: [".zeta-doc"] };
 	assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.ZETA-DOC") }, matcher), EditorPaneMatch.Default);
 	assert.equal(matchDocumentEditor({ resource: URI.file("C:\\project\\paper.bin"), contentType: "application/vnd.zeta.document+json" }, matcher), EditorPaneMatch.Default);
@@ -15,7 +15,7 @@ test("Aster input matching is supplied by the active Workbench profile", () => {
 	assert.equal(findEditorProfile({ resource: URI.file("C:\\project\\paper.txt") }, [academicProfile]), undefined);
 });
 
-test("Aster profile materialization keeps schema and browser extensions together", () => {
+test("Stanza profile materialization keeps schema and browser extensions together", () => {
 	const options = createDocumentEditorPaneOptions(academicProfile);
 	assert.equal(options.schema?.getNodeSpec("citation")?.kind, "inline");
 	assert.equal(options.schema?.getNodeSpec("bibliography")?.kind, "block");

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
 import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
@@ -36,7 +36,7 @@ test("Occurrence highlight controller projects and clears current-word decoratio
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createAsterDecorationSource(decorations, () => DecorationPresentation.OccurrenceHighlight)],
+		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.OccurrenceHighlight)],
 	});
 	using controller = new OccurrenceHighlightController(selections, decorations);
 	viewport.layout({ width: 240, height: 40 });

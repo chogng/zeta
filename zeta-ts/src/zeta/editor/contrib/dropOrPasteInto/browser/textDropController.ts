@@ -18,7 +18,7 @@ export class TextDropController extends DisposableOwner {
 		super();
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();
-			throw new TypeError("Aster text drop dependencies must share one text model");
+			throw new TypeError("Stanza text drop dependencies must share one text model");
 		}
 		this.own(addDisposableListener<DragEvent>(viewport.element, "dragover", event => this.handleDragOver(event)));
 		this.own(addDisposableListener<DragEvent>(viewport.element, "drop", event => this.handleDrop(event)));

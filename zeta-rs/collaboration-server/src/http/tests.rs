@@ -74,7 +74,7 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
         "/v1/document-collaboration/rooms/open",
         &serde_json::json!({
             "clientId": "client-a",
-            "schemaId": "aster-document-v1",
+            "schemaId": "stanza-document-v1",
             "document": document("initial"),
         }),
     );
@@ -94,7 +94,7 @@ fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
         &serde_json::json!({
             "roomId": room_id,
             "clientId": "client-b",
-            "schemaId": "aster-document-v1",
+            "schemaId": "stanza-document-v1",
             "document": document("ignored"),
         }),
     );
@@ -160,7 +160,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
         address,
         "/v1/document-collaboration/rooms/open",
         &serde_json::json!({
-            "clientId": "owner-client", "schemaId": "aster-document-v1", "document": document("initial"),
+            "clientId": "owner-client", "schemaId": "stanza-document-v1", "document": document("initial"),
         }),
     );
     let room_id = serde_json::from_slice::<Value>(&opened.body).unwrap()["snapshot"]["roomId"]
@@ -198,7 +198,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
         "/v1/document-collaboration/rooms/open",
         &viewer_token,
         &serde_json::json!({
-            "roomId": room_id, "clientId": "viewer-client", "schemaId": "aster-document-v1", "document": document("ignored"),
+            "roomId": room_id, "clientId": "viewer-client", "schemaId": "stanza-document-v1", "document": document("ignored"),
         }),
     );
     assert_eq!(viewer_open.status, 200);
@@ -288,7 +288,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
         "/v1/document-collaboration/rooms/open",
         &editor_token,
         &serde_json::json!({
-            "roomId": room_id, "clientId": "editor-client", "schemaId": "aster-document-v1", "document": document("ignored"),
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "stanza-document-v1", "document": document("ignored"),
         }),
     );
     assert_eq!(expired.status, 401);
@@ -297,7 +297,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
         "/v1/document-collaboration/rooms/open",
         &rotated_token,
         &serde_json::json!({
-            "roomId": room_id, "clientId": "editor-client", "schemaId": "aster-document-v1", "document": document("ignored"),
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "stanza-document-v1", "document": document("ignored"),
         }),
     );
     assert_eq!(renewed.status, 200);
@@ -315,7 +315,7 @@ fn remote_host_enforces_room_roles_rotates_credentials_and_exposes_owner_audit()
         "/v1/document-collaboration/rooms/open",
         &rotated_token,
         &serde_json::json!({
-            "roomId": room_id, "clientId": "editor-client", "schemaId": "aster-document-v1", "document": document("ignored"),
+            "roomId": room_id, "clientId": "editor-client", "schemaId": "stanza-document-v1", "document": document("ignored"),
         }),
     );
     assert_eq!(revoked_open.status, 401);
@@ -395,7 +395,7 @@ fn remote_hosts_recheck_shared_sqlite_for_cross_instance_updates() {
         address_a,
         "/v1/document-collaboration/rooms/open",
         &serde_json::json!({
-            "clientId": "client-a", "schemaId": "aster-document-v1", "document": document("initial"),
+            "clientId": "client-a", "schemaId": "stanza-document-v1", "document": document("initial"),
         }),
     );
     let room_id = serde_json::from_slice::<Value>(&opened.body).unwrap()["snapshot"]["roomId"]

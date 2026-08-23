@@ -268,7 +268,7 @@ fn open_params(
     DocumentCollaborationOpenParams {
         room_id,
         client_id: client_id.into(),
-        schema_id: "aster-document-v1".into(),
+        schema_id: "stanza-document-v1".into(),
         document,
     }
 }

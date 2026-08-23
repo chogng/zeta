@@ -309,7 +309,7 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"document/collaboration/open",
-            "params":{"clientId":"client-a","schemaId":"aster-document-v1","document":document}
+            "params":{"clientId":"client-a","schemaId":"stanza-document-v1","document":document}
         }),
     );
     let room_id = opened["result"]["snapshot"]["roomId"]
@@ -331,7 +331,7 @@ fn document_collaboration_orders_updates_and_returns_rebase_history() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"document/collaboration/open",
-            "params":{"roomId":room_id,"clientId":"client-b","schemaId":"aster-document-v1","document":"{}"}
+            "params":{"roomId":room_id,"clientId":"client-b","schemaId":"stanza-document-v1","document":"{}"}
         }),
     );
     assert_eq!(joined["result"]["snapshot"]["document"], document);

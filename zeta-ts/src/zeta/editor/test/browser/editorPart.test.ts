@@ -26,7 +26,7 @@ const { EditorPart } = await import("../../browser/editorPart.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("Aster editor part composes native input, local language syntax, and presentation", async () => {
+test("Stanza editor part composes native input, local language syntax, and presentation", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -44,14 +44,14 @@ test("Aster editor part composes native input, local language syntax, and presen
 		onLanguageError: error => errors.push(error),
 	});
 	editorPart.layout({ width: 500, height: 240 });
-	await waitFor(() => container.querySelectorAll(".aster-editor-token.token-string").length > 0);
-	await waitFor(() => container.querySelectorAll(".aster-editor-decoration.warning-underline").length > 0);
+	await waitFor(() => container.querySelectorAll(".stanza-editor-token.token-string").length > 0);
+	await waitFor(() => container.querySelectorAll(".stanza-editor-decoration.warning-underline").length > 0);
 
-	assert.equal(container.querySelectorAll(".aster-editor").length, 1);
-	assert.equal(container.querySelectorAll(".aster-editor-input").length, 1);
-	assert.equal(container.querySelectorAll(".aster-editor-token.token-string").length > 0, true);
-	assert.equal(container.querySelectorAll(".aster-editor-bracket-level-1").length > 0, true);
-	assert.equal(container.querySelectorAll(".aster-editor-decoration.warning-underline").length > 0, true);
+	assert.equal(container.querySelectorAll(".stanza-editor").length, 1);
+	assert.equal(container.querySelectorAll(".stanza-editor-input").length, 1);
+	assert.equal(container.querySelectorAll(".stanza-editor-token.token-string").length > 0, true);
+	assert.equal(container.querySelectorAll(".stanza-editor-bracket-level-1").length > 0, true);
+	assert.equal(container.querySelectorAll(".stanza-editor-decoration.warning-underline").length > 0, true);
 	assert.deepEqual(errors, []);
 
 	editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
@@ -71,7 +71,7 @@ test("Aster editor part composes native input, local language syntax, and presen
 	dom.window.close();
 });
 
-test("Aster editor part gives language editing one disposable owner", () => {
+test("Stanza editor part gives language editing one disposable owner", () => {
 	const tracker = new DisposableTracker();
 	{
 		using installation = installDisposableTracker(tracker);
@@ -89,7 +89,7 @@ test("Aster editor part gives language editing one disposable owner", () => {
 	assert.deepEqual(tracker.leaks().filter(leak => leak.label === "LanguageEditingAdapter"), []);
 });
 
-test("Aster editor part derives indentation folds and projects their gutter controls", () => {
+test("Stanza editor part derives indentation folds and projects their gutter controls", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -106,16 +106,16 @@ test("Aster editor part derives indentation folds and projects their gutter cont
 	});
 	editorPart.layout({ width: 500, height: 120 });
 
-	const foldToggle = container.querySelector<HTMLButtonElement>(".aster-editor-fold-toggle");
+	const foldToggle = container.querySelector<HTMLButtonElement>(".stanza-editor-fold-toggle");
 	assert.ok(foldToggle);
 	foldToggle.dispatchEvent(new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true }));
-	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".aster-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
+	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".stanza-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
 	editorPart.dispose();
 	dom.window.close();
 });
 
-test("Aster editor disposal cancels an in-flight folding provider before late results project", async () => {
+test("Stanza editor disposal cancels an in-flight folding provider before late results project", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -146,7 +146,7 @@ test("Aster editor disposal cancels an in-flight folding provider before late re
 	dom.window.close();
 });
 
-test("Aster editor part honors a read-only input without disabling selection infrastructure", () => {
+test("Stanza editor part honors a read-only input without disabling selection infrastructure", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -177,7 +177,7 @@ test("Aster editor part honors a read-only input without disabling selection inf
 	dom.window.close();
 });
 
-test("Aster editor part mounts text drop as an optional full-editor contribution", () => {
+test("Stanza editor part mounts text drop as an optional full-editor contribution", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -201,7 +201,7 @@ test("Aster editor part mounts text drop as an optional full-editor contribution
 	dom.window.close();
 });
 
-test("Aster editor part applies selected before-save contributions through explicit save", async () => {
+test("Stanza editor part applies selected before-save contributions through explicit save", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -230,7 +230,7 @@ test("Aster editor part applies selected before-save contributions through expli
 	dom.window.close();
 });
 
-test("Aster editor part omits disabled presentation and language-assistance contributions", () => {
+test("Stanza editor part omits disabled presentation and language-assistance contributions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -254,12 +254,12 @@ test("Aster editor part omits disabled presentation and language-assistance cont
 	editorPart.layout({ width: 320, height: 80 });
 
 	assert.equal(editorPart.viewport.element.classList.contains("hide-line-numbers"), true);
-	assert.equal(container.querySelectorAll(".aster-editor-indent-guide").length, 0);
-	assert.equal(container.querySelectorAll(".aster-editor-bracket-level-1").length, 0);
-	assert.equal(container.querySelectorAll(".aster-editor-sticky-scroll").length, 0);
-	assert.equal(container.querySelectorAll(".aster-editor-completion").length, 0);
-	assert.equal(container.querySelectorAll(".aster-editor-inline-completion").length, 0);
-	assert.equal(container.querySelectorAll(".aster-editor-parameter-hints").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-indent-guide").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-bracket-level-1").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-sticky-scroll").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-completion").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-inline-completion").length, 0);
+	assert.equal(container.querySelectorAll(".stanza-editor-parameter-hints").length, 0);
 
 	editorPart.dispose();
 	dom.window.close();
@@ -275,8 +275,8 @@ test("Code editor keeps large files editable while disabling full-document backg
 	try {
 		editorPart.layout({ width: 500, height: 40 });
 		assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
-		assert.equal(container.querySelectorAll(".aster-editor-token").length, 0, "background tokens");
-		assert.equal(container.querySelectorAll(".aster-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
+		assert.equal(container.querySelectorAll(".stanza-editor-token").length, 0, "background tokens");
+		assert.equal(container.querySelectorAll(".stanza-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
 		editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
 		assert.equal(editorPart.getValue().startsWith("xlet value = 1;\n"), true, "basic editing");
 	} finally {
@@ -356,5 +356,5 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await nextTask();
 	}
-	assert.fail("Timed out waiting for Aster editor projection");
+	assert.fail("Timed out waiting for Stanza editor projection");
 }

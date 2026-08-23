@@ -2,8 +2,8 @@ import { URI } from "../../../../base/common/uri.js";
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 
-export const DIFF_EDITOR_ID = "aster.editor.diff";
-export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.aster.editor-diff";
+export const DIFF_EDITOR_ID = "stanza.editor.diff";
+export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.stanza.editor-diff";
 
 /** One Workbench input that compares two ordinary text-resource editor inputs. */
 export interface DiffEditorInput extends EditorInput {

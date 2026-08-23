@@ -35,7 +35,7 @@ export class DecorationLineIndex {
 	/** Returns decorations that can produce geometry on the inclusive line span. */
 	getIntersectingLines(startLineIndex: number, endLineIndex: number): readonly ResolvedDecoration[] {
 		if (!Number.isSafeInteger(startLineIndex) || !Number.isSafeInteger(endLineIndex) || startLineIndex < 0 || endLineIndex < startLineIndex) {
-			throw new RangeError("Aster decoration line queries require a non-negative ordered integer span");
+			throw new RangeError("Stanza decoration line queries require a non-negative ordered integer span");
 		}
 		const intervals: DecorationInterval[] = [];
 		collectIntersecting(this.root, startLineIndex, endLineIndex, intervals);

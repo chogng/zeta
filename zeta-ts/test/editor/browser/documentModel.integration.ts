@@ -26,12 +26,12 @@ import { MemoryTextFiles } from "./memoryTextFiles.js";
 
 interface IntegrationHarness {
 	readonly apiDocumentType: string;
-	getTextBlockText(): string | undefined;
+	getCodeBlockText(): string | undefined;
 	getStructuredBlockTexts(): readonly string[];
 	getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>> }[];
 	getStructuredSelection(): unknown;
-	saveTextBlock(): Promise<void>;
-	getSavedTextBlock(): string;
+	saveCodeBlock(): Promise<void>;
+	getSavedCodeBlock(): string;
 	dispose(): void;
 }
 
@@ -111,38 +111,38 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 const schema = createDefaultDocumentSchema();
 const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
 const apiModel = new DocumentModel(schema, apiDocument);
-const textBlockResource = URI.parse("inmemory://editor/text-block.zeta-academic");
+const codeBlockResource = URI.parse("inmemory://editor/code-block.zeta-academic");
 const structuredResource = URI.parse("inmemory://editor/document.zeta-academic");
-const textBlockDocument = schema.createDocument([schema.createNode("textBlock", {
+const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", {
 	attrs: { language: "typescript" },
 	content: [createTextNode("editor-text", "const editor = 1;")],
-	id: "editor-text-block",
+	id: "editor-code-block",
 })], "editor-text-document");
-const textBlockFiles = new MemoryTextFiles(textBlockResource, serializeDocument(textBlockDocument, schema));
+const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const textBlockPane = new DocumentEditorPane(textBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
+const codeBlockPane = new DocumentEditorPane(codeBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
 const structuredPane = new DocumentEditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
 
-textBlockPane.create(requiredElement("#text-block"));
+codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));
-textBlockPane.layout({ width: 900, height: 300 });
+codeBlockPane.layout({ width: 900, height: 300 });
 structuredPane.layout({ width: 900, height: 300 });
-await textBlockPane.setInput({ resource: textBlockResource, label: "snippet.ts" }, new AbortController().signal);
+await codeBlockPane.setInput({ resource: codeBlockResource, label: "snippet.ts" }, new AbortController().signal);
 await structuredPane.setInput({ resource: structuredResource, label: "paper" }, new AbortController().signal);
 
 window.zetaDocumentModelIntegration = {
 	apiDocumentType: apiModel.document.type,
-	getTextBlockText: () => textBlockPane.getDocument().content[0]?.content[0]?.text,
+	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,
 	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
 	getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],
 	getStructuredSelection: () => structuredPane.getDocumentSelection(),
-	saveTextBlock: () => textBlockPane.save(),
-	getSavedTextBlock: () => textBlockFiles.read(textBlockResource),
+	saveCodeBlock: () => codeBlockPane.save(),
+	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),
 	dispose: () => {
 		apiModel.dispose();
-		textBlockPane.dispose();
+		codeBlockPane.dispose();
 		structuredPane.dispose();
-		textBlockFiles.dispose();
+		codeBlockFiles.dispose();
 		structuredFiles.dispose();
 	},
 };

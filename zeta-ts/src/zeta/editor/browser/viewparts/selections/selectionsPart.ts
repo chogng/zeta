@@ -1,7 +1,7 @@
 import "./selections.css";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { projectAsterCurrentLineHighlight, projectAsterSelectionOverlays } from "./selectionProjection.js";
+import { projectStanzaCurrentLineHighlight, projectStanzaSelectionOverlays } from "./selectionProjection.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Projects selection ranges and current-line state without owning selection state. */
@@ -18,7 +18,7 @@ export class SelectionsPart extends EditorOverlayPart {
 		if (!context) {
 			return;
 		}
-		projectAsterCurrentLineHighlight(context, this.selectionController);
-		projectAsterSelectionOverlays(context, this.selectionController);
+		projectStanzaCurrentLineHighlight(context, this.selectionController);
+		projectStanzaSelectionOverlays(context, this.selectionController);
 	}
 }

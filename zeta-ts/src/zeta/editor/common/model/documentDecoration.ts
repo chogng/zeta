@@ -20,7 +20,7 @@ export interface DocumentDecoration {
 	readonly attrs: DocumentAttributes;
 }
 
-/** Creates an immutable decoration that can be projected by any Aster view. */
+/** Creates an immutable decoration that can be projected by any Stanza view. */
 export function createDocumentDecoration(options: DocumentDecorationOptions): DocumentDecoration {
 	if (typeof options.id !== "string" || options.id.trim().length === 0) throw new TypeError("Document decorations require a non-empty id");
 	if (options.className !== undefined && typeof options.className !== "string") throw new TypeError("Document decoration className must be a string");

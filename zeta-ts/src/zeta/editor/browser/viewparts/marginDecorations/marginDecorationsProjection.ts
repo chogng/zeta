@@ -9,7 +9,7 @@ const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentatio
 ]);
 
 /** Projects the highest-severity diagnostic marker for each visible logical line. */
-export function projectAsterDiagnosticMarginDecorations(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+export function projectStanzaDiagnosticMarginDecorations(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
 	const diagnosticsByLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!DIAGNOSTIC_PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
@@ -33,7 +33,7 @@ export function projectAsterDiagnosticMarginDecorations(context: ViewportOverlay
 		delete marker.domNode.dataset.diagnosticHoverText;
 		marker.domNode.removeAttribute("title");
 		if (diagnostics.length === 0) {
-			marker.setClassName("aster-editor-diagnostic-marker");
+			marker.setClassName("stanza-editor-diagnostic-marker");
 			marker.setTextContent("");
 			continue;
 		}
@@ -41,7 +41,7 @@ export function projectAsterDiagnosticMarginDecorations(context: ViewportOverlay
 			(DIAGNOSTIC_PRESENTATION_PRIORITY.get(candidate.presentation) ?? 0) > (DIAGNOSTIC_PRESENTATION_PRIORITY.get(current.presentation) ?? 0)
 				? candidate
 				: current);
-		marker.setClassName(`aster-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`);
+		marker.setClassName(`stanza-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`);
 		marker.setTextContent("●");
 		const hoverTexts = [...new Set(diagnostics.flatMap(diagnostic => diagnostic.hoverText === undefined ? [] : [diagnostic.hoverText]))];
 		if (hoverTexts.length > 0) {

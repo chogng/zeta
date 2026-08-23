@@ -181,7 +181,7 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 		if (!Number.isSafeInteger(envelope.sequence) || envelope.sequence < 1) throw new RangeError("A collaboration envelope sequence must be a positive safe integer");
 		if (!Number.isSafeInteger(envelope.baseVersion) || envelope.baseVersion !== this._version) throw new DocumentCollaborationError(`Collaboration update is based on version ${envelope.baseVersion}, expected ${this._version}`);
 		if (!Number.isSafeInteger(envelope.version) || envelope.version <= envelope.baseVersion) throw new DocumentCollaborationError("A collaboration update must advance the document version");
-		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError("A collaboration envelope requires a Aster transaction");
+		if (!(envelope.transaction instanceof DocumentTransaction)) throw new TypeError("A collaboration envelope requires a Stanza transaction");
 	}
 
 	private emitChange(options: { readonly kind: DocumentCollaborationSynchronizationChange["kind"]; readonly envelope: DocumentCollaborationEnvelope; readonly droppedSteps: readonly DocumentStep[] }): DocumentCollaborationSynchronizationChange {

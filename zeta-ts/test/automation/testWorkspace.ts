@@ -51,7 +51,7 @@ function createAcademicDocument(): string {
 	const abstract = schema.createNode("abstract", {
 		content: [schema.createNode("paragraph", { content: [schema.createText("A structured document for editor tests.")] })],
 	});
-	const source = schema.createNode("textBlock", {
+	const source = schema.createNode("codeBlock", {
 		attrs: { language: "typescript" },
 		content: [schema.createText("const paper = 1;")],
 	});

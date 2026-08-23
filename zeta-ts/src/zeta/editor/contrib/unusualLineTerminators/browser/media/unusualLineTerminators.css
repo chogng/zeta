@@ -1,4 +1,4 @@
-.aster-editor-decoration.unusual-line-terminator {
+.stanza-editor-decoration.unusual-line-terminator {
   background: color-mix(in srgb, var(--zeta-error-foreground) 24%, transparent);
   border-bottom: 2px solid var(--zeta-error-foreground);
 }

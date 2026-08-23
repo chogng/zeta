@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
-import { start, type AsterWorkerPort } from "../../editor.worker.start.js";
+import { start, type StanzaWorkerPort } from "../../editor.worker.start.js";
 
-test("Aster worker bootstrap owns one structured-clone port lifecycle", () => {
+test("Stanza worker bootstrap owns one structured-clone port lifecycle", () => {
 	const port = new FakeWorkerPort();
 	let received: unknown;
 	let resources: { dispose(): void } | undefined;
@@ -26,7 +26,7 @@ test("Aster worker bootstrap owns one structured-clone port lifecycle", () => {
 	assert.doesNotThrow(() => start(context => context.resources.dispose(), () => new FakeWorkerPort()));
 });
 
-class FakeWorkerPort implements AsterWorkerPort {
+class FakeWorkerPort implements StanzaWorkerPort {
 	private readonly listeners = new Set<(message: unknown) => void>();
 	readonly sent: unknown[] = [];
 	disposed = false;

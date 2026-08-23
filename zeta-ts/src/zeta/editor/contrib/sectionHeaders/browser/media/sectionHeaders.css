@@ -1,7 +1,7 @@
-.aster-editor-line.section-header .aster-editor-line-text {
+.stanza-editor-line.section-header .stanza-editor-line-text {
   font-weight: 600;
 }
 
-.aster-editor-line.section-header {
+.stanza-editor-line.section-header {
   border-top: 1px solid color-mix(in srgb, var(--zeta-widget-border) 45%, transparent);
 }

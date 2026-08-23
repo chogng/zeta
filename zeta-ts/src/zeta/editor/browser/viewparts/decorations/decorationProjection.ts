@@ -1,12 +1,12 @@
 import { h, reset } from "../../../../base/browser/dom.js";
-import { createAsterVisualDecorationRectangles, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
-import { type ViewportOverlayContext, createAsterDomRangeRectangles } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { createStanzaVisualDecorationRectangles, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
+import { type ViewportOverlayContext, createStanzaDomRangeRectangles } from "../viewportOverlay/viewportOverlayPresentation.js";
 
 /** Projects visible inline decorations into rows. */
-export function projectAsterDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
-	const rectangles = createAsterVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+export function projectStanzaDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+	const rectangles = createStanzaVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	const domRectangles = context.useDomTextGeometry
-		? new Map(decorations.map(decoration => [decoration.id, createAsterDomRangeRectangles(context, decoration.range)] as const))
+		? new Map(decorations.map(decoration => [decoration.id, createStanzaDomRangeRectangles(context, decoration.range)] as const))
 		: undefined;
 	for (const line of context.renderedLines.values()) reset(line.decorationElement);
 	const ownerDocument = context.ownerDocument;
@@ -15,7 +15,7 @@ export function projectAsterDecorationOverlays(context: ViewportOverlayContext, 
 		const line = context.renderedLines.get(rectangle.visualLineIndex);
 		if (!line) continue;
 		const element = h(ownerDocument, "div");
-		element.className = "aster-editor-decoration";
+		element.className = "stanza-editor-decoration";
 		element.classList.add(rectangle.presentation);
 		element.dataset.decorationId = String(rectangle.id);
 		if (rectangle.hoverText !== undefined) element.title = rectangle.hoverText;
@@ -30,7 +30,7 @@ export function projectAsterDecorationOverlays(context: ViewportOverlayContext, 
 			const line = context.renderedLines.get(rectangle.visualLineIndex);
 			if (!line) continue;
 			const element = h(ownerDocument, "div");
-			element.className = "aster-editor-decoration";
+			element.className = "stanza-editor-decoration";
 			element.classList.add(decoration.presentation);
 			element.dataset.decorationId = String(decoration.id);
 			if (decoration.hoverText !== undefined) element.title = decoration.hoverText;

@@ -1,5 +1,5 @@
 /**
- * Stable text primitive barrel for Aster consumers.
+ * Stable text primitive barrel for Stanza consumers.
  *
  * The implementations live in focused modules so coordinate values, edit
  * descriptions, and committed model changes have separate ownership while

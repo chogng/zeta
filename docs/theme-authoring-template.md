@@ -150,7 +150,7 @@ Zeta 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件�
 
 一个成功注册的用户主题会自动出现在 Settings → Appearance，并使用实际快照生成预览。选择后以下消费者使用同一快照：
 
-- Workbench CSS custom properties 与 Aster editor token 颜色；
+- Workbench CSS custom properties 与 Stanza editor token 颜色；
 - Native shell、composer CodeEditor、multi-diff editor、terminal ANSI palette 与 scrollbar；
 - Desktop Terminal 前景、背景、光标、选择色和完整 ANSI palette；
 - Windows/Linux 原生标题栏按钮区域；

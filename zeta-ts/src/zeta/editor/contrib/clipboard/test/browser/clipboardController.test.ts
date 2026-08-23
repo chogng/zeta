@@ -486,7 +486,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	assert.equal(copied.getData("text/plain"), "const value\nnext");
 	assert.equal(
 		copied.getData(EDITOR_HTML_CLIPBOARD_MIME),
-		'<pre><code><span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">const</span> value\n<span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span></code></pre>',
+		'<pre><code><span class="stanza-editor-token token-keyword" style="color: rgb(1, 2, 3)">const</span> value\n<span class="stanza-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span></code></pre>',
 	);
 
 	selections.setSelections(TextSelectionSet.single(caret(1, 2)));
@@ -494,7 +494,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	input.element.dispatchEvent(clipboardEvent(dom.window, "copy", lineCopied));
 	assert.equal(
 		lineCopied.getData(EDITOR_HTML_CLIPBOARD_MIME),
-		'<pre><code><span class="aster-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span>\n</code></pre>',
+		'<pre><code><span class="stanza-editor-token token-keyword" style="color: rgb(1, 2, 3)">next</span>\n</code></pre>',
 	);
 
 	dom.window.close();

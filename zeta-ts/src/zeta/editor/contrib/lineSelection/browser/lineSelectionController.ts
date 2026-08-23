@@ -9,7 +9,7 @@ import { expandLineSelections } from "./lineSelection.js";
 export class LineSelectionController extends DisposableOwner {
 	constructor(input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Aster line selection dependencies must share one text model");
+		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza line selection dependencies must share one text model");
 		this.own(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph") || (!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "l") return;
 			stopEvent(event);

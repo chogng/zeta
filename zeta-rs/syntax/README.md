@@ -103,10 +103,10 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
 - Current：文本保存在 `String`，中间插入需要移动后续 bytes；超大文档的 rope/chunked input 尚未实现；
 - Current：snapshot 派生为同步调用；异步 worker、debounce 与 cancellation 由产品宿主负责；
 - Current：App Server 使用 connection/model-owned open/change/close session 将 Rust、JSON 与 JSONC 的完整
-  analysis snapshot 投影为 UTF-16 wire DTO；Aster 消费 token、parse diagnostic、symbol 与 folding；
+  analysis snapshot 投影为 UTF-16 wire DTO；Stanza 消费 token、parse diagnostic、symbol 与 folding；
 - Current：App Server 的 `syntax/selectionRanges` 只为离散命令按当前 selection 返回有限 scopes；普通
-  `syntax/analyze` 不携带全树 selection nodes，Aster Smart Select 负责 revision/cancellation/stale gate；
-- Current：Native `zeta-editor` 已私有组合 incremental analysis 与 folding；Aster folding/document-symbol
+  `syntax/analyze` 不携带全树 selection nodes，Stanza Smart Select 负责 revision/cancellation/stale gate；
+- Current：Native `zeta-editor` 已私有组合 incremental analysis 与 folding；Stanza folding/document-symbol
   provider 已接入，具体 outline presentation 仍由产品 UI 决定；
 - Current：`zeta-symbol-index` 已作为独立 consumer 持久化 verified declaration facts；磁盘/dirty
   arbitration 由 `zeta-code-index` overlay 拥有，不进入本 crate；

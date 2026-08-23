@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
 import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
@@ -45,7 +45,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createAsterDecorationSource(
+		decorationSources: [createStanzaDecorationSource(
 			decorations,
 			() => DecorationPresentation.BracketMatch,
 		)],

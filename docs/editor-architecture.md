@@ -1,10 +1,10 @@
-# Aster：多内核、可装配能力与产品边界
+# Stanza：多内核、可装配能力与产品边界
 
 > 本文是跨 editor、document、language、browser view、Workbench 和过渡 adapter 的 canonical 架构文档。扁平模块的实现和修改契约见 [`zeta-ts/src/zeta/editor/README.md`](../zeta-ts/src/zeta/editor/README.md)；行式文本与结构化文档 engine 的详细契约分别见 [`text-engine.md`](../zeta-ts/src/zeta/editor/text-engine.md) 和 [`document-engine.md`](../zeta-ts/src/zeta/editor/document-engine.md)。
 
 ## 快速理解
 
-Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平的 `editor` 领域模块中。它包含两个独立的同步权威：行式文本 `TextModel` 和结构化文档 `DocumentModel`。两者共同使用 VS Code 风格的 `common / browser / contrib / test` 分区；Code 与 Academic 不拥有第二份 editor 源码，而是在共享 Workbench 入口之后按窗口模式加载一个 contribution bundle。用户切换模式时重载窗口，不在运行中的 Workbench 内热卸载 editor contribution。
+Stanza 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平的 `editor` 领域模块中。它包含两个独立的同步权威：行式文本 `TextModel` 和结构化文档 `DocumentModel`。两者共同使用 VS Code 风格的 `common / browser / contrib / test` 分区；Code 与 Academic 不拥有第二份 editor 源码，而是在共享 Workbench 入口之后按窗口模式加载一个 contribution bundle。用户切换模式时重载窗口，不在运行中的 Workbench 内热卸载 editor contribution。
 
 | 使用场景 | 模式加载入口 | 编辑能力 |
 | --- | --- | --- |
@@ -13,9 +13,9 @@ Aster 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平�
 | 完整宿主与集成测试 | `editor.all.ts` | 两组 contribution 的并集 |
 | DOM-free 调用 | `editor.api.ts` | 两个 model、schema、transaction、serialization 和坐标 API；不注册 pane |
 
-Aster 是整个内核的品牌，不是某一个 engine 的别名。两个 engine 只称为 Text Engine 与 Document Engine；`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 capability contract；schema validation、transaction、selection mapping、IME commit 和 model lifecycle 仍属于对应 engine，不能变成任意开关 contribution。
+Stanza 是整个内核的品牌，不是某一个 engine 的别名。两个 engine 只称为 Text Engine 与 Document Engine；`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 capability contract；schema validation、transaction、selection mapping、IME commit 和 model lifecycle 仍属于对应 engine，不能变成任意开关 contribution。
 
-Aster 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM class、目录和兼容 pane 已删除；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
+Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM class、目录和兼容 pane 已删除；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
 
 ## 所有权
 
@@ -26,8 +26,8 @@ Aster 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM cl
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
 | `editor.*.all.ts` | editor 能力按模式装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
 | `workbench/contrib/{codeEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile、embedded factory 和模式注册；不得实现编辑事务或视图内部行为 |
-| `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Aster provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
-| Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Aster 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
+| `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
+| Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
 | Language model | 已具备 Code 主路径 | 版本化 token/diagnostic/completion、TextMate 与 parser facts、跨文件 definition/declaration/references/implementation/type definition、Peek、workspace symbols、call/type hierarchy、rename、code action 与有序 WorkspaceEdit 均接通 App Server；更广的语言覆盖由 language-server catalog 演进，不再复制 editor contract |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、至多 160 行的有界 density minimap（WebGL 优先、DOM 回退、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
@@ -73,7 +73,7 @@ editor/
 其中 composition 开始必须
 遵守共享 `IME.enabled` 状态，避免编辑器与 keybinding/inputbox 各自维护
 互相冲突的输入法开关。`ISize` 只表达通用几何；scroll clamp、visible line
-和 overscan 仍由 Aster 定义，未反向污染 base。
+和 overscan 仍由 Stanza 定义，未反向污染 base。
 
 ## 当前数据流
 
@@ -82,11 +82,11 @@ editor/
 ```text
 EditorInput → ITextFileService.resolve
         ↓
-Workbench BrowserTextResourceStore → Editor BrowserTextModelService → Aster TextModel
+Workbench BrowserTextResourceStore → Editor BrowserTextModelService → Stanza TextModel
         ↓
-Aster language session → Analysis/completion workers
+Stanza language session → Analysis/completion workers
         ↓
-Aster viewport / input
+Stanza viewport / input
         ↓ Ctrl/Cmd+S
 ITextFileService.save → IFileService.writeFile → App Server
 ```
@@ -98,7 +98,7 @@ ITextFileService.save → IFileService.writeFile → App Server
 ```text
 Document service
         ↓ load/save/conflict
-Aster TextModel
+Stanza TextModel
         ↓ transaction snapshots
 Selection + Decoration model
         ↓
@@ -239,7 +239,7 @@ common 契约明确限定为固定行高，不包含软换行、折叠、inline 
 ### Current 7：只读虚拟行 browser projection
 
 `EditorViewport` 已把 common viewport 接到原生 DOM。它创建并拥有
-`.aster-editor` scroll host、content extent 和 overscanned line layer；
+`.stanza-editor` scroll host、content extent 和 overscanned line layer；
 滚动窗口重叠的行按 line index 复用 DOM identity，模型版本变化同步更新当前
 render range，文档收缩则把 common 与 DOM 的滚动坐标一并约束回有效范围。
 模型文本通过 `textContent` 投影，不作为 HTML 解析。
@@ -252,13 +252,13 @@ soft wrap 与基础 accessibility projection。
 
 ### Current 8：字体度量与增量横向宽度
 
-`AsterDomTextMeasurer` 从 line layer computed style 解析 font、letter spacing、
+`StanzaDomTextMeasurer` 从 line layer computed style 解析 font、letter spacing、
 tab size 和左右 padding。普通文本段由 Canvas 按当前字体 shaping 和 fallback
 测量，tab 按实测 space glyph 推进到下一个 stop。Canvas 不可用时使用
 font-size 派生的 fallback advance；测试和未来专用字体引擎通过小型
 `TextMeasurer` contract 注入。
 
-`AsterLineWidthIndex` 首先同步测量一个有界行片段，之后通过可取消的 idle
+`StanzaLineWidthIndex` 首先同步测量一个有界行片段，之后通过可取消的 idle
 切片完成其余非换行行；未测量期间最大值只作为下界，完成后恢复精确值。稳定
 后它按 `TextModelChange` 的旧行范围合并同一行多处编辑，只重测事务影响的新
 行组。宽度计数集合维护当前最大值，最长行缩短时无需全文重测即可收缩 content
@@ -271,11 +271,11 @@ width 并夹紧横向滚动。字体加载完成或显式 `refreshFontMetrics()`
 每个虚拟行现在由 sticky line-number gutter、文本节点和 overlay 组成。gutter
 宽度按当前总行数的数字位数测量，并计入横向 content width；滚动复用行节点
 时，行号、文本和 overlay 一起按 line index 更新。组件通过稳定的 `.active`
-类投影 primary selection 的活动行，状态样式由 Aster 自己的 CSS 拥有，
+类投影 primary selection 的活动行，状态样式由 Stanza 自己的 CSS 拥有，
 Workbench 不通过深层 selector 覆盖。
 
 `EditorViewport` 可观察一个调用方持有的
-`EditorSelectionController`。`createAsterSelectionGeometry` 保留
+`EditorSelectionController`。`createStanzaSelectionGeometry` 保留
 anchor/active 方向、多 selection 顺序和 primary 身份，只为当前 overscan
 范围生成矩形。水平坐标复用当前 `TextMeasurer` 测量行前缀；被选中的
 换行符占一个实测 space cell，因此终点位于下一行 column 0 时仍有明确视觉
@@ -290,26 +290,26 @@ composition 见 Current 18。caret blink 与完整 screen-reader contract 仍未
 
 ### Current 10：Decoration presentation
 
-`createAsterDecorationSource<TMetadata>` 把一个调用方持有的
+`createStanzaDecorationSource<TMetadata>` 把一个调用方持有的
 `TextDecorationCollection` 适配为 browser presentation。resolver 显式选择
 `SearchMatch`、四种 diagnostic underline 或不投影；因此 common
 metadata 继续 opaque，browser 也不接受任意 caller CSS class。对应 CSS 由
-Aster component 自己拥有，并消费已有 search、error、warning 语义 token。
+Stanza component 自己拥有，并消费已有 search、error、warning 语义 token。
 
 Viewport 可同时观察多个 source，只为当前 overscan 范围创建 decoration
-rectangle。selection 与 decoration 共用 `createAsterRangeRectangles`，统一
+rectangle。selection 与 decoration 共用 `createStanzaRangeRectangles`，统一
 end-exclusive 多行范围、换行符可见宽度、字体前缀测量和 clipping 规则。
 collection 的 content/range event 会同步重建可见 decoration；文本事务移动
 tracked range 后，DOM 继续使用同一 decoration ID。
 
 每个 source 的 resolved snapshot 会缓存到下一次 collection event，因此滚动
-不会重复调用 caller metadata resolver。`AsterDecorationLineIndex` 将这些 snapshot
+不会重复调用 caller metadata resolver。`StanzaDecorationLineIndex` 将这些 snapshot
 建为按 logical-line interval 查询的不可变树；layout 仅取与当前 rendered logical
 span 相交的 decoration 后再做 visual clipping。索引不拥有 collection、metadata
 resolver 或 geometry，仅消除滚动期间对完整诊断/search 集合的重复扫描。
 
 Viewport 只拥有 source event registration，销毁时不销毁 source、collection
-或共享 `TextModel`。`AsterDiagnosticHoverController` 只消费 marker 当前的
+或共享 `TextModel`。`StanzaDiagnosticHoverController` 只消费 marker 当前的
 诊断文本并在 scroll 时关闭；`EditorViewport` 的 overview ruler 与 document
 minimap 都聚合每行最高 severity，且不在滚动时重扫 diagnostics。当前 presentation 还不包含
 诊断版本拒绝；这些不能从已有矩形投影推断为完成。
@@ -339,7 +339,7 @@ Current 12。
 
 ### Current 12：Pointer selection controller
 
-`AsterPointerSelectionController` 把 hit target 转成一个
+`StanzaPointerSelectionController` 把 hit target 转成一个
 `EditorSelectionController` 的显式 selection policy。主键点击放置单 caret，
 Shift-click 保留原 primary anchor；字符拖动持续更新 active。gutter 点击和
 拖动按整行选择，存在下一行时把 LF 包含在 end-exclusive range 中，向上拖动
@@ -371,7 +371,7 @@ pointer input stack。
 夹到最近 viewport 边缘，后者仍对普通查询返回 `undefined`。因此越界拖动会
 先同步扩展到当前可见边缘，不必等待 animation frame。
 
-`AsterPointerAutoScroller` 保存最新 point，并通过
+`StanzaPointerAutoScroller` 保存最新 point，并通过
 `base/browser/AnimationFrameScheduler` 逐帧更新。横纵轴速度分别由越界距离
 计算，起速为 240 px/s、上限为 2400 px/s；frame duration 限制在 4–50ms，
 避免后台恢复或异常时间戳造成大跳。每次滚动后重新执行最近命中，所以字符、
@@ -384,7 +384,7 @@ common viewport 或文本模型，也不把 wheel、touch kinetic scrolling 或
 
 ### Current 14：Pointer multi-cursor policy
 
-`AsterPointerSelectionControllerOptions.multiCursorModifier` 显式选择
+`StanzaPointerSelectionControllerOptions.multiCursorModifier` 显式选择
 `Alt`（默认）或 `ControlOrMeta`。只有配置的精确 chord 且未按 Shift 时才新增
 selection；因此 Alt 模式不会吞掉 Ctrl/Meta，ControlOrMeta 模式也不会吞掉
 Alt，带 Shift 的 chord 继续使用 Current 12 的普通扩选语义。
@@ -417,7 +417,7 @@ other 分类，避免三份 fallback 漂移。
 恢复；目标列会夹到 grapheme boundary。完全相同的结果会合并并重新映射
 primary，multi-selection 顺序保持稳定。
 
-`AsterKeyboardNavigationController` 只负责 browser routing。Windows/Linux
+`StanzaKeyboardNavigationController` 只负责 browser routing。Windows/Linux
 使用 Ctrl+Arrow 词跳转和 Ctrl+Home/End 文档跳转；macOS 使用
 Option+Arrow 词跳转、Command+Left/Right 行边界和
 Command+Up/Down 文档边界。Shift 统一选择 `Extend`。未知 chord、
@@ -440,9 +440,9 @@ Tab、clipboard、composition DOM event 或平台辅助功能命令。
 前拒绝；相邻删除使 caret 汇聚时，完全相同的结果会合并并重映射 primary。
 undo 仍恢复命令前的原多 selection，redo 恢复合并后的结果。
 
-`AsterTextInputController` 创建并拥有一个不可见 textarea。Viewport root
+`StanzaTextInputController` 创建并拥有一个不可见 textarea。Viewport root
 获得焦点时转移到该 textarea；focus 状态通过稳定的 `.input-focused` 类投影，
-视觉规则由 Aster component CSS 持有。非 composition `beforeinput` 将
+视觉规则由 Stanza component CSS 持有。非 composition `beforeinput` 将
 `insertText`、replacement text、Enter、Backspace、Delete、history undo/redo
 映射到 common 命令，普通 Tab 由 keydown 映射为 `\t`。成功编辑后清空
 textarea 并 reveal primary active position。它与 viewport、selection
@@ -463,21 +463,21 @@ router。
 offset，并使用 `Isolated` history，确保 paste/cut 不会与前后的连续 typing
 合成一个 undo step。
 
-`AsterClipboardController` 由 textarea input controller 组合持有并监听原生
+`StanzaClipboardController` 由 textarea input controller 组合持有并监听原生
 copy/cut/paste。copy 写入可移植的 `text/plain`、转义后的预格式化 `text/html`；
-Editor 的多 selection 复制额外写入版本化 `application/x-aster-editor`
+Editor 的多 selection 复制额外写入版本化 `application/x-stanza-editor`
 元数据。粘贴时，合法且数量匹配的元数据逐 selection 分发；外部纯文本或无效
 元数据则把同一文本应用到每个 selection。没有 `text/plain` 的外部 HTML 会在
 inert template 中转换为确定性文本，脚本、样式和 noscript 内容不进入 model。
 所有输入最终仍经过 common command 和权威
 `TextModel`，成功 cut/paste 后清空 textarea 并 reveal primary。
 
-clipboard 输出的换行约定由显式 `AsterClipboardLineEnding` 控制，默认按宿主
+clipboard 输出的换行约定由显式 `StanzaClipboardLineEnding` 控制，默认按宿主
 Windows 选择 CRLF，其余平台选择 LF；进入 model 时仍统一规范化为 LF。浏览器
 拒绝自定义 MIME 时保留 plain text，不影响跨应用复制。空 selection 的显式
 策略和整行 round-trip 见 Current 20。
 
-当前已有前端本地 `AsterClipboardPasteProvider`：它只能读取事件期捕获的不可变
+当前已有前端本地 `StanzaClipboardPasteProvider`：它只能读取事件期捕获的不可变
 文本 MIME 快照，按声明顺序执行，并且异步结果必须仍匹配原 model version 与
 selection 才能提交。内置 `text/uri-list` provider 会忽略注释行。异步 Clipboard
 在原生 event 没有文本、metadata、受支持文件或匹配 provider 时，于同一用户手势先读取
@@ -487,7 +487,7 @@ plain/HTML payload，且 cut 仅在写入成功后提交；这些路径不绕开
 
 ### Current 18：Textarea composition adapter
 
-`AsterCompositionController` 把 textarea 的 `compositionstart/update/end`
+`StanzaCompositionController` 把 textarea 的 `compositionstart/update/end`
 映射到一个 `EditorCompositionSession`。开始前要求共享 `IME.enabled` 且只有
 一个 selection；否则取消浏览器事件。每次 update 把完整 provisional string
 替换进同一个受保护 revision。textarea value 与 event data 一致时读取
@@ -505,7 +505,7 @@ revision。`onDidChange` 对上层发布 composition active 状态。
 `getPositionContentCoordinates` 把隐藏 textarea 移到对应的测量 caret；
 后续 selection、line height 和 layout 变化会重算位置，为原生候选窗提供
 content-coordinate anchor。DOM 通过稳定的 `.composing` 和 `.ime-input`
-状态类投影，样式继续由 Aster component 持有。
+状态类投影，样式继续由 Stanza component 持有。
 
 当前实现面向提供完整 `CompositionEvent.data` 的桌面式事件流。Android
 通常需要从 textarea 前后状态推导 replacement，macOS 长按可能把前一个字符
@@ -528,10 +528,10 @@ stale offset 暴露给 renderer。
 presentation 会释放旧 tracked handle，Viewport 销毁也只释放自己的临时
 所有权。
 
-composition rectangle 复用 `createAsterRangeRectangles`，与 selection 和
+composition rectangle 复用 `createStanzaRangeRectangles`，与 selection 和
 decoration 共享 tab prefix measurement、end-exclusive 多行语义、selected
 newline cell 和 overscan clipping。每个虚拟行拥有独立 composition layer；
-`.composing .aster-editor-composition` 由组件 CSS 投影 underline。commit、
+`.composing .stanza-editor-composition` 由组件 CSS 投影 underline。commit、
 cancel、blur、IME disable、外部失效和 disposal 都同步清空该 layer。当前空
 provisional range 不绘制标记，也尚未区分 IME clause 的 primary/secondary
 segment。
@@ -558,7 +558,7 @@ paste mode。全部 payload 为 `Line` 且目标 selection 都 collapsed 时，
 普通逐 selection paste，避免 line mode 隐式绕过目标范围。
 
 plain-text 输出会连续拼接 line entries，避免每个自带 LF 的行之间出现额外
-空行；跨平台输出仍由 `AsterClipboardLineEnding` 转换。当前已经有
+空行；跨平台输出仍由 `StanzaClipboardLineEnding` 转换。当前已经有
 copy-with-syntax、单个用户提供文本文件、内置 `text/uri-list` 与可注册的本地
 MIME paste provider。若原生 paste event 没有可用文本、metadata、受支持文件或
 provider，浏览器层在同一用户手势内先读取 rich Async Clipboard，再回退 plain text；
@@ -632,10 +632,10 @@ token/diagnostic worker wire schema 仍未完成。
 同一事务时已经没有旧 range，因此不会先发一次虚假的 `Range` movement 再
 清空。测试明确证明 model version 2 只出现一个空 `Content` event。
 
-browser 的 `createAsterLanguageDiagnosticSource` 为 Error、Warning、Information
-和 Hint 映射命名 underline，并继续消费 Aster component 的 severity theme token 和
+browser 的 `createStanzaLanguageDiagnosticSource` 为 Error、Warning、Information
+和 Hint 映射命名 underline，并继续消费 Stanza component 的 severity theme token 和
 CSS。Viewport 还会在每个可见 logical line 的首个 visual row 放置该行最高严重级别的
-gutter marker；`AsterDiagnosticHoverController` 会把该 marker 的当前文本呈现为
+gutter marker；`StanzaDiagnosticHoverController` 会把该 marker 的当前文本呈现为
 component-owned rich hover，并在 scroll 时关闭。Viewport 的非交互 overview ruler
 聚合每行最高 severity，且不改变 content hit-test。它不是可操作 glyph margin。
 Viewport 只拥有 source event registration，不拥有 bridge、collection、store 或 model。
@@ -656,14 +656,14 @@ F8/Shift+F8 的 diagnostic navigation 会在选择目标后通过同一 viewport
 索引。index 不拥有 store 或 `TextModel`，也不把旧 token 通过 tracked range
 映射到新文本。
 
-browser 的 `createAsterSemanticTokenSource` 把 common token type 显式解析为
-Aster 的 `Comment`、`Keyword`、`String`、`Number`、`Regexp`、`Type`、
+browser 的 `createStanzaSemanticTokenSource` 把 common token type 显式解析为
+Stanza 的 `Comment`、`Keyword`、`String`、`Number`、`Regexp`、`Type`、
 `Function`、`Variable` 或 `Operator` presentation。未知 type 默认省略；
 语言 owner 可以提供 resolver，但返回值仍必须属于该命名 enum，worker
 字符串永远不能直接成为 CSS class。source 的全量 `lines` 查询仍可生成并整体验证
 稀疏 snapshot；Viewport 使用 Current 35 的逐行查询，不再解析屏幕外 token。
 
-`projectAsterSemanticTokenLine` 只使用 text node 和 component-owned `span`，
+`projectStanzaSemanticTokenLine` 只使用 text node 和 component-owned `span`，
 不使用 HTML 拼接。每次分段都验证非空、排序、不重叠和行内边界，并要求
 fragment 的完整 `textContent` 与模型行逐 UTF-16 code unit 相同。Viewport
 先解析完整目标虚拟窗口，再修改其中的 row；同版本 token refresh
@@ -673,7 +673,7 @@ stale span，再由既有 model-version reconciliation 投影新文本。Viewpor
 
 颜色由 `platform/theme/common/colors/editorColors.ts` 以
 `editor.semanticToken.*Foreground` 注册并编译为 design-token 产物；
-Aster CSS 只消费这些语义变量。当前 modifiers 交给 resolver 解释，尚未定义
+Stanza CSS 只消费这些语义变量。当前 modifiers 交给 resolver 解释，尚未定义
 字体粗细/斜体 contract；持久 relative-range token storage、multi-splice delta、
 嵌入语言优先级和超大 token snapshot 的调度仍未完成。
 
@@ -700,7 +700,7 @@ range/insertText，生成一个 isolated `EditorEditCommand`，并把 caret 放�
 store invalidation 在 accept 期间由 session 协调，最终只发布一次
 `Accepted` close；undo 通过既有 selection history 同时恢复文本与触发 caret。
 
-browser 的 `CompletionWidget` 由 `AsterTextInputController` 可选托管。
+browser 的 `CompletionWidget` 由 `StanzaTextInputController` 可选托管。
 widget 使用 viewport 的 content coordinates 锚定在触发 caret 下方，以
 `.visible`、`.focused` 状态类同步 listbox/option ARIA。上下键循环 focus，
 Enter/Tab 接受，Escape 本地取消；活跃 session 才截获这些键，其余事件继续
@@ -714,7 +714,7 @@ non-overlapping additional edits，以及 `$n`/`${n}`/`${n:default}`/`${n|a,b|}`
 tabstop 会话，都通过同一 item contract、Worker transport 与 isolated undo 交付。
 choice 的镜像 occurrence 通过 `Alt+↑/↓` 原子循环替换；session 为 `${TM_FILENAME}`、
 `${TM_FILENAME_BASE}`、`${TM_DIRECTORY}` 与 `${TM_FILEPATH}` 注入 editor input
-变量，未知变量必须有显式 default。transform 仍不在 Aster 当前受支持 grammar，
+变量，未知变量必须有显式 default。transform 仍不在 Stanza 当前受支持 grammar，
 不能被静默降级。provider 生产和触发链见 Current 26；completion Worker wire
 transport 见 Current 27。
 
@@ -734,7 +734,7 @@ discriminated context，避免用 boolean 或可歧义的 optional 参数表达�
 第一个 preselect，并对 `isIncomplete` 做 OR。`LanguageCompletionService`
 拥有 coordinator、host 和 result store，但不拥有 registry 或 model。
 
-browser 输入层通过 `AsterTextInputControllerOptions.completion.requests`
+browser 输入层通过 `StanzaTextInputControllerOptions.completion.requests`
 显式接入 service 和 language ID。Ctrl+Space 发送 `Invoke`；已注册的 trigger
 character 在文本事务完成后，以新的 model version 和 caret 发送请求；当前
 结果为 incomplete 时，普通输入发送 `IncompleteRefresh`。请求只发生在单一
@@ -764,17 +764,17 @@ normalization。无效 range、kind、identity 或 malformed protocol 不能进�
 result store。transport terminal failure 会使 pending request 失败；既有
 coordinator 随即销毁 client，下一次请求创建新的 Worker。
 
-browser 的 `createAsterCompletionWorkerFactory` 创建 Vite module Worker、
+browser 的 `createStanzaCompletionWorkerFactory` 创建 Vite module Worker、
 DOM Worker port adapter 与 typed wire client。Worker entry 创建自己的 provider
 registry、`LanguageCompletionProviderWorker` 和 wire server，并注册
-`aster.word` lexical provider。该 provider 在 snapshot 内收集确定性排序的
+`stanza.word` lexical provider。该 provider 在 snapshot 内收集确定性排序的
 同前缀 word，使用完整 active word 作为 replacement range，默认最多返回
 100 项并准确标记 incomplete。
 
 `LanguageCompletionService.workerFactory` 允许调用方显式选择该 transport；
 service 仍拥有每个 factory result，而 registry/model 仍由调用方拥有。当前
 默认值继续使用进程内 provider host，因此现有调用方不会隐式创建线程。
-Aster 产品 composition root 尚未接入该 factory；接入时 renderer registry
+Stanza 产品 composition root 尚未接入该 factory；接入时 renderer registry
 与 Worker registry 的触发元数据同步由 Current 29 负责。
 
 Current 27 的第一版 wire 每次请求复制完整 snapshot，是正确但
@@ -820,7 +820,7 @@ immutable snapshot；注册和撤销都会在 registry 顺序下发布新 catalo
 catalog normalization 会复制冻结所有数组，并拒绝重复 provider ID、language
 ID 或 trigger character，因此 renderer 不会直接信任 Worker plain objects。
 
-catalog 使用独立的 `aster.completion-provider-catalog` side-channel，
+catalog 使用独立的 `stanza.completion-provider-catalog` side-channel，
 不把 completion 特有 metadata 塞进通用 language-worker envelope。
 `LanguageCompletionCatalogWirePublisher` 观察 Worker 内真正执行 provider 的
 registry，启动时发送当前 snapshot，之后发送每个 revision。
@@ -835,7 +835,7 @@ registry catalog。`requestTriggerCharacter` 捕获当前 model version，启动
 重建 Worker，等待首次 catalog，再只对真实匹配 provider 发请求。等待期间模型
 变化会丢弃该 trigger，而不是用旧位置请求新版本。
 
-`AsterTextInputController` 使用该异步 trigger API。若 catalog 证明字符不受
+`StanzaTextInputController` 使用该异步 trigger API。若 catalog 证明字符不受
 支持，且先前 result 是 incomplete，它只在 model version、单一 collapsed
 selection 和 caret 都未变化时回退到 `IncompleteRefresh`。Worker terminal
 failure 或 disposal 会先发布 empty catalog；下一次 trigger 让 coordinator
@@ -856,7 +856,7 @@ provider 或 load failure 都不会泄漏部分 registry 状态。deactivate、m
 撤销和 host disposal 会释放整批 provider，并只发布一次 provider catalog
 revision。
 
-独立的 `aster.completion-provider-modules` 协议只传 module ID、期望状态、
+独立的 `stanza.completion-provider-modules` 协议只传 module ID、期望状态、
 catalog 和结果，不传函数或 renderer 对象。
 `LanguageCompletionProviderModuleWireServer` 在 Worker 内委托 module host；
 `LanguageCompletionProviderModuleWireClient` 验证 catalog revision 与 request
@@ -865,7 +865,7 @@ typed Worker client，因此 catalog、activation 和 request 不会形成彼此
 半失效状态。
 
 `LanguageCompletionCatalogWorkerClient` 将 required-module activation 合成首次
-request readiness barrier。browser factory 声明需要 `aster.word`；Worker entry
+request readiness barrier。browser factory 声明需要 `stanza.word`；Worker entry
 只注册同名 module definition，不再无条件注册 lexical provider。客户端先等
 module catalog，再请求激活；Worker 原子注册 provider 并发布 provider catalog，
 最后返回 activation result。共享 port 的有序性保证 catalog revision 先于
@@ -886,7 +886,7 @@ provider resolver 只能返回 `LanguageCompletionItemDetails`。runtime normali
 structured clone 与 provider 后续 mutation 隔离；resolve failure 走 provider
 error policy，但不会 poison 一个协议仍健康的 Worker。
 
-独立的 `aster.completion-resolve` side-channel 提供 resolve/result/failure/
+独立的 `stanza.completion-resolve` side-channel 提供 resolve/result/failure/
 cancel。它复用同一 Worker port，却不扩张通用 language request envelope。
 客户端核对 response target；错配或 malformed response 会 invalidate 共享
 Worker。普通 provider failure 只拒绝对应 resolve。浏览器取消会发送 cancel，
@@ -922,10 +922,10 @@ store。两 lane 可并发；任一 lane 的新请求只 supersede 自己，mode
 请求在有序 sync 后继续 reference。无效 DTO 在 renderer realm 被拒绝，terminal
 Worker failure 由 coordinator 在下一请求重建。
 
-browser 的 `createAsterAnalysisWorkerFactory` 创建独立 Vite module Worker。
+browser 的 `createStanzaAnalysisWorkerFactory` 创建独立 Vite module Worker。
 completion 与 analysis 共用抽取后的 browser/dedicated Worker port adapter，
 但 provider host、协议 client 和 failure domain 独立。Worker entry 注册
-`aster.lexical` baseline provider，为 TypeScript/JavaScript/JSON 以及 Rust 提供确定性的
+`stanza.lexical` baseline provider，为 TypeScript/JavaScript/JSON 以及 Rust 提供确定性的
 comment/string/number/identifier/keyword/operator token；Rust profile 还识别 ordinary/raw string
 和 character literal，以及未终止 string/template/comment/raw string 和 bracket balance
 diagnostic。它不是 parser 或语言
@@ -941,7 +941,7 @@ transport 已经增量化。产品 composition root 尚未选择该 factory。
 `synchronizeDocument` 的 provider。单个 provider 的同步失败只进入该 provider
 的错误策略，不会清空 Worker mirror，也不会阻断健康 token/diagnostic lane。
 
-`aster.lexical` 现在由一个 token 与 diagnostic lane 共享的版本缓存计算结果。
+`stanza.lexical` 现在由一个 token 与 diagnostic lane 共享的版本缓存计算结果。
 逐行扫描只保存相对列范围、括号/诊断事件和显式
 `normal`、`blockComment`、`multilineString` 与带 delimiter hash 数的 Rust `rawString` 输入输出状态。事务更新先复用文本相同的
 前缀，再从首个变化行向后传播状态；进入相同文本后缀且输入状态与旧缓存一致时，
@@ -999,7 +999,7 @@ splice 边界覆盖的稀疏 token 行；行号未变化的 prefix/suffix line o
 报告 `rebuiltLineCount` 与 `reusedLineCount`。
 
 browser 不再在 source event 上解析全部 sparse lines。
-`AsterSemanticTokenSource.getLineTokens` 只解析指定行，Viewport 先解析整个目标
+`StanzaSemanticTokenSource.getLineTokens` 只解析指定行，Viewport 先解析整个目标
 虚拟窗口，再原子更新该窗口。1,000 个 token 行的单行编辑测试证明 1 行重建、
 999 行复用；100 轮随机 wire delta 与 full token oracle 一致；1,000 行文档的一行
 viewport 只调用一次 presentation resolver。
@@ -1040,14 +1040,14 @@ token 数组；若要进一步消除 renderer 端整数组分配，需要后续�
 | --- | --- | --- |
 | event、lifecycle、URI、resource collection | `base` | ✅ 复用现有领域无关基座；禁止 editor 反向依赖 |
 | 原始资源 I/O 与粗粒度失效 | `platform/files` | ✅ App Server-backed UTF-8 read/write 与 `fs/changed` projection |
-| load/save 传输、共享文档引用与 Aster dirty/revert/conflict policy | `workbench/services/textfile/common` / `BrowserTextModelService` | ✅ CAS 与 workspace-scoped working-copy 备份恢复均已接通 |
+| load/save 传输、共享文档引用与 Stanza dirty/revert/conflict policy | `workbench/services/textfile/common` / `BrowserTextModelService` | ✅ CAS 与 workspace-scoped working-copy 备份恢复均已接通 |
 | 文本事务、selection、decoration、language result | `editor/common` | ✅ editor 领域所有权 |
 | TextMate grammar/runtime 与 token provider | 独立 `workbench/services/textMate` adapter | ✅ runtime/provider/browser WASM、内置资源、声明式 extension discovery、活动主题、embedded language 与 bracket metadata 已接通 |
 
 因此 Current 36 不为 token delta 新造 service，也不提前创建没有保存、冲突或 grammar
 consumer 的空壳 service。Current 43 在 Analysis provider 成为真实 consumer 后才抽取
 TextMate adapter。未来若文件 I/O、dirty 状态或 TextMate runtime import 出现在
-`TextModel`、token index 或 Aster browser component 中，应视为所有权漂移并
+`TextModel`、token index 或 Stanza browser component 中，应视为所有权漂移并
 立即沿上述边界抽取。
 
 ### Current 37：共享 provider module 基座与 Analysis 激活屏障
@@ -1063,7 +1063,7 @@ Completion 与 Analysis 仅保留 provider 类型和协议描述符的薄封装�
 底层任务，只结束当前调用方的等待，并统一产生可识别的 `CancellationError`。
 
 Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provider registry。
-它发布 `aster.lexical` module definition，由
+它发布 `stanza.lexical` module definition，由
 `LanguageAnalysisModuleWorkerClient` 在首个 token/diagnostic 请求前完成 catalog
 握手与激活。激活以一个 provider batch 原子提交；碰撞、加载失败或加载期间撤销都不
 泄漏部分 provider。required module 失败会使预热 Worker 失效，下一次请求由
@@ -1075,15 +1075,15 @@ Analysis Worker entry 不再直接把 lexical provider 无条件注册进 provid
 module 协议。
 
 这条 module seam 是 `workbench/services/textMate` adapter 的接入点。Current 37 落地时
-TextMate grammar、scope 解析和 runtime 依赖后来由 Current 43–46 在 Aster/`base`
+TextMate grammar、scope 解析和 runtime 依赖后来由 Current 43–46 在 Stanza/`base`
 之外建立，并已接通产品 grammar 资源与 extension discovery。同样，
 `workbench/services/textfile/common` 已由 Text Engine、Document Engine 与 Explorer 的
-共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Aster 保持 dirty、
+共享 loading/save 边界证明需要。它只转发 I/O 与粗粒度 invalidation；Stanza 保持 dirty、
 revert、共享模型引用和外改 policy，不能反向塞入 `TextModel` 或 `base`。
 
 ### Current 38：语言配置基座与 lexical cache 身份
 
-对照 VS Code 源码后，Aster 保留了“language configuration 与 tokenization runtime
+对照 VS Code 源码后，Stanza 保留了“language configuration 与 tokenization runtime
 分离”的架构结论，但没有移植其完整 service、配置覆盖层或 support class。
 Current 38 的首个真实消费者只需要 comments 与 brackets，因此当时
 `LanguageConfigurationRegistry` 先定义这两个可组合字段。贡献按 priority 和注册顺序
@@ -1091,7 +1091,7 @@ Current 38 的首个真实消费者只需要 comments 与 brackets，因此当�
 revision。`languageId.ts` 统一 concrete language ID 与 `*` provider selector 的校验，
 这些都是 editor 领域身份，不能下沉到 `base`。
 
-Analysis Worker realm 在加载 `aster.lexical` module 前建立并拥有该 registry，注册
+Analysis Worker realm 在加载 `stanza.lexical` module 前建立并拥有该 registry，注册
 ECMAScript、JSON、JSONC 与 Rust 的内置配置，再把配置 source 注入 lexical provider。
 scanner 被编译为 `LanguageLexicalLineScanner`，comments、任意长度 bracket token、
 keyword、ordinary string、ECMAScript regular-expression、hash-delimited raw string 与 character-literal profile 均由明确的
@@ -1110,7 +1110,7 @@ registry 独立生命周期、同版本跨语言隔离、JSON/JSONC 差异、配
 替换，以及既有 1,000 行增量扫描与随机编辑 oracle。
 
 该 registry 是原生输入的 bracket/comment command、wordPattern 与 `workbench/services/textMate` adapter
-可共同消费的 Aster common 基座。Current 38 落地时尚未加入 indentation、on-enter
+可共同消费的 Stanza common 基座。Current 38 落地时尚未加入 indentation、on-enter
 或 word-pattern 字段；Current 41 在 Enter command 成为真实消费者后加入前两者。
 word-pattern 现已驱动 browser pointer、键盘导航、按词删除与 occurrence；TextMate
 grammar runtime 与 scope tokenization 由 Current 43 在独立 adapter 中补齐。
@@ -1139,7 +1139,7 @@ editor-common 事务构造器。`createLanguagePairTypeCommand` 在这一边界�
 - `createLanguagePairBackspaceCommand` 删除空 pair 两侧，同时让同一多光标事务中的
   其他 selection 保持普通 Backspace 语义。
 
-`AsterTextInputControllerOptions.language` 显式接收 concrete language ID 与
+`StanzaTextInputControllerOptions.language` 显式接收 concrete language ID 与
 caller-owned `LanguageConfigurationSource`。每次相关 `beforeinput` 都读取当前 resolved
 revision，因此配置贡献变化无需重建 View。若同时接入 completion requests，两条路径
 必须使用相同 language ID。DOM 层只做事件适配；pair 决策、事务、selection 映射与
@@ -1164,9 +1164,9 @@ model 的 `EditorSelectionController`：
 
 | 关注点 | 所有者 | 结论 |
 | --- | --- | --- |
-| tracked-range 映射算法 | `TextModel` / Aster text core | ✅ 复用，不建立第二套 decoration |
+| tracked-range 映射算法 | `TextModel` / Stanza text core | ✅ 复用，不建立第二套 decoration |
 | “由自动闭合产生”的身份 | `LanguageAutoClosingTracker` | editor-instance 状态，不进入共享 model |
-| DOM `beforeinput` 与 tracker 生命周期 | `AsterTextInputController` | browser 只适配事件和记录提交回执 |
+| DOM `beforeinput` 与 tracker 生命周期 | `StanzaTextInputController` | browser 只适配事件和记录提交回执 |
 | language pair 配置 | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供 |
 | URI、文件保存、TextMate runtime | 各自 platform/adapter service | ❌ 不与自动闭合来源耦合 |
 | 通用 `base` | domain-neutral primitives | ❌ 不新增 editor identity 或反向依赖 |
@@ -1211,10 +1211,10 @@ revision。
 | 候选抽象 | 当前归属 | 评估 |
 | --- | --- | --- |
 | event/lifecycle | `base/common` | ✅ 继续复用 |
-| Tabs/Spaces/tabSize | Aster editor instance | 值对象即可，尚不需要 service |
+| Tabs/Spaces/tabSize | Stanza editor instance | 值对象即可，尚不需要 service |
 | indentation/on-enter language rules | `LanguageConfigurationRegistry` | ✅ 已有多个 input/Worker composition root |
 | 持久化 editor setting | future Workbench settings service | 尚未完成；未来只映射为实例 options |
-| TextFile resolve/save 与 invalidation；Aster dirty/conflict | `workbench/services/textfile` / `BrowserTextModelService` | ✅，不与 Enter command 耦合；CAS 与 workspace-scoped recovery 已接通 |
+| TextFile resolve/save 与 invalidation；Stanza dirty/conflict | `workbench/services/textfile` / `BrowserTextModelService` | ✅，不与 Enter command 耦合；CAS 与 workspace-scoped recovery 已接通 |
 | TextMate grammar/runtime | `workbench/services/textMate` adapter | ✅；不得进入 Enter 或 `base` |
 
 Current 41 初始 matcher 使用 model 原始行文本，尚未像 VS Code 的
@@ -1254,8 +1254,8 @@ overtype 仍先由 `LanguageAutoClosingTracker` 决定，不会被 `notIn` 破�
 
 | 生命周期/能力 | 当前所有者 | 结论 |
 | --- | --- | --- |
-| 行 scanner 编译与 lazy state cache | `LanguageLexicalContextIndex` | Aster common、可共享注入 |
-| 默认 input context | `AsterTextInputController` | controller 创建并销毁本地 index |
+| 行 scanner 编译与 lazy state cache | `LanguageLexicalContextIndex` | Stanza common、可共享注入 |
+| 默认 input context | `StanzaTextInputController` | controller 创建并销毁本地 index |
 | document-level 共享 | future composition root | 可直接注入 source，无需改 command |
 | full token/diagnostic analysis | Analysis Worker | 继续异步，不阻塞按键 |
 | lifecycle/event primitives | `base/common` | ✅ 复用 |
@@ -1270,11 +1270,11 @@ revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与
 
 ### Current 43：独立 TextMate runtime adapter
 
-TextMate grammar 已经出现真实消费者：Aster Analysis provider/module seam 可以接收比
+TextMate grammar 已经出现真实消费者：Stanza Analysis provider/module seam 可以接收比
 baseline lexical scanner 更高保真的 token provider。因此 runtime 不进入
 `editor`，而是建立单向依赖 `workbench/services/textMate → editor/common →
 base/common`。`base` 不认识 grammar、scope、language ID 或 token provider；
-Aster 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
+Stanza 也不 import `vscode-textmate`、`vscode-oniguruma` 或 WASM。
 
 `TextMateGrammarRegistry` 拥有 grammar contribution identity。一个 definition 由唯一
 `scopeName`、可选 root `languageId`、injection targets 和延迟 loader 组成；注册、
@@ -1295,11 +1295,11 @@ comment/string/regexp/number/operator/keyword/function/type/parameter/variable/t
 property/constant/punctuation/invalid vocabulary。`TextMateScopeThemeModel` 现在提供
 可 structured-clone 的 revisioned selector rule，覆盖 token type 和 modifier；Renderer
 通过独立 theme wire 更新 Worker，Worker 清空仅样式 cache 后由下一请求重算。embedded
-language identity、balanced/unbalanced bracket metadata 与 exact scope styling 已接通。`createTextMateAnalysisProvider` 把结果转为 Aster
+language identity、balanced/unbalanced bracket metadata 与 exact scope styling 已接通。`createTextMateAnalysisProvider` 把结果转为 Stanza
 `LanguageTokenResult`，`createTextMateAnalysisModule` 再接入现有 module activation
 协议。
 
-Aster token provider 新增 `tokenPriority`，默认值为 `0`，相同优先级保留注册顺序。
+Stanza token provider 新增 `tokenPriority`，默认值为 `0`，相同优先级保留注册顺序。
 TextMate provider 使用 `100`，因此一个 Worker 可同时激活 lexical fallback 与
 TextMate。Current 43 初始 provider 捕获当时的 root language selectors；该静态限制由
 Current 44 的 wildcard/`undefined` fallback chain 与版本化 catalog transport 移除。
@@ -1314,9 +1314,9 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 | --- | --- | --- |
 | grammar identity、revision、injection graph | `workbench/services/textMate/common` | ✅ |
 | TextMate runtime 与 incremental state | `TextMateTokenizationService` | ✅ |
-| Aster provider/module integration | `workbench/services/textMate/common` | ✅ |
+| Stanza provider/module integration | `workbench/services/textMate/common` | ✅ |
 | Oniguruma WASM URL/fetch | `workbench/services/textMate/browser` | ✅ |
-| baseline structural diagnostics | `aster.lexical` | ✅，继续独立 |
+| baseline structural diagnostics | `stanza.lexical` | ✅，继续独立 |
 | grammar resource/extension manifest loading | product extension/resource layer | ✅ App Server extension discovery 与声明式资源投影已接通；不执行 extension JavaScript |
 | scope-theme selector、token type、modifier 与 embedded-language projection | TextMate/theme adapter | ✅ |
 | URI、文件保存、dirty/conflict | platform/textfile / `BrowserTextModelService` | ✅，不得混入 TextMate；CAS/恢复已接通 |
@@ -1325,7 +1325,7 @@ namespace/default 两种形式；该差异不泄漏给调用方。
 suffix convergence、同 model version grammar revision 替换、scope validation、
 cancellation、独立生命周期，以及经过 `LanguageAnalysisService` application gate 的
 provider priority。独立 Vite entry build 证明 browser WASM adapter 可被 Worker
-打包。`createBrowserEditorPart` consumes the Workbench `ITextMateService`/`BrowserTextMateService` for product Aster panes and subscribes
+打包。`createBrowserEditorPart` consumes the Workbench `ITextMateService`/`BrowserTextMateService` for product Stanza panes and subscribes
 to catalog/theme revisions before scheduling a replacement analysis request.
 This proves extension-packaged JSON/JSONC and caller-resolved session contributions
 are active in the product path; Rust owns extension manifest/resource discovery and
@@ -1354,7 +1354,7 @@ transport failure 会 poison catalog client 并 invalidate 整个 Analysis Worke
 或 port。
 
 静态 root selector 会让动态 catalog 增加语言时必须重注册 provider。为消除这个耦合，
-Aster token lane 从“选一个 provider”演进为明确的 priority fallback chain：
+Stanza token lane 从“选一个 provider”演进为明确的 priority fallback chain：
 
 - `LanguageAnalysisProviderRegistry.getTokenProviders` 按 `tokenPriority` 降序返回，
   同 priority 保留注册顺序；
@@ -1364,24 +1364,24 @@ Aster token lane 从“选一个 provider”演进为明确的 priority fallback
 - 所有 provider 都缺席时才发布 empty token result。
 
 TextMate provider 因而声明 wildcard、priority `100`；catalog 没有该 language root 时
-返回 `undefined`，priority `0` 的 `aster.lexical` 自动接管。该 fallback 语义只属于
+返回 `undefined`，priority `0` 的 `stanza.lexical` 自动接管。该 fallback 语义只属于
 token provider；diagnostic lane 仍然并发合并所有匹配 provider。
 
-`TextMateAnalysisModuleWorkerClient` 同时持有 Aster module client 与 grammar catalog
+`TextMateAnalysisModuleWorkerClient` 同时持有 Stanza module client 与 grammar catalog
 client。catalog updates 串行发送，每个 Analysis request 都等待调用时最新的 scheduled
 revision。`textMateAnalysisWorkerMain.ts` 是独立 composition root，拥有：
 
 | Worker 内能力 | 所有者 |
 | --- | --- |
-| Analysis request/result 与 document mirror | Aster Worker wire |
-| provider module activation | Aster generic module wire |
+| Analysis request/result 与 document mirror | Stanza Worker wire |
+| provider module activation | Stanza generic module wire |
 | grammar catalog replacement | TextMate catalog wire/store |
 | TextMate provider/runtime | `textmate.grammars` / `TextMateTokenizationService` |
-| deterministic fallback/diagnostics | `aster.lexical` |
+| deterministic fallback/diagnostics | `stanza.lexical` |
 | WASM fetch/init | `workbench/services/textMate/browser` |
 
 这种组合保持依赖为 `textmate/browser → textmate/common → editor/common → base`；
-Aster 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
+Stanza 原有 Worker 不 import TextMate，`base` 也不增加任何 editor identity。
 
 真实 structured-clone 测试证明 initial catalog 在首请求前落地、TextMate 优先、
 无 grammar language 回落 lexical、同 Worker revision 热更新改变同版本 token，
@@ -1390,7 +1390,7 @@ stale revision poison client，以及 registry snapshot 到 wire catalog 的 mat
 
 Current 44 落地时还缺真实 grammar resource owner 和产品层消费者。Current 45 已补入
 首批内置 grammar 与 catalog service，后续 extension service 也已接通声明式资源 discovery；`createBrowserEditorPart` 选择
-Aster pane 的 Worker factory 并调度 catalog 变化后的 model token request。catalog change 本身不隐式遍历或重算所有
+Stanza pane 的 Worker factory 并调度 catalog 变化后的 model token request。catalog change 本身不隐式遍历或重算所有
 文档，这个调度责任不得偷偷进入通用 catalog model。
 
 ### Current 45：TextMate grammar service 与首批真实资源
@@ -1411,7 +1411,7 @@ Current 45 建立了独立的 editor-domain 服务边界：
 | 产品内置 grammar 资源解析与贡献 | `AppServerExtensionService` | ✅ 通过 generation-bound extension API 接入 |
 | catalog 传输和 tokenization | TextMate dedicated Worker | ✅ 继续无文件权限 |
 | extension manifest 与外部 grammar resource | extension service | ✅ 不可变 generation-bound 声明式 discovery；不执行 extension JavaScript |
-| TextFile resolve/save/invalidation；Aster dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/working-copy 恢复已完成 |
+| TextFile resolve/save/invalidation；Stanza dirty/save/revert/conflict | `textfile` / `BrowserTextModelService` | ✅，未与 grammar service 混合；CAS/working-copy 恢复已完成 |
 
 `TextMateGrammarService` 拥有 registration 和 `TextMateGrammarCatalogModel`。每次贡献变化
 都会捕获 immutable registry snapshot；较新 revision 会取消较旧 materialization，只有最新且
@@ -1427,17 +1427,17 @@ language identity。
 
 `BrowserTextMateService` 把内置 grammar service 和
 `createTextMateAnalysisWorkerFactory` 组合为一个可销毁的产品接入单元。Current 45
-落地时 Workbench 尚无 Aster `EditorPane`，因此当时未选择该 support，也未在 catalog
+落地时 Workbench 尚无 Stanza `EditorPane`，因此当时未选择该 support，也未在 catalog
 revision 变化时为打开文档请求重分析；Current 46 已补齐这两个真实消费者。
 
 测试覆盖 contribution 装载、latest-revision-wins、失败保持 last-good catalog、撤销后重发布，
 并使用真实 Oniguruma 对移入的 VS Code JSON grammar 执行 tokenization。扩展与打包测试同时
 验证 manifest 引用的真实资源仍存在。
 
-### Current 46：Workbench TextFile 边界与 Aster 产品 Pane
+### Current 46：Workbench TextFile 边界与 Stanza 产品 Pane
 
-Aster 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能力，但仍保持“Workbench 负责资源与宿主、
-编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Aster 为
+Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能力，但仍保持“Workbench 负责资源与宿主、
+编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Stanza 为
 普通文本的默认 editor；document、diff 和 PDF 继续通过各自明确的 pane descriptor 参与选择。
 
 `IEditorPart.openEditor` 是产品调用面，`EditorPaneRegistry` 是实现选择边界，`IEditorPane` 是
@@ -1449,17 +1449,17 @@ Aster 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | URI、取消、事件、生命周期原语 | `base/common` | ✅ 复用，保持领域无关 |
 | 工作区原始文件读取 | `platform/files` | ✅ |
 | file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
-| URI 到 Aster `TextModel` 的共享引用 | `BrowserTextModelService` | ✅ editor-owned |
-| Aster viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
-| Aster language、folding、diagnostic、save 与文档命令组合 | `EditorPart` + editor contribution registry | ✅ per-editor runtime；可独立能力由模式 bundle 选择 |
+| URI 到 Stanza `TextModel` 的共享引用 | `BrowserTextModelService` | ✅ editor-owned |
+| Stanza viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
+| Stanza language、folding、diagnostic、save 与文档命令组合 | `EditorPart` + editor contribution registry | ✅ per-editor runtime；可独立能力由模式 bundle 选择 |
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
-| JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Aster pane 已选择 |
-| Completion Worker | `createBrowserEditorPart` | ✅ 产品 Aster pane 已选择 |
+| JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Stanza pane 已选择 |
+| Completion Worker | `createBrowserEditorPart` | ✅ 产品 Stanza pane 已选择 |
 | dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；CAS 与 Workbench 备份恢复已完成，非 UTF-8 编码仍是单独能力 |
 
 打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
-Aster pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资源模型保持权威，
+Stanza pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资源模型保持权威，
 新资源才调用 TextFile resolve。最后一个引用释放时模型销毁。TextFile service
 不吸收任何编辑器的 transaction、undo 或 selection 类型。
 
@@ -1468,19 +1468,19 @@ Aster pane 先通过 `BrowserTextModelService.acquire` 获取引用：已有资�
 所以达到 piece-tree 回收阈值不会把 O(document length) 压缩塞进一次编辑事务；调度
 任务在模型关闭时取消，快照、history 与 `TextModel.version` 不因维护而改变。
 
-产品 Aster session 组合 `BrowserTextMateService` 与 Completion Worker。
+产品 Stanza session 组合 `BrowserTextMateService` 与 Completion Worker。
 它等待初始 grammar catalog，再发 token/diagnostic 请求；catalog revision 变化会触发
-当前文档重新分析。直接构造的 Aster session 仍使用本地 lexical/word provider，方便
+当前文档重新分析。直接构造的 Stanza session 仍使用本地 lexical/word provider，方便
 独立嵌入和确定性测试。详细 TextFile 实现契约见
 [`zeta-ts/src/zeta/workbench/services/textfile/README.md`](../zeta-ts/src/zeta/workbench/services/textfile/README.md)，
-Aster 内部契约见
+Stanza 内部契约见
 [`zeta-ts/src/zeta/editor/text-engine.md`](../zeta-ts/src/zeta/editor/text-engine.md)。
 
 Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
 会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
 
 本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host
-已具备原子写入与粗粒度变更通知，Aster 因而拥有 dirty/save/revert 和外改 policy；
+已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；
 expected-revision write、workspace-scoped working-copy 备份恢复已经接通；非 UTF-8 编码恢复仍是独立能力。
 
 ### Proposed 3：语言边界

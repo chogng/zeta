@@ -3,12 +3,12 @@ import { type Event, Emitter } from "../../../../base/common/event.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type DiagnosticOverviewMarker } from "../overviewRuler/diagnosticOverviewMarkers.js";
-import { createAsterDiagnosticOverviewMarkers } from "../overviewRuler/diagnosticOverviewMarkers.js";
+import { createStanzaDiagnosticOverviewMarkers } from "../overviewRuler/diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "../overviewRuler/diffOverviewMarkers.js";
-import { createAsterDiffOverviewMarkers } from "../overviewRuler/diffOverviewMarkers.js";
+import { createStanzaDiffOverviewMarkers } from "../overviewRuler/diffOverviewMarkers.js";
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
 import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
-import { projectAsterDecorationOverlays } from "./decorationProjection.js";
+import { projectStanzaDecorationOverlays } from "./decorationProjection.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
@@ -52,7 +52,7 @@ export class DecorationsPart extends EditorOverlayPart {
 		if (!context) {
 			return;
 		}
-		projectAsterDecorationOverlays(context, this.resolveVisibleDecorations(context));
+		projectStanzaDecorationOverlays(context, this.resolveVisibleDecorations(context));
 	}
 
 	public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
@@ -62,8 +62,8 @@ export class DecorationsPart extends EditorOverlayPart {
 	public overviewMarkers(): readonly DecorationsPartMarker[] {
 		const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
 		return Object.freeze([
-			...createAsterDiagnosticOverviewMarkers(decorations, this.model.lineCount),
-			...createAsterDiffOverviewMarkers(decorations, this.model.lineCount),
+			...createStanzaDiagnosticOverviewMarkers(decorations, this.model.lineCount),
+			...createStanzaDiffOverviewMarkers(decorations, this.model.lineCount),
 		]);
 	}
 

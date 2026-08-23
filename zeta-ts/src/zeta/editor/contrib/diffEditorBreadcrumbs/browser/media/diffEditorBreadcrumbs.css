@@ -1,4 +1,4 @@
-.aster-diff-editor-breadcrumbs {
+.stanza-diff-editor-breadcrumbs {
   position: absolute;
   top: 4px;
   right: 8px;
@@ -11,7 +11,7 @@
   border-radius: 3px;
 }
 
-.aster-diff-editor-breadcrumb {
+.stanza-diff-editor-breadcrumb {
   min-width: 24px;
   color: var(--zeta-description-foreground);
   font-size: 11px;

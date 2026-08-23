@@ -29,10 +29,10 @@ export class CompositeEditorLineGutterDecoration extends DisposableOwner impleme
 
 	create(ownerDocument: Document): HTMLElement {
 		const root = h(ownerDocument, "span");
-		root.className = "aster-editor-feature-gutter";
+		root.className = "stanza-editor-feature-gutter";
 		for (const decoration of this.decorations) {
 			const slot = h(ownerDocument, "span");
-			slot.className = "aster-editor-feature-gutter-slot";
+			slot.className = "stanza-editor-feature-gutter-slot";
 			slot.append(decoration.create(ownerDocument));
 			root.append(slot);
 		}

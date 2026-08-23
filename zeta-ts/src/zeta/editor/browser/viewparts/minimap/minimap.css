@@ -1,4 +1,4 @@
-.aster-editor-minimap {
+.stanza-editor-minimap {
   position: absolute;
   top: 0;
   left: 0;
@@ -13,11 +13,11 @@
   will-change: transform;
 }
 
-.aster-editor-minimap.dragging {
+.stanza-editor-minimap.dragging {
   cursor: grabbing;
 }
 
-.aster-editor-minimap-gpu {
+.stanza-editor-minimap-gpu {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -26,14 +26,14 @@
   pointer-events: none;
 }
 
-.aster-editor-minimap-row {
+.stanza-editor-minimap-row {
   position: absolute;
   right: 4px;
   opacity: 0.42;
   background: currentColor;
 }
 
-.aster-editor-minimap-diagnostic-marker {
+.stanza-editor-minimap-diagnostic-marker {
   position: absolute;
   right: 0;
   z-index: 1;
@@ -42,35 +42,35 @@
   pointer-events: none;
 }
 
-.aster-editor-minimap-diagnostic-marker.error-underline {
+.stanza-editor-minimap-diagnostic-marker.error-underline {
   background: var(--zeta-error-foreground);
 }
 
-.aster-editor-minimap-diagnostic-marker.warning-underline {
+.stanza-editor-minimap-diagnostic-marker.warning-underline {
   background: var(--zeta-warning-foreground);
 }
 
-.aster-editor-minimap-diagnostic-marker.information-underline {
+.stanza-editor-minimap-diagnostic-marker.information-underline {
   background: var(--zeta-focus-border);
 }
 
-.aster-editor-minimap-diagnostic-marker.hint-underline {
+.stanza-editor-minimap-diagnostic-marker.hint-underline {
   background: var(--zeta-description-foreground);
 }
 
-.aster-editor-minimap-diagnostic-marker.diff-added {
+.stanza-editor-minimap-diagnostic-marker.diff-added {
   background: var(--zeta-diff-editor-inserted-line-marker);
 }
 
-.aster-editor-minimap-diagnostic-marker.diff-modified {
+.stanza-editor-minimap-diagnostic-marker.diff-modified {
   background: var(--zeta-focus-border);
 }
 
-.aster-editor-minimap-diagnostic-marker.diff-deleted {
+.stanza-editor-minimap-diagnostic-marker.diff-deleted {
   background: var(--zeta-diff-editor-removed-line-marker);
 }
 
-.aster-editor-minimap-viewport {
+.stanza-editor-minimap-viewport {
   position: absolute;
   top: 0;
   right: 0;
@@ -85,12 +85,12 @@
   will-change: transform;
 }
 
-.aster-editor-minimap:hover .aster-editor-minimap-viewport {
+.stanza-editor-minimap:hover .stanza-editor-minimap-viewport {
   opacity: 1;
   background: color-mix(in srgb, var(--zeta-scrollbar-slider-hover-background, color-mix(in srgb, currentColor 36%, transparent)) 50%, transparent);
 }
 
-.aster-editor-minimap.dragging .aster-editor-minimap-viewport {
+.stanza-editor-minimap.dragging .stanza-editor-minimap-viewport {
   opacity: 1;
   background: color-mix(in srgb, var(--zeta-scrollbar-slider-active-background, color-mix(in srgb, currentColor 48%, transparent)) 50%, transparent);
 }

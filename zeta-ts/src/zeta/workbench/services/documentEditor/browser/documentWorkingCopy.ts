@@ -25,7 +25,7 @@ export interface DocumentWorkingCopyOptions {
 	readonly createEmptyDocument?: () => DocumentNode;
 }
 
-/** Persistence adapter for Aster's immutable document model. */
+/** Persistence adapter for Stanza's immutable document model. */
 export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	private readonly dirtyEmitter = this.own(new Emitter<void>());
 	private readonly externalChangeEmitter = this.own(new Emitter<void>());
@@ -162,7 +162,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 	}
 }
 
-/** Parses Aster's versioned format and migrates plain text into paragraphs. */
+/** Parses Stanza's versioned format and migrates plain text into paragraphs. */
 export function parseDocument(text: string, schema: DocumentSchema = createDefaultDocumentSchema(), createEmptyDocument?: () => DocumentNode): DocumentNode {
 	if (text.trim().length === 0) {
 		const document = createEmptyDocument?.() ?? schema.createDocument([]);

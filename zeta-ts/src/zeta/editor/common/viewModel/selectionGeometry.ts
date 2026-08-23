@@ -2,7 +2,7 @@ import { type TextSelectionSet } from "../core/selection.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorLineRange } from "../viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "./textMeasurer.js";
-import { createAsterRangeRectangles } from "./rangeGeometry.js";
+import { createStanzaRangeRectangles } from "./rangeGeometry.js";
 
 export interface SelectionRectangle {
 	readonly selectionIndex: number;
@@ -24,7 +24,7 @@ export interface SelectionGeometry {
 }
 
 /** @internal */
-export function createAsterSelectionGeometry(
+export function createStanzaSelectionGeometry(
 	model: TextModel,
 	selectionSet: TextSelectionSet,
 	renderLines: EditorLineRange,
@@ -54,7 +54,7 @@ export function createAsterSelectionGeometry(
 			}));
 		}
 	}
-	const selections = createAsterRangeRectangles(
+	const selections = createStanzaRangeRectangles(
 		model,
 		selectionSet.selections.map((selection, selectionIndex) => ({
 			range: selection.range,

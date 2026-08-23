@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
 import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
@@ -51,7 +51,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createAsterDecorationSource(
+		decorationSources: [createStanzaDecorationSource(
 			decorations,
 			() => DecorationPresentation.WarningUnderline,
 			decoration => decoration.metadata,
@@ -59,9 +59,9 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	});
 	using controller = new DiagnosticHoverController(viewport);
 	viewport.layout({ width: 160, height: 20 });
-	const marker = viewport.element.querySelector<HTMLElement>(".aster-editor-diagnostic-marker")!;
+	const marker = viewport.element.querySelector<HTMLElement>(".stanza-editor-diagnostic-marker")!;
 	marker.dispatchEvent(new dom.window.Event("pointerover", { bubbles: true }));
-	const hover = dom.window.document.body.querySelector<HTMLElement>(".aster-editor-diagnostic-hover")!;
+	const hover = dom.window.document.body.querySelector<HTMLElement>(".stanza-editor-diagnostic-hover")!;
 	assert.equal(hover.hidden, false);
 	assert.equal(hover.textContent, "Use let instead");
 

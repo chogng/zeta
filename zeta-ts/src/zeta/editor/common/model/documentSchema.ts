@@ -6,10 +6,10 @@ export interface DocumentMarkSpec {
 	readonly validateAttributes?: (attrs: DocumentAttributes) => void;
 }
 
-/** Font families that Aster stores as semantic document text styles. */
+/** Font families that Stanza stores as semantic document text styles. */
 export type DocumentTextStyleFontFamily = "sans" | "serif" | "monospace";
 
-/** Persistent typography attributes applied by Aster's document-formatting controls. */
+/** Persistent typography attributes applied by Stanza's document-formatting controls. */
 export interface DocumentTextStyleAttributes {
 	readonly fontFamily?: DocumentTextStyleFontFamily;
 	readonly fontSize?: number;
@@ -55,7 +55,7 @@ export interface CreateNodeOptions {
 
 const DEFAULT_TOP_NODE_TYPE = "doc";
 
-/** Schema and content validator for Aster's structured document tree. */
+/** Schema and content validator for Stanza's structured document tree. */
 export class DocumentSchema {
 	readonly topNodeType: string;
 	private readonly nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>;
@@ -245,9 +245,9 @@ export function createDefaultDocumentSchema(): DocumentSchema {
 }
 
 function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
-	const blocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "textBlock", "table", "horizontalRule"] as const;
-	const listBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "textBlock", "table"] as const;
-	const tableCellBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "textBlock", "table"] as const;
+	const blocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table", "horizontalRule"] as const;
+	const listBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
+	const tableCellBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
 	return {
 		doc: { kind: "root", allowedChildren: blocks },
 		paragraph: { kind: "block", allowedChildren: ["text", "hardBreak", "image"] },
@@ -256,7 +256,7 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 		bulletList: { kind: "block", allowedChildren: ["listItem"], minChildren: 1 },
 		orderedList: { kind: "block", allowedChildren: ["listItem"], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => validateIntegerAttribute(attrs, "order", 1, Number.MAX_SAFE_INTEGER) },
 		listItem: { kind: "block", allowedChildren: listBlocks, minChildren: 1 },
-		textBlock: { kind: "block", content: [{ type: "text", min: 0, max: 1 }], defaultAttrs: { language: "text" }, validateAttributes: attrs => validateStringAttribute(attrs, "language", false) },
+		codeBlock: { kind: "block", content: [{ type: "text", min: 0, max: 1 }], defaultAttrs: { language: "text" }, validateAttributes: attrs => validateStringAttribute(attrs, "language", false) },
 		table: { kind: "block", allowedChildren: ["tableRow"], minChildren: 1 },
 		tableRow: { kind: "block", allowedChildren: ["tableCell"], minChildren: 1 },
 		tableCell: { kind: "block", allowedChildren: tableCellBlocks, minChildren: 1 },

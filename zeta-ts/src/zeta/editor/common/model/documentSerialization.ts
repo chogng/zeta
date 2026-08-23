@@ -7,7 +7,7 @@ export const DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT = "zeta.document.fragment";
 export const DOCUMENT_FRAGMENT_SERIALIZATION_VERSION = 1;
 export const DOCUMENT_FRAGMENT_CLIPBOARD_MIME = "application/vnd.zeta.document.fragment+json";
 
-/** JSON-safe representation of one Aster node, including incomplete transaction fragments. */
+/** JSON-safe representation of one Stanza node, including incomplete transaction fragments. */
 export interface SerializedDocumentNode {
 	readonly id: string;
 	readonly type: string;
@@ -38,7 +38,7 @@ export function encodeDocumentNode(node: DocumentNode, schema: DocumentSchema, o
 	return encodeNode(node);
 }
 
-/** Decodes and validates one untrusted node value from a Aster transport payload. */
+/** Decodes and validates one untrusted node value from a Stanza transport payload. */
 export function decodeDocumentNode(value: unknown, schema: DocumentSchema, options: DocumentValidationOptions = {}): DocumentNode {
 	try {
 		const node = decodeNode(value);
@@ -77,13 +77,13 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 	}
 }
 
-/** Serializes a validated selection fragment for Aster-aware clipboard transport. */
+/** Serializes a validated selection fragment for Stanza-aware clipboard transport. */
 export function serializeDocumentFragment(fragment: DocumentFragment, schema: DocumentSchema, pretty = false): string {
 	validateFragmentContent(fragment.content, schema);
 	return JSON.stringify({ format: DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT, version: DOCUMENT_FRAGMENT_SERIALIZATION_VERSION, content: fragment.content }, undefined, pretty ? 2 : undefined);
 }
 
-/** Parses and validates a Aster clipboard fragment without trusting its JSON shape. */
+/** Parses and validates a Stanza clipboard fragment without trusting its JSON shape. */
 export function deserializeDocumentFragment(value: string | unknown, schema: DocumentSchema): DocumentFragment {
 	let parsed: unknown = value;
 	if (typeof value === "string") {

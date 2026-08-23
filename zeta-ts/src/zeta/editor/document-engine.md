@@ -1,4 +1,4 @@
-# Aster Document Engine
+# Stanza Document Engine
 
 > 本文是结构化文档编辑器的 canonical 设计规范，拥有 schema、document model、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
@@ -6,7 +6,7 @@
 
 ## 快速理解
 
-Aster Document Engine 是 Zeta 唯一的结构化文档同步权威。`DocumentModel` 保存 schema-validated tree、selection、transaction、history 和 plugin state；`EditorWidget` 只负责浏览器投影；Workbench 负责 pane、resource reference、working copy 和产品 profile。
+Stanza Document Engine 是 Zeta 唯一的结构化文档同步权威。`DocumentModel` 保存 schema-validated tree、selection、transaction、history 和 plugin state；`EditorWidget` 只负责浏览器投影；Workbench 负责 pane、resource reference、working copy 和产品 profile。
 
 | 场景 | Canonical owner | 关键保证 |
 | --- | --- | --- |
@@ -16,7 +16,7 @@ Aster Document Engine 是 Zeta 唯一的结构化文档同步权威。`DocumentM
 | Academic schema、citation 和 toolbar | `EditorProfile` + matching contrib | 产品语义不进入通用 document core |
 | 打开、保存、revert 和 conflict | `BrowserDocumentModelService` + `DocumentWorkingCopy` | Workbench transport 不拥有 document mutation |
 | 本地或远程 collaboration | collaboration contrib + `IDocumentCollaborationService` | server 排序；client 不伪装成完整 CRDT authority |
-| `textBlock` 内嵌行编辑 | `IEmbeddedTextEditorFactory` | Document owns block identity；Text Engine 不依赖 document types |
+| `codeBlock` 内嵌行编辑 | `IEmbeddedTextEditorFactory` | Document owns block identity；Text Engine 不依赖 document types |
 
 ## 设计不变量
 
@@ -109,7 +109,7 @@ Browser HTML 永远不是 trusted document state。Structured clipboard 使用 v
 
 ## Text Engine 嵌入边界
 
-`textBlock` 是 Document Engine 的普通结构化文本块；`codeBlock` 表达 Text Engine 的代码语义。二者不能因为都显示文本而共享 model identity。
+`codeBlock` 是 Stanza Document Engine 中的结构化代码块：`DocumentModel` 拥有它的 block identity、顺序、attributes 和 document transaction，内部文本则通过 Stanza Text Engine 的行式编辑 surface 投影。两个 engine 同属 Stanza，但不因为共享一个界面就共享 model identity 或 mutation authority。
 
 Document browser 通过 `IEmbeddedTextEditorFactory` 请求一个嵌入式行编辑 surface：
 

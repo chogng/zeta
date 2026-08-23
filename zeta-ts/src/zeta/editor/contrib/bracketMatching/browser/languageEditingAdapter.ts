@@ -22,9 +22,9 @@ export class LanguageEditingAdapter extends DisposableOwner implements TextInput
 	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined, private readonly indentation: EditorIndentationOptions | undefined) {
 		super();
 		assertLanguageId(languageId);
-		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Aster text input language requires a configuration source");
+		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
 		resolveEditorIndentationOptions(indentation);
-		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Aster text input lexical context must match its model and language");
+		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Stanza text input lexical context must match its model and language");
 		this.lexicalContext = lexicalContext ?? this.own(new LanguageLexicalContextIndex(textModel, languageId, configurations));
 		this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
 	}

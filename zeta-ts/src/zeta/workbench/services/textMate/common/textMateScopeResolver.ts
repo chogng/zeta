@@ -8,7 +8,7 @@ export interface TextMateResolvedTokenStyle {
 
 export type TextMateScopeResolver = (scopes: readonly string[]) => TextMateResolvedTokenStyle | undefined;
 
-/** Maps conventional TextMate scopes onto Aster's stable semantic vocabulary. */
+/** Maps conventional TextMate scopes onto Stanza's stable semantic vocabulary. */
 export const defaultTextMateScopeResolver: TextMateScopeResolver = scopes => {
 	for (let index = scopes.length - 1; index >= 0; index -= 1) {
 		const scope = scopes[index]!;

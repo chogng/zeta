@@ -5,7 +5,7 @@ import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextRe
 import { isDiffEditorInput } from "./diffEditorInput.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 
-export const CODE_EDITOR_ID = "aster.editor.code";
+export const CODE_EDITOR_ID = "stanza.editor.code";
 
 /** Selects the canonical editor for plain-text resources. */
 export function matchCodeEditor(input: EditorInput): EditorPaneMatch {

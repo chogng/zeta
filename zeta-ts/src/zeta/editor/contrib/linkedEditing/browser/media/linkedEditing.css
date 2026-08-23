@@ -1,4 +1,4 @@
-.aster-editor.linked-editing-active {
+.stanza-editor.linked-editing-active {
   outline: 1px solid color-mix(in srgb, var(--zeta-focus-border) 35%, transparent);
   outline-offset: -1px;
 }

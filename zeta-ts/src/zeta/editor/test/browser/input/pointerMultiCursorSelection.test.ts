@@ -172,7 +172,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 		() => new PointerSelectionController(viewport, selections, {
 			multiCursorModifier: "shift" as PointerMultiCursorModifier,
 		}),
-		/Unknown Aster pointer multi-cursor modifier/,
+		/Unknown Stanza pointer multi-cursor modifier/,
 	);
 
 	dom.window.close();

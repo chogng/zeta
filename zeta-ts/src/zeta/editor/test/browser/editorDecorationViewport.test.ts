@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DecorationPresentation, createAsterDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
 import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
-import { createAsterLanguageDiagnosticSource, resolveAsterLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
+import { createStanzaLanguageDiagnosticSource, resolveStanzaLanguageDiagnosticPresentation } from "../../contrib/gotoError/browser/languageDiagnosticPresentation.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
@@ -51,14 +51,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 		metadata: "error",
 	});
 	let matchResolutionCount = 0;
-	const matchSource = createAsterDecorationSource(
+	const matchSource = createStanzaDecorationSource(
 		matches,
 		() => {
 			matchResolutionCount += 1;
 			return DecorationPresentation.SearchMatch;
 		},
 	);
-	const diagnosticSource = createAsterDecorationSource(
+	const diagnosticSource = createStanzaDecorationSource(
 		diagnostics,
 		decoration => decoration.metadata === "error"
 			? DecorationPresentation.ErrorUnderline
@@ -101,14 +101,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 		width: "20px",
 	}]);
 	const errorMarker = requiredElement<HTMLElement>(
-		requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="2"]'),
-		".aster-editor-diagnostic-marker",
+		requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="2"]'),
+		".stanza-editor-diagnostic-marker",
 	);
 	assert.equal(errorMarker.hidden, false);
 	assert.equal(errorMarker.classList.contains("error"), true);
-	const errorOverview = requiredElement<HTMLElement>(viewport.element, ".aster-editor-overview-marker");
+	const errorOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
 	assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap-diagnostic-marker");
+	const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(errorMinimap.classList.contains(DecorationPresentation.ErrorUnderline), true);
 	assert.equal(errorMinimap.style.top, "66.66666666666666%");
 
@@ -119,7 +119,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	});
 	const warning = requiredElement<HTMLElement>(
 		viewport.element,
-		`.aster-editor-decoration[data-decoration-id="${diagnosticId}"]`,
+		`.stanza-editor-decoration[data-decoration-id="${diagnosticId}"]`,
 	);
 	assert.equal(
 		warning.classList.contains(DecorationPresentation.WarningUnderline),
@@ -129,14 +129,14 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(warning.style.left, "48px");
 	assert.equal(warning.style.width, "20px");
 	const warningMarker = requiredElement<HTMLElement>(
-		requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="1"]'),
-		".aster-editor-diagnostic-marker",
+		requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="1"]'),
+		".stanza-editor-diagnostic-marker",
 	);
 	assert.equal(warningMarker.hidden, false);
 	assert.equal(warningMarker.classList.contains("warning"), true);
-	const warningOverview = requiredElement<HTMLElement>(viewport.element, ".aster-editor-overview-marker");
+	const warningOverview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-marker");
 	assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
-	const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap-diagnostic-marker");
+	const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(warningMinimap.classList.contains(DecorationPresentation.WarningUnderline), true);
 	assert.equal(warningMinimap.style.top, "33.33333333333333%");
 	assert.equal(matchResolutionCount, 1);
@@ -178,21 +178,21 @@ test("Line and block decoration parts project source presentation details", () =
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "block",
 	});
-	const source = createAsterDecorationSource(
+	const source = createStanzaDecorationSource(
 		decorations,
 		decoration => decoration.metadata === "lines"
 			? {
 				presentation: DecorationPresentation.DiffModified,
 				linesDecoration: {
-					className: "aster-test-line-marker",
-					firstLineClassName: "aster-test-first-line-marker",
+					className: "stanza-test-line-marker",
+					firstLineClassName: "stanza-test-first-line-marker",
 					tooltip: "line marker",
 				},
 			}
 			: {
 				presentation: DecorationPresentation.DiffModified,
 				blockDecoration: {
-					className: "aster-test-block",
+					className: "stanza-test-block",
 					padding: [1, 2, 3, 4],
 				},
 			},
@@ -206,20 +206,20 @@ test("Line and block decoration parts project source presentation details", () =
 	});
 	viewport.layout({ width: 200, height: 60 });
 
-	const firstLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="0"]');
-	const secondLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="1"]');
-	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.aster-editor-line[data-logical-line-index="2"]');
-	const firstMarker = requiredElement<HTMLElement>(firstLine, ".aster-editor-line-decoration");
-	const secondMarker = requiredElement<HTMLElement>(secondLine, ".aster-editor-line-decoration");
-	assert.equal(firstMarker.classList.contains("aster-test-line-marker"), true);
-	assert.equal(firstMarker.classList.contains("aster-test-first-line-marker"), true);
+	const firstLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="0"]');
+	const secondLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="1"]');
+	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="2"]');
+	const firstMarker = requiredElement<HTMLElement>(firstLine, ".stanza-editor-line-decoration");
+	const secondMarker = requiredElement<HTMLElement>(secondLine, ".stanza-editor-line-decoration");
+	assert.equal(firstMarker.classList.contains("stanza-test-line-marker"), true);
+	assert.equal(firstMarker.classList.contains("stanza-test-first-line-marker"), true);
 	assert.equal(firstMarker.title, "line marker");
-	assert.equal(secondMarker.classList.contains("aster-test-line-marker"), true);
-	assert.equal(secondMarker.classList.contains("aster-test-first-line-marker"), false);
-	assert.equal(thirdLine.querySelector(".aster-editor-line-decoration"), null);
+	assert.equal(secondMarker.classList.contains("stanza-test-line-marker"), true);
+	assert.equal(secondMarker.classList.contains("stanza-test-first-line-marker"), false);
+	assert.equal(thirdLine.querySelector(".stanza-editor-line-decoration"), null);
 
-	const block = requiredElement<HTMLElement>(viewport.element, ".aster-editor-block-decoration");
-	assert.equal(block.classList.contains("aster-test-block"), true);
+	const block = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
+	assert.equal(block.classList.contains("stanza-test-block"), true);
 	assert.equal(block.style.left, "34px");
 	assert.equal(block.style.width, "168px");
 	assert.equal(block.style.top, "-1px");
@@ -242,16 +242,16 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createAsterDecorationSource(decorations, decoration => decoration.metadata)],
+		decorationSources: [createStanzaDecorationSource(decorations, decoration => decoration.metadata)],
 	});
 	viewport.layout({ width: 200, height: 80 });
 
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-overview-marker")].map(marker => marker.classList[1]), [
+	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-overview-marker")].map(marker => marker.classList[1]), [
 		DecorationPresentation.DiffAdded,
 		DecorationPresentation.DiffModified,
 		DecorationPresentation.DiffDeleted,
 	]);
-	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-minimap-diagnostic-marker")].map(marker => marker.classList[1]), [
+	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-minimap-diagnostic-marker")].map(marker => marker.classList[1]), [
 		DecorationPresentation.DiffAdded,
 		DecorationPresentation.DiffModified,
 		DecorationPresentation.DiffDeleted,
@@ -275,10 +275,10 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		textDirection: EditorTextDirection.RightToLeft,
-		decorationSources: [createAsterDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
+		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch)],
 	});
 	viewport.layout({ width: 200, height: 40 });
-	const line = requiredElement<HTMLElement>(viewport.element, ".aster-editor-line");
+	const line = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-line");
 	Object.defineProperty(line, "getBoundingClientRect", {
 		configurable: true,
 		value: () => testRectangle(100, 0, 200),
@@ -323,7 +323,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createAsterDecorationSource(
+		decorationSources: [createStanzaDecorationSource(
 			decorations,
 			() => DecorationPresentation.SearchMatch,
 		)],
@@ -358,7 +358,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 	using model = new TextModel("abcd\nefgh\nijkl\nmnop");
 	using store = createLanguageDiagnosticStore(model);
 	using bridge = new LanguageDiagnosticDecorationBridge(store);
-	const source = createAsterLanguageDiagnosticSource(bridge.decorations);
+	const source = createStanzaLanguageDiagnosticSource(bridge.decorations);
 	const viewport = new EditorViewport({
 		container,
 		model,
@@ -421,17 +421,17 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 		title: "hint",
 	}]);
 	assert.equal(
-		resolveAsterLanguageDiagnosticPresentation(
+		resolveStanzaLanguageDiagnosticPresentation(
 			LanguageDiagnosticSeverity.Information,
 		),
 		DecorationPresentation.InformationUnderline,
 	);
 	assert.equal(
-		resolveAsterLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
+		resolveStanzaLanguageDiagnosticPresentation(LanguageDiagnosticSeverity.Hint),
 		DecorationPresentation.HintUnderline,
 	);
 	assert.throws(
-		() => resolveAsterLanguageDiagnosticPresentation(
+		() => resolveStanzaLanguageDiagnosticPresentation(
 			"fatal" as LanguageDiagnosticSeverity,
 		),
 		/Unknown language diagnostic severity/,
@@ -472,7 +472,7 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function decorationElements(container: ParentNode): HTMLElement[] {
 	return [...container.querySelectorAll<HTMLElement>(
-		".aster-editor-decoration",
+		".stanza-editor-decoration",
 	)];
 }
 

@@ -1,11 +1,11 @@
-.aster-editor-line-cursors {
+.stanza-editor-line-cursors {
   position: absolute;
   inset: 0;
   z-index: 5;
   pointer-events: none;
 }
 
-.aster-editor-caret {
+.stanza-editor-caret {
   position: absolute;
   top: 2px;
   bottom: 2px;
@@ -14,12 +14,12 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .aster-editor:focus-within .aster-editor-caret {
-    animation: aster-editor-caret-blink 1.2s step-end infinite;
+  .stanza-editor:focus-within .stanza-editor-caret {
+    animation: stanza-editor-caret-blink 1.2s step-end infinite;
   }
 }
 
-@keyframes aster-editor-caret-blink {
+@keyframes stanza-editor-caret-blink {
   0%,
   45% {
     opacity: 1;
@@ -31,12 +31,12 @@
   }
 }
 
-.aster-editor:not(:focus-within) .aster-editor-caret {
+.stanza-editor:not(:focus-within) .stanza-editor-caret {
   opacity: 0.65;
 }
 
 @media (forced-colors: active) {
-  .aster-editor-caret {
+  .stanza-editor-caret {
     background: CanvasText;
     color: CanvasText;
   }

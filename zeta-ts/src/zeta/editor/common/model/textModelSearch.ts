@@ -44,7 +44,7 @@ export class TextSearchQueryError extends Error {
 }
 
 /**
- * Finds ordered, non-overlapping matches in one synchronous Aster TextModel snapshot.
+ * Finds ordered, non-overlapping matches in one synchronous Stanza TextModel snapshot.
  *
  * Offsets and ranges use UTF-16 code units. Empty regular-expression matches are supported and
  * always advance by one Unicode code point so a global search cannot loop forever.

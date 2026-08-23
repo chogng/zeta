@@ -23,9 +23,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { LineOperationsController, resolveAsterDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
+const { LineOperationsController, resolveStanzaDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
 
-test("Line operation shortcuts duplicate and delete through Aster commands", () => {
+test("Line operation shortcuts duplicate and delete through Stanza commands", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
@@ -129,15 +129,15 @@ test("Line operation controller rejects cross-model wiring and leaves unrelated 
 });
 
 test("Line duplication reserves Linux Shift+Alt arrows for multi-cursor commands", () => {
-	assert.equal(resolveAsterDuplicateLineDirection(
+	assert.equal(resolveStanzaDuplicateLineDirection(
 		keydown(browserEnvironment.window, "ArrowDown", { shiftKey: true, altKey: true }),
 		OperatingSystem.Linux,
 	), undefined);
-	assert.equal(resolveAsterDuplicateLineDirection(
+	assert.equal(resolveStanzaDuplicateLineDirection(
 		keydown(browserEnvironment.window, "ArrowDown", { ctrlKey: true, shiftKey: true, altKey: true }),
 		OperatingSystem.Linux,
 	), "down");
-	assert.equal(resolveAsterDuplicateLineDirection(
+	assert.equal(resolveStanzaDuplicateLineDirection(
 		keydown(browserEnvironment.window, "ArrowUp", { shiftKey: true, altKey: true }),
 		OperatingSystem.Windows,
 	), "up");

@@ -3,7 +3,7 @@ import { type ResolvedDecoration } from "../decorations/decorationPresentation.j
 import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
 
 /** Projects line-side decoration classes into the currently rendered rows. */
-export function projectAsterLinesDecorations(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+export function projectStanzaLinesDecorations(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
 	const decorationsByLogicalLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!decoration.linesDecoration) continue;
@@ -32,7 +32,7 @@ export function projectAsterLinesDecorations(context: ViewportOverlayContext, de
 			].filter((className): className is string => className !== undefined);
 			if (classes.length === 0) continue;
 			const element = h(context.ownerDocument, "div");
-			element.className = "aster-editor-line-decoration";
+			element.className = "stanza-editor-line-decoration";
 			for (const className of classes.flatMap(value => value.trim().split(/\s+/u))) {
 				element.classList.add(className);
 			}

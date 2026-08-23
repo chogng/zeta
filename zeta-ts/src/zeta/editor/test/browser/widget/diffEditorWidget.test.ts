@@ -32,29 +32,29 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	using editor = new DiffEditorWidget({ container, model, lineHeight: 20 });
 	editor.layout({ width: 400, height: 80 });
 
-	const rows = [...editor.element.querySelectorAll<HTMLElement>(".aster-diff-editor-row")];
+	const rows = [...editor.element.querySelectorAll<HTMLElement>(".stanza-diff-editor-row")];
 	assert.equal(rows.length, 4);
 	assert.equal(rows[0]?.classList.contains("unchanged"), true);
 	assert.equal(rows[1]?.classList.contains("modified"), true);
-	assert.equal(rows[1]?.querySelector(".aster-diff-editor-cell.original")?.textContent, "2old value");
-	assert.equal(rows[1]?.querySelector(".aster-diff-editor-cell.modified")?.textContent, "2new value");
-	assert.equal(rows[1]?.querySelectorAll(".aster-diff-editor-inline.removed").length, 1);
-	assert.equal(rows[1]?.querySelectorAll(".aster-diff-editor-inline.added").length, 1);
-	const overview = requiredElement<HTMLElement>(editor.element, ".aster-diff-overview");
+	assert.equal(rows[1]?.querySelector(".stanza-diff-editor-cell.original")?.textContent, "2old value");
+	assert.equal(rows[1]?.querySelector(".stanza-diff-editor-cell.modified")?.textContent, "2new value");
+	assert.equal(rows[1]?.querySelectorAll(".stanza-diff-editor-inline.removed").length, 1);
+	assert.equal(rows[1]?.querySelectorAll(".stanza-diff-editor-inline.added").length, 1);
+	const overview = requiredElement<HTMLElement>(editor.element, ".stanza-diff-overview");
 	assert.equal(overview.style.left, "370px");
 	assert.equal(overview.style.height, "80px");
-	assert.equal(overview.querySelectorAll(".aster-diff-overview-lane.original .aster-diff-overview-marker.removed").length, 1);
-	assert.equal(overview.querySelectorAll(".aster-diff-overview-lane.modified .aster-diff-overview-marker.inserted").length, 1);
-	assert.equal(requiredElement<HTMLElement>(overview, ".aster-diff-overview-viewport").style.height, "80px");
+	assert.equal(overview.querySelectorAll(".stanza-diff-overview-lane.original .stanza-diff-overview-marker.removed").length, 1);
+	assert.equal(overview.querySelectorAll(".stanza-diff-overview-lane.modified .stanza-diff-overview-marker.inserted").length, 1);
+	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height, "80px");
 	assert.equal(editor.nextChange(), 1);
 	assert.equal(editor.currentChangeRow, 1);
-	assert.equal(editor.element.querySelector(".aster-diff-editor-row.active")?.classList.contains("modified"), true);
+	assert.equal(editor.element.querySelector(".stanza-diff-editor-row.active")?.classList.contains("modified"), true);
 	assert.equal(editor.previousChange(), 2);
 	const next = new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F7" });
 	editor.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
 	assert.equal(editor.currentChangeRow, 1);
-	assert.match(editor.element.querySelector(".aster-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
+	assert.match(editor.element.querySelector(".stanza-diff-editor-accessibility-status")?.textContent ?? "", /Change 1 of 2/);
 	dom.window.close();
 });
 
@@ -69,15 +69,15 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	using editor = new DiffEditorWidget({ container, model, lineHeight: 20, overscanRowCount: 1 });
 	editor.layout({ width: 400, height: 40 });
 
-	assert.equal(editor.element.querySelectorAll(".aster-diff-editor-row").length, 3);
+	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-row").length, 3);
 	editor.revealModifiedLine(80);
-	const firstVisibleRow = editor.element.querySelector<HTMLElement>(".aster-diff-editor-row");
+	const firstVisibleRow = editor.element.querySelector<HTMLElement>(".stanza-diff-editor-row");
 	assert.equal(firstVisibleRow?.style.height, "20px");
 	assert.ok(editor.element.scrollTop > 0);
-	const overview = requiredElement<HTMLElement>(editor.element, ".aster-diff-overview");
+	const overview = requiredElement<HTMLElement>(editor.element, ".stanza-diff-overview");
 	assert.equal(overview.style.top, `${editor.element.scrollTop}px`);
-	assert.equal(Number.parseFloat(requiredElement<HTMLElement>(overview, ".aster-diff-overview-viewport").style.height), 2);
-	assert.equal(requiredElement<HTMLElement>(overview, ".aster-diff-overview-viewport").style.transform === "translate3d(0, 0px, 0)", false);
+	assert.equal(Number.parseFloat(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height), 2);
+	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform === "translate3d(0, 0px, 0)", false);
 
 	modified.applyEdits([{
 		range: TextRange.from(modified.positionAt(0), modified.positionAt(modified.getText().length)),
@@ -88,8 +88,8 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	editor.element.scrollTop = 0;
 	editor.element.dispatchEvent(new dom.window.Event("scroll"));
 	assert.equal(overview.style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(overview, ".aster-diff-overview-viewport").style.transform, "translate3d(0, 0px, 0)");
-	assert.equal(editor.element.querySelector(".aster-diff-editor-row")?.classList.contains("modified"), true);
+	assert.equal(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.transform, "translate3d(0, 0px, 0)");
+	assert.equal(editor.element.querySelector(".stanza-diff-editor-row")?.classList.contains("modified"), true);
 	dom.window.close();
 });
 
@@ -108,7 +108,7 @@ test("DiffEditorWidget applies presentation settings and clamps change navigatio
 	assert.equal(editor.element.style.fontFamily, '"Test Mono"');
 	assert.equal(editor.element.style.fontSize, "15px");
 	assert.equal(editor.element.style.fontVariantLigatures, "normal");
-	assert.equal(editor.element.querySelectorAll(".aster-diff-editor-inline").length, 0);
+	assert.equal(editor.element.querySelectorAll(".stanza-diff-editor-inline").length, 0);
 	assert.equal(editor.nextChange(), 0);
 	assert.equal(editor.nextChange(), 2);
 	assert.equal(editor.nextChange(), 2);

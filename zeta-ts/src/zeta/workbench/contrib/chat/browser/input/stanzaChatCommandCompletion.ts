@@ -5,8 +5,8 @@ import { type SlashCommandCatalog } from "../../common/slashCommands.js";
 
 export const CHAT_INPUT_LANGUAGE_ID = "zeta-chat-input";
 
-/** Adapts the Chat slash-command catalog to Aster's completion contract. */
-export function createAsterChatCommandCompletionProvider(catalog: SlashCommandCatalog): LanguageCompletionProvider {
+/** Adapts the Chat slash-command catalog to Stanza's completion contract. */
+export function createStanzaChatCommandCompletionProvider(catalog: SlashCommandCatalog): LanguageCompletionProvider {
 	return Object.freeze({
 		id: "zeta.chat.commands",
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),

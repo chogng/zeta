@@ -13,7 +13,7 @@ export class MessageController extends DisposableOwner {
 	constructor(private readonly viewport: EditorViewport) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
-		this.element.className = "aster-editor-message";
+		this.element.className = "stanza-editor-message";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "status");
 		this.element.setAttribute("aria-live", "polite");
@@ -22,8 +22,8 @@ export class MessageController extends DisposableOwner {
 	}
 
 	show(message: string, durationMs = 3000): void {
-		if (typeof message !== "string" || message.trim().length === 0) throw new TypeError("Aster editor message must be non-empty");
-		if (!Number.isSafeInteger(durationMs) || durationMs < 0) throw new RangeError("Aster editor message duration must be non-negative");
+		if (typeof message !== "string" || message.trim().length === 0) throw new TypeError("Stanza editor message must be non-empty");
+		if (!Number.isSafeInteger(durationMs) || durationMs < 0) throw new RangeError("Stanza editor message duration must be non-negative");
 		this.timer.clear();
 		this.element.textContent = message.trim();
 		this.element.hidden = false;

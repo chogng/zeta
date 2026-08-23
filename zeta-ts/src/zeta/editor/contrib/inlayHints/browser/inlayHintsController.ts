@@ -11,7 +11,7 @@ export class InlayHintsController extends DisposableOwner {
 	private hints: readonly LanguageInlayHint[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster inlay hints failed", error)) {
+	constructor(private readonly viewport: EditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inlay hints failed", error)) {
 		super();
 		this.own(viewport.onDidChangeLayout(() => this.render()));
 		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
@@ -34,11 +34,11 @@ export class InlayHintsController extends DisposableOwner {
 	}
 
 	private render(): void {
-		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-inlay-hint")]) element.remove();
+		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-inlay-hint")]) element.remove();
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		for (const hint of this.hints) {
 			const element = h(this.viewport.element.ownerDocument, "span");
-			element.className = "aster-editor-inlay-hint";
+			element.className = "stanza-editor-inlay-hint";
 			element.textContent = typeof hint.label === "string" ? hint.label : hint.label.map(part => part.value).join("");
 			const coordinates = this.viewport.getPositionContentCoordinates(hint.position);
 			element.style.left = `${coordinates.left - scroll.left + 2}px`;

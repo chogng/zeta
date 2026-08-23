@@ -60,7 +60,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `languages`, file/first-line associations, `language-configuration.json` | ✅ loaded and registered | Editor language registry/configuration |
 | `snippets` | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor | Editor language completion / extension template registry |
 | `grammars` | ✅ loaded through Rust resource APIs and TextMate catalog snapshots | Workbench TextMate service |
-| `embeddedLanguages`, `tokenTypes`, bracket scope metadata | ✅ validated, transported, and projected to Aster token language/type/bracket metadata | TextMate adapter |
+| `embeddedLanguages`, `tokenTypes`, bracket scope metadata | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata | TextMate adapter |
 | `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
 | `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
 | `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |

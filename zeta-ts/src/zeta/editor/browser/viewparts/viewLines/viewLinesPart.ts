@@ -6,9 +6,9 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { type EditorLineRange, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewPart } from "../viewPart.js";
-import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectAsterSemanticTokenLine } from "../semanticTokens/semanticTokenPresentation.js";
+import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectStanzaSemanticTokenLine } from "../semanticTokens/semanticTokenPresentation.js";
 import { type EditorLineGutterDecoration } from "../margin/lineGutterDecoration.js";
-import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
+import { createStanzaRenderedLine, type RenderedLine } from "./renderedLine.js";
 
 export type ViewLinesTextDirection = "auto" | "ltr" | "rtl";
 
@@ -51,7 +51,7 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
 		this.textDirection = options.textDirection;
 		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("aster-editor-lines");
+		this.root.setClassName("stanza-editor-lines");
 	}
 
 	get renderedLines(): ReadonlyMap<number, RenderedLine> {
@@ -91,7 +91,7 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) throw new Error("Viewport render range exceeds the visual line projection");
 			const existing = this.lines.get(visualLineIndex);
-			const line = existing ?? createAsterRenderedLine(this.domNode.ownerDocument, visualLineIndex, this.lineGutterDecoration);
+			const line = existing ?? createStanzaRenderedLine(this.domNode.ownerDocument, visualLineIndex, this.lineGutterDecoration);
 			line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
 			if (!existing || this.renderedModelVersion !== layout.modelVersion || this.renderedProjectionRevision !== projectionRevision) {
 				line.textElement.dir = this.textDirection;
@@ -116,7 +116,7 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
 		const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
 		const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
 		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
-		projectAsterSemanticTokenLine(
+		projectStanzaSemanticTokenLine(
 			line.textElement,
 			text,
 			clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),

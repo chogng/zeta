@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, createAsterDecorationRectangles, createAsterDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
 import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
@@ -25,7 +25,7 @@ test("Decoration source resolves opaque metadata without owning the collection",
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: { presentation: DecorationPresentation.ErrorUnderline },
 	});
-	const source = createAsterDecorationSource(
+	const source = createStanzaDecorationSource(
 		collection,
 		decoration => decoration.metadata.presentation,
 	);
@@ -41,7 +41,7 @@ test("Decoration source resolves opaque metadata without owning the collection",
 	}]);
 	assert.equal(Object.isFrozen(source.decorations), true);
 
-	const rectangles = createAsterDecorationRectangles(
+	const rectangles = createStanzaDecorationRectangles(
 		model,
 		source.decorations,
 		{ startLineIndex: 0, endLineIndexExclusive: 3 },
@@ -83,12 +83,12 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: "match",
 	});
-	const source = createAsterDecorationSource(
+	const source = createStanzaDecorationSource(
 		collection,
 		() => DecorationPresentation.SearchMatch,
 	);
 
-	assert.deepEqual(createAsterDecorationRectangles(
+	assert.deepEqual(createStanzaDecorationRectangles(
 		model,
 		source.decorations,
 		{ startLineIndex: 1, endLineIndexExclusive: 2 },
@@ -102,11 +102,11 @@ test("Decoration geometry clips lines and rejects unknown presentations", () => 
 		width: 20,
 	}]);
 
-	const invalid = createAsterDecorationSource(
+	const invalid = createStanzaDecorationSource(
 		collection,
 		() => "unknown" as DecorationPresentation,
 	);
-	assert.throws(() => invalid.decorations, /Unknown Aster decoration/);
+	assert.throws(() => invalid.decorations, /Unknown Stanza decoration/);
 });
 
 test("Decoration geometry presents an empty diagnostic at its text position", () => {
@@ -117,9 +117,9 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
 		metadata: DecorationPresentation.HintUnderline,
 	});
-	const source = createAsterDecorationSource(collection, decoration => decoration.metadata);
+	const source = createStanzaDecorationSource(collection, decoration => decoration.metadata);
 
-	assert.deepEqual(createAsterDecorationRectangles(
+	assert.deepEqual(createStanzaDecorationRectangles(
 		model,
 		source.decorations,
 		{ startLineIndex: 0, endLineIndexExclusive: 2 },

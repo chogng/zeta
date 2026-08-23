@@ -1,10 +1,10 @@
-# Aster
+# Stanza
 
-> 本文是 `zeta-ts/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Aster 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
+> 本文是 `zeta-ts/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Stanza 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
 
 ## 快速理解
 
-Aster 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 保存 DOM-free 模型与算法，`browser` 保存 DOM 投影和宿主适配，`contrib` 保存可装配能力，`test` 保存内核级回归测试。Aster 只有一个源码域和一套公开入口；真正不同的底层对象分别由 `TextModel` 和 `DocumentModel` 表达。
+Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 保存 DOM-free 模型与算法，`browser` 保存 DOM 投影和宿主适配，`contrib` 保存可装配能力，`test` 保存内核级回归测试。Stanza 只有一个源码域和一套公开入口；真正不同的底层对象分别由 `TextModel` 和 `DocumentModel` 表达。
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ Workbench 模式 contribution 是唯一能力选择点：`editor.all.ts` 固定�
 | `TextModel` | 行式文本 mutation、version、history、snapshot | cursor、tracked range、language result version gate、text-engine tests |
 | `DocumentModel` | 结构化 transaction、selection mapping、plugin state、history | schema、serialization、collaboration rebase、document-engine tests |
 | `CodeEditorWidget` | 行式 DOM projection 与必需 input/navigation surface | viewport、accessibility、embedded adapter、contributed controllers |
-| `registerEditorContribution` | 所有 Aster capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
+| `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `EditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
 | `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |
 | Workbench `registerEditorPane` | Workbench pane descriptor 注册 | 模式入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用 |
@@ -99,7 +99,7 @@ Workbench 模式 contribution 是唯一能力选择点：`editor.all.ts` 固定�
 - 异步语言、diff、文件和协作结果必须按 model version 或服务器版本拒绝过期结果。
 - Academic schema 与 `collaborationSchemaId` 是持久兼容边界；改变节点语义时必须同步迁移、serialization 测试和 collaboration 测试。
 - Workbench 模式 bundle 在 Renderer 启动时静态装配，不提供运行时卸载 contribution 的承诺。
-- Aster 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `aster` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入 Alpha/Gama 兼容标识。
+- Stanza 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `stanza` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入 Alpha/Gama 兼容标识。
 
 ## 测试与修改影响
 
@@ -107,4 +107,4 @@ Workbench 模式 contribution 是唯一能力选择点：`editor.all.ts` 固定�
 - `test:editor:browser` 在同一浏览器 suite 内验证 text/document model 挂载点、输入、布局、embedded editor 和可访问性集成。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、禁止的同步层依赖、两个 engine owner 和模式 bundle。
 
-修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Aster 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。
+修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Stanza 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。

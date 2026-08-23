@@ -12,11 +12,11 @@ export class PlaceholderTextController extends DisposableOwner {
 
 	constructor(private readonly viewport: EditorViewport, placeholder: string) {
 		super();
-		if (typeof placeholder !== "string" || placeholder.trim().length === 0) throw new TypeError("Aster placeholder text must be non-empty");
+		if (typeof placeholder !== "string" || placeholder.trim().length === 0) throw new TypeError("Stanza placeholder text must be non-empty");
 		const isEmpty = observableFromEvent(this, viewport.textModel.onDidChange, () => viewport.textModel.length === 0);
 		const n = createReactiveDom(viewport.element.ownerDocument);
 		const view = this.own(n.div({
-			className: "aster-editor-placeholder-text",
+			className: "stanza-editor-placeholder-text",
 			attributes: { "aria-hidden": "true" },
 			properties: { hidden: isEmpty.map(empty => !empty) },
 		}, placeholder).toLiveElement());

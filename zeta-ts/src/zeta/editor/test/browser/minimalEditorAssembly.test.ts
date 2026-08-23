@@ -36,13 +36,13 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	});
 	editor.layout({ width: 480, height: 120 });
 
-	assert.ok(container.querySelector(".aster-editor"));
-	assert.ok(container.querySelector(".aster-editor-input"));
-	assert.equal(container.querySelector(".aster-editor-token"), null);
-	assert.equal(container.querySelector(".aster-editor-decoration"), null);
-	assert.equal(container.querySelector(".aster-editor-fold-toggle"), null);
-	assert.equal(container.querySelector(".aster-editor-completion"), null);
-	assert.equal(container.querySelector(".aster-editor-placeholder-text"), null);
+	assert.ok(container.querySelector(".stanza-editor"));
+	assert.ok(container.querySelector(".stanza-editor-input"));
+	assert.equal(container.querySelector(".stanza-editor-token"), null);
+	assert.equal(container.querySelector(".stanza-editor-decoration"), null);
+	assert.equal(container.querySelector(".stanza-editor-fold-toggle"), null);
+	assert.equal(container.querySelector(".stanza-editor-completion"), null);
+	assert.equal(container.querySelector(".stanza-editor-placeholder-text"), null);
 
 	const copy = new dom.window.Event("copy", { bubbles: true, cancelable: true });
 	editor.textInput.element.dispatchEvent(copy);

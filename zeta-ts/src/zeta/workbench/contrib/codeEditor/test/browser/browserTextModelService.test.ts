@@ -9,7 +9,7 @@ import { type IFileChangeEvent } from "../../../../../platform/files/common/file
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";
 
-test("Aster text model service shares one model and preserves edits across panes", async () => {
+test("Stanza text model service shares one model and preserves edits across panes", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const input = { resource: URI.file("C:\\project\\main.ts"), initialText: "bootstrap" };
@@ -31,7 +31,7 @@ test("Aster text model service shares one model and preserves edits across panes
 	assert.throws(() => second.model.getText(), /disposed/);
 });
 
-test("Aster text model acquisition delegates absent bootstrap content and observes cancellation", async () => {
+test("Stanza text model acquisition delegates absent bootstrap content and observes cancellation", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const resource = URI.file("C:\\project\\main.ts");
@@ -44,7 +44,7 @@ test("Aster text model acquisition delegates absent bootstrap content and observ
 	await assert.rejects(models.acquire({ resource }, cancelled.signal), error => (error as Error).name === "CancellationError");
 });
 
-test("Aster text model references track dirty content, save snapshots, and explicitly revert", async () => {
+test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
@@ -77,7 +77,7 @@ test("Aster text model references track dirty content, save snapshots, and expli
 	assert.equal(dirtyChanges, 4);
 });
 
-test("Aster text model save tolerates its final reference closing before I/O completes", async () => {
+test("Stanza text model save tolerates its final reference closing before I/O completes", async () => {
 	const pending = deferred<void>();
 	const textFiles: ITextFileService = {
 		onDidChangeFiles: inertFileChanges,
@@ -106,7 +106,7 @@ test("Aster text model save tolerates its final reference closing before I/O com
 	await saving;
 });
 
-test("Aster text model preserves the source CRLF convention when saving", async () => {
+test("Stanza text model preserves the source CRLF convention when saving", async () => {
 	const textFiles = new TestTextFileService("first\r\nsecond");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
@@ -120,7 +120,7 @@ test("Aster text model preserves the source CRLF convention when saving", async 
 	assert.deepEqual(textFiles.savedTexts, ["saved\r\nsecond"]);
 });
 
-test("Aster text model refuses to overwrite externally changed content", async () => {
+test("Stanza text model refuses to overwrite externally changed content", async () => {
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
@@ -135,7 +135,7 @@ test("Aster text model refuses to overwrite externally changed content", async (
 	assert.deepEqual(textFiles.savedTexts, []);
 });
 
-test("Aster text model reloads clean external changes and marks dirty models conflicted", async () => {
+test("Stanza text model reloads clean external changes and marks dirty models conflicted", async () => {
 	const resource = URI.file("C:\\project\\main.ts");
 	const textFiles = new TestTextFileService("from disk");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
@@ -221,7 +221,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
-	assert.fail("Timed out waiting for Aster external file synchronization");
+	assert.fail("Timed out waiting for Stanza external file synchronization");
 }
 
 function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value: T) => void } {

@@ -2,7 +2,7 @@ import "./linesDecorations.css";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { DecorationsPart } from "../decorations/decorationsPart.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
-import { projectAsterLinesDecorations } from "./linesDecorationsProjection.js";
+import { projectStanzaLinesDecorations } from "./linesDecorationsProjection.js";
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
 export class LinesDecorationsPart extends EditorOverlayPart {
@@ -18,6 +18,6 @@ export class LinesDecorationsPart extends EditorOverlayPart {
 		if (!context) {
 			return;
 		}
-		projectAsterLinesDecorations(context, this.decorations.visibleDecorations(context));
+		projectStanzaLinesDecorations(context, this.decorations.visibleDecorations(context));
 	}
 }

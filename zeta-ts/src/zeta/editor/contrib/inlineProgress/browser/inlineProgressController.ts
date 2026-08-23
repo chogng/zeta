@@ -15,7 +15,7 @@ export class InlineProgressController extends DisposableOwner {
 		super();
 		const n = createReactiveDom(viewport.element.ownerDocument);
 		const view = this.own(n.div({
-			className: "aster-editor-inline-progress",
+			className: "stanza-editor-inline-progress",
 			attributes: { role: "status", "aria-live": "polite" },
 			properties: { hidden: this.label.map(label => label.length === 0) },
 		}, this.label).toLiveElement());
@@ -25,7 +25,7 @@ export class InlineProgressController extends DisposableOwner {
 	}
 
 	async run<T>(label: string, task: Promise<T>): Promise<T> {
-		if (typeof label !== "string" || label.trim().length === 0) throw new TypeError("Aster inline progress label must be non-empty");
+		if (typeof label !== "string" || label.trim().length === 0) throw new TypeError("Stanza inline progress label must be non-empty");
 		const token = ++this.active;
 		this.label.set(label.trim());
 		try { return await task; } finally { if (token === this.active) this.label.set(""); }

@@ -4,7 +4,7 @@ import { type EditorSelectionController } from "../common/cursor/editorSelection
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type EditorViewport } from "./view/editorViewport.js";
 
-/** Routes synchronous document-wide editing shortcuts into Aster commands. */
+/** Routes synchronous document-wide editing shortcuts into Stanza commands. */
 export class EditingCommandController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -14,7 +14,7 @@ export class EditingCommandController extends DisposableOwner {
 		super();
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();
-			throw new TypeError("Aster editing command dependencies must share one text model");
+			throw new TypeError("Stanza editing command dependencies must share one text model");
 		}
 		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 	}

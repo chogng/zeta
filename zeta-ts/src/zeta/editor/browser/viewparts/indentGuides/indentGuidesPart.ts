@@ -1,7 +1,7 @@
 import "./indentGuides.css";
 import { h } from "../../../../base/browser/dom.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { createAsterIndentationGuides } from "./indentationGuides.js";
+import { createStanzaIndentationGuides } from "./indentationGuides.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 interface IndentGuidesPartOptions {
@@ -31,9 +31,9 @@ export class IndentGuidesPart extends EditorOverlayPart {
 			const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
 			if (!visualLine?.firstForLogicalLine) continue;
 			const text = context.model.getLineContent(visualLine.logicalLineIndex);
-			for (const guide of createAsterIndentationGuides(text, this.tabSize)) {
+			for (const guide of createStanzaIndentationGuides(text, this.tabSize)) {
 				const element = h(context.ownerDocument, "span");
-				element.className = "aster-editor-indent-guide";
+				element.className = "stanza-editor-indent-guide";
 				element.dataset.indentLevel = String(guide.level);
 				element.style.left = `${context.textLeft + context.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
 				line.indentationElement.append(element);

@@ -128,7 +128,7 @@ export interface TextInputCompletionRequests {
 }
 
 /**
- * Owns Aster's hidden textarea and non-composition beforeinput editing.
+ * Owns Stanza's hidden textarea and non-composition beforeinput editing.
  */
 export class TextInputController extends DisposableOwner {
 	readonly element: HTMLTextAreaElement;
@@ -169,22 +169,22 @@ export class TextInputController extends DisposableOwner {
 			)
 		) {
 			this.dispose();
-			throw new TypeError("Aster text input dependencies must share one text model and completion result store");
+			throw new TypeError("Stanza text input dependencies must share one text model and completion result store");
 		}
 		if (
 			options.completion?.requests?.onRequestError !== undefined &&
 			typeof options.completion.requests.onRequestError !== "function"
 		) {
 			this.dispose();
-			throw new TypeError("Aster completion request error handler must be a function");
+			throw new TypeError("Stanza completion request error handler must be a function");
 		}
 		if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
 			this.dispose();
-			throw new TypeError("Aster text input language editing must share its text model");
+			throw new TypeError("Stanza text input language editing must share its text model");
 		}
 		if (options.language && options.completion?.requests && options.completion.requests.languageId !== options.language.languageId) {
 			this.dispose();
-			throw new TypeError("Aster text input language and completion request identities must match");
+			throw new TypeError("Stanza text input language and completion request identities must match");
 		}
 		this.completionSession = options.completion?.session;
 		this.completionRequests = options.completion?.requests;
@@ -204,7 +204,7 @@ export class TextInputController extends DisposableOwner {
 		const ownerDocument = viewport.element.ownerDocument;
 		this.inputNode = new FastDomNode(h(ownerDocument, "textarea"));
 		this.element = this.inputNode.domNode;
-		this.inputNode.setClassName("aster-editor-input");
+		this.inputNode.setClassName("stanza-editor-input");
 		this.inputNode.setTabIndex(-1);
 		this.element.spellcheck = false;
 		this.element.readOnly = selectionController.readOnly;
@@ -212,7 +212,7 @@ export class TextInputController extends DisposableOwner {
 		this.element.dir = viewport.editorTextDirection;
 		this.element.autocomplete = "off";
 		this.element.setAttribute("autocapitalize", "off");
-		this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor input");
+		this.element.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor input");
 		this.element.setAttribute("aria-multiline", "true");
 		this.element.setAttribute("aria-roledescription", "code editor");
 		this.element.setAttribute("aria-readonly", String(selectionController.readOnly));
@@ -667,9 +667,9 @@ export class TextInputController extends DisposableOwner {
 		try {
 			const handler = this.completionRequests?.onRequestError;
 			if (handler) handler(error);
-			else console.error("Aster completion request failed", error);
+			else console.error("Stanza completion request failed", error);
 		} catch (reportingError) {
-			console.error("Aster completion request and error handler both failed", new AggregateError([error, reportingError]));
+			console.error("Stanza completion request and error handler both failed", new AggregateError([error, reportingError]));
 		}
 	}
 }

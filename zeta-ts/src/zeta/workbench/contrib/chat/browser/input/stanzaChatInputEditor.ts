@@ -1,4 +1,4 @@
-import "./asterChatInputEditor.css";
+import "./stanzaChatInputEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
@@ -14,14 +14,14 @@ import { TextSelection, TextSelectionSet } from "../../../../../editor/common/co
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditor.js";
-import { CHAT_INPUT_LANGUAGE_ID, createAsterChatCommandCompletionProvider } from "./asterChatCommandCompletion.js";
+import { CHAT_INPUT_LANGUAGE_ID, createStanzaChatCommandCompletionProvider } from "./stanzaChatCommandCompletion.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 const CHAT_INPUT_MIN_HEIGHT = 106;
 const CHAT_INPUT_MAX_HEIGHT = 320;
 
-/** Aster-backed embedded editor hosted by the Chat input part. */
+/** Stanza-backed embedded editor hosted by the Chat input part. */
 export class ChatInputEditor extends DisposableOwner implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this.own(new TextModel());
@@ -41,7 +41,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
 		const providers = this.own(new LanguageCompletionProviderRegistry());
-		this.own(providers.register(createAsterChatCommandCompletionProvider(options.slashCommands)));
+		this.own(providers.register(createStanzaChatCommandCompletionProvider(options.slashCommands)));
 		const completions = this.own(new LanguageCompletionService(this.model, providers));
 		const completionSession = this.own(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
 		this.editor = this.own(new CodeEditorWidget({

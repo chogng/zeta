@@ -28,7 +28,7 @@ export interface PointerAutoScrollBounds {
  * Each axis remains independent, starts at a usable minimum speed, and is
  * capped so a distant captured pointer cannot jump through a document.
  */
-export function getAsterPointerAutoScrollVelocity(bounds: PointerAutoScrollBounds, point: ClientPoint): PointerAutoScrollVelocity {
+export function getStanzaPointerAutoScrollVelocity(bounds: PointerAutoScrollBounds, point: ClientPoint): PointerAutoScrollVelocity {
 	validateBounds(bounds);
 	validatePoint(point);
 	return Object.freeze({
@@ -103,7 +103,7 @@ export class PointerAutoScroller extends DisposableOwner {
 	}
 
 	private readVelocity(point: ClientPoint): PointerAutoScrollVelocity {
-		return getAsterPointerAutoScrollVelocity(
+		return getStanzaPointerAutoScrollVelocity(
 			this.viewport.element.getBoundingClientRect(),
 			point,
 		);
@@ -129,7 +129,7 @@ function validatePoint(point: ClientPoint): void {
 		!Number.isFinite(point.clientX) ||
 		!Number.isFinite(point.clientY)
 	) {
-		throw new RangeError("Aster autoscroll point must contain finite coordinates");
+		throw new RangeError("Stanza autoscroll point must contain finite coordinates");
 	}
 }
 
@@ -143,7 +143,7 @@ function validateBounds(bounds: PointerAutoScrollBounds): void {
 		!Number.isFinite(bounds.bottom) ||
 		bounds.bottom < bounds.top
 	) {
-		throw new RangeError("Aster autoscroll bounds are invalid");
+		throw new RangeError("Stanza autoscroll bounds are invalid");
 	}
 }
 

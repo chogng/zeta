@@ -7,7 +7,7 @@ import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 export class SectionHeadersController extends DisposableOwner {
 	constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
 		super();
-		if (folding.model !== viewport.textModel) throw new TypeError("Aster section header dependencies must share a text model");
+		if (folding.model !== viewport.textModel) throw new TypeError("Stanza section header dependencies must share a text model");
 		this.own(viewport.onDidChangeLayout(() => this.update()));
 		this.own(folding.onDidChange(() => this.update()));
 		this.own(viewport.textModel.onDidChange(() => this.update()));
@@ -16,7 +16,7 @@ export class SectionHeadersController extends DisposableOwner {
 
 	private update(): void {
 		const headers = new Set(this.folding.regions.map(region => region.startLineIndex));
-		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-line")]) {
+		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-line")]) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
 			line.classList.toggle("section-header", headers.has(logicalLineIndex));
 			if (headers.has(logicalLineIndex)) line.setAttribute("data-section-header", "true");

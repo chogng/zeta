@@ -1,4 +1,4 @@
-.aster-editor-rulers {
+.stanza-editor-rulers {
   position: absolute;
   top: 0;
   left: 0;
@@ -7,7 +7,7 @@
   pointer-events: none;
 }
 
-.aster-editor-ruler {
+.stanza-editor-ruler {
   position: absolute;
   top: 0;
   width: 1px;
@@ -16,7 +16,7 @@
 }
 
 @media (forced-colors: active) {
-  .aster-editor-ruler {
+  .stanza-editor-ruler {
     box-shadow: 1px 0 0 0 CanvasText inset;
   }
 }

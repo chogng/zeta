@@ -24,11 +24,11 @@ const { BrowserTextModelService } = await import("../../../../../editor/browser/
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
-test("Aster diff pane rejects a missing Rust diff computation service", () => {
+test("Stanza diff pane rejects a missing Rust diff computation service", () => {
 	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
 });
 
-test("Aster diff pane acquires both models, lays out the review view, and releases both references", async () => {
+test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const parent = requiredElement<HTMLElement>(dom.window.document, "main");
 	const textFiles = new BootstrapTextFiles();
@@ -53,21 +53,21 @@ test("Aster diff pane acquires both models, lays out the review view, and releas
 		{ resource: URI.file("C:\\project\\after.ts"), initialText: "const newValue = 2;", label: "after.ts" },
 	), new AbortController().signal);
 
-	assert.equal(parent.querySelectorAll(".aster-diff-editor-pane").length, 1);
-	assert.equal(parent.querySelectorAll(".aster-diff-editor").length, 1);
-	const editor = requiredElement<HTMLElement>(dom.window.document, ".aster-diff-editor");
+	assert.equal(parent.querySelectorAll(".stanza-diff-editor-pane").length, 1);
+	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 1);
+	const editor = requiredElement<HTMLElement>(dom.window.document, ".stanza-diff-editor");
 	assert.equal(editor.classList.contains("hide-line-numbers"), true);
 	assert.equal(editor.style.fontFamily, '"Test Mono"');
 	assert.equal(editor.style.fontSize, "15px");
 	assert.equal(editor.style.fontVariantLigatures, "normal");
-	assert.equal(parent.querySelector(".aster-diff-editor-breadcrumbs"), null);
-	assert.match(parent.querySelector(".aster-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
+	assert.equal(parent.querySelector(".stanza-diff-editor-breadcrumbs"), null);
+	assert.match(parent.querySelector(".stanza-diff-editor")?.getAttribute("aria-label") ?? "", /before\.ts/);
 	pane.focus();
-	assert.equal(dom.window.document.activeElement?.classList.contains("aster-diff-editor"), true);
+	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-diff-editor"), true);
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
 	pane.clearInput();
-	assert.equal(parent.querySelectorAll(".aster-diff-editor").length, 0);
+	assert.equal(parent.querySelectorAll(".stanza-diff-editor").length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();

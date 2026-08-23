@@ -1,4 +1,4 @@
-# Aster Text Engine
+# Stanza Text Engine
 
 > 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
@@ -6,7 +6,7 @@
 
 ## 快速理解
 
-Aster Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本、事务、历史和 tracked range 在 Renderer 内同步完成；浏览器层只投影模型；语言、diff、文件和搜索等异步能力通过 editor-owned contract 接入，不能进入按键或 IME 热路径。
+Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本、事务、历史和 tracked range 在 Renderer 内同步完成；浏览器层只投影模型；语言、diff、文件和搜索等异步能力通过 editor-owned contract 接入，不能进入按键或 IME 热路径。
 
 | 场景 | Canonical owner | 关键保证 |
 | --- | --- | --- |
@@ -57,7 +57,7 @@ flowchart LR
 | `contrib/<feature>` | 可移除 feature 的 command、state、controller 和 presentation | 第二套 model、产品 ID、隐式宿主依赖 |
 | Workbench | pane/input、文件和 working-copy、产品组合、transport adapter | 文本事务、selection、viewport |
 
-依赖保持 `Workbench → editor/contrib → editor/browser → editor/common → base`。Aster 可以借鉴 VS Code 的目录和职责名称，但不复制其历史依赖、全局 service singleton 或与当前调用者无关的文件。
+依赖保持 `Workbench → editor/contrib → editor/browser → editor/common → base`。Stanza 可以借鉴 VS Code 的目录和职责名称，但不复制其历史依赖、全局 service singleton 或与当前调用者无关的文件。
 
 ## 同步文本内核
 
@@ -83,7 +83,7 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 
 ## 视图架构
 
-VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Aster 采用这些边界，并在 retained view root、virtual row、line number、diagnostic marker、block、ruler、scrollbar track/thumb、diff viewport 以及 IME input geometry 上使用按当前调用者补全的 `FastDomNode` contract 去重 geometry、line height、transform、visibility、tab order、class 和短文本写入；临时重建的 projection DOM 保持原生写入，也不复制没有现实调用者的 setter、全部 `ViewEventHandler` 事件或其他历史抽象。
+VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Stanza 采用这些边界，并在 retained view root、virtual row、line number、diagnostic marker、block、ruler、scrollbar track/thumb、diff viewport 以及 IME input geometry 上使用按当前调用者补全的 `FastDomNode` contract 去重 geometry、line height、transform、visibility、tab order、class 和短文本写入；临时重建的 projection DOM 保持原生写入，也不复制没有现实调用者的 setter、全部 `ViewEventHandler` 事件或其他历史抽象。
 
 ### Current：现有渲染链路
 
@@ -219,7 +219,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `EditorViewport` 同步调度 |
 | Token、diagnostic、completion、TextMate 和 Rust syntax facts | ✅ Current | version-bound async provider path |
-| Diff editor 与 Rust diff | ✅ Current | Rust 计算，Aster 投影 |
+| Diff editor 与 Rust diff | ✅ Current | Rust 计算，Stanza 投影 |
 | Stable view context 与 single frame context | 部分具备 | `EditorViewContext` 已存在；frame context 尚未独立 |
 | Host-owned Part DOM mounting | ✅ Current | `EditorViewport` 显式挂载 Part 根节点并固定 sibling 顺序 |
 | Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |

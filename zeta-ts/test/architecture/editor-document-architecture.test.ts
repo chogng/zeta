@@ -11,7 +11,7 @@ const workbenchRoot = resolve(desktopRoot, "src/zeta/workbench");
 test("editor exposes one flat VS Code-shaped domain for both engines", () => {
 	assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "test"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
-	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["input", "language", "media", "services", "view", "widget"]);
+	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["input", "language", "measurement", "media", "services", "view", "viewModel", "viewparts", "widget"]);
 	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
 	assert.equal(statSafe(join(editorRoot, "alpha")), false);
 	assert.equal(statSafe(join(editorRoot, "gama")), false);
@@ -27,7 +27,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"common/commands/documentCommands.ts",
 		"browser/editorWidget.ts",
 		"browser/widget/embeddedTextEditor.ts",
-		"browser/widget/textEditorWidget.ts",
+		"browser/widget/codeBlockEditorWidget.ts",
 		"browser/media/editorWidget.css",
 		"contrib/clipboard/browser/htmlDocumentFragment.ts",
 		"contrib/formatting/browser/formattingContribution.ts",
@@ -55,24 +55,24 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 	}
 });
 
-test("document editing keeps textBlock semantics behind the embedded-editor seam", () => {
+test("document editing keeps codeBlock semantics behind the embedded-editor seam", () => {
 	const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
 	const pane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
 	const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
 	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
-	const widget = readFileSync(join(editorRoot, "browser/widget/textEditorWidget.ts"), "utf8");
+	const widget = readFileSync(join(editorRoot, "browser/widget/codeBlockEditorWidget.ts"), "utf8");
 	const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
-	assert.match(schema, /textBlock:/u);
-	assert.doesNotMatch(schema, /codeBlock/u);
+	assert.match(schema, /codeBlock:/u);
+	assert.doesNotMatch(schema, /textBlock/u);
 	assert.match(pane, /export class DocumentEditorPane/u);
 	assert.match(pane, /implements IEditorPane/u);
 	assert.match(pane, /BrowserDocumentModelService/u);
 	assert.match(editor, /export class EditorWidget/u);
 	assert.match(editor, /IDocumentModelService/u);
 	assert.match(editor, /DocumentModelReference/u);
-	assert.match(widget, /export class TextEditorWidget/u);
+	assert.match(widget, /export class CodeBlockEditorWidget/u);
 	assert.match(widget, /IEmbeddedTextEditorFactory/u);
-	assert.match(editor, /new TextEditorWidget\(/u);
+	assert.match(editor, /new CodeBlockEditorWidget\(/u);
 	assert.doesNotMatch(widget, /editor\/alpha\/browser\/embeddedTextEditor/u);
 	assert.match(formatting, /new ToolBar\(/u);
 	const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");

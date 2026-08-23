@@ -39,7 +39,7 @@ export interface SerializedDocumentTransaction {
 
 type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
-/** Serializes a Aster transaction into a versioned, JSON-safe transport envelope. */
+/** Serializes a Stanza transaction into a versioned, JSON-safe transport envelope. */
 export function serializeDocumentTransaction(transaction: DocumentTransaction, schema: DocumentSchema): string {
 	const metadata = transaction.metadata.map(entry => {
 		if (typeof entry.key !== "string") throw new DocumentSerializationError("Document transaction metadata symbols cannot be serialized");
@@ -63,7 +63,7 @@ export function serializeDocumentTransaction(transaction: DocumentTransaction, s
 	return JSON.stringify(payload);
 }
 
-/** Parses and validates a versioned Aster transaction transport envelope. */
+/** Parses and validates a versioned Stanza transaction transport envelope. */
 export function deserializeDocumentTransaction(value: string | unknown, schema: DocumentSchema): DocumentTransaction {
 	let parsed: unknown = value;
 	if (typeof value === "string") {

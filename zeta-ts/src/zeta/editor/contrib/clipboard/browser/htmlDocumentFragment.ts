@@ -7,7 +7,7 @@ import type { DocumentSchema } from "../../../common/model/documentSchema.js";
 const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
 
 /**
- * Converts untrusted external clipboard HTML into a schema-valid Aster fragment.
+ * Converts untrusted external clipboard HTML into a schema-valid Stanza fragment.
  *
  * The converter reads only a small, explicit HTML vocabulary. It never carries
  * DOM nodes, styles, event handlers, or arbitrary attributes into the document
@@ -15,12 +15,12 @@ const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
  */
 export function createDocumentFragmentFromHtml(ownerDocument: Document, schema: DocumentSchema, html: string): DocumentFragment | undefined {
 	if (typeof html !== "string" || html.length === 0 || html.length > MAX_HTML_CLIPBOARD_CHARACTERS) return undefined;
-	const parsedDocument = ownerDocument.implementation.createHTMLDocument("Aster clipboard");
+	const parsedDocument = ownerDocument.implementation.createHTMLDocument("Stanza clipboard");
 	parsedDocument.body.innerHTML = html;
 	const content = blocksFromNodes(parsedDocument.body.childNodes, schema);
 	if (content.length === 0) return undefined;
 	try {
-		schema.createDocument(content, "__aster_html_clipboard_fragment__");
+		schema.createDocument(content, "__stanza_html_clipboard_fragment__");
 	} catch {
 		return undefined;
 	}
@@ -262,9 +262,9 @@ function safeHref(value: string | null): string | undefined {
 	const href = value.trim();
 	if (href.length === 0) return undefined;
 	try {
-		const url = new URL(href, "https://aster.invalid/");
+		const url = new URL(href, "https://stanza.invalid/");
 		if (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:") return href;
-		if (url.origin === "https://aster.invalid") return href;
+		if (url.origin === "https://stanza.invalid") return href;
 	} catch {
 		return undefined;
 	}
@@ -277,8 +277,8 @@ function safeImageSource(value: string | null): string | undefined {
 	if (source.length === 0) return undefined;
 	if (/^data:image\/(?:gif|jpeg|png|webp);base64,[a-z0-9+/=\s]+$/iu.test(source)) return source;
 	try {
-		const url = new URL(source, "https://aster.invalid/");
-		if (url.protocol === "http:" || url.protocol === "https:" || url.origin === "https://aster.invalid") return source;
+		const url = new URL(source, "https://stanza.invalid/");
+		if (url.protocol === "http:" || url.protocol === "https:" || url.origin === "https://stanza.invalid") return source;
 	} catch {
 		return undefined;
 	}

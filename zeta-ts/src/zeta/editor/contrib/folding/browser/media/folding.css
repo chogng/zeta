@@ -1,4 +1,4 @@
-.aster-editor-fold-toggle {
+.stanza-editor-fold-toggle {
   position: absolute;
   top: 0;
   left: 0;
@@ -15,19 +15,19 @@
   border: 0;
 }
 
-.aster-editor-fold-toggle:hover,
-.aster-editor-fold-toggle:focus-visible {
+.stanza-editor-fold-toggle:hover,
+.stanza-editor-fold-toggle:focus-visible {
   color: var(--zeta-editor-foreground);
   background: var(--zeta-button-hover-background);
 }
 
-.aster-editor-fold-toggle:focus-visible {
+.stanza-editor-fold-toggle:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
 @media (forced-colors: active) {
-  .aster-editor-fold-toggle:focus-visible {
+  .stanza-editor-fold-toggle:focus-visible {
     outline-color: Highlight;
   }
 }

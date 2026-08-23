@@ -52,7 +52,7 @@ export class FormattingContribution extends DisposableOwner {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
-		element.className = "zeta-structured-format-toolbar";
+		element.className = "stanza-structured-format-toolbar";
 		element.hidden = true;
 		element.setAttribute("role", "group");
 		element.setAttribute("aria-label", "Document formatting");
@@ -65,12 +65,12 @@ export class FormattingContribution extends DisposableOwner {
 			ariaLabel: "Text formatting",
 			highlightToggledItems: true,
 		}));
-		inlineActions.element.classList.add("zeta-structured-format-inline-actions");
+		inlineActions.element.classList.add("stanza-structured-format-inline-actions");
 		inlineActions.element.addEventListener("mousedown", event => event.preventDefault());
 		this.inlineActions = inlineActions;
 
 		const typographyControls = h(ownerDocument, "div");
-		typographyControls.className = "zeta-structured-format-typography-controls";
+		typographyControls.className = "stanza-structured-format-typography-controls";
 		typographyControls.setAttribute("role", "group");
 		typographyControls.setAttribute("aria-label", "Font and size");
 		this.typographyControls = typographyControls;
@@ -80,7 +80,7 @@ export class FormattingContribution extends DisposableOwner {
 			{ value: "serif", label: "Serif" },
 			{ value: "monospace", label: "Monospace" },
 		]);
-		fontFamily.element.classList.add("zeta-structured-format-font-family");
+		fontFamily.element.classList.add("stanza-structured-format-font-family");
 		fontFamily.select.addEventListener("change", () => {
 			const value = fontFamily.select.value;
 			if (value === "") {
@@ -94,7 +94,7 @@ export class FormattingContribution extends DisposableOwner {
 			{ value: "", label: "Default" },
 			...[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map(value => ({ value: String(value), label: `${value}` })),
 		]);
-		fontSize.element.classList.add("zeta-structured-format-font-size");
+		fontSize.element.classList.add("stanza-structured-format-font-size");
 		fontSize.select.addEventListener("change", () => {
 			const value = fontSize.select.value;
 			if (value === "") {
@@ -111,13 +111,13 @@ export class FormattingContribution extends DisposableOwner {
 			ariaLabel: "Document structure",
 			highlightToggledItems: true,
 		}));
-		documentActions.element.classList.add("zeta-structured-format-document-actions");
+		documentActions.element.classList.add("stanza-structured-format-document-actions");
 		documentActions.element.addEventListener("mousedown", event => event.preventDefault());
 		this.documentActions = documentActions;
 
 		const codeContext = h(ownerDocument, "div");
-		codeContext.className = "zeta-structured-format-code-context";
-		codeContext.textContent = "Code block · Text editor";
+		codeContext.className = "stanza-structured-format-code-context";
+		codeContext.textContent = "Code block · Stanza Code";
 		codeContext.setAttribute("role", "status");
 		this.codeContext = codeContext;
 
@@ -166,12 +166,12 @@ function createAction(id: string, label: string, tooltip: string, icon: IAction[
 
 function createSelectControl(ownerDocument: Document, label: string, ariaLabel: string, options: readonly { readonly value: string; readonly label: string }[]): { readonly element: HTMLLabelElement; readonly select: HTMLSelectElement } {
 	const element = h(ownerDocument, "label");
-	element.className = "zeta-structured-format-select-control";
+	element.className = "stanza-structured-format-select-control";
 	const text = h(ownerDocument, "span");
-	text.className = "zeta-structured-format-select-label";
+	text.className = "stanza-structured-format-select-label";
 	text.textContent = label;
 	const select = h(ownerDocument, "select");
-	select.className = "zeta-structured-format-select";
+	select.className = "stanza-structured-format-select";
 	select.setAttribute("aria-label", ariaLabel);
 	for (const option of options) {
 		const optionElement = h(ownerDocument, "option");

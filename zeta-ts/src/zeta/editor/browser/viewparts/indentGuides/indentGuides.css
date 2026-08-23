@@ -1,11 +1,11 @@
-.aster-editor-line-indent-guides {
+.stanza-editor-line-indent-guides {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
 }
 
-.aster-editor-indent-guide {
+.stanza-editor-indent-guide {
   position: absolute;
   top: 0;
   bottom: 0;

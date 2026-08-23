@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
-import { EditorHitTargetKind, hitTestAsterEditorPoint } from "../../common/viewModel/pointerHitTest.js";
+import { EditorHitTargetKind, hitTestStanzaEditorPoint } from "../../common/viewModel/pointerHitTest.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
@@ -36,7 +36,7 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 		scrollPosition: { left: 0, top: 0 },
 	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
-	const hit = (left: number, top: number) => hitTestAsterEditorPoint(
+	const hit = (left: number, top: number) => hitTestStanzaEditorPoint(
 		model,
 		layout,
 		{ left, top },
@@ -46,7 +46,7 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 
 	assert.equal(hit(-1, 0), undefined);
 	assert.equal(hit(0, 80), undefined);
-	assert.throws(() => hitTestAsterEditorPoint(
+	assert.throws(() => hitTestStanzaEditorPoint(
 		model,
 		{ ...layout, lineHeight: 0 },
 		{ left: 0, top: 0 },
@@ -104,7 +104,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
 
-	assert.deepEqual(hitTestAsterEditorPoint(
+	assert.deepEqual(hitTestStanzaEditorPoint(
 		model,
 		layout,
 		{ left: 10, top: 5 },
@@ -114,7 +114,7 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 		kind: EditorHitTargetKind.Gutter,
 		position: TextPosition.at(1, 0),
 	});
-	assert.deepEqual(hitTestAsterEditorPoint(
+	assert.deepEqual(hitTestStanzaEditorPoint(
 		model,
 		layout,
 		{ left: 30, top: 5 },

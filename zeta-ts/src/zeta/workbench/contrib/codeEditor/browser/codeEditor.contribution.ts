@@ -12,10 +12,10 @@ import { CodeEditorConfiguration } from "../common/editorConfiguration.js";
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
-	name: "Code Editor",
+	name: "Stanza Code",
 	canOpen: matchCodeEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Code Editor requires the Workbench text file service");
+		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return new CodeEditorPane(resourceStore, {
@@ -68,12 +68,12 @@ registerEditorPane({
 
 registerEditorPane({
 	id: DIFF_EDITOR_ID,
-	name: "Diff Editor",
+	name: "Stanza Diff",
 	canOpen: matchDiffEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Diff Editor requires the Workbench text file service");
+		if (!options.textFileService) throw new Error("Stanza Diff requires the Workbench text file service");
 		const diffApi = options.diffApi;
-		if (!diffApi) throw new Error("Diff Editor requires the Rust diff API");
+		if (!diffApi) throw new Error("Stanza Diff requires the Rust diff API");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return new DiffEditorPane(resourceStore, {

@@ -28,7 +28,7 @@ export class LineOperationsController extends DisposableOwner {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
 			if (viewport.textModel !== selections.textModel) {
-				throw new TypeError("Aster line operation dependencies must share one text model");
+				throw new TypeError("Stanza line operation dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
@@ -90,7 +90,7 @@ export class LineOperationsController extends DisposableOwner {
 			this.viewport.revealPosition(this.selections.selections.primary.active);
 			return;
 		}
-		const duplicateDirection = resolveAsterDuplicateLineDirection(event, this.targetOperatingSystem);
+		const duplicateDirection = resolveStanzaDuplicateLineDirection(event, this.targetOperatingSystem);
 		if (!duplicateDirection) return;
 		stopEvent(event);
 		this.selections.execute(createDuplicateLinesCommand(
@@ -103,7 +103,7 @@ export class LineOperationsController extends DisposableOwner {
 }
 
 /** Resolves a duplicate-line chord without colliding with the platform multi-cursor binding. */
-export function resolveAsterDuplicateLineDirection(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): EditorLineDuplicateDirection | undefined {
+export function resolveStanzaDuplicateLineDirection(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): EditorLineDuplicateDirection | undefined {
 	const direction = event.key === "ArrowUp"
 		? EditorLineDuplicateDirection.Up
 		: event.key === "ArrowDown"
@@ -119,7 +119,7 @@ export function resolveAsterDuplicateLineDirection(event: Pick<KeyboardEvent, "k
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
 	const resolved = value ?? operatingSystem;
 	if (!Object.values(OperatingSystem).includes(resolved)) {
-		throw new TypeError("Unknown Aster line operation operating system");
+		throw new TypeError("Unknown Stanza line operation operating system");
 	}
 	return resolved;
 }

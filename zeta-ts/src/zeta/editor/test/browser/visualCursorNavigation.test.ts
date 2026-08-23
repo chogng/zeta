@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { navigateAsterVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
+import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/cursor/cursorNavigation.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
@@ -13,7 +13,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 		[2, 4, 6],
 		[3, 5],
 	]);
-	const first = navigateAsterVisualCursors(
+	const first = navigateStanzaVisualCursors(
 		model,
 		projection,
 		TextSelectionSet.single(caret(0, 1)),
@@ -27,7 +27,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	assert.deepEqual(first.selections.primary, caret(0, 3));
 	assert.deepEqual(first.preferredHorizontalOffsets, [10]);
 
-	const second = navigateAsterVisualCursors(
+	const second = navigateStanzaVisualCursors(
 		model,
 		projection,
 		first.selections,
@@ -42,7 +42,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	assert.deepEqual(second.selections.primary, caret(1, 1));
 	assert.deepEqual(second.preferredHorizontalOffsets, [10]);
 
-	const extended = navigateAsterVisualCursors(
+	const extended = navigateStanzaVisualCursors(
 		model,
 		projection,
 		TextSelectionSet.single(caret(0, 1)),
@@ -62,7 +62,7 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 test("Visual cursor navigation uses browser geometry when bidirectional layout provides it", () => {
 	using model = new TextModel("abc אבג");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3, 7]]);
-	const result = navigateAsterVisualCursors(
+	const result = navigateStanzaVisualCursors(
 		model,
 		projection,
 		TextSelectionSet.single(caret(0, 1)),
@@ -93,7 +93,7 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 		text: "d",
 	}]);
 
-	assert.throws(() => navigateAsterVisualCursors(
+	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		projection,
 		TextSelectionSet.single(caret(0, 0)),
@@ -106,7 +106,7 @@ test("Visual cursor navigation rejects stale projections and invalid preferred o
 	), /current text model projection/);
 
 	const current = EditorVisualLineProjection.fromBreakColumns(model, [[4]]);
-	assert.throws(() => navigateAsterVisualCursors(
+	assert.throws(() => navigateStanzaVisualCursors(
 		model,
 		current,
 		TextSelectionSet.single(caret(0, 0)),

@@ -5,8 +5,8 @@ import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { EmptyRangeRendering, createAsterRangeRectangles } from "../../../common/viewModel/rangeGeometry.js";
-import { createAsterVisualRangeRectangles } from "../../../common/viewModel/visualRangeGeometry.js";
+import { EmptyRangeRendering, createStanzaRangeRectangles } from "../../../common/viewModel/rangeGeometry.js";
+import { createStanzaVisualRangeRectangles } from "../../../common/viewModel/visualRangeGeometry.js";
 import { type EditorLineRange } from "../../../common/viewLayout/editorViewportModel.js";
 
 export enum DecorationPresentation {
@@ -88,7 +88,7 @@ export interface VisualDecorationRectangle {
  * Returning `undefined` from `resolvePresentation` omits a decoration from
  * this renderer without changing the common collection.
  */
-export function createAsterDecorationSource<TMetadata>(
+export function createStanzaDecorationSource<TMetadata>(
 	collection: TextDecorationCollection<TMetadata>,
 	resolvePresentation: (
 		decoration: TextDecorationSnapshot<TMetadata>,
@@ -112,12 +112,12 @@ export function createAsterDecorationSource<TMetadata>(
 				validatePresentation(presentation);
 				const hoverText = resolveHoverText?.(decoration);
 				if (hoverText !== undefined && (typeof hoverText !== "string" || hoverText.trim().length === 0)) {
-					throw new TypeError("Aster decoration hover text must be non-empty text");
+					throw new TypeError("Stanza decoration hover text must be non-empty text");
 				}
 				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration);
 				const blockDecoration = normalizeBlockPresentation(details?.blockDecoration);
 				if (blockDecoration?.isAfterEnd && !decoration.range.empty) {
-					throw new TypeError("Aster block decoration isAfterEnd requires an empty range");
+					throw new TypeError("Stanza block decoration isAfterEnd requires an empty range");
 				}
 				resolved.push(Object.freeze({
 					id: decoration.id,
@@ -134,14 +134,14 @@ export function createAsterDecorationSource<TMetadata>(
 }
 
 /** @internal */
-export function createAsterDecorationRectangles(
+export function createStanzaDecorationRectangles(
 	model: TextModel,
 	decorations: readonly ResolvedDecoration[],
 	renderLines: EditorLineRange,
 	textLeft: number,
 	measurer: TextMeasurer,
 ): readonly DecorationRectangle[] {
-	return Object.freeze(createAsterRangeRectangles(
+	return Object.freeze(createStanzaRangeRectangles(
 		model,
 		decorations.map(decoration => ({
 			range: decoration.range,
@@ -162,8 +162,8 @@ export function createAsterDecorationRectangles(
 }
 
 /** @internal */
-export function createAsterVisualDecorationRectangles(model: TextModel, decorations: readonly ResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualDecorationRectangle[] {
-	return Object.freeze(createAsterVisualRangeRectangles(
+export function createStanzaVisualDecorationRectangles(model: TextModel, decorations: readonly ResolvedDecoration[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualDecorationRectangle[] {
+	return Object.freeze(createStanzaVisualRangeRectangles(
 		model,
 		decorations.map(decoration => ({
 			range: decoration.range,
@@ -201,7 +201,7 @@ function validatePresentation(
 		&& presentation !== DecorationPresentation.DiffModified
 		&& presentation !== DecorationPresentation.DiffDeleted
 	) {
-		throw new TypeError(`Unknown Aster decoration presentation '${presentation}'`);
+		throw new TypeError(`Unknown Stanza decoration presentation '${presentation}'`);
 	}
 }
 
@@ -216,12 +216,12 @@ function normalizeLinesPresentation(
 ): DecorationLinesPresentation | undefined {
 	if (presentation === undefined) return undefined;
 	if (!presentation || typeof presentation !== "object") {
-		throw new TypeError("Aster lines decoration presentation must be an object");
+		throw new TypeError("Stanza lines decoration presentation must be an object");
 	}
 	const className = normalizeClassName(presentation.className, "lines decoration className");
 	const firstLineClassName = normalizeClassName(presentation.firstLineClassName, "first-line decoration className");
 	if (className === undefined && firstLineClassName === undefined) {
-		throw new TypeError("Aster lines decoration presentation must provide a className");
+		throw new TypeError("Stanza lines decoration presentation must provide a className");
 	}
 	const tooltip = normalizeOptionalText(presentation.tooltip, "lines decoration tooltip");
 	return Object.freeze({
@@ -236,15 +236,15 @@ function normalizeBlockPresentation(
 ): DecorationBlockPresentation | undefined {
 	if (presentation === undefined) return undefined;
 	if (!presentation || typeof presentation !== "object") {
-		throw new TypeError("Aster block decoration presentation must be an object");
+		throw new TypeError("Stanza block decoration presentation must be an object");
 	}
 	const className = normalizeClassName(presentation.className, "block decoration className");
-	if (className === undefined) throw new TypeError("Aster block decoration presentation must provide a className");
+	if (className === undefined) throw new TypeError("Stanza block decoration presentation must provide a className");
 	if (presentation.isAfterEnd !== undefined && typeof presentation.isAfterEnd !== "boolean") {
-		throw new TypeError("Aster block decoration isAfterEnd must be a boolean");
+		throw new TypeError("Stanza block decoration isAfterEnd must be a boolean");
 	}
 	if (presentation.doesNotCollapse !== undefined && typeof presentation.doesNotCollapse !== "boolean") {
-		throw new TypeError("Aster block decoration doesNotCollapse must be a boolean");
+		throw new TypeError("Stanza block decoration doesNotCollapse must be a boolean");
 	}
 	const padding = normalizePadding(presentation.padding);
 	return Object.freeze({
@@ -258,7 +258,7 @@ function normalizeBlockPresentation(
 function normalizeClassName(value: string | undefined, name: string): string | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value !== "string" || value.trim().length === 0 || !/^\S+(?:\s+\S+)*$/u.test(value.trim())) {
-		throw new TypeError(`Aster ${name} must be a non-empty CSS class list`);
+		throw new TypeError(`Stanza ${name} must be a non-empty CSS class list`);
 	}
 	return value.trim();
 }
@@ -266,7 +266,7 @@ function normalizeClassName(value: string | undefined, name: string): string | u
 function normalizeOptionalText(value: string | undefined, name: string): string | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new TypeError(`Aster ${name} must be non-empty text`);
+		throw new TypeError(`Stanza ${name} must be non-empty text`);
 	}
 	return value;
 }
@@ -276,7 +276,7 @@ function normalizePadding(
 ): readonly [number, number, number, number] | undefined {
 	if (padding === undefined) return undefined;
 	if (!Array.isArray(padding) || padding.length !== 4 || padding.some(value => !Number.isFinite(value) || value < 0)) {
-		throw new TypeError("Aster block decoration padding must contain four non-negative finite numbers");
+		throw new TypeError("Stanza block decoration padding must contain four non-negative finite numbers");
 	}
 	return Object.freeze([padding[0]!, padding[1]!, padding[2]!, padding[3]!]);
 }

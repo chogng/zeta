@@ -4,7 +4,7 @@ import { type EditorLineVisibilitySource, EditorVisualLineProjection } from "../
 import { type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
 import { VisualLineProjection } from "./visualLineProjection.js";
 
-/** Filters Aster's wrapped visual rows through an optional logical-line visibility source. */
+/** Filters Stanza's wrapped visual rows through an optional logical-line visibility source. */
 export class VisibleLineProjection extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<void>());
 	private projectionRevision = 0;

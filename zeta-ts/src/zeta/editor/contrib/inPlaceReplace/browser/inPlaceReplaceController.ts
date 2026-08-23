@@ -10,7 +10,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 export class InPlaceReplaceController extends DisposableOwner {
 	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Aster in-place replace dependencies must share a text model");
+		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza in-place replace dependencies must share a text model");
 		this.own(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) return;
 			stopEvent(event);

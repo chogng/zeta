@@ -14,7 +14,7 @@ import { EditorSelectionConfiguration } from "../../../common/editorSelectionCon
 import { SettingsTree } from "./settingsTree.js";
 import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
 
-/** Product settings controls for Aster-backed code editors. */
+/** Product settings controls for Stanza-backed code editors. */
 export class EditorSettingsPane extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	private readonly controls = new Map<string, HTMLInputElement | InputBox | SelectBox | Toggle>();

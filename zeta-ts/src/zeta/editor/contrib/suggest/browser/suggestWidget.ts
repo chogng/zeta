@@ -9,7 +9,7 @@ import { registerTextInputCompletionViewFactory, type TextInputCompletionSession
 
 let nextCompletionWidgetId = 1;
 
-/** Projects one common completion session into Aster-owned browser UI. */
+/** Projects one common completion session into Stanza-owned browser UI. */
 export class CompletionWidget extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
@@ -30,13 +30,13 @@ export class CompletionWidget extends DisposableOwner {
 				viewport.textModel !== selectionController.textModel ||
 				viewport.textModel !== session.textModel
 			) {
-				throw new TypeError("Aster completion widget dependencies must share one text model");
+				throw new TypeError("Stanza completion widget dependencies must share one text model");
 			}
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
-		this.widgetId = `aster-completion-${nextCompletionWidgetId++}`;
+		this.widgetId = `stanza-completion-${nextCompletionWidgetId++}`;
 		this.previousAriaAutocomplete = inputElement.getAttribute("aria-autocomplete");
 		this.previousAriaControls = inputElement.getAttribute("aria-controls");
 		this.previousAriaHasPopup = inputElement.getAttribute("aria-haspopup");
@@ -44,7 +44,7 @@ export class CompletionWidget extends DisposableOwner {
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.id = this.widgetId;
-		this.element.className = "aster-editor-completion";
+		this.element.className = "stanza-editor-completion";
 		this.element.setAttribute("role", "listbox");
 		this.element.hidden = true;
 		inputElement.setAttribute("aria-autocomplete", "none");
@@ -142,23 +142,23 @@ export class CompletionWidget extends DisposableOwner {
 			const focused = index === state.selectedIndex;
 			const resolving = focused && state.detailsStatus === LanguageCompletionDetailsStatus.Loading;
 			option.id = `${this.widgetId}-option-${index}`;
-			option.className = "aster-editor-completion-option";
+			option.className = "stanza-editor-completion-option";
 			option.classList.toggle("focused", focused);
 			option.classList.toggle("resolving", resolving);
 			option.dataset.completionIndex = String(index);
 			option.setAttribute("role", "option");
 			option.setAttribute("aria-selected", String(focused));
 			if (resolving) option.setAttribute("aria-busy", "true");
-			kind.className = "aster-editor-completion-kind";
+			kind.className = "stanza-editor-completion-kind";
 			kind.setAttribute("aria-hidden", "true");
 			kind.textContent = completionKindLabel(item.kind);
-			label.className = "aster-editor-completion-label";
+			label.className = "stanza-editor-completion-label";
 			label.textContent = item.label;
-			detail.className = "aster-editor-completion-detail";
+			detail.className = "stanza-editor-completion-detail";
 			detail.textContent = focused ? state.details.detail ?? "" : item.detail ?? "";
 			option.append(kind, label, detail);
 			if (focused && state.details.documentation !== undefined) {
-				documentation.className = "aster-editor-completion-documentation";
+				documentation.className = "stanza-editor-completion-documentation";
 				documentation.textContent = state.details.documentation;
 				option.append(documentation);
 			}
@@ -191,7 +191,7 @@ export class CompletionWidget extends DisposableOwner {
 	private readOptionIndex(event: MouseEvent): number | undefined {
 		const target = event.target;
 		if (!isElement(target)) return undefined;
-		const option = target.closest<HTMLElement>(".aster-editor-completion-option");
+		const option = target.closest<HTMLElement>(".stanza-editor-completion-option");
 		if (!option || !this.element.contains(option)) return undefined;
 		const index = Number(option.dataset.completionIndex);
 		return Number.isSafeInteger(index) ? index : undefined;

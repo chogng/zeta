@@ -80,7 +80,7 @@ Code Sessions 的 Renderer 实现、状态 owner、执行路径、失败语义�
 
 普通 Workbench 使用唯一的 immutable `defaultWorkbenchSession`：两个模式具有相同初始区域、默认 view container 和可持久化布局语义。Dedicated Sessions 自己构造固定页面，不读取或更改 `WorkbenchLayout`。
 
-Browser 与 Electron 各自只有一个 `workbench.ts` 入口。入口读取 Main 写入的窗口模式后加载 `modes/code` 或 `modes/academic`；模式 contribution 分别静态装配 `editor.code.all.ts` 与 `editor.academic.all.ts`，但不得拥有布局、Part topology 或第二套 Workbench runtime。两个 editor bundle 都来自同一个扁平的 `src/zeta/editor` 模块；Aster 是统一内核品牌，`TextModel` 与 `DocumentModel` 分别拥有 Text Engine 和 Document Engine 的同步语义。
+Browser 与 Electron 各自只有一个 `workbench.ts` 入口。入口读取 Main 写入的窗口模式后加载 `modes/code` 或 `modes/academic`；模式 contribution 分别静态装配 `editor.code.all.ts` 与 `editor.academic.all.ts`，但不得拥有布局、Part topology 或第二套 Workbench runtime。两个 editor bundle 都来自同一个扁平的 `src/zeta/editor` 模块；Stanza 是统一内核品牌，`TextModel` 与 `DocumentModel` 分别拥有 Text Engine 和 Document Engine 的同步语义。
 
 ## 构建与验证
 
@@ -111,4 +111,4 @@ ZETA_WORKBENCH_MODE=academic corepack pnpm dev:desktop
 - 模式由应用内设置选择，但只在窗口重载边界改变。
 - 一个 Renderer 生命周期只装配一个模式，不能热卸载 contribution。
 - Workbench、布局和 App Server 契约保持共享，模式入口只拥有差异化能力装配。
-- Aster 仍是唯一 editor runtime；模式不得复制 editor、model 或文件状态。
+- Stanza 仍是唯一 editor runtime；模式不得复制 editor、model 或文件状态。

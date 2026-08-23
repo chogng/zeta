@@ -64,12 +64,12 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 
 	editor.layout({ width: 320, height: 40 });
 
-	assert.equal(editor.element.querySelector(".aster-editor-line.active"), null);
-	assert.ok(editor.element.querySelector(".aster-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".aster-editor-lines").style.transform, "translate3d(0, 20px, 0)");
-	assert.equal(editor.element.style.getPropertyValue("--aster-editor-padding-left"), "20px");
-	assert.equal(editor.element.style.getPropertyValue("--aster-editor-padding-right"), "20px");
-	assert.equal(requiredElement<HTMLElement>(editor.element, ".aster-editor-placeholder-text").style.top, "20px");
+	assert.equal(editor.element.querySelector(".stanza-editor-line.active"), null);
+	assert.ok(editor.element.querySelector(".stanza-editor-caret"));
+	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-lines").style.transform, "translate3d(0, 20px, 0)");
+	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-left"), "20px");
+	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-right"), "20px");
+	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text").style.top, "20px");
 	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });

@@ -12,7 +12,7 @@ export interface BlockDecorationGeometry {
 }
 
 /** Resolves one block decoration into content-coordinate geometry. */
-export function resolveAsterBlockDecorationGeometry(
+export function resolveStanzaBlockDecorationGeometry(
 	context: ViewportOverlayContext,
 	layout: EditorViewportLayout,
 	decoration: ResolvedDecoration,

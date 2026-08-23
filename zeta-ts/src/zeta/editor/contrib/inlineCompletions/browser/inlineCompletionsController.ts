@@ -14,10 +14,10 @@ export class InlineCompletionsController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster inline completion failed", error)) {
+	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
-		element.className = "aster-editor-inline-completion";
+		element.className = "stanza-editor-inline-completion";
 		element.hidden = true;
 		viewport.element.append(element);
 		this.defer(() => element.remove());

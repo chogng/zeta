@@ -12,7 +12,7 @@ export interface BlockCommentControllerOptions {
 	readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
-/** Routes the platform block-comment shortcut through Aster's local command model. */
+/** Routes the platform block-comment shortcut through Stanza's local command model. */
 export class BlockCommentController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -24,7 +24,7 @@ export class BlockCommentController extends DisposableOwner {
 		try {
 			validateOptions(options);
 			if (viewport.textModel !== selections.textModel) {
-				throw new TypeError("Aster block comment dependencies must share one text model");
+				throw new TypeError("Stanza block comment dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
@@ -51,9 +51,9 @@ export class BlockCommentController extends DisposableOwner {
 
 function validateOptions(options: BlockCommentControllerOptions): void {
 	if (!options || typeof options !== "object" || typeof options.languageId !== "string" || options.languageId.length === 0) {
-		throw new TypeError("Aster block comment controller requires a language ID");
+		throw new TypeError("Stanza block comment controller requires a language ID");
 	}
 	if (!options.configurations || typeof options.configurations.getLanguageConfiguration !== "function") {
-		throw new TypeError("Aster block comment controller requires language configurations");
+		throw new TypeError("Stanza block comment controller requires language configurations");
 	}
 }

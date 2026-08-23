@@ -2,7 +2,7 @@ import { h } from "../../../base/browser/dom.js";
 import { type TextMeasurer as CommonTextMeasurer } from "../../common/viewModel/textMeasurer.js";
 
 /**
- * Measures rendered Aster line text for the current browser font.
+ * Measures rendered Stanza line text for the current browser font.
  *
  * Implementations must be ready to measure immediately. `refresh` returns
  * whether cached line widths must be rebuilt after a font or style change.
@@ -23,7 +23,7 @@ interface ResolvedFontMetrics {
 }
 
 /**
- * Browser-backed line measurer using the Aster line layer's computed style.
+ * Browser-backed line measurer using the Stanza line layer's computed style.
  *
  * Canvas handles shaping and font fallback. Tabs advance to CSS `tab-size`
  * stops based on the measured space glyph.
@@ -83,7 +83,7 @@ export class DomTextMeasurer implements TextMeasurer {
 	private readMetrics(): ResolvedFontMetrics {
 		const ownerWindow = this.referenceElement.ownerDocument.defaultView;
 		if (!ownerWindow) {
-			throw new ReferenceError("Aster font measurement requires a browser window");
+			throw new ReferenceError("Stanza font measurement requires a browser window");
 		}
 		const style = ownerWindow.getComputedStyle(this.referenceElement);
 		const fontSize = positiveCssNumber(style.fontSize, 14);

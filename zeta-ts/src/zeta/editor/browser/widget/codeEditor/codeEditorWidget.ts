@@ -25,7 +25,7 @@ export interface CodeEditorWidgetOptions {
 }
 
 /**
- * Canonical browser editing surface for one Aster text model and editor-local selection controller.
+ * Canonical browser editing surface for one Stanza text model and editor-local selection controller.
  *
  * Callers retain ownership of the model and selection controller. This component owns their DOM
  * projection plus native text input, keyboard navigation, and pointer selection. Optional
@@ -89,9 +89,9 @@ export function registerCodeEditorPlaceholderFactory(factory: CodeEditorPlacehol
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
 	if (!options || typeof options !== "object" || !options.container || !options.model || !options.selectionController) {
-		throw new TypeError("Aster code editor requires a container, text model, and selection controller");
+		throw new TypeError("Stanza code editor requires a container, text model, and selection controller");
 	}
 	if (options.selectionController.textModel !== options.model) {
-		throw new TypeError("Aster code editor model and selection controller must match");
+		throw new TypeError("Stanza code editor model and selection controller must match");
 	}
 }

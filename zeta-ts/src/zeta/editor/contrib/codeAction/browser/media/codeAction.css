@@ -1,4 +1,4 @@
-.aster-editor-code-action {
+.stanza-editor-code-action {
   position: absolute;
   z-index: 9;
   min-width: 240px;
@@ -10,7 +10,7 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
-.aster-editor-code-action button {
+.stanza-editor-code-action button {
   display: block;
   width: 100%;
   padding: 5px 8px;
@@ -21,13 +21,13 @@
   border-radius: 3px;
 }
 
-.aster-editor-code-action button:hover,
-.aster-editor-code-action button:focus-visible {
+.stanza-editor-code-action button:hover,
+.stanza-editor-code-action button:focus-visible {
   background: var(--zeta-editor-list-hover-background);
   outline: none;
 }
 
-.aster-editor-code-action button:disabled {
+.stanza-editor-code-action button:disabled {
   color: var(--zeta-editor-description-foreground, var(--zeta-editor-foreground));
   opacity: 0.65;
 }

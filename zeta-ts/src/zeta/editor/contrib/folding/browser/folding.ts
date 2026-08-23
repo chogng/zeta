@@ -24,7 +24,7 @@ export interface FoldingControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 }
 
-/** Routes local VS Code fold chords and gutter controls through Aster's folding model. */
+/** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
 export class FoldingController extends DisposableOwner {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private awaitingChord = false;
@@ -40,7 +40,7 @@ export class FoldingController extends DisposableOwner {
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			if (viewport.textModel !== selections.textModel || viewport.textModel !== folding.model) {
-				throw new TypeError("Aster folding dependencies must share one text model");
+				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 			this.own(addDisposableListener(viewport.element, "pointerdown", event => this.handleGutterPointerDown(event)));
@@ -52,7 +52,7 @@ export class FoldingController extends DisposableOwner {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		const chord = resolveAsterFoldingChord(event, this.targetOperatingSystem, this.awaitingChord);
+		const chord = resolveStanzaFoldingChord(event, this.targetOperatingSystem, this.awaitingChord);
 		if (chord === "prefix") {
 			stopEvent(event);
 			this.awaitingChord = true;
@@ -74,7 +74,7 @@ export class FoldingController extends DisposableOwner {
 			}
 			return;
 		}
-		const command = resolveAsterFoldingCommand(event, this.targetOperatingSystem);
+		const command = resolveStanzaFoldingCommand(event, this.targetOperatingSystem);
 		if (!command) return;
 		stopEvent(event);
 		this.setContainingFoldCollapsed(command === FoldingCommand.Collapse);
@@ -82,7 +82,7 @@ export class FoldingController extends DisposableOwner {
 
 	private handleGutterPointerDown(event: PointerEvent): void {
 		const target = event.target as { closest?: <T extends Element>(selector: string) => T | null } | null;
-		const button = target?.closest?.<HTMLButtonElement>(".aster-editor-fold-toggle");
+		const button = target?.closest?.<HTMLButtonElement>(".stanza-editor-fold-toggle");
 		if (!button || !this.viewport.element.contains(button)) return;
 		const lineIndex = Number(button.dataset.logicalLineIndex);
 		if (!Number.isSafeInteger(lineIndex)) return;
@@ -153,7 +153,7 @@ export class FoldingController extends DisposableOwner {
 	}
 }
 
-function resolveAsterFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem, awaitingChord: boolean): FoldingChord | undefined {
+function resolveStanzaFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem, awaitingChord: boolean): FoldingChord | undefined {
 	const modifier = targetOperatingSystem === OperatingSystem.Macintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 	if (!modifier || event.shiftKey || event.altKey) return undefined;
 	if (!awaitingChord) return event.key.toLowerCase() === "k" ? "prefix" : undefined;
@@ -172,7 +172,7 @@ function resolveAsterFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" |
 type FoldingChord = FoldingCommand | "prefix" | { readonly command: FoldingCommand.CollapseToLevel; readonly level: number };
 
 /** Resolves the platform-specific fold and unfold chords used by VS Code. */
-export function resolveAsterFoldingCommand(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): FoldingCommand | undefined {
+export function resolveStanzaFoldingCommand(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): FoldingCommand | undefined {
 	const command = event.key === "["
 		? FoldingCommand.Collapse
 		: event.key === "]"
@@ -188,7 +188,7 @@ export function resolveAsterFoldingCommand(event: Pick<KeyboardEvent, "key" | "c
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
 	const resolved = value ?? operatingSystem;
 	if (!Object.values(OperatingSystem).includes(resolved)) {
-		throw new TypeError("Unknown Aster folding operating system");
+		throw new TypeError("Unknown Stanza folding operating system");
 	}
 	return resolved;
 }

@@ -76,13 +76,13 @@ export class LanguageNavigationController extends DisposableOwner {
 		this.closePeek();
 		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
 		const list = h(widget.element.ownerDocument, "div");
-		list.className = "aster-editor-language-locations";
+		list.className = "stanza-editor-language-locations";
 		list.setAttribute("role", "listbox");
 		for (const location of locations) {
 			const button = h(widget.element.ownerDocument, "button");
 			button.type = "button";
 			button.setAttribute("role", "option");
-			button.className = "aster-editor-language-location";
+			button.className = "stanza-editor-language-location";
 			const selection = location.selectionRange ?? location.range;
 			button.textContent = `${resourceLabel(location.resource)}:${selection.start.lineIndex + 1}:${selection.start.columnIndex + 1}`;
 			this.peek.add(addDisposableListener(button, "click", () => void this.open(location)));

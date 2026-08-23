@@ -37,7 +37,7 @@ test("Module wire publishes availability and controls Worker-local providers", a
 	assert.equal((await client.setProviderModuleActivation("language.word", LanguageCompletionProviderModuleState.Inactive)).changed, true);
 	assert.deepEqual(providers.providerCatalog.providers, []);
 	await assert.rejects(
-		client.setProviderModuleActivation("aster.missing", LanguageCompletionProviderModuleState.Active),
+		client.setProviderModuleActivation("stanza.missing", LanguageCompletionProviderModuleState.Active),
 		/unavailable/,
 	);
 });
@@ -113,7 +113,7 @@ test("Required-module failure discards the prewarmed Worker before the next trig
 			const providers = workerResources.add(new LanguageCompletionProviderRegistry());
 			const modules = workerResources.add(new LanguageCompletionProviderModuleRegistry());
 			workerResources.add(modules.register({
-				id: "aster.dot",
+				id: "stanza.dot",
 				load: () => {
 					if (workerCount === 1) throw new Error("required module failed");
 					return [triggerProvider()];
@@ -125,7 +125,7 @@ test("Required-module failure discards the prewarmed Worker before the next trig
 			workerResources.add(new LanguageCompletionCatalogWirePublisher(serverPort, providers));
 			workerResources.add(new LanguageCompletionProviderModuleWireServer(serverPort, modules, host));
 			return new LanguageCompletionCatalogWorkerClient(clientPort, {
-				requiredProviderModules: ["aster.dot"],
+				requiredProviderModules: ["stanza.dot"],
 			});
 		},
 	});
@@ -139,7 +139,7 @@ test("Required-module failure discards the prewarmed Worker before the next trig
 
 	assert.equal(outcome?.status, LanguageRequestStatus.Applied);
 	assert.equal(workerCount, 2);
-	assert.deepEqual(service.results.result!.value.items.map(item => item.providerId), ["aster.dot"]);
+	assert.deepEqual(service.results.result!.value.items.map(item => item.providerId), ["stanza.dot"]);
 });
 
 test("Deferred completion details and cancellation cross the shared Worker port", async () => {
@@ -149,7 +149,7 @@ test("Deferred completion details and cancellation cross the shared Worker port"
 	let blockResolution = false;
 	let remoteCancelled = false;
 	using registration = remoteProviders.register({
-		id: "aster.resolve",
+		id: "stanza.resolve",
 		languageIds: ["typescript"],
 		provideCompletions: () => ({
 			items: [{
@@ -187,7 +187,7 @@ test("Deferred completion details and cancellation cross the shared Worker port"
 	const target = {
 		completionRequestId: result.requestId,
 		modelVersion: result.modelVersion,
-		providerId: "aster.resolve",
+		providerId: "stanza.resolve",
 		itemId: "console",
 	};
 
@@ -219,7 +219,7 @@ test("Malformed resolve responses reject pending work and invalidate the shared 
 	const target = {
 		completionRequestId: 7,
 		modelVersion: 1,
-		providerId: "aster.resolve",
+		providerId: "stanza.resolve",
 		itemId: "console",
 	};
 	const pending = client.resolveCompletionItem(target, new AbortController().signal);
@@ -252,7 +252,7 @@ function moduleCatalogMessage(revision: number): unknown {
 
 function triggerProvider(): LanguageCompletionProvider {
 	return {
-		id: "aster.dot",
+		id: "stanza.dot",
 		languageIds: ["typescript"],
 		triggerCharacters: ["."],
 		provideCompletions: request => ({

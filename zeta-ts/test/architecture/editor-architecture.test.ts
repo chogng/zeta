@@ -140,7 +140,7 @@ test("Flat editor layout keeps both engine owners and mode bundles", () => {
 	assert.equal(existsSync(join(editorRoot, "gama")), false, "gama directory");
 });
 
-test("Aster source does not retain retired engine compatibility identifiers", () => {
+test("Stanza source does not retain retired engine compatibility identifiers", () => {
 	const sourceRoot = resolve(desktopRoot, "src/zeta");
 	const legacyCompatibilityPattern = /zeta-(?:alpha|gama)|zeta\.editor\.(?:alpha|gama)|application\/(?:x-|vnd\.)?zeta(?:[-.](?:alpha|gama))|--(?:alpha|gama)-editor-|(?:ALPHA|GAMA)_EDITOR_ID/u;
 	for (const file of collectFiles(sourceRoot)) {
@@ -149,19 +149,28 @@ test("Aster source does not retain retired engine compatibility identifiers", ()
 	}
 });
 
-test("Aster owns its public protocol and DOM vocabulary without renaming the editor domain", () => {
+test("Stanza owns its public protocol and DOM vocabulary without renaming the editor domain", () => {
 	const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
 	const codeInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditorInput.ts"), "utf8");
 	const documentInput = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorInput.ts"), "utf8");
 	const diffInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/diffEditorInput.ts"), "utf8");
 	const viewport = readFileSync(join(editorRoot, "browser/view/editorViewport.ts"), "utf8");
-	assert.match(api, /Stable DOM-free Aster API/u);
-	assert.match(codeInput, /aster\.editor\.code/u);
-	assert.match(documentInput, /aster\.editor\.document/u);
-	assert.match(diffInput, /aster\.editor\.diff/u);
-	assert.match(diffInput, /application\/vnd\.aster\.editor-diff/u);
-	assert.match(viewport, /aster-editor/u);
-	assert.equal(existsSync(resolve(editorRoot, "../aster")), false, "parallel aster directory");
+	const structuredSurface = [
+		readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8"),
+		readFileSync(join(editorRoot, "browser/media/editorWidget.css"), "utf8"),
+		readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8"),
+		readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8"),
+	].join("\n");
+	assert.match(api, /Stable DOM-free Stanza API/u);
+	assert.match(codeInput, /stanza\.editor\.code/u);
+	assert.match(documentInput, /stanza\.editor\.document/u);
+	assert.match(diffInput, /stanza\.editor\.diff/u);
+	assert.match(diffInput, /application\/vnd\.stanza\.editor-diff/u);
+	assert.match(viewport, /stanza-editor/u);
+	assert.match(structuredSurface, /stanza-document-/u);
+	assert.match(structuredSurface, /stanza-structured-/u);
+	assert.doesNotMatch(structuredSurface, /zeta-(?:document|structured)-/u);
+	assert.equal(existsSync(resolve(editorRoot, "../stanza")), false, "parallel stanza directory");
 });
 
 test("Text engine PieceTree tests follow VS Code's common model layout", () => {
@@ -169,7 +178,7 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Window modes select one Aster contribution bundle behind the shared Workbench entry", () => {
+test("Window modes select one Stanza contribution bundle behind the shared Workbench entry", () => {
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");

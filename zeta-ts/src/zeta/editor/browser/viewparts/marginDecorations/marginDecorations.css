@@ -1,7 +1,7 @@
-.aster-editor-diagnostic-marker {
+.stanza-editor-diagnostic-marker {
   position: absolute;
   top: 0;
-  left: max(20px, var(--aster-editor-feature-gutter-width, 0px));
+  left: max(20px, var(--stanza-editor-feature-gutter-width, 0px));
   z-index: 5;
   width: 20px;
   height: 100%;
@@ -12,24 +12,24 @@
   cursor: help;
 }
 
-.aster-editor-diagnostic-marker.error {
+.stanza-editor-diagnostic-marker.error {
   color: var(--zeta-error-foreground);
 }
 
-.aster-editor-diagnostic-marker.warning {
+.stanza-editor-diagnostic-marker.warning {
   color: var(--zeta-warning-foreground);
 }
 
-.aster-editor-diagnostic-marker.information {
+.stanza-editor-diagnostic-marker.information {
   color: var(--zeta-focus-border);
 }
 
-.aster-editor-diagnostic-marker.hint {
+.stanza-editor-diagnostic-marker.hint {
   color: var(--zeta-description-foreground);
 }
 
 @media (forced-colors: active) {
-  .aster-editor-diagnostic-marker {
+  .stanza-editor-diagnostic-marker {
     background: CanvasText;
     color: CanvasText;
   }

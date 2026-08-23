@@ -16,14 +16,14 @@ export class DocumentOutlineNavigator extends DisposableOwner {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "nav");
-		element.className = "zeta-document-outline";
+		element.className = "stanza-document-outline";
 		element.hidden = true;
 		element.setAttribute("aria-label", "Document outline");
 		const title = h(ownerDocument, "div");
-		title.className = "zeta-document-outline-title";
+		title.className = "stanza-document-outline-title";
 		title.textContent = "Outline";
 		const list = h(ownerDocument, "ol");
-		list.className = "zeta-document-outline-list";
+		list.className = "stanza-document-outline-list";
 		element.append(title, list);
 		this.element = element;
 		this.list = list;
@@ -38,10 +38,10 @@ export class DocumentOutlineNavigator extends DisposableOwner {
 		const fragment = createFragment(ownerDocument);
 		for (const entry of outline) {
 			const item = h(ownerDocument, "li");
-			item.className = "zeta-document-outline-item";
+			item.className = "stanza-document-outline-item";
 			const button = h(ownerDocument, "button");
 			button.type = "button";
-			button.className = "zeta-document-outline-entry";
+			button.className = "stanza-document-outline-entry";
 			button.dataset.nodeId = entry.nodeId;
 			button.dataset.depth = String(entry.depth);
 			button.style.paddingInlineStart = `${8 + entry.depth * 14}px`;

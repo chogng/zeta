@@ -7,7 +7,7 @@ const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 const MAX_TRANSACTION_BYTES = 1_048_576;
 const MAX_PRESENCE_SELECTION_BYTES = 64 * 1024;
 
-/** Exact-shape IPC routes for Aster's server-ordered document collaboration protocol. */
+/** Exact-shape IPC routes for Stanza's server-ordered document collaboration protocol. */
 export function documentCollaborationIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
 	return [
 		route({

@@ -356,11 +356,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(dom.window.document.querySelector(".zeta-chat-input-mode-menu"), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
-		const input = chatPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+		const input = chatPane.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
 		assert.ok(input);
 		return input;
 	});
-	typeAsterText(dom.window, composerInputs[0], "First draft");
+	typeStanzaText(dom.window, composerInputs[0], "First draft");
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, false);
 
 	tabs?.[1]?.click();
@@ -372,12 +372,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		["false", "true"],
 	);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
-	typeAsterText(dom.window, composerInputs[1], "Second draft");
+	typeStanzaText(dom.window, composerInputs[1], "Second draft");
 	chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-	assert.equal(chatPanes[0]?.querySelector(".aster-editor-line-text")?.textContent, "First draft");
-	assert.equal(chatPanes[1]?.querySelector(".aster-editor-line-text")?.textContent, "Second draft");
+	assert.equal(chatPanes[0]?.querySelector(".stanza-editor-line-text")?.textContent, "First draft");
+	assert.equal(chatPanes[1]?.querySelector(".stanza-editor-line-text")?.textContent, "Second draft");
 
 	const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
 		`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
@@ -529,10 +529,10 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.untitledSessions.length, 1);
 	const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
 	assert.ok(untitledPane?.dataset.untitledSessionId);
-	const input = untitledPane.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+	const input = untitledPane.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains("empty"), true);
-	typeAsterText(dom.window, input, "Hello from an untitled session");
+	typeStanzaText(dom.window, input, "Hello from an untitled session");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
@@ -611,9 +611,9 @@ test("the New Chat slash command opens an untitled session", async () => {
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .aster-editor-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".zeta-chat:not([hidden]) .stanza-editor-input");
 	assert.ok(input);
-	typeAsterText(dom.window, input, "/new");
+	typeStanzaText(dom.window, input, "/new");
 	assert.equal(pane.element.querySelector("[data-action-id='zeta.chat.input.command'] button")?.textContent, "Command");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -684,20 +684,20 @@ test("failed first send keeps the untitled session and its input draft", async (
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".aster-editor-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
 	assert.ok(input);
-	typeAsterText(dom.window, input, "Keep this draft");
+	typeStanzaText(dom.window, input, "Keep this draft");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
 		key: "Enter",
 	}));
-	await waitFor(() => pane.element.querySelector(".aster-editor-line-text")?.textContent === "Keep this draft");
+	await waitFor(() => pane.element.querySelector(".stanza-editor-line-text")?.textContent === "Keep this draft");
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	assert.equal(pane.element.querySelector(".aster-editor-line-text")?.textContent, "Keep this draft");
+	assert.equal(pane.element.querySelector(".stanza-editor-line-text")?.textContent, "Keep this draft");
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
@@ -1584,7 +1584,7 @@ function emptyUsage(): Thread["usage"] {
 	};
 }
 
-function typeAsterText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
+function typeStanzaText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
 	input.dispatchEvent(new targetWindow.InputEvent("beforeinput", {
 		bubbles: true,
 		cancelable: true,

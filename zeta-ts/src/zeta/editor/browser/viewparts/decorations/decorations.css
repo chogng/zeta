@@ -1,47 +1,47 @@
-.aster-editor-line-decorations {
+.stanza-editor-line-decorations {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
 }
 
-.aster-editor-decoration {
+.stanza-editor-decoration {
   position: absolute;
   top: 0;
   bottom: 0;
   box-sizing: border-box;
 }
 
-.aster-editor-decoration.search-match,
-.aster-editor-decoration.occurrence-highlight {
+.stanza-editor-decoration.search-match,
+.stanza-editor-decoration.occurrence-highlight {
   background: var(--zeta-search-match-background);
 }
 
-.aster-editor-decoration.bracket-match {
+.stanza-editor-decoration.bracket-match {
   border: 1px solid var(--zeta-focus-border);
 }
 
-.aster-editor-decoration.error-underline {
+.stanza-editor-decoration.error-underline {
   border-bottom: 2px solid var(--zeta-error-foreground);
 }
 
-.aster-editor-decoration.warning-underline {
+.stanza-editor-decoration.warning-underline {
   border-bottom: 2px solid var(--zeta-warning-foreground);
 }
 
-.aster-editor-decoration.information-underline {
+.stanza-editor-decoration.information-underline {
   border-bottom: 2px solid var(--zeta-focus-border);
 }
 
-.aster-editor-decoration.hint-underline {
+.stanza-editor-decoration.hint-underline {
   border-bottom: 1px dotted var(--zeta-description-foreground);
 }
 
 @media (forced-colors: active) {
-  .aster-editor-decoration.error-underline,
-  .aster-editor-decoration.warning-underline,
-  .aster-editor-decoration.information-underline,
-  .aster-editor-decoration.hint-underline {
+  .stanza-editor-decoration.error-underline,
+  .stanza-editor-decoration.warning-underline,
+  .stanza-editor-decoration.information-underline,
+  .stanza-editor-decoration.hint-underline {
     border-bottom-color: CanvasText;
   }
 }

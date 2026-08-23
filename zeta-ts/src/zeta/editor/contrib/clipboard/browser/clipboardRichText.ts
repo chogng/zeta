@@ -1,4 +1,4 @@
-/** A permission-gated Async Clipboard item reduced to Aster's safe text formats. */
+/** A permission-gated Async Clipboard item reduced to Stanza's safe text formats. */
 export interface ClipboardRichTextItem {
 	readonly plainText?: string;
 	readonly html?: string;
@@ -9,13 +9,13 @@ export interface ClipboardRichTextReader {
 	readText(): PromiseLike<ClipboardRichTextItem | undefined>;
 }
 
-/** Writes Aster's portable plain-text and safe HTML clipboard representations. */
+/** Writes Stanza's portable plain-text and safe HTML clipboard representations. */
 export interface ClipboardRichTextWriter {
 	writeText(item: Required<ClipboardRichTextItem>): PromiseLike<void>;
 }
 
-/** Creates the browser adapter without exposing ClipboardItem or Blob to Aster consumers. */
-export function createAsterBrowserClipboardRichTextReader(ownerDocument: Document): ClipboardRichTextReader | undefined {
+/** Creates the browser adapter without exposing ClipboardItem or Blob to Stanza consumers. */
+export function createStanzaBrowserClipboardRichTextReader(ownerDocument: Document): ClipboardRichTextReader | undefined {
 	const clipboard = ownerDocument.defaultView?.navigator.clipboard;
 	if (!clipboard || typeof clipboard.read !== "function") return undefined;
 	return Object.freeze({
@@ -38,7 +38,7 @@ export function createAsterBrowserClipboardRichTextReader(ownerDocument: Documen
  * Creates a permission-gated Async Clipboard writer when this browser exposes
  * both `Clipboard.write` and the `ClipboardItem` constructor.
  */
-export function createAsterBrowserClipboardRichTextWriter(ownerDocument: Document): ClipboardRichTextWriter | undefined {
+export function createStanzaBrowserClipboardRichTextWriter(ownerDocument: Document): ClipboardRichTextWriter | undefined {
 	const ownerWindow = ownerDocument.defaultView;
 	const clipboard = ownerWindow?.navigator.clipboard;
 	const ClipboardItemConstructor = ownerWindow?.ClipboardItem;

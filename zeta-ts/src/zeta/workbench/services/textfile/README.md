@@ -1,7 +1,7 @@
 # Text file service
 
 This module owns the Workbench boundary between resource I/O and editor model
-implementations. Cross-editor architecture and Aster ownership are
+implementations. Cross-editor architecture and Stanza ownership are
 canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-architecture.md).
 
 ## Current contract
@@ -45,7 +45,7 @@ Workbench lifecycle.
 
 `Workbench` constructs `TextFileService` after `BrowserFileService`, registers
 it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
-Aster text and document contributions reject construction when that service is absent.
+Stanza text and document contributions reject construction when that service is absent.
 
 Cancellation before resolution or save, or while awaiting the underlying I/O,
 rejects without publishing a result. File-service errors pass through
@@ -65,7 +65,7 @@ delegation, cancellation, validation, and failure propagation.
 `../../../platform/files/test/browser/file-service.test.ts` covers App Server
 invalidation projection.
 `../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
-content. Aster Text Engine model and pane tests cover shared model references, edit
+content. Stanza Text Engine model and pane tests cover shared model references, edit
 preservation, cancellation, and session disposal. The working-copy service
 test covers registration, lookup, and unregistration.
 

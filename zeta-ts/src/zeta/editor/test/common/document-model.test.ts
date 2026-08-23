@@ -23,24 +23,24 @@ function createDocument(schema: DocumentSchema) {
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	const textBlock = schema.createNode("textBlock", {
+	const codeBlock = schema.createNode("codeBlock", {
 		id: "code-1",
 		attrs: { language: "typescript" },
 		content: [schema.createText("const value = 1;", { id: "code-text-1" })],
 	});
-	return schema.createDocument([paragraph, textBlock], "document-1");
+	return schema.createDocument([paragraph, codeBlock], "document-1");
 }
 
-test("DocumentSchema creates and validates block, inline, and text-block nodes", () => {
+test("DocumentSchema creates and validates block, inline, and code-block nodes", () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 
-	assert.deepEqual(document.content.map(node => node.type), ["paragraph", "textBlock"]);
+	assert.deepEqual(document.content.map(node => node.type), ["paragraph", "codeBlock"]);
 	assert.equal(document.content[1]?.attrs.language, "typescript");
 	schema.validate(document);
 	assert.throws(() => schema.createNode("heading", { attrs: { level: 7 } }), /between 1 and 6/);
-	assert.throws(() => schema.createNode("paragraph", { content: [schema.createNode("textBlock")] }), /cannot contain/);
-	assert.throws(() => schema.createNode("textBlock", { content: [schema.createText("one"), schema.createText("two")] }), /content does not match/);
+	assert.throws(() => schema.createNode("paragraph", { content: [schema.createNode("codeBlock")] }), /cannot contain/);
+	assert.throws(() => schema.createNode("codeBlock", { content: [schema.createText("one"), schema.createText("two")] }), /content does not match/);
 });
 
 test("DocumentModel updates plugin state across edits, history, and reset", () => {
@@ -158,7 +158,7 @@ test("Document plugins can atomically filter user, undo, and redo transactions",
 	assert.deepEqual(origins, ["user", "user", "undo", "undo", "redo", "redo"]);
 });
 
-test("Aster maps decoration ranges through one transaction and drops ranges with no text", () => {
+test("Stanza maps decoration ranges through one transaction and drops ranges with no text", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
 	const second = schema.createNode("paragraph", { id: "paragraph-2", content: [schema.createText("World", { id: "text-2" })] });
@@ -179,7 +179,7 @@ test("Aster maps decoration ranges through one transaction and drops ranges with
 	assert.throws(() => decorations.add(createDocumentDecoration({ id: "hit", from: { nodeId: "text-1", offset: 0 } })), /Duplicate document decoration/);
 });
 
-test("Aster converts nested text points to absolute positions with stable boundary bias", () => {
+test("Stanza converts nested text points to absolute positions with stable boundary bias", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-inline",
@@ -354,7 +354,7 @@ test("DocumentSchema enforces ordered content terms for custom academic nodes", 
 	assert.throws(() => new DocumentSchema({ topNodeType: "article", nodes: { article: { kind: "root", content: [{ type: "missing" }] }, text: { kind: "text" } } }), /unknown child/);
 });
 
-test("Aster Academic schema composes title, abstract, and section wrappers", () => {
+test("Stanza Academic schema composes title, abstract, and section wrappers", () => {
 	const schema = createAcademicDocumentSchema();
 	const empty = createEmptyAcademicDocument(schema);
 	assert.deepEqual(empty.content.map(node => node.type), ["title", "abstract"]);
@@ -370,7 +370,7 @@ test("Aster Academic schema composes title, abstract, and section wrappers", () 
 	assert.throws(() => schema.createDocument([section, title]), /content does not match its schema/);
 });
 
-test("Aster builds an outline across nested structured nodes", () => {
+test("Stanza builds an outline across nested structured nodes", () => {
 	const schema = createAcademicDocumentSchema();
 	const title = schema.createNode("title", { id: "outline-title", content: [schema.createNode("heading", { id: "outline-title-heading", content: [schema.createText("Paper title", { id: "outline-title-text" })] })] });
 	const abstract = schema.createNode("abstract", { id: "outline-abstract", content: [schema.createNode("paragraph", { id: "outline-abstract-paragraph", content: [schema.createText("Summary", { id: "outline-abstract-text" })] })] });
@@ -495,7 +495,7 @@ test("Structured documents round-trip through a versioned serialization envelope
 	assert.throws(() => deserializeDocument("not json", schema), DocumentSerializationError);
 });
 
-test("Aster serializes every transaction step and preserves transport metadata", () => {
+test("Stanza serializes every transaction step and preserves transport metadata", () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	const inserted = schema.createNode("paragraph", { id: "serialized-paragraph", content: [schema.createText("Inserted", { id: "serialized-text" })] });
@@ -547,7 +547,7 @@ test("DocumentModel applies remote transactions outside local history", () => {
 	assert.deepEqual(model.getPluginState(key), ["user", "remote"]);
 });
 
-test("Aster converts inline and cross-block selections into clipboard text", () => {
+test("Stanza converts inline and cross-block selections into clipboard text", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -566,7 +566,7 @@ test("Aster converts inline and cross-block selections into clipboard text", () 
 	assert.equal(documentSelectionToText(document, textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-3", offset: 1 })), "A\nB\nC");
 });
 
-test("Aster supports whole-document clipboard text, fragments, replacement, and deletion", () => {
+test("Stanza supports whole-document clipboard text, fragments, replacement, and deletion", () => {
 	const schema = createDefaultDocumentSchema();
 	const source = schema.createDocument([
 		schema.createNode("paragraph", { id: "source-paragraph-1", content: [schema.createText("First", { id: "source-text-1" })] }),
@@ -599,7 +599,7 @@ test("Aster supports whole-document clipboard text, fragments, replacement, and 
 	assert.equal(model.selection, undefined);
 });
 
-test("Aster extracts, serializes, and inserts structured clipboard fragments", () => {
+test("Stanza extracts, serializes, and inserts structured clipboard fragments", () => {
 	const schema = createDefaultDocumentSchema();
 	const sourceParagraph = schema.createNode("paragraph", {
 		id: "source-paragraph",
@@ -631,7 +631,7 @@ test("Aster extracts, serializes, and inserts structured clipboard fragments", (
 	assert.throws(() => deserializeDocumentFragment("{\"format\":\"zeta.document.fragment\",\"version\":1,\"content\":[{\"id\":\"bad\",\"type\":\"unknown\",\"attrs\":{},\"content\":[],\"marks\":[]}]}", schema), /fragment/);
 });
 
-test("Aster block commands split, join, move, and insert through model transactions", () => {
+test("Stanza block commands split, join, move, and insert through model transactions", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -666,7 +666,7 @@ test("Aster block commands split, join, move, and insert through model transacti
 	assert.equal(model.canUndo, true);
 });
 
-test("Aster moves a block down to the requested sibling index", () => {
+test("Stanza moves a block down to the requested sibling index", () => {
 	const schema = createDefaultDocumentSchema();
 	const blocks = ["one", "two", "three"].map((text, index) => schema.createNode("paragraph", {
 		id: `paragraph-${index + 1}`,
@@ -683,7 +683,7 @@ test("Aster moves a block down to the requested sibling index", () => {
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-2", "paragraph-3"]);
 });
 
-test("Aster inline mark commands split text runs and preserve the selection", () => {
+test("Stanza inline mark commands split text runs and preserve the selection", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -711,7 +711,7 @@ test("Aster inline mark commands split text runs and preserve the selection", ()
 	assert.equal(model.document.content[0]?.content[1]?.marks.length, 0);
 });
 
-test("Aster stores collapsed mark toggles for subsequent text insertion", () => {
+test("Stanza stores collapsed mark toggles for subsequent text insertion", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
 	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
@@ -735,7 +735,7 @@ test("Aster stores collapsed mark toggles for subsequent text insertion", () => 
 	assert.deepEqual(model.storedMarks, []);
 });
 
-test("Aster link mark commands set, update, remove, and undo link attributes", () => {
+test("Stanza link mark commands set, update, remove, and undo link attributes", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -777,7 +777,7 @@ test("Aster link mark commands set, update, remove, and undo link attributes", (
 	assert.equal(model.document.content[0]?.content[1]?.marks.find(mark => mark.type === "link")?.attrs.href, "https://updated.test");
 });
 
-test("Aster text-style commands merge persistent font attributes", () => {
+test("Stanza text-style commands merge persistent font attributes", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -808,7 +808,7 @@ test("Aster text-style commands merge persistent font attributes", () => {
 	assert.throws(() => schema.createText("Invalid", { marks: [{ type: "textStyle", attrs: {} }] }), /Text style marks require/);
 });
 
-test("Aster block commands preserve inline runs while splitting and joining", () => {
+test("Stanza block commands preserve inline runs while splitting and joining", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -839,7 +839,7 @@ test("Aster block commands preserve inline runs while splitting and joining", ()
 	assert.equal(model.document.content[0]?.content[0]?.marks[0]?.type, "strong");
 });
 
-test("Aster structural block commands toggle blockquotes and insert horizontal rules", () => {
+test("Stanza structural block commands toggle blockquotes and insert horizontal rules", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -871,7 +871,7 @@ test("Aster structural block commands toggle blockquotes and insert horizontal r
 	assert.deepEqual(model.document.content.map(node => node.type), ["paragraph", "paragraph"]);
 });
 
-test("Aster replaces and undoes a text selection spanning sibling blocks", () => {
+test("Stanza replaces and undoes a text selection spanning sibling blocks", () => {
 	const schema = createDefaultDocumentSchema();
 	const blocks = ["First", "Middle", "Third"].map((text, index) => schema.createNode("paragraph", {
 		id: `paragraph-${index + 1}`,
@@ -893,7 +893,7 @@ test("Aster replaces and undoes a text selection spanning sibling blocks", () =>
 	assert.deepEqual(model.document.content.map(node => node.content[0]?.text), ["First", "Middle", "Third"]);
 });
 
-test("Aster pastes multiline text across sibling blocks", () => {
+test("Stanza pastes multiline text across sibling blocks", () => {
 	const schema = createDefaultDocumentSchema();
 	const blocks = ["First", "Middle", "Third"].map((text, index) => schema.createNode("paragraph", {
 		id: `paragraph-${index + 1}`,
@@ -910,7 +910,7 @@ test("Aster pastes multiline text across sibling blocks", () => {
 	assert.equal(model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined, model.document.content[2]?.content.at(-1)?.id);
 });
 
-test("Aster inline commands handle selections spanning multiple text runs", () => {
+test("Stanza inline commands handle selections spanning multiple text runs", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -941,7 +941,7 @@ test("Aster inline commands handle selections spanning multiple text runs", () =
 	assert.equal(model.selection?.kind, "text");
 });
 
-test("Aster paste commands turn multiline text into sibling blocks", () => {
+test("Stanza paste commands turn multiline text into sibling blocks", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -958,7 +958,7 @@ test("Aster paste commands turn multiline text into sibling blocks", () => {
 	assert.deepEqual(model.document.content.map(node => node.content[0]?.text ?? ""), ["Hello"]);
 });
 
-test("Aster splits a list paragraph into sibling list items", () => {
+test("Stanza splits a list paragraph into sibling list items", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -979,7 +979,7 @@ test("Aster splits a list paragraph into sibling list items", () => {
 	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, "oneTwo");
 });
 
-test("Aster joins, indents, and outdents list items as atomic commands", () => {
+test("Stanza joins, indents, and outdents list items as atomic commands", () => {
 	const schema = createDefaultDocumentSchema();
 	const createItem = (id: string, paragraphId: string, textId: string, text: string) => schema.createNode("listItem", { id, content: [schema.createNode("paragraph", { id: paragraphId, content: [schema.createText(text, { id: textId })] })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [createItem("item-1", "paragraph-1", "text-1", "one"), createItem("item-2", "paragraph-2", "text-2", "two"), createItem("item-3", "paragraph-3", "text-3", "three")] });
@@ -1011,7 +1011,7 @@ test("Aster joins, indents, and outdents list items as atomic commands", () => {
 	assert.deepEqual(model.document.content[0]?.content.map(item => item.id), ["item-1", "item-2", "item-3"]);
 });
 
-test("Aster exits an empty list item at the list boundary", () => {
+test("Stanza exits an empty list item at the list boundary", () => {
 	const schema = createDefaultDocumentSchema();
 	const emptyItem = schema.createNode("listItem", { id: "item-1", content: [schema.createNode("paragraph", { id: "paragraph-1" })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [emptyItem] });
@@ -1025,7 +1025,7 @@ test("Aster exits an empty list item at the list boundary", () => {
 	assert.equal(model.document.content[0]?.type, "bulletList");
 });
 
-test("Aster block format commands change block and list types without replacing content", () => {
+test("Stanza block format commands change block and list types without replacing content", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
 	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
@@ -1052,7 +1052,7 @@ test("Aster block format commands change block and list types without replacing 
 	assert.equal(model.document.content[0]?.type, "heading");
 });
 
-test("Aster inserts validated tables and inline images", () => {
+test("Stanza inserts validated tables and inline images", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
 	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
@@ -1074,7 +1074,7 @@ test("Aster inserts validated tables and inline images", () => {
 	assert.equal(model.document.content[0]?.content.at(-1)?.type, "text");
 });
 
-test("Aster inserts images at text selections while preserving inline runs", () => {
+test("Stanza inserts images at text selections while preserving inline runs", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -1106,7 +1106,7 @@ test("Aster inserts images at text selections while preserving inline runs", () 
 	assert.deepEqual(content.filter(node => node.text !== undefined).map(node => node.marks.map(mark => mark.type)), [[], ["strong"]]);
 });
 
-test("Aster deletes adjacent inline nodes through common boundary commands", () => {
+test("Stanza deletes adjacent inline nodes through common boundary commands", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -1132,7 +1132,7 @@ test("Aster deletes adjacent inline nodes through common boundary commands", () 
 	assert.equal(model.document.content[0]?.content[1]?.type, "image");
 });
 
-test("Aster deletes and restores a selected inline node", () => {
+test("Stanza deletes and restores a selected inline node", () => {
 	const schema = createDefaultDocumentSchema();
 	const image = schema.createNode("image", { id: "image-1", attrs: { src: "data:image/png;base64,AA==" } });
 	const paragraph = schema.createNode("paragraph", {
@@ -1153,7 +1153,7 @@ test("Aster deletes and restores a selected inline node", () => {
 	assert.equal(model.document.content[0]?.content.some(node => node.id === image.id), false);
 });
 
-test("Aster inserts hard breaks and deletes selections spanning inline nodes", () => {
+test("Stanza inserts hard breaks and deletes selections spanning inline nodes", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-1",
@@ -1181,7 +1181,7 @@ test("Aster inserts hard breaks and deletes selections spanning inline nodes", (
 	assert.equal(model.selection?.kind, "text");
 });
 
-test("Aster navigates table cells and applies row and column transactions", () => {
+test("Stanza navigates table cells and applies row and column transactions", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Before", { id: "text-1" })] });
 	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));

@@ -1,7 +1,7 @@
 import { type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { createAsterDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
+import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import { RustDiffComputationService } from "../../../../editor/browser/services/rustDiffComputationService.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../../editor/common/diff/lineDiff.js";
@@ -29,7 +29,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 	constructor(private readonly resource: URI, private readonly model: TextModel, private readonly gitService: IGitService, diffApi: IDiffApi) {
 		super();
 		this.collection = this.own(new TextDecorationCollection<DecorationPresentation>(model));
-		this.source = createAsterDecorationSource(this.collection, decoration => decoration.metadata, decoration => hoverText(decoration.metadata));
+		this.source = createStanzaDecorationSource(this.collection, decoration => decoration.metadata, decoration => hoverText(decoration.metadata));
 		this.diffService = this.own(new RustDiffComputationService(diffApi));
 		this.onDidChange = this.source.onDidChange;
 		this.own(model.onDidChange(() => this.scheduleRefresh(MODEL_REFRESH_DELAY_MS)));

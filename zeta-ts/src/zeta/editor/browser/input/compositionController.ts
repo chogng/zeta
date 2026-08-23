@@ -18,7 +18,7 @@ interface ActiveComposition {
 }
 
 /**
- * Maps textarea composition events to one protected Aster composition session.
+ * Maps textarea composition events to one protected Stanza composition session.
  */
 export class CompositionController extends DisposableOwner {
 	private readonly _onDidChange = this.own(new Emitter<boolean>());
@@ -37,7 +37,7 @@ export class CompositionController extends DisposableOwner {
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
 			throw new TypeError(
-				"Aster composition and selection controllers must share one text model",
+				"Stanza composition and selection controllers must share one text model",
 			);
 		}
 		this.inputNode = inputNode;

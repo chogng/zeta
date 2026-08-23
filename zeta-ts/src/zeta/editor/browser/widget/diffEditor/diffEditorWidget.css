@@ -1,4 +1,4 @@
-.aster-diff-editor {
+.stanza-diff-editor {
   position: relative;
   box-sizing: border-box;
   width: 100%;
@@ -13,17 +13,17 @@
   outline: none;
 }
 
-.aster-diff-editor:focus-visible {
+.stanza-diff-editor:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.aster-diff-editor-content {
+.stanza-diff-editor-content {
   position: relative;
   min-width: 100%;
 }
 
-.aster-diff-editor-rows {
+.stanza-diff-editor-rows {
   position: absolute;
   top: 0;
   left: 0;
@@ -31,7 +31,7 @@
   will-change: transform;
 }
 
-.aster-diff-overview {
+.stanza-diff-overview {
   position: absolute;
   z-index: 9;
   width: 30px;
@@ -41,22 +41,22 @@
   background: color-mix(in srgb, currentColor 3%, transparent);
 }
 
-.aster-diff-overview-lane {
+.stanza-diff-overview-lane {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 15px;
 }
 
-.aster-diff-overview-lane.original {
+.stanza-diff-overview-lane.original {
   left: 0;
 }
 
-.aster-diff-overview-lane.modified {
+.stanza-diff-overview-lane.modified {
   right: 0;
 }
 
-.aster-diff-overview-marker {
+.stanza-diff-overview-marker {
   position: absolute;
   right: 0;
   left: 0;
@@ -64,15 +64,15 @@
   min-height: 2px;
 }
 
-.aster-diff-overview-marker.removed {
+.stanza-diff-overview-marker.removed {
   background: var(--zeta-diff-editor-removed-line-marker);
 }
 
-.aster-diff-overview-marker.inserted {
+.stanza-diff-overview-marker.inserted {
   background: var(--zeta-diff-editor-inserted-line-marker);
 }
 
-.aster-diff-overview-viewport {
+.stanza-diff-overview-viewport {
   position: absolute;
   top: 0;
   right: 0;
@@ -83,43 +83,43 @@
   will-change: transform;
 }
 
-.aster-diff-editor-row {
+.stanza-diff-editor-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-width: 100%;
 }
 
-.aster-diff-editor-row.active {
+.stanza-diff-editor-row.active {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.aster-diff-editor-cell {
+.stanza-diff-editor-cell {
   box-sizing: border-box;
   min-width: 0;
   overflow: hidden;
   text-overflow: clip;
 }
 
-.aster-diff-editor-cell.original {
+.stanza-diff-editor-cell.original {
   border-right: 1px solid var(--zeta-widget-border);
 }
 
-.aster-diff-editor-cell.removed,
-.aster-diff-editor-row.modified .aster-diff-editor-cell.original {
+.stanza-diff-editor-cell.removed,
+.stanza-diff-editor-row.modified .stanza-diff-editor-cell.original {
   background: var(--zeta-diff-editor-removed-line-background);
 }
 
-.aster-diff-editor-cell.added,
-.aster-diff-editor-row.modified .aster-diff-editor-cell.modified {
+.stanza-diff-editor-cell.added,
+.stanza-diff-editor-row.modified .stanza-diff-editor-cell.modified {
   background: var(--zeta-diff-editor-inserted-line-background);
 }
 
-.aster-diff-editor-cell.missing {
+.stanza-diff-editor-cell.missing {
   background: var(--zeta-diff-editor-missing-line-background);
 }
 
-.aster-diff-editor-line-number {
+.stanza-diff-editor-line-number {
   display: inline-block;
   box-sizing: border-box;
   width: 52px;
@@ -129,23 +129,23 @@
   user-select: none;
 }
 
-.aster-diff-editor.hide-line-numbers .aster-diff-editor-line-number {
+.stanza-diff-editor.hide-line-numbers .stanza-diff-editor-line-number {
   display: none;
 }
 
-.aster-diff-editor-line-content {
+.stanza-diff-editor-line-content {
   display: inline;
 }
 
-.aster-diff-editor-inline.removed {
+.stanza-diff-editor-inline.removed {
   background: var(--zeta-diff-editor-removed-text-background);
 }
 
-.aster-diff-editor-inline.added {
+.stanza-diff-editor-inline.added {
   background: var(--zeta-diff-editor-inserted-text-background);
 }
 
-.aster-diff-editor-accessibility-status {
+.stanza-diff-editor-accessibility-status {
   position: absolute;
   width: 1px;
   height: 1px;

@@ -23,7 +23,7 @@ import { getEditorContributions, type DocumentCollaborationContribution, type Do
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
-import { TextEditorWidget } from "./widget/textEditorWidget.js";
+import { CodeBlockEditorWidget } from "./widget/codeBlockEditorWidget.js";
 import type { IDocumentModelService } from "../common/services/documentModelService.js";
 import type { DocumentModelReference } from "../common/services/documentModelService.js";
 import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
@@ -118,7 +118,7 @@ type CommandFocusBehavior = "focus-editor" | "preserve-focus";
  *
  * The editor owns the structured model, working copy, DOM projection, and
  * block-level input. `EditorPane` owns Workbench pane lifecycle, while
- * `TextEditorWidget` owns only an embedded text-model surface.
+ * `CodeBlockEditorWidget` owns only an embedded text-model surface.
  */
 export class EditorWidget extends DisposableOwner {
 
@@ -128,7 +128,7 @@ export class EditorWidget extends DisposableOwner {
 	private readonly collaborationStateListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly collaborationPresenceListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly schema: DocumentSchema;
-	private readonly embeddedEditors = new Map<string, TextEditorWidget>();
+	private readonly embeddedEditors = new Map<string, CodeBlockEditorWidget>();
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
 	private container: HTMLDivElement | undefined;
 	private containerNode: FastDomNode<HTMLDivElement> | undefined;
@@ -141,7 +141,7 @@ export class EditorWidget extends DisposableOwner {
 	private composition: DocumentComposition | undefined;
 	private collaborationStart: AbortController | undefined;
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
-	private updatingEmbeddedTextBlockModel: DocumentModel | undefined;
+	private updatingEmbeddedCodeBlockModel: DocumentModel | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
 	get modelReference(): DocumentModelReference | undefined {
@@ -247,7 +247,7 @@ export class EditorWidget extends DisposableOwner {
 		this.modelChangeListenerSlot.clear();
 		this.modelReferenceSlot.replace(modelReference);
 		this.modelChangeListenerSlot.replace(model.onDidChange(() => {
-			if (this.updatingEmbeddedTextBlockModel !== model) this.render();
+			if (this.updatingEmbeddedCodeBlockModel !== model) this.render();
 		}));
 		this.input = input;
 		this.activeBlockId = undefined;
@@ -417,60 +417,60 @@ export class EditorWidget extends DisposableOwner {
 		if (node.type === "horizontalRule") {
 			const rule = this.reuseElement(node, previousElements, document, "hr");
 			rule.dataset.nodeId = node.id;
-			rule.className = "zeta-document-horizontal-rule";
+			rule.className = "stanza-document-horizontal-rule";
 			return rule;
 		}
 		const element = this.reuseElement(node, previousElements, document, nodeElementTagName(node));
 		element.dataset.nodeId = node.id;
 		switch (node.type) {
 			case "paragraph":
-				element.className = "zeta-document-paragraph";
+				element.className = "stanza-document-paragraph";
 				this.appendEditableText(element, node, model, decorations);
 				break;
 			case "heading":
-				element.className = "zeta-document-heading";
+				element.className = "stanza-document-heading";
 				element.dataset.level = String(node.attrs.level ?? 1);
 				this.appendEditableText(element, node, model, decorations);
 				break;
-			case "textBlock":
-				element.className = "zeta-document-text-block";
-				element.dataset.editorKind = "text-block";
-				this.appendTextBlockEditor(element, node, model, decorations);
+			case "codeBlock":
+				element.className = "stanza-document-code-block";
+				element.dataset.editorKind = "code-block";
+				this.appendCodeBlockEditor(element, node, model, decorations);
 				break;
 			case "blockquote":
-				element.className = "zeta-document-blockquote";
+				element.className = "stanza-document-blockquote";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "bulletList":
 			case "orderedList":
-				element.className = node.type === "bulletList" ? "zeta-document-list zeta-document-list-bullet" : "zeta-document-list zeta-document-list-ordered";
+				element.className = node.type === "bulletList" ? "stanza-document-list stanza-document-list-bullet" : "stanza-document-list stanza-document-list-ordered";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "listItem":
-				element.className = "zeta-document-list-item";
+				element.className = "stanza-document-list-item";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "table":
-				element.className = "zeta-document-table";
+				element.className = "stanza-document-table";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "tableRow":
-				element.className = "zeta-document-table-row";
+				element.className = "stanza-document-table-row";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "tableCell":
-				element.className = "zeta-document-table-cell";
+				element.className = "stanza-document-table-cell";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			default:
-				element.className = "zeta-document-block";
+				element.className = "stanza-document-block";
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 		}
 		return element;
 	}
 
-	private appendTextBlockEditor(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
+	private appendCodeBlockEditor(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
 		const textNode = node.content.find(child => child.text !== undefined);
 		const text = textNode?.text ?? "";
 		const factory = this.options.embeddedTextEditorFactory;
@@ -485,9 +485,9 @@ export class EditorWidget extends DisposableOwner {
 			return;
 		}
 		element.replaceChildren();
-		const editor = new TextEditorWidget(factory, {
-			resource: URI.parse(`untitled:text-editor-widget-text-block/${encodeURIComponent(this.requireInput().resource.toString())}/${encodeURIComponent(node.id)}`),
-			label: `${this.requireInput().label ?? "Document"} text block`,
+		const editor = new CodeBlockEditorWidget(factory, {
+			resource: URI.parse(`untitled:stanza-code-block/${encodeURIComponent(this.requireInput().resource.toString())}/${encodeURIComponent(node.id)}`),
+			label: `${this.requireInput().label ?? "Document"} code block`,
 			languageId: typeof node.attrs.language === "string" ? node.attrs.language : "plaintext",
 			initialText: text,
 			readOnly: this.requireInput().readOnly,
@@ -500,7 +500,7 @@ export class EditorWidget extends DisposableOwner {
 			if (!currentNode) return;
 			const currentText = currentNode.content.find(child => child.text !== undefined);
 			if (currentText?.text === value) return;
-			this.updatingEmbeddedTextBlockModel = currentModel;
+			this.updatingEmbeddedCodeBlockModel = currentModel;
 			try {
 				if (!currentText) {
 					if (value.length === 0) return;
@@ -509,7 +509,7 @@ export class EditorWidget extends DisposableOwner {
 				}
 				currentModel.dispatch(new DocumentTransaction().replaceText(currentText.id, 0, currentText.text?.length ?? 0, value).withHistoryGroup("typing"));
 			} finally {
-				this.updatingEmbeddedTextBlockModel = undefined;
+				this.updatingEmbeddedCodeBlockModel = undefined;
 			}
 		});
 		editor.create(element);
@@ -529,7 +529,7 @@ export class EditorWidget extends DisposableOwner {
 			return;
 		}
 		const textNode = node.content.find(child => child.text !== undefined);
-		let textarea = element.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+		let textarea = element.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 		if (!textarea && element.childElementCount > 0) {
 			this.embeddedEditors.get(node.id)?.dispose();
 			this.embeddedEditors.delete(node.id);
@@ -537,7 +537,7 @@ export class EditorWidget extends DisposableOwner {
 		}
 		const isNew = !textarea;
 		textarea ??= h(element.ownerDocument, "textarea");
-		textarea.className = "zeta-document-text-input";
+		textarea.className = "stanza-document-text-input";
 		textarea.dataset.blockId = node.id;
 		textarea.readOnly = this.isReadOnly();
 		textarea.setAttribute("aria-label", editableBlockAriaLabel(node));
@@ -604,13 +604,13 @@ export class EditorWidget extends DisposableOwner {
 	}
 
 	private appendRichText(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
-		let editor = element.querySelector<HTMLDivElement>("div.zeta-document-rich-text-input");
+		let editor = element.querySelector<HTMLDivElement>("div.stanza-document-rich-text-input");
 		if (!editor) {
 			this.embeddedEditors.get(node.id)?.dispose();
 			this.embeddedEditors.delete(node.id);
 			const createdEditor = h(element.ownerDocument, "div");
 			editor = createdEditor;
-			createdEditor.className = "zeta-document-rich-text-input";
+			createdEditor.className = "stanza-document-rich-text-input";
 			createdEditor.dataset.blockId = node.id;
 			createdEditor.contentEditable = this.isReadOnly() ? "false" : "true";
 			createdEditor.setAttribute("aria-label", editableBlockAriaLabel(node));
@@ -657,9 +657,9 @@ export class EditorWidget extends DisposableOwner {
 					if (to < from) continue;
 					const activeDecorations = localDecorations.filter(decoration => decoration.from < start + to && decoration.to > start + from).map(decoration => decoration.decoration);
 					const run = h(editor.ownerDocument, linkMark ? "a" : "span");
-					run.className = "zeta-document-inline-run";
+					run.className = "stanza-document-inline-run";
 					run.dataset.textNodeId = child.id;
-					for (const mark of child.marks) run.classList.add(`zeta-document-mark-${mark.type}`);
+					for (const mark of child.marks) run.classList.add(`stanza-document-mark-${mark.type}`);
 					applyTextStyleMark(run, textStyleMark);
 					if (linkMark) {
 						run.setAttribute("href", typeof linkMark.attrs.href === "string" ? linkMark.attrs.href : "");
@@ -677,7 +677,7 @@ export class EditorWidget extends DisposableOwner {
 			}
 			if (child.type === "image") {
 				const image = h(editor.ownerDocument, "img");
-				image.className = "zeta-document-inline-image";
+				image.className = "stanza-document-inline-image";
 				image.dataset.inlineNodeId = child.id;
 				image.draggable = false;
 				image.alt = typeof child.attrs.alt === "string" ? child.attrs.alt : "";
@@ -740,7 +740,7 @@ export class EditorWidget extends DisposableOwner {
 
 	private beginComposition(model: DocumentModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: TextSelection | undefined): void {
 		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || !selection || selection.kind !== "text") return;
-		if (findTextBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
+		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
 		if (model.selection?.kind !== "text" || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
 	}
@@ -886,7 +886,7 @@ export class EditorWidget extends DisposableOwner {
 		const encodedFragment = fragment ? serializeDocumentFragment(fragment, model.schema) : undefined;
 		let command: DocumentCommand | undefined;
 		if (cut) {
-			const blockId = selection.kind === "all" ? findFirstEditableBlock(model.document)?.id : findTextBlockId(model.document, selection.anchor.nodeId);
+			const blockId = selection.kind === "all" ? findFirstEditableBlock(model.document)?.id : findTextBearingBlockId(model.document, selection.anchor.nodeId);
 			if (!blockId) return;
 			command = createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
 			if (!command) return;
@@ -1152,8 +1152,8 @@ export class EditorWidget extends DisposableOwner {
 
 	private restoreModelFocus(model: DocumentModel, selection: DocumentSelection | undefined): void {
 		let blockId: string | undefined;
-		if (selection?.kind === "text") blockId = findTextBlockId(model.document, selection.anchor.nodeId);
-		if (selection?.kind === "node") blockId = findTextBlockContainingNode(model.document, selection.nodeId);
+		if (selection?.kind === "text") blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
+		if (selection?.kind === "node") blockId = findTextBearingBlockContainingNode(model.document, selection.nodeId);
 		if (!blockId && this.activeBlockId) {
 			const active = findNode(model.document, this.activeBlockId);
 			if (active) blockId = findFirstEditableBlock(active)?.id;
@@ -1177,7 +1177,7 @@ export class EditorWidget extends DisposableOwner {
 				const head = Math.min(textNode.text!.length, selection.head.offset);
 				textarea.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), anchor <= head ? "forward" : "backward");
 			}
-		} else if (selection?.kind === "text" && editor.classList.contains("zeta-document-rich-text-input")) {
+		} else if (selection?.kind === "text" && editor.classList.contains("stanza-document-rich-text-input")) {
 			setInlineTextSelection(this.requireContainer(), selection);
 		}
 		this.updateToolbar();
@@ -1200,7 +1200,7 @@ export class EditorWidget extends DisposableOwner {
 		const selectedNodeId = model.selection?.kind === "node" ? model.selection.nodeId : undefined;
 		for (const element of container.querySelectorAll<HTMLElement>("[data-inline-node-id]")) {
 			const selected = element.dataset.inlineNodeId === selectedNodeId;
-			element.classList.toggle("zeta-document-inline-node-selected", selected);
+			element.classList.toggle("stanza-document-inline-node-selected", selected);
 			element.setAttribute("aria-selected", String(selected));
 		}
 	}
@@ -1260,7 +1260,7 @@ export class EditorWidget extends DisposableOwner {
 			const textarea = editor as HTMLTextAreaElement;
 			const offset = command.focus.point?.offset ?? 0;
 			textarea.setSelectionRange(Math.min(offset, textarea.value.length), Math.min(offset, textarea.value.length));
-		} else if (editor.classList.contains("zeta-document-rich-text-input") && model.selection?.kind === "text") {
+		} else if (editor.classList.contains("stanza-document-rich-text-input") && model.selection?.kind === "text") {
 			setInlineTextSelection(this.requireContainer(), model.selection);
 		}
 		this.updateToolbar();
@@ -1270,10 +1270,10 @@ export class EditorWidget extends DisposableOwner {
 		if (this.isReadOnly()) return;
 		const model = this.modelReferenceSlot.value?.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
 		const selection = this.readActiveTextSelection(model, blockId);
-		const selectionBlockId = selection ? findTextBlockId(model.document, selection.anchor.nodeId) : undefined;
+		const selectionBlockId = selection ? findTextBearingBlockId(model.document, selection.anchor.nodeId) : undefined;
 		let command: DocumentCommand | undefined;
 		switch (action) {
 			case "paragraph":
@@ -1335,7 +1335,7 @@ export class EditorWidget extends DisposableOwner {
 		if (this.isReadOnly()) return;
 		const model = this.modelReferenceSlot.value?.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
@@ -1349,7 +1349,7 @@ export class EditorWidget extends DisposableOwner {
 		if (this.isReadOnly()) return;
 		const model = this.modelReferenceSlot.value?.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
@@ -1363,7 +1363,7 @@ export class EditorWidget extends DisposableOwner {
 		if (this.isReadOnly()) return;
 		const model = this.modelReferenceSlot.value?.model;
 		if (!model) return;
-		const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
 		const block = findNode(model.document, blockId);
 		if (!isTypographyBlock(block)) return;
@@ -1375,7 +1375,7 @@ export class EditorWidget extends DisposableOwner {
 
 	private readActiveTextSelection(model: DocumentModel, blockId: string): TextSelection | undefined {
 		const modelSelection = model.selection;
-		if (modelSelection?.kind === "text" && findTextBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isTextSelectionInDocument(model.document, modelSelection)) {
+		if (modelSelection?.kind === "text" && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isTextSelectionInDocument(model.document, modelSelection)) {
 			return modelSelection;
 		}
 		const editor = findBlockEditor(this.requireContainer(), blockId);
@@ -1383,7 +1383,7 @@ export class EditorWidget extends DisposableOwner {
 			const selection = createTextareaTextSelection(model.document, blockId, editor as HTMLTextAreaElement);
 			return selection;
 		}
-		if (editor?.classList.contains("zeta-document-rich-text-input")) {
+		if (editor?.classList.contains("stanza-document-rich-text-input")) {
 			const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 			if (inlineSelection?.blockId === blockId && isTextSelectionInDocument(model.document, inlineSelection.selection)) {
 				return inlineSelection.selection;
@@ -1396,12 +1396,12 @@ export class EditorWidget extends DisposableOwner {
 		const toolbar = this.formattingContribution;
 		const model = this.modelReferenceSlot.value?.model;
 		if (!toolbar || !model) return;
-		const blockId = this.activeBlockId ?? findTextBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (blockId && !this.activeBlockId) this.activeBlockId = blockId;
 		const block = blockId ? findNode(model.document, blockId) : undefined;
 		const list = block ? findListForBlock(model.document, block.id) : undefined;
 		const selection = model.selection?.kind === "text" ? model.selection : undefined;
-		const selectionBlock = selection ? findNode(model.document, findTextBlockId(model.document, selection.anchor.nodeId) ?? "") : undefined;
+		const selectionBlock = selection ? findNode(model.document, findTextBearingBlockId(model.document, selection.anchor.nodeId) ?? "") : undefined;
 		const readOnly = this.isReadOnly();
 		const checkedDocumentActionIds = new Set<string>();
 		for (const { id: type } of DEFAULT_DOCUMENT_ACTIONS) {
@@ -1415,7 +1415,7 @@ export class EditorWidget extends DisposableOwner {
 		const textContext = isTypographyBlock(block);
 		const activeSelection = textContext ? this.readActiveTextSelection(model, block!.id) ?? selection : undefined;
 		toolbar.setState({
-			context: block?.type === "textBlock" ? "code" : textContext ? "text" : "none",
+			context: block?.type === "codeBlock" ? "code" : textContext ? "text" : "none",
 			readOnly,
 			bold: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "strong", model.storedMarks) : false,
 			italic: textContext && activeSelection ? isTextSelectionMarked(block!, activeSelection, "em", model.storedMarks) : false,
@@ -1465,7 +1465,7 @@ export class EditorWidget extends DisposableOwner {
 			const connection = await service.open({
 				...(roomId === undefined ? {} : { roomId }),
 				clientId: createCollaborationClientId(input.resource),
-				schemaId: this.options.collaborationSchemaId ?? "aster-document-v1",
+				schemaId: this.options.collaborationSchemaId ?? "stanza-document-v1",
 				schema: model.schema,
 				document: model.document,
 				target,
@@ -1550,7 +1550,7 @@ export class EditorWidget extends DisposableOwner {
 
 function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): HTMLElement {
 	const element = h(ownerDocument, "span");
-	element.className = "zeta-document-inline-node";
+	element.className = "stanza-document-inline-node";
 	const label = node.attrs.label;
 	element.textContent = typeof label === "string" && label.length > 0 ? label : `[${node.type}]`;
 	return element;
@@ -1558,9 +1558,9 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
 
 function createCollaborationClientId(resource: URI): string {
 	const identifier = globalThis.crypto?.randomUUID?.();
-	if (identifier) return `aster-${identifier}`;
+	if (identifier) return `stanza-${identifier}`;
 	const suffix = `${Date.now().toString(36)}${Math.random().toString(36).replace(/[^a-z0-9]/g, "")}`;
-	return `aster-${resource.path.length.toString(36)}-${suffix}`;
+	return `stanza-${resource.path.length.toString(36)}-${suffix}`;
 }
 
 function editableBlockAriaLabel(node: DocumentNode): string {
@@ -1569,9 +1569,9 @@ function editableBlockAriaLabel(node: DocumentNode): string {
 			const level = node.attrs.level;
 			return typeof level === "number" && Number.isInteger(level) && level > 0 ? `Heading level ${level}` : "Heading";
 		}
-		case "textBlock": {
+		case "codeBlock": {
 			const language = node.attrs.language;
-			return typeof language === "string" && language.length > 0 ? `${language} text block` : "Text block";
+			return typeof language === "string" && language.length > 0 ? `${language} code block` : "Code block";
 		}
 		case "paragraph": return "Paragraph";
 		default: return `${node.type} text`;
@@ -1651,14 +1651,14 @@ function createTextareaTextSelection(document: DocumentNode, blockId: string, te
 }
 
 function findBlockEditor(container: HTMLDivElement, blockId: string): HTMLElement | undefined {
-	for (const editor of container.querySelectorAll<HTMLElement>("textarea, div.zeta-document-rich-text-input")) {
+	for (const editor of container.querySelectorAll<HTMLElement>("textarea, div.stanza-document-rich-text-input")) {
 		if (editor.dataset.blockId === blockId) return editor;
 	}
 	return undefined;
 }
 
 function findFirstEditableBlock(node: DocumentNode): DocumentNode | undefined {
-	if (node.type === "paragraph" || node.type === "heading" || node.type === "textBlock") return node;
+	if (node.type === "paragraph" || node.type === "heading" || node.type === "codeBlock") return node;
 	for (const child of node.content) {
 		const block = findFirstEditableBlock(child);
 		if (block) return block;
@@ -1786,7 +1786,7 @@ function remotePresenceDecorations(document: DocumentNode, presences: readonly D
 			id: `remote-presence-${presence.clientId}`,
 			from,
 			to,
-			className: `zeta-document-remote-selection zeta-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
+			className: `stanza-document-remote-selection stanza-document-remote-selection-${presenceColorIndex(presence.clientId)}`,
 			attrs: { "data-collaboration-client": presence.clientId },
 		}));
 	}
@@ -1811,7 +1811,7 @@ function hasRenderableDecoration(model: DocumentModel, node: DocumentNode, decor
 
 function applyViewDecorations(element: HTMLElement, decorations: readonly DocumentDecoration[]): void {
 	if (decorations.length === 0) return;
-	element.classList.add("zeta-document-decoration");
+	element.classList.add("stanza-document-decoration");
 	element.dataset.decorationIds = decorations.map(decoration => decoration.id).join(" ");
 	for (const decoration of decorations) {
 		for (const className of decoration.className?.split(/\s+/) ?? []) {
@@ -1838,20 +1838,20 @@ function nodeElementTagName(node: DocumentNode): string {
 	}
 }
 
-function findTextBlockId(root: DocumentNode, textNodeId: string | undefined): string | undefined {
+function findTextBearingBlockId(root: DocumentNode, textNodeId: string | undefined): string | undefined {
 	if (!textNodeId) return undefined;
-	if ((root.type === "paragraph" || root.type === "heading" || root.type === "textBlock") && root.content.some(child => child.id === textNodeId)) return root.id;
+	if ((root.type === "paragraph" || root.type === "heading" || root.type === "codeBlock") && root.content.some(child => child.id === textNodeId)) return root.id;
 	for (const child of root.content) {
-		const blockId = findTextBlockId(child, textNodeId);
+		const blockId = findTextBearingBlockId(child, textNodeId);
 		if (blockId) return blockId;
 	}
 	return undefined;
 }
 
-function findTextBlockContainingNode(root: DocumentNode, nodeId: string): string | undefined {
-	if ((root.type === "paragraph" || root.type === "heading" || root.type === "textBlock") && containsDocumentNode(root, nodeId)) return root.id;
+function findTextBearingBlockContainingNode(root: DocumentNode, nodeId: string): string | undefined {
+	if ((root.type === "paragraph" || root.type === "heading" || root.type === "codeBlock") && containsDocumentNode(root, nodeId)) return root.id;
 	for (const child of root.content) {
-		const blockId = findTextBlockContainingNode(child, nodeId);
+		const blockId = findTextBearingBlockContainingNode(child, nodeId);
 		if (blockId) return blockId;
 	}
 	return undefined;
@@ -1993,12 +1993,12 @@ function findRichTextEditor(container: HTMLDivElement, node: Node): HTMLDivEleme
 	while (current) {
 		if (current.nodeType === 1) {
 			const element = current as HTMLElement;
-			if (element.classList.contains("zeta-document-rich-text-input")) return element as HTMLDivElement;
+			if (element.classList.contains("stanza-document-rich-text-input")) return element as HTMLDivElement;
 		}
 		if (current === container) break;
 		current = current.parentNode;
 	}
-	return container.classList.contains("zeta-document-rich-text-input") ? container : undefined;
+	return container.classList.contains("stanza-document-rich-text-input") ? container : undefined;
 }
 
 function offsetWithinInlineRun(editor: HTMLDivElement, run: HTMLElement, node: Node | null, offset: number): number {

@@ -13,7 +13,7 @@ export class DiagnosticNavigationController extends DisposableOwner {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
 			this.dispose();
-			throw new TypeError("Aster diagnostic navigation dependencies must share one text model");
+			throw new TypeError("Stanza diagnostic navigation dependencies must share one text model");
 		}
 		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 	}

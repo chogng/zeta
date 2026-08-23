@@ -1,4 +1,4 @@
-/** Stable DOM-free Aster API for programmatic text and structured-document consumers. */
+/** Stable DOM-free Stanza API for programmatic text and structured-document consumers. */
 export { TextPosition } from "./common/core/position.js";
 export type { IPosition } from "./common/core/position.js";
 export { TextRange } from "./common/core/range.js";

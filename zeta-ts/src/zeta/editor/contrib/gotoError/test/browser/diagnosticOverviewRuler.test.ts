@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DecorationPresentation, type ResolvedDecoration } from "../../../../browser/viewparts/decorations/decorationPresentation.js";
-import { createAsterDiagnosticOverviewMarkers } from "../../../../browser/viewparts/overviewRuler/diagnosticOverviewMarkers.js";
+import { createStanzaDiagnosticOverviewMarkers } from "../../../../browser/viewparts/overviewRuler/diagnosticOverviewMarkers.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 
 function diagnostic(startLineIndex: number, endLineIndex: number, presentation: DecorationPresentation, hoverText: string): ResolvedDecoration {
@@ -14,7 +14,7 @@ function diagnostic(startLineIndex: number, endLineIndex: number, presentation: 
 }
 
 test("Diagnostic overview condenses sorted logical lines by highest severity and hover text", () => {
-	const markers = createAsterDiagnosticOverviewMarkers([
+	const markers = createStanzaDiagnosticOverviewMarkers([
 		diagnostic(2, 2, DecorationPresentation.WarningUnderline, "warning"),
 		diagnostic(0, 1, DecorationPresentation.InformationUnderline, "information"),
 		diagnostic(1, 1, DecorationPresentation.ErrorUnderline, "error"),
@@ -43,5 +43,5 @@ test("Diagnostic overview condenses sorted logical lines by highest severity and
 });
 
 test("Diagnostic overview validates its document extent", () => {
-	assert.throws(() => createAsterDiagnosticOverviewMarkers([], 0), /positive line count/);
+	assert.throws(() => createStanzaDiagnosticOverviewMarkers([], 0), /positive line count/);
 });

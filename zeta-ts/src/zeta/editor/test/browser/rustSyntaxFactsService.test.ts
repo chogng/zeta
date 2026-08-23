@@ -8,7 +8,7 @@ import { SyntaxService, type SyntaxWorker } from "../../common/languages/syntax/
 import { LanguageFeatureProviderRegistry } from "../../common/languages/languageFeatureRegistry.js";
 import { RustSyntaxWorker, RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService } from "../../browser/services/rustSyntaxFactsService.js";
 
-test("Rust syntax facts feed Aster token, diagnostic, and document-symbol services from one revision request", async () => {
+test("Rust syntax facts feed Stanza token, diagnostic, and document-symbol services from one revision request", async () => {
 	using model = new TextModel("fn main() {\n  /* hi\n  */\n}\n");
 	let calls = 0;
 	let selectionCalls = 0;
@@ -80,7 +80,7 @@ test("Rust syntax facts feed Aster token, diagnostic, and document-symbol servic
 	assert.equal(selectionCalls, 1);
 });
 
-test("Rust syntax facts leave unsupported languages and oversized documents to Aster's fallback worker", async () => {
+test("Rust syntax facts leave unsupported languages and oversized documents to Stanza's fallback worker", async () => {
 	using model = new TextModel("const value = 1;");
 	let fallbackCalls = 0;
 	let syntaxCalls = 0;
@@ -127,7 +127,7 @@ test("Rust syntax facts leave unsupported languages and oversized documents to A
 	assert.equal(syntaxCalls, 0);
 });
 
-test("Rust syntax symbols remain a fallback behind registered Aster providers", async () => {
+test("Rust syntax symbols remain a fallback behind registered Stanza providers", async () => {
 	using model = new TextModel("fn main() {}");
 	let syntaxCalls = 0;
 	using facts = new RustSyntaxFactsService({

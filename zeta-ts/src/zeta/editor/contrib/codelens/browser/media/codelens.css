@@ -1,4 +1,4 @@
-.aster-editor-codelens {
+.stanza-editor-codelens {
   position: absolute;
   z-index: 5;
   max-width: calc(100% - 8px);

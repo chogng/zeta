@@ -17,7 +17,7 @@ const FRAGMENT_SHADER_SOURCE = `
 `;
 
 /**
- * GPU-backed density projection for Aster's minimap.
+ * GPU-backed density projection for Stanza's minimap.
  *
  * Text, selection and accessibility remain DOM-owned. This renderer owns only
  * the bounded, non-semantic minimap density rectangles and is optional: callers
@@ -44,7 +44,7 @@ export class GpuMinimapRenderer {
 		const vertexBuffer = context.createBuffer();
 		if (positionLocation < 0 || !colorLocation || !vertexBuffer) {
 			context.deleteProgram(program);
-			throw new Error("Aster GPU minimap could not initialize its rendering resources");
+			throw new Error("Stanza GPU minimap could not initialize its rendering resources");
 		}
 		this.program = program;
 		this.positionLocation = positionLocation;
@@ -84,7 +84,7 @@ export class GpuMinimapRenderer {
 	/** Replaces the current bounded density data and redraws the current surface. */
 	setRows(rows: readonly MinimapRow[], lineCount: number): void {
 		if (!Number.isSafeInteger(lineCount) || lineCount < 1) {
-			throw new RangeError("Aster GPU minimap line count must be a positive safe integer");
+			throw new RangeError("Stanza GPU minimap line count must be a positive safe integer");
 		}
 		this.rows = rows;
 		this.lineCount = lineCount;
@@ -94,7 +94,7 @@ export class GpuMinimapRenderer {
 	/** Resizes in CSS pixels; backing storage follows the current device pixel ratio. */
 	resize(width: number, height: number): void {
 		if (!Number.isFinite(width) || width < 0 || !Number.isFinite(height) || height < 0) {
-			throw new RangeError("Aster GPU minimap size must be non-negative and finite");
+			throw new RangeError("Stanza GPU minimap size must be non-negative and finite");
 		}
 		if (this.width === width && this.height === height) return;
 		this.width = width;
@@ -133,7 +133,7 @@ function createProgram(context: WebGLRenderingContext, vertexSource: string, fra
 	const vertexShader = compileShader(context, context.VERTEX_SHADER, vertexSource);
 	const fragmentShader = compileShader(context, context.FRAGMENT_SHADER, fragmentSource);
 	const program = context.createProgram();
-	if (!program) throw new Error("Aster GPU minimap could not create a WebGL program");
+	if (!program) throw new Error("Stanza GPU minimap could not create a WebGL program");
 	context.attachShader(program, vertexShader);
 	context.attachShader(program, fragmentShader);
 	context.linkProgram(program);
@@ -141,19 +141,19 @@ function createProgram(context: WebGLRenderingContext, vertexSource: string, fra
 	context.deleteShader(fragmentShader);
 	if (!context.getProgramParameter(program, context.LINK_STATUS)) {
 		context.deleteProgram(program);
-		throw new Error("Aster GPU minimap could not link its WebGL program");
+		throw new Error("Stanza GPU minimap could not link its WebGL program");
 	}
 	return program;
 }
 
 function compileShader(context: WebGLRenderingContext, kind: number, source: string): WebGLShader {
 	const shader = context.createShader(kind);
-	if (!shader) throw new Error("Aster GPU minimap could not create a WebGL shader");
+	if (!shader) throw new Error("Stanza GPU minimap could not create a WebGL shader");
 	context.shaderSource(shader, source);
 	context.compileShader(shader);
 	if (context.getShaderParameter(shader, context.COMPILE_STATUS)) return shader;
 	context.deleteShader(shader);
-	throw new Error("Aster GPU minimap could not compile a WebGL shader");
+	throw new Error("Stanza GPU minimap could not compile a WebGL shader");
 }
 
 function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: number, height: number): Float32Array {

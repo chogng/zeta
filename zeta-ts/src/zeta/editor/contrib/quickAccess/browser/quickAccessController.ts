@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorContribution.
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { parseAsterGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
+import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
@@ -13,7 +13,7 @@ export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 }
 
-/** Owns Aster's local Go to Line/Column dialog and platform G shortcut. */
+/** Owns Stanza's local Go to Line/Column dialog and platform G shortcut. */
 export class GotoLineController extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	readonly input: HTMLInputElement;
@@ -30,23 +30,23 @@ export class GotoLineController extends DisposableOwner {
 		this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();
-			throw new TypeError("Aster Go to Line dependencies must share one text model");
+			throw new TypeError("Stanza Go to Line dependencies must share one text model");
 		}
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "aster-editor-goto-line-widget";
+		this.element.className = "stanza-editor-goto-line-widget";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Go to Line or Column");
 		this.input = h(ownerDocument, "input");
-		this.input.className = "aster-editor-goto-line-input";
+		this.input.className = "stanza-editor-goto-line-input";
 		this.input.type = "text";
 		this.input.placeholder = "Line[:Column]";
 		this.input.setAttribute("aria-label", "Line number and optional column");
 		this.input.autocomplete = "off";
 		this.input.spellcheck = false;
 		this.status = h(ownerDocument, "span");
-		this.status.className = "aster-editor-goto-line-status";
+		this.status.className = "stanza-editor-goto-line-status";
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
 		viewport.element.append(this.element);
@@ -90,7 +90,7 @@ export class GotoLineController extends DisposableOwner {
 
 	private handleEditorKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		if (!isAsterGotoLineChord(event, this.targetOperatingSystem)) return;
+		if (!isStanzaGotoLineChord(event, this.targetOperatingSystem)) return;
 		stopEvent(event);
 		this.open();
 	}
@@ -121,7 +121,7 @@ export class GotoLineController extends DisposableOwner {
 	}
 
 	private readResult(): GotoLocationParseResult {
-		return parseAsterGotoLocation(this.viewport.textModel, this.input.value);
+		return parseStanzaGotoLocation(this.viewport.textModel, this.input.value);
 	}
 
 	private position(): void {
@@ -143,7 +143,7 @@ registerEditorContribution({
 });
 
 /** Identifies Ctrl+G on Windows/Linux and Command+G on macOS. */
-export function isAsterGotoLineChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
+export function isStanzaGotoLineChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
 	if (event.shiftKey || event.altKey || event.key.toLowerCase() !== "g") return false;
 	return targetOperatingSystem === OperatingSystem.Macintosh
 		? event.metaKey && !event.ctrlKey

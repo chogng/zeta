@@ -38,7 +38,7 @@ export class OverviewRulerPart extends DisposableOwner implements EditorViewPart
 		this.readMarkersRevision = options.readMarkersRevision;
 		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("aster-editor-overview-ruler");
+		this.root.setClassName("stanza-editor-overview-ruler");
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
 
@@ -56,7 +56,7 @@ export class OverviewRulerPart extends DisposableOwner implements EditorViewPart
 		const fragment = createFragment(this.domNode.ownerDocument);
 		for (const marker of markers) {
 			const element = h(this.domNode.ownerDocument, "span");
-			element.className = "aster-editor-overview-marker";
+			element.className = "stanza-editor-overview-marker";
 			element.classList.add(marker.presentation);
 			element.style.top = `${marker.startLineIndex / lineCount * 100}%`;
 			element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / lineCount * 100)}%`;

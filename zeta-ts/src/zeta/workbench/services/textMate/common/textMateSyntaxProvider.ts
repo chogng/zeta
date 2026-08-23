@@ -5,7 +5,7 @@ import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 export const TEXTMATE_SYNTAX_PROVIDER_ID = "textmate.grammar";
 export const TEXTMATE_TOKEN_PRIORITY = 100;
 
-/** Adapts one caller-owned TextMate runtime to Aster's Syntax provider contract. */
+/** Adapts one caller-owned TextMate runtime to Stanza's Syntax provider contract. */
 export function createTextMateSyntaxProvider(tokenization: TextMateTokenizationService): SyntaxProvider {
 	if (!(tokenization instanceof TextMateTokenizationService)) {
 		throw new TypeError("TextMate syntax provider requires a tokenization service");

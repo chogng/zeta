@@ -1,4 +1,4 @@
-.zeta-structured-format-toolbar {
+.stanza-structured-format-toolbar {
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -9,11 +9,11 @@
   background: var(--zeta-editor-background);
 }
 
-.zeta-structured-format-toolbar .zeta-action-bar {
+.stanza-structured-format-toolbar .zeta-action-bar {
   gap: 2px;
 }
 
-.zeta-structured-format-typography-controls {
+.stanza-structured-format-typography-controls {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -21,7 +21,7 @@
   border-inline: 1px solid var(--zeta-border);
 }
 
-.zeta-structured-format-select-control {
+.stanza-structured-format-select-control {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -29,7 +29,7 @@
   font-size: 0.9em;
 }
 
-.zeta-structured-format-select {
+.stanza-structured-format-select {
   min-width: 88px;
   height: 24px;
   padding-inline: 5px;
@@ -40,14 +40,14 @@
   font: inherit;
 }
 
-.zeta-structured-format-font-size .zeta-structured-format-select { min-width: 64px; }
+.stanza-structured-format-font-size .stanza-structured-format-select { min-width: 64px; }
 
-.zeta-structured-format-select:focus-visible {
+.stanza-structured-format-select:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 1px;
 }
 
-.zeta-structured-format-code-context {
+.stanza-structured-format-code-context {
   color: var(--zeta-description-foreground, var(--zeta-editor-foreground));
   font-size: 0.9em;
 }
@@ -59,7 +59,7 @@
   min-height: 0;
 }
 
-.zeta-document-outline {
+.stanza-document-outline {
   box-sizing: border-box;
   flex: 0 0 240px;
   overflow: auto;
@@ -68,7 +68,7 @@
   background: var(--zeta-editor-background);
 }
 
-.zeta-document-outline-title {
+.stanza-document-outline-title {
   padding: 12px 14px 8px;
   color: var(--zeta-editor-foreground);
   font-size: 0.85em;
@@ -76,13 +76,13 @@
   text-transform: uppercase;
 }
 
-.zeta-document-outline-list {
+.stanza-document-outline-list {
   margin: 0;
   padding: 0 0 12px;
   list-style: none;
 }
 
-.zeta-document-outline-entry {
+.stanza-document-outline-entry {
   box-sizing: border-box;
   display: block;
   width: 100%;
@@ -99,8 +99,8 @@
   white-space: nowrap;
 }
 
-.zeta-document-outline-entry:hover,
-.zeta-document-outline-entry:focus-visible {
+.stanza-document-outline-entry:hover,
+.stanza-document-outline-entry:focus-visible {
   outline: 0;
   background: var(--zeta-toolbar-hover-background);
 }
@@ -116,19 +116,19 @@
   background: var(--zeta-editor-background);
 }
 
-.zeta-document-paragraph,
-.zeta-document-heading,
-.zeta-document-text-block,
-.zeta-document-blockquote,
-.zeta-document-list,
-.zeta-document-block {
+.stanza-document-paragraph,
+.stanza-document-heading,
+.stanza-document-code-block,
+.stanza-document-blockquote,
+.stanza-document-list,
+.stanza-document-block {
   max-width: 860px;
   margin: 0 auto 12px;
 }
 
-.zeta-document-heading[data-level="1"] { font-size: 2em; }
-.zeta-document-heading[data-level="2"] { font-size: 1.5em; }
-.zeta-document-heading[data-level="3"] { font-size: 1.25em; }
+.stanza-document-heading[data-level="1"] { font-size: 2em; }
+.stanza-document-heading[data-level="2"] { font-size: 1.5em; }
+.stanza-document-heading[data-level="3"] { font-size: 1.25em; }
 
 .zeta-academic-title,
 .zeta-academic-abstract,
@@ -151,7 +151,7 @@
   margin-bottom: 28px;
 }
 
-.zeta-document-text-input {
+.stanza-document-text-input {
   box-sizing: border-box;
   display: block;
   width: 100%;
@@ -167,7 +167,7 @@
   line-height: 1.6;
 }
 
-.zeta-document-rich-text-input {
+.stanza-document-rich-text-input {
   box-sizing: border-box;
   min-height: 28px;
   padding: 2px 0;
@@ -179,17 +179,17 @@
   line-height: 1.6;
 }
 
-.zeta-document-inline-run { white-space: pre-wrap; }
-.zeta-document-inline-image {
+.stanza-document-inline-run { white-space: pre-wrap; }
+.stanza-document-inline-image {
   max-width: 100%;
   vertical-align: middle;
   cursor: pointer;
 }
-.zeta-document-inline-image.zeta-document-inline-node-selected {
+.stanza-document-inline-image.stanza-document-inline-node-selected {
   outline: 2px solid var(--zeta-focus-border);
   outline-offset: 2px;
 }
-.zeta-document-inline-node {
+.stanza-document-inline-node {
   display: inline-block;
   margin: 0 2px;
   padding: 0 4px;
@@ -198,7 +198,7 @@
   background: var(--zeta-toolbar-hover-background);
   cursor: pointer;
 }
-.zeta-document-inline-node.zeta-document-inline-node-selected {
+.stanza-document-inline-node.stanza-document-inline-node-selected {
   outline: 2px solid var(--zeta-focus-border);
   outline-offset: 1px;
 }
@@ -214,7 +214,7 @@
   text-decoration: underline wavy;
   text-decoration-color: var(--zeta-error-foreground);
 }
-.zeta-citation.zeta-document-inline-node-selected {
+.zeta-citation.stanza-document-inline-node-selected {
   outline: 2px solid var(--zeta-focus-border);
   outline-offset: 1px;
 }
@@ -226,33 +226,33 @@
 .zeta-citation-reference {
   margin: 6px 0;
 }
-.zeta-document-mark-strong { font-weight: 700; }
-.zeta-document-mark-em { font-style: italic; }
-.zeta-document-mark-textStyle[data-font-family="sans"] { font-family: var(--zeta-font-family); }
-.zeta-document-mark-textStyle[data-font-family="serif"] { font-family: Georgia, "Times New Roman", serif; }
-.zeta-document-mark-textStyle[data-font-family="monospace"] { font-family: var(--zeta-font-family-monospace); }
-.zeta-document-mark-code {
+.stanza-document-mark-strong { font-weight: 700; }
+.stanza-document-mark-em { font-style: italic; }
+.stanza-document-mark-textStyle[data-font-family="sans"] { font-family: var(--zeta-font-family); }
+.stanza-document-mark-textStyle[data-font-family="serif"] { font-family: Georgia, "Times New Roman", serif; }
+.stanza-document-mark-textStyle[data-font-family="monospace"] { font-family: var(--zeta-font-family-monospace); }
+.stanza-document-mark-code {
   padding: 0 2px;
   border-radius: 3px;
   background: var(--zeta-text-code-block-background);
   font-family: var(--zeta-font-family-monospace);
 }
-.zeta-document-mark-link {
+.stanza-document-mark-link {
   color: var(--zeta-accent-foreground);
   text-decoration: underline;
 }
 
-.zeta-document-remote-selection {
+.stanza-document-remote-selection {
   border-radius: 2px;
   box-decoration-break: clone;
 }
 
-.zeta-document-remote-selection-0 { background: color-mix(in srgb, var(--zeta-collaboration-selection0-background) 26%, transparent); }
-.zeta-document-remote-selection-1 { background: color-mix(in srgb, var(--zeta-collaboration-selection1-background) 26%, transparent); }
-.zeta-document-remote-selection-2 { background: color-mix(in srgb, var(--zeta-collaboration-selection2-background) 26%, transparent); }
-.zeta-document-remote-selection-3 { background: color-mix(in srgb, var(--zeta-collaboration-selection3-background) 26%, transparent); }
+.stanza-document-remote-selection-0 { background: color-mix(in srgb, var(--zeta-collaboration-selection0-background) 26%, transparent); }
+.stanza-document-remote-selection-1 { background: color-mix(in srgb, var(--zeta-collaboration-selection1-background) 26%, transparent); }
+.stanza-document-remote-selection-2 { background: color-mix(in srgb, var(--zeta-collaboration-selection2-background) 26%, transparent); }
+.stanza-document-remote-selection-3 { background: color-mix(in srgb, var(--zeta-collaboration-selection3-background) 26%, transparent); }
 
-.zeta-document-text-block {
+.stanza-document-code-block {
   padding: 12px 16px;
   border: 1px solid var(--zeta-border);
   border-radius: 6px;
@@ -260,39 +260,39 @@
   font-family: var(--zeta-font-family-monospace);
 }
 
-.zeta-document-embedded-text-editor {
+.stanza-document-embedded-text-editor {
   height: 180px;
   min-height: 120px;
 }
 
-.zeta-document-blockquote {
+.stanza-document-blockquote {
   padding-left: 16px;
   border-left: 3px solid var(--zeta-border);
 }
 
-.zeta-document-list {
+.stanza-document-list {
   padding-left: 32px;
 }
 
-.zeta-document-list-item {
+.stanza-document-list-item {
   margin-bottom: 8px;
 }
 
-.zeta-document-table {
+.stanza-document-table {
   width: min(100%, 860px);
   margin: 0 auto 12px;
   border-collapse: collapse;
   table-layout: fixed;
 }
 
-.zeta-document-table-cell {
+.stanza-document-table-cell {
   min-width: 120px;
   padding: 8px;
   border: 1px solid var(--zeta-border);
   vertical-align: top;
 }
 
-.zeta-document-table-cell > .zeta-document-paragraph,
-.zeta-document-table-cell > .zeta-document-heading {
+.stanza-document-table-cell > .stanza-document-paragraph,
+.stanza-document-table-cell > .stanza-document-heading {
   margin-bottom: 0;
 }

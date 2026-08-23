@@ -14,7 +14,7 @@ const DIFF_PRESENTATIONS = new Set<DecorationPresentation>([
 ]);
 
 /** Condenses Quick Diff decorations into stable overview-ruler line ranges. */
-export function createAsterDiffOverviewMarkers(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DiffOverviewMarker[] {
+export function createStanzaDiffOverviewMarkers(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DiffOverviewMarker[] {
 	if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("Diff overview requires a positive line count");
 	const markers: DiffOverviewMarker[] = [];
 	for (const decoration of decorations) {

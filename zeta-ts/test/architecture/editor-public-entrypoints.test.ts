@@ -6,18 +6,18 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
 
-test("flat Aster domain exposes public entrypoints and mode bundles", () => {
+test("flat Stanza domain exposes public entrypoints and mode bundles", () => {
 	for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
 	}
 	assert.equal(exists(join(editorRoot, "alpha")), false, "alpha directory");
 	assert.equal(exists(join(editorRoot, "gama")), false, "gama directory");
-	for (const retiredEntrypoint of ["aster.api.ts", "aster.code.all.ts", "aster.academic.all.ts", "aster.all.ts", "aster.main.ts", "aster.worker.start.ts"]) {
+	for (const retiredEntrypoint of ["stanza.api.ts", "stanza.code.all.ts", "stanza.academic.all.ts", "stanza.all.ts", "stanza.main.ts", "stanza.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, retiredEntrypoint)), false, retiredEntrypoint);
 	}
 });
 
-test("public Aster entrypoints retain distinct API, contribution, main, and worker roles", () => {
+test("public Stanza entrypoints retain distinct API, contribution, main, and worker roles", () => {
 	const api = readFileSync(join(editorRoot, "editor.api.ts"), "utf8");
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
@@ -40,7 +40,7 @@ test("public Aster entrypoints retain distinct API, contribution, main, and work
 	assert.doesNotMatch(all, /editor\.(?:code|academic)\.all/u);
 	assert.match(main, /import "\.\/editor\.all\.js"/u);
 	assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
-	assert.match(worker, /AsterWorkerPort/u);
+	assert.match(worker, /StanzaWorkerPort/u);
 	assert.match(worker, /export function start/u);
 	assert.match(analysisWorker, /languageWorker\.start/u);
 	assert.match(completionWorker, /languageWorker\.start/u);

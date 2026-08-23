@@ -120,7 +120,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 	create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("EditorPane has already been created");
 		const container = h(parent.ownerDocument, "div");
-		container.className = "aster-editor-pane";
+		container.className = "stanza-editor-pane";
 		parent.append(container);
 		this.container = container;
 		this.own(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));

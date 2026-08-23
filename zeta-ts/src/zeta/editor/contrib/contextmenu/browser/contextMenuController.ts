@@ -9,7 +9,7 @@ export interface ContextMenuRequest { readonly position: TextPosition; readonly 
 
 /** Delegates context-menu composition to the host while keeping editor hit testing local. */
 export class ContextMenuController extends DisposableOwner {
-	constructor(private readonly viewport: EditorViewport, private readonly showContextMenu: (request: ContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Aster context menu failed", error)) {
+	constructor(private readonly viewport: EditorViewport, private readonly showContextMenu: (request: ContextMenuRequest) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza context menu failed", error)) {
 		super();
 		this.own(addDisposableListener<MouseEvent>(viewport.element, "contextmenu", event => {
 			event.preventDefault();

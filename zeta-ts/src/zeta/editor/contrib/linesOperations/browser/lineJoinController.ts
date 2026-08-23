@@ -9,7 +9,7 @@ export interface LineJoinControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 }
 
-/** Routes the platform join-lines chord to Aster's DOM-free command semantics. */
+/** Routes the platform join-lines chord to Stanza's DOM-free command semantics. */
 export class LineJoinController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -21,7 +21,7 @@ export class LineJoinController extends DisposableOwner {
 		this.targetOperatingSystem = options.operatingSystem ?? operatingSystem;
 		try {
 			if (viewport.textModel !== selections.textModel) {
-				throw new TypeError("Aster line join dependencies must share one text model");
+				throw new TypeError("Stanza line join dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
@@ -34,7 +34,7 @@ export class LineJoinController extends DisposableOwner {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		if (!isAsterJoinLinesChord(event, this.targetOperatingSystem)) return;
+		if (!isStanzaJoinLinesChord(event, this.targetOperatingSystem)) return;
 		stopEvent(event);
 		this.selections.execute(createJoinLinesCommand(this.viewport.textModel, this.selections.selections));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
@@ -42,7 +42,7 @@ export class LineJoinController extends DisposableOwner {
 }
 
 /** Identifies Ctrl+J on Windows/Linux and Command+J on macOS. */
-export function isAsterJoinLinesChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
+export function isStanzaJoinLinesChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
 	if (event.shiftKey || event.altKey || event.key.toLowerCase() !== "j") return false;
 	return targetOperatingSystem === OperatingSystem.Macintosh
 		? event.metaKey && !event.ctrlKey

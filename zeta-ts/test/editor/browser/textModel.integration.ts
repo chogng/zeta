@@ -51,6 +51,7 @@ const pane = new CodeEditorPane(resourceStore, {
 				diagnostics: [{ kind: "missing", range: { start: { lineIndex: 1, columnIndex: 2 }, end: { lineIndex: 1, columnIndex: 8 } } }],
 			};
 		},
+		selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
 	},
 });
 const apiModel = new TextModel("editor-api");

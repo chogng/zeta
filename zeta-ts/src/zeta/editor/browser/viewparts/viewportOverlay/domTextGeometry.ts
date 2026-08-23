@@ -25,16 +25,16 @@ interface CaretDocument {
 }
 
 /**
- * Resolves logical UTF-16 offsets against one rendered Aster text fragment.
+ * Resolves logical UTF-16 offsets against one rendered Stanza text fragment.
  *
  * Semantic-token spans may split source text into several DOM text nodes, but
  * this adapter deliberately exposes only the original contiguous offset space.
  */
-export function createAsterDomTextRange(element: HTMLElement, startOffset: number, endOffset: number): Range | undefined {
+export function createStanzaDomTextRange(element: HTMLElement, startOffset: number, endOffset: number): Range | undefined {
 	const segments = textSegments(element);
 	const textLength = segments.at(-1)?.endOffset ?? 0;
 	if (!isOffset(startOffset, textLength) || !isOffset(endOffset, textLength) || endOffset < startOffset) {
-		throw new RangeError("Aster DOM text range offsets must be ordered UTF-16 positions");
+		throw new RangeError("Stanza DOM text range offsets must be ordered UTF-16 positions");
 	}
 	const start = resolveBoundary(segments, startOffset);
 	const end = resolveBoundary(segments, endOffset);
@@ -46,8 +46,8 @@ export function createAsterDomTextRange(element: HTMLElement, startOffset: numbe
 }
 
 /** Returns browser-shaped visual rectangles for one source range, if layout is available. */
-export function getAsterDomTextRangeRectangles(element: HTMLElement, startOffset: number, endOffset: number, relativeTo: HTMLElement): readonly DomTextRectangle[] | undefined {
-	const range = createAsterDomTextRange(element, startOffset, endOffset);
+export function getStanzaDomTextRangeRectangles(element: HTMLElement, startOffset: number, endOffset: number, relativeTo: HTMLElement): readonly DomTextRectangle[] | undefined {
+	const range = createStanzaDomTextRange(element, startOffset, endOffset);
 	if (!range || startOffset === endOffset) return undefined;
 	if (typeof range.getClientRects !== "function") return undefined;
 	const origin = relativeTo.getBoundingClientRect();
@@ -61,8 +61,8 @@ export function getAsterDomTextRangeRectangles(element: HTMLElement, startOffset
 }
 
 /** Returns the browser-shaped caret x-coordinate for one source offset, if layout is available. */
-export function getAsterDomTextCaretLeft(element: HTMLElement, offset: number, relativeTo: HTMLElement): number | undefined {
-	const range = createAsterDomTextRange(element, offset, offset);
+export function getStanzaDomTextCaretLeft(element: HTMLElement, offset: number, relativeTo: HTMLElement): number | undefined {
+	const range = createStanzaDomTextRange(element, offset, offset);
 	if (!range) return undefined;
 	if (typeof range.getBoundingClientRect !== "function") return undefined;
 	const origin = relativeTo.getBoundingClientRect();
@@ -74,9 +74,9 @@ export function getAsterDomTextCaretLeft(element: HTMLElement, offset: number, r
 }
 
 /** Resolves a browser caret hit inside one rendered text fragment to its source offset. */
-export function getAsterDomTextOffsetAtClientPoint(element: HTMLElement, clientX: number, clientY: number): number | undefined {
+export function getStanzaDomTextOffsetAtClientPoint(element: HTMLElement, clientX: number, clientY: number): number | undefined {
 	if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-		throw new RangeError("Aster DOM hit-test coordinates must be finite");
+		throw new RangeError("Stanza DOM hit-test coordinates must be finite");
 	}
 	const document = element.ownerDocument as unknown as CaretDocument;
 	const position = document.caretPositionFromPoint?.(clientX, clientY) ?? document.caretRangeFromPoint?.(clientX, clientY);

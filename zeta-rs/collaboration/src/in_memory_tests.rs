@@ -14,7 +14,7 @@ fn in_memory_rooms_order_updates_and_replay_stale_clients() {
         .open(DocumentCollaborationOpenParams {
             room_id: None,
             client_id: "client-a".into(),
-            schema_id: "aster-document-v1".into(),
+            schema_id: "stanza-document-v1".into(),
             document,
         })
         .unwrap();
@@ -50,7 +50,7 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
     let invalid_document = rooms.open(DocumentCollaborationOpenParams {
         room_id: None,
         client_id: "client-a".into(),
-        schema_id: "aster-document-v1".into(),
+        schema_id: "stanza-document-v1".into(),
         document: "{}".into(),
     });
     assert!(invalid_document.unwrap_err().contains("zeta.document v1"));
@@ -111,7 +111,7 @@ fn open_room(rooms: &mut InMemoryDocumentCollaborationRooms) -> String {
         .open(DocumentCollaborationOpenParams {
             room_id: None,
             client_id: "client-a".into(),
-            schema_id: "aster-document-v1".into(),
+            schema_id: "stanza-document-v1".into(),
             document: document("initial"),
         })
         .unwrap()

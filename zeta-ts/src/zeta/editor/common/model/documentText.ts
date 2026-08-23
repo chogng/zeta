@@ -17,8 +17,8 @@ export function documentFromPlainText(schema: DocumentSchema, text: string, docu
 export function documentSelectionToText(document: DocumentNode, selection: DocumentSelection): string | undefined {
 	if (selection.kind === "all") return documentToPlainText(document);
 	if (selection.kind !== "text") return undefined;
-	const anchor = findTextBlockLocation(document, selection.anchor.nodeId);
-	const head = findTextBlockLocation(document, selection.head.nodeId);
+	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
+	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
 	if (!anchor || !head) return undefined;
 	if (anchor.block.id === head.block.id) {
 		const forward = anchor.index < head.index || (anchor.index === head.index && selection.anchor.offset <= selection.head.offset);
@@ -31,7 +31,7 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 	const start = forward ? { location: anchor, point: selection.anchor } : { location: head, point: selection.head };
 	const end = forward ? { location: head, point: selection.head } : { location: anchor, point: selection.anchor };
 	for (let index = start.location.parentIndex; index <= end.location.parentIndex; index += 1) {
-		if (!isTextBlock(start.location.parent.content[index]!)) return undefined;
+		if (!isTextBearingBlock(start.location.parent.content[index]!)) return undefined;
 	}
 	const parts: string[] = [textFromBlockRange(start.location.block, start.location.index, start.point.offset, start.location.block.content.length - 1, Number.MAX_SAFE_INTEGER)];
 	for (let index = start.location.parentIndex + 1; index < end.location.parentIndex; index += 1) parts.push(textFromBlock(start.location.parent.content[index]!));
@@ -42,29 +42,29 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 /** Converts the complete structured document to interoperable plain text. */
 export function documentToPlainText(document: DocumentNode): string {
 	const blocks: string[] = [];
-	collectPlainTextBlocks(document, blocks);
+	collectTextBearingBlocks(document, blocks);
 	return blocks.join("\n");
 }
 
-function collectPlainTextBlocks(node: DocumentNode, blocks: string[]): void {
-	if (isTextBlock(node)) {
+function collectTextBearingBlocks(node: DocumentNode, blocks: string[]): void {
+	if (isTextBearingBlock(node)) {
 		blocks.push(textFromBlock(node));
 		return;
 	}
-	for (const child of node.content) collectPlainTextBlocks(child, blocks);
+	for (const child of node.content) collectTextBearingBlocks(child, blocks);
 }
 
-interface TextBlockLocation {
+interface TextBearingBlockLocation {
 	readonly block: DocumentNode;
 	readonly parent: DocumentNode;
 	readonly parentIndex: number;
 	readonly index: number;
 }
 
-function findTextBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBlockLocation | undefined {
+function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNodeId): TextBearingBlockLocation | undefined {
 	const textLocation = findDocumentNode(root, textNodeId);
 	const block = textLocation?.parent;
-	if (!block || !isTextBlock(block)) return undefined;
+	if (!block || !isTextBearingBlock(block)) return undefined;
 	const blockLocation = findDocumentNode(root, block.id);
 	const index = block.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	if (!blockLocation?.parent || index < 0) return undefined;
@@ -95,6 +95,6 @@ function textFromBlockRange(block: DocumentNode, startIndex: number, startOffset
 	return parts.join("");
 }
 
-function isTextBlock(node: DocumentNode): boolean {
-	return node.type === "paragraph" || node.type === "heading" || node.type === "textBlock";
+function isTextBearingBlock(node: DocumentNode): boolean {
+	return node.type === "paragraph" || node.type === "heading" || node.type === "codeBlock";
 }

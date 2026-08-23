@@ -19,13 +19,13 @@ import type { IServerEventApi } from "../../../../../platform/app-server/common/
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
 
-test("Aster App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
+test("Stanza App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	const events = new FakeServerEvents();
 	const api = new FakeDocumentCollaborationApi();
 	using service = new AppServerDocumentCollaborationService(api, events);
-	using connection = await service.open({ clientId: "client-a", schemaId: "aster-document-v1", schema, document }, new AbortController().signal);
+	using connection = await service.open({ clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, new AbortController().signal);
 
 	assert.equal(connection.roomId, "room-a");
 	assert.equal(connection.canEdit, true);

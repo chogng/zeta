@@ -74,12 +74,12 @@ test("EditorViewport projects the initial virtual line window", () => {
 	assert.equal(lineNumber(rows[6]).textContent, "7");
 	assert.equal(
 		viewport.element.style.getPropertyValue(
-			"--aster-editor-gutter-width",
+			"--stanza-editor-gutter-width",
 		),
 		"40px",
 	);
 	assert.equal(
-		requiredElement(viewport.element, ".aster-editor-content").style.height,
+		requiredElement(viewport.element, ".stanza-editor-content").style.height,
 		"2000px",
 	);
 
@@ -101,7 +101,7 @@ test("EditorViewport gives browser text shaping an explicit paragraph direction"
 
 	assert.equal(viewport.editorTextDirection, EditorTextDirection.RightToLeft);
 	assert.equal(viewport.element.dir, "rtl");
-	assert.equal(viewport.element.classList.contains("aster-editor-direction-rtl"), true);
+	assert.equal(viewport.element.classList.contains("stanza-editor-direction-rtl"), true);
 	assert.equal(lineText(requiredLine(viewport.element, 0)).dir, "rtl");
 	dom.window.close();
 });
@@ -119,7 +119,7 @@ test("EditorViewport projects configured column rulers through the margin coordi
 	});
 	viewport.layout({ width: 200, height: 20 });
 
-	const rulers = [...viewport.element.querySelectorAll<HTMLElement>(".aster-editor-ruler")];
+	const rulers = [...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-ruler")];
 	assert.equal(rulers.length, 2);
 	assert.deepEqual(rulers.map(ruler => ruler.style.left), ["68px", "116px"]);
 	assert.equal(rulers[1]?.style.boxShadow, "1px 0 0 0 red inset");
@@ -165,12 +165,12 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 	});
 	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 3))));
 
-	const selectionElements = [...line.querySelectorAll<HTMLElement>(".aster-editor-selection")];
+	const selectionElements = [...line.querySelectorAll<HTMLElement>(".stanza-editor-selection")];
 	assert.deepEqual(selectionElements.map(element => ({ left: element.style.left, width: element.style.width })), [
 		{ left: "50px", width: "20px" },
 		{ left: "20px", width: "15px" },
 	]);
-	assert.equal(requiredElement<HTMLElement>(line, ".aster-editor-caret").style.left, "35px");
+	assert.equal(requiredElement<HTMLElement>(line, ".stanza-editor-caret").style.left, "35px");
 	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
 	dom.window.close();
 });
@@ -208,7 +208,7 @@ test("EditorViewport announces cursor and selection changes through its live reg
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
 
-	const status = requiredElement(viewport.element, ".aster-editor-accessibility-status");
+	const status = requiredElement(viewport.element, ".stanza-editor-accessibility-status");
 	assert.equal(status.getAttribute("aria-live"), "polite");
 	assert.equal(status.textContent, "Line 1, column 1");
 	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 1), TextPosition.at(1, 4))));
@@ -228,7 +228,7 @@ test("EditorViewport accepts explicit accessibility status announcements", () =>
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 
 	viewport.announceAccessibilityStatus("  Saved  ");
-	assert.equal(requiredElement(viewport.element, ".aster-editor-accessibility-status").textContent, "Saved");
+	assert.equal(requiredElement(viewport.element, ".stanza-editor-accessibility-status").textContent, "Saved");
 	assert.throws(() => viewport.announceAccessibilityStatus("  "), /non-empty string/);
 	dom.window.close();
 });
@@ -245,12 +245,12 @@ test("EditorViewport projects indentation guides for visible logical rows only",
 		indentation: { tabSize: 2 },
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const firstGuides = requiredLine(viewport.element, 0).querySelectorAll<HTMLElement>(".aster-editor-indent-guide");
+	const firstGuides = requiredLine(viewport.element, 0).querySelectorAll<HTMLElement>(".stanza-editor-indent-guide");
 	assert.deepEqual([...firstGuides].map(guide => ({ level: guide.dataset.indentLevel, left: guide.style.left })), [
 		{ level: "1", left: "57px" },
 		{ level: "2", left: "77px" },
 	]);
-	assert.equal(requiredLine(viewport.element, 1).querySelectorAll(".aster-editor-indent-guide").length, 1);
+	assert.equal(requiredLine(viewport.element, 1).querySelectorAll(".stanza-editor-indent-guide").length, 1);
 	dom.window.close();
 });
 
@@ -266,20 +266,20 @@ test("EditorViewport renders a bounded minimap and maps a primary click to docum
 		minimap: EditorMinimap.On,
 	});
 	viewport.layout({ width: 300, height: 100 });
-	const minimap = requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap");
+	const minimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap");
 	assert.equal(minimap.hidden, false);
-	assert.equal(minimap.querySelectorAll(".aster-editor-minimap-row").length, 160);
-	const minimapRow = requiredElement<HTMLElement>(minimap, ".aster-editor-minimap-row");
+	assert.equal(minimap.querySelectorAll(".stanza-editor-minimap-row").length, 160);
+	const minimapRow = requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-row");
 	assert.equal(minimapRow.style.height, "1px");
 	assert.equal(Number.parseFloat(minimapRow.style.width) <= 44, true);
-	const overview = requiredElement<HTMLElement>(viewport.element, ".aster-editor-overview-ruler");
+	const overview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-ruler");
 	assert.equal(overview.style.left, "234px");
 
 	viewport.element.scrollTop = 1950;
 	viewport.element.dispatchEvent(new dom.window.Event("scroll"));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 1950);
 	assert.equal(minimap.style.transform, "translate3d(244px, 1950px, 0)");
-	assert.equal(requiredElement<HTMLElement>(minimap, ".aster-editor-minimap-viewport").style.transform, "translate3d(0, 48.75px, 0)");
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-viewport").style.transform, "translate3d(0, 48.75px, 0)");
 
 	minimap.dispatchEvent(new dom.window.MouseEvent("pointerdown", {
 		bubbles: true,
@@ -288,7 +288,7 @@ test("EditorViewport renders a bounded minimap and maps a primary click to docum
 		clientY: 75,
 	}));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 2925);
-	assert.equal(requiredElement<HTMLElement>(minimap, ".aster-editor-minimap-viewport").style.transform, "translate3d(0, 73.125px, 0)");
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-viewport").style.transform, "translate3d(0, 73.125px, 0)");
 
 	dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointermove", {
 		bubbles: true,
@@ -320,7 +320,7 @@ test("EditorViewport keeps minimaps out of embedded presentations", () => {
 		textMeasurer: fixedTextMeasurer(),
 		presentation: "embedded",
 	});
-	assert.equal(requiredElement<HTMLElement>(viewport.element, ".aster-editor-minimap").hidden, true);
+	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap").hidden, true);
 	dom.window.close();
 });
 
@@ -339,24 +339,24 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 		selectionController: selections,
 	});
 	embeddedViewport.layout({ width: 300, height: 40 });
-	assert.equal(embeddedViewport.element.classList.contains("aster-editor-focus-owner-host"), true);
-	assert.equal(embeddedViewport.element.classList.contains("aster-editor-focus-owner-editor"), false);
-	assert.equal(embeddedViewport.element.querySelector(".aster-editor-line.active"), null);
-	assert.ok(embeddedViewport.element.querySelector(".aster-editor-caret"));
+	assert.equal(embeddedViewport.element.classList.contains("stanza-editor-focus-owner-host"), true);
+	assert.equal(embeddedViewport.element.classList.contains("stanza-editor-focus-owner-editor"), false);
+	assert.equal(embeddedViewport.element.querySelector(".stanza-editor-line.active"), null);
+	assert.ok(embeddedViewport.element.querySelector(".stanza-editor-caret"));
 	assert.throws(() => new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		focusOutlineOwner: "unknown" as never,
-	}), /Unknown Aster editor focus outline owner/);
+	}), /Unknown Stanza editor focus outline owner/);
 	assert.throws(() => new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		activeLineHighlight: "unknown" as never,
-	}), /Unknown Aster editor active-line highlight/);
+	}), /Unknown Stanza editor active-line highlight/);
 	dom.window.close();
 });
 
@@ -370,7 +370,7 @@ test("EditorViewport rejects an unknown minimap mode", () => {
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		minimap: "invalid" as never,
-	}), /Unknown Aster editor minimap mode/);
+	}), /Unknown Stanza editor minimap mode/);
 	dom.window.close();
 });
 
@@ -394,7 +394,7 @@ test("Scrolling virtualizes rows while preserving overlapping DOM identity", () 
 		endLineIndexExclusive: 27,
 	});
 	assert.equal(
-		requiredElement(viewport.element, ".aster-editor-lines").style.transform,
+		requiredElement(viewport.element, ".stanza-editor-lines").style.transform,
 		"translate3d(0, 360px, 0)",
 	);
 
@@ -493,7 +493,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		lineGutterDecoration: new FoldingDecorationProvider(folding),
 	});
 	viewport.layout({ width: 300, height: 20 });
-	const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".aster-editor-fold-toggle");
+	const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(initialToggle.getAttribute("aria-expanded"), "true");
 	assert.equal(initialToggle.textContent, "⌄");
 	folding.setContainingLineCollapsed(0, true);
@@ -517,7 +517,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		top: 0,
 		height: 20,
 	});
-	const collapsedToggle = requiredElement<HTMLButtonElement>(viewport.element, ".aster-editor-fold-toggle");
+	const collapsedToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(collapsedToggle.getAttribute("aria-expanded"), "false");
 	assert.equal(collapsedToggle.textContent, "›");
 
@@ -593,12 +593,12 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 
 	const selectionElements = [
 		...viewport.element.querySelectorAll<HTMLElement>(
-			".aster-editor-selection",
+			".stanza-editor-selection",
 		),
 	];
 	const caretElements = [
 		...viewport.element.querySelectorAll<HTMLElement>(
-			".aster-editor-caret",
+			".stanza-editor-caret",
 		),
 	];
 	assert.deepEqual(
@@ -617,9 +617,9 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 			width: "30px",
 		}],
 	);
-	assert.equal(selectionElements.every(element => element.parentElement?.classList.contains("aster-editor-line-selections")), true);
+	assert.equal(selectionElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-selections")), true);
 	assert.equal(caretElements.length, 2);
-	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("aster-editor-line-cursors")), true);
+	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-cursors")), true);
 	assert.equal(caretElements[0]?.classList.contains("primary"), true);
 	assert.equal(caretElements[0]?.style.left, "48px");
 	assert.equal(
@@ -634,13 +634,13 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 
 	assert.equal(
 		viewport.element.querySelectorAll(
-			".aster-editor-selection",
+			".stanza-editor-selection",
 		).length,
 		0,
 	);
 	assert.equal(
 		requiredLine(viewport.element, 1)
-			.querySelector<HTMLElement>(".aster-editor-caret")
+			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
 		"58px",
 	);
@@ -659,7 +659,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	assert.equal(controller.selections.primary.active.lineIndex, 2);
 	assert.equal(
 		requiredLine(viewport.element, 2)
-			.querySelector<HTMLElement>(".aster-editor-caret")
+			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
 		"58px",
 	);
@@ -701,7 +701,7 @@ test("Measured content width, line height, and scroll stay synchronized", () => 
 	assert.equal(viewport.element.scrollLeft, 300);
 	assert.equal(viewport.element.scrollTop, 400);
 	assert.equal(
-		requiredElement(viewport.element, ".aster-editor-content").style.width,
+		requiredElement(viewport.element, ".stanza-editor-content").style.width,
 		"500px",
 	);
 	for (const row of lineElements(viewport.element)) {
@@ -806,7 +806,7 @@ function requiredElement<T extends Element = HTMLElement>(
 
 function lineElements(container: ParentNode): HTMLDivElement[] {
 	return [...container.querySelectorAll<HTMLDivElement>(
-		".aster-editor-line",
+		".stanza-editor-line",
 	)];
 }
 
@@ -821,7 +821,7 @@ function lineText(line: Element | undefined): HTMLSpanElement {
 	assert.ok(line);
 	return requiredElement<HTMLSpanElement>(
 		line,
-		".aster-editor-line-text",
+		".stanza-editor-line-text",
 	);
 }
 
@@ -829,7 +829,7 @@ function lineNumber(line: Element | undefined): HTMLSpanElement {
 	assert.ok(line);
 	return requiredElement<HTMLSpanElement>(
 		line,
-		".aster-editor-line-number",
+		".stanza-editor-line-number",
 	);
 }
 

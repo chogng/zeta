@@ -51,9 +51,9 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
 		this.horizontalVisibility = options.horizontal ?? "auto";
 		this.verticalVisibility = options.vertical ?? "auto";
 		if (!options.viewport.id) {
-			options.viewport.id = `aster-editor-scroll-viewport-${EditorScrollbarPart.nextViewportId++}`;
+			options.viewport.id = `stanza-editor-scroll-viewport-${EditorScrollbarPart.nextViewportId++}`;
 		}
-		options.container.style.setProperty("--aster-editor-scrollbar-size", `${this.scrollbarSize}px`);
+		options.container.style.setProperty("--stanza-editor-scrollbar-size", `${this.scrollbarSize}px`);
 		this.horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 		this.verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 		this.horizontal = this.own(new HorizontalScrollbar(options.container, {
@@ -78,7 +78,7 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
 		this.configureTrack(this.vertical, "vertical", this.verticalVisibility);
 		this.defer(() => {
 			if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
-			this.container.classList.remove("aster-editor-scrolling");
+			this.container.classList.remove("stanza-editor-scrolling");
 		});
 	}
 
@@ -135,17 +135,17 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
 		axis: "horizontal" | "vertical",
 		visibility: EditorScrollbarVisibility,
 	): void {
-		scrollbar.trackNode.toggleClassName("aster-editor-scrollbar-track", true);
-		scrollbar.trackNode.toggleClassName(`aster-editor-scrollbar-track-${axis}`, true);
+		scrollbar.trackNode.toggleClassName("stanza-editor-scrollbar-track", true);
+		scrollbar.trackNode.toggleClassName(`stanza-editor-scrollbar-track-${axis}`, true);
 		scrollbar.track.dataset.visibility = visibility;
 	}
 
 	private showScrollbars(): void {
-		this.container.classList.add("aster-editor-scrolling");
+		this.container.classList.add("stanza-editor-scrolling");
 		if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
 		this.scrollActivityTimer = setTimeout(() => {
 			this.scrollActivityTimer = undefined;
-			this.container.classList.remove("aster-editor-scrolling");
+			this.container.classList.remove("stanza-editor-scrolling");
 		}, 700);
 	}
 }

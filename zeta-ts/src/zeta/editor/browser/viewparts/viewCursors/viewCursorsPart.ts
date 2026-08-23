@@ -1,7 +1,7 @@
 import "./viewCursors.css";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { projectAsterCursorOverlays } from "./cursorProjection.js";
+import { projectStanzaCursorOverlays } from "./cursorProjection.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Projects primary and secondary carets without owning cursor positions. */
@@ -18,6 +18,6 @@ export class ViewCursorsPart extends EditorOverlayPart {
 		if (!context) {
 			return;
 		}
-		projectAsterCursorOverlays(context, this.selectionController);
+		projectStanzaCursorOverlays(context, this.selectionController);
 	}
 }

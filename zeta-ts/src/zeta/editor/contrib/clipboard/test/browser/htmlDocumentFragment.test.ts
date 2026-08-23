@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createDefaultDocumentSchema } from "../../../../common/model/documentSchema.js";
 import { createDocumentFragmentFromHtml } from "../../browser/htmlDocumentFragment.js";
 
-test("Aster external HTML clipboard converts supported structure and inline marks into schema nodes", () => {
+test("Stanza external HTML clipboard converts supported structure and inline marks into schema nodes", () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createDefaultDocumentSchema();
 	const fragment = createDocumentFragmentFromHtml(environment.window.document, schema, [
@@ -32,7 +32,7 @@ test("Aster external HTML clipboard converts supported structure and inline mark
 	environment.window.close();
 });
 
-test("Aster external HTML clipboard discards executable content and unsafe URLs", () => {
+test("Stanza external HTML clipboard discards executable content and unsafe URLs", () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createDefaultDocumentSchema();
 	const fragment = createDocumentFragmentFromHtml(environment.window.document, schema, "<p onclick='alert(1)'><a href='javascript:alert(1)'>unsafe</a><script>ignored()</script><img src='javascript:alert(1)' alt='ignored'>safe</p>");
@@ -46,7 +46,7 @@ test("Aster external HTML clipboard discards executable content and unsafe URLs"
 	environment.window.close();
 });
 
-test("Aster external HTML clipboard preserves nested block containers without flattening them", () => {
+test("Stanza external HTML clipboard preserves nested block containers without flattening them", () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createDefaultDocumentSchema();
 	const fragment = createDocumentFragmentFromHtml(environment.window.document, schema, "<div>Before<p>Paragraph</p><div>After</div></div>");
@@ -60,7 +60,7 @@ test("Aster external HTML clipboard preserves nested block containers without fl
 	environment.window.close();
 });
 
-test("Aster external HTML clipboard rejects empty and unbounded input", () => {
+test("Stanza external HTML clipboard rejects empty and unbounded input", () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createDefaultDocumentSchema();
 

@@ -1,4 +1,4 @@
-.aster-editor-completion {
+.stanza-editor-completion {
   position: absolute;
   z-index: 6;
   display: none;
@@ -15,11 +15,11 @@
   box-shadow: 0 4px 12px var(--zeta-widget-shadow);
 }
 
-.aster-editor-completion.visible {
+.stanza-editor-completion.visible {
   display: block;
 }
 
-.aster-editor-completion-option {
+.stanza-editor-completion-option {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
   gap: 8px;
@@ -30,40 +30,40 @@
   cursor: default;
 }
 
-.aster-editor-completion-option.focused {
+.stanza-editor-completion-option.focused {
   color: var(--zeta-list-active-selection-foreground);
   background: var(--zeta-list-active-selection-background);
 }
 
-.aster-editor-completion-kind {
+.stanza-editor-completion-kind {
   min-width: 64px;
   color: var(--zeta-description-foreground);
   font-size: 0.85em;
 }
 
-.aster-editor-completion-option.focused
-  .aster-editor-completion-kind {
+.stanza-editor-completion-option.focused
+  .stanza-editor-completion-kind {
   color: inherit;
 }
 
-.aster-editor-completion-label,
-.aster-editor-completion-detail {
+.stanza-editor-completion-label,
+.stanza-editor-completion-detail {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.aster-editor-completion-detail {
+.stanza-editor-completion-detail {
   color: var(--zeta-description-foreground);
   font-size: 0.9em;
 }
 
-.aster-editor-completion-option.resolving
-  .aster-editor-completion-detail::after {
+.stanza-editor-completion-option.resolving
+  .stanza-editor-completion-detail::after {
   content: " …";
 }
 
-.aster-editor-completion-documentation {
+.stanza-editor-completion-documentation {
   grid-column: 2 / -1;
   overflow: hidden;
   color: inherit;
@@ -72,7 +72,7 @@
   white-space: pre-wrap;
 }
 
-.aster-editor-completion-option.focused
-  .aster-editor-completion-detail {
+.stanza-editor-completion-option.focused
+  .stanza-editor-completion-detail {
   color: inherit;
 }

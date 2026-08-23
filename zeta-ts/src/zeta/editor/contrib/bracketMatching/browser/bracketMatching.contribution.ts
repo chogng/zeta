@@ -4,7 +4,7 @@ import { BracketMatchController } from "./bracketMatchController.js";
 import { BracketNavigationController } from "./bracketNavigationController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { DecorationPresentation, createAsterDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";
 import { LanguageBracketMatcher } from "../common/bracketMatching.js";
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from "../../../common/languages/languageLexicalContext.js";
 import { LanguageBracketColorizationIndex } from "../common/bracketColorization.js";
@@ -20,7 +20,7 @@ registerEditorContribution({ id: "editor.contrib.bracketMatching", configure: co
 	context.provideCapability(TextEditorCapability.bracketMatcher, matcher);
 	context.provideCapability(TextEditorCapability.bracketDecorations, decorations);
 	context.provideCapability(TextEditorCapability.languageLexicalContext, lexicalContext);
-	context.addDecorationSource(createAsterDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
+	context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.BracketMatch));
 	context.setLanguageLexicalContext(lexicalContext);
 	if (!largeFile && context.options.bracketPairColorization !== false) {
 		const colorizations = context.own(new LanguageBracketColorizationIndex(context.model, lexicalContext));

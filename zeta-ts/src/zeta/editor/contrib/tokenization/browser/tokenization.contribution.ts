@@ -1,12 +1,12 @@
 import { registerEditorContribution } from "../../../browser/editorContribution.js";
 import { TokenizationController } from "./tokenizationController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { createAsterSemanticTokenSource, createOverlaySemanticTokenSource } from "../../semanticTokens/browser/semanticTokenPresentation.js";
+import { createStanzaSemanticTokenSource, createOverlaySemanticTokenSource } from "../../semanticTokens/browser/semanticTokenPresentation.js";
 
 registerEditorContribution({ id: "editor.contrib.tokenization", configure: context => {
-	const lexicalSource = createAsterSemanticTokenSource(context.getCapability(TextEditorCapability.tokenization));
+	const lexicalSource = createStanzaSemanticTokenSource(context.getCapability(TextEditorCapability.tokenization));
 	const semanticOverlay = context.getOptionalCapability(TextEditorCapability.semanticTokenOverlay);
-	const source = semanticOverlay ? createOverlaySemanticTokenSource(lexicalSource, createAsterSemanticTokenSource(semanticOverlay)) : lexicalSource;
+	const source = semanticOverlay ? createOverlaySemanticTokenSource(lexicalSource, createStanzaSemanticTokenSource(semanticOverlay)) : lexicalSource;
 	context.provideCapability(TextEditorCapability.semanticTokenSource, source);
 	context.setSemanticTokenSource(source);
 }, install: context => {

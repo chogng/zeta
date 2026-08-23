@@ -35,11 +35,11 @@ export class DiffOverviewRuler {
 		this.modifiedLane = h(ownerDocument, "div");
 		this.viewport = h(ownerDocument, "div");
 		this.viewportNode = new FastDomNode(this.viewport);
-		this.root.setClassName("aster-diff-overview");
+		this.root.setClassName("stanza-diff-overview");
 		this.element.setAttribute("aria-hidden", "true");
-		this.originalLane.className = "aster-diff-overview-lane original";
-		this.modifiedLane.className = "aster-diff-overview-lane modified";
-		this.viewportNode.setClassName("aster-diff-overview-viewport");
+		this.originalLane.className = "stanza-diff-overview-lane original";
+		this.modifiedLane.className = "stanza-diff-overview-lane modified";
+		this.viewportNode.setClassName("stanza-diff-overview-viewport");
 		this.element.append(this.originalLane, this.modifiedLane, this.viewport);
 	}
 
@@ -64,7 +64,7 @@ function createMarkers(ownerDocument: Document, rows: readonly LineDiffRow[], si
 	if (rows.length === 0) return fragment;
 	for (const range of changedRanges(rows, side)) {
 		const marker = h(ownerDocument, "span");
-		marker.className = `aster-diff-overview-marker ${side === "original" ? "removed" : "inserted"}`;
+		marker.className = `stanza-diff-overview-marker ${side === "original" ? "removed" : "inserted"}`;
 		marker.style.top = `${range.startRow / rows.length * 100}%`;
 		marker.style.height = `${(range.endRowExclusive - range.startRow) / rows.length * 100}%`;
 		fragment.append(marker);

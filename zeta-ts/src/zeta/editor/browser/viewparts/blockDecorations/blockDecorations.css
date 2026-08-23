@@ -1,4 +1,4 @@
-.aster-editor-block-decorations {
+.stanza-editor-block-decorations {
   position: absolute;
   top: 0;
   left: 0;
@@ -6,7 +6,7 @@
   pointer-events: none;
 }
 
-.aster-editor-block-decoration {
+.stanza-editor-block-decoration {
   position: absolute;
   box-sizing: border-box;
   pointer-events: none;

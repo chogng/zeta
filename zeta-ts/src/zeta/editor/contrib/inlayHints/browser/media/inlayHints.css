@@ -1,4 +1,4 @@
-.aster-editor-inlay-hint {
+.stanza-editor-inlay-hint {
   position: absolute;
   z-index: 3;
   color: var(--zeta-editor-inlay-hint-foreground, var(--zeta-editor-description-foreground));

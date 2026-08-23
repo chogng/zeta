@@ -1,4 +1,4 @@
-/** Largest explicit clipboard text file Aster will read into one document edit. */
+/** Largest explicit clipboard text file Stanza will read into one document edit. */
 export const TEXT_FILE_TRANSFER_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Browser file capability accepted only after a user supplies it through a transfer. */

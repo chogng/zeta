@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { syntaxLanguageForAsterLanguage } from "../../browser/services/rustSyntaxFactsService.js";
+import { syntaxLanguageForStanzaLanguage } from "../../browser/services/rustSyntaxFactsService.js";
 import { projectRustSyntaxFoldingRanges } from "../../browser/services/rustSyntaxFoldingService.js";
 
 test("Rust syntax folding projects matching parser revisions", () => {
@@ -20,12 +20,12 @@ test("Rust syntax folding projects matching parser revisions", () => {
 	}]);
 });
 
-test("Rust syntax folding rejects stale revisions and maps every parser-backed Aster language", () => {
+test("Rust syntax folding rejects stale revisions and maps every parser-backed Stanza language", () => {
 	assert.deepEqual(projectRustSyntaxFoldingRanges({ revision: 2, foldingRanges: [] }, 3), []);
-	assert.equal(syntaxLanguageForAsterLanguage("javascript"), "javascript");
-	assert.equal(syntaxLanguageForAsterLanguage("javascriptreact"), "javascriptreact");
-	assert.equal(syntaxLanguageForAsterLanguage("rust"), "rust");
-	assert.equal(syntaxLanguageForAsterLanguage("typescript"), "typescript");
-	assert.equal(syntaxLanguageForAsterLanguage("typescriptreact"), "typescriptreact");
-	assert.equal(syntaxLanguageForAsterLanguage("markdown"), undefined);
+	assert.equal(syntaxLanguageForStanzaLanguage("javascript"), "javascript");
+	assert.equal(syntaxLanguageForStanzaLanguage("javascriptreact"), "javascriptreact");
+	assert.equal(syntaxLanguageForStanzaLanguage("rust"), "rust");
+	assert.equal(syntaxLanguageForStanzaLanguage("typescript"), "typescript");
+	assert.equal(syntaxLanguageForStanzaLanguage("typescriptreact"), "typescriptreact");
+	assert.equal(syntaxLanguageForStanzaLanguage("markdown"), undefined);
 });

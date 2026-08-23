@@ -35,7 +35,7 @@ export class RulersPart extends DisposableOwner implements EditorViewPart {
 		this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));
 		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName("aster-editor-rulers");
+		this.root.setClassName("stanza-editor-rulers");
 		this.domNode.setAttribute("role", "presentation");
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
@@ -49,7 +49,7 @@ export class RulersPart extends DisposableOwner implements EditorViewPart {
 			this.renderedRulers.length = 0;
 			for (const ruler of this.rulers) {
 				const element = new FastDomNode(h(this.domNode.ownerDocument, "div"));
-				element.setClassName("aster-editor-ruler");
+				element.setClassName("stanza-editor-ruler");
 				fragment.append(element.domNode);
 				this.renderedRulers.push(element);
 			}
@@ -69,10 +69,10 @@ export class RulersPart extends DisposableOwner implements EditorViewPart {
 
 function validateRuler(ruler: EditorRuler): EditorRuler {
 	if (!ruler || !Number.isSafeInteger(ruler.column) || ruler.column < 1) {
-		throw new RangeError("Aster ruler columns must be positive safe integers");
+		throw new RangeError("Stanza ruler columns must be positive safe integers");
 	}
 	if (ruler.color !== undefined && (typeof ruler.color !== "string" || ruler.color.trim().length === 0)) {
-		throw new TypeError("Aster ruler colors must be non-empty strings");
+		throw new TypeError("Stanza ruler colors must be non-empty strings");
 	}
 	return Object.freeze({
 		column: ruler.column,

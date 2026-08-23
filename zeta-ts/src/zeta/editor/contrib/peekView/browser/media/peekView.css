@@ -1,4 +1,4 @@
-.aster-editor-peek-view {
+.stanza-editor-peek-view {
   position: absolute;
   right: 8px;
   left: 8px;
@@ -11,24 +11,24 @@
   box-shadow: 0 6px 18px var(--zeta-widget-shadow);
 }
 
-.aster-editor-peek-view-header {
+.stanza-editor-peek-view-header {
   padding: 4px 8px;
   color: var(--zeta-description-foreground);
   font-size: 11px;
   border-bottom: 1px solid var(--zeta-widget-border);
 }
 
-.aster-editor-peek-view-body {
+.stanza-editor-peek-view-body {
   padding: 8px;
 }
 
-.aster-editor-language-locations {
+.stanza-editor-language-locations {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.aster-editor-language-location {
+.stanza-editor-language-location {
   padding: 5px 8px;
   color: var(--zeta-editor-foreground);
   font: inherit;
@@ -38,32 +38,32 @@
   border-radius: 2px;
 }
 
-.aster-editor-language-location:hover,
-.aster-editor-language-location:focus-visible {
+.stanza-editor-language-location:hover,
+.stanza-editor-language-location:focus-visible {
   background: var(--zeta-list-hover-background);
   outline: 1px solid var(--zeta-focus-border);
 }
 
-.aster-editor-language-hierarchy,
-.aster-editor-language-hierarchy-children {
+.stanza-editor-language-hierarchy,
+.stanza-editor-language-hierarchy-children {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.aster-editor-language-hierarchy-children {
+.stanza-editor-language-hierarchy-children {
   padding-left: 14px;
   color: var(--zeta-description-foreground);
 }
 
-.aster-editor-language-hierarchy-row {
+.stanza-editor-language-hierarchy-row {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.aster-editor-language-hierarchy-item,
-.aster-editor-language-hierarchy-expand {
+.stanza-editor-language-hierarchy-item,
+.stanza-editor-language-hierarchy-expand {
   padding: 4px 7px;
   color: var(--zeta-editor-foreground);
   font: inherit;
@@ -73,7 +73,7 @@
   border-radius: 2px;
 }
 
-.aster-editor-language-hierarchy-item {
+.stanza-editor-language-hierarchy-item {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -81,15 +81,15 @@
   white-space: nowrap;
 }
 
-.aster-editor-language-hierarchy-expand {
+.stanza-editor-language-hierarchy-expand {
   color: var(--zeta-description-foreground);
   font-size: 11px;
 }
 
-.aster-editor-language-hierarchy-item:hover,
-.aster-editor-language-hierarchy-item:focus-visible,
-.aster-editor-language-hierarchy-expand:hover,
-.aster-editor-language-hierarchy-expand:focus-visible {
+.stanza-editor-language-hierarchy-item:hover,
+.stanza-editor-language-hierarchy-item:focus-visible,
+.stanza-editor-language-hierarchy-expand:hover,
+.stanza-editor-language-hierarchy-expand:focus-visible {
   background: var(--zeta-list-hover-background);
   outline: 1px solid var(--zeta-focus-border);
 }

@@ -38,7 +38,7 @@ export interface DocumentPluginDecorationSource {
 	readonly set: DocumentDecorationSet;
 }
 
-/** Mutable document state around immutable Aster snapshots and transactions. */
+/** Mutable document state around immutable Stanza snapshots and transactions. */
 export class DocumentModel extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<DocumentChange>());
 	private readonly selectionEmitter = this.own(new Emitter<DocumentSelection | undefined>());

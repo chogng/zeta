@@ -1,4 +1,4 @@
-.aster-editor-scroll-decoration {
+.stanza-editor-scroll-decoration {
   position: absolute;
   top: 0;
   left: 0;
@@ -6,7 +6,7 @@
   pointer-events: none;
 }
 
-.aster-editor-scroll-decoration-shadow {
+.stanza-editor-scroll-decoration-shadow {
   position: absolute;
   right: 0;
   left: 0;
@@ -16,21 +16,21 @@
   transition: opacity 100ms linear;
 }
 
-.aster-editor-scroll-decoration-shadow.top {
+.stanza-editor-scroll-decoration-shadow.top {
   top: 0;
 }
 
-.aster-editor-scroll-decoration-shadow.bottom {
+.stanza-editor-scroll-decoration-shadow.bottom {
   bottom: 0;
   transform: rotate(180deg);
 }
 
-.aster-editor-scroll-decoration-shadow.visible {
+.stanza-editor-scroll-decoration-shadow.visible {
   opacity: 1;
 }
 
 @media (forced-colors: active) {
-  .aster-editor-scroll-decoration-shadow {
+  .stanza-editor-scroll-decoration-shadow {
     background: linear-gradient(to bottom, CanvasText, transparent);
   }
 }

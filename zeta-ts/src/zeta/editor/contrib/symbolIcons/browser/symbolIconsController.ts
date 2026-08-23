@@ -9,9 +9,9 @@ export class SymbolIconsController extends DisposableOwner {
 	private symbols: readonly LanguageDocumentSymbol[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: DocumentSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster symbol icons failed", error)) {
+	constructor(private readonly viewport: EditorViewport, private readonly service: DocumentSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza symbol icons failed", error)) {
 		super();
-		if (service.textModel !== viewport.textModel) throw new TypeError("Aster symbol icon dependencies must share a text model");
+		if (service.textModel !== viewport.textModel) throw new TypeError("Stanza symbol icon dependencies must share a text model");
 		this.own(viewport.onDidChangeLayout(() => this.render()));
 		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
 		this.defer(() => this.request?.abort());
@@ -30,12 +30,12 @@ export class SymbolIconsController extends DisposableOwner {
 	}
 
 	private render(): void {
-		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-symbol-icon")]) element.remove();
+		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-symbol-icon")]) element.remove();
 		for (const symbol of flatten(this.symbols)) {
-			const line = this.viewport.element.querySelector<HTMLElement>(`.aster-editor-line[data-logical-line-index="${symbol.selectionRange.start.lineIndex}"]`);
+			const line = this.viewport.element.querySelector<HTMLElement>(`.stanza-editor-line[data-logical-line-index="${symbol.selectionRange.start.lineIndex}"]`);
 			if (!line) continue;
 			const icon = h(this.viewport.element.ownerDocument, "span");
-			icon.className = "aster-editor-symbol-icon";
+			icon.className = "stanza-editor-symbol-icon";
 			icon.textContent = symbolIcon(symbol.kind);
 			icon.title = symbol.detail ? `${symbol.name}: ${symbol.detail}` : symbol.name;
 			icon.setAttribute("aria-label", icon.title);

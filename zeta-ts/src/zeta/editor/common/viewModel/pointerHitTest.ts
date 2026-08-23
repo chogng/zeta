@@ -43,7 +43,7 @@ export interface EditorHitTarget {
 }
 
 /** @internal */
-export function hitTestAsterEditorPoint(
+export function hitTestStanzaEditorPoint(
 	model: TextModel,
 	layout: HitTestLayout,
 	point: ViewportPoint,
@@ -101,12 +101,12 @@ export function hitTestAsterEditorPoint(
 }
 
 /** @internal */
-export function hitTestAsterVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: HitTestLayout, point: ViewportPoint, metrics: HitTestMetrics, measurer: TextMeasurer): EditorHitTarget | undefined {
+export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: HitTestLayout, point: ViewportPoint, metrics: HitTestMetrics, measurer: TextMeasurer): EditorHitTarget | undefined {
 	validatePoint(point);
 	validateLayout(layout);
 	validateMetrics(metrics);
 	if (projection.modelVersion !== model.version) {
-		throw new Error("Aster visual hit testing requires the current text model projection");
+		throw new Error("Stanza visual hit testing requires the current text model projection");
 	}
 	if (
 		point.left < 0 ||
@@ -186,7 +186,7 @@ function validatePoint(point: ViewportPoint): void {
 		!Number.isFinite(point.left) ||
 		!Number.isFinite(point.top)
 	) {
-		throw new RangeError("Aster hit-test point must contain finite coordinates");
+		throw new RangeError("Stanza hit-test point must contain finite coordinates");
 	}
 }
 
@@ -206,7 +206,7 @@ function validateLayout(layout: HitTestLayout): void {
 		!Number.isFinite(layout.scrollPosition.top) ||
 		layout.scrollPosition.top < 0
 	) {
-		throw new RangeError("Aster hit-test layout is invalid");
+		throw new RangeError("Stanza hit-test layout is invalid");
 	}
 }
 
@@ -220,6 +220,6 @@ function validateMetrics(metrics: HitTestMetrics): void {
 		!Number.isFinite(metrics.paddingTop ?? 0) ||
 		(metrics.paddingTop ?? 0) < 0
 	) {
-		throw new RangeError("Aster hit-test metrics are invalid");
+		throw new RangeError("Stanza hit-test metrics are invalid");
 	}
 }

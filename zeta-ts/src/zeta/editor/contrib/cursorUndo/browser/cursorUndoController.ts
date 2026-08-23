@@ -17,7 +17,7 @@ export class CursorUndoController extends DisposableOwner {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (viewport.textModel !== selections.textModel) throw new TypeError("Aster cursor undo dependencies must share one text model");
+			if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza cursor undo dependencies must share one text model");
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
@@ -39,7 +39,7 @@ registerEditorContribution({ id: "editor.contrib.cursorUndo", install: context =
 	context.own(new CursorUndoController(context.textInput.element, context.viewport, context.selections));
 } });
 
-/** Resolves Aster's cursor-only undo shortcut without accepting unrelated modifiers. */
+/** Resolves Stanza's cursor-only undo shortcut without accepting unrelated modifiers. */
 export function isCursorUndoChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): boolean {
 	if (event.key.toLowerCase() !== "u" || event.shiftKey || event.altKey) return false;
 	return targetOperatingSystem === OperatingSystem.Macintosh
@@ -49,6 +49,6 @@ export function isCursorUndoChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" |
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
 	const resolved = value ?? operatingSystem;
-	if (!Object.values(OperatingSystem).includes(resolved)) throw new TypeError("Unknown Aster cursor undo operating system");
+	if (!Object.values(OperatingSystem).includes(resolved)) throw new TypeError("Unknown Stanza cursor undo operating system");
 	return resolved;
 }

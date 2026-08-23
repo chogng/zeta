@@ -22,7 +22,7 @@ import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollabor
 import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../../../generated/app-server/types.js";
 import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../generated/app-server/types.js";
 
-/** App Server transport adapter for Aster's server-ordered collaboration contract. */
+/** App Server transport adapter for Stanza's server-ordered collaboration contract. */
 export class AppServerDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
 	private readonly connections = new Map<string, Set<AppServerDocumentCollaborationConnection>>();
 
@@ -41,14 +41,14 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 	}
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
-		throwIfCancelled(signal, "Opening a Aster collaboration room was cancelled");
+		throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
 		const opened = await this.api.open({
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
 			clientId: input.clientId,
 			schemaId: input.schemaId,
 			document: serializeDocument(input.document, input.schema),
 		});
-		throwIfCancelled(signal, "Opening a Aster collaboration room was cancelled");
+		throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
 		const snapshot = decodeSnapshot(opened.snapshot, input.schema);
 		const connection = new AppServerDocumentCollaborationConnection(this, input.schema, opened.clientId, snapshot);
 		let roomConnections = this.connections.get(connection.roomId);
@@ -59,7 +59,7 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 		roomConnections.add(connection);
 		try {
 			connection.acceptPresence(await this.api.readPresence({ roomId: connection.roomId }));
-			throwIfCancelled(signal, "Opening a Aster collaboration room was cancelled");
+			throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
 		} catch (error) {
 			connection.dispose();
 			throw error;
@@ -75,7 +75,7 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 	}
 
 	async submit(connection: AppServerDocumentCollaborationConnection, envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		throwIfCancelled(signal, "Submitting a Aster collaboration update was cancelled");
+		throwIfCancelled(signal, "Submitting a Stanza collaboration update was cancelled");
 		const submitted = await this.api.submit({
 			roomId: connection.roomId,
 			clientId: connection.clientId,
@@ -84,7 +84,7 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 			transaction: serializeDocumentTransaction(envelope.transaction, connection.schema),
 			document: serializeDocument(document, connection.schema),
 		});
-		throwIfCancelled(signal, "Submitting a Aster collaboration update was cancelled");
+		throwIfCancelled(signal, "Submitting a Stanza collaboration update was cancelled");
 		switch (submitted.status) {
 			case "accepted": return { kind: "accepted", update: decodeUpdate(submitted.update, connection.schema) };
 			case "conflict": return { kind: "conflict", updates: Object.freeze(submitted.updates.map(update => decodeUpdate(update, connection.schema))) };
@@ -93,13 +93,13 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 	}
 
 	async updatePresence(connection: AppServerDocumentCollaborationConnection, selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		throwIfCancelled(signal, "Publishing Aster collaboration presence was cancelled");
+		throwIfCancelled(signal, "Publishing Stanza collaboration presence was cancelled");
 		await this.api.publishPresence({
 			roomId: connection.roomId,
 			clientId: connection.clientId,
 			...(selection === undefined ? {} : { selection: JSON.stringify(selection) }),
 		});
-		throwIfCancelled(signal, "Publishing Aster collaboration presence was cancelled");
+		throwIfCancelled(signal, "Publishing Stanza collaboration presence was cancelled");
 	}
 }
 
@@ -137,12 +137,12 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 	}
 
 	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration connection is disposed"));
+		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
 		return this.service.submit(this, envelope, document, signal);
 	}
 
 	updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Aster collaboration connection is disposed"));
+		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
 		return this.service.updatePresence(this, selection, signal);
 	}
 
@@ -202,14 +202,14 @@ function decodeSelection(value: string): DocumentSelection {
 	try {
 		parsed = JSON.parse(value);
 	} catch {
-		throw new TypeError("Aster collaboration presence selection must contain JSON");
+		throw new TypeError("Stanza collaboration presence selection must contain JSON");
 	}
-	const selection = expectRecord(parsed, "Aster collaboration presence selection");
+	const selection = expectRecord(parsed, "Stanza collaboration presence selection");
 	switch (selection.kind) {
 		case "all": return allSelection();
-		case "node": return nodeSelection(expectString(selection.nodeId, "Aster collaboration node selection nodeId"));
-		case "text": return textSelection(decodePoint(selection.anchor, "Aster collaboration text selection anchor"), decodePoint(selection.head, "Aster collaboration text selection head"));
-		default: throw new TypeError("Aster collaboration presence selection has an unknown kind");
+		case "node": return nodeSelection(expectString(selection.nodeId, "Stanza collaboration node selection nodeId"));
+		case "text": return textSelection(decodePoint(selection.anchor, "Stanza collaboration text selection anchor"), decodePoint(selection.head, "Stanza collaboration text selection head"));
+		default: throw new TypeError("Stanza collaboration presence selection has an unknown kind");
 	}
 }
 
@@ -229,6 +229,6 @@ function expectString(value: unknown, name: string): string {
 }
 
 function validateProtocolInteger(value: unknown, name: string, minimum: number): number {
-	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) throw new TypeError(`Aster collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
+	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) throw new TypeError(`Stanza collaboration ${name} must be a safe integer greater than or equal to ${minimum}`);
 	return value;
 }

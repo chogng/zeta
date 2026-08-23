@@ -50,12 +50,12 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 		this.canvas = h(ownerDocument, "canvas");
 		this.viewportElement = h(ownerDocument, "div");
 		this.viewportNode = new FastDomNode(this.viewportElement);
-		this.root.setClassName("aster-editor-minimap");
+		this.root.setClassName("stanza-editor-minimap");
 		this.root.setHidden(!options.enabled);
 		this.domNode.setAttribute("aria-hidden", "true");
-		this.canvas.className = "aster-editor-minimap-gpu";
+		this.canvas.className = "stanza-editor-minimap-gpu";
 		this.canvas.setAttribute("aria-hidden", "true");
-		this.viewportNode.setClassName("aster-editor-minimap-viewport");
+		this.viewportNode.setClassName("stanza-editor-minimap-viewport");
 		this.domNode.append(this.canvas, this.viewportElement);
 		this.gpuRenderer = options.enabled
 			? GpuMinimapRenderer.tryCreate(this.canvas)
@@ -95,7 +95,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 		} else {
 			for (const row of rows) {
 				const marker = h(this.domNode.ownerDocument, "span");
-				marker.className = "aster-editor-minimap-row";
+				marker.className = "stanza-editor-minimap-row";
 				marker.style.top = `${row.startLineIndex / this.model.lineCount * 100}%`;
 				marker.style.width = `${minimapContentWidth(row.density)}px`;
 				marker.style.height = `${MINIMAP_LINE_HEIGHT}px`;
@@ -104,7 +104,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 		}
 		for (const marker of this.readMarkers()) {
 			const element = h(this.domNode.ownerDocument, "span");
-			element.className = "aster-editor-minimap-diagnostic-marker";
+			element.className = "stanza-editor-minimap-diagnostic-marker";
 			element.classList.add(marker.presentation);
 			element.style.top = `${marker.startLineIndex / this.model.lineCount * 100}%`;
 			element.style.height = `${Math.max(1, (marker.endLineIndexExclusive - marker.startLineIndex) / this.model.lineCount * 100)}%`;

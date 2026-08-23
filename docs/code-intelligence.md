@@ -35,7 +35,7 @@ Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索
 | 能力 | 当前 owner | 当前状态 |
 | --- | --- | --- |
 | 单文档增量 parse、token、fold、document symbol、parse diagnostic | `zeta-syntax` | Current |
-| 打开文档的文本、selection、undo/redo 与 Editor revision | Aster / `zeta-editor` | Current |
+| 打开文档的文本、selection、undo/redo 与 Editor revision | Stanza / `zeta-editor` | Current |
 | completion、definition、references、hierarchy、workspace symbol 等精确语义 | `zeta-language-service` + `zeta-lsp` | Current |
 | Workspace scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS | `zeta-code-index` | Current |
 | embedding cache、vector recall、optional rerank | `zeta-code-index-semantic` | Current |
@@ -47,7 +47,7 @@ Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索
 | 语言请求取消与隐私安全指标 | `zeta-language-service` + App Server sink | Current |
 | references/navigation semantic cache | 无 | 未安装；等待指标门禁 |
 | SCIP、occurrence/edge graph 与跨语言 resolver | 无 | 尚未完成 |
-| revision-bound structural selection scopes + Smart Select | `zeta-syntax` + Aster | Current；mutation 尚未完成 |
+| revision-bound structural selection scopes + Smart Select | `zeta-syntax` + Stanza | Current；mutation 尚未完成 |
 
 当前 `zeta-code-index` 的 `ChunkReference` 仍只表达 root、path、source revision、chunk key、content
 hash 和范围；`zeta-symbol-index` 单独保存 name、kind 与声明/选择范围。两者通过 source identity 与
@@ -370,7 +370,7 @@ indexer/resolver、真实 consumer、可追溯 freshness 和 failure tests 同�
 - 不暴露原始 Tree-sitter `Node`，先按真实命令增加 revision-bound operation。
 - 已实现 `syntax/selectionRanges`：只按当前最多 1,024 个 selection 请求，每个 selection 最多返回
   64 个 innermost-first named parser scopes；普通 `syntax/analyze` 不批量携带整棵树节点。
-- Aster Smart Select 已按 snapshot revision 和选区绑定异步结果，支持取消与 stale gate；parser 失败时
+- Stanza Smart Select 已按 snapshot revision 和选区绑定异步结果，支持取消与 stale gate；parser 失败时
   回退 word/pair/line/document，shrink 使用 Editor-owned history。
 - 后续顺序实现 select declaration、argument/expression/statement selection，之后
   才实现 delete/move/wrap 等编辑。

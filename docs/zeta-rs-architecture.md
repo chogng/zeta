@@ -172,7 +172,7 @@ TUI presentation。当前 API、接入义务和限制见
 `zeta-editor-core` 当前拥有不依赖 renderer 或 transport 的纯 Rust document transaction vertical
 slice：UTF-16 selection、revision-bound atomic multi-edit、bounded undo/redo 和 snapshot。`zeterm/zeterm`
 的 `CodeEditorDocument` 是当前真实消费者，以 persistent core 持有 committed text/history/revision，zeterm text
-projection 仅供行索引、syntax、folding 与绘制使用。Zeta Aster 是独立的 TypeScript Browser editor，拥有自己的
+projection 仅供行索引、syntax、folding 与绘制使用。Zeta Stanza 是独立的 TypeScript Browser editor，拥有自己的
 PieceTree、transaction、history、selection 和 tracked ranges；它只异步消费 Rust file/language/workspace service，
 不通过 WASM 或 App Server shadow document 调用 `zeta-editor-core`。跨运行时边界见
 [`editor-core.md`](editor-core.md)。

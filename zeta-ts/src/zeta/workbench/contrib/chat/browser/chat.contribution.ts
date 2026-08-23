@@ -11,13 +11,13 @@ import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { ISessionsManagementService } from "../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
-import { ChatInputEditor } from "./input/asterChatInputEditor.js";
+import { ChatInputEditor } from "./input/stanzaChatInputEditor.js";
 import { ChatInputEditors } from "./input/chatInputEditor.js";
 import { ChatAgentSidebarViewPane } from "./view/chatAgentSidebarViewPane.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
 
 ChatInputEditors.registerStatic({
-	id: "aster",
+	id: "stanza",
 	create: options => new ChatInputEditor(options),
 });
 

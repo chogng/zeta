@@ -5,7 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-/** Routes the VS Code go-to-bracket shortcut through Aster's lexical matcher. */
+/** Routes the VS Code go-to-bracket shortcut through Stanza's lexical matcher. */
 export class BracketNavigationController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -16,7 +16,7 @@ export class BracketNavigationController extends DisposableOwner {
 		super();
 		try {
 			if (viewport.textModel !== selections.textModel || viewport.textModel !== matcher.textModel) {
-				throw new TypeError("Aster bracket navigation dependencies must share one text model");
+				throw new TypeError("Stanza bracket navigation dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {

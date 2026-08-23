@@ -35,7 +35,7 @@ const { EditorLineWrapping } = await import("../../../../../editor/browser/viewM
 
 test.after(() => browserEnvironment.window.close());
 
-test("Aster editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
+test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -52,14 +52,14 @@ test("Aster editor pane loads, lays out, focuses, hides, and clears one editor p
 	}, new AbortController().signal);
 
 	assert.equal(pane.getValue(), "const alpha = 1;");
-	assert.equal(parent.querySelectorAll(".aster-editor-pane").length, 1);
-	assert.equal(parent.querySelectorAll(".aster-editor").length, 1);
-	const editor = parent.querySelector<HTMLElement>(".aster-editor")!;
+	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
+	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
+	const editor = parent.querySelector<HTMLElement>(".stanza-editor")!;
 	assert.equal(editor.dir, "rtl");
 	assert.equal(editor.style.fontFamily, '"Fira Code", monospace');
 	assert.equal(editor.style.fontSize, "16px");
 	pane.focus();
-	assert.equal(dom.window.document.activeElement?.classList.contains("aster-editor-input"), true);
+	assert.equal(dom.window.document.activeElement?.classList.contains("stanza-editor-input"), true);
 	assert.equal((dom.window.document.activeElement as HTMLTextAreaElement).dir, "rtl");
 	pane.setVisible(EditorPaneVisibility.Hidden);
 	assert.equal((parent.firstElementChild as HTMLElement).hidden, true);
@@ -68,13 +68,13 @@ test("Aster editor pane loads, lays out, focuses, hides, and clears one editor p
 
 	pane.clearInput();
 	assert.equal(pane.getValue(), "");
-	assert.equal(parent.querySelectorAll(".aster-editor").length, 0);
+	assert.equal(parent.querySelectorAll(".stanza-editor").length, 0);
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();
 });
 
-test("Aster editor pane acquires the Workbench language service for its detected model", async () => {
+test("Stanza editor pane acquires the Workbench language service for its detected model", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -111,7 +111,7 @@ class RecordingLanguageDiagnosticsService implements ILanguageDiagnosticsService
 	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] { return []; }
 }
 
-test("Aster editor pane releases a load cancelled before content resolution", async () => {
+test("Stanza editor pane releases a load cancelled before content resolution", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -132,12 +132,12 @@ test("Aster editor pane releases a load cancelled before content resolution", as
 	});
 
 	await assert.rejects(opening, error => (error as Error).name === "CancellationError");
-	assert.equal(parent.querySelectorAll(".aster-editor").length, 0);
+	assert.equal(parent.querySelectorAll(".stanza-editor").length, 0);
 	pane.dispose();
 	dom.window.close();
 });
 
-test("Aster editor pane saves and reverts its shared model reference", async () => {
+test("Stanza editor pane saves and reverts its shared model reference", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -173,7 +173,7 @@ test("Aster editor pane saves and reverts its shared model reference", async () 
 	dom.window.close();
 });
 
-test("Aster editor pane resolves extension first-line languages after loading an unknown file", async () => {
+test("Stanza editor pane resolves extension first-line languages after loading an unknown file", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("#!/usr/bin/env demo\nprint('ok')");
@@ -199,7 +199,7 @@ test("Aster editor pane resolves extension first-line languages after loading an
 	dom.window.close();
 });
 
-test("Aster editor pane forwards Workbench editor preferences to each created part", async () => {
+test("Stanza editor pane forwards Workbench editor preferences to each created part", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const parent = dom.window.document.querySelector<HTMLElement>("main")!;
 	const textFiles = new ImmediateTextFiles("const value = 1;");
@@ -288,15 +288,15 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\save.ts") }, new AbortController().signal);
 
-	const input = parent.querySelector<HTMLTextAreaElement>(".aster-editor-input")!;
+	const input = parent.querySelector<HTMLTextAreaElement>(".stanza-editor-input")!;
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));
 	await waitFor(() => textFiles.savedTexts.length === 1);
-	assert.equal(parent.querySelector(".aster-editor-accessibility-status")?.textContent, "Saved");
+	assert.equal(parent.querySelector(".stanza-editor-accessibility-status")?.textContent, "Saved");
 
 	textFiles.failSave = true;
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, ctrlKey: true, key: "s" }));
 	await waitFor(() => errors.length === 1);
-	assert.equal(parent.querySelector(".aster-editor-accessibility-status")?.textContent, "Save failed: conflict");
+	assert.equal(parent.querySelector(".stanza-editor-accessibility-status")?.textContent, "Save failed: conflict");
 
 	pane.dispose();
 	dom.window.close();

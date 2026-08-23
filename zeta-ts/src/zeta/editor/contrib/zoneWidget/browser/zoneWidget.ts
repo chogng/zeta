@@ -15,7 +15,7 @@ export class ZoneWidget extends DisposableOwner {
 		super();
 		viewport.textModel.offsetAt(options.anchor);
 		this.element = h(viewport.element.ownerDocument, "div");
-		this.element.className = `aster-editor-zone-widget${options.className ? ` ${options.className}` : ""}`;
+		this.element.className = `stanza-editor-zone-widget${options.className ? ` ${options.className}` : ""}`;
 		this.content = options.createContent(viewport.element.ownerDocument);
 		this.element.append(this.content);
 		this.element.hidden = true;

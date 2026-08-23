@@ -10,15 +10,15 @@ import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
-import { createAsterSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
+import { createStanzaSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
-import { captureAsterClipboardTextTransfer, normalizeAsterClipboardPasteProviders, provideAsterClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
-import { createAsterBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
-import { createAsterBrowserClipboardRichTextReader, createAsterBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
+import { captureStanzaClipboardTextTransfer, normalizeStanzaClipboardPasteProviders, provideStanzaClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
+import { createStanzaBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
+import { createStanzaBrowserClipboardRichTextReader, createStanzaBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
 import { registerTextInputClipboardFactory } from "../../../browser/input/textInputController.js";
 import { UriListPasteProvider } from "./clipboardPasteProvider.js";
 
-export const EDITOR_CLIPBOARD_MIME = "application/x-aster-editor";
+export const EDITOR_CLIPBOARD_MIME = "application/x-stanza-editor";
 export const EDITOR_HTML_CLIPBOARD_MIME = "text/html";
 
 export enum ClipboardLineEnding {
@@ -58,7 +58,7 @@ interface ClipboardPasteData {
 }
 
 /**
- * Routes native clipboard events through Aster's selection-aware commands.
+ * Routes native clipboard events through Stanza's selection-aware commands.
  */
 export class ClipboardController extends DisposableOwner {
 	private readonly lineEnding: ClipboardLineEnding;
@@ -82,28 +82,28 @@ export class ClipboardController extends DisposableOwner {
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
 			throw new TypeError(
-				"Aster clipboard and selection controllers must share one text model",
+				"Stanza clipboard and selection controllers must share one text model",
 			);
 		}
 		if (options.semanticTokens && options.semanticTokens.textModel !== viewport.textModel) {
 			this.dispose();
-			throw new TypeError("Aster clipboard semantic tokens must share the viewport text model");
+			throw new TypeError("Stanza clipboard semantic tokens must share the viewport text model");
 		}
 		if (options.isEditingAllowed !== undefined && typeof options.isEditingAllowed !== "function") {
 			this.dispose();
-			throw new TypeError("Aster clipboard edit gate must be a function");
+			throw new TypeError("Stanza clipboard edit gate must be a function");
 		}
 		if (options.systemTextReader !== undefined && typeof options.systemTextReader.readText !== "function") {
 			this.dispose();
-			throw new TypeError("Aster clipboard system text reader must provide readText");
+			throw new TypeError("Stanza clipboard system text reader must provide readText");
 		}
 		if (options.richTextReader !== undefined && typeof options.richTextReader.readText !== "function") {
 			this.dispose();
-			throw new TypeError("Aster clipboard rich text reader must provide readText");
+			throw new TypeError("Stanza clipboard rich text reader must provide readText");
 		}
 		if (options.richTextWriter !== undefined && typeof options.richTextWriter.writeText !== "function") {
 			this.dispose();
-			throw new TypeError("Aster clipboard rich text writer must provide writeText");
+			throw new TypeError("Stanza clipboard rich text writer must provide writeText");
 		}
 		this.lineEnding = readLineEnding(options.lineEnding);
 		this.emptySelectionPolicy = readEmptySelectionPolicy(
@@ -111,10 +111,10 @@ export class ClipboardController extends DisposableOwner {
 		);
 		this.semanticTokens = options.semanticTokens;
 		this.isEditingAllowed = options.isEditingAllowed ?? (() => true);
-		this.pasteProviders = normalizeAsterClipboardPasteProviders(options.pasteProviders);
-		this.systemTextReader = options.systemTextReader ?? createAsterBrowserClipboardSystemTextReader(element.ownerDocument);
-		this.richTextReader = options.richTextReader ?? createAsterBrowserClipboardRichTextReader(element.ownerDocument);
-		this.richTextWriter = options.richTextWriter ?? createAsterBrowserClipboardRichTextWriter(element.ownerDocument);
+		this.pasteProviders = normalizeStanzaClipboardPasteProviders(options.pasteProviders);
+		this.systemTextReader = options.systemTextReader ?? createStanzaBrowserClipboardSystemTextReader(element.ownerDocument);
+		this.richTextReader = options.richTextReader ?? createStanzaBrowserClipboardRichTextReader(element.ownerDocument);
+		this.richTextWriter = options.richTextWriter ?? createStanzaBrowserClipboardRichTextWriter(element.ownerDocument);
 		this.defer(() => {
 			this.disposed = true;
 			this.asynchronousPasteRequest += 1;
@@ -241,9 +241,9 @@ export class ClipboardController extends DisposableOwner {
 		const expectedVersion = model.version;
 		const expectedSelections = this.selectionController.selections;
 		const request = ++this.asynchronousPasteRequest;
-		const transfer = captureAsterClipboardTextTransfer(clipboardData);
+		const transfer = captureStanzaClipboardTextTransfer(clipboardData);
 		stopEvent(event);
-		void provideAsterClipboardPaste(this.pasteProviders, transfer).then(text => {
+		void provideStanzaClipboardPaste(this.pasteProviders, transfer).then(text => {
 			if (
 				text === undefined ||
 				this.disposed ||
@@ -370,7 +370,7 @@ export class ClipboardController extends DisposableOwner {
 	private createClipboardPayload(entries: readonly EditorClipboardEntry[]): Required<ClipboardRichTextItem> {
 		return Object.freeze({
 			plainText: joinClipboardEntries(entries, this.lineEnding),
-			html: createAsterSyntaxClipboardHtml(
+			html: createStanzaSyntaxClipboardHtml(
 				entries,
 				this.lineEnding,
 				this.semanticTokens,
@@ -412,7 +412,7 @@ function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardL
 		isWindows ? ClipboardLineEnding.CRLF : ClipboardLineEnding.LF
 	);
 	if (!Object.values(ClipboardLineEnding).includes(resolved)) {
-		throw new TypeError("Unknown Aster clipboard line ending");
+		throw new TypeError("Unknown Stanza clipboard line ending");
 	}
 	return resolved;
 }
@@ -420,7 +420,7 @@ function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardL
 function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | undefined): EditorEmptySelectionClipboardPolicy {
 	const resolved = policy ?? EditorEmptySelectionClipboardPolicy.Line;
 	if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(resolved)) {
-		throw new TypeError("Unknown Aster empty-selection clipboard policy");
+		throw new TypeError("Unknown Stanza empty-selection clipboard policy");
 	}
 	return resolved;
 }
@@ -472,7 +472,7 @@ function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): bo
 		});
 }
 
-/** Reduces untrusted HTML to inert deterministic text for Aster paste and drop paths. */
+/** Reduces untrusted HTML to inert deterministic text for Stanza paste and drop paths. */
 export function readEditorHtmlText(html: string, ownerDocument: Document): string {
 	if (html.length === 0) return "";
 	const template = h(ownerDocument, "template");

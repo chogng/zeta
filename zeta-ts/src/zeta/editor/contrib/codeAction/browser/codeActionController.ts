@@ -22,10 +22,10 @@ export class CodeActionController extends DisposableOwner {
 
 	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
 		super();
-		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Aster code action dependencies must share one text model");
+		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Stanza code action dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "aster-editor-code-action";
+		this.element.className = "stanza-editor-code-action";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "menu");
 		viewport.element.append(this.element);

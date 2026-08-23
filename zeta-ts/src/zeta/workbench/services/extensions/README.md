@@ -22,7 +22,7 @@ filesystem access.
 | Supported manifest parsing | `parseExtensionManifest` | Identity plus languages, grammars, snippets, themes, and debuggers |
 | Workbench lifecycle | `AppServerExtensionService` | Serialized/coalesced refresh with full candidate preparation and one event-barrier commit |
 | Grammar/Worker materialization | `workbench/services/textMate` | Latest complete catalog and independent failure event |
-| Language/configuration/completion | Aster language services | Caller-owned disposable registrations |
+| Language/configuration/completion | Stanza language services | Caller-owned disposable registrations |
 | Declarative Debug Adapter lookup | `ExtensionDebugAdapterRegistry` | Unique debugger type to bounded command descriptor |
 
 ## Supported contribution projection
@@ -30,7 +30,7 @@ filesystem access.
 | Contribution | Projection | Current limitation |
 | --- | --- | --- |
 | `languages` | Language identity, file/MIME/first-line associations | No manifest localization |
-| language `configuration` | Parsed JSONC to Aster language configuration | Only the existing Aster configuration vocabulary |
+| language `configuration` | Parsed JSONC to Stanza language configuration | Only the existing Stanza configuration vocabulary |
 | `snippets` | Prefix-bearing snippets become completion providers; file templates power `New File from Template` | Template bodies create language-tagged untitled editors |
 | `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
 | `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | `include` is rejected; manifest NLS placeholders use deterministic fallback labels |

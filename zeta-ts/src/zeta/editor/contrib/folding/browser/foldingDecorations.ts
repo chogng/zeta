@@ -18,12 +18,12 @@ export class FoldingDecorationProvider extends DisposableOwner implements Editor
 	}
 
 	create(ownerDocument: Document): HTMLElement {
-		return createAsterFoldingDecoration(ownerDocument);
+		return createStanzaFoldingDecoration(ownerDocument);
 	}
 
 	project(element: HTMLElement, logicalLineIndex: number, firstForLogicalLine: boolean): void {
 		if (!(element instanceof element.ownerDocument.defaultView!.HTMLButtonElement)) throw new TypeError("Folding gutter requires a button element");
-		projectAsterFoldingDecoration(
+		projectStanzaFoldingDecoration(
 			element,
 			logicalLineIndex,
 			firstForLogicalLine
@@ -33,17 +33,17 @@ export class FoldingDecorationProvider extends DisposableOwner implements Editor
 	}
 }
 
-/** Creates the folding gutter control attached to an Aster rendered line. */
-export function createAsterFoldingDecoration(ownerDocument: Document): HTMLButtonElement {
+/** Creates the folding gutter control attached to an Stanza rendered line. */
+export function createStanzaFoldingDecoration(ownerDocument: Document): HTMLButtonElement {
 	const element = h(ownerDocument, "button");
-	element.className = "aster-editor-fold-toggle";
+	element.className = "stanza-editor-fold-toggle";
 	element.type = "button";
 	element.hidden = true;
 	return element;
 }
 
 /** Projects one folding region's semantic state onto its gutter control. */
-export function projectAsterFoldingDecoration(element: HTMLButtonElement, logicalLineIndex: number, region: EditorFoldingRegion | undefined): void {
+export function projectStanzaFoldingDecoration(element: HTMLButtonElement, logicalLineIndex: number, region: EditorFoldingRegion | undefined): void {
 	element.hidden = !region;
 	if (!region) {
 		delete element.dataset.logicalLineIndex;

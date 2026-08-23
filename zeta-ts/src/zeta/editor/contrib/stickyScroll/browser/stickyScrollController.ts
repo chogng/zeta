@@ -12,9 +12,9 @@ export class StickyScrollController extends DisposableOwner {
 
 	constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
 		super();
-		if (folding.model !== viewport.textModel) throw new TypeError("Aster sticky scroll dependencies must share a text model");
+		if (folding.model !== viewport.textModel) throw new TypeError("Stanza sticky scroll dependencies must share a text model");
 		this.element = h(viewport.element.ownerDocument, "div");
-		this.element.className = "aster-editor-sticky-scroll";
+		this.element.className = "stanza-editor-sticky-scroll";
 		this.element.setAttribute("aria-label", "Sticky section headers");
 		viewport.element.append(this.element);
 		this.defer(() => this.element.remove());
@@ -32,7 +32,7 @@ export class StickyScrollController extends DisposableOwner {
 		this.element.replaceChildren(...entries.map(entry => {
 			const button = h(this.element.ownerDocument, "button");
 			button.type = "button";
-			button.className = "aster-editor-sticky-scroll-item";
+			button.className = "stanza-editor-sticky-scroll-item";
 			button.style.paddingLeft = `${8 + entry.depth * 12}px`;
 			button.textContent = entry.label || `Line ${entry.lineIndex + 1}`;
 			button.title = `Reveal line ${entry.lineIndex + 1}`;

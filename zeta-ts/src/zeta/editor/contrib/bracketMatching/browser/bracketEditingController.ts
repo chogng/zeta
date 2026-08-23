@@ -5,7 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
-/** Routes the VS Code remove-brackets chord through Aster's lexical bracket matcher. */
+/** Routes the VS Code remove-brackets chord through Stanza's lexical bracket matcher. */
 export class BracketEditingController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -16,7 +16,7 @@ export class BracketEditingController extends DisposableOwner {
 		super();
 		try {
 			if (viewport.textModel !== selections.textModel || viewport.textModel !== matcher.textModel) {
-				throw new TypeError("Aster bracket editing dependencies must share one text model");
+				throw new TypeError("Stanza bracket editing dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {

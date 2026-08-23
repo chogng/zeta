@@ -19,10 +19,10 @@ export class ScrollDecorationPart extends DisposableOwner implements EditorViewP
 		this.root = new FastDomNode(this.domNode);
 		this.topShadow = new FastDomNode(h(ownerDocument, "div"));
 		this.bottomShadow = new FastDomNode(h(ownerDocument, "div"));
-		this.root.setClassName("aster-editor-scroll-decoration");
+		this.root.setClassName("stanza-editor-scroll-decoration");
 		this.domNode.setAttribute("aria-hidden", "true");
-		this.topShadow.setClassName("aster-editor-scroll-decoration-shadow top");
-		this.bottomShadow.setClassName("aster-editor-scroll-decoration-shadow bottom");
+		this.topShadow.setClassName("stanza-editor-scroll-decoration-shadow top");
+		this.bottomShadow.setClassName("stanza-editor-scroll-decoration-shadow bottom");
 		this.domNode.append(this.topShadow.domNode, this.bottomShadow.domNode);
 	}
 
@@ -31,10 +31,10 @@ export class ScrollDecorationPart extends DisposableOwner implements EditorViewP
 		this.root.setHeight(layout.viewportSize.height);
 		this.root.setTransform(`translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`);
 		this.topShadow.setClassName(layout.scrollPosition.top > 0
-			? "aster-editor-scroll-decoration-shadow top visible"
-			: "aster-editor-scroll-decoration-shadow top");
+			? "stanza-editor-scroll-decoration-shadow top visible"
+			: "stanza-editor-scroll-decoration-shadow top");
 		this.bottomShadow.setClassName(layout.scrollPosition.top < layout.maximumScrollPosition.top
-			? "aster-editor-scroll-decoration-shadow bottom visible"
-			: "aster-editor-scroll-decoration-shadow bottom");
+			? "stanza-editor-scroll-decoration-shadow bottom visible"
+			: "stanza-editor-scroll-decoration-shadow bottom");
 	}
 }

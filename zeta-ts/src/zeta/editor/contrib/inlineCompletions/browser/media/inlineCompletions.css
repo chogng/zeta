@@ -1,4 +1,4 @@
-.aster-editor-inline-completion {
+.stanza-editor-inline-completion {
   position: absolute;
   z-index: 4;
   color: var(--zeta-editor-inline-completion-foreground, var(--zeta-editor-description-foreground));

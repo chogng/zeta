@@ -1,4 +1,4 @@
-.aster-editor-margin {
+.stanza-editor-margin {
   position: absolute;
   top: 0;
   left: 0;
@@ -9,7 +9,7 @@
   background: var(--zeta-editor-background);
 }
 
-.aster-editor-feature-gutter-slot {
+.stanza-editor-feature-gutter-slot {
   position: relative;
   z-index: 5;
   display: inline-block;
@@ -18,18 +18,18 @@
   vertical-align: top;
 }
 
-.aster-editor-feature-gutter {
+.stanza-editor-feature-gutter {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 5;
-  width: var(--aster-editor-feature-gutter-width, 0px);
+  width: var(--stanza-editor-feature-gutter-width, 0px);
   height: 100%;
   white-space: nowrap;
 }
 
 @media (forced-colors: active) {
-  .aster-editor-margin {
+  .stanza-editor-margin {
     background: Canvas;
   }
 }

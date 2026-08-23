@@ -15,21 +15,21 @@ export class GotoSymbolController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Aster goto symbol failed", error)) {
+	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
 		super();
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "aster-editor-goto-symbol";
+		this.element.className = "stanza-editor-goto-symbol";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Go to Symbol");
 		this.queryInput = h(ownerDocument, "input");
-		this.queryInput.className = "aster-editor-goto-symbol-input";
+		this.queryInput.className = "stanza-editor-goto-symbol-input";
 		this.queryInput.type = "search";
 		this.queryInput.placeholder = "Type a symbol name";
 		this.queryInput.setAttribute("aria-label", "Symbol query");
 		this.list = h(ownerDocument, "div");
-		this.list.className = "aster-editor-goto-symbol-list";
+		this.list.className = "stanza-editor-goto-symbol-list";
 		this.list.setAttribute("role", "listbox");
 		this.element.append(this.queryInput, this.list);
 		viewport.element.append(this.element);
@@ -74,7 +74,7 @@ export class GotoSymbolController extends DisposableOwner {
 		this.itemListeners.clear();
 		this.list.replaceChildren(...this.matches.map((match, index) => {
 			const item = h(this.list.ownerDocument, "button");
-			item.className = "aster-editor-goto-symbol-item";
+			item.className = "stanza-editor-goto-symbol-item";
 			item.type = "button";
 			item.setAttribute("role", "option");
 			item.textContent = match.symbol.detail ? `${match.symbol.name} — ${match.symbol.detail}` : match.symbol.name;

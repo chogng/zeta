@@ -14,7 +14,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { createAsterDomTextRange, getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint, getAsterDomTextRangeRectangles } = await import("../../browser/viewparts/viewportOverlay/domTextGeometry.js");
+const { createStanzaDomTextRange, getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint, getStanzaDomTextRangeRectangles } = await import("../../browser/viewparts/viewportOverlay/domTextGeometry.js");
 
 test("DOM text geometry keeps one UTF-16 offset space across syntax spans", () => {
 	const dom = new JSDOM("<!doctype html><body><div id=\"line\"><span id=\"text\"><span>ab</span><span>😊</span><span>cd</span></span></div></body>");
@@ -23,9 +23,9 @@ test("DOM text geometry keeps one UTF-16 offset space across syntax spans", () =
 	assert.ok(line);
 	assert.ok(text);
 
-	const range = createAsterDomTextRange(text, 1, 5);
+	const range = createStanzaDomTextRange(text, 1, 5);
 	assert.equal(range?.toString(), "b😊c");
-	assert.throws(() => createAsterDomTextRange(text, 5, 1), /ordered UTF-16/);
+	assert.throws(() => createStanzaDomTextRange(text, 5, 1), /ordered UTF-16/);
 
 	const textNode = text.querySelector("span")?.firstChild;
 	assert.ok(textNode);
@@ -33,7 +33,7 @@ test("DOM text geometry keeps one UTF-16 offset space across syntax spans", () =
 		configurable: true,
 		value: () => ({ offsetNode: textNode, offset: 2 }),
 	});
-	assert.equal(getAsterDomTextOffsetAtClientPoint(text, 20, 40), 2);
+	assert.equal(getStanzaDomTextOffsetAtClientPoint(text, 20, 40), 2);
 	dom.window.close();
 });
 
@@ -64,11 +64,11 @@ test("DOM text geometry preserves browser visual rectangles for mixed-direction 
 		},
 	});
 
-	assert.deepEqual(getAsterDomTextRangeRectangles(text, 0, 3, line), [
+	assert.deepEqual(getStanzaDomTextRangeRectangles(text, 0, 3, line), [
 		{ left: 50, width: 20 },
 		{ left: 20, width: 15 },
 	]);
-	assert.equal(getAsterDomTextCaretLeft(text, 3, line), 35);
+	assert.equal(getStanzaDomTextCaretLeft(text, 3, line), 35);
 	dom.window.close();
 });
 

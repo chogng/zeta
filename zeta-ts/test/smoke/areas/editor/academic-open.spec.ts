@@ -18,10 +18,10 @@ test("Academic opens the document engine and saves its structured document throu
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(1);
 	await expect(group.tabs.first()).toContainText("paper.zeta-academic");
-	await expect(group.content.locator(".zeta-structured-editor-pane")).toBeVisible();
+	await expect(group.content.locator(".stanza-structured-editor-pane")).toBeVisible();
 
-	const formatting = group.content.locator(".zeta-structured-format-toolbar");
-	const structuredInput = group.content.locator("textarea.zeta-document-text-input").first();
+	const formatting = group.content.locator(".stanza-structured-format-toolbar");
+	const structuredInput = group.content.locator("textarea.stanza-document-text-input").first();
 	const fontSize = formatting.locator("select[aria-label='Font size']");
 	await expect(formatting).toHaveAttribute("data-context", "text");
 	await expect(fontSize).toBeVisible();
@@ -34,7 +34,7 @@ test("Academic opens the document engine and saves its structured document throu
 	await fontSize.selectOption("18");
 	await expect(fontSize).toHaveValue("18");
 
-	const input = group.content.locator(".zeta-document-text-block .aster-editor-input");
+	const input = group.content.locator(".stanza-document-code-block .stanza-editor-input");
 	await expect(input).toBeAttached();
 	await input.focus();
 	await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
@@ -47,6 +47,6 @@ test("Academic opens the document engine and saves its structured document throu
 	).toContain("\"fontSize\":18");
 	await expect.poll(
 		() => readFile(testWorkspace.academicFile, "utf8"),
-		{ timeout: 15_000, message: "Document engine code textBlock save reaches the App Server workspace" },
+		{ timeout: 15_000, message: "Document engine code codeBlock save reaches the App Server workspace" },
 	).toContain("const paper = 2;");
 });

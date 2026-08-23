@@ -6,7 +6,7 @@
 
 ## 快速理解
 
-Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投影”的模型。Desktop TypeScript registry 是 token 声明的 authoring authority；构建器把保留 alias/default graph 的 manifest、Schema 和模板生成到 `resources/design-tokens/`。Desktop resolver 与 Rust `zeta-theme` 都读取这份 contract，分别产生不可变快照，再投影给 CSS、Aster CodeEditor、Native UI 或 Ratatui。`system` 只选择具体明暗方案，不是第四套主题数据。
+Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投影”的模型。Desktop TypeScript registry 是 token 声明的 authoring authority；构建器把保留 alias/default graph 的 manifest、Schema 和模板生成到 `resources/design-tokens/`。Desktop resolver 与 Rust `zeta-theme` 都读取这份 contract，分别产生不可变快照，再投影给 CSS、Stanza CodeEditor、Native UI 或 Ratatui。`system` 只选择具体明暗方案，不是第四套主题数据。
 
 | 想改变什么 | 应该修改哪里 | 不应该怎么做 |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ flowchart LR
   L["User theme JSON"] --> E
   L --> F
   K["Built-in theme entry"] --> F
-  E --> H["CSS / Aster / xterm"]
+  E --> H["CSS / Stanza / xterm"]
   F --> I["Native component palettes"]
   F --> J["TUI token subset + capability downgrade"]
 ```
@@ -81,11 +81,11 @@ flowchart LR
   Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
 - 127 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
-- Aster/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
+- Stanza/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
 - Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
 - TUI chrome 只消费 accent、chrome、error/success/warning、muted 和 highlight；Theme Pane preview
   额外消费有限的 syntax/diff 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
-- Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；legacy editor runtime 仅保留迁移期兼容同步，Aster Text Engine 是默认文本编辑器。
+- Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；legacy editor runtime 仅保留迁移期兼容同步，Stanza Text Engine 是默认文本编辑器。
 - Electron renderer 通过受校验的 window-theme IPC 将标题栏背景和按钮颜色投影到主进程；Terminal canvas 使用当前编辑器背景，不依赖 xterm 黑色回退。
 - Desktop 与 Rust resolver 共同执行 `theme-conformance.json`，防止 alias、变换、量化或兼容映射发生跨语言漂移。
 

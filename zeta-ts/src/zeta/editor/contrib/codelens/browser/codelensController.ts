@@ -12,7 +12,7 @@ export class CodeLensController extends DisposableOwner {
 	private lenses: readonly LanguageCodeLens[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Aster code lens failed", error)) {
+	constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Stanza code lens failed", error)) {
 		super();
 		this.own(viewport.onDidChangeLayout(() => this.render()));
 		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
@@ -35,14 +35,14 @@ export class CodeLensController extends DisposableOwner {
 	}
 
 	private render(): void {
-		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".aster-editor-codelens")]) element.remove();
+		for (const element of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-codelens")]) element.remove();
 		const scroll = this.viewport.viewportLayout.scrollPosition;
 		for (const lens of this.lenses) {
 			const command = lens.command;
 			if (!command) continue;
 			const element = h(this.viewport.element.ownerDocument, "button");
 			element.type = "button";
-			element.className = "aster-editor-codelens";
+			element.className = "stanza-editor-codelens";
 			element.textContent = command.title;
 			const coordinates = this.viewport.getPositionContentCoordinates(lens.range.start);
 			element.style.left = `${Math.max(4, coordinates.left - scroll.left)}px`;

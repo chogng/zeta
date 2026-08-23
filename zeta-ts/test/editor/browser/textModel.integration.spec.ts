@@ -20,10 +20,10 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	const workers: string[] = [];
 	page.on("worker", worker => workers.push(worker.url()));
 	await page.goto("/textModel.html");
-	await expect(page.locator(".aster-editor")).toBeVisible();
+	await expect(page.locator(".stanza-editor")).toBeVisible();
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.apiText)).toBe("editor-api");
 
-	const input = page.locator(".aster-editor-input");
+	const input = page.locator(".stanza-editor-input");
 	await input.focus();
 	await page.keyboard.press("Control+Home");
 	await page.keyboard.type("/* integrated */ ");
@@ -39,19 +39,19 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {
 	await page.goto("/textModel.html");
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
-	await expect(page.locator(".aster-editor-token.token-keyword")).toHaveText("fn");
-	await expect(page.locator(".aster-editor-diagnostic-marker.error")).toHaveCount(1);
+	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
+	await expect(page.locator(".stanza-editor-diagnostic-marker.error")).toHaveCount(1);
 
-	const input = page.locator(".aster-editor-input");
+	const input = page.locator(".stanza-editor-input");
 	await input.focus();
 	await page.keyboard.press("ControlOrMeta+Shift+o");
-	await expect(page.locator(".aster-editor-goto-symbol-item")).toHaveText("main");
+	await expect(page.locator(".stanza-editor-goto-symbol-item")).toHaveText("main");
 });
 
 test("text-model editor has the accessibility contract", async ({ page }) => {
 	await page.goto("/textModel.html");
-	const editor = page.locator(".aster-editor");
-	const input = page.locator(".aster-editor-input");
+	const editor = page.locator(".stanza-editor");
+	const input = page.locator(".stanza-editor-input");
 	await expect(editor).toHaveAttribute("role", "region");
 	await expect(editor).toHaveAttribute("aria-label", /.+/);
 	await expect(input).toHaveAttribute("aria-multiline", "true");

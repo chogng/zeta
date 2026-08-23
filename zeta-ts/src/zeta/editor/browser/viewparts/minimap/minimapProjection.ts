@@ -1,4 +1,4 @@
-/** Minimal document access required to derive Aster's bounded minimap density rows. */
+/** Minimal document access required to derive Stanza's bounded minimap density rows. */
 export interface MinimapTextSource {
 	readonly lineCount: number;
 	getLineContent(lineIndex: number): string;
@@ -22,10 +22,10 @@ export const MINIMAP_MAX_ROWS = 160;
  */
 export function createMinimapRows(source: MinimapTextSource, maximumRows = MINIMAP_MAX_ROWS): readonly MinimapRow[] {
 	if (!source || !Number.isSafeInteger(source.lineCount) || source.lineCount < 1 || typeof source.getLineContent !== "function") {
-		throw new TypeError("Aster minimap requires a non-empty text source");
+		throw new TypeError("Stanza minimap requires a non-empty text source");
 	}
 	if (!Number.isSafeInteger(maximumRows) || maximumRows < 1) {
-		throw new RangeError("Aster minimap maximum rows must be a positive safe integer");
+		throw new RangeError("Stanza minimap maximum rows must be a positive safe integer");
 	}
 	const rowCount = Math.min(source.lineCount, maximumRows);
 	const sampled = Array.from({ length: rowCount }, (_, rowIndex) => {
@@ -53,7 +53,7 @@ function sampledContentLength(source: MinimapTextSource, startLineIndex: number,
 	for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
 		const lineIndex = startLineIndex + Math.floor(sampleIndex * lineCount / samples);
 		const text = source.getLineContent(lineIndex);
-		if (typeof text !== "string") throw new TypeError("Aster minimap text source returned non-text content");
+		if (typeof text !== "string") throw new TypeError("Stanza minimap text source returned non-text content");
 		maximum = Math.max(maximum, [...text.trimEnd()].length);
 	}
 	return maximum;

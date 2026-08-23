@@ -1,4 +1,4 @@
-.aster-editor-sticky-scroll {
+.stanza-editor-sticky-scroll {
   position: absolute;
   top: 0;
   right: 6px;
@@ -12,7 +12,7 @@
   border-bottom: 1px solid var(--zeta-widget-border);
 }
 
-.aster-editor-sticky-scroll-item {
+.stanza-editor-sticky-scroll-item {
   height: 20px;
   overflow: hidden;
   color: var(--zeta-description-foreground);

@@ -4,15 +4,15 @@ import { TextSelection, TextSelectionSet } from "../../common/core/selection.js"
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { createAsterVisualRangeRectangles } from "../../common/viewModel/visualRangeGeometry.js";
-import { createAsterVisualSelectionGeometry } from "../../common/viewModel/visualSelectionGeometry.js";
+import { createStanzaVisualRangeRectangles } from "../../common/viewModel/visualRangeGeometry.js";
+import { createStanzaVisualSelectionGeometry } from "../../common/viewModel/visualSelectionGeometry.js";
 import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
 
 test("visual selection geometry splits one logical range across wrapped fragments", () => {
 	using model = new TextModel("abcdef\ngh");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6], [2]]);
 	const selections = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(1, 1)));
-	const geometry = createAsterVisualSelectionGeometry(model, selections, projection, {
+	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
 		startLineIndex: 0,
 		endLineIndexExclusive: 4,
 	}, 10, new FixedTextMeasurer());
@@ -35,7 +35,7 @@ test("visual range geometry rejects a projection from another model version", ()
 	using model = new TextModel("abc");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
 	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 3)), text: "d" }]);
-	assert.throws(() => createAsterVisualRangeRectangles(model, [{
+	assert.throws(() => createStanzaVisualRangeRectangles(model, [{
 		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
 		value: undefined,
 	}], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);

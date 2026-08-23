@@ -17,8 +17,8 @@ import { type EditorScrollPosition, type EditorViewportChange, type EditorViewpo
 import { type DecorationSource } from "../viewparts/decorations/decorationPresentation.js";
 import { DomTextMeasurer, type TextMeasurer } from "../measurement/fontMetrics.js";
 import { LineWidthIndex } from "../measurement/lineWidthIndex.js";
-import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestAsterVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
-import { getAsterDomTextCaretLeft, getAsterDomTextOffsetAtClientPoint } from "../viewparts/viewportOverlay/domTextGeometry.js";
+import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
+import { getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint } from "../viewparts/viewportOverlay/domTextGeometry.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "../viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type ActiveLineHighlight, type ViewportOverlayContext } from "../viewparts/viewportOverlay/viewportOverlayPresentation.js";
 import { EditorLineWrapping, VisualLineProjection } from "../viewModel/visualLineProjection.js";
@@ -45,7 +45,7 @@ import { ViewLinesPart } from "../viewparts/viewLines/viewLinesPart.js";
 
 export type EditorViewportPresentation = "document" | "embedded";
 
-/** Chooses which component renders the visible focus outline for an Aster viewport. */
+/** Chooses which component renders the visible focus outline for an Stanza viewport. */
 export type EditorFocusOutlineOwner = "editor" | "host";
 
 /** Controls whether the viewport projects current-line presentation DOM. */
@@ -66,7 +66,7 @@ export enum EditorMinimap {
 
 export type { EditorRuler } from "../viewparts/rulers/rulersPart.js";
 
-/** Controls the browser paragraph direction used to shape Aster's rendered text. */
+/** Controls the browser paragraph direction used to shape Stanza's rendered text. */
 export enum EditorTextDirection {
 	Auto = "auto",
 	LeftToRight = "ltr",
@@ -112,7 +112,7 @@ export interface EditorContentPosition {
 }
 
 /**
- * Read-only browser projection of one Aster text model.
+ * Read-only browser projection of one Stanza text model.
  *
  * The common viewport owns layout math. This component owns the scroll host,
  * measurement inputs, and ordered visual-part lifecycle; individual parts own
@@ -174,54 +174,54 @@ export class EditorViewport extends DisposableOwner {
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
 			if (!Object.values(EditorMinimap).includes(this.minimap)) {
-				throw new TypeError("Unknown Aster editor minimap mode");
+				throw new TypeError("Unknown Stanza editor minimap mode");
 			}
 			if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
-				throw new TypeError("Unknown Aster editor text direction");
+				throw new TypeError("Unknown Stanza editor text direction");
 			}
 			if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
-				throw new TypeError("Unknown Aster editor focus outline owner");
+				throw new TypeError("Unknown Stanza editor focus outline owner");
 			}
 			if (this.activeLineHighlight !== "on" && this.activeLineHighlight !== "off") {
-				throw new TypeError("Unknown Aster editor active-line highlight");
+				throw new TypeError("Unknown Stanza editor active-line highlight");
 			}
 			if (this.selectionController && this.selectionController.textModel !== this.model) {
 				throw new TypeError(
-					"Aster viewport and selection controller must share one text model",
+					"Stanza viewport and selection controller must share one text model",
 				);
 			}
 			if (options.semanticTokenSource && options.semanticTokenSource.textModel !== this.model) {
-				throw new TypeError("Aster viewport and semantic token source must share one text model");
+				throw new TypeError("Stanza viewport and semantic token source must share one text model");
 			}
 			if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== this.model) {
-				throw new TypeError("Aster viewport and bracket colorization source must share one text model");
+				throw new TypeError("Stanza viewport and bracket colorization source must share one text model");
 			}
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 		this.lineGutterDecoration = options.lineGutterDecoration ? this.own(options.lineGutterDecoration) : undefined;
-		this.element.className = "aster-editor";
-		this.element.classList.add(`aster-editor-${this.presentation}`);
-		this.element.classList.add(`aster-editor-focus-owner-${this.focusOutlineOwner}`);
-		this.element.classList.add(`aster-editor-direction-${this.textDirection}`);
+		this.element.className = "stanza-editor";
+		this.element.classList.add(`stanza-editor-${this.presentation}`);
+		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
+		this.element.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.element.classList.toggle("hide-line-numbers", !this.showLineNumbers);
 		if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
 		if (options.fontSize !== undefined) this.element.style.fontSize = `${options.fontSize}px`;
 		this.element.style.fontVariantLigatures = options.fontLigatures ? "normal" : "none";
 		this.element.style.tabSize = String(this.indentation.tabSize);
-		this.element.style.setProperty("--aster-editor-padding-left", `${this.padding.left}px`);
-		this.element.style.setProperty("--aster-editor-padding-right", `${this.padding.right}px`);
+		this.element.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
+		this.element.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
 		this.element.dir = this.textDirection;
 		this.element.classList.toggle("word-wrapped", this.softWrapping);
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
-		this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor");
-		this.contentNode.setClassName("aster-editor-content");
+		this.element.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor");
+		this.contentNode.setClassName("stanza-editor-content");
 		this.textMetricsElement.className =
-			"aster-editor-text-metrics";
+			"stanza-editor-text-metrics";
 		this.textMetricsElement.setAttribute("aria-hidden", "true");
-		this.accessibilityStatusElement.className = "aster-editor-accessibility-status";
+		this.accessibilityStatusElement.className = "stanza-editor-accessibility-status";
 		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
 		this.element.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
@@ -432,7 +432,7 @@ export class EditorViewport extends DisposableOwner {
 	/** Changes only this viewport's visual row projection; document text is unaffected. */
 	setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
 		if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
-			throw new TypeError("Unknown Aster editor line wrapping mode");
+			throw new TypeError("Unknown Stanza editor line wrapping mode");
 		}
 		const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
 		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
@@ -466,7 +466,7 @@ export class EditorViewport extends DisposableOwner {
 	/** Announces one editor status message through the viewport's live region. */
 	announceAccessibilityStatus(message: string): void {
 		if (typeof message !== "string" || message.trim().length === 0) {
-			throw new TypeError("Aster accessibility status must be a non-empty string");
+			throw new TypeError("Stanza accessibility status must be a non-empty string");
 		}
 		this.accessibilityStatusElement.textContent = message.trim();
 	}
@@ -551,7 +551,7 @@ export class EditorViewport extends DisposableOwner {
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
 	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
-		if (!Number.isFinite(horizontalOffset)) throw new RangeError("Aster visual cursor horizontal offset must be finite");
+		if (!Number.isFinite(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
@@ -561,7 +561,7 @@ export class EditorViewport extends DisposableOwner {
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
 		for (const column of getTextGraphemeBoundaries(text)) {
-			const left = getAsterDomTextCaretLeft(line.textElement, column, line.domNode.domNode);
+			const left = getStanzaDomTextCaretLeft(line.textElement, column, line.domNode.domNode);
 			if (left === undefined) return undefined;
 			const distance = Math.abs(left - horizontalOffset);
 			if (distance < nearestDistance) {
@@ -614,7 +614,7 @@ export class EditorViewport extends DisposableOwner {
 	}
 
 	private hitTestViewportPoint(left: number, top: number): EditorHitTarget | undefined {
-		return hitTestAsterVisualEditorPoint(
+		return hitTestStanzaVisualEditorPoint(
 			this.model,
 			this.visualProjection,
 			this.viewport.layout,
@@ -630,7 +630,7 @@ export class EditorViewport extends DisposableOwner {
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		for (const [visualLineIndex, renderedLine] of this.viewLinesPart.renderedLines) {
-			const offset = getAsterDomTextOffsetAtClientPoint(
+			const offset = getStanzaDomTextOffsetAtClientPoint(
 				renderedLine.textElement,
 				point.clientX,
 				point.clientY,
@@ -650,7 +650,7 @@ export class EditorViewport extends DisposableOwner {
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
 		return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
-			? getAsterDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
+			? getStanzaDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
 			: undefined;
 	}
 
@@ -755,7 +755,7 @@ function validateClientPoint(point: ClientPoint): void {
 		!Number.isFinite(point.clientY)
 	) {
 		throw new RangeError(
-			"Aster client point must contain finite coordinates",
+			"Stanza client point must contain finite coordinates",
 		);
 	}
 }
@@ -771,7 +771,7 @@ function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined
 
 function nonNegativePaddingValue(value: number, side: keyof EditorViewportPadding): number {
 	if (!Number.isFinite(value) || value < 0) {
-		throw new RangeError(`Aster editor padding.${side} must be non-negative and finite`);
+		throw new RangeError(`Stanza editor padding.${side} must be non-negative and finite`);
 	}
 	return value;
 }

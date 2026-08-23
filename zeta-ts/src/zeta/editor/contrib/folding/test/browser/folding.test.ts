@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { FoldingCommand, FoldingController, resolveAsterFoldingCommand } = await import("../../browser/folding.js");
+const { FoldingCommand, FoldingController, resolveStanzaFoldingCommand } = await import("../../browser/folding.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -63,7 +63,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
 	const expand = keyboardEvent(dom.window, "]", { ctrlKey: true, shiftKey: true });
 	input.dispatchEvent(expand);
 	assert.equal(folding.regions[0]?.collapsed, false);
-	const toggle = requiredElement<HTMLButtonElement>(viewport.element, ".aster-editor-fold-toggle");
+	const toggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	const gutterToggle = new dom.window.MouseEvent("pointerdown", { bubbles: true, cancelable: true });
 	toggle.dispatchEvent(gutterToggle);
 	assert.equal(gutterToggle.defaultPrevented, true);
@@ -74,9 +74,9 @@ test("Folding controller routes platform chords and gutter toggles through the f
 });
 
 test("Folding chord resolution follows Windows/Linux and macOS conventions", () => {
-	assert.equal(resolveAsterFoldingCommand({ key: "[", ctrlKey: true, shiftKey: true, altKey: false, metaKey: false }, OperatingSystem.Linux), FoldingCommand.Collapse);
-	assert.equal(resolveAsterFoldingCommand({ key: "]", ctrlKey: false, shiftKey: false, altKey: true, metaKey: true }, OperatingSystem.Macintosh), FoldingCommand.Expand);
-	assert.equal(resolveAsterFoldingCommand({ key: "[", ctrlKey: true, shiftKey: false, altKey: false, metaKey: false }, OperatingSystem.Windows), undefined);
+	assert.equal(resolveStanzaFoldingCommand({ key: "[", ctrlKey: true, shiftKey: true, altKey: false, metaKey: false }, OperatingSystem.Linux), FoldingCommand.Collapse);
+	assert.equal(resolveStanzaFoldingCommand({ key: "]", ctrlKey: false, shiftKey: false, altKey: true, metaKey: true }, OperatingSystem.Macintosh), FoldingCommand.Expand);
+	assert.equal(resolveStanzaFoldingCommand({ key: "[", ctrlKey: true, shiftKey: false, altKey: false, metaKey: false }, OperatingSystem.Windows), undefined);
 });
 
 test("Folding controller routes macOS Command+K chords without accepting Control", () => {
@@ -198,7 +198,7 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
 });
 
 function renderedLogicalLines(root: ParentNode): readonly string[] {
-	return [...root.querySelectorAll<HTMLElement>(".aster-editor-line")].map(line => line.dataset.logicalLineIndex!);
+	return [...root.querySelectorAll<HTMLElement>(".stanza-editor-line")].map(line => line.dataset.logicalLineIndex!);
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit): KeyboardEvent {

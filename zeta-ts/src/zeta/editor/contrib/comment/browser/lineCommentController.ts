@@ -13,7 +13,7 @@ export interface LineCommentControllerOptions {
 	readonly lexicalContext?: LanguageLexicalContextSource;
 }
 
-/** Routes the platform line-comment shortcut through Aster's local command model. */
+/** Routes the platform line-comment shortcut through Stanza's local command model. */
 export class LineCommentController extends DisposableOwner {
 	constructor(
 		input: HTMLTextAreaElement,
@@ -25,7 +25,7 @@ export class LineCommentController extends DisposableOwner {
 		try {
 			validateOptions(options);
 			if (viewport.textModel !== selections.textModel) {
-				throw new TypeError("Aster line comment dependencies must share one text model");
+				throw new TypeError("Stanza line comment dependencies must share one text model");
 			}
 			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
@@ -55,12 +55,12 @@ export class LineCommentController extends DisposableOwner {
 
 function validateOptions(options: LineCommentControllerOptions): void {
 	if (!options || typeof options !== "object" || typeof options.languageId !== "string" || options.languageId.length === 0) {
-		throw new TypeError("Aster line comment controller requires a language ID");
+		throw new TypeError("Stanza line comment controller requires a language ID");
 	}
 	if (!options.configurations || typeof options.configurations.getLanguageConfiguration !== "function") {
-		throw new TypeError("Aster line comment controller requires language configurations");
+		throw new TypeError("Stanza line comment controller requires language configurations");
 	}
 	if (options.insertSpace !== undefined && typeof options.insertSpace !== "boolean") {
-		throw new TypeError("Aster line comment insertSpace must be a boolean");
+		throw new TypeError("Stanza line comment insertSpace must be a boolean");
 	}
 }

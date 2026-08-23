@@ -23,7 +23,7 @@ export interface FindControllerOptions {
 	readonly regularExpression?: boolean;
 }
 
-/** Owns Aster's browser find/replace widget, shortcuts, match navigation, and search decorations. */
+/** Owns Stanza's browser find/replace widget, shortcuts, match navigation, and search decorations. */
 export class FindController extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	readonly searchInput: HTMLInputElement;
@@ -65,28 +65,28 @@ export class FindController extends DisposableOwner {
 		this.regularExpression = options.regularExpression ?? false;
 		if (viewport.textModel !== selections.textModel || viewport.textModel !== decorations.textModel) {
 			this.dispose();
-			throw new TypeError("Aster find dependencies must share one text model");
+			throw new TypeError("Stanza find dependencies must share one text model");
 		}
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "aster-editor-find-widget";
+		this.element.className = "stanza-editor-find-widget";
 		this.element.hidden = true;
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Find and replace");
 
 		const findRow = h(ownerDocument, "div");
-		findRow.className = "aster-editor-find-row";
+		findRow.className = "stanza-editor-find-row";
 		this.replaceToggle = createButton(ownerDocument, "Toggle replace", "›");
-		this.replaceToggle.classList.add("aster-editor-find-replace-toggle");
+		this.replaceToggle.classList.add("stanza-editor-find-replace-toggle");
 		this.searchInput = h(ownerDocument, "input");
-		this.searchInput.className = "aster-editor-find-input";
+		this.searchInput.className = "stanza-editor-find-input";
 		this.searchInput.type = "text";
 		this.searchInput.placeholder = "Find";
 		this.searchInput.setAttribute("aria-label", "Find");
 		this.searchInput.autocomplete = "off";
 		this.searchInput.spellcheck = false;
 		this.resultLabel = h(ownerDocument, "span");
-		this.resultLabel.className = "aster-editor-find-result";
+		this.resultLabel.className = "stanza-editor-find-result";
 		this.resultLabel.setAttribute("aria-live", "polite");
 		this.matchCaseButton = createToggleButton(ownerDocument, "Match case", "Aa");
 		this.wholeWordButton = createToggleButton(ownerDocument, "Match whole word", "W");
@@ -98,12 +98,12 @@ export class FindController extends DisposableOwner {
 		findRow.append(this.replaceToggle, this.searchInput, this.resultLabel, this.matchCaseButton, this.wholeWordButton, this.regularExpressionButton, this.findInSelectionButton, previousButton, nextButton, closeButton);
 
 		this.replaceRow = h(ownerDocument, "div");
-		this.replaceRow.className = "aster-editor-replace-row";
+		this.replaceRow.className = "stanza-editor-replace-row";
 		this.replaceRow.hidden = true;
 		const replaceSpacer = h(ownerDocument, "span");
-		replaceSpacer.className = "aster-editor-replace-spacer";
+		replaceSpacer.className = "stanza-editor-replace-spacer";
 		this.replaceInput = h(ownerDocument, "input");
-		this.replaceInput.className = "aster-editor-find-input";
+		this.replaceInput.className = "stanza-editor-find-input";
 		this.replaceInput.type = "text";
 		this.replaceInput.placeholder = "Replace";
 		this.replaceInput.setAttribute("aria-label", "Replace");
@@ -418,7 +418,7 @@ export class FindController extends DisposableOwner {
 
 function createButton(ownerDocument: Document, label: string, text: string): HTMLButtonElement {
 	const button = h(ownerDocument, "button");
-	button.className = "aster-editor-find-button";
+	button.className = "stanza-editor-find-button";
 	button.type = "button";
 	button.title = label;
 	button.setAttribute("aria-label", label);
@@ -438,8 +438,8 @@ function projectToggle(button: HTMLButtonElement, checked: boolean): void {
 }
 
 function validateFindControllerOptions(options: FindControllerOptions): void {
-	if (!options || typeof options !== "object") throw new TypeError("Aster Find options must be an object");
+	if (!options || typeof options !== "object") throw new TypeError("Stanza Find options must be an object");
 	for (const [name, value] of Object.entries(options)) {
-		if (typeof value !== "boolean") throw new TypeError(`Aster Find option '${name}' must be boolean`);
+		if (typeof value !== "boolean") throw new TypeError(`Stanza Find option '${name}' must be boolean`);
 	}
 }

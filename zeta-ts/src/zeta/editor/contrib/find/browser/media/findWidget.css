@@ -1,4 +1,4 @@
-.aster-editor-find-widget {
+.stanza-editor-find-widget {
   position: absolute;
   z-index: 7;
   display: none;
@@ -13,24 +13,24 @@
   box-shadow: 0 4px 12px var(--zeta-widget-shadow);
 }
 
-.aster-editor-find-widget.visible {
+.stanza-editor-find-widget.visible {
   display: grid;
   gap: 5px;
 }
 
-.aster-editor-find-row,
-.aster-editor-replace-row {
+.stanza-editor-find-row,
+.stanza-editor-replace-row {
   display: grid;
   grid-template-columns: 24px minmax(80px, 1fr) auto repeat(7, 24px);
   gap: 3px;
   align-items: center;
 }
 
-.aster-editor-replace-row {
+.stanza-editor-replace-row {
   grid-template-columns: 24px minmax(80px, 1fr) auto auto;
 }
 
-.aster-editor-find-input {
+.stanza-editor-find-input {
   box-sizing: border-box;
   min-width: 0;
   height: 24px;
@@ -42,15 +42,15 @@
   outline: none;
 }
 
-.aster-editor-find-input:focus {
+.stanza-editor-find-input:focus {
   border-color: var(--zeta-focus-border);
 }
 
-.aster-editor-find-input.invalid {
+.stanza-editor-find-input.invalid {
   border-color: var(--zeta-error-foreground);
 }
 
-.aster-editor-find-result {
+.stanza-editor-find-result {
   min-width: 60px;
   overflow: hidden;
   color: var(--zeta-description-foreground);
@@ -60,7 +60,7 @@
   white-space: nowrap;
 }
 
-.aster-editor-find-button {
+.stanza-editor-find-button {
   box-sizing: border-box;
   min-width: 24px;
   height: 24px;
@@ -73,16 +73,16 @@
   border-radius: 3px;
 }
 
-.aster-editor-find-button:hover,
-.aster-editor-find-button.checked {
+.stanza-editor-find-button:hover,
+.stanza-editor-find-button.checked {
   background: var(--zeta-button-hover-background);
 }
 
-.aster-editor-find-button:focus-visible {
+.stanza-editor-find-button:focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: -1px;
 }
 
-.aster-editor-find-replace-toggle {
+.stanza-editor-find-replace-toggle {
   font-size: 16px;
 }

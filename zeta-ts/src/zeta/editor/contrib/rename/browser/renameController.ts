@@ -18,17 +18,17 @@ export class RenameController extends DisposableOwner {
 
 	constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error)) {
 		super();
-		if (viewport.textModel !== selections.textModel) throw new TypeError("Aster rename dependencies must share one text model");
+		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza rename dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");
-		this.element.className = "aster-editor-rename";
+		this.element.className = "stanza-editor-rename";
 		this.element.hidden = true;
 		this.input = h(ownerDocument, "input");
-		this.input.className = "aster-editor-rename-input";
+		this.input.className = "stanza-editor-rename-input";
 		this.input.type = "text";
 		this.input.setAttribute("aria-label", "New symbol name");
 		this.status = h(ownerDocument, "span");
-		this.status.className = "aster-editor-rename-status";
+		this.status.className = "stanza-editor-rename-status";
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
 		viewport.element.append(this.element);

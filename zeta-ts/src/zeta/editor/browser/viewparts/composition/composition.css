@@ -1,11 +1,11 @@
-.aster-editor-line-composition {
+.stanza-editor-line-composition {
   position: absolute;
   inset: 0;
   z-index: 4;
   pointer-events: none;
 }
 
-.aster-editor.composing .aster-editor-composition {
+.stanza-editor.composing .stanza-editor-composition {
   position: absolute;
   top: 0;
   bottom: 1px;

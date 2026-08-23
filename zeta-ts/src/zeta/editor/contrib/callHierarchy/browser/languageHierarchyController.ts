@@ -64,7 +64,7 @@ export class LanguageHierarchyController extends DisposableOwner {
 		this.closePeek();
 		const widget = this.peek.add(new PeekViewWidget(this.viewport, anchor, `${sessions[0]!.kind === "call" ? "Call" : "Type"} Hierarchy`));
 		const body = h(widget.element.ownerDocument, "div");
-		body.className = "aster-editor-language-hierarchy";
+		body.className = "stanza-editor-language-hierarchy";
 		widget.setBody(body);
 		for (const session of sessions) for (const root of session.roots) body.append(this.createNode(widget, session, root, [], defaultDirection(session.kind)));
 		widget.show();
@@ -80,17 +80,17 @@ export class LanguageHierarchyController extends DisposableOwner {
 	private createNode(widget: PeekViewWidget, session: HierarchySession, item: LanguageHierarchyItem, ancestors: readonly LanguageHierarchyItem[], direction: HierarchyDirection): HTMLElement {
 		const document = widget.element.ownerDocument;
 		const node = h(document, "section");
-		node.className = "aster-editor-language-hierarchy-node";
+		node.className = "stanza-editor-language-hierarchy-node";
 		const row = h(document, "div");
-		row.className = "aster-editor-language-hierarchy-row";
+		row.className = "stanza-editor-language-hierarchy-row";
 		const open = h(document, "button");
 		open.type = "button";
-		open.className = "aster-editor-language-hierarchy-item";
+		open.className = "stanza-editor-language-hierarchy-item";
 		open.textContent = item.detail ? `${item.name} — ${item.detail}` : item.name;
 		open.title = resourceLabel(item.resource);
 		const expand = h(document, "button");
 		expand.type = "button";
-		expand.className = "aster-editor-language-hierarchy-expand";
+		expand.className = "stanza-editor-language-hierarchy-expand";
 		expand.textContent = directionLabel(direction);
 		expand.setAttribute("aria-label", `${directionLabel(direction)} for ${item.name}`);
 		row.append(open, expand);
@@ -101,7 +101,7 @@ export class LanguageHierarchyController extends DisposableOwner {
 		if (session.kind === "call" || session.kind === "type") {
 			const alternate = h(document, "button");
 			alternate.type = "button";
-			alternate.className = "aster-editor-language-hierarchy-expand";
+			alternate.className = "stanza-editor-language-hierarchy-expand";
 			const alternateDirection = oppositeDirection(direction);
 			alternate.textContent = directionLabel(alternateDirection);
 			alternate.setAttribute("aria-label", `${directionLabel(alternateDirection)} for ${item.name}`);
@@ -115,10 +115,10 @@ export class LanguageHierarchyController extends DisposableOwner {
 		button.disabled = true;
 		try {
 			const items = await session.query(item, direction);
-			const existing = node.querySelector(":scope > .aster-editor-language-hierarchy-children");
+			const existing = node.querySelector(":scope > .stanza-editor-language-hierarchy-children");
 			existing?.remove();
 			const children = h(widget.element.ownerDocument, "div");
-			children.className = "aster-editor-language-hierarchy-children";
+			children.className = "stanza-editor-language-hierarchy-children";
 			if (items.length === 0) {
 				children.textContent = `No ${directionLabel(direction).toLowerCase()}.`;
 			} else {

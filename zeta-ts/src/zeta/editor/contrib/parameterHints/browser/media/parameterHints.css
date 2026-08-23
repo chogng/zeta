@@ -1,4 +1,4 @@
-.aster-editor-parameter-hints {
+.stanza-editor-parameter-hints {
   position: absolute;
   z-index: 8;
   max-width: min(480px, calc(100% - 16px));
@@ -10,11 +10,11 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
-.aster-editor-parameter-hints-signature.active {
+.stanza-editor-parameter-hints-signature.active {
   font-weight: 600;
 }
 
-.aster-editor-parameter-hints-parameter.active {
+.stanza-editor-parameter-hints-parameter.active {
   color: var(--zeta-list-active-selection-foreground);
   background: var(--zeta-list-active-selection-background);
   border-radius: 2px;

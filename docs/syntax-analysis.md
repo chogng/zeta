@@ -2,7 +2,7 @@
 
 > 状态：Rust `CodeEditor` 已内部接入 Rust、JSON、JSONC 与 Shell 的增量 tree-sitter
 > 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
-> Aster Text Engine 通过 TextMate 与有界 Rust syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
+> Stanza Text Engine 通过 TextMate 与有界 Rust syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
 > [`zeta-syntax` README](../zeta-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
 > 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
 > [`zeta-editor` README](../zeterm/editor/README.md)。
@@ -21,10 +21,10 @@
 | Native Composer 的 Shell 高亮 | `CodeEditorDocument::from_text_with_language` / `set_language` | ✅ |
 | Native 文件 document lifecycle | `zeta-text-file` + `FileEditorHost` / `FileEditorPane` | ✅；独立 crate 拥有 baseline/version/dirty/conflict，Native 已接通 Tab、Explorer load、save、关闭确认、外部重载/显式乐观覆盖、中心 Editor Surface 以及 keyboard/IME/pointer/clipboard/viewport 输入 |
 | Native `DiffEditor` 两侧 syntax token 投影 | `zeta-editor::DiffEditorDocument` / `DiffEditor` | ✅；宿主只提交 diff 与 language |
-| Aster bundled-language token | TextMate worker + lexical fallback | ✅ |
-| Aster parser facts | `zeta-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell token/diagnostic/symbol/folding |
+| Stanza bundled-language token | TextMate worker + lexical fallback | ✅ |
+| Stanza parser facts | `zeta-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell token/diagnostic/symbol/folding |
 | App Server syntax RPC | bounded stateless analysis | ✅；仅异步 facts，不拥有 editor revision 或输入热路径 |
-| Aster Smart Select | Aster selection/history + `zeta-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
+| Stanza Smart Select | Stanza selection/history + `zeta-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
 | completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 catalog 决定 |
 | workspace code chunk index | `zeta-code-index` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
 | workspace symbol/reference capability | `zeta-lsp` + App Server language runtime | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document |
@@ -59,7 +59,7 @@ Native host
 
 ## 所有权边界
 
-| 能力 | `zeta-syntax` | `CodeEditor` / Aster | 产品宿主 | App Server | `zeta-lsp` |
+| 能力 | `zeta-syntax` | `CodeEditor` / Stanza | 产品宿主 | App Server | `zeta-lsp` |
 | --- | --- | --- | --- | --- | --- |
 | grammar、query、tree-sitter tree | ✅ | 组合/消费 | ❌ | ❌ | ❌ |
 | editor text、selection、language 与本地 revision | ❌ | ✅ | 选择初始资源与语言 | ❌ | 消费同步 |
@@ -73,12 +73,12 @@ Native host
 边界；但它不是产品对外服务。`zeta-editor` 是当前唯一产品 consumer，Native 不直接依赖它。
 tree-sitter 的输出是 concrete syntax facts，不是统一 AST，也不是 compiler/LSP semantic facts。
 
-## Desktop Aster
+## Desktop Stanza
 
-Aster 只对外暴露编辑器与 versioned language-provider contract。声明式 grammar 在专用 TextMate
+Stanza 只对外暴露编辑器与 versioned language-provider contract。声明式 grammar 在专用 TextMate
 Worker 中运行；受支持语言还可通过 `RustSyntaxFactsService` 请求 App Server 的有界、无状态 syntax
 facts。该 adapter 不建立远端 shadow document，不参与键盘、IME、selection 或同步 transaction；
-返回结果仍经过 Aster 的 model-version gate 后进入 token、diagnostic、symbol 与 folding owner。
+返回结果仍经过 Stanza 的 model-version gate 后进入 token、diagnostic、symbol 与 folding owner。
 
 Smart Select 是一条按需路径：快捷键捕获当前 snapshot 与所有 selection，调用
 `syntax/selectionRanges`，每个 selection 只沿 parser named ancestors 返回默认最多 64 层；普通

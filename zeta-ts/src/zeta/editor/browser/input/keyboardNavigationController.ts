@@ -6,7 +6,7 @@ import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEdit
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../view/editorViewport.js";
 import { EditorLineWrapping } from "../viewModel/visualLineProjection.js";
-import { navigateAsterVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
+import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 
 export interface KeyboardNavigationControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -20,7 +20,7 @@ export interface KeyboardNavigationCommand {
 }
 
 /**
- * Routes browser keydown navigation into Aster common selection commands.
+ * Routes browser keydown navigation into Stanza common selection commands.
  */
 export class KeyboardNavigationController extends DisposableOwner {
 	private readonly targetOperatingSystem: OperatingSystem;
@@ -40,7 +40,7 @@ export class KeyboardNavigationController extends DisposableOwner {
 				options.operatingSystem,
 			);
 			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
-				throw new TypeError("Aster keyboard word pattern resolver must be a function");
+				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
 			}
 			this.wordPattern = options.wordPattern;
 		} catch (error) {
@@ -50,7 +50,7 @@ export class KeyboardNavigationController extends DisposableOwner {
 		if (viewport.textModel !== selectionController.textModel) {
 			this.dispose();
 			throw new TypeError(
-				"Aster keyboard and selection controllers must share one text model",
+				"Stanza keyboard and selection controllers must share one text model",
 			);
 		}
 		this.own(addDisposableListener(
@@ -69,7 +69,7 @@ export class KeyboardNavigationController extends DisposableOwner {
 	private handleKeydown(browserEvent: KeyboardEvent): void {
 		if (browserEvent.defaultPrevented) return;
 		const event = new StandardKeyboardEvent(browserEvent);
-		const navigation = resolveAsterKeyboardNavigation(
+		const navigation = resolveStanzaKeyboardNavigation(
 			event,
 			this.targetOperatingSystem,
 		);
@@ -85,7 +85,7 @@ export class KeyboardNavigationController extends DisposableOwner {
 			: undefined;
 		const result = this.viewport.lineWrapping === EditorLineWrapping.On &&
 			visualCommand !== undefined
-			? navigateAsterVisualCursors(
+			? navigateStanzaVisualCursors(
 				this.viewport.textModel,
 				this.viewport.getVisualLineProjection(),
 				this.selectionController.selections,
@@ -135,7 +135,7 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
 		command === EditorCursorNavigationCommand.PageDown;
 }
 
-export function resolveAsterKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
+export function resolveStanzaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
 	if (event.isComposing || event.altGraphKey) return undefined;
 	const mode = event.shiftKey
 		? EditorCursorNavigationMode.Extend
@@ -228,7 +228,7 @@ function macCommandCommand(key: string): EditorCursorNavigationCommand | undefin
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
 	const resolved = value ?? operatingSystem;
 	if (!Object.values(OperatingSystem).includes(resolved)) {
-		throw new TypeError("Unknown Aster keyboard operating system");
+		throw new TypeError("Unknown Stanza keyboard operating system");
 	}
 	return resolved;
 }

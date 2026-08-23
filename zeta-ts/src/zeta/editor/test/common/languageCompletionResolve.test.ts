@@ -90,7 +90,7 @@ test("Resolve output cannot mutate completion edit identity", async () => {
 	);
 
 	assert.equal(result.value.items[0]!.insertText, "console");
-	assert.equal(errors[0]!.providerId, "aster.test");
+	assert.equal(errors[0]!.providerId, "stanza.test");
 	assert.match((errors[0]!.error as Error).message, /unsupported field/);
 	assert.equal((await service.request("typescript", TextPosition.at(0, 3), createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
 });
@@ -99,7 +99,7 @@ test("Provider output cannot forge deferred-details capability", async () => {
 	using model = new TextModel("con");
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register({
-		id: "aster.plain",
+		id: "stanza.plain",
 		languageIds: ["typescript"],
 		provideCompletions: () => ({
 			items: [{
@@ -125,7 +125,7 @@ function provider(options: {
 	readonly resolve: NonNullable<LanguageCompletionProvider["resolveCompletionItem"]>;
 }): LanguageCompletionProvider {
 	return {
-		id: "aster.test",
+		id: "stanza.test",
 		languageIds: ["typescript"],
 		provideCompletions: () => ({
 			items: [{
@@ -146,7 +146,7 @@ function resolveRequest(completionRequestId: number, modelVersion: number): Lang
 	return {
 		completionRequestId,
 		modelVersion,
-		providerId: "aster.test",
+		providerId: "stanza.test",
 		itemId: "console",
 	};
 }

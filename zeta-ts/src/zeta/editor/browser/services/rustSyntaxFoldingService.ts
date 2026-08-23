@@ -3,9 +3,9 @@ import type { SyntaxAnalyzeResult } from "../../../platform/syntax/common/syntax
 import { type EditorFoldingRange, EditorFoldingRangeSource } from "../../contrib/folding/browser/foldingRanges.js";
 import { type TextSnapshot } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
-import { RustSyntaxFactsService, syntaxLanguageForAsterLanguage } from "./rustSyntaxFactsService.js";
+import { RustSyntaxFactsService, syntaxLanguageForStanzaLanguage } from "./rustSyntaxFactsService.js";
 
-/** Keeps Aster's parser-derived folding ranges synchronized with the Rust syntax endpoint. */
+/** Keeps Stanza's parser-derived folding ranges synchronized with the Rust syntax endpoint. */
 export class RustSyntaxFoldingService extends DisposableOwner {
 	private readonly supported: boolean;
 	private generation = 0;
@@ -28,7 +28,7 @@ export class RustSyntaxFoldingService extends DisposableOwner {
 			this.disposed = true;
 			this.generation += 1;
 		});
-		this.supported = syntaxLanguageForAsterLanguage(languageId) !== undefined;
+		this.supported = syntaxLanguageForStanzaLanguage(languageId) !== undefined;
 		if (!this.supported) return;
 		this.own(model.onDidChange(() => this.refresh()));
 		this.request();

@@ -13,18 +13,18 @@ export interface PointerModifierState {
 	readonly shiftKey: boolean;
 }
 
-export function readAsterPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
+export function readStanzaPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
 	const resolved = value ?? PointerMultiCursorModifier.Alt;
 	if (
 		resolved !== PointerMultiCursorModifier.Alt &&
 		resolved !== PointerMultiCursorModifier.ControlOrMeta
 	) {
-		throw new TypeError("Unknown Aster pointer multi-cursor modifier");
+		throw new TypeError("Unknown Stanza pointer multi-cursor modifier");
 	}
 	return resolved;
 }
 
-export function isAsterPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
+export function isStanzaPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
 	if (state.shiftKey) return false;
 	if (modifier === PointerMultiCursorModifier.Alt) {
 		return state.altKey && !state.ctrlKey && !state.metaKey;
@@ -39,7 +39,7 @@ export function isAsterPointerMultiCursorGesture(state: PointerModifierState, mo
  * the only selection. Dragging from that selection replaces it. Landing on
  * another identical range deduplicates and makes that range primary.
  */
-export function combineAsterPointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+export function combineStanzaPointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
 	validateToggleCandidate(base, toggleCandidateIndex);
 	if (
 		toggleCandidateIndex !== undefined &&
@@ -77,7 +77,7 @@ export function combineAsterPointerSelection(base: TextSelectionSet, active: Tex
 	);
 }
 
-export function findAsterPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
+export function findStanzaPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
 	const index = base.selections.findIndex(candidate =>
 		selectionsHaveSameRange(candidate, selection)
 	);

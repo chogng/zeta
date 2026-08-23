@@ -7,7 +7,7 @@ export function createCompletionWorkerFactory(): LanguageCompletionWorkerFactory
 	return () => new LanguageCompletionCatalogWorkerClient(
 		new BrowserLanguageWorkerPort(new Worker(
 			new URL("./languageCompletionWorkerMain.ts", import.meta.url),
-			{ type: "module", name: "aster-completion" },
+			{ type: "module", name: "stanza-completion" },
 		)),
 		{ requiredProviderModules: ["language.word"] },
 	);

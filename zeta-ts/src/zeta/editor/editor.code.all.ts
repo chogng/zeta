@@ -1,2 +1,2 @@
-// Code uses the standard Aster capability bundle without product-specific editor contributions.
+// Code uses the standard Stanza capability bundle without product-specific editor contributions.
 import "./editor.all.js";

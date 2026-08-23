@@ -4,7 +4,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
 import { type EditorLineRange } from "../../../common/viewLayout/editorViewportModel.js";
-import { getAsterDomTextCaretLeft, getAsterDomTextRangeRectangles } from "./domTextGeometry.js";
+import { getStanzaDomTextCaretLeft, getStanzaDomTextRangeRectangles } from "./domTextGeometry.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
 
 /** Selects whether selection projection marks the cursor's logical line as active. */
@@ -45,7 +45,7 @@ export interface DomSelectionGeometry {
 	readonly carets: readonly DomCaretRectangle[];
 }
 
-export function createAsterDomSelectionGeometry(context: ViewportOverlayContext, selections: EditorSelectionController["selections"]): DomSelectionGeometry | undefined {
+export function createStanzaDomSelectionGeometry(context: ViewportOverlayContext, selections: EditorSelectionController["selections"]): DomSelectionGeometry | undefined {
 	const selectionIndexes = new Set<number>();
 	const domSelections: DomSelectionRectangle[] = [];
 	const caretIndexes = new Set<number>();
@@ -53,7 +53,7 @@ export function createAsterDomSelectionGeometry(context: ViewportOverlayContext,
 	for (let selectionIndex = 0; selectionIndex < selections.selections.length; selectionIndex += 1) {
 		const selection = selections.selections[selectionIndex]!;
 		if (!selection.collapsed) {
-			const candidate = createAsterDomRangeRectangles(context, selection.range);
+			const candidate = createStanzaDomRangeRectangles(context, selection.range);
 			if (candidate) {
 				selectionIndexes.add(selectionIndex);
 				domSelections.push(...candidate.map(rectangle => Object.freeze({ ...rectangle, selectionIndex })));
@@ -65,7 +65,7 @@ export function createAsterDomSelectionGeometry(context: ViewportOverlayContext,
 		if (!visualLine || !renderedLine) continue;
 		const offset = selection.active.columnIndex - visualLine.startColumn;
 		if (!isCurrentDomTextOffset(renderedLine.textElement, offset)) continue;
-		const left = getAsterDomTextCaretLeft(
+		const left = getStanzaDomTextCaretLeft(
 			renderedLine.textElement,
 			offset,
 			renderedLine.domNode.domNode,
@@ -94,7 +94,7 @@ export interface DomVisualRangeRectangle {
 	readonly width: number;
 }
 
-export function createAsterDomRangeRectangles(context: ViewportOverlayContext, range: TextRange): readonly DomVisualRangeRectangle[] | undefined {
+export function createStanzaDomRangeRectangles(context: ViewportOverlayContext, range: TextRange): readonly DomVisualRangeRectangle[] | undefined {
 	const result: DomVisualRangeRectangle[] = [];
 	let intersectsRenderedLine = false;
 	for (let visualLineIndex = context.renderLines.startLineIndex; visualLineIndex < context.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
@@ -112,7 +112,7 @@ export function createAsterDomRangeRectangles(context: ViewportOverlayContext, r
 		const startOffset = startColumn - visualLine.startColumn;
 		const endOffset = endColumn - visualLine.startColumn;
 		if (!isCurrentDomTextOffset(renderedLine.textElement, startOffset) || !isCurrentDomTextOffset(renderedLine.textElement, endOffset)) return undefined;
-		const rectangles = getAsterDomTextRangeRectangles(
+		const rectangles = getStanzaDomTextRangeRectangles(
 			renderedLine.textElement,
 			startOffset,
 			endOffset,

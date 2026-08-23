@@ -14,13 +14,13 @@ export class PeekViewWidget extends DisposableOwner {
 		viewport.textModel.offsetAt(anchor);
 		const document = viewport.element.ownerDocument;
 		this.element = h(document, "section");
-		this.element.className = "aster-editor-peek-view";
+		this.element.className = "stanza-editor-peek-view";
 		this.element.hidden = true;
 		const header = h(document, "header");
-		header.className = "aster-editor-peek-view-header";
+		header.className = "stanza-editor-peek-view-header";
 		header.textContent = title;
 		this.body = h(document, "div");
-		this.body.className = "aster-editor-peek-view-body";
+		this.body.className = "stanza-editor-peek-view-body";
 		this.element.append(header, this.body);
 		viewport.element.append(this.element);
 		this.defer(() => this.element.remove());

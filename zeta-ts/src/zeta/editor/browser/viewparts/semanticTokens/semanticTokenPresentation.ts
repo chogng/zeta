@@ -75,12 +75,12 @@ export type SemanticTokenResolver = (token: LanguageToken) => SemanticTokenPrese
  * The source observes but owns neither the index, result store, nor text model.
  * Worker token type strings never become DOM classes directly.
  */
-export function createAsterSemanticTokenSource(
+export function createStanzaSemanticTokenSource(
 	index: SemanticTokenModelSource,
-	resolvePresentation: SemanticTokenResolver = resolveAsterSemanticTokenPresentation,
+	resolvePresentation: SemanticTokenResolver = resolveStanzaSemanticTokenPresentation,
 ): SemanticTokenSource {
 	if (typeof resolvePresentation !== "function") {
-		throw new TypeError("Aster semantic token resolver must be a function");
+		throw new TypeError("Stanza semantic token resolver must be a function");
 	}
 	const onDidChange: Event<void> = listener => index.onDidChange(() => listener());
 	return Object.freeze({
@@ -112,8 +112,8 @@ export function createOverlaySemanticTokenSource(base: SemanticTokenSource, over
 	});
 }
 
-/** Maps common semantic-token names to Aster's stable presentation vocabulary. */
-export function resolveAsterSemanticTokenPresentation(token: LanguageToken): SemanticTokenPresentation | undefined {
+/** Maps common semantic-token names to Stanza's stable presentation vocabulary. */
+export function resolveStanzaSemanticTokenPresentation(token: LanguageToken): SemanticTokenPresentation | undefined {
 	switch (token.tokenType) {
 		case "comment": return SemanticTokenPresentation.Comment;
 		case "keyword":
@@ -141,7 +141,7 @@ export function resolveAsterSemanticTokenPresentation(token: LanguageToken): Sem
 }
 
 /** Projects one line transactionally while preserving its exact source text. */
-export function projectAsterSemanticTokenLine(
+export function projectStanzaSemanticTokenLine(
 	element: HTMLElement,
 	lineText: string,
 	tokens: readonly ResolvedSemanticToken[],
@@ -166,16 +166,16 @@ export function projectAsterSemanticTokenLine(
 			continue;
 		}
 		const tokenElement = h(ownerDocument, "span");
-		tokenElement.className = "aster-editor-token";
+		tokenElement.className = "stanza-editor-token";
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
-		if (bracket) tokenElement.classList.add(`aster-editor-bracket-level-${bracket.level}`);
+		if (bracket) tokenElement.classList.add(`stanza-editor-bracket-level-${bracket.level}`);
 		tokenElement.textContent = lineText.slice(startColumn, endColumn);
 		fragment.append(tokenElement);
 	}
 	if (fragment.textContent !== lineText) {
-		throw new Error("Aster semantic token projection changed line text");
+		throw new Error("Stanza semantic token projection changed line text");
 	}
 	reset(element, fragment);
 }
@@ -184,24 +184,24 @@ function validateBracketColorizations(lineText: string, brackets: readonly Brack
 	let previousEnd = 0;
 	for (const bracket of brackets) {
 		if (!Number.isSafeInteger(bracket.startColumn) || !Number.isSafeInteger(bracket.endColumn) || bracket.startColumn < previousEnd || bracket.endColumn <= bracket.startColumn || bracket.endColumn > lineText.length) {
-			throw new RangeError("Aster bracket colorizations must be sorted, non-overlapping source ranges");
+			throw new RangeError("Stanza bracket colorizations must be sorted, non-overlapping source ranges");
 		}
 		if (!Number.isSafeInteger(bracket.level) || bracket.level < 1 || bracket.level > 6) {
-			throw new RangeError("Aster bracket colorization level must be between 1 and 6");
+			throw new RangeError("Stanza bracket colorization level must be between 1 and 6");
 		}
 		previousEnd = bracket.endColumn;
 	}
 }
 
 /** Captures and validates one source before a viewport replaces its snapshot. */
-export function snapshotAsterSemanticTokenLines(source: SemanticTokenSource): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
+export function snapshotStanzaSemanticTokenLines(source: SemanticTokenSource): ReadonlyMap<number, readonly ResolvedSemanticToken[]> {
 	const result = new Map<number, readonly ResolvedSemanticToken[]>();
 	for (const line of source.lines) {
 		if (!Number.isSafeInteger(line.lineIndex) || line.lineIndex < 0) {
-			throw new RangeError("Aster semantic token line index must be a non-negative safe integer");
+			throw new RangeError("Stanza semantic token line index must be a non-negative safe integer");
 		}
 		if (result.has(line.lineIndex)) {
-			throw new RangeError(`Duplicate Aster semantic token line ${line.lineIndex}`);
+			throw new RangeError(`Duplicate Stanza semantic token line ${line.lineIndex}`);
 		}
 		const tokens = Object.freeze(line.tokens.map(token => Object.freeze({
 			startColumn: token.startColumn,
@@ -222,13 +222,13 @@ function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticT
 		if (token.presentation !== undefined) validatePresentation(token.presentation);
 		validateModifiers(token.modifiers);
 		if (!Number.isSafeInteger(token.startColumn) || !Number.isSafeInteger(token.endColumn)) {
-			throw new RangeError("Aster semantic token columns must be safe integers");
+			throw new RangeError("Stanza semantic token columns must be safe integers");
 		}
 		if (token.startColumn < previousEnd || token.endColumn <= token.startColumn) {
-			throw new RangeError("Aster semantic tokens must be sorted, non-overlapping, and non-empty");
+			throw new RangeError("Stanza semantic tokens must be sorted, non-overlapping, and non-empty");
 		}
 		if (token.endColumn > lineText.length) {
-			throw new RangeError("Aster semantic token exceeds its line text");
+			throw new RangeError("Stanza semantic token exceeds its line text");
 		}
 		previousEnd = token.endColumn;
 	}
@@ -236,14 +236,14 @@ function validateLineTokens(lineText: string, tokens: readonly ResolvedSemanticT
 
 function validatePresentation(presentation: SemanticTokenPresentation): void {
 	if (!Object.values(SemanticTokenPresentation).includes(presentation)) {
-		throw new TypeError(`Unknown Aster semantic token presentation '${presentation}'`);
+		throw new TypeError(`Unknown Stanza semantic token presentation '${presentation}'`);
 	}
 }
 
 function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefined): void {
 	if (modifiers === undefined) return;
 	if (new Set(modifiers).size !== modifiers.length || modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) {
-		throw new TypeError("Unknown or duplicate Aster semantic token modifier");
+		throw new TypeError("Unknown or duplicate Stanza semantic token modifier");
 	}
 }
 
@@ -253,7 +253,7 @@ function resolveLineTokens(tokens: readonly LanguageToken[], resolvePresentation
 		const presentation = resolvePresentation(token);
 		if (presentation === undefined && token.presentation === undefined) continue;
 		if (presentation !== undefined) validatePresentation(presentation);
-		const modifiers = resolveAsterSemanticTokenModifiers(token);
+		const modifiers = resolveStanzaSemanticTokenModifiers(token);
 		resolved.push(Object.freeze({
 			startColumn: token.range.start.columnIndex,
 			endColumn: token.range.end.columnIndex,
@@ -297,8 +297,8 @@ function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable
 	if (decorations.length > 0) element.style.textDecorationLine = decorations.join(" ");
 }
 
-/** Maps standard LSP modifier names to Aster's closed browser presentation set. */
-export function resolveAsterSemanticTokenModifiers(token: LanguageToken): readonly SemanticTokenModifier[] {
+/** Maps standard LSP modifier names to Stanza's closed browser presentation set. */
+export function resolveStanzaSemanticTokenModifiers(token: LanguageToken): readonly SemanticTokenModifier[] {
 	const resolved = new Set<SemanticTokenModifier>();
 	for (const modifier of token.modifiers) {
 		switch (modifier) {

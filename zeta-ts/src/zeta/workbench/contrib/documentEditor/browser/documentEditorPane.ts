@@ -42,7 +42,7 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 	create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("Document editor pane has already been created");
 		const container = h(parent.ownerDocument, "div");
-		container.className = "zeta-structured-editor-pane";
+		container.className = "stanza-structured-editor-pane";
 		parent.append(container);
 		this.container = container;
 		this.editor.create(container);

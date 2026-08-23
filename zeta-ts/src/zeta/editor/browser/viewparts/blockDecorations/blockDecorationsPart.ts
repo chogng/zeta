@@ -4,7 +4,7 @@ import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/editorViewportModel.js';
 import { DecorationsPart } from '../decorations/decorationsPart.js';
 import { EditorOverlayPart, EditorViewContext } from '../viewPart.js';
-import { resolveAsterBlockDecorationGeometry } from './blockDecorationsProjection.js';
+import { resolveStanzaBlockDecorationGeometry } from './blockDecorationsProjection.js';
 
 export class BlockDecorationsPart extends EditorOverlayPart {
 	public readonly domNode: HTMLDivElement;
@@ -19,7 +19,7 @@ export class BlockDecorationsPart extends EditorOverlayPart {
 		this.decorations = decorations;
 		this.domNode = this.adopt(h(host.ownerDocument, 'div'), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
-		this.root.setClassName('aster-editor-block-decorations');
+		this.root.setClassName('stanza-editor-block-decorations');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
 	}
@@ -41,7 +41,7 @@ export class BlockDecorationsPart extends EditorOverlayPart {
 				continue;
 			}
 
-			const geometry = resolveAsterBlockDecorationGeometry(context, layout, decoration);
+			const geometry = resolveStanzaBlockDecorationGeometry(context, layout, decoration);
 			if (!geometry) {
 				continue;
 			}
@@ -54,7 +54,7 @@ export class BlockDecorationsPart extends EditorOverlayPart {
 			}
 
 			const [paddingTop, , paddingBottom] = geometry.padding;
-			block.setClassName(`aster-editor-block-decoration ${presentation.className}`);
+			block.setClassName(`stanza-editor-block-decoration ${presentation.className}`);
 			block.domNode.dataset.decorationId = String(decoration.id);
 			block.setLeft(geometry.left);
 			block.setWidth(geometry.width);

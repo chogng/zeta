@@ -354,7 +354,7 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		change?.click();
 		await waitFor(() => opened.length === 1);
 		assert.equal(fileRequests, 1);
-		assert.equal(opened[0].input.contentType, "application/vnd.aster.editor-diff");
+		assert.equal(opened[0].input.contentType, "application/vnd.stanza.editor-diff");
 		assert.equal(opened[0].input.label, "editor.ts (2222222) ↔ editor.ts (1111111)");
 		assert.equal(opened[0].options?.pinned, false);
 
@@ -496,7 +496,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		stagedOpen.click();
 		await waitFor(() => opened.length === 1);
 		assert.deepEqual(changeFileRequests[0], { path: "staged.ts", comparison: "staged" });
-		assert.equal(opened[0].input.contentType, "application/vnd.aster.editor-diff");
+		assert.equal(opened[0].input.contentType, "application/vnd.stanza.editor-diff");
 		assert.equal(opened[0].input.label, "staged.ts (HEAD) ↔ staged.ts (Index)");
 		assert.equal(opened[0].options?.pinned, false);
 
@@ -505,7 +505,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		workingOpen.click();
 		await waitFor(() => opened.length === 2);
 		assert.deepEqual(changeFileRequests[1], { path: "src/working.ts", comparison: "unstaged" });
-		assert.equal(opened[1].input.contentType, "application/vnd.aster.editor-diff");
+		assert.equal(opened[1].input.contentType, "application/vnd.stanza.editor-diff");
 		assert.equal(opened[1].input.label, "working.ts (Index) ↔ working.ts (Working Tree)");
 		assert.equal(opened[1].options?.pinned, false);
 

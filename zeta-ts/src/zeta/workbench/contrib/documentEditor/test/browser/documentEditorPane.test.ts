@@ -25,11 +25,11 @@ await import("../../../../../editor/contrib/documentEditor.contribution.js");
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {
 	const button = parent.querySelector<HTMLButtonElement>(`[data-action-id='${actionId}'] button`);
-	assert.ok(button, `Missing Aster document action '${actionId}'`);
+	assert.ok(button, `Missing Stanza document action '${actionId}'`);
 	return button;
 }
 
-test("Aster editor migrates plain text and edits a structured paragraph", async () => {
+test("Stanza editor migrates plain text and edits a structured paragraph", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Title\nBody");
 	const parent = h(environment.window.document, "main");
@@ -77,7 +77,7 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
 	const pane = new EditorPane(new MemoryTextFiles(""), { onSave: async () => { saveCalls += 1; } });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.parse("untitled:academic/draft"), initialText: "Draft" }, new AbortController().signal);
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.value = "Changed";
 	textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
@@ -89,14 +89,14 @@ test("DocumentWorkingCopy clears dirty state after an untitled save succeeds", a
 	environment.window.close();
 });
 
-test("Aster refuses a stale conditional save even before a file-change notification arrives", async () => {
+test("Stanza refuses a stale conditional save even before a file-change notification arrives", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Initial");
 	const parent = h(environment.window.document, "main");
 	using pane = new EditorPane(files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.value = "Local";
 	textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
@@ -109,16 +109,16 @@ test("Aster refuses a stale conditional save even before a file-change notificat
 	environment.window.close();
 });
 
-test("Aster routes block keyboard commands through Aster", async () => {
+test("Stanza routes block keyboard commands through Stanza", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
-	const files = new MemoryTextFiles("Hello\nWorld\nAster");
+	const files = new MemoryTextFiles("Hello\nWorld\nStanza");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
 	using pane = new EditorPane(files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	const blockTexts = (): string[] => pane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? "");
 	const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
 		const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...modifiers });
@@ -131,7 +131,7 @@ test("Aster routes block keyboard commands through Aster", async () => {
 	fields[0]!.focus();
 	fields[0]!.setSelectionRange(2, 2);
 	assert.equal(dispatchKey(fields[0]!, "Enter").defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["He", "llo", "World", "Aster"]);
+	assert.deepEqual(blockTexts(), ["He", "llo", "World", "Stanza"]);
 	fields = textareas();
 	assert.equal(environment.window.document.activeElement, fields[1]);
 	assert.equal(fields[1]!.selectionStart, 0);
@@ -139,31 +139,31 @@ test("Aster routes block keyboard commands through Aster", async () => {
 	fields[1]!.focus();
 	fields[1]!.setSelectionRange(fields[1]!.value.length, fields[1]!.value.length);
 	assert.equal(dispatchKey(fields[1]!, "Delete").defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["He", "lloWorld", "Aster"]);
+	assert.deepEqual(blockTexts(), ["He", "lloWorld", "Stanza"]);
 
 	fields = textareas();
 	fields[1]!.focus();
 	fields[1]!.setSelectionRange(0, 0);
 	assert.equal(dispatchKey(fields[1]!, "Backspace").defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["HelloWorld", "Aster"]);
+	assert.deepEqual(blockTexts(), ["HelloWorld", "Stanza"]);
 
 	fields = textareas();
 	fields[0]!.focus();
 	assert.equal(dispatchKey(fields[0]!, "Enter", { ctrlKey: true }).defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["HelloWorld", "", "Aster"]);
+	assert.deepEqual(blockTexts(), ["HelloWorld", "", "Stanza"]);
 	fields = textareas();
 	assert.equal(environment.window.document.activeElement, fields[1]);
 
 	assert.equal(dispatchKey(fields[1]!, "ArrowDown", { altKey: true }).defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["HelloWorld", "Aster", ""]);
+	assert.deepEqual(blockTexts(), ["HelloWorld", "Stanza", ""]);
 	fields = textareas();
 	assert.equal(environment.window.document.activeElement, fields[2]);
 	assert.equal(dispatchKey(fields[2]!, "ArrowUp", { altKey: true }).defaultPrevented, true);
-	assert.deepEqual(blockTexts(), ["HelloWorld", "", "Aster"]);
+	assert.deepEqual(blockTexts(), ["HelloWorld", "", "Stanza"]);
 	environment.window.close();
 });
 
-test("Aster projects plugin decorations onto rich text runs", async () => {
+test("Stanza projects plugin decorations onto rich text runs", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -181,7 +181,7 @@ test("Aster projects plugin decorations onto rich text runs", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	const hit = editor?.querySelector<HTMLElement>(".search-hit");
 	assert.ok(editor);
 	assert.ok(hit);
@@ -194,7 +194,7 @@ test("Aster projects plugin decorations onto rich text runs", async () => {
 	environment.window.close();
 });
 
-test("Aster commits textarea composition as one Aster transaction", async () => {
+test("Stanza commits textarea composition as one Stanza transaction", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -203,7 +203,7 @@ test("Aster commits textarea composition as one Aster transaction", async () => 
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(5, 5);
@@ -217,13 +217,13 @@ test("Aster commits textarea composition as one Aster transaction", async () => 
 
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello世");
 	const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
-	parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input")?.dispatchEvent(undo);
+	parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input")?.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello");
 	environment.window.close();
 });
 
-test("Aster accepts a schema and custom node view without changing Aster common nodes", async () => {
+test("Stanza accepts a schema and custom node view without changing Stanza common nodes", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "custom-paragraph", content: [schema.createText("Inside callout", { id: "custom-text" })] });
@@ -270,7 +270,7 @@ test("Aster accepts a schema and custom node view without changing Aster common 
 	environment.window.close();
 });
 
-test("Aster projects Academic wrappers while editing Aster child blocks", async () => {
+test("Stanza projects Academic wrappers while editing Stanza child blocks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createAcademicDocumentSchema();
 	const document = schema.createDocument([
@@ -294,31 +294,31 @@ test("Aster projects Academic wrappers while editing Aster child blocks", async 
 	assert.equal(title.getAttribute("aria-label"), "Document title");
 	assert.equal(abstract.dataset.academicRole, "abstract");
 	assert.equal(section.dataset.academicRole, "section");
-	assert.equal(parent.querySelectorAll("textarea.zeta-document-text-input").length, 4);
+	assert.equal(parent.querySelectorAll("textarea.stanza-document-text-input").length, 4);
 	assert.deepEqual(pane.getOutline().map(entry => ({ nodeId: entry.nodeId, title: entry.title, depth: entry.depth })), [
 		{ nodeId: "title-heading", title: "Paper title", depth: 0 },
 		{ nodeId: "section-heading", title: "Introduction", depth: 0 },
 	]);
-	const outlineEntries = parent.querySelectorAll<HTMLButtonElement>(".zeta-document-outline-entry");
+	const outlineEntries = parent.querySelectorAll<HTMLButtonElement>(".stanza-document-outline-entry");
 	assert.deepEqual([...outlineEntries].map(entry => entry.textContent), ["Paper title", "Introduction"]);
 	outlineEntries[1]!.click();
-	const sectionInput = section.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const sectionInput = section.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(sectionInput);
 	assert.equal(environment.window.document.activeElement, sectionInput);
 	assert.equal(sectionInput.selectionStart, 0);
 
-	const titleInput = title.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const titleInput = title.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(titleInput);
 	titleInput.value = "Updated title";
 	titleInput.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
 	assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.text, "Updated title");
 	assert.ok(parent.querySelector("header.zeta-academic-title"));
 	pane.clearInput();
-	assert.equal(parent.querySelector<HTMLElement>(".zeta-document-outline")?.hidden, true);
+	assert.equal(parent.querySelector<HTMLElement>(".stanza-document-outline")?.hidden, true);
 	environment.window.close();
 });
 
-test("Aster renders and deletes Academic citation inline nodes", async () => {
+test("Stanza renders and deletes Academic citation inline nodes", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createAcademicDocumentSchema();
 	const citation = schema.createNode("citation", { id: "browser-citation", attrs: { key: "smith-2024", label: "[Smith 2024]" } });
@@ -331,13 +331,13 @@ test("Aster renders and deletes Academic citation inline nodes", async () => {
 	await pane.setInput({ resource: URI.file("C:\\project\\citations.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
 
 	const citationElement = parent.querySelector<HTMLElement>(".zeta-citation");
-	const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input[data-block-id='citation-paragraph']");
+	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input[data-block-id='citation-paragraph']");
 	assert.ok(citationElement);
 	assert.ok(editor);
 	assert.equal(citationElement.textContent, "[Smith 2024]");
 	assert.equal(citationElement.dataset.citationKey, "smith-2024");
 	citationElement.click();
-	assert.equal(citationElement.classList.contains("zeta-document-inline-node-selected"), true);
+	assert.equal(citationElement.classList.contains("stanza-document-inline-node-selected"), true);
 
 	const deletion = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Backspace" });
 	editor.dispatchEvent(deletion);
@@ -347,7 +347,7 @@ test("Aster renders and deletes Academic citation inline nodes", async () => {
 	environment.window.close();
 });
 
-test("Aster exposes Academic citation insertion as a toolbar action", async () => {
+test("Stanza exposes Academic citation insertion as a toolbar action", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const prompts = ["smith-2024", "[Smith 2024]"];
 	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
@@ -374,7 +374,7 @@ test("Aster exposes Academic citation insertion as a toolbar action", async () =
 	environment.window.close();
 });
 
-test("Aster renders resolved citations and bibliography references", async () => {
+test("Stanza renders resolved citations and bibliography references", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createAcademicDocumentSchema();
 	const citation = schema.createNode("citation", { id: "resolved-citation", attrs: { key: "smith-2024" } });
@@ -403,7 +403,7 @@ test("Aster renders resolved citations and bibliography references", async () =>
 	environment.window.close();
 });
 
-test("Aster exposes reference insertion as a citation toolbar action", async () => {
+test("Stanza exposes reference insertion as a citation toolbar action", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const prompts = ["smith-2024", "Smith, 2024"];
 	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => prompts.shift() ?? null });
@@ -429,7 +429,7 @@ test("Aster exposes reference insertion as a citation toolbar action", async () 
 	environment.window.close();
 });
 
-test("Aster uses the Academic empty document through revert", async () => {
+test("Stanza uses the Academic empty document through revert", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const schema = createAcademicDocumentSchema();
 	const parent = h(environment.window.document, "main");
@@ -445,9 +445,9 @@ test("Aster uses the Academic empty document through revert", async () => {
 	assert.deepEqual(pane.getDocument().content.map(node => node.type), ["title", "abstract"]);
 	assert.ok(parent.querySelector("header.zeta-academic-title"));
 	assert.ok(parent.querySelector("section.zeta-academic-abstract"));
-	assert.equal(parent.querySelectorAll("textarea.zeta-document-text-input").length, 2);
+	assert.equal(parent.querySelectorAll("textarea.stanza-document-text-input").length, 2);
 
-	const titleInput = parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.zeta-document-text-input");
+	const titleInput = parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.stanza-document-text-input");
 	assert.ok(titleInput);
 	titleInput.value = "Temporary title";
 	titleInput.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
@@ -455,24 +455,24 @@ test("Aster uses the Academic empty document through revert", async () => {
 
 	await pane.revert();
 	assert.deepEqual(pane.getDocument().content.map(node => node.type), ["title", "abstract"]);
-	assert.equal(parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.zeta-document-text-input")?.value, "");
+	assert.equal(parent.querySelector<HTMLTextAreaElement>("header.zeta-academic-title textarea.stanza-document-text-input")?.value, "");
 	assert.equal(pane.isDirty, false);
 	environment.window.close();
 });
 
-test("Aster projects read-only inputs without accepting model mutations", async () => {
+test("Stanza projects read-only inputs without accepting model mutations", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	const pane = new EditorPane(new MemoryTextFiles("Hello"));
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic"), readOnly: true }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	assert.equal(textarea.readOnly, true);
 	assert.equal(textarea.getAttribute("aria-readonly"), "true");
-	assert.equal([...parent.querySelectorAll<HTMLButtonElement>(".zeta-structured-format-toolbar button")].every(button => button.disabled), true);
-	assert.equal([...parent.querySelectorAll<HTMLSelectElement>(".zeta-structured-format-toolbar select")].every(select => select.disabled), true);
+	assert.equal([...parent.querySelectorAll<HTMLButtonElement>(".stanza-structured-format-toolbar button")].every(button => button.disabled), true);
+	assert.equal([...parent.querySelectorAll<HTMLSelectElement>(".stanza-structured-format-toolbar select")].every(select => select.disabled), true);
 	textarea.value = "Rejected";
 	textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello");
@@ -483,7 +483,7 @@ test("Aster projects read-only inputs without accepting model mutations", async 
 	environment.window.close();
 });
 
-test("Aster routes text undo and redo through Aster history", async () => {
+test("Stanza routes text undo and redo through Stanza history", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -492,7 +492,7 @@ test("Aster routes text undo and redo through Aster history", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+	const textareas = (): HTMLTextAreaElement[] => Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	const dispatchKey = (textarea: HTMLTextAreaElement, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent => {
 		const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key, ...modifiers });
 		textarea.dispatchEvent(event);
@@ -519,7 +519,7 @@ test("Aster routes text undo and redo through Aster history", async () => {
 	environment.window.close();
 });
 
-test("Aster creates a hard break with Shift+Enter", async () => {
+test("Stanza creates a hard break with Shift+Enter", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -528,7 +528,7 @@ test("Aster creates a hard break with Shift+Enter", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(2, 2);
@@ -537,11 +537,11 @@ test("Aster creates a hard break with Shift+Enter", async () => {
 	assert.equal(event.defaultPrevented, true);
 	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.type), ["text", "hardBreak", "text"]);
 	assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ["He", "llo"]);
-	assert.ok(parent.querySelector(".zeta-document-rich-text-input br"));
+	assert.ok(parent.querySelector(".stanza-document-rich-text-input br"));
 	environment.window.close();
 });
 
-test("Aster deletes a selection spanning a hard break", async () => {
+test("Stanza deletes a selection spanning a hard break", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -570,7 +570,7 @@ test("Aster deletes a selection spanning a hard break", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
 	const runs = Array.from(editor.querySelectorAll<HTMLElement>("[data-text-node-id]"));
 	const selection = environment.window.document.getSelection();
@@ -587,7 +587,7 @@ test("Aster deletes a selection spanning a hard break", async () => {
 	environment.window.close();
 });
 
-test("Aster renders semantic lists and splits list items", async () => {
+test("Stanza renders semantic lists and splits list items", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -626,7 +626,7 @@ test("Aster renders semantic lists and splits list items", async () => {
 
 	assert.equal(parent.querySelectorAll("ul").length, 1);
 	assert.equal(parent.querySelectorAll("ul > li").length, 1);
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(3, 3);
@@ -639,7 +639,7 @@ test("Aster renders semantic lists and splits list items", async () => {
 	environment.window.close();
 });
 
-test("Aster indents and outdents list items with Tab", async () => {
+test("Stanza indents and outdents list items with Tab", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -667,7 +667,7 @@ test("Aster indents and outdents list items with Tab", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	let textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+	let textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	textareas[1]!.focus();
 	const indent = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab" });
 	textareas[1]!.dispatchEvent(indent);
@@ -675,7 +675,7 @@ test("Aster indents and outdents list items with Tab", async () => {
 	assert.equal(parent.querySelector("ul")?.children.length, 1);
 	assert.equal(parent.querySelectorAll("ul ul > li").length, 1);
 
-	textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.zeta-document-text-input"));
+	textareas = Array.from(parent.querySelectorAll<HTMLTextAreaElement>("textarea.stanza-document-text-input"));
 	const outdent = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Tab", shiftKey: true });
 	textareas[1]!.dispatchEvent(outdent);
 	assert.equal(outdent.defaultPrevented, true);
@@ -684,7 +684,7 @@ test("Aster indents and outdents list items with Tab", async () => {
 	environment.window.close();
 });
 
-test("Aster exits an empty list item on the second Enter", async () => {
+test("Stanza exits an empty list item on the second Enter", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -703,7 +703,7 @@ test("Aster exits an empty list item on the second Enter", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	const event = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
@@ -714,7 +714,7 @@ test("Aster exits an empty list item on the second Enter", async () => {
 	environment.window.close();
 });
 
-test("Aster exposes a block toolbar for block and list formats", async () => {
+test("Stanza exposes a block toolbar for block and list formats", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -723,8 +723,8 @@ test("Aster exposes a block toolbar for block and list formats", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(toolbar);
 	assert.ok(textarea);
 	assert.equal(toolbar.hidden, false);
@@ -751,7 +751,7 @@ test("Aster exposes a block toolbar for block and list formats", async () => {
 	environment.window.close();
 });
 
-test("Aster formats selected text with persistent typography marks", async () => {
+test("Stanza formats selected text with persistent typography marks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
@@ -759,8 +759,8 @@ test("Aster formats selected text with persistent typography marks", async () =>
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\formatted.zeta-academic") }, new AbortController().signal);
 
-	const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	const fontFamily = parent.querySelector<HTMLSelectElement>("select[aria-label='Font family']");
 	const fontSize = parent.querySelector<HTMLSelectElement>("select[aria-label='Font size']");
 	assert.ok(toolbar);
@@ -785,7 +785,7 @@ test("Aster formats selected text with persistent typography marks", async () =>
 		{ type: "textStyle", attrs: { fontFamily: "serif", fontSize: 18 } },
 		{ type: "strong", attrs: {} },
 	]);
-	const styledRun = parent.querySelector<HTMLElement>(".zeta-document-mark-textStyle[data-font-family='serif']");
+	const styledRun = parent.querySelector<HTMLElement>(".stanza-document-mark-textStyle[data-font-family='serif']");
 	assert.ok(styledRun);
 	assert.equal(styledRun.style.fontSize, "18px");
 	assert.equal(fontFamily.value, "serif");
@@ -800,7 +800,7 @@ test("Aster formats selected text with persistent typography marks", async () =>
 	environment.window.close();
 });
 
-test("Aster toggles blockquotes and inserts horizontal rules", async () => {
+test("Stanza toggles blockquotes and inserts horizontal rules", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Quoted");
 	const parent = h(environment.window.document, "main");
@@ -809,8 +809,8 @@ test("Aster toggles blockquotes and inserts horizontal rules", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(toolbar);
 	assert.ok(textarea);
 	textarea.focus();
@@ -823,12 +823,12 @@ test("Aster toggles blockquotes and inserts horizontal rules", async () => {
 	assert.equal(documentAction(toolbar, "blockquote").classList.contains("checked"), false);
 
 	documentAction(toolbar, "horizontalRule").click();
-	assert.equal(parent.querySelectorAll("hr.zeta-document-horizontal-rule").length, 1);
+	assert.equal(parent.querySelectorAll("hr.stanza-document-horizontal-rule").length, 1);
 	assert.deepEqual(pane.getDocument().content.map(node => node.type), ["paragraph", "horizontalRule"]);
 	environment.window.close();
 });
 
-test("Aster navigates table cells with Tab and exposes row and column operations", async () => {
+test("Stanza navigates table cells with Tab and exposes row and column operations", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Hello");
 	const parent = h(environment.window.document, "main");
@@ -837,8 +837,8 @@ test("Aster navigates table cells with Tab and exposes row and column operations
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const toolbar = parent.querySelector<HTMLDivElement>(".zeta-structured-format-toolbar");
-	const source = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const toolbar = parent.querySelector<HTMLDivElement>(".stanza-structured-format-toolbar");
+	const source = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(toolbar);
 	assert.ok(source);
 	source.focus();
@@ -885,7 +885,7 @@ test("Aster navigates table cells with Tab and exposes row and column operations
 	environment.window.close();
 });
 
-test("Aster renders inline image nodes in the rich surface", async () => {
+test("Stanza renders inline image nodes in the rich surface", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -913,13 +913,13 @@ test("Aster renders inline image nodes in the rich surface", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const image = parent.querySelector<HTMLImageElement>(".zeta-document-rich-text-input img");
+	const image = parent.querySelector<HTMLImageElement>(".stanza-document-rich-text-input img");
 	assert.ok(image);
 	assert.equal(image.src, "https://example.test/image.png");
 	assert.equal(image.alt, "Example");
 	image.click();
-	assert.equal(image.classList.contains("zeta-document-inline-node-selected"), true);
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	assert.equal(image.classList.contains("stanza-document-inline-node-selected"), true);
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	const remove = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Delete" });
 	rich.dispatchEvent(remove);
@@ -928,13 +928,13 @@ test("Aster renders inline image nodes in the rich surface", async () => {
 	const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
 	rich.dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
-	const restoredImage = parent.querySelector<HTMLImageElement>(".zeta-document-rich-text-input img");
+	const restoredImage = parent.querySelector<HTMLImageElement>(".stanza-document-rich-text-input img");
 	assert.ok(restoredImage);
-	assert.equal(restoredImage.classList.contains("zeta-document-inline-node-selected"), true);
+	assert.equal(restoredImage.classList.contains("stanza-document-inline-node-selected"), true);
 	environment.window.close();
 });
 
-test("Aster turns an image clipboard paste into an image node", async () => {
+test("Stanza turns an image clipboard paste into an image node", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles("Before");
 	const parent = h(environment.window.document, "main");
@@ -943,7 +943,7 @@ test("Aster turns an image clipboard paste into an image node", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(3, 3);
@@ -959,7 +959,7 @@ test("Aster turns an image clipboard paste into an image node", async () => {
 	environment.window.close();
 });
 
-test("Aster inserts a pasted image at a rich-text selection", async () => {
+test("Stanza inserts a pasted image at a rich-text selection", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -987,7 +987,7 @@ test("Aster inserts a pasted image at a rich-text selection", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
 	const run = editor.querySelector<HTMLElement>("[data-text-node-id='text-1']");
 	assert.ok(run?.firstChild);
@@ -1030,7 +1030,7 @@ test("Aster inserts a pasted image at a rich-text selection", async () => {
 	environment.window.close();
 });
 
-test("Aster renders and edits marked inline runs", async () => {
+test("Stanza renders and edits marked inline runs", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1059,11 +1059,11 @@ test("Aster renders and edits marked inline runs", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	let runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
 	assert.deepEqual(runs.map(run => run.textContent), ["H", "ell", "o"]);
-	assert.equal(runs[1]?.classList.contains("zeta-document-mark-strong"), true);
+	assert.equal(runs[1]?.classList.contains("stanza-document-mark-strong"), true);
 
 	runs[1]!.textContent = "ELl";
 	runs[1]!.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
@@ -1102,7 +1102,7 @@ test("Aster renders and edits marked inline runs", async () => {
 	environment.window.close();
 });
 
-test("Aster carries collapsed mark toggles into later input", async () => {
+test("Stanza carries collapsed mark toggles into later input", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	environment.window.document.body.append(parent);
@@ -1110,7 +1110,7 @@ test("Aster carries collapsed mark toggles into later input", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.zeta-document-text-input");
+	const textarea = parent.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
 	assert.ok(textarea);
 	textarea.focus();
 	textarea.setSelectionRange(5, 5);
@@ -1121,7 +1121,7 @@ test("Aster carries collapsed mark toggles into later input", async () => {
 
 	textarea.value = "Hello!";
 	textarea.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
-	let rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	let rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, "Hello!");
 	assert.deepEqual(pane.getDocument().content[0]?.content[0]?.marks, [{ type: "strong", attrs: {} }]);
@@ -1147,7 +1147,7 @@ test("Aster carries collapsed mark toggles into later input", async () => {
 	environment.window.close();
 });
 
-test("Aster applies, updates, and removes link marks", async () => {
+test("Stanza applies, updates, and removes link marks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	let promptValue = " https://example.test ";
 	Object.defineProperty(environment.window, "prompt", { configurable: true, value: () => promptValue });
@@ -1177,7 +1177,7 @@ test("Aster applies, updates, and removes link marks", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	rich.focus();
 	const select = (startRunIndex: number, startOffset: number, endRunIndex: number, endOffset: number): void => {
@@ -1194,7 +1194,7 @@ test("Aster applies, updates, and removes link marks", async () => {
 	select(0, 1, 1, 6);
 	documentAction(parent, "link").click();
 	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], ["link"], ["strong", "link"]]);
-	let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.zeta-document-inline-run"));
+	let links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.stanza-document-inline-run"));
 	assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://example.test", "https://example.test"]);
 	assert.equal(documentAction(parent, "link").classList.contains("checked"), true);
 
@@ -1203,17 +1203,17 @@ test("Aster applies, updates, and removes link marks", async () => {
 	const shortcut = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "k", ctrlKey: true });
 	rich.dispatchEvent(shortcut);
 	assert.equal(shortcut.defaultPrevented, true);
-	links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.zeta-document-inline-run"));
+	links = Array.from(rich.querySelectorAll<HTMLAnchorElement>("a.stanza-document-inline-run"));
 	assert.deepEqual(links.map(link => link.getAttribute("href")), ["https://updated.test", "https://updated.test"]);
 
 	select(1, 0, 2, 6);
 	documentAction(parent, "unlink").click();
-	assert.equal(rich.querySelectorAll("a.zeta-document-inline-run").length, 0);
+	assert.equal(rich.querySelectorAll("a.stanza-document-inline-run").length, 0);
 	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
 	environment.window.close();
 });
 
-test("Aster routes rich-text copy and cut through Aster", async () => {
+test("Stanza routes rich-text copy and cut through Stanza", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1241,7 +1241,7 @@ test("Aster routes rich-text copy and cut through Aster", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	const runs = Array.from(rich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
 	const selection = environment.window.document.getSelection();
@@ -1281,7 +1281,7 @@ test("Aster routes rich-text copy and cut through Aster", async () => {
 	assert.equal(paste.defaultPrevented, true);
 	assert.deepEqual(pane.getDocument().content[0]?.content.filter(node => node.text !== undefined).map(node => node.text), ["Hello", " world", "Hello", " world"]);
 
-	const updatedRich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const updatedRich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(updatedRich);
 	const updatedRuns = Array.from(updatedRich.querySelectorAll<HTMLElement>("[data-text-node-id]"));
 	const cutSelection = environment.window.document.getSelection();
@@ -1299,7 +1299,7 @@ test("Aster routes rich-text copy and cut through Aster", async () => {
 	environment.window.close();
 });
 
-test("Aster pastes external HTML through a schema-valid structured fragment", async () => {
+test("Stanza pastes external HTML through a schema-valid structured fragment", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1327,7 +1327,7 @@ test("Aster pastes external HTML through a schema-valid structured fragment", as
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	const firstRun = rich?.querySelector<HTMLElement>("[data-text-node-id='text-1']");
 	assert.ok(rich);
 	assert.ok(firstRun);
@@ -1360,7 +1360,7 @@ test("Aster pastes external HTML through a schema-valid structured fragment", as
 	environment.window.close();
 });
 
-test("Aster handles whole-document select all, copy, and cut", async () => {
+test("Stanza handles whole-document select all, copy, and cut", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1394,7 +1394,7 @@ test("Aster handles whole-document select all, copy, and cut", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const rich = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const rich = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(rich);
 	const selectAll = new environment.window.KeyboardEvent("keydown", { key: "a", ctrlKey: true, bubbles: true, cancelable: true });
 	rich.dispatchEvent(selectAll);
@@ -1418,7 +1418,7 @@ test("Aster handles whole-document select all, copy, and cut", async () => {
 	environment.window.close();
 });
 
-test("Aster replaces a rich-text selection spanning sibling blocks", async () => {
+test("Stanza replaces a rich-text selection spanning sibling blocks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1458,7 +1458,7 @@ test("Aster replaces a rich-text selection spanning sibling blocks", async () =>
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const editors = Array.from(parent.querySelectorAll<HTMLDivElement>(".zeta-document-rich-text-input"));
+	const editors = Array.from(parent.querySelectorAll<HTMLDivElement>(".stanza-document-rich-text-input"));
 	assert.equal(editors.length, 2);
 	const startRun = editors[0]!.querySelector<HTMLElement>("[data-text-node-id='text-1']");
 	const endRun = editors[1]!.querySelector<HTMLElement>("[data-text-node-id='text-2']");
@@ -1480,18 +1480,18 @@ test("Aster replaces a rich-text selection spanning sibling blocks", async () =>
 	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text ?? node.type), ["Fi", "ond", "hardBreak"]);
 
 	const undo = new environment.window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "z", ctrlKey: true });
-	(parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input") as HTMLDivElement).dispatchEvent(undo);
+	(parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input") as HTMLDivElement).dispatchEvent(undo);
 	assert.equal(undo.defaultPrevented, true);
 	assert.deepEqual(pane.getDocument().content.map(node => node.id), ["paragraph-1", "paragraph-2"]);
 
 	const paste = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertFromPaste", data: "A\nB" });
-	(parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input") as HTMLDivElement).dispatchEvent(paste);
+	(parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input") as HTMLDivElement).dispatchEvent(paste);
 	assert.equal(paste.defaultPrevented, true);
 	assert.deepEqual(pane.getDocument().content.map(node => node.content.filter(child => child.text !== undefined).map(child => child.text).join("")), ["FiA", "Bond"]);
 	environment.window.close();
 });
 
-test("Aster pastes multiline text as structured blocks", async () => {
+test("Stanza pastes multiline text as structured blocks", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1520,7 +1520,7 @@ test("Aster pastes multiline text as structured blocks", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	const editor = parent.querySelector<HTMLDivElement>(".zeta-document-rich-text-input");
+	const editor = parent.querySelector<HTMLDivElement>(".stanza-document-rich-text-input");
 	assert.ok(editor);
 	const runs = Array.from(editor.querySelectorAll<HTMLElement>("[data-text-node-id]"));
 	const selection = environment.window.document.getSelection();
@@ -1538,7 +1538,7 @@ test("Aster pastes multiline text as structured blocks", async () => {
 	environment.window.close();
 });
 
-test("Aster restores serialized blocks and releases its model", async () => {
+test("Stanza restores serialized blocks and releases its model", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1550,7 +1550,7 @@ test("Aster restores serialized blocks and releases its model", async () => {
 			content: [
 				{
 					id: "code-1",
-					type: "textBlock",
+					type: "codeBlock",
 					attrs: { language: "typescript" },
 					content: [{ id: "code-text-1", type: "text", attrs: {}, content: [], marks: [], text: "const value = 1;" }],
 					marks: [],
@@ -1564,17 +1564,17 @@ test("Aster restores serialized blocks and releases its model", async () => {
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	assert.equal(parent.querySelector("[data-editor-kind='text-block']")?.textContent, "");
+	assert.equal(parent.querySelector("[data-editor-kind='code-block']")?.textContent, "");
 	assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
-	assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-toolbar")?.dataset.context, "code");
-	assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-code-context")?.textContent, "Code block · Text editor");
-	assert.equal(parent.querySelector<HTMLElement>(".zeta-structured-format-typography-controls")?.hidden, true);
+	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-toolbar")?.dataset.context, "code");
+	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-code-context")?.textContent, "Code block · Stanza Code");
+	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-typography-controls")?.hidden, true);
 	pane.clearInput();
 	assert.throws(() => pane.getDocument(), /no active model/);
 	environment.window.close();
 });
 
-test("Aster delegates text blocks to an embedded line editor", async () => {
+test("Stanza delegates code blocks to its embedded line editor", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1585,7 +1585,7 @@ test("Aster delegates text blocks to an embedded line editor", async () => {
 			attrs: {},
 			content: [{
 				id: "code-1",
-				type: "textBlock",
+				type: "codeBlock",
 				attrs: { language: "typescript" },
 				content: [{ id: "code-text-1", type: "text", attrs: {}, content: [], marks: [], text: "const value = 1;" }],
 				marks: [],
@@ -1631,7 +1631,7 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
 		});
 		editor.create(parent);
 		await new Promise(resolve => setTimeout(resolve, 25));
-		assert.ok(parent.querySelector(".aster-editor"));
+		assert.ok(parent.querySelector(".stanza-editor"));
 		assert.equal(editor.getValue(), "const value = 1;");
 	} finally {
 		Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
@@ -1644,7 +1644,7 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
 async function waitFor(predicate: () => boolean, timeout = 500): Promise<void> {
 	const deadline = Date.now() + timeout;
 	while (!predicate()) {
-		if (Date.now() >= deadline) throw new Error("Timed out waiting for Aster browser state");
+		if (Date.now() >= deadline) throw new Error("Timed out waiting for Stanza browser state");
 		await new Promise(resolve => setTimeout(resolve, 1));
 	}
 }

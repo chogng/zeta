@@ -1,4 +1,4 @@
-.aster-editor-hover {
+.stanza-editor-hover {
   position: absolute;
   z-index: 8;
   max-width: min(480px, calc(100% - 16px));
@@ -13,6 +13,6 @@
   pointer-events: none;
 }
 
-.aster-editor-hover-content + .aster-editor-hover-content {
+.stanza-editor-hover-content + .stanza-editor-hover-content {
   margin-top: 5px;
 }

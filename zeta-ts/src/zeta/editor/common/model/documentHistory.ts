@@ -15,7 +15,7 @@ export interface DocumentHistoryEntries {
 	readonly redo: readonly DocumentHistoryEntry[];
 }
 
-/** Transaction history for one Aster document; selection state travels with each step. */
+/** Transaction history for one Stanza document; selection state travels with each step. */
 export class DocumentHistory {
 	private readonly undoStack: DocumentHistoryEntry[] = [];
 	private readonly redoStack: DocumentHistoryEntry[] = [];

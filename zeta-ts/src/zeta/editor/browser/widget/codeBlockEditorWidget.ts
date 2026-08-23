@@ -5,27 +5,27 @@ import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEdito
 import { h } from "../../../base/browser/dom.js";
 
 /**
- * A document `textBlock` projection backed by the line-oriented editor.
+ * A document `codeBlock` projection backed by the line-oriented editor.
  *
  * The document model retains block identity and transactions. This widget only
  * hosts the embedded line editor and reports its text snapshot to the owner.
  */
-export class TextEditorWidget extends DisposableOwner implements IEmbeddedTextEditor {
+export class CodeBlockEditorWidget extends DisposableOwner implements IEmbeddedTextEditor {
 	private readonly editor: IEmbeddedTextEditor;
 	private container: HTMLDivElement | undefined;
 	readonly onDidChange: Event<string>;
 
 	constructor(factory: IEmbeddedTextEditorFactory, options: EmbeddedTextEditorOptions) {
 		super();
-		if (!factory || typeof factory.create !== "function") throw new TypeError("Text editor widget requires an embedded editor factory");
+		if (!factory || typeof factory.create !== "function") throw new TypeError("Code block editor widget requires an embedded editor factory");
 		this.editor = this.own(factory.create(options));
 		this.onDidChange = this.editor.onDidChange;
 	}
 
 	create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("Text editor widget has already been created");
+		if (this.container) throw new ReferenceError("Code block editor widget has already been created");
 		const container = h(parent.ownerDocument, "div");
-		container.className = "zeta-document-embedded-text-editor";
+		container.className = "stanza-document-embedded-text-editor";
 		parent.append(container);
 		this.container = container;
 		this.editor.create(container);

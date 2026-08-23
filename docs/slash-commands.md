@@ -47,7 +47,7 @@ local commands 合并。命令定义、名称冲突、补全和提交解析属�
 | --- | --- | --- | --- |
 | TUI | built-ins + initialize snapshot + enabled Skill metadata | 直接使用 `zeta-slash-commands`；Skill target 保存在 client binding | Ratatui popup |
 | Native zeta-ui | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
-| Desktop Chat | Workbench actions + initialize snapshot + enabled Skill metadata | canonical generated `SlashCommandDefinition` + separate action/Skill binding | Aster completion widget；textarea/legacy editor runtime 可复用同一 catalog |
+| Desktop Chat | Workbench actions + initialize snapshot + enabled Skill metadata | canonical generated `SlashCommandDefinition` + separate action/Skill binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 TUI 与 Desktop 已把用户可调用 Skill 以 `/name` 投影到同一补全菜单。启动与刷新只读取 Skill
 metadata；entry 绑定 exact pinned `SkillRef`，不会把 Skill 正文复制成 command definition。
@@ -91,7 +91,7 @@ Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 
 ## 当前限制
 
 Rust surfaces 直接共享 `zeta-slash-commands` 的 headless state。Desktop 直接消费同一个 generated
-`SlashCommandDefinition` model，并由 Aster Editor 的通用 completion/session state 投影交互；TypeScript
+`SlashCommandDefinition` model，并由 Stanza Editor 的通用 completion/session state 投影交互；TypeScript
 只保留运行时 catalog binding。Rust crate 与 Desktop adapter 共同执行
 `zeta-rs/slash-commands/fixtures/conformance.json`，确保名称校验、大小写、前缀匹配和参数规则一致。
 
