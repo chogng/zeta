@@ -1,8 +1,9 @@
 use super::command::AppCommand;
 use super::event::AppEvent;
-use super::keymap::GlobalKeymap;
-use super::keymap::GlobalKeymapAction;
-use super::keymap::GlobalKeymapContext;
+use super::keymap::AppChordMatch;
+use super::keymap::AppKeymap;
+use super::keymap::AppKeymapAction;
+use super::keymap::AppKeymapContext;
 use crate::components::composer::ComposerInput;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
@@ -63,7 +64,7 @@ pub(crate) enum Status {
 #[derive(Debug)]
 pub(crate) struct App {
     interaction_pane: InteractionPane,
-    global_keymap: GlobalKeymap,
+    app_keymap: AppKeymap,
     thread: ThreadFeatureState,
     transcript_scroll: TranscriptScroll,
     selection_actions: Vec<SelectionActions>,
@@ -93,7 +94,7 @@ impl App {
     pub(crate) fn new() -> Self {
         Self {
             interaction_pane: InteractionPane::new(),
-            global_keymap: GlobalKeymap::default(),
+            app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
@@ -118,7 +119,7 @@ impl App {
     ) -> Self {
         Self {
             interaction_pane: InteractionPane::with_slash_commands(slash_commands),
-            global_keymap: GlobalKeymap::default(),
+            app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
@@ -142,14 +143,22 @@ impl App {
         {
             self.last_root_escape = None;
         }
+        let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
+        match self.app_keymap.route_chord(&key, keymap_context, now) {
+            AppChordMatch::PassThrough => {}
+            AppChordMatch::Pending | AppChordMatch::Consumed => return None,
+            AppChordMatch::Command(action) => {
+                return self.apply_app_keymap_action(action, now);
+            }
+        }
         if !self.accepts_input() {
             self.last_root_escape = None;
-            return self.handle_global_key(key, now);
+            return self.handle_app_key(key, now);
         }
 
         let outcome = self.interaction_pane.handle_key(key);
         if matches!(outcome, InteractionPaneOutcome::Unhandled) {
-            return self.handle_global_key(key, now);
+            return self.handle_app_key(key, now);
         }
         self.handle_interaction_pane_outcome(outcome)
     }
@@ -655,15 +664,19 @@ impl App {
         }
     }
 
-    fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
-        let keymap_context = GlobalKeymapContext {
+    fn app_keymap_context(&self, is_press: bool) -> AppKeymapContext {
+        AppKeymapContext {
             accepts_input: self.accepts_input(),
             has_selection: self.selection_view().is_some(),
             composer_empty: self.input().is_empty(),
-            is_press: key.kind == KeyEventKind::Press,
-        };
-        if let Some(action) = self.global_keymap.resolve(&key, keymap_context) {
-            return self.apply_global_keymap_action(action, now);
+            is_press,
+        }
+    }
+
+    fn handle_app_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
+        if let Some(action) = self.app_keymap.resolve_single(&key, keymap_context) {
+            return self.apply_app_keymap_action(action, now);
         }
         if self.selection_view().is_none() && self.transcript_scroll.handle_key(key) {
             return (key.code == KeyCode::Home).then_some(AppCommand::LoadOlderHistory);
@@ -671,13 +684,13 @@ impl App {
         None
     }
 
-    fn apply_global_keymap_action(
+    fn apply_app_keymap_action(
         &mut self,
-        action: GlobalKeymapAction,
+        action: AppKeymapAction,
         now: Instant,
     ) -> Option<AppCommand> {
         match action {
-            GlobalKeymapAction::CycleApprovalMode => {
+            AppKeymapAction::CycleApprovalMode => {
                 self.approval_mode = match self.approval_mode {
                     ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
                     ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
@@ -685,7 +698,7 @@ impl App {
                 };
                 None
             }
-            GlobalKeymapAction::RootEscape => {
+            AppKeymapAction::RootEscape => {
                 if self
                     .last_root_escape
                     .take()
@@ -696,11 +709,20 @@ impl App {
                 self.last_root_escape = Some(now);
                 None
             }
-            GlobalKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
-            GlobalKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
-            GlobalKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
-            GlobalKeymapAction::Suspend => Some(AppCommand::Suspend),
+            AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
+            AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
+            AppKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
+            AppKeymapAction::Suspend => Some(AppCommand::Suspend),
         }
+    }
+
+    pub(crate) fn handle_tick(&mut self, now: Instant) {
+        let context = self.app_keymap_context(true);
+        self.app_keymap.expire(context, now);
+    }
+
+    pub(crate) fn pending_key_chord_label(&self) -> Option<String> {
+        self.app_keymap.pending_chord_label()
     }
 
     fn handle_slash_command(&mut self, invocation: SlashCommandInvocation) -> Option<AppCommand> {

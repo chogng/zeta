@@ -42,6 +42,7 @@ use crossterm::event::KeyEventKind;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEventKind;
 use std::collections::VecDeque;
+use std::time::Instant;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
@@ -143,7 +144,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     connectors_refresh_requested |= refresh.connectors;
                     None
                 }
-                client::RuntimeEvent::Tick => None,
+                client::RuntimeEvent::Tick => {
+                    app.handle_tick(Instant::now());
+                    None
+                }
                 client::RuntimeEvent::TerminationRequested => {
                     return Ok(TuiExit::TerminationRequested);
                 }

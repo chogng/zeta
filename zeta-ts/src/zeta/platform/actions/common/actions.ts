@@ -32,7 +32,7 @@ import type {
 } from "../../instantiation/common/instantiation.js";
 import {
 	KeybindingsRegistry,
-	type KeybindingWeight,
+	type KeybindingSource,
 } from "../../keybinding/common/keybindingsRegistry.js";
 
 export interface IMenuItem {
@@ -224,7 +224,8 @@ export interface IAction2KeybindingOptions {
 	readonly secondary?: readonly Keybinding[];
 	readonly when?: ContextKeyExpression;
 	readonly args?: readonly unknown[];
-	readonly weight?: KeybindingWeight | number;
+	readonly source?: KeybindingSource;
+	readonly priority?: number;
 }
 
 export interface IAction2Options extends ICommandAction {
@@ -282,7 +283,8 @@ export function registerAction2(
 					keybinding,
 					when,
 					args: contribution.args,
-					weight: contribution.weight,
+					source: contribution.source,
+					priority: contribution.priority,
 				}));
 			}
 		}

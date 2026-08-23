@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import test from "node:test";
 import {
 	getKeybindingLabel,
@@ -19,6 +17,7 @@ import {
 	resolveKeybinding,
 } from "../../common/keybindings.js";
 import { OperatingSystem } from "../../common/platform.js";
+import { loadKeybindingConformanceFixtures } from "./keybindingConformanceFixtures.js";
 import {
 	EVENT_KEY_CODE_MAP,
 	IMMUTABLE_CODE_TO_KEY_CODE,
@@ -139,13 +138,7 @@ test("space has a stable user representation", () => {
 });
 
 test("shared keybinding parser fixtures match the TypeScript implementation", () => {
-	const fixturePath = resolve(
-		process.cwd(),
-		"../resources/keybindings/conformance.json",
-	);
-	const fixtures = JSON.parse(
-		readFileSync(fixturePath, "utf8"),
-	) as ConformanceFixtures;
+	const fixtures = loadKeybindingConformanceFixtures<ConformanceFixtures>();
 
 	for (const fixture of fixtures.parser) {
 		const parsed = parseKeybinding(fixture.input);

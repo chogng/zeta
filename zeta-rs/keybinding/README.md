@@ -16,7 +16,7 @@ Zeterm 和 Zeta Code 直接依赖这个 crate；Zeta Renderer 保留同步 TypeS
 | 逻辑键、物理键、实际与 portable modifier | `key` | adapter 必须先完成平台事件转换 |
 | 一至四段 Chord、parser 与 canonical serializer | `key` / `parser` | 不定义产品默认键位 |
 | `when` 表达式解析与求值 | `context` | context key catalog 和 value 由产品提供 |
-| Builtin/User、priority、注册顺序与 blocker | `binding` | 不读取用户文件 |
+| Builtin/Workbench/User、priority、注册顺序与 blocker | `binding` | 不读取用户文件 |
 | 前缀、冲突与命令解析 | `resolver` | 不拥有 timeout、焦点或命令副作用 |
 | Rust/TypeScript 共同 conformance 向量 | `resources/keybindings` | 固定两端共同的语法、优先级、condition、blocker 和 prefix 子集 |
 
@@ -41,13 +41,14 @@ Zeta Code TUI ──┘
 | `BindingSet` | 注册命令或 blocker 规则 |
 | `KeybindingResolver` | 根据产品上下文返回 `ResolveResult` |
 
-Resolver 先过滤条件和按键前缀，再按 User/Builtin 来源、显式 priority 和注册顺序选择获胜规则。
+Resolver 先过滤条件和按键前缀，再按 User/Workbench/Builtin 来源、同来源内显式 priority 和注册顺序选择获胜规则；priority 不能跨越来源层级。
 
 ## 验证
 
 ```bash
 cargo test -p zeta-keybinding
 cargo clippy -p zeta-keybinding --all-targets -- -D warnings
+bazel test //zeta-rs/keybinding:keybinding-unit-tests
 ```
 
-测试覆盖逻辑/物理键、portable modifier、parser/serializer、条件表达式、冲突优先级、blocker、Chord prefix 和共享 conformance 向量。
+测试覆盖逻辑/物理键、portable modifier、parser/serializer、Unicode 空白、条件表达式、来源与极值优先级、blocker、Chord prefix 和共享 conformance 向量。

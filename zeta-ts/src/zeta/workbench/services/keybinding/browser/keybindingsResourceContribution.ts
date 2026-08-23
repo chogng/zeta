@@ -15,7 +15,7 @@ import {
 import {
 	type KeybindingRegistry,
 	KeybindingsRegistry,
-	KeybindingWeight,
+	KeybindingSource,
 } from "../../../../platform/keybinding/common/keybindingsRegistry.js";
 import type {
 	IKeybindingEntry,
@@ -69,14 +69,14 @@ export class KeybindingsResourceContribution extends DisposableOwner {
 					? this.registry.registerKeybindingBlocker({
 						keybinding,
 						when,
-						weight: KeybindingWeight.User,
+						source: KeybindingSource.User,
 					})
 					: this.registry.registerKeybindingRule({
 						command: binding.command,
 						keybinding,
 						when,
 						args: binding.args === undefined ? undefined : [binding.args],
-						weight: KeybindingWeight.User,
+						source: KeybindingSource.User,
 					}));
 			}
 		} catch (error) {

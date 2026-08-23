@@ -108,7 +108,7 @@ impl<Command: Copy> KeyboardShortcutsState<Command> {
 
     pub fn advance(&mut self, now: Instant) -> Option<ShortcutCommit<Command>> {
         let recording = self.recording.as_ref()?;
-        if !recording.deadline.is_some_and(|deadline| now >= deadline) {
+        if recording.deadline.is_none_or(|deadline| now < deadline) {
             return None;
         }
         let command = recording.command;

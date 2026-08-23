@@ -11,6 +11,7 @@ archive_override(
     integrity = "sha256-BHgSBa5kiwxnvxEI4ouPeARFvvQMchVk7FJcq2PEddY=",
     patches = [
         "//third_party/rules_rs:module_dot_bazel_version.patch",
+        "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
     patch_strip = 1,
     strip_prefix = "rules_rs-0.0.96",
@@ -94,10 +95,12 @@ crate.from_cargo(
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
         "aarch64-unknown-linux-musl",
+        "aarch64-pc-windows-gnullvm",
         "aarch64-pc-windows-msvc",
         "x86_64-apple-darwin",
         "x86_64-unknown-linux-gnu",
         "x86_64-unknown-linux-musl",
+        "x86_64-pc-windows-gnullvm",
         "x86_64-pc-windows-msvc",
     ],
 )

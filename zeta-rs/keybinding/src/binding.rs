@@ -4,6 +4,7 @@ use crate::KeySequence;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BindingSource {
     Builtin,
+    Workbench,
     User,
 }
 
@@ -11,7 +12,8 @@ impl BindingSource {
     pub(crate) const fn precedence(self) -> u8 {
         match self {
             Self::Builtin => 0,
-            Self::User => 1,
+            Self::Workbench => 1,
+            Self::User => 2,
         }
     }
 }

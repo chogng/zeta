@@ -1,18 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import test from "node:test";
 import type { KeybindingEvent } from "../../../../base/common/keybindings.js";
 import { resolveKeybinding } from "../../../../base/common/keybindings.js";
 import { parseKeybinding } from "../../../../base/common/keybindingParser.js";
 import { OperatingSystem } from "../../../../base/common/platform.js";
+import { loadKeybindingConformanceFixtures } from "../../../../base/test/common/keybindingConformanceFixtures.js";
 import type { Context } from "../../../contextkey/common/contextkey.js";
 import type { ContextKeyValue } from "../../../contextkey/common/contextkey.js";
 import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
 import { KeybindingResolveKind } from "../../common/keybindingResolver.js";
 import { KeybindingResolver } from "../../common/keybindingResolver.js";
 import { KeybindingRegistry } from "../../common/keybindingsRegistry.js";
-import { KeybindingWeight } from "../../common/keybindingsRegistry.js";
+import { KeybindingSource } from "../../common/keybindingsRegistry.js";
 
 interface ConformanceFixtures {
 	readonly resolver: readonly ResolverFixture[];
@@ -41,7 +40,7 @@ interface RuleFixture {
 	readonly binding: string;
 	readonly command?: string;
 	readonly block?: boolean;
-	readonly source: "builtin" | "user";
+	readonly source: "builtin" | "workbench" | "user";
 	readonly priority: number;
 	readonly when?: string;
 }
@@ -56,7 +55,8 @@ test("shared keybinding resolver fixtures match the TypeScript implementation", 
 			const contribution = {
 				keybinding,
 				when: rule.when ? ContextKeyExpr.has(rule.when) : undefined,
-				weight: sourceWeight(rule.source) + rule.priority,
+				source: keybindingSource(rule.source),
+				priority: rule.priority,
 			};
 			if (rule.block) {
 				registry.registerKeybindingBlocker(contribution);
@@ -94,17 +94,18 @@ test("shared keybinding resolver fixtures match the TypeScript implementation", 
 });
 
 function loadFixtures(): ConformanceFixtures {
-	const path = resolve(
-		process.cwd(),
-		"../resources/keybindings/conformance.json",
-	);
-	return JSON.parse(readFileSync(path, "utf8")) as ConformanceFixtures;
+	return loadKeybindingConformanceFixtures<ConformanceFixtures>();
 }
 
-function sourceWeight(source: RuleFixture["source"]): number {
-	return source === "user"
-		? KeybindingWeight.User
-		: KeybindingWeight.Builtin;
+function keybindingSource(source: RuleFixture["source"]): KeybindingSource {
+	switch (source) {
+		case "builtin":
+			return KeybindingSource.Builtin;
+		case "workbench":
+			return KeybindingSource.Workbench;
+		case "user":
+			return KeybindingSource.User;
+	}
 }
 
 function keybindingEvent(event: EventFixture): KeybindingEvent {

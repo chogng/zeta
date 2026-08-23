@@ -4,4 +4,5 @@ zeterm_rust_library(
     name = "native-keybindings",
     crate_name = "zeta_keybindings_host",
     package_name = "zeterm/native-keybindings",
+    unit_tests = True,
 )

@@ -2,14 +2,20 @@
 
 use std::io;
 use std::io::IsTerminal;
+#[cfg(unix)]
 use std::io::Write;
+#[cfg(unix)]
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 use zeta_terminal_detection::HostTerminal;
 use zeta_terminal_detection::TerminalRgb;
 
+#[cfg(unix)]
 const OSC_BACKGROUND_QUERY: &[u8] = b"\x1b]11;?\x07";
+#[cfg(unix)]
 const QUERY_TIMEOUT: Duration = Duration::from_millis(120);
+#[cfg(unix)]
 const RETRY_INTERVAL: Duration = Duration::from_millis(4);
 
 pub(super) fn query_background(host: &HostTerminal) -> Option<TerminalRgb> {
@@ -73,6 +79,7 @@ impl Drop for NonblockingGuard {
     }
 }
 
+#[cfg(any(unix, test))]
 fn parse_response(bytes: &[u8]) -> Option<TerminalRgb> {
     let payload = osc_11_payload(bytes)?;
     let components = if let Some(rgb) = payload.strip_prefix(b"rgb:") {
@@ -83,6 +90,7 @@ fn parse_response(bytes: &[u8]) -> Option<TerminalRgb> {
     Some(components.into())
 }
 
+#[cfg(any(unix, test))]
 fn osc_11_payload(bytes: &[u8]) -> Option<&[u8]> {
     for introducer in [b"\x1b]11;".as_slice(), b"\x9d11;".as_slice()] {
         let Some(start) = find_bytes(bytes, introducer) else {
@@ -102,6 +110,7 @@ fn osc_11_payload(bytes: &[u8]) -> Option<&[u8]> {
     None
 }
 
+#[cfg(any(unix, test))]
 fn parse_rgb_components(value: &[u8]) -> Option<[u8; 3]> {
     let mut components = value.split(|byte| *byte == b'/');
     let red = scale_hex_component(components.next()?)?;
@@ -110,6 +119,7 @@ fn parse_rgb_components(value: &[u8]) -> Option<[u8; 3]> {
     components.next().is_none().then_some([red, green, blue])
 }
 
+#[cfg(any(unix, test))]
 fn parse_hex_triplet(value: &[u8]) -> Option<[u8; 3]> {
     if value.len() != 6 {
         return None;
@@ -121,6 +131,7 @@ fn parse_hex_triplet(value: &[u8]) -> Option<[u8; 3]> {
     ])
 }
 
+#[cfg(any(unix, test))]
 fn scale_hex_component(value: &[u8]) -> Option<u8> {
     if value.is_empty() || value.len() > 4 {
         return None;
@@ -130,6 +141,7 @@ fn scale_hex_component(value: &[u8]) -> Option<u8> {
     Some(((component * 255 + maximum / 2) / maximum) as u8)
 }
 
+#[cfg(any(unix, test))]
 fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack
         .windows(needle.len())

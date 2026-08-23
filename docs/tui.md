@@ -754,7 +754,7 @@ focused component
       ↓
 parent bubble
       ↓
-global fallback
+application fallback
 ```
 
 局部 handler 返回 `Handled`、`Propagate` 或 typed intent；不能通过默认空 hook 把 approval、
@@ -999,7 +999,10 @@ lib_tests.rs
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
 - `app/keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与
-  Ctrl-C/D/O/V/Z，并把 Crossterm event 单向转换为标准 `KeyStroke`；composer 编辑、selection
+  Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/help` 项；Crossterm event 单向转换为
+  标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、
+  1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。
+  普通单键保持 component-first，只有 Chord prefix 在 component 前路由；composer 编辑、selection
   导航与 transcript 滚动继续由局部 component 拥有；
 - `App` 处理 presentation coordination 与 Keymap action，并直接委托 `InteractionPane` 的
   composer/temporary-view 输入；`ChatWidget` 与过渡目录 `toppane/` 已移除，不再存在第二份

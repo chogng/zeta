@@ -55,7 +55,7 @@ impl std::error::Error for KeybindingParseError {}
 /// Logical keys use their host-reported name. Bracketed keys such as `[KeyK]` use a stable
 /// physical code. `primary` maps to Command on macOS and Control on other supported hosts.
 pub fn parse_key_sequence(value: &str) -> Result<KeySequence, KeybindingParseError> {
-    let chord_values = value.split_ascii_whitespace().collect::<Vec<_>>();
+    let chord_values = value.split_whitespace().collect::<Vec<_>>();
     if chord_values.is_empty() {
         return Err(KeybindingParseError::Empty);
     }

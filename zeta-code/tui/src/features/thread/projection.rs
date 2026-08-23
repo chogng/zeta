@@ -77,6 +77,12 @@ pub(super) fn project_messages(thread: &Thread) -> Vec<Message> {
                 .iter()
                 .map(|item| project_item(item, &tool_names)),
         );
+        if let Some(plan) = &turn.plan {
+            messages.push(
+                Message::plain(MessageRole::Plan, present_plan(plan))
+                    .with_source_id(plan_source_id(turn.turn_id.as_str())),
+            );
+        }
     }
     messages
 }
@@ -97,23 +103,6 @@ pub(super) fn apply_transient(
                 ItemDelta::Plan { text } => (MessageRole::Plan, text),
             };
             append_or_insert(messages, transient, source_id, role, text);
-        }
-        ThreadUpdate::PlanUpdated { turn_id, plan } => {
-            let source_id = format!("plan-update:{turn_id}");
-            let text = present_plan(plan);
-            if transient.contains(&source_id) {
-                if let Some(message) = message_by_source_mut(messages, &source_id) {
-                    message.text = bounded_transient_text(&text);
-                }
-            } else if message_by_source_mut(messages, &source_id).is_none() {
-                transient.reserve(messages, &source_id);
-                messages.push(
-                    Message::plain(MessageRole::Plan, bounded_transient_text(&text))
-                        .with_source_id(source_id),
-                );
-            } else {
-                // A canonical row with the same identity already supersedes this transient value.
-            }
         }
         ThreadUpdate::ToolOutputDelta {
             turn_id,
@@ -310,6 +299,10 @@ fn source_id_for_item(item: &ThreadItem) -> String {
 
 fn item_source_id(item_id: &str) -> String {
     format!("item:{item_id}")
+}
+
+fn plan_source_id(turn_id: &str) -> String {
+    format!("plan-update:{turn_id}")
 }
 
 fn tool_call_source_id(tool_call_id: &ToolCallId) -> String {

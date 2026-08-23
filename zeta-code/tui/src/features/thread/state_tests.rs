@@ -6,6 +6,9 @@ use zeta_protocol::ContentDigest;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageMediaType;
 use zeta_protocol::ItemId;
+use zeta_protocol::PlanStep;
+use zeta_protocol::PlanStepStatus;
+use zeta_protocol::PlanUpdate;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
@@ -52,6 +55,32 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
 }
 
 #[test]
+fn canonical_snapshot_projects_the_latest_structured_turn_plan() {
+    let mut snapshot = thread_snapshot();
+    snapshot.turns[0].plan = Some(PlanUpdate {
+        explanation: Some("Implementation plan".into()),
+        steps: vec![
+            PlanStep {
+                step: "inspect".into(),
+                status: PlanStepStatus::Completed,
+            },
+            PlanStep {
+                step: "change".into(),
+                status: PlanStepStatus::InProgress,
+            },
+        ],
+    });
+    let mut state = ThreadFeatureState::default();
+
+    state.update(ThreadPresentationEvent::SnapshotReceived(snapshot));
+
+    let plan = state.messages().last().unwrap();
+    assert_eq!(plan.role, MessageRole::Plan);
+    assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
+    assert_eq!(plan.source_id.as_deref(), Some("plan-update:turn_1"));
+}
+
+#[test]
 fn older_history_page_is_merged_before_the_loaded_snapshot() {
     let mut state = ThreadFeatureState::default();
     let current = thread_snapshot();
@@ -63,11 +92,15 @@ fn older_history_page_is_merged_before_the_loaded_snapshot() {
             turn_id: older_turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
+            resource_budget: None,
+            tool_profile: None,
+            usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new("older_item").unwrap(),
                 turn_id: older_turn_id,
                 text: "older prompt".into(),
             }],
+            plan: None,
             pending_interaction: None,
             error: None,
         }],
@@ -105,11 +138,15 @@ fn older_history_page_preserves_the_active_transient_projection() {
             turn_id: older_turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
+            resource_budget: None,
+            tool_profile: None,
+            usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new("older_item").unwrap(),
                 turn_id: older_turn_id,
                 text: "older prompt".into(),
             }],
+            plan: None,
             pending_interaction: None,
             error: None,
         }],
@@ -323,6 +360,9 @@ fn thread_snapshot() -> Thread {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
+            resource_budget: None,
+            tool_profile: None,
+            usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![
                 ThreadItem::UserMessage {
                     item_id: ItemId::new("item_1").unwrap(),
@@ -377,6 +417,7 @@ fn thread_snapshot() -> Thread {
                     text: "canonical response".into(),
                 },
             ],
+            plan: None,
             pending_interaction: None,
             error: None,
         }],

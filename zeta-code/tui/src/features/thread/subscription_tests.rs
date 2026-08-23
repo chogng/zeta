@@ -347,7 +347,11 @@ fn turn(turn_id: &str) -> Turn {
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Completed,
         model: None,
+        resource_budget: None,
+        tool_profile: None,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         items: Vec::new(),
+        plan: None,
         pending_interaction: None,
         error: None,
     }

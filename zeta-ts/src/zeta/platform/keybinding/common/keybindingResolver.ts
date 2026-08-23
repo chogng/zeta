@@ -17,7 +17,7 @@ import {
 	type KeybindingRegistry,
 	KeybindingsRegistry,
 	KeybindingRuleKind,
-	KeybindingWeight,
+	KeybindingSource,
 } from "./keybindingsRegistry.js";
 
 export enum KeybindingResolveKind {
@@ -181,7 +181,9 @@ function compareResolvedRules(
 	first: ResolvedRule,
 	second: ResolvedRule,
 ): number {
-	const weight = (second.rule.weight ?? KeybindingWeight.Workbench) -
-		(first.rule.weight ?? KeybindingWeight.Workbench);
-	return weight !== 0 ? weight : second.rule.order - first.rule.order;
+	const source = (second.rule.source ?? KeybindingSource.Workbench) -
+		(first.rule.source ?? KeybindingSource.Workbench);
+	if (source !== 0) return source;
+	const priority = (second.rule.priority ?? 0) - (first.rule.priority ?? 0);
+	return priority !== 0 ? priority : second.rule.order - first.rule.order;
 }

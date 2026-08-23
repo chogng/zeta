@@ -1,3 +1,4 @@
+use super::present_turn_error;
 use super::recover_active_turn;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadItem;
@@ -27,12 +28,37 @@ fn recovery_does_not_reopen_terminal_turns() {
     assert_eq!(recover_active_turn(&turns), None);
 }
 
+#[test]
+fn every_stable_turn_error_has_a_user_facing_message() {
+    let errors = [
+        StableTurnError::model_invocation_failed(),
+        StableTurnError::context_overflow(),
+        StableTurnError::provider_auth(),
+        StableTurnError::invalid_request(),
+        StableTurnError::invalid_response(),
+        StableTurnError::completion_persistence_failed(),
+        StableTurnError::interaction_deadline_elapsed(),
+        StableTurnError::tool_repetition(),
+        StableTurnError::turn_budget_exhausted(),
+    ];
+
+    for error in errors {
+        let message = present_turn_error(&error);
+        assert!(!message.trim().is_empty());
+        assert!(!message.contains(&format!("{:?}", error.code)));
+    }
+}
+
 fn turn(id: &str, status: TurnStatus) -> Turn {
     Turn {
         turn_id: TurnId::new(id).unwrap(),
         status,
         model: None,
+        resource_budget: None,
+        tool_profile: None,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         items: Vec::<ThreadItem>::new(),
+        plan: None,
         pending_interaction: None,
         error: (status == TurnStatus::Failed).then(StableTurnError::model_invocation_failed),
     }

@@ -97,12 +97,40 @@ pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
              then try again."
                 .into()
         }
+        StableTurnErrorCode::ContextOverflow => {
+            "The conversation is too large for the configured model. Compact the context or start \
+             a new thread, then try again."
+                .into()
+        }
+        StableTurnErrorCode::ProviderAuth => {
+            "The model provider rejected the current credentials. Sign in again or update the \
+             provider credentials, then retry."
+                .into()
+        }
+        StableTurnErrorCode::InvalidRequest => {
+            "The model rejected this request as invalid. Adjust the request or model settings, then \
+             try again."
+                .into()
+        }
+        StableTurnErrorCode::InvalidResponse => {
+            "The model returned a response Zeta couldn't process. Please try again.".into()
+        }
         StableTurnErrorCode::CompletionPersistenceFailed => {
             "Zeta generated a response but couldn't save it. Please try again.".into()
         }
         StableTurnErrorCode::InteractionDeadlineElapsed => {
             "The approval or input request expired before it received a response. Please try the \
              request again."
+                .into()
+        }
+        StableTurnErrorCode::ToolRepetition => {
+            "Zeta stopped after the same tool call failed repeatedly. Review the tool output or \
+             change the request before retrying."
+                .into()
+        }
+        StableTurnErrorCode::TurnBudgetExhausted => {
+            "This request used its allowed resource budget. Increase the budget or narrow the \
+             request, then try again."
                 .into()
         }
     }

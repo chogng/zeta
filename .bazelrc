@@ -10,8 +10,9 @@ common --symlink_prefix=.build/bazel-
 # MODULE.bazel and the LLVM toolchain.
 common --xcode_version_config=//:disable_xcode
 
-# Keep Linux and Windows host toolchain selection aligned with the root
-# platform constraints. macOS uses the hermetic LLVM/macOS SDK directly.
+# Keep Linux and Windows host tools aligned with the hermetic target ABI.
+# rules_rs is patched to use gnullvm-hosted Rust tools on Windows so rustc,
+# proc-macro DLLs, and the LLVM/MinGW linker share one ABI.
 common:linux --host_platform=//:local_linux
 common:windows --host_platform=//:local_windows
 

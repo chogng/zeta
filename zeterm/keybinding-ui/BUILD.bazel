@@ -4,13 +4,5 @@ zeterm_rust_library(
     name = "keybinding-ui",
     crate_name = "zeterm_keybinding_ui",
     package_name = "zeterm/keybinding-ui",
-)
-
-filegroup(
-    name = "keybinding-ui_sources",
-    srcs = glob([
-        "src/**/*.rs",
-        "Cargo.toml",
-    ]),
-    visibility = ["//visibility:public"],
+    unit_tests = True,
 )

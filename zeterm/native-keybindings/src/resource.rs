@@ -351,11 +351,11 @@ fn compile_user_binding<C: KeybindingCatalog>(
     }))
 }
 
-fn selected_key<'a>(
-    object: &'a Map<String, Value>,
+fn selected_key(
+    object: &Map<String, Value>,
     index: usize,
     platform: HostPlatform,
-) -> Result<Option<&'a str>, KeybindingsResourceError> {
+) -> Result<Option<&str>, KeybindingsResourceError> {
     let key = object
         .get("key")
         .ok_or(KeybindingsResourceError::MissingField {

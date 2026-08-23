@@ -1,9 +1,15 @@
 # `rules_rs` pin
 
 The repository pins `rules_rs 0.0.96` through the archive override in the root
-[`MODULE.bazel`](../../MODULE.bazel). The only local patch is
-`module_dot_bazel_version.patch`, which preserves the module version metadata
-when the archive override bypasses the Bazel Central Registry patch set.
+[`MODULE.bazel`](../../MODULE.bazel). The local patches are:
+
+- `module_dot_bazel_version.patch`, which preserves module version metadata
+  when the archive override bypasses the Bazel Central Registry patch set.
+- `windows_gnullvm_exec_triples.patch`, which makes Windows Rust host tools use
+  the same gnullvm ABI as the repository's hermetic LLVM/MinGW C++ toolchain.
+  This is required for `rustc` to load proc-macro DLLs and link Bazel host tools
+  without relying on an installed MSVC SDK. Remove it when `rules_rs` can select
+  the Windows execution ABI from platform constraints.
 
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
 `zeterm`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. Zeterm-owned

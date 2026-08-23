@@ -13,10 +13,10 @@ import type {
 	ContextKeyExpression,
 } from "../../contextkey/common/contextkey.js";
 
-export enum KeybindingWeight {
+export enum KeybindingSource {
 	Builtin = 0,
-	Workbench = 100,
-	User = 200,
+	Workbench = 1,
+	User = 2,
 }
 
 export enum KeybindingRuleKind {
@@ -30,14 +30,16 @@ export interface IKeybindingRule {
 	readonly keybinding: Keybinding;
 	readonly when?: ContextKeyExpression;
 	readonly args?: readonly unknown[];
-	readonly weight?: number;
+	readonly source?: KeybindingSource;
+	readonly priority?: number;
 }
 
 /** Explicitly consumes a shortcut without dispatching a command. */
 export interface IKeybindingBlocker {
 	readonly keybinding: Keybinding;
 	readonly when?: ContextKeyExpression;
-	readonly weight?: number;
+	readonly source?: KeybindingSource;
+	readonly priority?: number;
 }
 
 export interface IRegisteredCommandKeybindingRule

@@ -9,6 +9,14 @@ use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 
 pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
+    if let Some(prefix) = app.pending_key_chord_label() {
+        frame.render_widget(
+            Paragraph::new(format!("{prefix} … waiting for next key · esc cancel"))
+                .style(Style::default().fg(warning())),
+            area,
+        );
+        return;
+    }
     let mode = match app.approval_mode() {
         zeta_protocol::ApprovalMode::AskPermissions => "ask permissions on",
         zeta_protocol::ApprovalMode::AutoReview => "auto review on",

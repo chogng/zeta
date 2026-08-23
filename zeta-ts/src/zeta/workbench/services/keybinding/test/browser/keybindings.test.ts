@@ -35,7 +35,7 @@ import {
 } from "../../../../../platform/keybinding/common/keybindingResolver.js";
 import {
 	KeybindingRegistry,
-	KeybindingWeight,
+	KeybindingSource,
 } from "../../../../../platform/keybinding/common/keybindingsRegistry.js";
 import {
 	BrowserKeyboardLayoutService,
@@ -66,7 +66,7 @@ import {
 } from "../../../../../workbench/services/statusbar/browser/statusbar.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 
-test("resolver applies context, weight, and latest-registration precedence", () => {
+test("resolver applies context, source, priority, and latest-registration precedence", () => {
 	using registrations = new DisposableStore();
 	const registry = new KeybindingRegistry();
 	const contexts = registrations.add(new ContextKeyService());
@@ -76,13 +76,13 @@ test("resolver applies context, weight, and latest-registration precedence", () 
 	registrations.add(registry.registerKeybindingRule({
 		command: "test.low",
 		keybinding,
-		weight: KeybindingWeight.Builtin,
+		source: KeybindingSource.Builtin,
 	}));
 	registrations.add(registry.registerKeybindingRule({
 		command: "test.disabled",
 		keybinding,
 		when: ContextKeyExpr.has("test.enabled"),
-		weight: KeybindingWeight.User,
+		source: KeybindingSource.User,
 	}));
 	registrations.add(registry.registerKeybindingRule({
 		command: "test.latest",
@@ -742,7 +742,7 @@ test("keybindings resource applies conditions, arguments, OS keys, and blockers"
 		keybinding: Keybinding.single(logicalKey("p", {
 			ctrlKey: true,
 		})),
-		weight: KeybindingWeight.Builtin,
+		source: KeybindingSource.Builtin,
 	}));
 	const keybindingsResource = registrations.add(
 		new WorkbenchKeybindingsResourceService(),

@@ -60,13 +60,13 @@ flowchart LR
 
 | 组件 | 拥有 | 明确不拥有 |
 | --- | --- | --- |
-| `zeta-keybinding` | `KeyStroke`、Chord、Parser、Context expression、优先级、冲突和 Resolver | `winit`、Crossterm、DOM、UI、定时器、文件、产品命令 |
+| `zeta-keybinding` | `KeyStroke`、Chord、Parser、Context expression、来源、优先级、冲突和 Resolver | `winit`、Crossterm、DOM、UI、定时器、文件、产品命令 |
 | Zeta Keyboard Layout | ScanCode、KeyCode、AltGr、死键、系统布局、浏览器映射 | Rust Keymap、后台命令执行 |
 | Zeta Keybinding Service | ContextKey、Chord lifecycle、浏览器事件阻止和命令执行 | 系统布局采集、App Server 状态 |
 | `zeta-keybindings-host` | `winit` 适配、Native Chord timeout、用户资源校验和热更新 | Zeterm UI、产品命令副作用 |
 | Zeterm Keymap | `ZetermCommandId`、内建规则和 Native context | 通用 Parser、设置组件绘制 |
 | Zeterm 快捷键 UI | 录制生命周期、设置浮层、诊断展示 | Resolver、用户文件 authority、命令执行 |
-| Zeta Code Keymap | Crossterm 适配、固定 TUI action 和局部 context | 键盘布局、物理 ScanCode、App Server authority |
+| Zeta Code `AppKeymap` | Crossterm 适配、应用级 action、Chord lifecycle 和局部 context | component 编辑/导航、键盘布局、物理 ScanCode、App Server authority |
 | App Server | 快捷键触发后的类型化产品请求 | 原始按键、焦点、IME、Chord 和快捷键配置 |
 
 依赖方向固定为：
@@ -88,7 +88,7 @@ all clients ── semantic command only ──→ App Server
 - 一至四段有序 Chord；
 - 逻辑键和可选物理键身份；
 - Control、Shift、Alt、Meta 和 portable `primary`；
-- Builtin/User 来源、显式优先级和后注册覆盖；
+- Builtin/Workbench/User 来源、显式优先级和后注册覆盖；
 - 条件过滤、阻止规则和 Chord prefix；
 - `NoMatch`、`PendingChord`、`Command` 和 `Blocked` 四类解析结果。
 
@@ -100,22 +100,24 @@ all clients ── semantic command only ──→ App Server
 - 设置 UI、快捷键提示样式和诊断展示；
 - 是否开放用户自定义快捷键。
 
-Zeta Code 首版只接入全局固定 Keymap。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有；只有跨 component、产生 `AppCommand` 或需要统一提示的按键进入全局 Resolver。
+Zeta Code 把根级运行时结构称为 `AppKeymap`，不称为 `GlobalKeymap`；`global` 只应在未来用户配置中表示“上下文没有覆盖时的回退层”。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有。单键先交给当前 component，只有未消费事件进入应用级 fallback；多段 Chord prefix 则先经过应用级 matcher，避免首段被文本组件吞掉。应用级声明同时生成 Resolver 注册和 `/help` 项，附加 Shift、Alt、Meta 或 Hyper 不会匹配只声明 Control 的组合。
+
+`AppKeymap` 已拥有一至四段 Chord 的 pending sequence、1 秒超时、上下文变化取消、Esc 取消、错误后续键透传和 footer 提示。当前内建应用级绑定仍都是单段；以后增加多段声明不再需要建立第二套状态机。`Esc Esc` rewind 保留为根界面的专用交互：普通 Esc 在 Chord pending 时只负责取消，不同时推进 rewind。
 
 ## 5. 跨语言一致性
 
 Rust crate 与 TypeScript 实现共享 JSON conformance fixtures，而不是共享运行时二进制。当前 fixture 固定共同子集中的：
 
-- 有效和无效字符串；
+- 有效和无效字符串，以及 Unicode 空白分隔的规范化；
 - canonical 序列化；
 - portable modifier 别名的 canonical 归一化；
 - Chord 数量上限；
 - 规则来源、显式优先级和注册顺序；
 - condition filter、blocker、Chord prefix 与 no-match 结果。
 
-TypeScript 的单一 `weight` 是 Rust `source + priority` 的产品侧编码；共同 fixture 要求 User 来源先于 Builtin，再在同一来源内比较 priority，最后由后注册规则打破平局。
+Rust 与 TypeScript 都显式按“来源、同来源内优先级、注册顺序”比较；任何数值优先级都不能跨越来源层级。共同 fixture 要求 User 先于 Workbench、Workbench 先于 Builtin，再在同一来源内比较 priority，最后由后注册规则打破平局。
 
-展示标签、浏览器 ScanCode 白名单和单修饰键 keyup 行为属于宿主能力，不进入强制跨语言相等断言。新增共享语法必须同时修改 Rust、TypeScript、fixtures 和本文；产品专属扩展必须在对应实现文档中标出，不得悄悄改变共享 grammar。
+展示标签、浏览器 ScanCode 白名单和单修饰键 keyup 行为属于宿主能力，不进入强制跨语言相等断言。Rust 物理键只保存宿主已经标准化的非空标识，浏览器端额外使用 ScanCode catalog 校验；这是 adapter 能力差异，不改变共享 Resolver 语义。新增共享语法必须同时修改 Rust、TypeScript、fixtures 和本文；产品专属扩展必须在对应实现文档中标出，不得悄悄改变共享 grammar。
 
 ## 6. 配置与持久化
 
@@ -140,12 +142,14 @@ Zeta Code 首版不读取 `keybindings.json`。在产品接受用户自定义需
 | Zeta TypeScript layout、Mapper、Resolver 和 profile resource | Current | 浏览器与 Electron 测试持续覆盖布局和快捷键 |
 | Zeterm Rust Resolver、Native adapter、用户资源与设置 UI | Current | 迁移共享 core 后行为和资源测试不变 |
 | 提升无 UI 的 `zeta-keybinding` 到 `zeta-rs/keybinding` | Current | crate 不含产品/UI/platform 依赖，Zeterm 继续通过测试 |
-| Zeta Code 全局固定 Keymap | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动，局部 component key 不上移 |
+| Zeta Code 应用级固定 Keymap 与 Chord lifecycle | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动；pending/超时/取消/提示完整，局部 component key 不上移 |
 | TS/Rust parser conformance fixtures | Current | 两个实现读取同一 fixture 并通过 |
-| TS/Rust Resolver precedence fixtures | Current | 来源、优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture |
+| TS/Rust Resolver precedence fixtures | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture |
 | Zeta Code 用户可配置 Keymap | Potential | 先有明确产品需求、配置 owner 和冲突/恢复交互 |
 
 迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，Zeterm UI 已拆出，Zeta Code 根级 Keymap 已接入，旧 `zeterm/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
+
+共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。Zeterm host 与 UI 另有 `native-keybindings-unit-tests` 和 `keybinding-ui-unit-tests` Bazel 目标。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；三个目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
 
 ## 9. 长期不变量
 

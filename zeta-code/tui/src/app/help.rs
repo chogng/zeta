@@ -1,3 +1,4 @@
+use super::keymap::app_keybinding_help_items;
 use crate::components::composer::built_in_slash_commands;
 use crate::components::pane::PaneViewModel;
 use crate::components::search_box::SearchBoxModel;
@@ -15,16 +16,13 @@ pub(crate) fn help_selection_view() -> PaneViewModel<SelectionViewModel> {
     let keys = [
         ("Enter", "submit the current prompt"),
         ("Shift-Enter", "insert a newline in the current prompt"),
-        ("Ctrl-O", "copy the latest Zeta response"),
-        ("Ctrl-Z", "suspend Zeta on Unix and restore it after fg"),
-        ("Ctrl-V", "attach an image from the system clipboard"),
         ("Ctrl-Home", "load 50 older turns and move to history start"),
         ("Esc", "close the active view"),
-        ("Ctrl-C", "interrupt an active turn or exit while idle"),
         ("← / →", "switch tabs in an interactive view"),
         ("↑ / ↓", "move through visible choices"),
     ]
     .into_iter()
+    .chain(app_keybinding_help_items())
     .map(|(key, description)| SelectionItem::new(key).with_description(description))
     .collect();
     PaneViewModel::new(

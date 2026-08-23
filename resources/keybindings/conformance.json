@@ -7,6 +7,12 @@
       "chords": 2
     },
     {
+      "input": "ctrl+k\u00a0ctrl+c",
+      "valid": true,
+      "canonical": "ctrl+k ctrl+c",
+      "chords": 2
+    },
+    {
       "input": "cmdorctrl+space",
       "valid": true,
       "canonical": "primary+space",
@@ -62,16 +68,37 @@
           "binding": "ctrl+k",
           "command": "builtin-high",
           "source": "builtin",
-          "priority": 10
+          "priority": 1000000
         },
         {
           "binding": "ctrl+k",
           "command": "user-low",
           "source": "user",
-          "priority": -10
+          "priority": -1000000
         }
       ],
       "result": { "kind": "command", "command": "user-low" }
+    },
+    {
+      "name": "workbench source wins before explicit priority",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "builtin-high",
+          "source": "builtin",
+          "priority": 1000000
+        },
+        {
+          "binding": "ctrl+k",
+          "command": "workbench-low",
+          "source": "workbench",
+          "priority": -1000000
+        }
+      ],
+      "result": { "kind": "command", "command": "workbench-low" }
     },
     {
       "name": "explicit priority wins within one source",
