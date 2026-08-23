@@ -109,7 +109,7 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 
 const schema = createDefaultDocumentSchema();
 const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
-const apiModel = TextModel.createWithStructure(schema, apiDocument);
+const apiModel = TextModel.create(schema, apiDocument);
 const codeBlockResource = URI.parse("inmemory://editor/code-block.zeta-academic");
 const structuredResource = URI.parse("inmemory://editor/document.zeta-academic");
 const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", {

@@ -10,7 +10,7 @@
 
 | 能力 | Stanza（Zeta TS Renderer） | Zeterm（Native Rust） |
 | --- | --- | --- |
-| 文本存储、transaction、version | `TextModel` / `PieceTreeTextBuffer` | `EditorCoreDocument` / `CodeEditorDocument` |
+| 文本存储、transaction、version | `TextModel` / `TextBuffer` | `EditorCoreDocument` / `CodeEditorDocument` |
 | undo/redo 与 typing grouping | `TextModelHistory` | `EditorCoreDocument` + Native command policy |
 | selection、tracked range、IME | Stanza common/browser | `zeta-editor` |
 | layout 与 presentation | DOM、CSS、virtual viewport | `zeta-ui`、`zui`、GPU scene |

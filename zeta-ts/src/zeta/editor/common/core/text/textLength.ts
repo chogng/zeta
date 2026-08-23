@@ -1,3 +1,4 @@
+import { CharCode } from "../../../../base/common/charCode.js";
 import { LineRange } from "../ranges/lineRange.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { TextPosition } from "../position.js";
@@ -30,7 +31,7 @@ export class TextLength {
 		let lineCount = 0;
 		let columnCount = 0;
 		for (let index = 0; index < text.length; index += 1) {
-			if (text.charCodeAt(index) === 10) {
+			if (text.charCodeAt(index) === CharCode.LineFeed) {
 				lineCount += 1;
 				columnCount = 0;
 			} else {

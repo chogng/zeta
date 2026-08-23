@@ -16,7 +16,7 @@ test("Stanza unit tests follow the flat editor common, browser, and contrib layo
 	assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
 	assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts")), true);
 	assert.equal(exists(join(editorRoot, "contrib/find/test/browser/findController.test.ts")), true);
-	assert.equal(exists(join(editorRoot, "test/common/textModelStructure.test.ts")), true);
+	assert.equal(exists(join(editorRoot, "test/common/textModelBlocks.test.ts")), true);
 	assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/documentEditor/test/browser/documentEditorPane.test.ts")), true);
 });
 

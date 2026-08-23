@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CharCode } from "../../../../../base/common/charCode.js";
 import { PieceNode } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeBase.js";
+import { NodeColor } from "../../../../common/model/pieceTreeTextBuffer/rbTreeBase.js";
 import { PieceTreeTextBuffer } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
+import { PieceTreeTextBufferBuilder } from "../../../../common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js";
 
-test("PieceTreeTextBuffer matches a string oracle and treap invariants across deterministic edits", () => {
+test("PieceTreeTextBuffer matches a string oracle and red-black invariants across deterministic edits", () => {
 	const random = createRandom(0x71ece);
 	const buffer = new PieceTreeTextBuffer("seed\n😀text");
 	let oracle = "seed\n😀text";
@@ -55,6 +58,26 @@ test("PieceTreeTextBuffer matches a string oracle and treap invariants across de
 			line: oracle.slice(lineStarts[lineIndex], lineEndOffset),
 		});
 	}
+});
+
+test("PieceTreeTextBufferBuilder constructs one buffer from ordered chunks", () => {
+	const builder = new PieceTreeTextBufferBuilder();
+	builder.acceptChunk("first\n");
+	builder.acceptChunk("");
+	builder.acceptChunk("second😀");
+	const buffer = builder.finish();
+
+	assert.deepEqual({
+		text: buffer.getText(),
+		lineCount: buffer.lineCount,
+		position: buffer.positionAt(8),
+	}, {
+		text: "first\nsecond😀",
+		lineCount: 2,
+		position: { lineIndex: 1, columnIndex: 2 },
+	});
+	assert.throws(() => builder.acceptChunk("late"), /already finished/u);
+	assert.throws(() => builder.finish(), /already finished/u);
 });
 
 test("PieceTreeTextBuffer coalesces contiguous source pieces", () => {
@@ -130,25 +153,39 @@ test("PieceTreeTextBuffer compaction preserves captured sources", () => {
 });
 
 function assertTreeInvariants(buffer: PieceTreeTextBuffer): void {
-	const aggregate = assertNode((buffer as unknown as PieceTreeTextBufferInternals).root);
-	assert.deepEqual(aggregate, {
+	const root = (buffer as unknown as PieceTreeTextBufferInternals).root;
+	if (root) {
+		assert.equal(root.color, NodeColor.Black, "red-black root must be black");
+		assert.equal(root.parent, undefined, "red-black root must not have a parent");
+	}
+	const aggregate = assertNode(root, undefined);
+	assert.deepEqual({
+		length: aggregate.length,
+		lineFeeds: aggregate.lineFeeds,
+		pieces: aggregate.pieces,
+	}, {
 		length: buffer.length,
 		lineFeeds: buffer.lineCount - 1,
 		pieces: buffer.pieceCount,
 	});
 }
 
-function assertNode(node: PieceNode | undefined): TreeAggregate {
-	if (!node) return { length: 0, lineFeeds: 0, pieces: 0 };
-	const left = assertNode(node.left);
-	const right = assertNode(node.right);
-	if (node.left) assert.ok(node.priority <= node.left.priority, "treap priority must be a min-heap");
-	if (node.right) assert.ok(node.priority <= node.right.priority, "treap priority must be a min-heap");
+function assertNode(node: PieceNode | undefined, parent: PieceNode | undefined): TreeAggregate {
+	if (!node) return { length: 0, lineFeeds: 0, pieces: 0, blackHeight: 1 };
+	assert.equal(node.parent, parent, "red-black parent pointer must match its owner");
+	const left = assertNode(node.left, node);
+	const right = assertNode(node.right, node);
+	assert.equal(left.blackHeight, right.blackHeight, "red-black paths must have equal black height");
+	if (node.color === NodeColor.Red) {
+		assert.equal(node.left?.color ?? NodeColor.Black, NodeColor.Black, "a red node cannot have a red left child");
+		assert.equal(node.right?.color ?? NodeColor.Black, NodeColor.Black, "a red node cannot have a red right child");
+	}
 	assert.ok(node.piece.length > 0, "piece-tree nodes must not retain empty pieces");
 	const aggregate = {
 		length: left.length + node.piece.length + right.length,
 		lineFeeds: left.lineFeeds + node.piece.lineFeedOffsets.length + right.lineFeeds,
 		pieces: left.pieces + 1 + right.pieces,
+		blackHeight: left.blackHeight + (node.color === NodeColor.Black ? 1 : 0),
 	};
 	assert.equal(node.totalLength, aggregate.length, "node text-length aggregate must match its subtree");
 	assert.equal(node.totalLineFeeds, aggregate.lineFeeds, "node line-feed aggregate must match its subtree");
@@ -164,6 +201,7 @@ interface TreeAggregate {
 	readonly length: number;
 	readonly lineFeeds: number;
 	readonly pieces: number;
+	readonly blackHeight: number;
 }
 
 function positionAt(
@@ -196,7 +234,7 @@ function positionAt(
 function computeLineStarts(text: string): number[] {
 	const starts = [0];
 	for (let index = 0; index < text.length; index += 1) {
-		if (text.charCodeAt(index) === 10) starts.push(index + 1);
+		if (text.charCodeAt(index) === CharCode.LineFeed) starts.push(index + 1);
 	}
 	return starts;
 }

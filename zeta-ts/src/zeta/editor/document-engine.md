@@ -6,17 +6,17 @@
 
 ## 快速理解
 
-Stanza 只有一个同步权威：按行存储的 `TextModel`。结构化 TextModel 在同一个 piece tree 和版本号上附加 schema-validated group/block 元数据、selection、transaction history 和 plugin state；`EditorWidget` 只负责浏览器投影；Workbench 负责 pane、resource reference、working copy 和产品 profile。
+Stanza 只有一个同步权威：拥有 `TextBuffer`、Group 和 BlockTree 的 `TextModel`。Code 的默认拓扑是一个 source Group 和 code Block；Academic schema 定义更多 Group/Block 类型、selection、transaction history 和 plugin state。PieceTree 只是 TextBuffer 的当前私有实现。
 
 | 场景 | Canonical owner | 关键保证 |
 | --- | --- | --- |
-| 修改节点、文本、mark 或表格 | `DocumentTransaction` → `TextModel.dispatch()` | 结构索引与 piece tree 在同一版本上原子提交 |
+| 修改节点、文本、mark 或表格 | `DocumentTransaction` → `TextModel.dispatch()` | BlockTree 与 TextBuffer 在同一版本上原子提交 |
 | selection、undo/redo 和 stored marks | structured `TextModel` | 与 TextModel version 一起映射，不依赖 DOM lifetime |
 | 结构化 DOM 和输入 | `EditorWidget` | DOM 只是 projection，不是文档权威 |
 | Academic schema、citation 和 toolbar | `EditorProfile` + matching contrib | 产品语义不进入通用 document core |
 | 打开、保存、revert 和 conflict | `DocumentEditorTextModelService` + `DocumentWorkingCopy` | Workbench transport 不拥有 model mutation |
 | 本地或远程 collaboration | collaboration contrib + `IDocumentCollaborationService` | server 排序；client 不伪装成完整 CRDT authority |
-| `codeBlock` 行编辑 | owning `TextModel` + `TextModelStructureIndex` | 代码行仍属于当前文档，不创建嵌套模型 |
+| `codeBlock` 行编辑 | owning `TextModel` + `Group.blockTree` | 代码行仍属于当前文档，不创建嵌套模型 |
 
 ## 设计不变量
 
@@ -60,7 +60,7 @@ flowchart LR
 
 依赖保持 `Workbench → editor/contrib/browser → editor/common → base`。结构化状态由 `TextModel` 直接拥有，但普通 TextModel 不必启用 schema；Code 功能实现不依赖 Academic profile 或 document browser projection。
 
-## Schema 与结构化 TextModel
+## Schema 与 Block TextModel
 
 ### Document tree
 
@@ -69,15 +69,16 @@ flowchart LR
 Stanza 的目标结构只有一个方向：
 
 ```text
-Document → Group[] → Block[] → Line[]
+TextModel → Group[] → BlockTree → Block[] → Line[]
 ```
 
-- `Group` 拥有一组有序 block；Academic 的 title、abstract、section 和 bibliography 都是 group，Code implementation 可以把一个文件或语义区域投影为 code group。
-- `Block` 是 typed union，不是泛化的“任意文本容器”：至少包括 `textBlock`、`codeBlock`、`quoteBlock` 与 `imageBlock`，后续类型通过 schema/profile 扩展。
-- 文本型 block 拥有有序 line；line 才承载可编辑文本和 inline marks。`ImageBlock` 等 atomic block 拥有媒体 payload，并可选择拥有 caption lines。
+- `TextModel` 原生拥有有序 Group；Code 总有一个 source Group，旧 schema 的 root-level block 在迁移期间由稳定的隐式 Group 包装。
+- 每个 `Group` 恰好拥有一个 `TextModelBlockTree`。BlockTree 拥有 root 顺序、block 父子拓扑与 identity lookup，但不保存第二份文本。
+- `Block` 是 typed union，不是泛化的“任意文本容器”：至少包括 `textBlock`、`codeBlock`、`quoteBlock` 与 `imageBlock`，后续类型通过 schema/profile 扩展。容器 block 的 children 仍属于同一个 BlockTree。
+- Block 使用零基、尾端排除的行范围关联 TextBuffer 物理行，不保存第二份文本或 Line 数组。`ImageBlock` 等 atomic block 拥有媒体 payload，并可选择覆盖 caption 行。
 - Group、Block 和需要 durable mapping 的结构节点拥有稳定 identity；line identity 与存储策略由对应实现决定，不能用 DOM line 充当 model authority。
 
-`DocumentNodeKind` 已允许 profile 明确声明 `group` 与 `line`。迁移期间旧 paragraph/list/table 结构仍由现有 command 支持；新增结构必须按上述方向建模，不再把所有内容都塞进一个含混的 `textBlock`。
+调用方通过 `TextModel.groups`、`getGroup()`、`getBlock()` 和 `getBlockAtLine()` 访问语义拓扑；block 集合只能从对应 Group 的 BlockTree 获得。`DocumentNodeKind` 允许 profile 明确声明 `group` 与 `line`。迁移期间旧 paragraph/list/table 结构仍由现有 command 支持。
 
 `createNode` 和 transaction builder 可以在一次原子组装期间创建 incomplete composite fragment；child type 与 order 始终验证，只有 content minimum 可以通过显式 `allowIncompleteContent` 暂时放宽。Commit 前必须执行 strict final validation。
 
@@ -122,7 +123,7 @@ Browser HTML 永远不是 trusted document state。Structured clipboard 使用 v
 
 ## Code block 行范围
 
-`codeBlock` 是 Stanza Academic 功能实现中的 typed block。它的 identity、顺序、attributes 和全部文本行都属于当前 structured `TextModel`；`TextModelStructureIndex` 给出它的 `startLine`/`endLine`，浏览器只投影并编辑该范围。
+`codeBlock` 是 Stanza Academic 功能实现中的 typed block。它的 identity、顺序、attributes 和全部文本行都属于当前 structured `TextModel`；所属 Group 的 `TextModelBlockTree` 给出它的 `startLine`/`endLine` 和直属 line，浏览器只投影并编辑该范围。
 
 代码块遵守以下边界：
 
@@ -206,9 +207,11 @@ Empty resource reload/revert 使用 profile 的 canonical empty-document factory
 | Symbol/file | Responsibility | 修改时同步检查 |
 | --- | --- | --- |
 | `common/model/documentSchema.ts` | node/mark/content contract | profile schema、serialization、fixtures |
-| `common/model/textModel.ts` | 唯一文本、行、版本与结构化 mutation authority | piece tree、structure、widget、language version gates |
-| `common/model/textModelStructure.ts` | schema、selection、plugin 与结构化 history | transaction、collaboration、atomic commit tests |
-| `common/model/textModelStructureIndex.ts` | group/block/line identity 与行范围 | schema、serialization、projection tests |
+| `common/model/textModel.ts` | TextBuffer、Group、BlockTree、版本与唯一 mutation authority | buffer、widget、language version gates |
+| `common/model/textBuffer.ts` | 字符和物理行存储 contract | PieceTree implementation、snapshot、worker mirror |
+| `common/model/textModelBlockState.ts` | TextModel 内部的 schema transaction、selection、plugin 与 block history helper | transaction、collaboration、atomic commit tests |
+| `common/model/textModelBlockSnapshot.ts` | schema node 到 Group/BlockTree 行范围的单版本转换 | schema、serialization、projection tests |
+| `common/model/textModelBlockTree.ts` | 单个 Group 内的 Block 父子拓扑与 TextBuffer 行范围 | nested block、projection tests |
 | `common/model/documentTransaction.ts` | steps、mapping、metadata | selection、decoration、rebase、serialization |
 | `common/model/documentHistory.ts` | undo/redo branches | remote rebase、selection restore |
 | `common/model/documentPlugin.ts` | plugin lifecycle 和 filter/apply | atomicity、decoration projection |

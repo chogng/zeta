@@ -1,3 +1,4 @@
+import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertLanguageId } from "./languageId.js";
@@ -225,7 +226,7 @@ function normalizeFirstLinePattern(value: string): string {
 
 function normalizeFirstLineText(value: string | undefined): string | undefined {
 	if (value === undefined) return undefined;
-	const withoutByteOrderMark = value.charCodeAt(0) === 0xFEFF ? value.slice(1) : value;
+	const withoutByteOrderMark = value.charCodeAt(0) === CharCode.ByteOrderMark ? value.slice(1) : value;
 	return withoutByteOrderMark.slice(0, 1000);
 }
 

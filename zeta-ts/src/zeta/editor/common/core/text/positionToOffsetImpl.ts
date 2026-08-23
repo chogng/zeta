@@ -1,3 +1,4 @@
+import { CharCode } from "../../../../base/common/charCode.js";
 import { TextPosition } from "../position.js";
 import { TextRange } from "../range.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
@@ -25,7 +26,7 @@ export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 		const starts = [0];
 		const ends: number[] = [];
 		for (let index = 0; index < text.length; index += 1) {
-			if (text.charCodeAt(index) === 10) {
+			if (text.charCodeAt(index) === CharCode.LineFeed) {
 				ends.push(index);
 				starts.push(index + 1);
 			}

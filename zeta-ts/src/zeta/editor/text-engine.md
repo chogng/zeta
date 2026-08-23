@@ -48,7 +48,7 @@ flowchart LR
 | 层 | 拥有 | 不得拥有 |
 | --- | --- | --- |
 | `common/core` | position、range、selection value、纯 edit/range/text 算法 | model state、DOM、provider、产品逻辑 |
-| `common/model` | `TextModel`、Piece Tree、history、snapshot、search、tracked range、decoration identity | CSS、selection instance、文件传输、语言 runtime |
+| `common/model` | `TextModel`、`TextBuffer`、history、snapshot、search、tracked range、decoration identity；PieceTree 是当前私有 buffer 实现 | CSS、selection instance、文件传输、语言 runtime |
 | `common/cursor`、`common/commands` | editor-local selection 和 DOM-free edit intent | 键盘监听、DOM、Workbench command registry |
 | `common/viewModel` | logical line → visual line、geometry、hit-test 所需纯投影 | DOM 测量、CSS、feature controller |
 | `common/viewLayout` | viewport size、content extent、scroll clamp、visible/render ranges | DOM scroll node、model mutation |
@@ -63,7 +63,7 @@ flowchart LR
 
 ### Model、事务和历史
 
-`TextModel` 在一次提交前验证所有 range 和 edit，拒绝重叠或越界输入，然后通过一个 mutation boundary 更新 Piece Tree、tracked ranges、history、version 和同步事件。Exact replacement 是 no-op，不增加版本，也不产生 history。
+`TextModel` 在一次提交前验证所有 range 和 edit，拒绝重叠或越界输入，然后通过一个 mutation boundary 更新 TextBuffer、tracked ranges、history、version 和同步事件。Exact replacement 是 no-op，不增加版本，也不产生 history。当前 TextBuffer 由 `PieceTreeTextBufferBuilder` 构建的红黑 PieceTree 实现，但调用方不能依赖该具体类型。
 
 `TextModel.createSnapshot` 捕获不可变 source segments。Snapshot 在后续 edit 或 model disposal 后仍可读取。文档 history 有 transaction 与 UTF-16 text-unit 双重预算；typing、Backspace 和 Delete 只有在光标连续性可证明时才合并。
 
@@ -215,7 +215,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| Text model、Piece Tree、history、snapshot、tracked range | ✅ Current | Renderer 内同步权威 |
+| TextModel、TextBuffer、history、snapshot、tracked range | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `EditorViewport` 同步调度 |
 | Token、diagnostic、completion、TextMate 和 Rust syntax facts | ✅ Current | version-bound async provider path |

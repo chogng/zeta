@@ -8,7 +8,7 @@ import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./docu
 import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
 import type { TextModelChange } from "../core/text.js";
-import { createTextModelStructureIndex, type TextModelStructureIndex } from "./textModelStructureIndex.js";
+import { createTextModelBlockSnapshot, type TextModelBlockSnapshot } from "./textModelBlockSnapshot.js";
 
 export type DocumentChangeOrigin = DocumentPluginChangeOrigin;
 
@@ -18,7 +18,7 @@ export enum TextModelRemoteHistoryPolicy {
 	Preserve = "preserve",
 }
 
-export interface TextModelStructureChange {
+export interface TextModelBlockChange {
 	readonly version: number;
 	readonly origin: DocumentChangeOrigin;
 	readonly transaction: DocumentTransaction;
@@ -28,7 +28,7 @@ export interface TextModelStructureChange {
 	readonly selectionAfter: DocumentSelection | undefined;
 }
 
-export interface TextModelStructureOptions {
+export interface TextModelBlockOptions {
 	readonly historyLimit?: number;
 	readonly selection?: DocumentSelection;
 	readonly storedMarks?: readonly DocumentMark[];
@@ -40,38 +40,38 @@ export interface TextModelPluginDecorationSource {
 	readonly set: DocumentDecorationSet;
 }
 
-export interface TextModelStructureHost {
+export interface TextModelBlockHost {
 	getVersion(): number;
 	commitText(text: string): { readonly version: number; readonly change?: TextModelChange };
 	publishTextChange(change: TextModelChange): void;
 }
 
-/** Group/block metadata, selection, and structured history owned by one TextModel. */
-export class TextModelStructure extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<TextModelStructureChange>());
+/** Schema-backed block transactions coordinated by the owning TextModel. */
+export class TextModelBlockState extends DisposableOwner {
+	private readonly changeEmitter = this.own(new Emitter<TextModelBlockChange>());
 	private readonly selectionEmitter = this.own(new Emitter<DocumentSelection | undefined>());
 	private readonly storedMarksEmitter = this.own(new Emitter<readonly DocumentMark[] | undefined>());
 	private readonly history: DocumentHistory;
 	private readonly plugins: readonly DocumentPlugin<unknown>[];
 	private pluginStates: Map<DocumentPluginKey<unknown>, unknown>;
 	private _document: DocumentNode;
-	private _index: TextModelStructureIndex;
+	private _snapshot: TextModelBlockSnapshot;
 	private _selection: DocumentSelection | undefined;
 	private _storedMarks: readonly DocumentMark[] | undefined;
 	private disposed = false;
 
-	readonly onDidChange: Event<TextModelStructureChange> = this.changeEmitter.event;
+	readonly onDidChange: Event<TextModelBlockChange> = this.changeEmitter.event;
 	readonly onDidChangeSelection: Event<DocumentSelection | undefined> = this.selectionEmitter.event;
 	readonly onDidChangeStoredMarks: Event<readonly DocumentMark[] | undefined> = this.storedMarksEmitter.event;
 
-	constructor(readonly schema: DocumentSchema, document: DocumentNode, options: TextModelStructureOptions, private readonly host: TextModelStructureHost) {
+	constructor(readonly schema: DocumentSchema, document: DocumentNode, options: TextModelBlockOptions, private readonly host: TextModelBlockHost) {
 		super();
 		const normalizedDocument = freezeDocumentNode(document);
 		schema.validate(normalizedDocument);
 		if (options.selection) validateDocumentSelection(normalizedDocument, options.selection);
 		if (options.storedMarks) schema.validateMarks(options.storedMarks);
 		this._document = normalizedDocument;
-		this._index = createTextModelStructureIndex(schema, normalizedDocument);
+		this._snapshot = createTextModelBlockSnapshot(schema, normalizedDocument);
 		this._selection = options.selection;
 		this._storedMarks = cloneMarks(options.storedMarks);
 		this.history = new DocumentHistory(options.historyLimit);
@@ -95,9 +95,9 @@ export class TextModelStructure extends DisposableOwner {
 		return this._document;
 	}
 
-	get index(): TextModelStructureIndex {
+	get snapshot(): TextModelBlockSnapshot {
 		this.ensureAlive();
-		return this._index;
+		return this._snapshot;
 	}
 
 	get version(): number {
@@ -148,7 +148,7 @@ export class TextModelStructure extends DisposableOwner {
 		return Object.freeze(sources);
 	}
 
-	dispatch(transaction: DocumentTransaction): TextModelStructureChange | undefined {
+	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
 		this.ensureAlive();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "user")) return undefined;
@@ -178,7 +178,7 @@ export class TextModelStructure extends DisposableOwner {
 	}
 
 	/** Applies an already-transformed remote transaction outside local author history. */
-	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelStructureChange | undefined {
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
 		this.ensureAlive();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "remote")) return undefined;
@@ -211,7 +211,7 @@ export class TextModelStructure extends DisposableOwner {
 		this.history.rebase(mapper);
 	}
 
-	undo(): TextModelStructureChange | undefined {
+	undo(): TextModelBlockChange | undefined {
 		this.ensureAlive();
 		this.history.closeGroup();
 		const entry = this.history.takeUndo();
@@ -231,7 +231,7 @@ export class TextModelStructure extends DisposableOwner {
 		}
 	}
 
-	redo(): TextModelStructureChange | undefined {
+	redo(): TextModelBlockChange | undefined {
 		this.ensureAlive();
 		this.history.closeGroup();
 		const entry = this.history.takeRedo();
@@ -272,7 +272,7 @@ export class TextModelStructure extends DisposableOwner {
 		this.storedMarksEmitter.fire(normalized);
 	}
 
-	reset(document: DocumentNode): TextModelStructureChange | undefined {
+	reset(document: DocumentNode): TextModelBlockChange | undefined {
 		this.ensureAlive();
 		const normalizedDocument = freezeDocumentNode(document);
 		this.schema.validate(normalizedDocument);
@@ -293,11 +293,11 @@ export class TextModelStructure extends DisposableOwner {
 			selectionAfter: undefined,
 		});
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document: normalizedDocument, transaction, previousSelection, selection: undefined, origin: "reset", previousVersion, version });
-		const nextIndex = createTextModelStructureIndex(this.schema, normalizedDocument);
-		const textCommit = this.host.commitText(nextIndex.getText());
-		if (textCommit.version !== version) throw new Error("TextModel structure reset did not commit exactly one model version");
+		const nextSnapshot = createTextModelBlockSnapshot(this.schema, normalizedDocument);
+		const textCommit = this.host.commitText(nextSnapshot.getText());
+		if (textCommit.version !== version) throw new Error("TextModel block reset did not commit exactly one model version");
 		this._document = normalizedDocument;
-		this._index = nextIndex;
+		this._snapshot = nextSnapshot;
 		this._selection = undefined;
 		this._storedMarks = undefined;
 		this.pluginStates = pluginStates;
@@ -315,17 +315,17 @@ export class TextModelStructure extends DisposableOwner {
 		origin: DocumentChangeOrigin,
 		selectionBefore: DocumentSelection | undefined,
 		selectionAfter: DocumentSelection | undefined,
-	): TextModelStructureChange {
+	): TextModelBlockChange {
 		const previousDocument = this._document;
 		const previousVersion = this.version;
 		const version = previousVersion + 1;
 		const change = Object.freeze({ version, origin, transaction, previousDocument, document, selectionBefore, selectionAfter });
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document, transaction, previousSelection: selectionBefore, selection: selectionAfter, origin, previousVersion, version });
-		const nextIndex = createTextModelStructureIndex(this.schema, document);
-		const textCommit = this.host.commitText(nextIndex.getText());
-		if (textCommit.version !== version) throw new Error("TextModel structure transaction did not commit exactly one model version");
+		const nextSnapshot = createTextModelBlockSnapshot(this.schema, document);
+		const textCommit = this.host.commitText(nextSnapshot.getText());
+		if (textCommit.version !== version) throw new Error("TextModel block transaction did not commit exactly one model version");
 		this._document = document;
-		this._index = nextIndex;
+		this._snapshot = nextSnapshot;
 		this._selection = selectionAfter;
 		this.pluginStates = pluginStates;
 		this.changeEmitter.fire(change);
@@ -370,7 +370,7 @@ export class TextModelStructure extends DisposableOwner {
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextModel structure is already disposed");
+		if (this.disposed) throw new ReferenceError("TextModel block state is already disposed");
 	}
 }
 

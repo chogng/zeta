@@ -1,3 +1,4 @@
+import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModelChange } from "../../common/core/text.js";
@@ -295,7 +296,7 @@ function groupAffectedLines(
 function lineFeedCount(text: string): number {
 	let count = 0;
 	for (let index = 0; index < text.length; index++) {
-		if (text.charCodeAt(index) === 10) count++;
+		if (text.charCodeAt(index) === CharCode.LineFeed) count++;
 	}
 	return count;
 }

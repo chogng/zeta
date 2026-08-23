@@ -1,4 +1,6 @@
-import { PieceTreeTextBuffer } from "../model/pieceTreeTextBuffer/pieceTreeTextBuffer.js";
+import { CharCode } from "../../../base/common/charCode.js";
+import type { TextBuffer } from "../model/textBuffer.js";
+import { createTextBuffer } from "../model/textBufferFactory.js";
 import { normalizeTextLineEndings, type TextSnapshot } from "../core/text.js";
 
 export interface LanguageWorkerDocumentChange {
@@ -20,7 +22,7 @@ export interface LanguageWorkerDocumentSynchronizationObserver {
 
 /** Single-document Piece Tree mirror owned by one language-worker server. */
 export class LanguageWorkerDocumentMirror {
-	private readonly buffer: PieceTreeTextBuffer;
+	private readonly buffer: TextBuffer;
 	private _version: number;
 
 	constructor(snapshot: TextSnapshot) {
@@ -30,7 +32,7 @@ export class LanguageWorkerDocumentMirror {
 			throw new Error("Language worker mirror snapshot metadata is inconsistent");
 		}
 		this._version = snapshot.version;
-		this.buffer = new PieceTreeTextBuffer(text);
+		this.buffer = createTextBuffer(text);
 	}
 
 	get version(): number {
@@ -103,7 +105,7 @@ function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts va
 function countLines(text: string): number {
 	let result = 1;
 	for (let index = 0; index < text.length; index += 1) {
-		if (text.charCodeAt(index) === 10) result += 1;
+		if (text.charCodeAt(index) === CharCode.LineFeed) result += 1;
 	}
 	return result;
 }

@@ -1,6 +1,6 @@
 # Stanza
 
-> 本文是 `zeta-ts/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Stanza 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
+> 本文是 `zeta-ts/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Stanza 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。TextBuffer 与 Block 文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
 
 ## 快速理解
 
@@ -10,8 +10,8 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 | --- | --- | --- |
 | 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
 | Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
-| Academic 功能实现 | `editor.academic.all.ts` | 只加载结构化文档 contribution；不加载 Code bundle 或 Code pane |
-| DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、可选 group/block 结构、schema、transaction 和坐标值对象；不注册 pane |
+| Academic 功能实现 | `editor.academic.all.ts` | 只加载 Academic Block contribution；不加载 Code bundle 或 Code pane |
+| DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、Group、BlockTree、schema、transaction 和坐标值对象；不注册 pane |
 | 完整程序化入口 | `editor.main.ts` | `editor.all.ts` 与 `editor.api.ts` 的组合 |
 
 ## 核心文档
@@ -22,7 +22,7 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | --- | --- | --- |
 | [`README.md`](./README.md) | 扁平目录、单一 TextModel、依赖方向和 Workbench 模式装配 | 单套功能实现的完整行为和实现台账 |
 | [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
-| [`document-engine.md`](./document-engine.md) | Schema、structured model、transaction、browser projection、profile 和 collaboration | 行式文本语义和产品 pane 生命周期 |
+| [`document-engine.md`](./document-engine.md) | Schema-backed Block、transaction、browser projection、profile 和 collaboration | TextBuffer 语义和产品 pane 生命周期 |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
@@ -31,14 +31,16 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | 目录 | 允许依赖 | 拥有 | 不得拥有 |
 | --- | --- | --- | --- |
 | `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
-| `common/model` | `common/core`、`base/common` | `TextModel`、piece tree、group/block/line index、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
+| `common/model` | `common/core`、`base/common` | `TextModel`、`TextBuffer`、Group/BlockTree/Block/Line、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
 | `workbench/contrib/{codeEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
 
-依赖必须保持 `workbench → editor/contrib → editor/browser/common → editor/common → base` 的方向。`src/zeta/editor` 的生产代码不得反向引用 Workbench，`src/zeta/base` 也不得反向引用 editor。结构化能力由 `TextModel` 可选持有 schema、group/block/line index、selection 与 transaction history；浏览器投影和 Workbench 不得为代码块或其他 block 再创建隐藏模型。
+依赖必须保持 `workbench → editor/contrib → editor/browser/common → editor/common → base` 的方向。`src/zeta/editor` 的生产代码不得反向引用 Workbench，`src/zeta/base` 也不得反向引用 editor。每个 `TextModel` 原生拥有 Group 和 BlockTree；Code 使用一个 source Group 和 code Block，Academic 使用 schema 定义更多 Group/Block 类型。浏览器投影和 Workbench 不得为代码块或其他 block 再创建隐藏模型。
+
+语义包含关系只有 `TextModel → Group → BlockTree → Block → LineRange`。LineRange 使用 TextModel 坐标访问 TextModel 私有拥有的 `TextBuffer`；TextBuffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现。TextBuffer 不是 Group 的同级文档节点，PieceTree 也不属于公开模型拓扑。
 
 ## 一个品牌，两套功能实现
 
@@ -52,11 +54,11 @@ Academic 代码块是当前 `TextModel` 中一个带类型和行范围的 block�
 
 `TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorPart` 投影它，但不拥有共享 model。`browser/editorContribution.ts` 保存 feature-neutral 注册表；`contrib/codeEditorPart.contribution.ts` 建立 Code 功能实现的 runtime 与 typed capability map。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
 
-### 结构化文档 engine
+### Block 文档 engine
 
-Academic 使用的 `TextModel` 在同一个 piece tree 和版本号上附加 schema-validated group/block 元数据、selection、transaction history、plugin state 与 serialization。`TextModelStructureIndex` 把稳定 group/block/line identity 投影为具体行范围；`EditorWidget` 投影这些节点。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。Academic 的 schema、node view、toolbar 和 plugin 由 Workbench `EditorProfile` 组合，formatting/collaboration browser UI 由 `contrib/documentEditor.contribution.ts` 在 Academic bundle 中安装。
+Academic 使用与 Code 相同的 `TextModel`、`TextBuffer` 和版本号，只是 schema 定义了更多 Group/Block 类型、selection、transaction history、plugin state 与 serialization。`TextModel.groups` 直接给出 `Group → BlockTree → Block → LineRange`；BlockTree 负责组内拓扑与 lookup，字符和物理行始终由 TextBuffer 唯一保存。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。
 
-普通代码模型与结构化模型共享 `TextModel` 的文本、行、版本和生命周期。结构化命令必须通过 `TextModel.dispatch()` 同时更新文本和 block 元数据；不能绕过结构索引直接修改 piece tree。新增能力应依赖小而完整的 capability contract，不得创建第二套 model authority。
+Code 与 Academic 都使用原生 Group/BlockTree TextModel。Schema-backed 命令必须通过 `TextModel.dispatch()` 同时更新 TextBuffer 和 block 元数据；不能直接修改 PieceTree 实现。新增能力应依赖 TextModel、TextBuffer 或 BlockTree 的小而完整 contract，不得创建第二套 model authority。
 
 ## Contribution 装配
 
@@ -88,8 +90,9 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 
 | 符号 | 责任 | 修改时必须同步检查 |
 | --- | --- | --- |
-| `TextModel` | 行式文本、可选结构元数据、version、history、snapshot | cursor、structure index、selection、language result version gate、model tests |
-| `TextModelStructureIndex` | group/block/line identity 到行范围的映射 | schema、serialization、结构化 transaction、Academic projection |
+| `TextModel` | TextBuffer、Group、BlockTree、version、history、snapshot | cursor、selection、language result version gate、model tests |
+| `TextBuffer` | 字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
+| `TextModelBlockTree` | 一个 Group 内的 block root、父子拓扑、行范围与 identity lookup | nested block command、Academic projection |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
 | `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `EditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
@@ -109,7 +112,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 ## 测试与修改影响
 
 - `test:editor:unit` 编译并运行 editor 内核测试，以及随 owner 迁移到 Workbench 的 code/document pane 与 collaboration adapter 测试。
-- `test:editor:browser` 在同一浏览器 suite 内验证普通/结构化 TextModel 挂载点、输入、布局、代码块行范围和可访问性集成。
+- `test:editor:browser` 在同一浏览器 suite 内验证 Code/Academic TextModel 挂载点、输入、布局、代码块行范围和可访问性集成。
 - `test/architecture/editor-architecture.test.ts` 验证扁平目录、单一 TextModel authority 和模式 bundle。
 
 修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Stanza 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。

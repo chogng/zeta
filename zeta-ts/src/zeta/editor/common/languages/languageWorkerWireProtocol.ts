@@ -1,3 +1,4 @@
+import { CharCode } from "../../../base/common/charCode.js";
 import { type LanguageWorkerRequest } from "./languageRequestCoordinator.js";
 import { normalizeTextLineEndings, type TextModelChange, type TextSnapshot } from "../core/text.js";
 
@@ -356,7 +357,7 @@ function assertRecord(value: unknown, owner: string): asserts value is Record<st
 function countLines(text: string): number {
 	let result = 1;
 	for (let index = 0; index < text.length; index += 1) {
-		if (text.charCodeAt(index) === 10) result += 1;
+		if (text.charCodeAt(index) === CharCode.LineFeed) result += 1;
 	}
 	return result;
 }

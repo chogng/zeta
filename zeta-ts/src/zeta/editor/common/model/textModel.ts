@@ -1,7 +1,8 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
-import { PieceTreeTextBuffer } from "./pieceTreeTextBuffer/pieceTreeTextBuffer.js";
+import type { TextBuffer } from "./textBuffer.js";
+import { createTextBuffer } from "./textBufferFactory.js";
 import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
 import { TextModelHistory, type TextModelHistoryEntry } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
@@ -12,8 +13,9 @@ import type { DocumentHistoryEntries } from "./documentHistory.js";
 import type { DocumentPluginKey } from "./documentPlugin.js";
 import type { DocumentSchema } from "./documentSchema.js";
 import type { DocumentTransaction } from "./documentTransaction.js";
-import { TextModelRemoteHistoryPolicy, TextModelStructure, type TextModelPluginDecorationSource, type TextModelStructureChange, type TextModelStructureOptions } from "./textModelStructure.js";
-import { createTextModelStructureIndex, type TextModelStructureIndex } from "./textModelStructureIndex.js";
+import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
+import { createTextModelBlockSnapshot } from "./textModelBlockSnapshot.js";
+import { createTextModelCodeGroup, type TextModelBlock, type TextModelGroup } from "./textModelBlockTree.js";
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -44,11 +46,11 @@ export interface TextModelOptions {
 	readonly historyLimit?: TextModelHistoryLimit;
 	/** Product-owned scheduling for non-semantic piece-tree maintenance. */
 	readonly maintenance?: TextModelMaintenanceOptions;
-	/** Optional Group/Block metadata owned by this same line-based model. */
-	readonly structure?: TextModelStructureInitialization;
+	/** Schema-backed blocks used by document profiles. */
+	readonly blocks?: TextModelBlockInitialization;
 }
 
-export interface TextModelStructureInitialization extends TextModelStructureOptions {
+export interface TextModelBlockInitialization extends TextModelBlockOptions {
 	readonly schema: DocumentSchema;
 	readonly document?: DocumentNode;
 }
@@ -65,8 +67,8 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  * Zeta's canonical mutable text document.
  *
  * The model owns normalized LF text, versioning, atomic non-overlapping edit
- * transactions, transaction-level undo/redo, and generic tracked ranges. It
- * Optional Group/Block metadata remains part of this same model and version.
+ * transactions, transaction-level undo/redo, and generic tracked ranges.
+ * Group/Block metadata remains part of this same model and version.
  * The model has no DOM, URI, persistence, language, or presentation dependency.
  */
 export class TextModel extends DisposableOwner {
@@ -77,8 +79,9 @@ export class TextModel extends DisposableOwner {
 	private readonly history: TextModelHistory;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
-	private buffer: PieceTreeTextBuffer;
-	private readonly structureState: TextModelStructure | undefined;
+	private buffer: TextBuffer;
+	private codeGroups: readonly TextModelGroup[];
+	private readonly blockState: TextModelBlockState | undefined;
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
@@ -103,115 +106,134 @@ export class TextModel extends DisposableOwner {
 			historyTransactionLimit,
 			historyTextUnitLimit,
 		);
-		const structureDocument = options.structure?.document ?? options.structure?.schema.createDocument();
-		const normalizedInitialText = structureDocument && options.structure ? createTextModelStructureIndex(options.structure.schema, structureDocument).getText() : normalizeTextLineEndings(initialText);
-		this.buffer = new PieceTreeTextBuffer(normalizedInitialText);
+		const blockDocument = options.blocks?.document ?? options.blocks?.schema.createDocument();
+		const normalizedInitialText = blockDocument && options.blocks ? createTextModelBlockSnapshot(options.blocks.schema, blockDocument).getText() : normalizeTextLineEndings(initialText);
+		this.buffer = createTextBuffer(normalizedInitialText);
+		this.codeGroups = Object.freeze([createTextModelCodeGroup(this.buffer.lineCount)]);
 		this.largeFile = classifyTextModelSize(this.buffer.length, this.buffer.lineCount);
-		this.structureState = options.structure && structureDocument ? this.own(new TextModelStructure(
-			options.structure.schema,
-			structureDocument,
-			options.structure,
+		this.blockState = options.blocks && blockDocument ? this.own(new TextModelBlockState(
+			options.blocks.schema,
+			blockDocument,
+			options.blocks,
 			{
 				getVersion: () => this._version,
-				commitText: text => this.commitStructureText(text),
+				commitText: text => this.commitBlockText(text),
 				publishTextChange: change => this.changeEmitter.fire(change),
 			},
 		)) : undefined;
 		this.defer(() => {
 			this.disposed = true;
 			this.history.dispose();
-			this.buffer = new PieceTreeTextBuffer("");
+			this.buffer = createTextBuffer("");
 		});
 	}
 
-	/** Creates the single TextModel used by a Group/Block/Line document profile. */
-	static createWithStructure(schema: DocumentSchema, document = schema.createDocument(), options: TextModelStructureOptions = {}): TextModel {
-		return new TextModel(createTextModelStructureIndex(schema, document).getText(), { structure: { ...options, schema, document } });
+	/** Creates one TextModel with schema-backed Group and Block content. */
+	static create(schema: DocumentSchema, document = schema.createDocument(), options: TextModelBlockOptions = {}): TextModel {
+		return new TextModel(createTextModelBlockSnapshot(schema, document).getText(), { blocks: { ...options, schema, document } });
 	}
 
-	get hasStructure(): boolean {
+	get groups(): readonly TextModelGroup[] {
 		this.ensureAlive();
-		return this.structureState !== undefined;
+		return this.blockState?.snapshot.groups ?? this.codeGroups;
+	}
+
+	getGroup(id: string): TextModelGroup | undefined {
+		return this.groups.find(group => group.id === id);
+	}
+
+	getBlock(id: string): TextModelBlock | undefined {
+		for (const group of this.groups) {
+			const block = group.blockTree.getBlock(id);
+			if (block) return block;
+		}
+		return undefined;
+	}
+
+	getBlockAtLine(lineIndex: number): TextModelBlock | undefined {
+		this.ensureAlive();
+		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.buffer.lineCount) throw new RangeError("Block line index is outside the TextModel");
+		for (const group of this.groups) {
+			const block = group.blockTree.getBlockAtLine(lineIndex);
+			if (block) return block;
+		}
+		return undefined;
 	}
 
 	get schema(): DocumentSchema {
-		return this.requireStructure().schema;
+		return this.requireBlockState().schema;
 	}
 
 	get document(): DocumentNode {
-		return this.requireStructure().document;
-	}
-
-	get structureIndex(): TextModelStructureIndex {
-		return this.requireStructure().index;
+		return this.requireBlockState().document;
 	}
 
 	get selection(): DocumentSelection | undefined {
-		return this.requireStructure().selection;
+		return this.requireBlockState().selection;
 	}
 
 	get storedMarks(): readonly DocumentMark[] | undefined {
-		return this.requireStructure().storedMarks;
+		return this.requireBlockState().storedMarks;
 	}
 
-	get onDidChangeStructure(): Event<TextModelStructureChange> {
-		return this.requireStructure().onDidChange;
+	get onDidChangeBlocks(): Event<TextModelBlockChange> {
+		return this.requireBlockState().onDidChange;
 	}
 
 	get onDidChangeSelection(): Event<DocumentSelection | undefined> {
-		return this.requireStructure().onDidChangeSelection;
+		return this.requireBlockState().onDidChangeSelection;
 	}
 
 	get onDidChangeStoredMarks(): Event<readonly DocumentMark[] | undefined> {
-		return this.requireStructure().onDidChangeStoredMarks;
+		return this.requireBlockState().onDidChangeStoredMarks;
 	}
 
-	get canUndoStructure(): boolean {
-		return this.requireStructure().canUndo;
+	get canUndoBlocks(): boolean {
+		return this.requireBlockState().canUndo;
 	}
 
-	get canRedoStructure(): boolean {
-		return this.requireStructure().canRedo;
+	get canRedoBlocks(): boolean {
+		return this.requireBlockState().canRedo;
 	}
 
-	dispatch(transaction: DocumentTransaction): TextModelStructureChange | undefined {
-		return this.requireStructure().dispatch(transaction);
+	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
+		return this.requireBlockState().dispatch(transaction);
 	}
 
-	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelStructureChange | undefined {
-		return this.requireStructure().dispatchRemote(transaction, historyPolicy);
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
+		return this.requireBlockState().dispatchRemote(transaction, historyPolicy);
 	}
 
 	rebaseHistory(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
-		this.requireStructure().rebaseHistory(mapper);
+		this.requireBlockState().rebaseHistory(mapper);
 	}
 
-	undoStructure(): TextModelStructureChange | undefined {
-		return this.requireStructure().undo();
+	undoBlocks(): TextModelBlockChange | undefined {
+		return this.requireBlockState().undo();
 	}
 
-	redoStructure(): TextModelStructureChange | undefined {
-		return this.requireStructure().redo();
+	redoBlocks(): TextModelBlockChange | undefined {
+		return this.requireBlockState().redo();
 	}
 
 	setSelection(selection: DocumentSelection | undefined): void {
-		this.requireStructure().setSelection(selection);
+		this.requireBlockState().setSelection(selection);
 	}
 
 	setStoredMarks(marks: readonly DocumentMark[] | undefined): void {
-		this.requireStructure().setStoredMarks(marks);
+		this.requireBlockState().setStoredMarks(marks);
 	}
 
-	resetStructure(document: DocumentNode): TextModelStructureChange | undefined {
-		return this.requireStructure().reset(document);
+	resetBlocks(document: DocumentNode): TextModelBlockChange | undefined {
+		return this.requireBlockState().reset(document);
 	}
 
 	getPluginState<T>(key: DocumentPluginKey<T>): T | undefined {
-		return this.requireStructure().getPluginState(key);
+		return this.requireBlockState().getPluginState(key);
 	}
 
 	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
-		return this.requireStructure().getPluginDecorations();
+		return this.requireBlockState().getPluginDecorations();
 	}
 
 	get version(): number {
@@ -558,6 +580,7 @@ export class TextModel extends DisposableOwner {
 				edit.text,
 			);
 		}
+		this.codeGroups = Object.freeze([createTextModelCodeGroup(this.buffer.lineCount)]);
 		this.trackedRanges.acceptChanges(changes);
 		this.scheduleMaintenance();
 
@@ -575,10 +598,10 @@ export class TextModel extends DisposableOwner {
 	}
 
 	private scheduleMaintenance(): void {
-		if (!this.buffer.needsCompaction()) return;
+		if (!this.buffer.needsMaintenance()) return;
 		const maintenance = this.maintenance;
 		if (!maintenance) {
-			this.buffer.compact();
+			this.buffer.maintain();
 			return;
 		}
 		if (this.pendingMaintenance.value) return;
@@ -588,13 +611,13 @@ export class TextModel extends DisposableOwner {
 			pending = maintenance.schedule(() => {
 				ranSynchronously = true;
 				this.pendingMaintenance.clear();
-				if (!this.disposed) this.buffer.compactIfNeeded();
+				if (!this.disposed) this.buffer.maintainIfNeeded();
 			});
 			if (!pending || typeof pending.dispose !== "function") {
 				throw new TypeError("TextModel maintenance scheduler must return a disposable");
 			}
 		} catch {
-			this.buffer.compact();
+			this.buffer.maintain();
 			return;
 		}
 		if (ranSynchronously) {
@@ -668,8 +691,8 @@ export class TextModel extends DisposableOwner {
 		);
 	}
 
-	/** Commits the flattened line text for one already-validated structure change. */
-	private commitStructureText(text: string): { readonly version: number; readonly change?: TextModelChange } {
+	/** Commits flattened line text for one already-validated block transaction. */
+	private commitBlockText(text: string): { readonly version: number; readonly change?: TextModelChange } {
 		const previousText = this.buffer.getText();
 		const nextText = normalizeTextLineEndings(text);
 		let prefixLength = 0;
@@ -685,14 +708,14 @@ export class TextModel extends DisposableOwner {
 			startOffset: prefixLength,
 			endOffset: previousText.length - suffixLength,
 			text: nextText.slice(prefixLength, nextText.length - suffixLength),
-		}], { reason: TextModelChangeReason.Structure });
+		}], { reason: TextModelChangeReason.Blocks });
 		this.history.reset();
 		if (result) return { version: this._version, change: result.change };
 		this._version += 1;
 		const change = Object.freeze<TextModelChange>({
 			version: this._version,
 			transactionId: this.nextTransactionId++,
-			reason: TextModelChangeReason.Structure,
+			reason: TextModelChangeReason.Blocks,
 			changes: Object.freeze([Object.freeze<TextModelContentChange>({
 				range: TextRange.from(TextPosition.at(0, 0), this.positionAt(this.buffer.length)),
 				rangeOffset: 0,
@@ -703,15 +726,15 @@ export class TextModel extends DisposableOwner {
 		return { version: this._version, change };
 	}
 
-	private requireStructure(): TextModelStructure {
+	private requireBlockState(): TextModelBlockState {
 		this.ensureAlive();
-		const structure = this.structureState;
-		if (!structure) throw new ReferenceError("TextModel has no Group/Block structure");
-		return structure;
+		const blockState = this.blockState;
+		if (!blockState) throw new ReferenceError("TextModel has no schema-backed Block state");
+		return blockState;
 	}
 
 	private ensureDirectTextMutationAllowed(): void {
-		if (this.structureState) throw new Error("TextModel edits must update Group/Block metadata through dispatch()");
+		if (this.blockState) throw new Error("TextModel edits must update schema-backed Blocks through dispatch()");
 	}
 
 	private ensureAlive(): void {

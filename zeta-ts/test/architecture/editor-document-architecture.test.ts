@@ -23,8 +23,15 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 	for (const file of [
 		"common/core/documentSelection.ts",
 		"common/model/textModel.ts",
-		"common/model/textModelStructure.ts",
-		"common/model/textModelStructureIndex.ts",
+		"common/model/textBuffer.ts",
+		"common/model/textBufferFactory.ts",
+		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
+		"common/model/textModelBlockTree.ts",
+		"common/model/textModelBlockState.ts",
+		"common/model/textModelBlockSnapshot.ts",
 		"common/services/textModelService.ts",
 		"common/commands/documentCommands.ts",
 		"browser/editorWidget.ts",
@@ -70,7 +77,12 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 test("document editing keeps groups, blocks, lines, and codeBlock text in one TextModel", () => {
 	const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
-	const structureIndex = readFileSync(join(editorRoot, "common/model/textModelStructureIndex.ts"), "utf8");
+	const textBuffer = readFileSync(join(editorRoot, "common/model/textBuffer.ts"), "utf8");
+	const textBufferFactory = readFileSync(join(editorRoot, "common/model/textBufferFactory.ts"), "utf8");
+	const pieceTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts"), "utf8");
+	const pieceTreeBuilder = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts"), "utf8");
+	const redBlackTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/rbTreeBase.ts"), "utf8");
+	const blockTree = readFileSync(join(editorRoot, "common/model/textModelBlockTree.ts"), "utf8");
 	const pane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
 	const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
 	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
@@ -80,13 +92,24 @@ test("document editing keeps groups, blocks, lines, and codeBlock text in one Te
 	assert.match(schema, /"root" \| "group" \| "block" \| "line" \| "inline" \| "text"/u);
 	assert.match(pane, /export class DocumentEditorPane/u);
 	assert.match(pane, /implements IEditorPane/u);
-	assert.match(textModel, /static createWithStructure/u);
-	assert.match(textModel, /TextModelStructure/u);
-	assert.match(textModel, /get structureIndex/u);
-	assert.match(structureIndex, /export class TextModelStructureIndex/u);
-	assert.match(structureIndex, /readonly groups/u);
-	assert.match(structureIndex, /readonly blocks/u);
-	assert.match(structureIndex, /readonly lines/u);
+	assert.match(textModel, /static create\(/u);
+	assert.match(textModel, /get groups/u);
+	assert.match(textModel, /private buffer: TextBuffer/u);
+	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex/u);
+	assert.match(textBuffer, /export interface TextBuffer/u);
+	assert.doesNotMatch(textBuffer, /PieceTree/u);
+	assert.match(textBufferFactory, /new PieceTreeTextBufferBuilder/u);
+	assert.match(textBufferFactory, /return builder\.finish\(\)/u);
+	assert.match(pieceTreeBuilder, /implements TextBufferBuilder/u);
+	assert.match(pieceTreeBuilder, /return new PieceTreeTextBuffer/u);
+	assert.match(pieceTree, /from "\.\/rbTreeBase\.js"/u);
+	assert.match(redBlackTree, /export const enum NodeColor/u);
+	assert.match(redBlackTree, /function fixInsert/u);
+	assert.match(redBlackTree, /function fixDelete/u);
+	assert.match(blockTree, /export class TextModelBlockTree/u);
+	assert.match(blockTree, /readonly startLine/u);
+	assert.match(blockTree, /readonly endLine/u);
+	assert.doesNotMatch(blockTree, /TextModelLine/u);
 	assert.match(pane, /DocumentEditorTextModelService/u);
 	assert.match(editor, /export class EditorWidget/u);
 	assert.match(editor, /ITextModelService/u);

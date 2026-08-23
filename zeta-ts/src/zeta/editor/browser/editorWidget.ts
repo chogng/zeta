@@ -22,7 +22,7 @@ import { getEditorContributions, type DocumentCollaborationContribution, type Do
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
-import type { ITextModelService, TextModelStructureInput, TextModelWorkingCopyReference } from "../common/services/textModelService.js";
+import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../common/services/textModelService.js";
 import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationPresence } from "../common/services/documentCollaborationService.js";
@@ -112,7 +112,7 @@ type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 /**
  * One browser editor projected over a TextModel with Group/Block metadata.
  *
- * The editor owns the structured model, working copy, DOM projection, and
+ * The editor owns the schema-backed TextModel reference, working copy, DOM projection, and
  * block-level input. `EditorPane` owns Workbench pane lifecycle. Code blocks
  * edit line ranges in this same TextModel rather than creating nested models.
  */
@@ -142,7 +142,7 @@ export class EditorWidget extends DisposableOwner {
 		return this.modelReferenceSlot.value;
 	}
 
-	constructor(private readonly modelService: ITextModelService<TextModelStructureInput, TextModelWorkingCopyReference>, private readonly options: EditorWidgetOptions = {}) {
+	constructor(private readonly modelService: ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: EditorWidgetOptions = {}) {
 		super();
 		if (!modelService || typeof modelService.acquire !== "function") {
 			this.dispose();
@@ -239,7 +239,7 @@ export class EditorWidget extends DisposableOwner {
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
 		this.modelReferenceSlot.replace(modelReference);
-		this.modelChangeListenerSlot.replace(model.onDidChangeStructure(() => this.render()));
+		this.modelChangeListenerSlot.replace(model.onDidChangeBlocks(() => this.render()));
 		this.input = input;
 		this.activeBlockId = undefined;
 		container.replaceChildren();
@@ -309,7 +309,7 @@ export class EditorWidget extends DisposableOwner {
 		return this.requireModel().document;
 	}
 
-	/** Returns the current structured-document selection, if the editor has input. */
+	/** Returns the current block-document selection, if the editor has input. */
 	getDocumentSelection(): DocumentSelection | undefined {
 		return this.modelReferenceSlot.value?.model.selection;
 	}
@@ -1064,7 +1064,7 @@ export class EditorWidget extends DisposableOwner {
 		const action = historyShortcut(event);
 		if (!action) return false;
 		event.preventDefault();
-		const change = action === "undo" ? model.undoStructure() : model.redoStructure();
+		const change = action === "undo" ? model.undoBlocks() : model.redoBlocks();
 		if (change) this.restoreModelFocus(model, change.selectionAfter);
 		return true;
 	}

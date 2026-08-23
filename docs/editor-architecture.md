@@ -4,14 +4,14 @@
 
 ## 快速理解
 
-Stanza 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平的 `editor` 领域模块中。所有文档都由按行存储的 `TextModel` 作为唯一同步权威；Academic 在同一模型上附加 group/block/line 结构索引、schema、selection 与结构化 transaction。Code 与 Academic 不拥有第二份 editor 源码或第二套模型，而是在共享 Workbench 入口之后按窗口模式加载不同的 contribution bundle。用户切换模式时重载窗口，不在运行中的 Workbench 内热卸载 editor contribution。
+Stanza 是 Zeta 唯一的可组装编辑器内核。所有文档都由 `TextModel` 作为唯一同步权威，并原生遵循 `Group → BlockTree → Block → TextBuffer LineRange`；Code 使用一个 source Group，Academic schema 使用更多 Group/Block 类型。字符和物理行由 TextModel-owned `TextBuffer` 唯一保存，PieceTree 只是当前私有实现。
 
 | 使用场景 | 模式加载入口 | 编辑能力 |
 | --- | --- | --- |
 | Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 独立的文件级行式功能实现 + code/diff pane/input 与文件服务接线 |
-| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 独立的结构化功能实现；在同一 TextModel 上使用 group/block/line schema 与投影 |
+| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 独立的 Block 功能实现；在同一 TextModel 上使用更多 Group/Block 类型与投影 |
 | Code 行式能力全集 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；Academic 不加载它 |
-| DOM-free 调用 | `editor.api.ts` | TextModel、可选结构索引、schema、transaction、serialization 和坐标 API；不注册 pane |
+| DOM-free 调用 | `editor.api.ts` | TextModel、Group、BlockTree、schema、transaction、serialization 和坐标 API；不注册 pane |
 
 Stanza 是整个内核的品牌，不是某一个 mode 的别名。Code 与 Academic 拥有不同的 feature implementation、projection 和 bundle，但共享唯一 `TextModel`。结构化能力是 TextModel 的显式可选状态，不是第二个万能接口或平行模型；复用底层文本能力不代表复用 Code pane 或 Code contribution 集合。
 
@@ -21,7 +21,7 @@ Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM c
 
 | 层 | 当前状态 | 责任 |
 | --- | --- | --- |
-| `editor/common` | 单一同步内核与纯投影状态已具备 | `TextModel`、piece tree、group/block/line index、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport 与版本化语言状态；不得引用 Workbench、Electron 或 generated DTO |
+| `editor/common` | 单一同步内核与纯投影状态已具备 | `TextModel`、`TextBuffer`、Group/BlockTree/Block/LineRange、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport 与版本化语言状态；不得引用 Workbench、Electron 或 generated DTO |
 | `editor/browser` | Code 与 Academic 的 widget 和 DOM projection 已具备 | code/document/diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择 Workbench 模式 |
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
 | `editor.*.all.ts` | editor 能力按模式装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
@@ -48,7 +48,7 @@ decoration 等身份只能由 `editor` 领域定义，不得为了复用而下�
 
 | Editor 层 | 应复用的 base 能力 | 仍由 editor 定义 |
 | --- | --- | --- |
-| `common` | event、lifecycle、IME realm coordination、cancellation、通用 geometry | TextModel position/range、model version、history、可选结构 selection/transaction/schema、language request/lane/result identity、snapshot version gate 和纯 view-model 语义 |
+| `common` | event、lifecycle、IME realm coordination、cancellation、通用 geometry | TextModel position/range、Group/BlockTree、model version、history、schema-backed selection/transaction、language request/lane/result identity、snapshot version gate 和纯 view-model 语义 |
 | `browser` | DOM lifecycle、通用控件基础、platform/keybinding 状态、通用 layout primitive | code/document viewport、行与节点投影、textarea/input adapter、字体测量、editor ARIA |
 | Workbench host | platform service、context key、commands、configuration、theme | editor pane 接线、document/workspace 绑定和外部区域布局 |
 | Transition adapter | 对应第三方 renderer API | 仅适配，不得反向定义 Zeta common/browser contract |
@@ -123,11 +123,11 @@ Input controller ←──────→ Native DOM renderer
 
 ## 分阶段实施
 
-### Current：文本事务与 Piece Tree 内核
+### Current：文本事务、TextBuffer 与 Piece Tree 实现
 
 已实现 LF 规范化、UTF-16 坐标、原子非重叠编辑、版本、同步事件和事务级
-undo/redo。存储已经切换到 TypeScript `PieceTreeTextBuffer`：piece 引用不可变
-original/add buffer，确定性 treap 在子树维护字符数、换行数和 piece 数。随机
+undo/redo。`TextModel` 只依赖 `TextBuffer` contract；当前 TypeScript `PieceTreeTextBuffer` 由
+`PieceTreeTextBufferBuilder` 构建，piece 引用不可变 original/add buffer，红黑树在子树维护字符数、换行数和 piece 数。随机
 差分测试将 1,000 次 replace、range read、坐标和行内容与普通 string oracle
 对比。
 
@@ -798,7 +798,7 @@ changes)`，其中 changes 只包含 pre-transaction UTF-16 range offset/length
 不再传全文。若 client 观察到版本跳跃，它不猜测缺失事务，而是清空本地 mirror
 状态，使下一请求重新发送 full。
 
-Worker server 用 `LanguageWorkerDocumentMirror` 独占一个 Piece Tree，而不是
+Worker server 用 `LanguageWorkerDocumentMirror` 独占一个由 PieceTree 实现的 TextBuffer，而不是
 用字符串拼接应用 delta。所有 change 会先验证版本连续、顺序、非重叠、范围
 和 LF，再按 offset 逆序写入，因此验证失败是原子的。每个 request 从 Piece
 Tree 捕获独立 immutable snapshot；同步新版本不会改变正在取消中的旧 request
@@ -1450,7 +1450,7 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | 工作区原始文件读取 | `platform/files` | ✅ |
 | file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
 | URI 到 Stanza `TextModel` 的共享引用 | `BrowserTextModelService` | ✅ editor-owned |
-| Stanza viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ Code mode 与 Academic code-block implementation 复用的底层浏览器编辑表面 |
+| Stanza viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ Code mode 的底层浏览器编辑表面；Academic code block 由父 `EditorWidget` 按 BlockTree 行范围投影 |
 | Stanza language、folding、diagnostic、save 与文档命令组合 | `EditorPart` + editor contribution registry | ✅ per-editor runtime；可独立能力由模式 bundle 选择 |
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Stanza pane 已选择 |

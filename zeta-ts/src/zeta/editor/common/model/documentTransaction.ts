@@ -69,7 +69,7 @@ export interface DocumentTransactionOptions {
 	readonly metadata?: readonly DocumentTransactionMetaEntry[];
 }
 
-/** Immutable batch of structured-document steps applied atomically by the model. */
+/** Immutable batch of schema-backed Block steps applied atomically by TextModel. */
 export class DocumentTransaction {
 	readonly steps: readonly DocumentStep[];
 	readonly addToHistory: boolean;

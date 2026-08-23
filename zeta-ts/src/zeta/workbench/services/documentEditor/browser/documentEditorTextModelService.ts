@@ -1,14 +1,14 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import type { ITextModelService, TextModelStructureInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelService.js";
+import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
 import { parseDocument } from "./documentWorkingCopy.js";
 
 /** Workbench persistence adapter for a TextModel opened by the document editor. */
-export class DocumentEditorTextModelService extends DisposableOwner implements ITextModelService<TextModelStructureInput, TextModelWorkingCopyReference> {
+export class DocumentEditorTextModelService extends DisposableOwner implements ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference> {
 	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
 		super();
 		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
@@ -17,7 +17,7 @@ export class DocumentEditorTextModelService extends DisposableOwner implements I
 		}
 	}
 
-	async acquire(input: TextModelStructureInput, signal: AbortSignal): Promise<TextModelWorkingCopyReference> {
+	async acquire(input: TextModelBlockInput, signal: AbortSignal): Promise<TextModelWorkingCopyReference> {
 		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
 		const content = await this.textFiles.resolve({
 			resource: input.resource,
@@ -25,7 +25,7 @@ export class DocumentEditorTextModelService extends DisposableOwner implements I
 		}, signal);
 		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
 		const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
-		const model = TextModel.createWithStructure(input.schema, document, { plugins: input.plugins });
+		const model = TextModel.create(input.schema, document, { plugins: input.plugins });
 		const workingCopy = new DocumentWorkingCopy({
 			resource: input.resource,
 			model,

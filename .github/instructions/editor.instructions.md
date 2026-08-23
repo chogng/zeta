@@ -10,7 +10,7 @@ See [`src/zeta/editor/README.md`](../../zeta-ts/src/zeta/editor/README.md), [`te
 ## Ownership
 
 - Give each editor state one canonical owner. Browser code retains only DOM and measurement state needed for projection.
-- Keep the text model and structured document model as independent mutation authorities.
+- Keep `TextModel` as the single text, line, Group, BlockTree, version, and mutation authority. Every model has Groups; schema-backed block transactions must not create a parallel document model. Concrete buffers such as PieceTree remain behind the `TextBuffer` contract.
 - Contributions depend on engine contracts; they do not introduce product IDs, duplicate model state, or import product bundles.
 
 ## View parts and DOM

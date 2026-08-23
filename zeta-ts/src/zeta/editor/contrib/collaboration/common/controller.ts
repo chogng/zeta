@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../common/model/textModel.js";
-import { TextModelRemoteHistoryPolicy } from "../../../common/model/textModelStructure.js";
+import { TextModelRemoteHistoryPolicy } from "../../../common/model/textModelBlockState.js";
 import { serializeDocument } from "../../../common/model/documentSerialization.js";
 import type { DocumentCollaborationConnection } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
@@ -52,7 +52,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		}));
 		this._presences = connection.currentPresence;
 		this.own(connection);
-		this.own(model.onDidChangeStructure(change => {
+		this.own(model.onDidChangeBlocks(change => {
 			if (this.synchronizingModel || (change.origin !== "user" && change.origin !== "undo" && change.origin !== "redo")) return;
 			const envelope = this.synchronizer.dispatchLocal(change.transaction);
 			if (envelope) this.submit(envelope);
@@ -218,7 +218,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		if (serializeDocument(this.model.document, this.model.schema) === serializeDocument(this.synchronizer.document, this.model.schema)) return;
 		this.synchronizingModel = true;
 		try {
-			this.model.resetStructure(this.synchronizer.document);
+			this.model.resetBlocks(this.synchronizer.document);
 		} finally {
 			this.synchronizingModel = false;
 		}

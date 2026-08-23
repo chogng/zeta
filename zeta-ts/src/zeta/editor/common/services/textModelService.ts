@@ -14,8 +14,8 @@ export interface TextModelInput {
 	readonly initialText?: string;
 }
 
-/** Optional Group/Block/Line configuration used when a profile opens a TextModel. */
-export interface TextModelStructureInput extends TextModelInput {
+/** Schema and block configuration used when a document profile opens a TextModel. */
+export interface TextModelBlockInput extends TextModelInput {
 	readonly schema: DocumentSchema;
 	readonly plugins?: readonly DocumentPlugin<unknown>[];
 	readonly createEmptyDocument?: () => DocumentNode;

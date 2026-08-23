@@ -88,8 +88,15 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"contrib/tokenization/common/tokenizationTextModelPart.ts",
 		"contrib/semanticTokens/common/semanticTokens.ts",
 		"common/editorResource.ts",
-		"common/model/textModelStructure.ts",
-		"common/model/textModelStructureIndex.ts",
+		"common/model/textBuffer.ts",
+		"common/model/textBufferFactory.ts",
+		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
+		"common/model/textModelBlockTree.ts",
+		"common/model/textModelBlockState.ts",
+		"common/model/textModelBlockSnapshot.ts",
 		"common/services/textModelService.ts",
 		"common/model/documentTransaction.ts",
 		"contrib/academic/common/schema.ts",
@@ -140,6 +147,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/documentModel.ts",
 		"common/services/documentModelService.ts",
 		"common/services/structuredTextModelService.ts",
+		"common/model/textModelStructure.ts",
+		"common/model/textModelStructureIndex.ts",
 		"contrib/academic/browser/academicCodeBlockEditor.ts",
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
@@ -182,6 +191,8 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 
 test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "test/common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.test.ts")), true);
+	assert.equal(statSafe(join(editorRoot, "common/model/pieceTreeTextBuffer/rbTreeBase.ts")), true);
+	assert.equal(statSafe(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts")), true);
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
@@ -316,7 +327,9 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(academicPaneContribution, /contrib\/codeEditor|CodeEditorPane|EmbeddedTextEditorFactory|AcademicCodeBlockEditorFactory|CodeEditorWidget/u);
 	assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
-	assert.match(textModel, /static createWithStructure/u);
+	assert.match(textModel, /static create\(/u);
+	assert.match(textModel, /get groups/u);
+	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex/u);
 	assert.match(documentHost, /case "codeBlock":[\s\S]*appendEditableText/u);
 	assert.doesNotMatch(documentHost, /new TextModel|TextModel\.createStructured/u);
 	assert.match(standardBundle, /codeEditorPart\.contribution/u);

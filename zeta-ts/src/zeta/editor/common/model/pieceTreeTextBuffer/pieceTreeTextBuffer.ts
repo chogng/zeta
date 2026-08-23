@@ -1,5 +1,7 @@
-import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, removeLeftmost, removeRightmost, slicePiece, updateNode, type Piece } from "./pieceTreeBase.js";
-import { createTextBufferSnapshot, type TextBufferSnapshot, type TextBufferSnapshotSegment } from "./pieceTreeSnapshot.js";
+import { PieceBuffer, PieceNode, canCoalesce, coalescePieces, createPiece, lowerBound, nodeLength, nodeLineFeeds, nodePieces, slicePiece, updateNodeAndAncestors, type Piece } from "./pieceTreeBase.js";
+import { NodeColor, deleteNode, insertAfter, insertBefore, nextNode, previousNode, rightmost } from "./rbTreeBase.js";
+import type { TextBuffer } from "../textBuffer.js";
+import { createTextBufferSnapshot, type TextBufferSnapshot, type TextBufferSnapshotSegment } from "../textBufferSnapshot.js";
 
 export interface PieceTreeTextBufferStatistics {
 	readonly liveTextUnits: number;
@@ -15,23 +17,18 @@ const MAXIMUM_PIECE_COUNT = 4_096;
 /**
  * Private piece-tree storage for `TextModel`.
  *
- * Pieces reference immutable original/add buffers. A deterministic treap keeps
+ * Pieces reference immutable original/add buffers. A red-black tree keeps
  * character length and line-feed counts on every subtree so edits and
  * coordinate queries do not rebuild a document-wide line index.
  */
-export class PieceTreeTextBuffer {
+export class PieceTreeTextBuffer implements TextBuffer {
 	private originalBuffer: string;
 	private addBuffer = "";
 	private root: PieceNode | undefined;
-	private priorityState = 0x6d2b79f5;
 
 	constructor(text: string) {
 		this.originalBuffer = text;
-		if (text.length > 0) {
-			this.root = this.createNode(
-				createPiece(PieceBuffer.Original, 0, text),
-			);
-		}
+		if (text.length > 0) this.root = this.createRootNode(createPiece(PieceBuffer.Original, 0, text));
 	}
 
 	get length(): number {
@@ -132,29 +129,34 @@ export class PieceTreeTextBuffer {
 
 	replace(startOffset: number, endOffset: number, text: string): void {
 		this.assertRange(startOffset, endOffset);
-		const [before, remainder] = this.split(this.root, startOffset);
-		const [, after] = this.split(
-			remainder,
-			endOffset - startOffset,
-		);
-		let inserted: PieceNode | undefined;
+		const endNode = this.ensureBoundary(endOffset);
+		const startNode = this.ensureBoundary(startOffset);
+		let current = startNode;
+		while (current && current !== endNode) {
+			const next = nextNode(current);
+			this.root = deleteNode(this.root!, current);
+			current = next;
+		}
+
 		if (text.length > 0) {
 			const addStartOffset = this.addBuffer.length;
 			this.addBuffer += text;
-			inserted = this.createNode(
-				createPiece(PieceBuffer.Add, addStartOffset, text),
-			);
+			const inserted = new PieceNode(createPiece(PieceBuffer.Add, addStartOffset, text));
+			this.root = insertBefore(this.root, endNode, inserted);
+			this.coalesceAround(inserted);
+		} else if (endNode) {
+			this.coalesceAround(endNode);
 		}
-		this.root = this.mergeCoalescing(
-			this.mergeCoalescing(before, inserted),
-			after,
-		);
 	}
 
 	compactIfNeeded(): boolean {
 		if (!this.needsCompaction()) return false;
 		this.compact();
 		return true;
+	}
+
+	maintainIfNeeded(): boolean {
+		return this.compactIfNeeded();
 	}
 
 	/** Reports whether retaining obsolete piece buffers exceeds the maintenance budget. */
@@ -172,13 +174,19 @@ export class PieceTreeTextBuffer {
 		return fragmented || disproportionatelyRetained || absolutelyRetained;
 	}
 
+	needsMaintenance(): boolean {
+		return this.needsCompaction();
+	}
+
 	compact(): void {
 		const text = this.getText();
 		this.originalBuffer = text;
 		this.addBuffer = "";
-		this.root = text.length > 0
-			? this.createNode(createPiece(PieceBuffer.Original, 0, text))
-			: undefined;
+		this.root = text.length > 0 ? this.createRootNode(createPiece(PieceBuffer.Original, 0, text)) : undefined;
+	}
+
+	maintain(): void {
+		this.compact();
 	}
 
 	private collectText(
@@ -305,111 +313,60 @@ export class PieceTreeTextBuffer {
 		);
 	}
 
-	private split(
-		node: PieceNode | undefined,
-		offset: number,
-	): [PieceNode | undefined, PieceNode | undefined] {
-		if (!node) return [undefined, undefined];
-		const leftLength = nodeLength(node.left);
-		if (offset < leftLength) {
-			const [before, after] = this.split(node.left, offset);
-			node.left = after;
-			updateNode(node);
-			return [before, node];
-		}
-		const pieceEndOffset = leftLength + node.piece.length;
-		if (offset > pieceEndOffset) {
-			const [before, after] = this.split(
-				node.right,
-				offset - pieceEndOffset,
-			);
-			node.right = before;
-			updateNode(node);
-			return [node, after];
-		}
-		if (offset === leftLength) {
-			const before = node.left;
-			node.left = undefined;
-			updateNode(node);
-			return [before, node];
-		}
-		if (offset === pieceEndOffset) {
-			const after = node.right;
-			node.right = undefined;
-			updateNode(node);
-			return [node, after];
-		}
+	private ensureBoundary(offset: number): PieceNode | undefined {
+		if (offset === this.length) return undefined;
+		let node = this.root;
+		let baseOffset = 0;
+		while (node) {
+			const leftLength = nodeLength(node.left);
+			const pieceStartOffset = baseOffset + leftLength;
+			const pieceEndOffset = pieceStartOffset + node.piece.length;
+			if (offset < pieceStartOffset) {
+				node = node.left;
+				continue;
+			}
+			if (offset > pieceEndOffset) {
+				baseOffset = pieceEndOffset;
+				node = node.right;
+				continue;
+			}
+			if (offset === pieceStartOffset) return node;
+			if (offset === pieceEndOffset) return nextNode(node);
 
-		const pieceOffset = offset - leftLength;
-		const leftPiece = slicePiece(node.piece, 0, pieceOffset);
-		const rightPiece = slicePiece(
-			node.piece,
-			pieceOffset,
-			node.piece.length,
-		);
-		const before = this.merge(
-			node.left,
-			this.createNode(leftPiece, node.priority),
-		);
-		const after = this.merge(
-			this.createNode(rightPiece, node.priority),
-			node.right,
-		);
-		return [before, after];
+			const pieceOffset = offset - pieceStartOffset;
+			const rightPiece = slicePiece(node.piece, pieceOffset, node.piece.length);
+			node.piece = slicePiece(node.piece, 0, pieceOffset);
+			updateNodeAndAncestors(node);
+			const right = new PieceNode(rightPiece);
+			this.root = insertAfter(this.root!, node, right);
+			return right;
+		}
+		throw new Error(`Unable to resolve PieceTree boundary at offset ${offset}`);
 	}
 
-	private merge(
-		left: PieceNode | undefined,
-		right: PieceNode | undefined,
-	): PieceNode | undefined {
-		if (!left) return right;
-		if (!right) return left;
-		if (left.priority <= right.priority) {
-			left.right = this.merge(left.right, right);
-			updateNode(left);
-			return left;
+	private coalesceAround(node: PieceNode): void {
+		let current = node;
+		const previous = previousNode(current);
+		if (previous && canCoalesce(previous.piece, current.piece)) {
+			const combined = coalescePieces(previous.piece, current.piece);
+			this.root = deleteNode(this.root!, current)!;
+			previous.piece = combined;
+			updateNodeAndAncestors(previous);
+			current = previous;
 		}
-		right.left = this.merge(left, right.left);
-		updateNode(right);
-		return right;
-	}
-
-	private mergeCoalescing(
-		left: PieceNode | undefined,
-		right: PieceNode | undefined,
-	): PieceNode | undefined {
-		if (!left) return right;
-		if (!right) return left;
-
-		const [leftRemainder, leftBoundary] = removeRightmost(left);
-		const [rightBoundary, rightRemainder] = removeLeftmost(right);
-		if (!canCoalesce(leftBoundary.piece, rightBoundary.piece)) {
-			return this.merge(
-				this.merge(leftRemainder, leftBoundary),
-				this.merge(rightBoundary, rightRemainder),
-			);
+		const next = nextNode(current);
+		if (next && canCoalesce(current.piece, next.piece)) {
+			const combined = coalescePieces(current.piece, next.piece);
+			this.root = deleteNode(this.root!, next)!;
+			current.piece = combined;
+			updateNodeAndAncestors(current);
 		}
-
-		const combined = this.createNode(
-			coalescePieces(leftBoundary.piece, rightBoundary.piece),
-		);
-		return this.mergeCoalescing(
-			this.mergeCoalescing(leftRemainder, combined),
-			rightRemainder,
-		);
 	}
 
-	private createNode(piece: Piece, priority = this.nextPriority()): PieceNode {
-		return new PieceNode(piece, priority);
-	}
-
-	private nextPriority(): number {
-		let value = this.priorityState;
-		value ^= value << 13;
-		value ^= value >>> 17;
-		value ^= value << 5;
-		this.priorityState = value >>> 0;
-		return this.priorityState;
+	private createRootNode(piece: Piece): PieceNode {
+		const node = new PieceNode(piece);
+		node.color = NodeColor.Black;
+		return node;
 	}
 
 	private pieceText(piece: Piece): string {
