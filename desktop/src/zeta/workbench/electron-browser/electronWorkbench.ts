@@ -5,9 +5,7 @@ import {
   DisposableTracker,
   installDisposableTracker,
 } from "../../base/common/disposableTracker.js";
-import type {
-  ProductConfiguration,
-} from "../../product/common/product.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import {
   createElectronRendererApi,
 } from "../../platform/native/electron-browser/rendererApi.js";
@@ -24,14 +22,15 @@ import {
 import { loadUserThemes } from "./userThemes.js";
 import type { WorkbenchProfile } from "../browser/workbenchProfile.js";
 import { type ElectronRendererCapabilityContribution } from "../../platform/native/electron-browser/rendererApi.js";
+import { switchElectronWorkbenchMode } from "../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js";
 
-/** Starts one Electron renderer for the selected product edition. */
+/** Starts one Electron renderer for the selected Workbench mode. */
 export async function startElectronWorkbench(
-  product: ProductConfiguration,
+  modeId: WorkbenchModeId,
   profile: WorkbenchProfile,
   rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
-  document.title = product.name;
+  document.title = WorkbenchModeRegistry.get(modeId).title;
   installBaseUiStyles();
   const disposableTracker = import.meta.env.DEV
     ? new DisposableTracker()
@@ -42,7 +41,7 @@ export async function startElectronWorkbench(
   const api = createElectronRendererApi(rendererCapabilities);
   const userThemes = await loadUserThemes(api.userThemes);
   const workbench = startWorkbench({
-    product,
+    modeId,
     profile,
     api,
     container: document.querySelector<HTMLElement>("#app") ?? document.body,
@@ -59,6 +58,7 @@ export async function startElectronWorkbench(
     createTitlebarPart: createElectronTitlebarPartFactory(
       api.nativeMenubar,
     ),
+    switchWorkbenchMode: switchElectronWorkbenchMode,
   });
   const lifecycle = new DisposableStore();
   const workspaceSubscription = api.workspace.onDidChange((workspace) => {

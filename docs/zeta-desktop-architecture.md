@@ -3,7 +3,7 @@
 > 负责人：Desktop 开发者
 > Rust 对接负责人：zeta-rs 开发者
 > 当前开发基线：[`zeta-app-server-api.md`](zeta-app-server-api.md)
-> 产品装配与构建版本：[`product-editions.md`](product-editions.md)
+> Workbench 模式装配与切换边界：[`workbench-modes.md`](workbench-modes.md)
 > Renderer 控件、Workbench Part 与 CSS 状态所有权：[`ui-styling-ownership.md`](ui-styling-ownership.md)
 > Pane-like Part 的标题槽位、CompositeBar、命名与生命周期：[`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)
 > Renderer Command、MenuId 与 UI Action 组合系统：[`menu-system.md`](menu-system.md)
@@ -416,7 +416,7 @@ Renderer 不复制 Rust 状态机。遇到 durable `sequence` 或 `streamCursor`
 `EditorPart` 是 Workbench 中央编辑区域的唯一宿主。`EditorInput` 表示待打开资源；
 `IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义；
 `EditorPaneRegistry` 负责默认匹配、候选枚举和显式编辑器选择。具体产品装配规则由
-[`product-editions.md`](product-editions.md) 负责。
+[`workbench-modes.md`](workbench-modes.md) 负责。
 
 打开新输入时，旧 pane 保持可见，直到新 pane 的异步 `setInput()` 成功。失败不会破坏当前
 编辑器；被后续打开或普通内容替代时，宿主中止 `AbortSignal` 并释放候选 pane。成功切换后由

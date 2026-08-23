@@ -121,7 +121,7 @@ export interface EditorContribution {
 const contributions: EditorContribution[] = [];
 const contributionIds = new Set<string>();
 
-/** Registers one flat editor contribution through a product bundle side effect. */
+/** Registers one flat editor contribution through a Workbench mode bundle side effect. */
 export function registerEditorContribution(contribution: EditorContribution): void {
   if (!contribution || !contribution.id?.trim() || (typeof contribution.configure !== "function" && typeof contribution.install !== "function")) throw new TypeError("Editor contribution is invalid");
   if (contributionIds.has(contribution.id)) throw new RangeError(`Duplicate editor contribution '${contribution.id}'`);

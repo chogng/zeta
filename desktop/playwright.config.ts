@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const browserServerMode = process.env.ZETA_PLAYWRIGHT_SERVER;
-const product = process.env.ZETA_PRODUCT === "academic" ? "academic" : "code";
+const workbenchMode = process.env.ZETA_WORKBENCH_MODE === "academic" ? "academic" : "code";
 const browserProjects = browserServerMode === "disconnected"
   ? [{ name: "browser-ui", use: { baseURL: "http://127.0.0.1:5173" } }]
   : browserServerMode === "full"
@@ -20,7 +20,7 @@ export default defineConfig({
     { name: "electron-app-server" },
     {
       name: "electron-editor-app-server",
-      testMatch: product === "academic" ? "**/areas/editor/academic-open.spec.ts" : "**/areas/editor/editor-open.spec.ts",
+      testMatch: workbenchMode === "academic" ? "**/areas/editor/academic-open.spec.ts" : "**/areas/editor/editor-open.spec.ts",
     },
     { name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
   ],

@@ -120,7 +120,7 @@ export interface IEditorPartRuntime extends IDisposable {
   revert(): Promise<void>;
 }
 
-/** Creates one line-editor runtime from the contributions selected by a product bundle. */
+/** Creates one line-editor runtime from the contributions selected by a Workbench mode bundle. */
 export type EditorPartFactory = (options: EditorPartOptions) => IEditorPartRuntime;
 
 let editorPartFactory: EditorPartFactory | undefined;

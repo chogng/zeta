@@ -34,6 +34,8 @@ import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
 import { LocalizationSettingsPane } from "../../localization/browser/localizationSettings.js";
 import { EditorSettingsPane } from "./editorSettings.js";
 import { GeneralSettingsPane } from "./generalSettings.js";
+import type { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
+import { ModelSettingsPane, type ModelSettingsCatalog } from "./modelSettings.js";
 import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
 import { WorkspaceTrustEditor } from "../../workspace/browser/workspaceTrustEditor.js";
 
@@ -55,6 +57,8 @@ export interface SettingsEditorOptions {
   readonly workspaceTrustService: IWorkspaceTrustService;
   readonly workspaceOpenService: IWorkspaceOpenService;
   readonly workspaceContextService?: IWorkspaceContextService;
+  readonly workbenchModeService: IWorkbenchModeService;
+  readonly modelCatalog: ModelSettingsCatalog;
 }
 
 let nextSettingsEditorId = 1;
@@ -79,6 +83,8 @@ export class SettingsEditor extends DisposableOwner {
   private readonly workspaceTrustService: IWorkspaceTrustService;
   private readonly workspaceOpenService: IWorkspaceOpenService;
   private readonly workspaceContextService: IWorkspaceContextService | undefined;
+  private readonly workbenchModeService: IWorkbenchModeService;
+  private readonly modelCatalog: ModelSettingsCatalog;
   private readonly searchInput: InputBox;
   private readonly navigationItems = new Map<string, HTMLButtonElement>();
   private readonly navigationEmpty: HTMLParagraphElement;
@@ -111,6 +117,8 @@ export class SettingsEditor extends DisposableOwner {
     this.workspaceTrustService = options.workspaceTrustService;
     this.workspaceOpenService = options.workspaceOpenService;
     this.workspaceContextService = options.workspaceContextService;
+    this.workbenchModeService = options.workbenchModeService;
+    this.modelCatalog = options.modelCatalog;
     const ownerDocument = container.ownerDocument;
     const editorId = `zeta-settings-editor-${nextSettingsEditorId++}`;
     this.element = h(ownerDocument, "div");
@@ -277,6 +285,7 @@ export class SettingsEditor extends DisposableOwner {
     else if (section.id === "languages") this.renderLanguages();
     else if (section.id === "localization") this.renderLocalization();
     else if (section.id === "marketplace") this.renderMarketplace();
+    else if (section.id === "models") this.renderModels();
     else if (section.id === "indexing") void this.renderIndexing();
     else if (section.id === "workspace-trust") this.renderWorkspaceTrust();
     else if (hasSectionOverviewSettings(section.id)) this.renderOverview(section.id);
@@ -291,7 +300,7 @@ export class SettingsEditor extends DisposableOwner {
   }
 
   private renderGeneral(): void {
-    const pane = new GeneralSettingsPane(this.sectionContent, this.configurationService, this.contextViewProvider);
+    const pane = new GeneralSettingsPane(this.sectionContent, this.configurationService, this.contextViewProvider, this.workbenchModeService);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }
@@ -310,6 +319,12 @@ export class SettingsEditor extends DisposableOwner {
 
   private renderPlugins(): void {
     const pane = new PluginSettingsPane(this.sectionContent, this.pluginService);
+    this.sectionBindings.add(pane);
+    this.sectionContent.replaceChildren(pane.element);
+  }
+
+  private renderModels(): void {
+    const pane = new ModelSettingsPane(this.sectionContent, this.modelCatalog);
     this.sectionBindings.add(pane);
     this.sectionContent.replaceChildren(pane.element);
   }

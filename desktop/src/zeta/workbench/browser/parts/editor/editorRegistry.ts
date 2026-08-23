@@ -37,7 +37,7 @@ export class EditorPaneRegistry {
    * Returns compatible editors in default-selection order.
    *
    * Higher matches come first. Registration order resolves equal matches so
-   * product contribution order remains deterministic.
+   * mode contribution order remains deterministic.
    */
   getEditors(input: EditorInput): readonly IEditorPaneDescriptor[] {
     return Array.from(this.descriptors.values())

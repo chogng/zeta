@@ -1,6 +1,7 @@
-import { ZetaDesktopProduct } from "../../product/common/product.js";
+import { ZetaDesktopApplication } from "../../product/common/product.js";
+import { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { startElectronApplication } from "./startElectronApplication.js";
 import { debugAdapterIpcRoutes } from "../../platform/debug/electron-main/debugAdapterIpcRoutes.js";
 
-/** Code product's explicit Electron Main entry. */
-startElectronApplication(ZetaDesktopProduct, [debugAdapterIpcRoutes]);
+/** Compatibility entry that starts the shared application in Code mode. */
+startElectronApplication({ application: ZetaDesktopApplication, initialModeId: WorkbenchModeId.Code, ipcRouteContributions: [debugAdapterIpcRoutes] });

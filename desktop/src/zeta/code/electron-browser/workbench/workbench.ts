@@ -1,10 +1,12 @@
 import "../../../workbench/workbench.desktop.main.js";
-import type { ProductId } from "../../../product/common/product.js";
+import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../product/common/workbenchMode.js";
 
-declare const __ZETA_PRODUCT__: ProductId;
+declare const __ZETA_WORKBENCH_MODE__: WorkbenchModeId;
 
-if (__ZETA_PRODUCT__ === "code") {
-  await import("./modes/code.js");
-} else {
-  await import("./modes/academic.js");
-}
+const modeLoaders = {
+  [WorkbenchModeId.Code]: () => import("./modes/code.js"),
+  [WorkbenchModeId.Academic]: () => import("./modes/academic.js"),
+} satisfies Record<WorkbenchModeId, () => Promise<unknown>>;
+
+const modeId = resolveWorkbenchModeIdFromUrl(window.location.href, __ZETA_WORKBENCH_MODE__);
+await modeLoaders[modeId]();

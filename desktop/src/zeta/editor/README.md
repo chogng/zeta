@@ -20,7 +20,7 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 
 | 文档 | Canonical responsibility | 不负责 |
 | --- | --- | --- |
-| [`README.md`](./README.md) | 扁平目录、两个 engine、依赖方向、bundle 和产品装配 | 单个 engine 的完整行为和实现台账 |
+| [`README.md`](./README.md) | 扁平目录、两个 engine、依赖方向和 Workbench 模式装配 | 单个 engine 的完整行为和实现台账 |
 | [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
 | [`document-engine.md`](./document-engine.md) | Schema、structured model、transaction、browser projection、profile 和 collaboration | 行式文本语义和产品 pane 生命周期 |
 
@@ -33,7 +33,7 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
 | `common/model` | `common/core`、`base/common` | `TextModel`、`DocumentModel`、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
-| `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、产品版本选择 |
+| `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
 | `workbench/contrib/{codeEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、embedded factory 和服务接线 | 编辑事务、selection、viewport 或 feature controller |
@@ -59,7 +59,7 @@ Contribution 必须满足以下条件：
 - 移除后对应 engine 仍能保持模型有效性和基本编辑正确性；
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
-- 不隐式 import 另一个产品 bundle；跨 engine 适配只能 import 所需实现。
+- 不隐式 import 另一个模式 bundle；跨 engine 适配只能 import 所需实现。
 - 正式产品只承诺 `editor.all.ts` 及其 Code/Academic 扩展组合，不承诺任意 contribution 子集都能组成受支持的产品。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
@@ -77,7 +77,7 @@ editor.api.ts ─────────────→ TextModel / DocumentMod
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
 ```
 
-构建模式 contribution 是唯一能力选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达模式差异，并与对应 Workbench contribution 配对。新增模式应从少量经过验证的 profile 扩展；不得在共享 Workbench、widget、model 或 feature controller 内增加产品分支，也不得复制整份标准能力清单。
+Workbench 模式 contribution 是唯一能力选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达模式差异，并与对应 Workbench contribution 配对。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget、model 或 feature controller 内增加模式分支，也不得复制整份标准能力清单。
 
 ## 关键实现符号
 
@@ -89,7 +89,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 | `registerEditorContribution` | 所有 Aster capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `EditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
 | `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |
-| Workbench `registerEditorPane` | Workbench pane descriptor 注册 | 产品入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用 |
+| Workbench `registerEditorPane` | Workbench pane descriptor 注册 | 模式入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用 |
 
 如果 common model 开始 import Workbench/generated DTO、contribution 开始拥有第二套 model state、或产品 ID 出现在 feature/controller 中，即表示所有权已经漂移。
 
@@ -98,13 +98,13 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 - 文本和结构化 model 的同步 mutation 失败必须在提交前抛出，不能留下部分版本、history 或 plugin state。
 - 异步语言、diff、文件和协作结果必须按 model version 或服务器版本拒绝过期结果。
 - Academic schema 与 `collaborationSchemaId` 是持久兼容边界；改变节点语义时必须同步迁移、serialization 测试和 collaboration 测试。
-- Product bundle 是构建时静态选择，不提供运行时卸载 contribution 的承诺。
+- Workbench 模式 bundle 在 Renderer 启动时静态装配，不提供运行时卸载 contribution 的承诺。
 - Aster 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `aster` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入 Alpha/Gama 兼容标识。
 
 ## 测试与修改影响
 
 - `test:editor:unit` 编译并运行 editor 内核测试，以及随 owner 迁移到 Workbench 的 code/document pane 与 collaboration adapter 测试。
 - `test:editor:browser` 在同一浏览器 suite 内验证 text/document model 挂载点、输入、布局、embedded editor 和可访问性集成。
-- `test/architecture/editor-architecture.test.ts` 验证扁平目录、禁止的同步层依赖、两个 engine owner 和产品 bundle。
+- `test/architecture/editor-architecture.test.ts` 验证扁平目录、禁止的同步层依赖、两个 engine owner 和模式 bundle。
 
 修改 product composition 时至少运行架构测试和两个 Renderer 类型检查目标；修改 model、input、serialization 或 schema 时运行对应 engine 的 unit/browser suite。浏览器集成测试应在统一 Aster 测试入口下按具体 model 挂载点命名，不再以历史 engine 代号表达架构所有权。

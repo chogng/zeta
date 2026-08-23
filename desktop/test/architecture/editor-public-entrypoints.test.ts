@@ -6,7 +6,7 @@ import { findDesktopRoot } from "./testPaths.js";
 
 const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/zeta/editor");
 
-test("flat Aster domain exposes public entrypoints and product bundles", () => {
+test("flat Aster domain exposes public entrypoints and mode bundles", () => {
   for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
     assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
   }

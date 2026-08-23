@@ -7,7 +7,7 @@ import {
 import { Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
-import type { ProductId } from "../../product/common/product.js";
+import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import type {
   WorkbenchState,
 } from "../../platform/workspace/common/workspace.js";
@@ -19,7 +19,7 @@ import { h } from "../../base/browser/dom.js";
 
 export interface WorkbenchWindowOptions {
   readonly root: HTMLElement;
-  readonly productId: ProductId;
+  readonly modeId: WorkbenchModeId;
   readonly workbenchState: WorkbenchState;
 }
 
@@ -46,13 +46,13 @@ export class WorkbenchWindow
     this.targetWindow = this.ownerDocument.defaultView;
 
     options.root.classList.add("zeta-workbench");
-    options.root.setAttribute("data-product", options.productId);
+    options.root.setAttribute("data-workbench-mode", options.modeId);
     options.root.setAttribute("data-runtime", environment.runtime);
     options.root.setAttribute("data-os", environment.os);
     this.setWorkbenchState(options.workbenchState);
     this.defer(() => {
       options.root.classList.remove("zeta-workbench");
-      options.root.removeAttribute("data-product");
+      options.root.removeAttribute("data-workbench-mode");
       options.root.removeAttribute("data-runtime");
       options.root.removeAttribute("data-os");
       options.root.removeAttribute("data-workbench-state");

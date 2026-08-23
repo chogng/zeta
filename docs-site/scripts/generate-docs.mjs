@@ -13,7 +13,7 @@ const groups = [
     files: [
       "README",
       "architecture",
-      "product-editions",
+      "workbench-modes",
       "product-lines",
       "zeta-rs-architecture",
       "zeta-desktop-architecture",

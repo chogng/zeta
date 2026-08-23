@@ -1,47 +1,50 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { getProductConfiguration, type ProductConfiguration, type ProductId, productIds } from "../common/product.js";
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { DesktopApplicationConfiguration } from '../common/product.js';
+import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, type WorkbenchModeId } from '../common/workbenchMode.js';
 
-export interface ProductDataPaths {
-  readonly userDataPath: string;
-  readonly sessionDataPath: string;
+export interface DesktopApplicationDataPaths {
+	readonly userDataPath: string;
+	readonly sessionDataPath: string;
 }
 
-/** Resolves the persistent Electron roots for one product edition. */
-export function resolveProductDataPaths(appDataPath: string, product: ProductConfiguration): ProductDataPaths {
-  if (appDataPath.trim().length === 0) throw new TypeError("Application data path must not be empty");
-  if (product.userDataFolderName.trim().length === 0) throw new TypeError("Product user data folder name must not be empty");
-  const userDataPath = join(appDataPath, product.userDataFolderName);
-  return { userDataPath, sessionDataPath: join(userDataPath, "session-data") };
+/** Resolves the persistent Electron roots shared by every built-in mode. */
+export function resolveApplicationDataPaths(appDataPath: string, application: DesktopApplicationConfiguration): DesktopApplicationDataPaths {
+	if (appDataPath.trim().length === 0) throw new TypeError('Application data path must not be empty');
+	if (application.userDataFolderName.trim().length === 0) throw new TypeError('Application user data folder name must not be empty');
+	const userDataPath = join(appDataPath, application.userDataFolderName);
+	return { userDataPath, sessionDataPath: join(userDataPath, 'session-data') };
 }
 
-/**
- * Resolves the product identity baked into a packaged renderer tree.
- *
- * Release packaging must include exactly one complete product directory.
- * Each product requires its normal Workbench and only products that declare a
- * dedicated Sessions capability require its sibling Sessions entry. Multiple
- * complete directories are rejected so installed application identity never
- * depends on a user-controlled environment variable.
- */
-export function resolvePackagedProductId(
-  rendererRoot: string,
-): ProductId {
-  const packagedProducts = productIds.filter((productId) => {
-    const product = getProductConfiguration(productId);
-    const productRendererRoot = join(rendererRoot, productId, "electron-browser");
-    return (
-      existsSync(join(productRendererRoot, "workbench", `${product.rendererEntry}.html`)) &&
-      (!product.dedicatedSessions || existsSync(
-        join(productRendererRoot, "sessions", `${product.dedicatedSessions.rendererEntry}.html`),
-      ))
-    );
-  });
-  if (packagedProducts.length !== 1) {
-    throw new Error(
-      "Packaged Zeta must contain exactly one renderer product; " +
-        `found ${packagedProducts.join(", ") || "none"}`,
-    );
-  }
-  return packagedProducts[0];
+/** Verifies that a packaged application contains the shared Workbench and every mode-owned sibling entry. */
+export function resolvePackagedRendererRoot(rendererRoot: string, application: DesktopApplicationConfiguration): string {
+	const packagedRoot = join(rendererRoot, application.rendererDirectory);
+	const requiredEntries = [
+		join(packagedRoot, 'electron-browser', 'workbench', 'workbench.html'),
+		...WorkbenchModeRegistry.definitions.flatMap(mode => mode.dedicatedSessions
+			? [join(packagedRoot, 'electron-browser', 'sessions', `${mode.dedicatedSessions.rendererEntry}.html`)]
+			: []),
+	];
+	const missing = requiredEntries.filter(entry => !existsSync(entry));
+	if (missing.length > 0) throw new Error(`Packaged Zeta renderer is incomplete: ${missing.join(', ')}`);
+	return packagedRoot;
+}
+
+/** Reads the preferred startup mode without making the full configuration service a bootstrap dependency. */
+export function readPersistedWorkbenchModeId(configurationFilePath: string, fallback: WorkbenchModeId): WorkbenchModeId {
+	let candidate: unknown;
+	try {
+		const document = JSON.parse(readFileSync(configurationFilePath, 'utf8')) as unknown;
+		candidate = readConfigurationValue(document, WorkbenchModeConfigurationKey);
+	} catch {
+		return fallback;
+	}
+	return WorkbenchModeRegistry.isModeId(candidate) ? candidate : fallback;
+}
+
+function readConfigurationValue(document: unknown, key: string): unknown {
+	if (typeof document !== 'object' || document === null || Array.isArray(document)) return undefined;
+	const values = (document as { readonly values?: unknown }).values;
+	if (typeof values !== 'object' || values === null || Array.isArray(values)) return undefined;
+	return (values as Readonly<Record<string, unknown>>)[key];
 }

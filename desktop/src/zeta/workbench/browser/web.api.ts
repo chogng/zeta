@@ -5,6 +5,7 @@ import type {
   IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import type { WorkbenchProfile } from "./workbenchProfile.js";
+import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -16,6 +17,7 @@ export interface IWebWorkbenchHost {
   readonly api: IRendererHost;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container?: HTMLElement | null;
+  readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Inputs used to create one browser-hosted Workbench instance. */
@@ -24,6 +26,7 @@ export interface IWebWorkbenchConstructionOptions {
   readonly profile: WorkbenchProfile;
   readonly workspace?: IAnyWorkspaceIdentifier;
   readonly container: HTMLElement;
+  readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Lifecycle facade returned to a Web Workbench embedder. */

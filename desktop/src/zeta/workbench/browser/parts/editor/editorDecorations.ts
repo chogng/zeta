@@ -15,7 +15,7 @@ export type EditorDecorationSourceFactory = (context: EditorDecorationSourceFact
 
 const factories: EditorDecorationSourceFactory[] = [];
 
-/** Registers one product contribution that projects resource semantics into editor decorations. */
+/** Registers one mode contribution that projects resource semantics into editor decorations. */
 export function registerEditorDecorationSourceFactory(factory: EditorDecorationSourceFactory): void {
   if (typeof factory !== "function") throw new TypeError("Editor decoration source factory must be a function");
   factories.push(factory);

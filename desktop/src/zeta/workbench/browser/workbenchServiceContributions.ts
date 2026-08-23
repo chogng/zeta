@@ -38,7 +38,7 @@ export class WorkbenchServiceContributionRegistry {
 
 export const WorkbenchServiceContributionsRegistry = new WorkbenchServiceContributionRegistry();
 
-/** Registers services owned by a statically selected product contribution bundle. */
+/** Registers services owned by a statically selected Workbench mode bundle. */
 export function registerWorkbenchServiceContribution<T>(contribution: WorkbenchServiceContribution<T>): void {
   WorkbenchServiceContributionsRegistry.register(contribution);
 }

@@ -4,9 +4,7 @@ import {
   DisposableStore,
   type IDisposable,
 } from "../../base/common/lifecycle.js";
-import type {
-  ProductConfiguration,
-} from "../../product/common/product.js";
+import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import {
   createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";
@@ -25,42 +23,45 @@ import type {
   IWebWorkbenchHost,
 } from "./web.api.js";
 import { startWorkbench } from "./workbench.js";
+import { switchBrowserWorkbenchMode } from "../services/workbenchMode/browser/browserWorkbenchModeHost.js";
 
 /** Creates a browser-hosted Workbench with the shared Web adapters. */
 export function createWebWorkbench(
-  product: ProductConfiguration,
+  modeId: WorkbenchModeId,
   options: IWebWorkbenchConstructionOptions,
 ): IWebWorkbench {
   installBaseUiStyles();
   return startWorkbench({
-    product,
+    modeId,
     profile: options.profile,
     api: options.api,
     container: options.container,
     workspace: options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE,
     createContextMenuService: createBrowserWorkbenchContextMenuService,
     createTitlebarPart: createBrowserTitlebarPart,
+    switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),
   });
 }
 
 /**
- * Starts a product page from the optional global Web host and owns page
+ * Starts a Workbench mode from the optional global Web host and owns page
  * shutdown. A page without an embedder starts in an explicit disconnected
  * state so its UI remains inspectable without claiming backend availability.
  */
 export function startWebWorkbench(
-  product: ProductConfiguration,
+  modeId: WorkbenchModeId,
   profile: IWebWorkbenchConstructionOptions["profile"],
 ): IDisposable {
   const host = readWebWorkbenchHost();
   const workbench = new DisposableStore();
-  const instance = createWebWorkbench(product, {
+  const instance = createWebWorkbench(modeId, {
     api: host?.api ?? createDisconnectedRendererApi(),
     profile,
     workspace: host?.workspace,
     container: host?.container ??
       document.querySelector<HTMLElement>("#app") ??
       document.body,
+    switchWorkbenchMode: host?.switchWorkbenchMode,
   });
   workbench.add(instance);
   workbench.add(addDisposableListener(window, "pagehide", () => {

@@ -1,6 +1,6 @@
 # Aster Text Engine
 
-> 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则、当前状态和修改契约。Editor 总体目录与产品装配见 [`README.md`](./README.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
 > 状态：Current + Proposed。未明确标为 Proposed 的内容都描述当前实现。
 
@@ -184,7 +184,7 @@ contrib/<feature>/
 
 - `common` 不读取 DOM、Workbench service 或 transport DTO。
 - 简单 feature 在 browser 主文件中注册；只有 configure phase、能力注入或多对象编排才使用独立 `.contribution.ts`。
-- Contribution 通过窄 capability 或 host callback 请求外部能力，不能 import 产品 bundle。
+- Contribution 通过窄 capability 或 host callback 请求外部能力，不能 import 模式 bundle。
 - Provider contract 与 DOM presentation 分离；没有 browser UI 时，common contract 仍应可独立测试。
 - 不创建空目录、barrel 或 placeholder controller 来表示尚未实现的能力。
 

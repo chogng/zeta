@@ -1,7 +1,7 @@
 import "./media/sessionsWorkbench.css";
 import "./actions/sessionsChatActions.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
-import type { ProductConfiguration } from "../../product/common/product.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
@@ -9,6 +9,7 @@ import type { IWorkspaceContextApi } from "../../platform/workspace/common/works
 import { IStorageService } from "../../platform/storage/common/storage.js";
 import type { WorkbenchContextMenuServiceFactory } from "../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
+import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import type { ISessionsWindowApi } from "../common/sessionsWindow.js";
 import { CodeSessionsWorkbench, type CodeSessionsWorkbenchOptions } from "./code/codeSessionsWorkbench.js";
@@ -16,7 +17,7 @@ import { SessionsRuntime } from "./common/sessionsRuntime.js";
 import { bindSessionsTheme } from "./common/sessionsTheme.js";
 
 export interface SessionsWorkbenchOptions {
-  readonly product: ProductConfiguration;
+  readonly modeId: WorkbenchModeId;
   readonly profile: SessionsProfile;
   readonly api: IRendererHost;
   readonly sessionsWindowApi?: ISessionsWindowApi;
@@ -27,26 +28,29 @@ export interface SessionsWorkbenchOptions {
   readonly container: HTMLElement;
 }
 
-/** Standalone product Sessions host that intentionally does not construct WorkbenchLayout. */
+/** Standalone mode-owned Sessions host that intentionally does not construct WorkbenchLayout. */
 export class SessionsWorkbench extends DisposableOwner {
   readonly element: HTMLElement;
 
   constructor(options: SessionsWorkbenchOptions) {
     super();
-    if (options.profile.productId !== options.product.id) {
-      throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.productId}', not '${options.product.id}'`);
+    if (options.profile.modeId !== options.modeId) {
+      throw new TypeError(`Sessions profile '${options.profile.id}' belongs to '${options.profile.modeId}', not '${options.modeId}'`);
     }
+    const mode = WorkbenchModeRegistry.get(options.modeId);
     const container = options.container;
     const ownerWindow = container.ownerDocument.defaultView;
     if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
     this.own(bindSessionsTheme(container));
+    const configurationService = this.own(new WorkbenchConfigurationService({ api: options.configurationApi }));
     const runtime = this.own(new SessionsRuntime(options.api, {
       ...(options.sessionsWindowApi ? { sessionsWindowApi: options.sessionsWindowApi } : {}),
       ...(options.workspaceApi ? { workspaceApi: options.workspaceApi } : {}),
+      configurationService,
     }));
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
-      applicationId: options.product.storageNamespace,
+      applicationId: mode.storageNamespace,
       workspaceId: "sessions",
       profileId: options.profile.id,
     }));
@@ -55,7 +59,7 @@ export class SessionsWorkbench extends DisposableOwner {
       profile: options.profile,
       runtime,
       sessionsWindowApi: options.sessionsWindowApi,
-      configurationApi: options.configurationApi,
+      configurationService,
       keybindingsResourceApi: options.keybindingsResourceApi,
       createContextMenuService: options.createContextMenuService,
       storageService: storage,
@@ -74,7 +78,7 @@ export class SessionsWorkbench extends DisposableOwner {
   }
 }
 
-/** Creates one dedicated Sessions workbench from the selected product entry. */
+/** Creates one dedicated Sessions workbench from the selected mode entry. */
 export function startSessionsWorkbench(options: SessionsWorkbenchOptions): SessionsWorkbench {
   return new SessionsWorkbench(options);
 }

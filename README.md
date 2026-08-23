@@ -11,7 +11,7 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 `zeta-rs` contains the shared Rust backend. The product-neutral backend executable is
 `zeta-server`, owned by [`zeta-server-host`](zeta-rs/server-host/README.md). Electron's `code` and
 `academic` builds are internal variants, not additional product lines; see
-[`docs/product-lines.md`](docs/product-lines.md) and [`docs/product-editions.md`](docs/product-editions.md).
+[`docs/product-lines.md`](docs/product-lines.md) and [`docs/workbench-modes.md`](docs/workbench-modes.md).
 
 ## Quick start
 
@@ -54,7 +54,7 @@ corepack pnpm dev:desktop
 ```
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
-matrix checks can set `ZETA_PRODUCT=academic` without changing the command name.
+matrix checks can set `ZETA_WORKBENCH_MODE=academic` without changing the command name.
 
 ### Browser Workbench
 

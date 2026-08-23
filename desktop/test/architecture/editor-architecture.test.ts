@@ -40,7 +40,7 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
   }
 });
 
-test("Flat editor layout keeps both engine owners and product bundles", () => {
+test("Flat editor layout keeps both engine owners and mode bundles", () => {
   const requiredFiles = [
     "browser/editorPart.ts",
     "browser/view/editorViewport.ts",
@@ -169,7 +169,7 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
   assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Build modes statically select their Aster contribution bundles behind one Workbench entry", () => {
+test("Window modes select one Aster contribution bundle behind the shared Workbench entry", () => {
   const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
   const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
   const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
@@ -189,9 +189,12 @@ test("Build modes statically select their Aster contribution bundles behind one 
   const electronCodeMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
   const electronAcademicMode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
   for (const entry of [browserEntry, electronEntry]) {
-    assert.match(entry, /__ZETA_PRODUCT__/u);
+    assert.match(entry, /__ZETA_WORKBENCH_MODE__/u);
+    assert.match(entry, /resolveWorkbenchModeIdFromUrl/u);
+    assert.match(entry, /satisfies Record<WorkbenchModeId/u);
     assert.match(entry, /modes\/code/u);
     assert.match(entry, /modes\/academic/u);
+    assert.doesNotMatch(entry, /if\s*\([^)]*(?:code|academic)/u);
     assert.doesNotMatch(entry, /editor\/editor\.(?:code|academic)\.all/u);
   }
   assert.match(codeContribution, /editor\/editor\.code\.all/u);
@@ -210,7 +213,7 @@ test("Build modes statically select their Aster contribution bundles behind one 
   assert.match(electronAcademicMode, /browser\/workbench\/modes\/academic\.contribution/u);
 });
 
-test("Code services are installed by product-selected service registrations rather than UI contributions", () => {
+test("Code services are installed by mode-selected service registrations rather than UI contributions", () => {
   const workbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
   const productServices = readFileSync(resolve(workbenchRoot, "../code/browser/workbench/codeWorkbenchServices.ts"), "utf8");
   const tasks = readFileSync(join(workbenchRoot, "services/tasks/browser/taskServiceRegistration.ts"), "utf8");
@@ -228,13 +231,14 @@ test("Code services are installed by product-selected service registrations rath
   for (const contribution of ["tasks", "testing", "debug"]) assert.doesNotMatch(readFileSync(join(workbenchRoot, `contrib/${contribution}/browser/${contribution}.contribution.ts`), "utf8"), /registerWorkbenchServiceContribution/u);
 });
 
-test("Debug transport is contributed by Code product hosts only", () => {
+test("Debug transport stays host-ready for mode reload but is projected by Code renderers only", () => {
   const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.ts"), "utf8");
   const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.ts"), "utf8");
   const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
   const electronAcademic = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
   const mainCode = readFileSync(resolve(editorRoot, "../code/electron-main/codeMain.ts"), "utf8");
   const mainAcademic = readFileSync(resolve(editorRoot, "../code/electron-main/acaMain.ts"), "utf8");
+  const main = readFileSync(resolve(editorRoot, "../code/electron-main/main.ts"), "utf8");
   const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");
   const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");
   const sharedConnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/webRendererApi.ts"), "utf8");
@@ -244,11 +248,12 @@ test("Debug transport is contributed by Code product hosts only", () => {
   assert.match(electronCode, /createElectronDebugAdapterCapability/u);
   assert.doesNotMatch(electronAcademic, /DebugAdapter|debugAdapter/u);
   assert.match(mainCode, /debugAdapterIpcRoutes/u);
-  assert.doesNotMatch(mainAcademic, /debugAdapterIpcRoutes/u);
+  assert.match(mainAcademic, /debugAdapterIpcRoutes/u);
+  assert.match(main, /debugAdapterIpcRoutes/u);
   for (const sharedHost of [sharedElectronRenderer, sharedDisconnectedRenderer, sharedConnectedRenderer, sharedElectronMain]) assert.doesNotMatch(sharedHost, /new (?:Electron|Disconnected|ViteDev)DebugAdapterProcessService|debugAdapterIpcRoutes/u);
 });
 
-test("Editor engines delegate optional feature composition to product bundles", () => {
+test("Editor engines delegate optional feature composition to mode bundles", () => {
   const textHost = readFileSync(join(editorRoot, "browser/editorPart.ts"), "utf8");
   const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
   const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");

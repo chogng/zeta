@@ -4,9 +4,7 @@
 通过 App Server 使用 Rust 后端；三条公开产品线的关系见
 [`docs/product-lines.md`](../docs/product-lines.md)。
 
-`code` 与 `academic` 两种内部构建变体的静态入口、输出目录和 contribution 所有权以
-[`docs/product-editions.md`](../docs/product-editions.md) 为准；本 README 只记录 Desktop
-实现、运行与验证入口。
+`code` 与 `academic` 两种内置 Workbench 模式的窗口重载、统一 Renderer 和 contribution 所有权以 [`docs/workbench-modes.md`](../docs/workbench-modes.md) 为准；本 README 只记录 Desktop 实现、运行与验证入口。
 
 ## 启动项目
 
@@ -28,7 +26,7 @@ corepack pnpm dev:desktop
 corepack pnpm dev:desktop:ui
 ```
 
-该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。命令本身不区分 Workbench 构建模式；需要检查指定模式时设置 `ZETA_PRODUCT` 环境变量即可。
+该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。可以在 Settings 的 Workbench Mode 中切换并重载当前窗口；需要覆盖启动初始模式时设置 `ZETA_WORKBENCH_MODE` 环境变量。
 
 只开发 Browser Workbench 界面时，在仓库根目录运行：
 
@@ -50,8 +48,7 @@ corepack pnpm dev:web:full
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
 子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
-TUI、zeterm 连接同一 profile/Workspace authority。Browser 命令同样通过 `ZETA_PRODUCT` 选择
-构建模式，而不是维护模式后缀命令。
+TUI、zeterm 连接同一 profile/Workspace authority。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `desktop/.tmp/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
@@ -121,12 +118,7 @@ Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从
 
 ## Electron 启动门禁
 
-Electron 的日常启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行
-bootstrap，再在 Electron `ready` 事件后按 `ZETA_PRODUCT` 解析当前构建模式并启动应用，不在
-ESM 顶层等待 `app.whenReady()`。`src/main-code.ts`、`src/main-aca.ts` 及
-`ZETA_ELECTRON_MAIN` 仅保留给旧的静态入口兼容，不再作为开发命令的一部分。
-`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免
-入口模块和 `ready` 生命周期互相等待。
+Electron 的日常启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行 bootstrap，打包应用从共享 profile 的 `workbench.mode` 读取初始模式 ID，非打包应用允许 `ZETA_WORKBENCH_MODE` 覆盖，然后在 Electron `ready` 事件后启动应用，不在 ESM 顶层等待 `app.whenReady()`。`src/main-code.ts`、`src/main-aca.ts` 及 `ZETA_ELECTRON_MAIN` 仅保留给旧的静态入口兼容，不再作为开发命令的一部分。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免入口模块和 `ready` 生命周期互相等待。
 
 本地 Electron 调试使用统一命令：
 
@@ -136,8 +128,7 @@ pnpm dev:ui
 pnpm start
 ```
 
-需要验证 Academic 构建模式时仍使用相同命令，只设置环境变量，例如
-`ZETA_PRODUCT=academic pnpm dev`。
+需要直接以 Academic 作为开发初始模式时仍使用相同命令，例如 `ZETA_WORKBENCH_MODE=academic pnpm dev`。无论初始模式为何，Vite 都把 Code、Academic 和 Code Sessions 入口输出到同一个 `dist/renderer/zeta` 目录。
 
 Ready 后在后台启动 App Server，并完成 initialize、server identity、protocol version
 与 schema hash 校验；门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，
@@ -152,9 +143,7 @@ remote/headless 形态没有 Electron，因此继续使用 package 中的 standa
 
 ## Browser Workbench
 
-Browser 与 Electron 现在各自只有一个 `workbench.html` 入口。`workbench/browser/web.factory.ts`
-拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入；构建模式入口只负责选择
-自身的 contribution，Workbench runtime 和 session profile 保持共享。
+Browser 与 Electron 现在各自只有一个 `workbench.html` 入口。`workbench/browser/web.factory.ts` 拥有自动启动与 `pagehide` 释放，`web.api.ts` 定义 embedder 输入；入口通过 `zeta-workbench-mode` URL 参数选择一个模式 contribution，Workbench runtime 和 session profile 保持共享。设置切换先以 `reload` 原因完成 lifecycle shutdown，再由 Browser URL 或 Electron Main 重载当前窗口。
 
 Renderer 控件、Workbench Part 与 CSS 状态的 canonical 所有权规范见
 [`docs/ui-styling-ownership.md`](../docs/ui-styling-ownership.md)。
@@ -248,7 +237,7 @@ Workbench 静态装配按 host 分层：`workbench.common.main.ts` 加载 Browse
 共享的 contribution，`workbench.web.main.ts` 与 `workbench.desktop.main.ts` 只加载各自
 host 的 adapter 和 contribution。产品入口在 host main 之外独立选择 editor bundle 与不可变的
 `WorkbenchSession` 初始 composition；可选的专用 Sessions renderer 由
-`ProductConfiguration.dedicatedSessions` 和产品自己的 `SessionsProfile` 装配。新增功能时不得从
+`WorkbenchModeRegistry` 中的 `dedicatedSessions` 定义和模式自己的 `SessionsProfile` 装配。新增功能时不得从
 共享 `Workbench` 构造实现反向导入产品或 Sessions 入口。
 
 当前链接只允许 HTTP、HTTPS 和页内 fragment，并交由宿主处理；图片只允许内嵌的 PNG、
@@ -277,10 +266,10 @@ corepack pnpm dev:desktop
 # 构建桌面端
 corepack pnpm build:desktop
 
-# 运行当前构建模式的 Electron 应用测试
+# 运行默认 Code 模式的 Electron 应用测试
 corepack pnpm test:desktop:app
-# Academic 构建模式仍使用同一个测试命令
-ZETA_PRODUCT=academic corepack pnpm test:desktop:app
+# 以 Academic 作为测试启动模式
+ZETA_WORKBENCH_MODE=academic corepack pnpm test:desktop:app
 
 # 只运行桌面端主进程测试
 corepack pnpm --dir desktop test:main

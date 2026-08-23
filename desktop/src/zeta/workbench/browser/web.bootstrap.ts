@@ -1,5 +1,5 @@
 import { URI } from "../../base/common/uri.js";
-import type { ProductConfiguration } from "../../product/common/product.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { connectViteDevRendererApi, type ViteDevRendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
@@ -8,21 +8,21 @@ import type { WorkbenchProfile } from "./workbenchProfile.js";
 
 declare const __ZETA_WEB_APP_SERVER__: boolean;
 
-/** Starts a product Workbench after resolving its optional development host. */
-export function startBrowserWorkbench(product: ProductConfiguration, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
-  document.title = product.name;
-  void startBrowserWorkbenchAsync(product, profile, rendererCapabilities);
+/** Starts a Workbench mode after resolving its optional development host. */
+export function startBrowserWorkbench(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
+  document.title = WorkbenchModeRegistry.get(modeId).title;
+  void startBrowserWorkbenchAsync(modeId, profile, rendererCapabilities);
 }
 
-async function startBrowserWorkbenchAsync(product: ProductConfiguration, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
+async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
   if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
-    startWebWorkbench(product, profile);
+    startWebWorkbench(modeId, profile);
     return;
   }
   const hot = import.meta.hot;
   if (!hot) {
     console.error("Zeta Web App Server development mode requires the Vite hot channel");
-    startWebWorkbench(product, profile);
+    startWebWorkbench(modeId, profile);
     return;
   }
   let disposeConnectedHost: (() => void) | undefined;
@@ -43,7 +43,7 @@ async function startBrowserWorkbenchAsync(product: ProductConfiguration, profile
     console.error("Failed to connect the Zeta Web development host", error);
   }
   try {
-    startWebWorkbench(product, profile);
+    startWebWorkbench(modeId, profile);
   } catch (error) {
     disposeConnectedHost?.();
     throw error;

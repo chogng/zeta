@@ -1,11 +1,20 @@
 import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
+import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "../../product/common/workbenchMode.js";
 import "../../platform/theme/common/themeConfiguration.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
   ...AccessibilityConfiguration,
+  mode: ConfigurationsRegistry.registerConfiguration({
+    key: WorkbenchModeConfigurationKey,
+    defaultValue: WorkbenchModeRegistry.defaultModeId,
+    parse(value: unknown) {
+      if (typeof value !== "string") throw new TypeError(`Unknown Workbench mode: ${String(value)}`);
+      return WorkbenchModeRegistry.resolveModeId(value);
+    },
+  }),
   colorTheme: ConfigurationsRegistry.registerConfiguration<string>({
     key: "workbench.colorTheme",
     defaultValue: defaultWorkbenchColorThemePreference,

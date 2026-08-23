@@ -10,6 +10,9 @@ import { HoverConfiguration, MaximumHoverDelay, MinimumHoverDelay } from "../../
 import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumSashSize, SashConfiguration } from "../../sash/common/sash.js";
 import { SettingsTree } from "./settingsTree.js";
 import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
+import type { WorkbenchModeId } from "../../../../product/common/workbenchMode.js";
+import type { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
+import { WorkbenchConfiguration } from "../../../common/configuration.js";
 
 type GeneralControl = HTMLInputElement | SelectBox | Toggle;
 
@@ -19,7 +22,7 @@ export class GeneralSettingsPane extends DisposableOwner {
   private readonly controls = new Map<string, GeneralControl>();
   private readonly status: HTMLParagraphElement;
 
-  constructor(container: HTMLElement, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider) {
+  constructor(container: HTMLElement, private readonly configurationService: IConfigurationService, private readonly contextViewProvider: IContextViewProvider, private readonly workbenchModeService: IWorkbenchModeService) {
     super();
     const ownerDocument = container.ownerDocument;
     this.element = h(ownerDocument, "div");
@@ -27,6 +30,9 @@ export class GeneralSettingsPane extends DisposableOwner {
     container.append(this.element);
     const model = this.own(new SettingsTreeModel<HTMLElement>());
     model.setChildren([
+      this.createGroup("mode", "Workbench Mode", "Choose the capabilities assembled for this window.", [
+        this.createWorkbenchModeSetting(),
+      ]),
       this.createGroup("accessibility", "Accessibility", "Adapt interaction and presentation to accessibility needs.", [
         this.createSelectSetting({
           key: AccessibilityConfiguration.editorAccessibilitySupport,
@@ -112,6 +118,26 @@ export class GeneralSettingsPane extends DisposableOwner {
     return checkbox.element;
   }
 
+  private createWorkbenchModeSetting(): HTMLElement {
+    const setting = h(this.element.ownerDocument, "div");
+    setting.className = "zeta-general-setting";
+    const select = this.own(new SelectBox(setting, {
+      options: this.workbenchModeService.availableModes.map(({ id, label }) => ({ value: id, label })),
+      ariaLabel: "Workbench mode",
+      presentation: "field",
+      contextViewProvider: this.contextViewProvider,
+    }));
+    select.element.classList.add("zeta-general-setting-control");
+    select.element.dataset.configurationKey = WorkbenchConfiguration.mode.key;
+    setting.append(this.createSettingCopy("Workbench mode", "Switch the capability assembly for this window. The current window reloads after a change."), select.element);
+    this.controls.set(WorkbenchConfiguration.mode.key, select);
+    this.own(select.onDidSelect(({ value }) => {
+      const mode = this.workbenchModeService.availableModes.find(candidate => candidate.id === value);
+      if (mode) void this.switchWorkbenchMode(mode.id);
+    }));
+    return setting;
+  }
+
   private createSelectSetting<T extends string>(options: { readonly key: IConfigurationKey<T>; readonly label: string; readonly description: string; readonly options: readonly { readonly value: T; readonly label: string }[] }): HTMLElement {
     const setting = h(this.element.ownerDocument, "div");
     setting.className = "zeta-general-setting";
@@ -167,6 +193,8 @@ export class GeneralSettingsPane extends DisposableOwner {
   }
 
   private syncControls(): void {
+    const workbenchModeControl = this.controls.get(WorkbenchConfiguration.mode.key);
+    if (workbenchModeControl instanceof SelectBox) workbenchModeControl.value = this.workbenchModeService.currentModeId;
     this.syncControl(AccessibilityConfiguration.editorAccessibilitySupport);
     this.syncControl(AccessibilityConfiguration.reduceMotion);
     this.syncControl(AccessibilityConfiguration.reduceTransparency);
@@ -175,6 +203,17 @@ export class GeneralSettingsPane extends DisposableOwner {
     this.syncControl(HoverConfiguration.reducedDelay);
     this.syncControl(SashConfiguration.size);
     this.syncControl(SashConfiguration.hoverDelay);
+  }
+
+  private async switchWorkbenchMode(modeId: WorkbenchModeId): Promise<void> {
+    this.setControlsEnabled(false);
+    try {
+      await this.workbenchModeService.switchMode(modeId);
+    } catch (error) {
+      this.syncControls();
+      this.showStatus(error instanceof Error ? error.message : "Unable to switch Workbench mode.", true);
+      this.setControlsEnabled(true);
+    }
   }
 
   private syncControl<T>(key: IConfigurationKey<T>): void {

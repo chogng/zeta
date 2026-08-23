@@ -22,6 +22,8 @@ import { IWorkspaceContextService } from "../../../../platform/workspace/common/
 import { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
+import { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
+import { IChatService } from "../../../services/chat/common/chatService.js";
 
 export const OpenSettingsCommandId = "workbench.action.openSettings";
 
@@ -80,5 +82,7 @@ registerWorkbenchContribution(
     workspaceTrustService: accessor.get(IWorkspaceTrustService),
     workspaceOpenService: accessor.get(IWorkspaceOpenService),
     workspaceContextService: accessor.get(IWorkspaceContextService),
+    workbenchModeService: accessor.get(IWorkbenchModeService),
+    modelCatalog: accessor.get(IChatService),
   }),
 );

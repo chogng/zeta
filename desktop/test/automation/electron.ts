@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
-import type { AppServerTestMode, DesktopProduct } from "./testTarget.js";
+import type { AppServerTestMode, DesktopWorkbenchMode } from "./testTarget.js";
 
 const desktopDirectory = resolve(import.meta.dirname, "../..");
 const electronExecutablePath = createRequire(import.meta.url)("electron") as string;
@@ -9,7 +9,7 @@ export interface ElectronLaunchOptions {
   readonly appServerMode: AppServerTestMode;
   readonly userDataDirectory: string;
   readonly workspaceDirectory?: string;
-  readonly product?: DesktopProduct;
+  readonly workbenchMode?: DesktopWorkbenchMode;
 }
 
 export interface ElectronConfiguration {
@@ -29,7 +29,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
   } else {
     delete environment.ZETA_DESKTOP_UI_ONLY;
   }
-  environment.ZETA_PRODUCT = options.product ?? "code";
+  environment.ZETA_WORKBENCH_MODE = options.workbenchMode ?? "code";
   delete environment.ELECTRON_RUN_AS_NODE;
 
   return {

@@ -17,7 +17,10 @@ import type { ILocalizationService } from "../../../services/localization/common
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IWorkspaceTrustService } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
+import { WorkbenchModeRegistry } from "../../../../product/common/workbenchMode.js";
 import { SettingsEditor } from "./settingsEditor.js";
+import type { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
+import type { ModelSettingsCatalog } from "./modelSettings.js";
 
 export interface SettingsEditorContributionOptions {
   readonly configurationService: IConfigurationService;
@@ -38,6 +41,8 @@ export interface SettingsEditorContributionOptions {
   readonly workspaceTrustService?: IWorkspaceTrustService;
   readonly workspaceOpenService?: IWorkspaceOpenService;
   readonly workspaceContextService?: IWorkspaceContextService;
+  readonly workbenchModeService?: IWorkbenchModeService;
+  readonly modelCatalog?: ModelSettingsCatalog;
 }
 
 /** Connects window Settings state to its modal editor host and content. */
@@ -65,6 +70,8 @@ export class SettingsEditorContribution extends DisposableOwner {
       workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
       workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
       workspaceContextService: options.workspaceContextService,
+      workbenchModeService: options.workbenchModeService ?? unavailableWorkbenchModeService,
+      modelCatalog: options.modelCatalog ?? unavailableModelCatalog,
     }));
     this.modalEditor = this.own(new ModalEditorPart({
       container: options.container,
@@ -102,6 +109,20 @@ const unavailableCodeIndexService: ICodeIndexService = {
   status: () => Promise.reject(new Error("Code index settings are unavailable.")),
   cancel: () => Promise.reject(new Error("Code index settings are unavailable.")),
   retry: () => Promise.reject(new Error("Code index settings are unavailable.")),
+};
+
+const unavailableWorkbenchModeService: IWorkbenchModeService = {
+  currentModeId: WorkbenchModeRegistry.defaultModeId,
+  availableModes: WorkbenchModeRegistry.definitions.map(({ id, label }) => ({ id, label })),
+  switchMode: () => Promise.reject(new Error("Workbench mode switching is unavailable.")),
+};
+
+const unavailableModelCatalog: ModelSettingsCatalog = {
+  onDidChangeModels: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+  listModelCatalog: () => Promise.reject(new Error("Model settings are unavailable.")),
+  refreshModels: () => Promise.reject(new Error("Model settings are unavailable.")),
+  isModelVisible: () => true,
+  setModelVisible: () => Promise.reject(new Error("Model settings are unavailable.")),
 };
 
 const unavailableToolSearchService: IToolSearchService = {

@@ -1,7 +1,7 @@
 # Zeta 产品线与宿主边界
 
 > 状态：Current product model。本文是三条公开产品线的 canonical 说明。
-> Electron Desktop 的构建变体与静态入口见 [`product-editions.md`](product-editions.md)；
+> Electron Desktop 的内置 Workbench 模式与窗口重载入口见 [`workbench-modes.md`](workbench-modes.md)；
 > 具体实现分别见 [`zeta-cli-architecture.md`](zeta-cli-architecture.md)、
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`tui.md`](tui.md) 和
 > [`zeterm/docs/native-terminal-ui.md`](../zeterm/docs/native-terminal-ui.md)。
@@ -18,11 +18,7 @@ Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust �
 | `zeta` | Electron Desktop | Renderer + Preload + Electron Main | Electron Main 启动并桥接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `zeta-utils-pty` |
 | `zeterm` | 纯 Rust Desktop | `zeterm/` 原生窗口与 UI | Rust 进程内直接组合 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 PTY/进程 |
 
-产品线与 Electron 的内部构建变体不是同一个维度。当前 Desktop 保留 `code`、`academic`
-两个源码和构建标识；它们是 `zeta` Electron Desktop 的构建变体，不代表
-`zeta code` TUI，也不构成额外的公开产品线。Desktop 的开发、构建和启动命令统一，不按这两个
-标识拆分命令；需要构建矩阵验证时通过 `ZETA_PRODUCT` 选择模式。具体说明见
-[`product-editions.md`](product-editions.md)。
+产品线与 Electron 的内部 Workbench 模式不是同一个维度。Desktop 在同一个 `zeta` 安装包中提供 `code`、`academic` 两个内置模式；它们不代表 `zeta code` TUI，也不构成额外的公开产品线。用户可以在设置中选择模式，当前 Workbench 窗口在 reload 边界重新装配；开发和测试可以用 `ZETA_WORKBENCH_MODE` 覆盖初始模式。具体说明见 [`workbench-modes.md`](workbench-modes.md)。
 
 ## 当前调用关系
 
@@ -66,7 +62,7 @@ Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的
 | 公开产品线 | 当前代码入口 | 当前状态 |
 | --- | --- | --- |
 | `zeta code` | `zeta-code/cli` 的 `zeta` binary → `zeta-tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
-| `zeta` | `desktop` Electron client | Electron Desktop 已存在；默认 Renderer 仍使用 `code` 这一内部构建 ID |
+| `zeta` | `desktop` Electron client | Electron Desktop 已存在；统一 Renderer 包含 Code 与 Academic，默认模式为最近保存的选择 |
 | `zeterm` | `zeterm/` 的 `zeterm` binary | 终端宿主已存在，并直接组合 `zeta-terminal` 与 `zeta-utils-pty`；Agent 能力尚未作为 Native 旁路提供 |
 
 ## Canonical `just` 命令

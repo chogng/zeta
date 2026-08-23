@@ -6,7 +6,7 @@ export type EditorLineGutterDecorationFactory = (resource: URI, accessor: Servic
 
 const factories: EditorLineGutterDecorationFactory[] = [];
 
-/** Registers one product contribution that projects Workbench semantics into a generic editor gutter slot. */
+/** Registers one mode contribution that projects Workbench semantics into a generic editor gutter slot. */
 export function registerEditorLineGutterDecorationFactory(factory: EditorLineGutterDecorationFactory): void {
   if (typeof factory !== "function") throw new TypeError("Editor gutter decoration factory must be a function");
   factories.push(factory);

@@ -2,7 +2,7 @@
 
 `sessions/` owns Zeta Code's dedicated agent Workbench beside the regular
 `workbench/`. Its product and build boundary is canonical in
-[`docs/product-editions.md`](../../../../docs/product-editions.md); this README
+[`docs/workbench-modes.md`](../../../../docs/workbench-modes.md); this README
 is canonical for the renderer implementation and extension points.
 
 ## Ownership

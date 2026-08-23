@@ -1,21 +1,21 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
-import type { ProductConfiguration } from "../../product/common/product.js";
+import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
 import { createBrowserWorkbenchContextMenuService } from "../../workbench/services/contextmenu/browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { startSessionsWorkbench } from "./sessionsWorkbench.js";
 
 /** Starts a browser-hosted Sessions page with the optional renderer host. */
-export function startBrowserSessions(product: ProductConfiguration, profile: SessionsProfile): IDisposable {
+export function startBrowserSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
   installBaseUiStyles();
   const sessions = new DisposableStore();
   const host = globalThis.zetaWebWorkbenchHost;
   const container = host?.container ?? document.querySelector<HTMLElement>("#app");
   if (!container) throw new Error("Sessions renderer requires an #app container");
   sessions.add(startSessionsWorkbench({
-    product,
+    modeId,
     profile,
     api: host?.api ?? createDisconnectedRendererApi(),
     createContextMenuService: createBrowserWorkbenchContextMenuService,

@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type SyntaxService } from "../../../common/languages/syntax/syntaxService.js";
 
-/** Schedules syntax lanes while the selected product's language support changes. */
+/** Schedules syntax lanes while the selected Workbench mode's language support changes. */
 export class LanguageAnalysisController extends DisposableOwner {
   private generation = 0;
   private disposed = false;

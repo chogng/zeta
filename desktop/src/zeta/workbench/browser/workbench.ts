@@ -7,9 +7,7 @@ import {
   DisposableOwner,
 } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import type {
-  ProductConfiguration,
-} from "../../product/common/product.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
@@ -207,10 +205,12 @@ import { createEditorDecorationSources } from "./parts/editor/editorDecorations.
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
+import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
+import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
-  readonly product: ProductConfiguration;
+  readonly modeId: WorkbenchModeId;
   readonly profile: WorkbenchProfile;
   readonly api: IRendererHost;
   readonly container: HTMLElement;
@@ -221,11 +221,12 @@ export interface IStartWorkbenchOptions {
   readonly userThemeService?: IUserThemeServiceContract;
   readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
   readonly createTitlebarPart: TitlebarPartFactory;
+  readonly switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export function startWorkbench({
-  product,
+  modeId,
   profile,
   api,
   container,
@@ -236,9 +237,10 @@ export function startWorkbench({
   userThemeService,
   createContextMenuService,
   createTitlebarPart,
+  switchWorkbenchMode,
 }: IStartWorkbenchOptions): Workbench {
   return new Workbench(
-    product,
+    modeId,
     profile,
     api,
     container,
@@ -249,6 +251,7 @@ export function startWorkbench({
     userThemeService,
     createContextMenuService,
     createTitlebarPart,
+    switchWorkbenchMode,
   );
 }
 
@@ -271,7 +274,7 @@ export class Workbench extends DisposableOwner {
   private disposed = false;
 
   constructor(
-    product: ProductConfiguration,
+    modeId: WorkbenchModeId,
     profile: WorkbenchProfile,
     api: IRendererHost,
     workbenchRoot: HTMLElement,
@@ -282,8 +285,10 @@ export class Workbench extends DisposableOwner {
     userThemeService: IUserThemeServiceContract | undefined,
     createContextMenuService: WorkbenchContextMenuServiceFactory,
     createTitlebarPart: TitlebarPartFactory,
+    switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
   ) {
     super();
+    const mode = WorkbenchModeRegistry.get(modeId);
     const normalizedProfile = createWorkbenchProfile(profile);
     this.profile = normalizedProfile;
     const services = new ServiceCollection();
@@ -361,8 +366,6 @@ export class Workbench extends DisposableOwner {
     services.set(ITerminalService, terminalService);
     const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
     services.set(IGitService, gitService);
-    const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events }));
-    services.set(IChatService, chatService);
     services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
     services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
     services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
@@ -372,7 +375,7 @@ export class Workbench extends DisposableOwner {
     const workbenchState = workspaceContext.getWorkbenchState();
     const workbenchWindow = this.own(new WorkbenchWindow({
       root: workbenchRoot,
-      productId: product.id,
+      modeId,
       workbenchState,
     }));
     services.set(IWorkbenchHostService, workbenchWindow);
@@ -392,6 +395,8 @@ export class Workbench extends DisposableOwner {
       api: configurationApi,
     }));
     services.set(IConfigurationService, configuration);
+    const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
+    services.set(IChatService, chatService);
     const languagePackService = this.own(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
     services.set(ILanguagePackService, languagePackService);
     const localeService = this.own(new WorkbenchLocaleService(configuration, languagePackService));
@@ -406,11 +411,17 @@ export class Workbench extends DisposableOwner {
     const lifecycleService = this.own(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
     this.lifecycleService = lifecycleService;
     services.set(ILifecycleService, lifecycleService);
+    services.set(IWorkbenchModeService, this.own(new WorkbenchModeService({
+      currentModeId: modeId,
+      configurationService: configuration,
+      lifecycleService,
+      switchHostMode: switchWorkbenchMode,
+    })));
     const workingCopyBackupTracker = this.own(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
     this.workingCopyBackupTracker = workingCopyBackupTracker;
     const storage = this.own(new BrowserStorageService({
       ownerWindow,
-      applicationId: product.storageNamespace,
+      applicationId: mode.storageNamespace,
       workspaceId: workspace.id,
     }));
     this.workbenchWindow = workbenchWindow;
@@ -584,7 +595,7 @@ export class Workbench extends DisposableOwner {
       },
       welcomeVisible: workbenchState === WorkbenchState.EMPTY,
       welcome: {
-        productName: product.name,
+        productName: mode.title,
         recentProjects: welcomeRecentProjects(),
         actions: {
           openFolder: workspaceOpenService.canOpenFolder

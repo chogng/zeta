@@ -6,7 +6,8 @@ import { isCancellationError } from "../../base/common/cancellation.js";
 import { DisposableOwner, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { DisposableTracker, installDisposableTracker } from "../../base/common/disposableTracker.js";
-import type { ProductConfiguration } from "../../product/common/product.js";
+import type { DesktopApplicationConfiguration } from "../../product/common/product.js";
+import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
@@ -81,15 +82,17 @@ import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunc
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "./workbenchWindowRegistry.js";
 import { electronWorkspaceLaunchArguments } from "./electronWindowLaunch.js";
+import { workbenchModeIpcRoutes } from "../../workbench/services/workbenchMode/electron-main/workbenchModeIpc.js";
 export type AppServerStartupMode = "required" | "disabled";
 export type ElectronMainIpcRouteContribution = (supervisor: AppServerSupervisor) => readonly IpcRoute<unknown, unknown>[];
 
 export interface ZetaApplicationOptions {
-  readonly product: ProductConfiguration;
+  readonly application: DesktopApplicationConfiguration;
+  readonly initialModeId: WorkbenchModeId;
   readonly rendererRoot: string;
   /** Selects whether this Electron process starts the App Server before opening its window. */
   readonly appServerStartupMode: AppServerStartupMode;
-  /** Product-selected IPC capabilities installed for every Workbench window. */
+  /** Host-selected IPC capabilities installed for every Workbench window. */
   readonly ipcRouteContributions?: readonly ElectronMainIpcRouteContribution[];
 }
 
@@ -110,6 +113,7 @@ interface WorkbenchWindowRecord extends IWorkbenchWindowRecord {
   readonly workspaceContext: WorkspaceContextMainService;
   readonly supervisor: AppServerSupervisor;
   readonly resources: DisposableStore;
+  modeId: WorkbenchModeId;
   windowsStateHandler: WindowsStateHandler;
   windowStateTracking: IDisposable;
   sessionsWindow?: BrowserWindow;
@@ -125,7 +129,8 @@ interface PendingWindowLaunch {
  * Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown.
  */
 export class ZetaApplication extends DisposableOwner {
-  private readonly product: ProductConfiguration;
+  private readonly application: DesktopApplicationConfiguration;
+  private defaultModeId: WorkbenchModeId;
   private readonly rendererRoot: string;
   private readonly appServerStartupMode: AppServerStartupMode;
   private readonly ipcRouteContributions: readonly ElectronMainIpcRouteContribution[];
@@ -149,7 +154,8 @@ export class ZetaApplication extends DisposableOwner {
     tracking: Disposable | undefined,
   ) {
     super();
-    this.product = options.product;
+    this.application = options.application;
+    this.defaultModeId = options.initialModeId;
     this.rendererRoot = options.rendererRoot;
     this.appServerStartupMode = options.appServerStartupMode;
     this.ipcRouteContributions = options.ipcRouteContributions ?? [];
@@ -438,7 +444,7 @@ export class ZetaApplication extends DisposableOwner {
       logProgress: createRemoteRuntimeInstallProgressLogger(),
     }));
     resources.add(new ElectronRemoteRuntimeInstallWindow({
-      productName: this.product.name,
+      productName: WorkbenchModeRegistry.get(this.defaultModeId).title,
       rendererEntry: this.resolveRendererEntry("remoteRuntimeInstall"),
       webPreferences: this.createSandboxWebPreferences(),
       trustedIpcRouter: this.trustedIpcRouter,
@@ -472,7 +478,7 @@ export class ZetaApplication extends DisposableOwner {
           : message;
         const result = await dialog.showMessageBox({
           type: "error",
-          title: `${this.product.name} startup failed`,
+          title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} startup failed`,
           message: "The App Server could not be validated.",
           detail,
           buttons: ["Retry", this.workbenchWindows.size === 0 ? "Quit" : "Cancel"],
@@ -514,6 +520,7 @@ export class ZetaApplication extends DisposableOwner {
       workspaceContext,
       supervisor,
       resources,
+      modeId: this.defaultModeId,
       windowsStateHandler,
       windowStateTracking,
       isDestroyed: () => window.isDestroyed(),
@@ -699,16 +706,15 @@ export class ZetaApplication extends DisposableOwner {
         },
         toggleDeveloperTools: () => window.webContents.toggleDevTools(),
       }),
+      ...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
       ...userThemeIpcRoutes(new UserThemeFileService(join(this.profileRoot, "themes"))),
       ...workspaceContextIpcRoutes(workspaceContext),
     ];
-    if (this.product.dedicatedSessions) {
-      ipcRoutes.push(...sessionsWindowIpcRoutes({
-        openSessionsWindow: () => this.openSessionsWindow(record),
-        returnToWorkbench: () => record.focus(),
-        openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
-      }));
-    }
+    ipcRoutes.push(...sessionsWindowIpcRoutes({
+      openSessionsWindow: () => this.openSessionsWindow(record),
+      returnToWorkbench: () => record.focus(),
+      openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
+    }));
     if (process.platform === "darwin") {
       const nativeContextMenu = windowDisposables.add(
         new ElectronContextMenu(window),
@@ -722,9 +728,7 @@ export class ZetaApplication extends DisposableOwner {
     windowDisposables.add(this.trustedIpcRouter.register(
       {
         webContents: window.webContents,
-        allowedEntryUrls: new Set([
-          normalizeEntryUrl(rendererEntry.url),
-        ]),
+        allowedEntryUrls: new Set(WorkbenchModeRegistry.modeIds.map(modeId => normalizeEntryUrl(this.resolveRendererEntry("workbench", modeId).url))),
       },
       ipcRoutes,
     ));
@@ -741,8 +745,7 @@ export class ZetaApplication extends DisposableOwner {
       window.webContents.send(KEYBINDINGS_RESOURCE_CHANGED_CHANNEL, snapshot)
     ));
     try {
-      if (rendererEntry.useDevelopmentUrl) await window.loadURL(rendererEntry.url);
-      else await window.loadFile(rendererEntry.file);
+      await this.loadRendererEntry(window, rendererEntry);
       return record;
     } catch (error) {
       if (!window.isDestroyed()) window.destroy();
@@ -752,8 +755,9 @@ export class ZetaApplication extends DisposableOwner {
 
   /** Creates or focuses the Sessions window belonging to one Workbench supervisor. */
   private async openSessionsWindow(record: WorkbenchWindowRecord): Promise<void> {
-    if (!this.product.dedicatedSessions) {
-      throw new Error(`${this.product.name} does not provide a dedicated Sessions window`);
+    const mode = WorkbenchModeRegistry.get(record.modeId);
+    if (!mode.dedicatedSessions) {
+      throw new Error(`${mode.title} does not provide a dedicated Sessions window`);
     }
     const existing = record.sessionsWindow;
     if (existing && !existing.isDestroyed()) {
@@ -762,7 +766,7 @@ export class ZetaApplication extends DisposableOwner {
       return;
     }
 
-    const sessionsEntry = this.resolveRendererEntry("sessions");
+    const sessionsEntry = this.resolveRendererEntry("sessions", record.modeId);
     const browserWindowOptions = resolveBrowserWindowOptions({
       state: {
         mode: WindowMode.Normal,
@@ -774,7 +778,7 @@ export class ZetaApplication extends DisposableOwner {
     const window = new BrowserWindow({
       ...browserWindowOptions,
       show: false,
-      title: `${this.product.name} Sessions`,
+      title: `${mode.title} Sessions`,
     });
     record.sessionsWindow = window;
     window.once("ready-to-show", () => {
@@ -824,11 +828,7 @@ export class ZetaApplication extends DisposableOwner {
     });
 
     try {
-      if (sessionsEntry.useDevelopmentUrl) {
-        await window.loadURL(sessionsEntry.url);
-      } else {
-        await window.loadFile(sessionsEntry.file);
-      }
+      await this.loadRendererEntry(window, sessionsEntry);
     } catch (error) {
       if (!window.isDestroyed()) {
         window.destroy();
@@ -851,32 +851,108 @@ export class ZetaApplication extends DisposableOwner {
     }
   }
 
-  private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall"): RendererEntry {
+  private scheduleWorkbenchModeSwitch(record: WorkbenchWindowRecord, modeId: WorkbenchModeId): void {
+    if (record.modeId === modeId) return;
+    setImmediate(() => {
+      void this.switchWorkbenchMode(record, modeId).catch(error => this.reportWorkbenchModeSwitchFailure(record, error));
+    });
+  }
+
+  private async switchWorkbenchMode(record: WorkbenchWindowRecord, modeId: WorkbenchModeId): Promise<void> {
+    if (record.window.isDestroyed() || record.modeId === modeId) return;
+    const previousModeId = record.modeId;
+    const previousDefaultModeId = this.defaultModeId;
+    this.closeSessionsWindow(record);
+    record.modeId = modeId;
+    this.defaultModeId = modeId;
+    try {
+      await this.loadRendererEntry(record.window, this.resolveRendererEntry("workbench", modeId));
+    } catch (error) {
+      record.modeId = previousModeId;
+      this.defaultModeId = previousDefaultModeId;
+      let persistenceError: unknown;
+      try {
+        await this.persistWorkbenchModeId(previousDefaultModeId);
+      } catch (candidate) {
+        persistenceError = candidate;
+      }
+      try {
+        await this.loadRendererEntry(record.window, this.resolveRendererEntry("workbench", previousModeId));
+      } catch (rollbackError) {
+        throw new AggregateError([error, persistenceError, rollbackError].filter(candidate => candidate !== undefined), "Workbench mode switch and rollback both failed");
+      }
+      if (persistenceError !== undefined) throw new AggregateError([error, persistenceError], "Workbench mode switch failed and its persisted preference could not be restored");
+      throw error;
+    }
+  }
+
+  private async persistWorkbenchModeId(modeId: WorkbenchModeId): Promise<void> {
+    const configuration = this.services.configuration;
+    const snapshot = configuration.read();
+    if (snapshot.document.values[WorkbenchModeConfigurationKey] === modeId) return;
+    await configuration.update({
+      expectedRevision: snapshot.revision,
+      document: {
+        version: 1,
+        values: {
+          ...snapshot.document.values,
+          [WorkbenchModeConfigurationKey]: modeId,
+        },
+      },
+    });
+  }
+
+  private async reportWorkbenchModeSwitchFailure(record: WorkbenchWindowRecord, error: unknown): Promise<void> {
+    console.error("Failed to switch Workbench mode", error);
+    if (record.window.isDestroyed()) return;
+    const detail = error instanceof Error ? error.message : "The requested mode could not be loaded";
+    await dialog.showMessageBox(record.window, {
+      type: "error",
+      title: `${this.application.name} mode switch failed`,
+      message: "The requested Workbench mode could not be loaded.",
+      detail: detail.slice(0, 8_000),
+      buttons: ["OK"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    });
+  }
+
+  private resolveRendererEntry(kind: "workbench" | "sessions" | "remoteRuntimeInstall", modeId: WorkbenchModeId = this.defaultModeId): RendererEntry {
+    const mode = WorkbenchModeRegistry.get(modeId);
     const entry = kind === "workbench"
-      ? this.product.rendererEntry
+      ? WorkbenchRendererEntry
       : kind === "sessions"
-        ? this.product.dedicatedSessions?.rendererEntry
+        ? mode.dedicatedSessions?.rendererEntry
         : "remoteRuntimeInstall";
     if (!entry) {
-      throw new Error(`${this.product.name} does not provide a Sessions renderer entry`);
+      throw new Error(`${mode.title} does not provide a Sessions renderer entry`);
     }
     const directory = kind === "remoteRuntimeInstall" ? "remote-runtime-install" : kind;
     const file = join(
       this.rendererRoot,
-      this.product.id,
       "electron-browser",
       directory,
       `${entry}.html`,
     );
     const rendererUrl = process.env.ZETA_RENDERER_URL;
     const useDevelopmentUrl = !app.isPackaged && rendererUrl !== undefined;
+    const baseUrl = useDevelopmentUrl
+      ? new URL(`/electron-browser/${directory}/${entry}.html`, rendererUrl).href
+      : pathToFileURL(file).href;
     return {
       file,
-      url: useDevelopmentUrl
-        ? new URL(`/electron-browser/${directory}/${entry}.html`, rendererUrl).href
-        : pathToFileURL(file).href,
+      url: kind === "workbench" ? withWorkbenchModeId(baseUrl, modeId) : baseUrl,
       useDevelopmentUrl,
     };
+  }
+
+  private async loadRendererEntry(window: BrowserWindow, entry: RendererEntry): Promise<void> {
+    if (entry.useDevelopmentUrl || new URL(entry.url).search.length > 0) {
+      await window.loadURL(entry.url);
+      return;
+    }
+    await window.loadFile(entry.file);
   }
 
   private createSandboxWebPreferences() {
@@ -1008,7 +1084,7 @@ export class ZetaApplication extends DisposableOwner {
     try {
       await dialog.showMessageBox({
         type: "error",
-        title: `${this.product.name} window failed`,
+        title: `${WorkbenchModeRegistry.get(this.defaultModeId).title} window failed`,
         message: "The requested Workspace could not be opened.",
         detail: message.slice(0, 8_000),
         buttons: ["OK"],

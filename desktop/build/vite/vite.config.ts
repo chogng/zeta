@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { getProductConfiguration, resolveProductId } from "../../src/zeta/product/common/product.js";
+import { ZetaDesktopApplication } from "../../src/zeta/product/common/product.js";
+import { WorkbenchModeRegistry } from "../../src/zeta/product/common/workbenchMode.js";
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.mjs";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.mjs";
@@ -8,19 +9,17 @@ import { workbenchEntryPlugin } from "./workbenchEntryPlugin.mjs";
 
 export default defineConfig(() => {
   const desktopRoot = resolve(import.meta.dirname, "../..");
-  const product = getProductConfiguration(resolveProductId(process.env.ZETA_PRODUCT));
+  const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ZETA_WORKBENCH_MODE);
   const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";
   const developmentPort = webAppServerEnabled ? 5174 : 5173;
   const sourceRoot = resolve(desktopRoot, "src/zeta/code");
   const browserEntry = "browser/workbench/workbench";
   const electronEntry = "electron-browser/workbench/workbench";
-  const dedicatedSessions = product.dedicatedSessions;
-  const sessionsInputs = dedicatedSessions
-    ? {
-        [`browser/sessions/${dedicatedSessions.rendererEntry}`]: resolve(sourceRoot, `browser/sessions/${dedicatedSessions.rendererEntry}.html`),
-        [`electron-browser/sessions/${dedicatedSessions.rendererEntry}`]: resolve(sourceRoot, `electron-browser/sessions/${dedicatedSessions.rendererEntry}.html`),
-      }
-    : {};
+  const dedicatedSessionsEntries = WorkbenchModeRegistry.definitions.flatMap(mode => mode.dedicatedSessions ? [mode.dedicatedSessions.rendererEntry] : []);
+  const sessionsInputs = Object.fromEntries(dedicatedSessionsEntries.flatMap(rendererEntry => [
+    [`browser/sessions/${rendererEntry}`, resolve(sourceRoot, `browser/sessions/${rendererEntry}.html`)],
+    [`electron-browser/sessions/${rendererEntry}`, resolve(sourceRoot, `electron-browser/sessions/${rendererEntry}.html`)],
+  ]));
   const remoteRuntimeInstallInput = {
     "electron-browser/remote-runtime-install/remoteRuntimeInstall": resolve(sourceRoot, "electron-browser/remote-runtime-install/remoteRuntimeInstall.html"),
   };
@@ -29,7 +28,7 @@ export default defineConfig(() => {
     base: "./",
     root: sourceRoot,
     define: {
-      __ZETA_PRODUCT__: JSON.stringify(product.id),
+      __ZETA_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
     plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
@@ -42,7 +41,7 @@ export default defineConfig(() => {
       strictPort: true,
     },
     build: {
-      outDir: resolve(desktopRoot, `dist/renderer/${product.id}`),
+      outDir: resolve(desktopRoot, `dist/renderer/${ZetaDesktopApplication.rendererDirectory}`),
       emptyOutDir: true,
       rollupOptions: {
         input: {

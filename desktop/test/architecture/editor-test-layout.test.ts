@@ -36,7 +36,7 @@ test("Aster browser integration is flat and named after concrete model mount poi
   assert.doesNotMatch(config, /firefox/u);
 });
 
-test("browser integrations import the stable API and only their product bundle", () => {
+test("browser integrations import the stable API and only their mode bundle", () => {
   const textModelIntegration = readFileSync(join(browserIntegrationRoot, "textModel.integration.ts"), "utf8");
   const documentModelIntegration = readFileSync(join(browserIntegrationRoot, "documentModel.integration.ts"), "utf8");
   assert.match(textModelIntegration, /editor\/editor\.api\.js/u);

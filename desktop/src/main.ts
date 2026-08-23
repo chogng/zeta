@@ -1,17 +1,17 @@
 import { bootstrapElectronMain } from "./bootstrap.js";
 
 bootstrapElectronMain();
-await import(productMainEntry());
+await import(workbenchMainEntry());
 
-function productMainEntry(): string {
+function workbenchMainEntry(): string {
   const entry = process.env.ZETA_ELECTRON_MAIN;
   if (entry === undefined || entry.length === 0) {
     return "./zeta/code/electron-main/main.js";
   }
   if (entry === "code" || entry === "academic") {
-    const configuredProduct = process.env.ZETA_PRODUCT;
-    if (configuredProduct !== undefined && configuredProduct !== entry) {
-      throw new Error(`Electron Main entry '${entry}' conflicts with ZETA_PRODUCT '${configuredProduct}'`);
+    const configuredMode = process.env.ZETA_WORKBENCH_MODE;
+    if (configuredMode !== undefined && configuredMode !== entry) {
+      throw new Error(`Electron Main entry '${entry}' conflicts with ZETA_WORKBENCH_MODE '${configuredMode}'`);
     }
     return entry === "code"
       ? "./zeta/code/electron-main/codeMain.js"

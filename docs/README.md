@@ -120,7 +120,7 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 ### 平台与产品
 
 [`architecture.md`](architecture.md)（总入口）、[`zeta-rs-architecture.md`](zeta-rs-architecture.md)、
-[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`product-editions.md`](product-editions.md)、
+[`zeta-cli-architecture.md`](zeta-cli-architecture.md)、[`workbench-modes.md`](workbench-modes.md)、
 [`product-lines.md`](product-lines.md)、[`remote-development.md`](remote-development.md)、[`git.md`](git.md)、
 [`documentation-guidelines.md`](documentation-guidelines.md)
 

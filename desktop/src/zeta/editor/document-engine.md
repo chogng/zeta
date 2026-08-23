@@ -1,6 +1,6 @@
 # Aster Document Engine
 
-> 本文是结构化文档编辑器的 canonical 设计规范，拥有 schema、document model、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与产品装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是结构化文档编辑器的 canonical 设计规范，拥有 schema、document model、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
 > 状态：Current。潜在演进会单独标记，不能被解释为已实现能力。
 

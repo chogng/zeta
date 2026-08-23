@@ -51,12 +51,12 @@ test(
 
     const workbenchWindow = new WorkbenchWindow({
       root,
-      productId: "academic",
+      modeId: "academic",
       workbenchState: WorkbenchState.FOLDER,
     });
 
     assert.equal(root.classList.contains("zeta-workbench"), true);
-    assert.equal(root.dataset.product, "academic");
+    assert.equal(root.dataset.workbenchMode, "academic");
     assert.equal(root.dataset.workbenchState, "folder");
     workbenchWindow.setWorkbenchState(WorkbenchState.EMPTY);
     assert.equal(root.dataset.workbenchState, "empty");

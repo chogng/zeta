@@ -1,7 +1,7 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
-import type { ProductConfiguration } from "../../product/common/product.js";
+import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
 import { createElectronRendererApi } from "../../platform/native/electron-browser/rendererApi.js";
 import { createElectronWorkbenchContextMenuService } from "../../workbench/services/contextmenu/electron-browser/contextMenuService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
@@ -9,14 +9,14 @@ import { startSessionsWorkbench } from "../browser/sessionsWorkbench.js";
 import { createSessionsWindowApi } from "./sessionsWindowApi.js";
 
 /** Starts the Code-specific Electron Sessions page. */
-export function startElectronSessions(product: ProductConfiguration, profile: SessionsProfile): IDisposable {
+export function startElectronSessions(modeId: WorkbenchModeId, profile: SessionsProfile): IDisposable {
   installBaseUiStyles();
   const api = createElectronRendererApi();
   const sessions = new DisposableStore();
   const container = document.querySelector<HTMLElement>("#app");
   if (!container) throw new Error("Sessions renderer requires an #app container");
   sessions.add(startSessionsWorkbench({
-    product,
+    modeId,
     profile,
     api,
     sessionsWindowApi: createSessionsWindowApi(),

@@ -225,7 +225,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
   );
   assert.equal(navigationItems[0].getAttribute("aria-current"), "page");
   assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
-  assert.equal(root.querySelectorAll(".zeta-general-setting").length, 8);
+  assert.equal(root.querySelectorAll(".zeta-general-setting").length, 9);
 
   search.value = "model";
   search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
@@ -439,6 +439,7 @@ test("General settings persist shared interaction preferences", async () => {
   ownerDocument.body.append(root);
   const settings = disposables.add(new SettingsService());
   const configuration = disposables.add(new WorkbenchConfigurationService());
+  const modeSwitches: string[] = [];
   disposables.add(new SettingsEditorContribution({
     configurationService: configuration,
     container: root,
@@ -447,11 +448,20 @@ test("General settings persist shared interaction preferences", async () => {
     settingsService: settings,
     themeService: disposables.add(new ThemeService(darkColorTheme)),
     userThemeService: UnavailableUserThemeService,
+    workbenchModeService: {
+      currentModeId: "code",
+      availableModes: [
+        { id: "code", label: "Code" },
+        { id: "academic", label: "Academic" },
+      ],
+      switchMode: async modeId => { modeSwitches.push(modeId); },
+    },
   }));
 
   settings.open("general");
   const hoverDelay = root.querySelector<HTMLInputElement>('[data-configuration-key="workbench.hover.delay"]')!;
   assert.equal(root.querySelector('[data-configuration-key="workbench.defaultProfile"]'), null);
+  assert.equal(settingValue(root, "workbench.mode"), "Code");
   assert.equal(settingValue(root, "workbench.reduceMotion"), "Auto");
   assert.equal(hoverDelay.value, "500");
   chooseSettingOption(root, "workbench.reduceMotion", "On");
@@ -459,10 +469,12 @@ test("General settings persist shared interaction preferences", async () => {
   hoverDelay.value = "250";
   hoverDelay.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
   await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+  chooseSettingOption(root, "workbench.mode", "Academic");
+  await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 
   assert.equal(configuration.getValue(WorkbenchConfiguration.reduceMotion), "on");
   assert.equal(configuration.getValue(HoverConfiguration.delay), 250);
-  assert.equal(root.querySelector(".zeta-general-settings-status")?.textContent, "Setting saved.");
+  assert.deepEqual(modeSwitches, ["academic"]);
 });
 
 test("Settings domains without writable services render honest capability overviews", () => {
