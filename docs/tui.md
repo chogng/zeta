@@ -909,6 +909,7 @@ app/
 ├── frame/
 ├── help.rs
 ├── keymap.rs
+├── keybindings_resource.rs
 ├── request_completion.rs
 ├── state.rs
 └── state_tests.rs
@@ -1004,6 +1005,10 @@ lib_tests.rs
   1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。
   普通单键保持 component-first，只有 Chord prefix 在 component 前路由；composer 编辑、selection
   导航与 transcript 滚动继续由局部 component 拥有；
+- `app/keybindings_resource.rs` 已读取 CLI 显式提供的 active profile 下
+  `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与
+  `when`。完整编译和 TUI Chord 安全校验成功后才替换 `AppKeymap`；坏更新保留上一份有效映射并
+  产生可见诊断。资源不进入 App Server，也不从 Remote Workspace 读取客户端按键配置；
 - `App` 处理 presentation coordination 与 Keymap action，并直接委托 `InteractionPane` 的
   composer/temporary-view 输入；`ChatWidget` 与过渡目录 `toppane/` 已移除，不再存在第二份
   transcript 或模糊的 top-pane owner；

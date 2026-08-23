@@ -64,7 +64,7 @@ pub(crate) enum Status {
 #[derive(Debug)]
 pub(crate) struct App {
     interaction_pane: InteractionPane,
-    app_keymap: AppKeymap,
+    pub(super) app_keymap: AppKeymap,
     thread: ThreadFeatureState,
     transcript_scroll: TranscriptScroll,
     selection_actions: Vec<SelectionActions>,
@@ -709,6 +709,7 @@ impl App {
                 self.last_root_escape = Some(now);
                 None
             }
+            AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindPane),
             AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
             AppKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
@@ -723,6 +724,14 @@ impl App {
 
     pub(crate) fn pending_key_chord_label(&self) -> Option<String> {
         self.app_keymap.pending_chord_label()
+    }
+
+    pub(crate) fn report_keybinding_diagnostic(&mut self, diagnostic: impl Into<String>) {
+        self.thread
+            .update(ThreadPresentationEvent::FailureReported(format!(
+                "Keybindings: {}",
+                diagnostic.into()
+            )));
     }
 
     fn handle_slash_command(&mut self, invocation: SlashCommandInvocation) -> Option<AppCommand> {

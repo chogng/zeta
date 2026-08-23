@@ -6,6 +6,8 @@ use super::Status;
 use super::TuiSlashCommandRegistry;
 use super::dispatch::execute_product_command;
 use super::frame;
+use super::keybindings_resource::AppKeybindingsResource;
+use super::keybindings_resource::AppKeybindingsResourcePoll;
 use super::request_completion::RequestCompletion;
 use super::request_completion::apply_request_completion;
 use super::request_completion::apply_thread_snapshot;
@@ -70,6 +72,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         display_workspace_root,
         host_workspace_root,
         host_file_search_root,
+        keybindings_path,
         recovery,
     } = options;
     let server_slash_commands = client.initialization()?.slash_commands.clone();
@@ -101,8 +104,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         &display_workspace_root,
         slash_registry.catalog.clone(),
     );
+    let now = Instant::now();
+    let mut keybindings_resource =
+        keybindings_path.map(|path| AppKeybindingsResource::new(path, now));
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
+    poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
     if let Ok(config) = client.read_config() {
         app.update(AppEvent::PreferredModelReceived(config.preferred_model));
     }
@@ -145,7 +152,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     None
                 }
                 client::RuntimeEvent::Tick => {
-                    app.handle_tick(Instant::now());
+                    let now = Instant::now();
+                    app.handle_tick(now);
+                    poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
                     None
                 }
                 client::RuntimeEvent::TerminationRequested => {
@@ -764,6 +773,27 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         (Err(error), _) => Err(error),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
+    }
+}
+
+fn poll_keybindings_resource(
+    resource: &mut Option<AppKeybindingsResource>,
+    app: &mut App,
+    now: Instant,
+) {
+    let Some(resource) = resource else {
+        return;
+    };
+    match resource.poll(now, &mut app.app_keymap) {
+        AppKeybindingsResourcePoll::Unchanged => {}
+        AppKeybindingsResourcePoll::Updated => {
+            for diagnostic in resource.diagnostics().to_vec() {
+                app.report_keybinding_diagnostic(diagnostic);
+            }
+        }
+        AppKeybindingsResourcePoll::Rejected(diagnostic) => {
+            app.report_keybinding_diagnostic(diagnostic);
+        }
     }
 }
 

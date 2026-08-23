@@ -5,6 +5,7 @@ mod context;
 mod key;
 mod parser;
 mod resolver;
+mod user;
 
 pub use binding::BindingPriority;
 pub use binding::BindingSet;
@@ -30,6 +31,12 @@ pub use parser::parse_key_sequence;
 pub use parser::serialize_key_sequence;
 pub use resolver::KeybindingResolver;
 pub use resolver::ResolveResult;
+pub use user::MAX_USER_BINDINGS;
+pub use user::UserBinding;
+pub use user::UserBindingTarget;
+pub use user::UserBindingsError;
+pub use user::compile_user_bindings;
+pub use user::user_binding_diagnostics;
 
 #[cfg(test)]
 #[path = "keybinding_tests.rs"]

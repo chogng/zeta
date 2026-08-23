@@ -6,12 +6,14 @@ use super::AppKeymapCondition;
 use super::AppKeymapContext;
 use super::KEY_CHORD_TIMEOUT;
 use super::app_keybinding_help_items;
+use super::compile_app_user_bindings;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::time::Duration;
 use std::time::Instant;
+use zeta_keybinding::HostPlatform;
 
 fn context() -> AppKeymapContext {
     AppKeymapContext {
@@ -274,4 +276,87 @@ fn app_help_is_derived_from_every_registered_binding() {
             "Ctrl-Z",
         ],
     );
+}
+
+#[test]
+fn user_rules_override_or_block_builtins_and_evaluate_context() {
+    let rules = compile_app_user_bindings(
+        br#"[
+            {
+                "key":"ctrl+o",
+                "command":"zetaCode.action.cycleApprovalMode",
+                "when":"inputFocus && !selectionVisible"
+            },
+            {"key":"ctrl+c","command":null}
+        ]"#,
+        HostPlatform::Linux,
+    )
+    .unwrap();
+    let mut keymap = AppKeymap::default();
+    keymap.replace_user_bindings(rules).unwrap();
+
+    assert_eq!(
+        keymap.resolve_single(&control('o'), context()),
+        Some(AppKeymapAction::CycleApprovalMode)
+    );
+    assert_eq!(keymap.resolve_single(&control('c'), context()), None);
+    assert_eq!(
+        keymap.resolve_single(
+            &control('o'),
+            AppKeymapContext {
+                has_selection: true,
+                ..context()
+            },
+        ),
+        Some(AppKeymapAction::CopyLastResponse)
+    );
+}
+
+#[test]
+fn user_chords_use_the_existing_pending_state_machine() {
+    let rules = compile_app_user_bindings(
+        br#"[{
+            "key":"ctrl+k ctrl+y",
+            "command":"zetaCode.action.copyLastResponse"
+        }]"#,
+        HostPlatform::Linux,
+    )
+    .unwrap();
+    let mut keymap = AppKeymap::default();
+    keymap.replace_user_bindings(rules).unwrap();
+    let started = Instant::now();
+
+    assert_eq!(
+        keymap.route_chord(&control('k'), context(), started),
+        AppChordMatch::Pending
+    );
+    assert_eq!(
+        keymap.route_chord(
+            &control('y'),
+            context(),
+            started + Duration::from_millis(100),
+        ),
+        AppChordMatch::Command(AppKeymapAction::CopyLastResponse)
+    );
+}
+
+#[test]
+fn user_resource_rejects_unknown_commands_and_context_keys() {
+    let unknown_command = compile_app_user_bindings(
+        br#"[{"key":"ctrl+y","command":"zetaCode.action.missing"}]"#,
+        HostPlatform::Linux,
+    )
+    .unwrap_err();
+    let unknown_context = compile_app_user_bindings(
+        br#"[{
+            "key":"ctrl+y",
+            "command":"zetaCode.action.copyLastResponse",
+            "when":"desktopFocus"
+        }]"#,
+        HostPlatform::Linux,
+    )
+    .unwrap_err();
+
+    assert!(unknown_command.contains("unknown command"));
+    assert!(unknown_context.contains("unknown context key"));
 }

@@ -91,8 +91,9 @@ fn interactive() -> Result<(), String> {
             zeta_tui::client_capabilities(),
         )
         .map_err(|error| error.to_string())?;
-        let mut options =
-            zeta_tui::TuiOptions::new("TUI conversation").with_workspace_root(&workspace_root);
+        let mut options = zeta_tui::TuiOptions::new("TUI conversation")
+            .with_workspace_root(&workspace_root)
+            .with_profile_root(&profile_root);
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }

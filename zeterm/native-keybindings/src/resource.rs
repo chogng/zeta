@@ -1,4 +1,3 @@
-use std::fmt;
 use std::fs;
 use std::io;
 use std::marker::PhantomData;
@@ -11,8 +10,6 @@ use serde_json::Map;
 use serde_json::Value;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::KeySequence;
-use zeta_keybinding::format_key_sequence;
-use zeta_keybinding::parse_key_sequence;
 use zeta_keybinding::serialize_key_sequence;
 use zeta_utils_path::write_atomically;
 
@@ -22,7 +19,6 @@ use crate::engine::UserBinding;
 use crate::engine::UserBindingTarget;
 
 const MAX_RESOURCE_BYTES: u64 = 1024 * 1024;
-const MAX_BINDINGS: usize = 1_024;
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -149,95 +145,36 @@ impl<C: KeybindingCatalog> KeybindingsResource<C> {
     }
 }
 
-/// A malformed or unsupported entry in a user keybinding resource.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum KeybindingsResourceError {
-    InvalidJson(String),
-    ExpectedArray,
-    TooManyBindings { maximum: usize, actual: usize },
-    ExpectedObject { index: usize },
-    UnknownField { index: usize, field: String },
-    MissingField { index: usize, field: &'static str },
-    InvalidField { index: usize, field: &'static str },
-    InvalidKey { index: usize, message: String },
-    UnknownCommand { index: usize, command: String },
-    UnknownCondition { index: usize, condition: String },
-}
+/// Shared validation error for a malformed user keybinding resource.
+pub type KeybindingsResourceError = zeta_keybinding::UserBindingsError;
 
-impl fmt::Display for KeybindingsResourceError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidJson(message) => write!(formatter, "invalid JSON: {message}"),
-            Self::ExpectedArray => formatter.write_str("the root value must be an array"),
-            Self::TooManyBindings { maximum, actual } => {
-                write!(
-                    formatter,
-                    "at most {maximum} bindings are allowed, got {actual}"
-                )
-            }
-            Self::ExpectedObject { index } => {
-                write!(formatter, "binding {index} must be an object")
-            }
-            Self::UnknownField { index, field } => {
-                write!(
-                    formatter,
-                    "binding {index} contains unknown field `{field}`"
-                )
-            }
-            Self::MissingField { index, field } => {
-                write!(formatter, "binding {index} is missing `{field}`")
-            }
-            Self::InvalidField { index, field } => {
-                write!(formatter, "binding {index} has an invalid `{field}`")
-            }
-            Self::InvalidKey { index, message } => {
-                write!(formatter, "binding {index} has an invalid key: {message}")
-            }
-            Self::UnknownCommand { index, command } => {
-                write!(
-                    formatter,
-                    "binding {index} uses unknown command `{command}`"
-                )
-            }
-            Self::UnknownCondition { index, condition } => {
-                write!(
-                    formatter,
-                    "binding {index} uses unknown condition `{condition}`"
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for KeybindingsResourceError {}
-
-/// Parses a complete user resource into rules without mutating an active engine.
+/// Parses a complete user resource into product rules without mutating an active engine.
 pub fn compile_user_bindings<C: KeybindingCatalog>(
     contents: &[u8],
     platform: HostPlatform,
 ) -> Result<Vec<UserBinding<C>>, KeybindingsResourceError> {
-    let value: Value = serde_json::from_slice(contents)
-        .map_err(|error| KeybindingsResourceError::InvalidJson(error.to_string()))?;
-    let values = value
-        .as_array()
-        .ok_or(KeybindingsResourceError::ExpectedArray)?;
-    if values.len() > MAX_BINDINGS {
-        return Err(KeybindingsResourceError::TooManyBindings {
-            maximum: MAX_BINDINGS,
-            actual: values.len(),
-        });
-    }
-    values
-        .iter()
-        .enumerate()
-        .filter_map(
-            |(index, value)| match compile_user_binding::<C>(value, index + 1, platform) {
-                Ok(Some(rule)) => Some(Ok(rule)),
-                Ok(None) => None,
-                Err(error) => Some(Err(error)),
-            },
-        )
-        .collect()
+    zeta_keybinding::compile_user_bindings(
+        contents,
+        platform,
+        C::command_from_id,
+        C::parse_condition,
+    )
+    .map(|rules| {
+        rules
+            .into_iter()
+            .map(|rule| UserBinding {
+                keybinding: rule.keybinding,
+                target: match rule.target {
+                    zeta_keybinding::UserBindingTarget::Command(command) => {
+                        UserBindingTarget::Command(command)
+                    }
+                    zeta_keybinding::UserBindingTarget::Block => UserBindingTarget::Block,
+                },
+                when: rule.when,
+                when_source: rule.when_source,
+            })
+            .collect()
+    })
 }
 
 /// Produces non-fatal diagnostics for exact duplicate rules.
@@ -245,21 +182,21 @@ pub fn binding_diagnostics<C: KeybindingCatalog>(
     rules: &[UserBinding<C>],
     platform: HostPlatform,
 ) -> Vec<String> {
-    let mut diagnostics = Vec::new();
-    for (later_index, later) in rules.iter().enumerate() {
-        for (earlier_index, earlier) in rules[..later_index].iter().enumerate() {
-            if earlier.keybinding == later.keybinding && earlier.when == later.when {
-                let key = format_key_sequence(&later.keybinding, platform);
-                let condition = later.when_source.as_deref().unwrap_or("always");
-                diagnostics.push(format!(
-                    "Rule {} conflicts with rule {} for {key} when {condition}; the later rule wins",
-                    later_index + 1,
-                    earlier_index + 1
-                ));
-            }
-        }
-    }
-    diagnostics
+    let shared_rules = rules
+        .iter()
+        .map(|rule| zeta_keybinding::UserBinding {
+            keybinding: rule.keybinding.clone(),
+            target: match rule.target {
+                UserBindingTarget::Command(command) => {
+                    zeta_keybinding::UserBindingTarget::Command(command)
+                }
+                UserBindingTarget::Block => zeta_keybinding::UserBindingTarget::Block,
+            },
+            when: rule.when.clone(),
+            when_source: rule.when_source.clone(),
+        })
+        .collect::<Vec<_>>();
+    zeta_keybinding::user_binding_diagnostics(&shared_rules, platform)
 }
 
 fn read_snapshot(path: &Path) -> io::Result<ResourceSnapshot> {
@@ -284,136 +221,4 @@ fn read_snapshot(path: &Path) -> io::Result<ResourceSnapshot> {
         ));
     }
     Ok(ResourceSnapshot::Contents(contents))
-}
-
-fn compile_user_binding<C: KeybindingCatalog>(
-    value: &Value,
-    index: usize,
-    platform: HostPlatform,
-) -> Result<Option<UserBinding<C>>, KeybindingsResourceError> {
-    let object = value
-        .as_object()
-        .ok_or(KeybindingsResourceError::ExpectedObject { index })?;
-    reject_unknown_fields(object, index)?;
-    validate_platform_overrides(object, index)?;
-    let key = selected_key(object, index, platform)?;
-    let Some(key) = key else {
-        return Ok(None);
-    };
-    let keybinding =
-        parse_key_sequence(key).map_err(|error| KeybindingsResourceError::InvalidKey {
-            index,
-            message: error.to_string(),
-        })?;
-    let command = object
-        .get("command")
-        .ok_or(KeybindingsResourceError::MissingField {
-            index,
-            field: "command",
-        })?;
-    let target = if command.is_null() {
-        UserBindingTarget::Block
-    } else {
-        let command = command
-            .as_str()
-            .ok_or(KeybindingsResourceError::InvalidField {
-                index,
-                field: "command",
-            })?;
-        C::command_from_id(command)
-            .map(UserBindingTarget::Command)
-            .ok_or_else(|| KeybindingsResourceError::UnknownCommand {
-                index,
-                command: command.to_owned(),
-            })?
-    };
-    if object.get("when").is_some_and(|value| !value.is_string()) {
-        return Err(KeybindingsResourceError::InvalidField {
-            index,
-            field: "when",
-        });
-    }
-    let when_source = object
-        .get("when")
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned);
-    let when = C::parse_condition(when_source.as_deref()).map_err(|error| {
-        KeybindingsResourceError::UnknownCondition {
-            index,
-            condition: error,
-        }
-    })?;
-    Ok(Some(UserBinding {
-        keybinding,
-        target,
-        when,
-        when_source,
-    }))
-}
-
-fn selected_key(
-    object: &Map<String, Value>,
-    index: usize,
-    platform: HostPlatform,
-) -> Result<Option<&str>, KeybindingsResourceError> {
-    let key = object
-        .get("key")
-        .ok_or(KeybindingsResourceError::MissingField {
-            index,
-            field: "key",
-        })?
-        .as_str()
-        .ok_or(KeybindingsResourceError::InvalidField {
-            index,
-            field: "key",
-        })?;
-    let field = match platform {
-        HostPlatform::MacOs => "mac",
-        HostPlatform::Windows => "win",
-        HostPlatform::Linux => "linux",
-        HostPlatform::Other => return Ok(Some(key)),
-    };
-    let Some(value) = object.get(field) else {
-        return Ok(Some(key));
-    };
-    if value.is_null() {
-        return Ok(None);
-    }
-    value
-        .as_str()
-        .map(Some)
-        .ok_or(KeybindingsResourceError::InvalidField { index, field })
-}
-
-fn reject_unknown_fields(
-    object: &Map<String, Value>,
-    index: usize,
-) -> Result<(), KeybindingsResourceError> {
-    for field in object.keys() {
-        if !matches!(
-            field.as_str(),
-            "key" | "command" | "when" | "mac" | "linux" | "win"
-        ) {
-            return Err(KeybindingsResourceError::UnknownField {
-                index,
-                field: field.clone(),
-            });
-        }
-    }
-    Ok(())
-}
-
-fn validate_platform_overrides(
-    object: &Map<String, Value>,
-    index: usize,
-) -> Result<(), KeybindingsResourceError> {
-    for field in ["mac", "linux", "win"] {
-        if let Some(value) = object.get(field)
-            && !value.is_null()
-            && !value.is_string()
-        {
-            return Err(KeybindingsResourceError::InvalidField { index, field });
-        }
-    }
-    Ok(())
 }

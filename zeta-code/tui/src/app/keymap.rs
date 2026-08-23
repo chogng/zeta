@@ -8,6 +8,8 @@ use zeta_keybinding::BindingPriority;
 use zeta_keybinding::BindingSet;
 use zeta_keybinding::BindingSource;
 use zeta_keybinding::Chord;
+use zeta_keybinding::ContextExpression;
+use zeta_keybinding::ContextValue;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::KeyIdentity;
 use zeta_keybinding::KeySequence;
@@ -17,6 +19,9 @@ use zeta_keybinding::LogicalKey;
 use zeta_keybinding::Modifiers;
 use zeta_keybinding::ResolveResult;
 use zeta_keybinding::ShortcutModifiers;
+use zeta_keybinding::UserBinding;
+use zeta_keybinding::UserBindingTarget;
+use zeta_keybinding::compile_user_bindings;
 use zeta_keybinding::format_key_sequence;
 use zeta_keybinding::parse_key_sequence;
 
@@ -27,19 +32,50 @@ const KEY_CHORD_TIMEOUT: Duration = Duration::from_secs(1);
 pub(super) enum AppKeymapAction {
     CycleApprovalMode,
     RootEscape,
+    OpenRewind,
     ReadClipboardImage,
     InterruptOrQuit,
     CopyLastResponse,
     Suspend,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum AppKeymapCondition {
+impl AppKeymapAction {
+    const fn command_id(self) -> Option<&'static str> {
+        match self {
+            Self::CycleApprovalMode => Some("zetaCode.action.cycleApprovalMode"),
+            Self::RootEscape => None,
+            Self::OpenRewind => Some("zetaCode.action.openRewind"),
+            Self::ReadClipboardImage => Some("zetaCode.action.attachClipboardImage"),
+            Self::InterruptOrQuit => Some("zetaCode.action.interruptOrQuit"),
+            Self::CopyLastResponse => Some("zetaCode.action.copyLastResponse"),
+            Self::Suspend => Some("zetaCode.action.suspend"),
+        }
+    }
+
+    fn from_command_id(id: &str) -> Option<Self> {
+        Self::USER_BINDABLE
+            .into_iter()
+            .find(|action| action.command_id() == Some(id))
+    }
+
+    const USER_BINDABLE: [Self; 6] = [
+        Self::CycleApprovalMode,
+        Self::OpenRewind,
+        Self::ReadClipboardImage,
+        Self::InterruptOrQuit,
+        Self::CopyLastResponse,
+        Self::Suspend,
+    ];
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum AppKeymapCondition {
     Always,
     AcceptsInput,
     EmptyComposer,
     PressWithInput,
     PressWithInputWithoutSelection,
+    Expression(ContextExpression),
 }
 
 /// State needed to decide a root binding without exposing component internals to the resolver.
@@ -51,7 +87,26 @@ pub(super) struct AppKeymapContext {
     pub(super) is_press: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+impl AppKeymapContext {
+    fn supports_key(key: &str) -> bool {
+        matches!(
+            key,
+            "inputFocus" | "composerEmpty" | "selectionVisible" | "keyEventPress"
+        )
+    }
+
+    fn value(self, key: &str) -> Option<ContextValue> {
+        match key {
+            "inputFocus" => Some(ContextValue::Boolean(self.accepts_input)),
+            "composerEmpty" => Some(ContextValue::Boolean(self.composer_empty)),
+            "selectionVisible" => Some(ContextValue::Boolean(self.has_selection)),
+            "keyEventPress" => Some(ContextValue::Boolean(self.is_press)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct AppKeybindingSpec {
     keybinding: &'static str,
     action: AppKeymapAction,
@@ -137,6 +192,8 @@ pub(super) struct AppKeymap {
     pending: Option<PendingChord>,
 }
 
+pub(super) type AppUserBinding = UserBinding<AppKeymapAction, AppKeymapCondition>;
+
 impl Default for AppKeymap {
     fn default() -> Self {
         Self::from_specs(APP_KEYBINDINGS)
@@ -149,7 +206,7 @@ impl AppKeymap {
             .iter()
             .map(|binding| {
                 (
-                    *binding,
+                    binding.clone(),
                     parse_key_sequence(binding.keybinding)
                         .expect("fixed TUI binding must use portable keybinding syntax"),
                 )
@@ -159,11 +216,13 @@ impl AppKeymap {
         let mut single_bindings = BindingSet::default();
         let mut chord_bindings = BindingSet::default();
         for (binding, keybinding) in parsed {
-            register(
+            register_command(
                 &mut single_bindings,
                 &mut chord_bindings,
-                binding,
                 keybinding,
+                binding.action,
+                binding.condition,
+                BindingSource::Builtin,
             );
         }
         Self {
@@ -172,6 +231,57 @@ impl AppKeymap {
             platform: HostPlatform::current(),
             pending: None,
         }
+    }
+
+    pub(super) fn replace_user_bindings(
+        &mut self,
+        rules: Vec<AppUserBinding>,
+    ) -> Result<(), String> {
+        let parsed_builtins = APP_KEYBINDINGS
+            .iter()
+            .map(|binding| {
+                parse_key_sequence(binding.keybinding)
+                    .map(|keybinding| (binding.clone(), keybinding))
+                    .map_err(|error| error.to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        validate_user_bindings(&rules, &parsed_builtins)?;
+
+        let mut single_bindings = BindingSet::default();
+        let mut chord_bindings = BindingSet::default();
+        for (binding, keybinding) in parsed_builtins {
+            register_command(
+                &mut single_bindings,
+                &mut chord_bindings,
+                keybinding,
+                binding.action,
+                binding.condition,
+                BindingSource::Builtin,
+            );
+        }
+        for rule in rules {
+            let bindings =
+                bindings_for_sequence(&mut single_bindings, &mut chord_bindings, &rule.keybinding);
+            match rule.target {
+                UserBindingTarget::Command(action) => bindings.register_command(
+                    rule.keybinding,
+                    action,
+                    rule.when,
+                    BindingSource::User,
+                    BindingPriority::NORMAL,
+                ),
+                UserBindingTarget::Block => bindings.register_blocker(
+                    rule.keybinding,
+                    rule.when,
+                    BindingSource::User,
+                    BindingPriority::NORMAL,
+                ),
+            }
+        }
+        self.single_bindings = single_bindings;
+        self.chord_bindings = chord_bindings;
+        self.cancel_chord();
+        Ok(())
     }
 
     pub(super) fn resolve_single(
@@ -300,24 +410,62 @@ pub(super) fn app_keybinding_help_items() -> impl Iterator<Item = (&'static str,
         .map(|binding| (binding.help_label, binding.help_description))
 }
 
-fn register(
+pub(super) fn compile_app_user_bindings(
+    contents: &[u8],
+    platform: HostPlatform,
+) -> Result<Vec<AppUserBinding>, String> {
+    compile_user_bindings(
+        contents,
+        platform,
+        AppKeymapAction::from_command_id,
+        parse_user_condition,
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn parse_user_condition(source: Option<&str>) -> Result<AppKeymapCondition, String> {
+    let Some(source) = source else {
+        return Ok(AppKeymapCondition::Always);
+    };
+    let expression = ContextExpression::parse(source).map_err(|error| error.to_string())?;
+    if let Some(key) = expression
+        .referenced_keys()
+        .into_iter()
+        .find(|key| !AppKeymapContext::supports_key(key))
+    {
+        return Err(format!("unknown context key `{key}`"));
+    }
+    Ok(AppKeymapCondition::Expression(expression))
+}
+
+fn register_command(
     single_bindings: &mut BindingSet<AppKeymapCondition, AppKeymapAction>,
     chord_bindings: &mut BindingSet<AppKeymapCondition, AppKeymapAction>,
-    binding: AppKeybindingSpec,
     keybinding: KeySequence,
+    action: AppKeymapAction,
+    condition: AppKeymapCondition,
+    source: BindingSource,
 ) {
-    let bindings = if keybinding.chords().len() == 1 {
+    let bindings = bindings_for_sequence(single_bindings, chord_bindings, &keybinding);
+    bindings.register_command(
+        keybinding,
+        action,
+        condition,
+        source,
+        BindingPriority::NORMAL,
+    );
+}
+
+fn bindings_for_sequence<'a>(
+    single_bindings: &'a mut BindingSet<AppKeymapCondition, AppKeymapAction>,
+    chord_bindings: &'a mut BindingSet<AppKeymapCondition, AppKeymapAction>,
+    keybinding: &KeySequence,
+) -> &'a mut BindingSet<AppKeymapCondition, AppKeymapAction> {
+    if keybinding.chords().len() == 1 {
         single_bindings
     } else {
         chord_bindings
-    };
-    bindings.register_command(
-        keybinding,
-        binding.action,
-        binding.condition,
-        BindingSource::Builtin,
-        BindingPriority::NORMAL,
-    );
+    }
 }
 
 fn validate_specs(specs: &[(AppKeybindingSpec, KeySequence)]) {
@@ -344,6 +492,51 @@ fn validate_specs(specs: &[(AppKeybindingSpec, KeySequence)]) {
             binding.keybinding,
         );
     }
+}
+
+fn validate_user_bindings(
+    rules: &[AppUserBinding],
+    builtins: &[(AppKeybindingSpec, KeySequence)],
+) -> Result<(), String> {
+    let singles = builtins
+        .iter()
+        .map(|(_, sequence)| sequence)
+        .chain(
+            rules
+                .iter()
+                .map(|rule| &rule.keybinding)
+                .filter(|sequence| sequence.chords().len() == 1),
+        )
+        .collect::<Vec<_>>();
+    for rule in rules {
+        let sequence = &rule.keybinding;
+        if sequence.chords().len() == 1 {
+            continue;
+        }
+        if sequence.chords().iter().any(is_plain_escape) {
+            return Err(format!(
+                "user chord `{}` cannot use plain Escape because Escape cancels pending chords",
+                format_key_sequence(sequence, HostPlatform::current())
+            ));
+        }
+        let prefix = &sequence.chords()[0];
+        if !is_safe_app_chord_prefix(prefix) {
+            return Err(format!(
+                "user chord `{}` must use Control, Alt, Meta, primary, or a non-character prefix",
+                format_key_sequence(sequence, HostPlatform::current())
+            ));
+        }
+        if singles
+            .iter()
+            .any(|candidate| candidate.chords().first() == Some(prefix))
+        {
+            return Err(format!(
+                "user chord `{}` shadows an application-level single-key binding",
+                format_key_sequence(sequence, HostPlatform::current())
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn is_plain_escape(chord: &Chord) -> bool {
@@ -378,6 +571,7 @@ fn condition_matches(condition: &AppKeymapCondition, context: &AppKeymapContext)
         AppKeymapCondition::PressWithInputWithoutSelection => {
             context.is_press && context.accepts_input && !context.has_selection
         }
+        AppKeymapCondition::Expression(expression) => expression.evaluate(|key| context.value(key)),
     }
 }
 

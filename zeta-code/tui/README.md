@@ -88,7 +88,10 @@ Tool、approval policy 或 persistence。
   提交的 Turn；TUI 不解释策略结果，也不自行签发执行授权；
 - `app/keymap.rs` 把 Crossterm 事件转成 `zeta-keybinding::KeyStroke`，并用共享 Resolver 处理
   Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z；`AppKeymap` 还拥有多段 Chord 的 pending、超时、
-  取消和提示。composer 编辑、selection 导航和 transcript 滚动仍由各 component 拥有；
+  取消和提示。CLI 通过 `TuiOptions::with_profile_root` 启用
+  `<profile>/zeta-code/keybindings.json`；TUI 启动加载并每秒热重载 User command/blocker、平台覆盖
+  与 `when`，坏更新保留上一份有效规则并显示诊断。composer 编辑、selection 导航和 transcript
+  滚动仍由各 component 拥有；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
   通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
@@ -156,6 +159,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | --- | --- |
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_workspace_root` | 显式覆盖有界 file mention root |
+| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json` 用户键位资源 |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
 | `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
 | `TuiExit::TerminationRequested` | Unix host termination signal 请求正常退出 |
@@ -177,6 +181,7 @@ src/
 ├── app/
 │   ├── event_loop.rs              # terminal/client/background coordination
 │   ├── keymap.rs                   # Crossterm adapter + application keymap/chord session
+│   ├── keybindings_resource.rs     # bounded profile resource polling + atomic runtime replacement
 │   ├── state.rs                   # single-writer presentation state
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
@@ -232,6 +237,7 @@ src/
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 composer 编辑、selection 导航、滚动、I/O 或命令副作用 |
+| `AppKeybindingsResource` | private | 有界读取产品 profile JSON、检测外部修改、完整编译后替换 User rules，并保留坏更新前的有效映射 | 不解析按键语法、不执行 action、不读取 Remote Workspace 文件 |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
 | `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，通过 1024 项有界队列汇入单写者 loop | Tick 可合并；control/input 不静默丢失；不应用 UI state |
@@ -425,6 +431,8 @@ transient 永远不决定 completed/failed/interrupted。
 下列根级组合由 `app/keymap.rs` 的单一静态声明注册到共享 `zeta-keybinding` Resolver，并由同一声明生成 `/help` 项。运行时结构叫 `AppKeymap`：多段 Chord prefix 在 component 前匹配，普通单键仍先经过当前 interaction/component，只有未消费事件进入应用级 fallback。组合精确匹配修饰键，因此 `Ctrl-Shift-V` 不会触发只声明为 `Ctrl-V` 的动作。
 
 `AppKeymap` 支持一至四段 Chord，pending 后在 footer 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是独立的根级状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
+
+用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。资源路径、稳定 command ID、ContextKey catalog、示例和已接受的 Keyboard Shortcuts Pane/录制计划统一见 [`docs/keybindings.md`](../../docs/keybindings.md)。当前手工编辑资源；设置 Pane 尚未实现。
 
 ```text
 Ready / Error

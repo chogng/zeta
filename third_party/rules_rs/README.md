@@ -8,8 +8,12 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
 - `windows_gnullvm_exec_triples.patch`, which makes Windows Rust host tools use
   the same gnullvm ABI as the repository's hermetic LLVM/MinGW C++ toolchain.
   This is required for `rustc` to load proc-macro DLLs and link Bazel host tools
-  without relying on an installed MSVC SDK. Remove it when `rules_rs` can select
-  the Windows execution ABI from platform constraints.
+  without relying on an installed MSVC SDK. Because upstream places Cargo and
+  rustc in separate repositories while gnullvm Cargo dynamically loads the
+  matching `libunwind.dll`, the patch also merges the rustc runtime component
+  into Cargo's repository. This keeps `cargo metadata` working when a manifest
+  change reruns the crate extension. Remove the patch when `rules_rs` can select
+  the Windows execution ABI and assemble its runtime DLLs from platform constraints.
 
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
 `zeterm`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. Zeterm-owned

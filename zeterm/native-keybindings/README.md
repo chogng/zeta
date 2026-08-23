@@ -16,7 +16,8 @@ side effects, focus changes, IME lifecycle, and redraws.
 | --- | --- | --- |
 | Logical/physical event normalization | `input` | Consumes `zeta-winit` events and returns generic keybinding values. |
 | Pending chord, timeout, blocker, and command resolution | `Keybindings<C>` | Uses the host-supplied catalog; does not execute commands. |
-| User resource size/shape/platform validation | `KeybindingsResource<C>` | Reads and atomically updates one JSON file; preserves the last valid rule set on rejected updates. |
+| User resource file size, polling and atomic writes | `KeybindingsResource<C>` | Owns one JSON file and preserves the last valid rule set on rejected updates. |
+| User JSON shape, platform override and duplicate validation | `zeta-keybinding::user` | Compiles in-memory bytes through host command/condition callbacks; performs no file I/O. |
 | Product command identity and builtin rules | Product host catalog | Implements `KeybindingCatalog`; product commands do not enter this crate's transport boundary. |
 | Command execution, focus, IME, and event-loop deadlines | Product host | Consumes resolution and deadline accessors. |
 
@@ -31,7 +32,8 @@ zeta-winit event
 
 keybindings.json
   → KeybindingsResource::poll
-  → catalog command/condition validation
+  → zeta-keybinding::compile_user_bindings
+  → catalog command/condition callbacks
   → complete UserBinding set
   → Keybindings::replace_user_bindings
 ```

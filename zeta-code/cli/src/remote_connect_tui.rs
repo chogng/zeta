@@ -25,7 +25,8 @@ pub(super) fn run(
     loop {
         let mut options =
             zeta_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
-                .with_remote_workspace(PathBuf::from(profile.target().workspace().as_str()));
+                .with_remote_workspace(PathBuf::from(profile.target().workspace().as_str()))
+                .with_profile_root(zeta_app_server_client::local_profile_root());
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }

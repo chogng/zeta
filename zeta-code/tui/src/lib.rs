@@ -49,6 +49,7 @@ pub struct TuiOptions {
     display_workspace_root: PathBuf,
     host_workspace_root: PathBuf,
     host_file_search_root: Option<PathBuf>,
+    keybindings_path: Option<PathBuf>,
     recovery: Option<TuiRecoveryState>,
 }
 
@@ -60,6 +61,7 @@ impl TuiOptions {
             display_workspace_root: workspace_root.clone(),
             host_workspace_root: workspace_root.clone(),
             host_file_search_root: Some(workspace_root),
+            keybindings_path: None,
             recovery: None,
         }
     }
@@ -81,6 +83,20 @@ impl TuiOptions {
     pub fn with_remote_workspace(mut self, remote_workspace_root: impl Into<PathBuf>) -> Self {
         self.display_workspace_root = remote_workspace_root.into();
         self.host_file_search_root = None;
+        self
+    }
+
+    /// Enables host-local Zeta Code keybindings from the active profile.
+    ///
+    /// Product-scoped storage prevents desktop-only command identifiers from invalidating the
+    /// TUI resource while preserving the shared JSON grammar and resolver precedence.
+    pub fn with_profile_root(mut self, profile_root: impl Into<PathBuf>) -> Self {
+        self.keybindings_path = Some(
+            profile_root
+                .into()
+                .join("zeta-code")
+                .join("keybindings.json"),
+        );
         self
     }
 
