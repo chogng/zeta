@@ -1,0 +1,4 @@
+{
+	"bazel.commandLine.queryExpression": "//...:*",
+	"bazel.queriesShareServer": false
+}
