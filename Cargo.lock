@@ -10440,6 +10440,7 @@ dependencies = [
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",
+ "zeta-uds",
 ]
 
 [[package]]
@@ -10662,6 +10663,14 @@ dependencies = [
  "typst",
  "typst-assets",
  "typst-pdf",
+]
+
+[[package]]
+name = "zeta-uds"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "uds_windows",
 ]
 
 [[package]]

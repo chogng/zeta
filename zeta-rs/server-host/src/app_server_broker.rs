@@ -2,6 +2,7 @@
 mod platform {
     use std::collections::BTreeMap;
     use std::fs;
+    #[cfg(unix)]
     use std::fs::DirBuilder;
     use std::fs::File;
     use std::fs::OpenOptions;
@@ -36,15 +37,7 @@ mod platform {
     #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     #[cfg(unix)]
-    use std::os::unix::net::UnixListener;
-    #[cfg(unix)]
-    use std::os::unix::net::UnixStream;
-    #[cfg(unix)]
     use std::os::unix::process::CommandExt;
-    #[cfg(windows)]
-    use std::os::windows::net::UnixListener;
-    #[cfg(windows)]
-    use std::os::windows::net::UnixStream;
 
     use serde::Deserialize;
     use serde::Serialize;
@@ -54,6 +47,8 @@ mod platform {
     use zeta_app_server::LocalProductServicesConfig;
     use zeta_app_server::LocalProfileRuntime;
     use zeta_app_server_protocol::schema_hash;
+    use zeta_uds::UnixListener;
+    use zeta_uds::UnixStream;
 
     use crate::app_server::AppServerHostOptions;
     use crate::app_server::WorkspaceTrustSource;

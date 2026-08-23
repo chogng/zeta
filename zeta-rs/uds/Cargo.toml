@@ -1,0 +1,20 @@
+[package]
+name = "zeta-uds"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_uds"
+path = "src/lib.rs"
+
+[target.'cfg(windows)'.dependencies]
+uds_windows = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
