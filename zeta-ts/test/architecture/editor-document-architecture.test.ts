@@ -28,6 +28,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"browser/editorWidget.ts",
 		"browser/widget/embeddedTextEditor.ts",
 		"browser/widget/codeBlockEditorWidget.ts",
+		"contrib/academic/browser/academicCodeBlockEditor.ts",
 		"browser/media/editorWidget.css",
 		"contrib/clipboard/browser/htmlDocumentFragment.ts",
 		"contrib/formatting/browser/formattingContribution.ts",
@@ -61,9 +62,10 @@ test("document editing keeps codeBlock semantics behind the embedded-editor seam
 	const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
 	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
 	const widget = readFileSync(join(editorRoot, "browser/widget/codeBlockEditorWidget.ts"), "utf8");
+	const academicCodeBlock = readFileSync(join(editorRoot, "contrib/academic/browser/academicCodeBlockEditor.ts"), "utf8");
 	const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	assert.match(schema, /codeBlock:/u);
-	assert.doesNotMatch(schema, /textBlock/u);
+	assert.match(schema, /"root" \| "group" \| "block" \| "line" \| "inline" \| "text"/u);
 	assert.match(pane, /export class DocumentEditorPane/u);
 	assert.match(pane, /implements IEditorPane/u);
 	assert.match(pane, /BrowserDocumentModelService/u);
@@ -73,6 +75,9 @@ test("document editing keeps codeBlock semantics behind the embedded-editor seam
 	assert.match(widget, /export class CodeBlockEditorWidget/u);
 	assert.match(widget, /IEmbeddedTextEditorFactory/u);
 	assert.match(editor, /new CodeBlockEditorWidget\(/u);
+	assert.match(academicCodeBlock, /export class AcademicCodeBlockEditorFactory/u);
+	assert.match(academicCodeBlock, /new CodeEditorWidget\(/u);
+	assert.doesNotMatch(academicCodeBlock, /CodeEditorPane|EditorPart|workbench/u);
 	assert.doesNotMatch(widget, /editor\/alpha\/browser\/embeddedTextEditor/u);
 	assert.match(formatting, /new ToolBar\(/u);
 	const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");

@@ -1,4 +1,4 @@
-// Standard Stanza profile shared by the Code and Academic products.
+// Complete Code line-editor feature implementation. Academic owns a separate bundle.
 import "./contrib/codeEditorPart.contribution.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";
 import "./contrib/anchorSelect/browser/anchorSelectController.js";

@@ -121,9 +121,14 @@
 .stanza-document-code-block,
 .stanza-document-blockquote,
 .stanza-document-list,
+.stanza-document-group,
 .stanza-document-block {
   max-width: 860px;
   margin: 0 auto 12px;
+}
+
+.stanza-document-line {
+  min-width: 0;
 }
 
 .stanza-document-heading[data-level="1"] { font-size: 2em; }

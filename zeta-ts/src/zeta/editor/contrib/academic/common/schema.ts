@@ -41,17 +41,17 @@ export function createAcademicDocumentSchema(): DocumentSchema {
 		}
 	}
 	nodes[ACADEMIC_NODE_TYPES.title] = {
-		kind: "block",
+		kind: "group",
 		groups: ["academic-meta"],
 		content: [{ type: "heading", min: 1, max: 1 }],
 	};
 	nodes[ACADEMIC_NODE_TYPES.abstract] = {
-		kind: "block",
+		kind: "group",
 		groups: ["academic-meta"],
 		content: [{ type: "paragraph", min: 1, max: 1 }],
 	};
 	nodes[ACADEMIC_NODE_TYPES.section] = {
-		kind: "block",
+		kind: "group",
 		groups: ["academic-section"],
 		content: [{ type: "heading", min: 1, max: 1 }, { group: "block" }],
 	};

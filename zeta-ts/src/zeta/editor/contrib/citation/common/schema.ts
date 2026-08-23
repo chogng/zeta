@@ -14,7 +14,7 @@ export const citationNodeSpec: DocumentNodeSpec = Object.freeze({
 });
 
 export const bibliographyNodeSpec: DocumentNodeSpec = Object.freeze({
-	kind: "block",
+	kind: "group",
 	groups: ["citation-bibliography"],
 	content: [{ group: "citation-reference", min: 1 }],
 });

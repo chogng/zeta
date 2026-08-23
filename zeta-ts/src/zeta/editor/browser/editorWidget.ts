@@ -15,7 +15,7 @@ import { documentPointToPosition } from "../common/core/documentPosition.js";
 import { documentSelectionToText } from "../common/model/documentText.js";
 import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from "../common/commands/documentCommands.js";
 import { extractDocumentFragment } from "../common/model/documentFragment.js";
-import { createDefaultDocumentSchema, type DocumentSchema, type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
+import { createDefaultDocumentSchema, type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from "../common/model/documentSerialization.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from "../common/core/documentSelection.js";
 import { DocumentTransaction } from "../common/model/documentTransaction.js";
@@ -390,6 +390,7 @@ export class EditorWidget extends DisposableOwner {
 
 	private renderNode(node: DocumentNode, model: DocumentModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): HTMLElement {
 		const document = this.requireContainer().ownerDocument;
+		const nodeKind = this.schema.getNodeSpec(node.type)?.kind ?? "block";
 		activeNodeIds.add(node.id);
 		const nodeView = this.options.nodeViews?.[node.type];
 		if (nodeView) {
@@ -407,11 +408,13 @@ export class EditorWidget extends DisposableOwner {
 			const refreshed = this.nodeViewSlots.get(node.id);
 			if (refreshed) {
 				refreshed.view.element.dataset.nodeId = node.id;
+				refreshed.view.element.dataset.nodeKind = nodeKind;
 				return refreshed.view.element;
 			}
 			const created = normalizeNodeView(nodeView(context), node.type);
 			if (created.dispose || created.update) this.nodeViewSlots.set(node.id, { type: node.type, view: created });
 			created.element.dataset.nodeId = node.id;
+			created.element.dataset.nodeKind = nodeKind;
 			return created.element;
 		}
 		if (node.type === "horizontalRule") {
@@ -422,6 +425,7 @@ export class EditorWidget extends DisposableOwner {
 		}
 		const element = this.reuseElement(node, previousElements, document, nodeElementTagName(node));
 		element.dataset.nodeId = node.id;
+		element.dataset.nodeKind = nodeKind;
 		switch (node.type) {
 			case "paragraph":
 				element.className = "stanza-document-paragraph";
@@ -463,8 +467,9 @@ export class EditorWidget extends DisposableOwner {
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			default:
-				element.className = "stanza-document-block";
-				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
+				element.className = documentNodeKindClassName(nodeKind);
+				if (nodeKind === "line") this.appendEditableText(element, node, model, decorations);
+				else this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 		}
 		return element;
@@ -1836,6 +1841,10 @@ function nodeElementTagName(node: DocumentNode): string {
 		case "tableCell": return "td";
 		default: return "div";
 	}
+}
+
+function documentNodeKindClassName(kind: DocumentNodeKind): string {
+	return `stanza-document-${kind}`;
 }
 
 function findTextBearingBlockId(root: DocumentNode, textNodeId: string | undefined): string | undefined {

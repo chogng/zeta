@@ -178,14 +178,14 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Window modes select one Stanza contribution bundle behind the shared Workbench entry", () => {
+test("Window modes select independent Stanza feature implementations behind the shared Workbench entry", () => {
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-	assert.match(academicBundle, /editor\.all/u);
+	assert.doesNotMatch(academicBundle, /editor\.all/u);
 	assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
 	assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
 	assert.match(standardBundle, /contrib\/codeEditorPart\.contribution/u);
@@ -271,6 +271,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
 	const codePaneContribution = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditor.contribution.ts"), "utf8");
 	const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+	const academicCodeBlock = readFileSync(join(editorRoot, "contrib/academic/browser/academicCodeBlockEditor.ts"), "utf8");
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
@@ -306,7 +307,11 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(documentContribution, /FormattingContribution/u);
 	assert.match(documentContribution, /CollaborationContribution/u);
 	assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
+	assert.doesNotMatch(academicPaneContribution, /contrib\/codeEditor|CodeEditorPane|EmbeddedTextEditorFactory/u);
+	assert.match(academicPaneContribution, /AcademicCodeBlockEditorFactory/u);
 	assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
+	assert.match(academicCodeBlock, /new CodeEditorWidget\(/u);
+	assert.doesNotMatch(academicCodeBlock, /CodeEditorPane|EditorPart|workbench/u);
 	assert.match(standardBundle, /codeEditorPart\.contribution/u);
 	assert.match(academicBundle, /documentEditor\.contribution/u);
 });

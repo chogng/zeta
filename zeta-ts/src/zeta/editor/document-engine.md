@@ -66,6 +66,19 @@ flowchart LR
 
 `DocumentNode` 是 immutable tree value，block 和 inline structure 使用稳定 node identity。`DocumentSchema` 支持 node kind、group、attribute、mark、ordered content terms 和 `min`/`max` cardinality。Custom top node 与默认 `doc` 走同一验证路径，transaction 不假设 root name。
 
+Stanza 的目标结构只有一个方向：
+
+```text
+Document → Group[] → Block[] → Line[]
+```
+
+- `Group` 拥有一组有序 block；Academic 的 title、abstract、section 和 bibliography 都是 group，Code implementation 可以把一个文件或语义区域投影为 code group。
+- `Block` 是 typed union，不是泛化的“任意文本容器”：至少包括 `textBlock`、`codeBlock`、`quoteBlock` 与 `imageBlock`，后续类型通过 schema/profile 扩展。
+- 文本型 block 拥有有序 line；line 才承载可编辑文本和 inline marks。`ImageBlock` 等 atomic block 拥有媒体 payload，并可选择拥有 caption lines。
+- Group、Block 和需要 durable mapping 的结构节点拥有稳定 identity；line identity 与存储策略由对应实现决定，不能用 DOM line 充当 model authority。
+
+`DocumentNodeKind` 已允许 profile 明确声明 `group` 与 `line`。迁移期间旧 paragraph/list/table 结构仍由现有 command 支持；新增结构必须按上述方向建模，不再把所有内容都塞进一个含混的 `textBlock`。
+
 `createNode` 和 transaction builder 可以在一次原子组装期间创建 incomplete composite fragment；child type 与 order 始终验证，只有 content minimum 可以通过显式 `allowIncompleteContent` 暂时放宽。Commit 前必须执行 strict final validation。
 
 ### Transaction 与 mapping
@@ -109,13 +122,14 @@ Browser HTML 永远不是 trusted document state。Structured clipboard 使用 v
 
 ## Text Engine 嵌入边界
 
-`codeBlock` 是 Stanza Document Engine 中的结构化代码块：`DocumentModel` 拥有它的 block identity、顺序、attributes 和 document transaction，内部文本则通过 Stanza Text Engine 的行式编辑 surface 投影。两个 engine 同属 Stanza，但不因为共享一个界面就共享 model identity 或 mutation authority。
+`codeBlock` 是 Stanza Academic 功能实现中的结构化代码块：`DocumentModel` 拥有它的 block identity、顺序、attributes 和 document transaction，Academic-owned factory 负责它的行式编辑 surface。它可以复用 `TextModel` 与 `CodeEditorWidget` primitive，但不能挂载 Code mode 的 pane、contribution bundle 或 feature controller 集合。
 
 Document browser 通过 `IEmbeddedTextEditorFactory` 请求一个嵌入式行编辑 surface：
 
 - Document Engine 拥有 block identity、document transaction 和 schema；
-- `EmbeddedTextEditorFactory` 可以用 `CodeEditorWidget` 提供实现；
+- `AcademicCodeBlockEditorFactory` 直接用 `TextModel` 与 `CodeEditorWidget` 提供实现；
 - Text Engine 不知道 document node、profile 或 document persistence；
+- Academic code-block implementation 不 import `CodeEditorPane`、`EditorPart` 或 `workbench/contrib/codeEditor`；
 - 没有 factory 时，Document Widget 可以使用自己的 text surface，不建立隐藏 `TextModel`。
 
 ## Profile 与 Contribution

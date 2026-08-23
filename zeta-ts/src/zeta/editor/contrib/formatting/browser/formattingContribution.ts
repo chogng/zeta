@@ -117,7 +117,7 @@ export class FormattingContribution extends DisposableOwner {
 
 		const codeContext = h(ownerDocument, "div");
 		codeContext.className = "stanza-structured-format-code-context";
-		codeContext.textContent = "Code block · Stanza Code";
+		codeContext.textContent = "Code block · Academic";
 		codeContext.setAttribute("role", "status");
 		this.codeContext = codeContext;
 

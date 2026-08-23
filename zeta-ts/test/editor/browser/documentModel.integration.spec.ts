@@ -20,7 +20,7 @@ test("document-model editor API, structured editing, and embedded code block run
 	await page.goto("/documentModel.html");
 	await expect(page.locator("#code-block .stanza-editor")).toBeVisible();
 	await expect(page.locator("#code-block .stanza-structured-format-toolbar")).toHaveAttribute("data-context", "code");
-	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Stanza Code");
+	await expect(page.locator("#code-block .stanza-structured-format-code-context")).toHaveText("Code block · Academic");
 	await expect.poll(() => page.evaluate(() => window.zetaDocumentModelIntegration.apiDocumentType)).toBe("doc");
 
 	const codeBlockInput = page.locator("#code-block .stanza-editor-input");

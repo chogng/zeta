@@ -8,9 +8,9 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
-| 标准 editor 能力 | `editor.all.ts` | 两个产品共同验证的行式编辑能力；不注册 Workbench pane |
-| Code editor 能力 | `editor.code.all.ts` | 标准能力；当前没有额外 editor contribution |
-| Academic editor 能力 | `editor.academic.all.ts` | 标准能力加结构化文档 engine contribution；不注册 Workbench pane |
+| 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
+| Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
+| Academic 功能实现 | `editor.academic.all.ts` | 只加载结构化文档 contribution；不加载 Code bundle 或 Code pane |
 | DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、`DocumentModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整程序化入口 | `editor.main.ts` | `editor.all.ts` 与 `editor.api.ts` 的组合 |
 
@@ -36,15 +36,21 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
-| `workbench/contrib/{codeEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、embedded factory 和服务接线 | 编辑事务、selection、viewport 或 feature controller |
+| `workbench/contrib/{codeEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
 
-依赖必须保持 `workbench → editor/contrib → editor/browser/common → editor/common → base` 的方向。`src/zeta/editor` 的生产代码不得反向引用 Workbench，`src/zeta/base` 也不得反向引用 editor。结构化文档通过 editor-owned `IEmbeddedTextEditorFactory` contract 请求行编辑能力，由 Workbench 提供具体 factory；`DocumentModel` 不得依赖 `TextModel`，`TextModel` 也不得依赖 document schema。
+依赖必须保持 `workbench → editor/contrib → editor/browser/common → editor/common → base` 的方向。`src/zeta/editor` 的生产代码不得反向引用 Workbench，`src/zeta/base` 也不得反向引用 editor。结构化文档通过 editor-owned `IEmbeddedTextEditorFactory` contract 请求行编辑能力，由 Academic feature implementation 提供具体 factory，再由 Workbench 注入 pane；`DocumentModel` 不得依赖 `TextModel`，`TextModel` 也不得依赖 document schema。
 
-## 两个 engine
+## 一个品牌，两套功能实现
+
+Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 feature implementation：Code 组合文件级行式命令、语言能力、diff 与 Code Workbench pane；Academic 组合 group、typed block、document transaction、citation、formatting 与 Academic Workbench pane。二者可以复用 `TextModel`、`CodeEditorWidget`、坐标和 DOM foundation 等底层 primitive，但不得复用对方的 pane、controller 集合或 mode bundle。
+
+Academic 代码块由 `AcademicCodeBlockEditorFactory` 直接组合行模型和 `CodeEditorWidget`。它不 import `CodeEditorPane`、`EditorPart` 或 `workbench/contrib/codeEditor`，因此“Academic 中出现代码”不等于在 Academic 内启动 Code 模式。
+
+## 两个同步 engine
 
 ### 行式文本 engine
 
-`TextModel` 是纯文本、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 `EditorPart` 投影它，但不拥有共享 model。`browser/editorContribution.ts` 保存 feature-neutral 注册表；`contrib/codeEditorPart.contribution.ts` 只建立不可缺少的 Code/embedded text runtime 与 typed capability map。简单功能由 browser 主文件就地注册；只有能力注入、两阶段配置或多对象编排才使用独立 `*.contribution.ts`。Editor-owned `BrowserTextModelService` 管理 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
+`TextModel` 是纯文本、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorPart` 投影它，但不拥有共享 model。`browser/editorContribution.ts` 保存 feature-neutral 注册表；`contrib/codeEditorPart.contribution.ts` 建立 Code 功能实现的 runtime 与 typed capability map。Editor-owned `BrowserTextModelService` 管理 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
 
 ### 结构化文档 engine
 
@@ -60,24 +66,24 @@ Contribution 必须满足以下条件：
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
 - 不隐式 import 另一个模式 bundle；跨 engine 适配只能 import 所需实现。
-- 正式产品只承诺 `editor.all.ts` 及其 Code/Academic 扩展组合，不承诺任意 contribution 子集都能组成受支持的产品。
+- 正式产品只承诺 `editor.code.all.ts` 与 `editor.academic.all.ts` 两个完整模式入口，不承诺任意 contribution 子集都能组成受支持的产品。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
 
 ## 入口与调用路径
 
 ```text
-Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ standard capability registration
+Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
                        └→ workbench/contrib/codeEditor ───→ code/diff pane + input registration
-Academic build mode ───┬→ editor.academic.all.ts → editor.all.ts + document contribution
+Academic build mode ───┬→ editor.academic.all.ts → document contribution only
                        └→ workbench/contrib/academic ──────→ profile + document pane registration
-                                                               └→ embedded CodeEditorWidget factory
+                                                               └→ AcademicCodeBlockEditorFactory
 
 editor.api.ts ─────────────→ TextModel / DocumentModel APIs
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
 ```
 
-Workbench 模式 contribution 是唯一能力选择点：`editor.all.ts` 固定标准能力，`editor.code.all.ts` 和 `editor.academic.all.ts` 只表达模式差异，并与对应 Workbench contribution 配对。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget、model 或 feature controller 内增加模式分支，也不得复制整份标准能力清单。
+Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
 
 ## 关键实现符号
 

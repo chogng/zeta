@@ -1,3 +1,2 @@
-// Academic extends the standard Stanza capability bundle with the Document Engine.
-import "./editor.all.js";
+// Academic owns a separate document-feature implementation and does not load Code mode contributions.
 import "./contrib/documentEditor.contribution.js";

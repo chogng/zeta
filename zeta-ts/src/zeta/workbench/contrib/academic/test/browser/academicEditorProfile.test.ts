@@ -18,7 +18,9 @@ test("Stanza input matching is supplied by the active Workbench profile", () => 
 test("Stanza profile materialization keeps schema and browser extensions together", () => {
 	const options = createDocumentEditorPaneOptions(academicProfile);
 	assert.equal(options.schema?.getNodeSpec("citation")?.kind, "inline");
-	assert.equal(options.schema?.getNodeSpec("bibliography")?.kind, "block");
+	assert.equal(options.schema?.getNodeSpec("title")?.kind, "group");
+	assert.equal(options.schema?.getNodeSpec("section")?.kind, "group");
+	assert.equal(options.schema?.getNodeSpec("bibliography")?.kind, "group");
 	assert.equal(options.outlineNavigator, true);
 	assert.equal(options.plugins?.length, 1);
 	assert.ok(options.nodeViews?.bibliography);

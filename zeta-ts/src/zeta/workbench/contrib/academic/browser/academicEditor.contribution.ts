@@ -1,5 +1,5 @@
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
-import { EmbeddedTextEditorFactory } from "../../codeEditor/browser/embeddedTextEditor.js";
+import { AcademicCodeBlockEditorFactory } from "../../../../editor/contrib/academic/browser/academicCodeBlockEditor.js";
 import { DocumentEditorPane } from "../../documentEditor/browser/documentEditorPane.js";
 import { createDocumentEditorPaneOptions, findEditorProfile, matchEditorProfiles } from "../../documentEditor/browser/editorProfile.js";
 import { AppServerDocumentCollaborationService } from "../../../services/documentCollaboration/browser/appServerDocumentCollaborationService.js";
@@ -25,10 +25,7 @@ for (const profile of profiles) {
 			const paneOptions = createDocumentEditorPaneOptions(selectedProfile, {
 				onSave: options.onSave,
 				workingCopyService: options.workingCopyService,
-				embeddedTextEditorFactory: options.embeddedTextEditorFactory ?? new EmbeddedTextEditorFactory({
-					textMateService: options.textMateService,
-					languageFeaturesService: options.languageFeaturesService,
-				}),
+				embeddedTextEditorFactory: options.embeddedTextEditorFactory ?? new AcademicCodeBlockEditorFactory(),
 				documentCollaborationService,
 			});
 			return new DocumentEditorPane(options.textFileService, paneOptions);

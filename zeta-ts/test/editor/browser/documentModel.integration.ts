@@ -1,7 +1,7 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/zeta/base/common/event.js";
 import { DisposableOwner } from "../../../src/zeta/base/common/lifecycle.js";
-import { EmbeddedTextEditorFactory } from "../../../src/zeta/workbench/contrib/codeEditor/browser/embeddedTextEditor.js";
+import { AcademicCodeBlockEditorFactory } from "../../../src/zeta/editor/contrib/academic/browser/academicCodeBlockEditor.js";
 import { createDefaultDocumentSchema } from "../../../src/zeta/editor/editor.api.js";
 import { createTextNode } from "../../../src/zeta/editor/editor.api.js";
 import { DocumentModel } from "../../../src/zeta/editor/editor.api.js";
@@ -120,7 +120,7 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const codeBlockPane = new DocumentEditorPane(codeBlockFiles, { embeddedTextEditorFactory: new EmbeddedTextEditorFactory() });
+const codeBlockPane = new DocumentEditorPane(codeBlockFiles, { embeddedTextEditorFactory: new AcademicCodeBlockEditorFactory() });
 const structuredPane = new DocumentEditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
 
 codeBlockPane.create(requiredElement("#code-block"));

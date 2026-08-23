@@ -328,6 +328,48 @@ test("DocumentSchema supports child groups, cardinality, and valid multi-step as
 	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, "assembled");
 });
 
+test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy", () => {
+	const schema = new DocumentSchema({
+		topNodeType: "article",
+		nodes: {
+			article: { kind: "root", content: [{ type: "group", min: 1 }] },
+			group: { kind: "group", content: [{ group: "stanza-block", min: 1 }] },
+			textBlock: { kind: "block", groups: ["stanza-block"], content: [{ type: "richLine", min: 1 }] },
+			quoteBlock: { kind: "block", groups: ["stanza-block"], content: [{ type: "richLine", min: 1 }] },
+			codeBlock: { kind: "block", groups: ["stanza-block"], content: [{ type: "codeLine", min: 1 }] },
+			imageBlock: {
+				kind: "block",
+				groups: ["stanza-block"],
+				content: [{ type: "captionLine", max: 1 }],
+				validateAttributes: attrs => {
+					if (typeof attrs.src !== "string" || attrs.src.length === 0) throw new TypeError("Image blocks require a source");
+				},
+			},
+			richLine: { kind: "line", content: [{ type: "text", max: 1 }] },
+			codeLine: { kind: "line", content: [{ type: "text", max: 1 }] },
+			captionLine: { kind: "line", content: [{ type: "text", max: 1 }] },
+			text: { kind: "text" },
+		},
+	});
+	const line = (type: "richLine" | "codeLine" | "captionLine", text: string) => schema.createNode(type, {
+		content: text.length > 0 ? [schema.createText(text)] : [],
+	});
+	const group = schema.createNode("group", { content: [
+		schema.createNode("textBlock", { content: [line("richLine", "First"), line("richLine", "Second")] }),
+		schema.createNode("quoteBlock", { content: [line("richLine", "Quoted")] }),
+		schema.createNode("codeBlock", { content: [line("codeLine", "const value = 1;"), line("codeLine", "return value;")] }),
+		schema.createNode("imageBlock", { attrs: { src: "image.png" }, content: [line("captionLine", "Figure 1")] }),
+	] });
+	const document = schema.createDocument([group]);
+
+	assert.equal(document.content[0]?.content.length, 4);
+	assert.deepEqual(document.content[0]?.content.map(block => block.type), ["textBlock", "quoteBlock", "codeBlock", "imageBlock"]);
+	assert.equal(document.content[0]?.content[2]?.content.length, 2);
+	assert.equal(schema.getNodeSpec("group")?.kind, "group");
+	assert.equal(schema.getNodeSpec("codeLine")?.kind, "line");
+	assert.throws(() => schema.createDocument([schema.createNode("codeBlock", { content: [line("codeLine", "orphan")] })]), /cannot contain 'codeBlock'/);
+});
+
 test("DocumentSchema enforces ordered content terms for custom academic nodes", () => {
 	const schema = new DocumentSchema({
 		topNodeType: "article",

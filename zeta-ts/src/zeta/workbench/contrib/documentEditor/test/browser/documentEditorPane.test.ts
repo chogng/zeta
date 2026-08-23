@@ -18,7 +18,7 @@ import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEdito
 import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../editor/common/model/documentDecoration.js";
 import { createDocumentPlugin, DocumentPluginKey } from "../../../../../editor/common/model/documentPlugin.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";
-import { createDefaultDocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
+import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 await import("../../../../../editor/contrib/documentEditor.contribution.js");
@@ -267,6 +267,41 @@ test("Stanza accepts a schema and custom node view without changing Stanza commo
 	assert.equal(pane.getDocument().content[0]?.content[0]?.content[0]?.text, "Updated callout");
 	pane.clearInput();
 	assert.equal(disposals, 1);
+	environment.window.close();
+});
+
+test("Stanza projects and edits the generic group, typed-block, and line hierarchy", async () => {
+	const environment = new JSDOM("<!doctype html><body></body>");
+	const schema = new DocumentSchema({
+		topNodeType: "article",
+		nodes: {
+			article: { kind: "root", content: [{ type: "group", min: 1 }] },
+			group: { kind: "group", content: [{ group: "stanza-block", min: 1 }] },
+			textBlock: { kind: "block", groups: ["stanza-block"], content: [{ type: "richLine", min: 1 }] },
+			richLine: { kind: "line", content: [{ type: "text", max: 1 }] },
+			text: { kind: "text" },
+		},
+	});
+	const firstLine = schema.createNode("richLine", { id: "line-1", content: [schema.createText("First", { id: "line-text-1" })] });
+	const secondLine = schema.createNode("richLine", { id: "line-2", content: [schema.createText("Second", { id: "line-text-2" })] });
+	const document = schema.createDocument([schema.createNode("group", { id: "group-1", content: [
+		schema.createNode("textBlock", { id: "block-1", content: [firstLine, secondLine] }),
+	] })], "article-1");
+	const parent = h(environment.window.document, "main");
+	environment.window.document.body.append(parent);
+	using pane = new EditorPane(new MemoryTextFiles(""), { schema });
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file("C:\\project\\hierarchy.zeta-academic"), initialText: serializeDocument(document, schema) }, new AbortController().signal);
+
+	assert.equal(parent.querySelectorAll(".stanza-document-group[data-node-kind='group']").length, 1);
+	assert.equal(parent.querySelectorAll(".stanza-document-block[data-node-kind='block']").length, 1);
+	const lines = parent.querySelectorAll<HTMLElement>(".stanza-document-line[data-node-kind='line']");
+	assert.equal(lines.length, 2);
+	const secondInput = lines[1]?.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
+	assert.ok(secondInput);
+	secondInput.value = "Updated";
+	secondInput.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
+	assert.equal(pane.getDocument().content[0]?.content[0]?.content[1]?.content[0]?.text, "Updated");
 	environment.window.close();
 });
 
@@ -1567,7 +1602,7 @@ test("Stanza restores serialized blocks and releases its model", async () => {
 	assert.equal(parent.querySelector("[data-editor-kind='code-block']")?.textContent, "");
 	assert.equal(parent.querySelector<HTMLTextAreaElement>("textarea")?.value, "const value = 1;");
 	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-toolbar")?.dataset.context, "code");
-	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-code-context")?.textContent, "Code block · Stanza Code");
+	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-code-context")?.textContent, "Code block · Academic");
 	assert.equal(parent.querySelector<HTMLElement>(".stanza-structured-format-typography-controls")?.hidden, true);
 	pane.clearInput();
 	assert.throws(() => pane.getDocument(), /no active model/);
@@ -1611,7 +1646,7 @@ test("Stanza delegates code blocks to its embedded line editor", async () => {
 	environment.window.close();
 });
 
-test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
+test("AcademicCodeBlockEditorFactory creates an Academic-owned line editor surface", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const parent = h(environment.window.document, "main");
 	const previousWindow = (globalThis as typeof globalThis & { window?: Window }).window;
@@ -1622,8 +1657,8 @@ test("EmbeddedTextEditorFactory creates a line editor surface", async () => {
 	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
 	try {
 		await import("../../../../../editor/editor.code.all.js");
-		const { EmbeddedTextEditorFactory } = await import("../../../codeEditor/browser/embeddedTextEditor.js");
-		using editor = new EmbeddedTextEditorFactory().create({
+		const { AcademicCodeBlockEditorFactory } = await import("../../../../../editor/contrib/academic/browser/academicCodeBlockEditor.js");
+		using editor = new AcademicCodeBlockEditorFactory().create({
 			resource: URI.parse("untitled:test/code"),
 			label: "code",
 			languageId: "typescript",

@@ -1,6 +1,7 @@
 import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
 
-export type DocumentNodeKind = "root" | "block" | "inline" | "text";
+/** Structural layers available to Stanza schemas. */
+export type DocumentNodeKind = "root" | "group" | "block" | "line" | "inline" | "text";
 
 export interface DocumentMarkSpec {
 	readonly validateAttributes?: (attrs: DocumentAttributes) => void;

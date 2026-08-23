@@ -8,12 +8,12 @@ Stanza 是 Zeta 唯一的可组装编辑器内核，源码保持在一个扁平�
 
 | 使用场景 | 模式加载入口 | 编辑能力 |
 | --- | --- | --- |
-| Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 行式 editor 能力 + code/diff pane/input 与文件服务接线 |
-| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 结构化 editor 能力 + Academic profile、document pane 与 embedded code factory |
-| 完整宿主与集成测试 | `editor.all.ts` | 两组 contribution 的并集 |
+| Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 独立的文件级行式功能实现 + code/diff pane/input 与文件服务接线 |
+| Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 独立的结构化文档功能实现；已建立 group/block/line schema 与通用投影底座，并使用 Academic-owned code-block factory |
+| Code 行式能力全集 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；Academic 不加载它 |
 | DOM-free 调用 | `editor.api.ts` | 两个 model、schema、transaction、serialization 和坐标 API；不注册 pane |
 
-Stanza 是整个内核的品牌，不是某一个 engine 的别名。两个 engine 只称为 Text Engine 与 Document Engine；`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 capability contract；schema validation、transaction、selection mapping、IME commit 和 model lifecycle 仍属于对应 engine，不能变成任意开关 contribution。
+Stanza 是整个内核的品牌，不是某一个 engine 或 mode 的别名。Code 与 Academic 拥有不同的 feature implementation 和 bundle；两个 engine 只称为 Text Engine 与 Document Engine。`TextModel` 与 `DocumentModel` 不互相继承，也不通过一个带大量可选方法的万能 model 接口合并。可共享能力必须依赖小而完整的 primitive/capability contract；复用 `CodeEditorWidget` 不代表复用 Code pane 或 Code contribution 集合。
 
 Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM class、目录和兼容 pane 已删除；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
 
@@ -25,7 +25,7 @@ Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM c
 | `editor/browser` | 两个 engine 的 widget 与 DOM projection 已具备 | code/document/diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择 Workbench 模式 |
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
 | `editor.*.all.ts` | editor 能力按模式装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
-| `workbench/contrib/{codeEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile、embedded factory 和模式注册；不得实现编辑事务或视图内部行为 |
+| `workbench/contrib/{codeEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile、factory 注入和模式注册；不得实现编辑事务或视图内部行为 |
 | `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
 | Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
@@ -1450,7 +1450,7 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | 工作区原始文件读取 | `platform/files` | ✅ |
 | file/bootstrap 内容决策 | `ITextFileService` | ✅ Workbench service |
 | URI 到 Stanza `TextModel` 的共享引用 | `BrowserTextModelService` | ✅ editor-owned |
-| Stanza viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ document session 与 embedded widget 共用的浏览器编辑表面 |
+| Stanza viewport、native input、基础键盘/指针与 text drop | `CodeEditorWidget` | ✅ Code mode 与 Academic code-block implementation 复用的底层浏览器编辑表面 |
 | Stanza language、folding、diagnostic、save 与文档命令组合 | `EditorPart` + editor contribution registry | ✅ per-editor runtime；可独立能力由模式 bundle 选择 |
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Stanza pane 已选择 |
