@@ -34,7 +34,7 @@ Zeta 文档首先帮助读者建立正确的系统心智模型，然后才提供
 | 信息结构与语言 | 全部 `docs/*.md` 和 crate README | 本文 |
 | 页面布局、字体、列表、表格和颜色 | 文档站全部页面 | 文档站全局样式 |
 | 标题展示、导航、目录和源码入口 | 文档站全部页面 | 统一页面组件 |
-| 最低机械约束 | 文档站收录的全部 Markdown | `npm run check:docs` |
+| 最低机械约束 | 文档站收录的全部 Markdown | `corepack pnpm --dir docs-site run check:docs` |
 
 ## 1. 目标
 

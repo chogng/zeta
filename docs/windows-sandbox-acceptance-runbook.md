@@ -115,7 +115,7 @@ Golden expectation：
 执行：
 
 ```powershell
-python scripts/build_zeta_package.py `
+python -B build/release/build_zeta_package.py `
   --target $Target `
   --package-dir $Package
 

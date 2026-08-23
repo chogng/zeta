@@ -1,4 +1,5 @@
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { developmentArtifactsPath } from "../../environment/node/developmentArtifacts.js";
 
 export interface ServerHostPackageLocation {
   readonly appPath: string;
@@ -13,12 +14,12 @@ export interface ServerHostPackageLocation {
 export function serverHostExecutablePath(location: ServerHostPackageLocation): string {
   const packageRoot = location.isPackaged
     ? location.resourcesPath
-    : resolve(location.appPath, ".tmp", "zeta-package");
+    : developmentArtifactsPath(location.appPath, "dev", "zeta-package");
   const executableName = location.platform === "win32" ? "zeta-server.exe" : "zeta-server";
   return join(packageRoot, "bin", executableName);
 }
 
 /** Resolves the development-only generation pointer published by the Rust watcher. */
 export function developmentServerHostGenerationPath(appPath: string): string {
-  return resolve(appPath, ".tmp", "dev-server-host", "current.json");
+  return developmentArtifactsPath(appPath, "dev", "server-host", "current.json");
 }

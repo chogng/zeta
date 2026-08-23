@@ -5,13 +5,14 @@ import test from "node:test";
 import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
+const buildRoot = resolve(desktopRoot, "../build");
 const editorRoot = join(desktopRoot, "src/zeta/editor");
 const browserIntegrationRoot = join(desktopRoot, "test/editor/browser");
 const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
 
 test("Aster unit tests follow the flat editor common, browser, and contrib layout", () => {
   assert.equal(exists(join(desktopRoot, "test/monaco")), false);
-  assert.equal(exists(join(desktopRoot, "test/editor/run-unit.mjs")), true);
+  assert.equal(exists(join(buildRoot, "test/runEditorUnitTests.ts")), true);
   assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
   assert.equal(exists(join(desktopRoot, "src/zeta/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts")), true);
   assert.equal(exists(join(editorRoot, "contrib/find/test/browser/findController.test.ts")), true);
@@ -48,7 +49,7 @@ test("browser integrations import the stable API and only their mode bundle", ()
 });
 
 test("desktop exposes one editor browser test entrypoint", () => {
-  assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node scripts/run-editor-browser-tests.mjs");
+  assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node ../build/test/runEditorBrowserTests.ts");
   assert.equal(desktopPackage.scripts?.["test:alpha"], undefined);
   assert.equal(desktopPackage.scripts?.["test:gama"], undefined);
 });

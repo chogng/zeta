@@ -1,7 +1,7 @@
 # Zeta 文档导航
 
 > 本文件是跨产品 `docs/` 的索引。新增跨产品文档必须同时加入本索引和
-> [`docs-site/scripts/generate-docs.mjs`](../docs-site/scripts/generate-docs.mjs) 的分组。
+> [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) 的分组。
 > `zeterm` 专属系统文档由 [`zeterm/docs/README.md`](../zeterm/docs/README.md) 索引，避免产品宿主
 > 文档和共享系统文档混在同一目录。
 > 系统性的阅读方法（先系统后 crate、两层文档职责）见
@@ -17,7 +17,7 @@
 | 理解共享 backend、协议、执行和存储 | 本目录对应的系统文档与 `zeta-rs/*/README.md` |
 | 理解 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) |
 | 理解某个 crate 的实现契约 | 对应 crate 的 `README.md` |
-| 查看 docs-site 如何收录文档 | [`docs-site/scripts/generate-docs.mjs`](../docs-site/scripts/generate-docs.mjs) |
+| 查看 docs-site 如何收录文档 | [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) |
 
 ## 1. 我该看哪份？
 

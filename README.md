@@ -31,6 +31,8 @@ For Electron or Browser Workbench development, install the pinned pnpm workspace
 corepack pnpm install
 ```
 
+Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
+
 ### `zeta code`
 
 ```bash
@@ -78,9 +80,9 @@ cargo run -p zeterm
 - [`zeta-rs`](zeta-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
 - [`zeta-code`](zeta-code): CLI command host and TUI presentation.
 - [`desktop`](desktop): Electron Main, Preload, Renderer, and Browser Workbench.
+- [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
 - [`zeterm`](zeterm): native window, terminal, renderer, and product UI.
 - [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
-- [`scripts`](scripts): packaging and release tooling.
 
 ## Where to read next
 
@@ -90,7 +92,7 @@ cargo run -p zeterm
 - [Electron Desktop architecture](docs/zeta-desktop-architecture.md)
 - [Shared Rust architecture](docs/zeta-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
-- [Packaging](scripts/zeta_package/README.md)
+- [Packaging](build/release/zeta_package/README.md)
 - [`zeterm` release graph](zeterm/docs/zeterm-release-graph.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.

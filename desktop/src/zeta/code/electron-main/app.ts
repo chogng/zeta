@@ -27,6 +27,7 @@ import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
 import { extensionIpcRoutes } from "../../platform/extensions/electron-main/extensionIpcRoutes.js";
 import { extensionHostIpcRoutes } from "../../platform/extensionHost/electron-main/extensionHostIpcRoutes.js";
+import { developmentArtifactsPath } from "../../platform/environment/node/developmentArtifacts.js";
 import { diffIpcRoutes } from "../../platform/diff/electron-main/diffIpcRoutes.js";
 import { documentCollaborationIpcRoutes } from "../../platform/collaboration/electron-main/documentCollaborationIpcRoutes.js";
 import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
@@ -960,10 +961,9 @@ export class ZetaApplication extends DisposableOwner {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      preload: join(
-        app.getAppPath(),
-        "dist/preload/src/zeta/base/parts/sandbox/electron-browser/preload.cjs",
-      ),
+      preload: app.isPackaged
+        ? join(app.getAppPath(), "dist/preload/src/zeta/base/parts/sandbox/electron-browser/preload.cjs")
+        : developmentArtifactsPath(app.getAppPath(), "preload", "src/zeta/base/parts/sandbox/electron-browser/preload.cjs"),
       additionalArguments: [],
     };
   }

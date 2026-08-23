@@ -1,8 +1,0 @@
-.zeta-icon {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 auto;
-}
-
-.zeta-icon [stroke="#000"] { stroke: currentColor; }
-.zeta-icon [fill="#000"] { fill: currentColor; }

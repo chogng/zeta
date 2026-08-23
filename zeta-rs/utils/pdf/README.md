@@ -39,7 +39,7 @@ other    unsupported-platform
 Release build 先 stage runtime：
 
 ```text
-node scripts/fetch-pdfium.mjs --target darwin-arm64 \
+node build/download/fetchPdfium.ts --target darwin-arm64 \
   --output "$STAGING/resources/native/pdfium"
 ```
 

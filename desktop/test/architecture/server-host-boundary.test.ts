@@ -11,9 +11,9 @@ function source(path: string): string {
 }
 
 test("Desktop packages the shared backend host instead of the Zeta Code CLI", () => {
-  const packageScript = source("scripts/prepare-dev-package.mjs");
+  const packageScript = source("../build/desktop/prepareDevPackage.ts");
   const packageManifest = source("package.json");
-  const watcher = source("build/serverHost/watch.mjs");
+  const watcher = source("../build/lib/watch/watchServerHost.ts");
   const electronMain = source("src/zeta/code/electron-main/app.ts");
   const forbiddenProductCrate = ["zeta", "cli"].join("-");
   const forbiddenProductPath = ["zeta", "code", "cli"].join("/");

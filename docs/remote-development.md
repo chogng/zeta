@@ -397,14 +397,14 @@ target、非规范/符号链接路径、大小或 SHA-256 不匹配，并在远�
 开发/发布包可选择离线 bundle：
 
 ```text
-node desktop/scripts/prepare-dev-package.mjs \
+node build/desktop/prepareDevPackage.ts \
   --remote-runtime-bundle <bundle-directory>
 ```
 
 也可生成只绑定网络发布目录的轻量产品包；URL 与摘要随后由平台应用签名认证：
 
 ```text
-node desktop/scripts/prepare-dev-package.mjs \
+node build/desktop/prepareDevPackage.ts \
   --remote-runtime-catalog-url https://releases.example/zeta/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```
@@ -540,8 +540,8 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - zeterm Native Tunnel host/manager：`zeterm/src/remote_tunnel_process.rs`、
   `zeterm/src/remote_tunnel_manager.rs`、`zeterm/src/remote_tunnel_manager_input.rs`、
   `zeterm/src/remote_tunnel_manager_view.rs`
-- zeterm Remote bundle/build trust chain：`scripts/remote_runtime_bundle.py`、
-  `scripts/build_remote_runtime_bundle.py`、`scripts/build_zeterm_package.py`
+- zeterm Remote bundle/build trust chain：`build/release/remote_runtime_bundle.py`、
+  `build/release/build_remote_runtime_bundle.py`、`build/release/build_zeterm_package.py`
 - Optional headless Remote runtime：`zeta-rs/remote-server`
 - Remote Terminal lease/attach：`zeta-rs/app-server/src/terminal_service.rs`、
   `zeterm/src/terminal_session_remote.rs`

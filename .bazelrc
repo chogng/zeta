@@ -4,6 +4,7 @@ try-import %workspace%/user.bazelrc
 common --enable_platform_specific_config
 common --incompatible_strict_action_env
 common --test_output=errors
+common --symlink_prefix=.build/bazel-
 
 # Do not probe the machine's Xcode installation; the SDK is supplied by
 # MODULE.bazel and the LLVM toolchain.

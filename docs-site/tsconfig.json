@@ -13,13 +13,15 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    "tsBuildInfoFile": "../.build/docs/typescript/tsconfig.tsbuildinfo",
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@zeta-generated-docs": ["../.build/docs/generatedDocs.ts"]
     }
   },
   "include": [

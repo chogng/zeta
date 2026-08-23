@@ -1,5 +1,6 @@
 import { app } from 'electron/main';
 import { join } from 'node:path';
+import { developmentArtifactsPath } from '../../platform/environment/node/developmentArtifacts.js';
 import type { DesktopApplicationConfiguration } from '../../product/common/product.js';
 import type { WorkbenchModeId } from '../../product/common/workbenchMode.js';
 import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from '../../product/node/product.js';
@@ -13,7 +14,9 @@ export interface StartElectronApplicationOptions {
 
 /** Starts the shared Electron application with one selected initial Workbench mode. */
 export function startElectronApplication(options: StartElectronApplicationOptions): void {
-	const rendererBase = join(app.getAppPath(), 'dist', 'renderer');
+	const rendererBase = app.isPackaged
+		? join(app.getAppPath(), 'dist', 'renderer')
+		: developmentArtifactsPath(app.getAppPath(), 'renderer');
 	const rendererRoot = app.isPackaged
 		? resolvePackagedRendererRoot(rendererBase, options.application)
 		: join(rendererBase, options.application.rendererDirectory);

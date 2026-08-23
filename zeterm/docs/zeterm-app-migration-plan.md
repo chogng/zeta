@@ -122,7 +122,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
       单一 root workspace 已消除跨 workspace path dependency bridge；
 - [x] 在 CI 入口中通过完整 `//zeterm:zeterm` build 验证平台 toolchain；本机已通过同一 target，
       `//zeterm:zeterm_ci` 继续验证 boundary/package/signing contract。
-- [x] 接入 provider-neutral 的 platform signing/verification job；`scripts/release_zeterm_package.sh`
+- [x] 接入 provider-neutral 的 platform signing/verification job；`build/release/release_zeterm_package.sh`
       负责 Build → Stage → Sign → Verify，平台 CI 只需绑定 native tool 和 secret 环境；只发布
       `verified` artifact；
 - [x] `desktop` 构建不拉入 Native UI/GPU 依赖；desktop 侧只保留自身的 platform adapter，边界检查未发现
@@ -183,7 +183,7 @@ just --dry-run zeterm
 `just zeterm`。根 workspace 的 zeterm package 与 shared backend 已通过 workspace check 和 targeted
 check/test 验证；Bazel graph 的完整入口是 `bazel build //zeterm:zeterm`，发布 contract 入口是
 `bazel test //zeterm:zeterm_ci`，package staging 使用 `just zeterm-package`，
-签名发布流程使用 `scripts/release_zeterm_package.sh`，发布细节见
+签名发布流程使用 `build/release/release_zeterm_package.sh`，发布细节见
 [`zeterm-release-graph.md`](zeterm-release-graph.md)。
 
 并满足以下结构检查：

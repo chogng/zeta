@@ -42,7 +42,7 @@ Desktop consumes these files through the following build-time path:
 
 ```text
 resources/icons/*.svg
-  -> desktop/scripts/sync-product-icons.mjs
+  -> build/desktop/resources/syncProductIcons.ts
   -> desktop/generated/product-icons.ts
   -> base/common/lxiconsLibrary.ts
   -> register
@@ -88,7 +88,7 @@ Rust consumes the same source artwork through:
 
 ```text
 resources/icons/*.svg
-  -> scripts/sync-rust-icons.mjs
+  -> build/zeterm/syncRustIcons.ts
   -> zeterm/icons/src/generated.rs
   -> private artwork bindings
   -> zeterm/icons/src/library.rs
@@ -96,8 +96,8 @@ resources/icons/*.svg
   -> zeta-ui renderer and components
 ```
 
-Run `node scripts/sync-rust-icons.mjs` after adding, removing, or renaming an
-icon; `node scripts/sync-rust-icons.mjs --check` verifies that the checked-in
+Run `node build/zeterm/syncRustIcons.ts` after adding, removing, or renaming an
+icon; `node build/zeterm/syncRustIcons.ts --check` verifies that the checked-in
 output is current. The generated Rust source is checked in so Cargo and Bazel
 builds remain hermetic. Generated artwork is crate-private: resource filenames
 do not automatically become public icon IDs. Add or change public semantics in

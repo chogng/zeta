@@ -52,9 +52,9 @@ filegroup(
 filegroup(
     name = "zeterm_package_tool",
     srcs = [
-        "//scripts:build_remote_runtime_bundle.py",
-        "//scripts:build_zeterm_package.py",
-        "//scripts:remote_runtime_bundle.py",
+        "//build/release:build_remote_runtime_bundle.py",
+        "//build/release:build_zeterm_package.py",
+        "//build/release:remote_runtime_bundle.py",
     ],
 )
 
@@ -69,9 +69,9 @@ filegroup(
 
 sh_test(
     name = "zeterm_boundary_test",
-    srcs = ["//scripts:check_zeterm_boundary.sh"],
+    srcs = ["//build/release:check_zeterm_boundary.sh"],
     args = [
-        "$(location //scripts:check_zeterm_boundary.py)",
+        "$(location //build/release:check_zeterm_boundary.py)",
         "$(location //:Cargo.toml)",
         "$(location Cargo.toml)",
         "$(location //:Cargo.lock)",
@@ -80,63 +80,63 @@ sh_test(
         "//:Cargo.lock",
         "//:Cargo.toml",
         "Cargo.toml",
-        "//scripts:check_zeterm_boundary.py",
+        "//build/release:check_zeterm_boundary.py",
     ],
     size = "small",
 )
 
 sh_test(
     name = "zeterm_package_test",
-    srcs = ["//scripts:test_zeterm_package.sh"],
-    args = ["$(location //scripts:test_zeterm_package.py)"],
+    srcs = ["//build/release:test_zeterm_package.sh"],
+    args = ["$(location //build/release:test_zeterm_package.py)"],
     data = [
         "//zeterm:zeterm_package_contract",
-        "//scripts:build_zeterm_package.py",
-        "//scripts:remote_runtime_bundle.py",
-        "//scripts:test_remote_runtime_bundle.py",
-        "//scripts:test_zeterm_package.py",
+        "//build/release:build_zeterm_package.py",
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/release:test_zeterm_package.py",
     ],
     size = "small",
 )
 
 sh_test(
     name = "remote_runtime_bundle_test",
-    srcs = ["//scripts:test_remote_runtime_bundle.sh"],
-    args = ["$(location //scripts:test_remote_runtime_bundle.py)"],
+    srcs = ["//build/release:test_remote_runtime_bundle.sh"],
+    args = ["$(location //build/release:test_remote_runtime_bundle.py)"],
     data = [
-        "//scripts:remote_runtime_bundle.py",
-        "//scripts:test_remote_runtime_bundle.py",
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
     ],
     size = "small",
 )
 
 sh_test(
     name = "zeterm_release_contract_test",
-    srcs = ["//scripts:check_zeterm_release_contract.sh"],
+    srcs = ["//build/release:check_zeterm_release_contract.sh"],
     args = [
-        "$(location //scripts:check_zeterm_release_contract.py)",
+        "$(location //build/release:check_zeterm_release_contract.py)",
         "$(location packaging/zeterm-package-contract.json)",
         "$(location packaging/zeterm-signing-policy.json)",
     ],
     data = [
         "packaging/zeterm-package-contract.json",
         "packaging/zeterm-signing-policy.json",
-        "//scripts:check_zeterm_release_contract.py",
+        "//build/release:check_zeterm_release_contract.py",
     ],
     size = "small",
 )
 
 sh_test(
     name = "zeterm_signing_test",
-    srcs = ["//scripts:test_zeterm_signing.sh"],
-    args = ["$(location //scripts:test_zeterm_signing.py)"],
+    srcs = ["//build/release:test_zeterm_signing.sh"],
+    args = ["$(location //build/release:test_zeterm_signing.py)"],
     data = [
         "//zeterm:zeterm_package_contract",
-        "//scripts:build_zeterm_package.py",
-        "//scripts:remote_runtime_bundle.py",
-        "//scripts:test_remote_runtime_bundle.py",
-        "//scripts:test_zeterm_signing.py",
-        "//scripts:zeterm_signing.py",
+        "//build/release:build_zeterm_package.py",
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/release:test_zeterm_signing.py",
+        "//build/release:zeterm_signing.py",
     ],
     size = "small",
 )

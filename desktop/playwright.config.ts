@@ -10,7 +10,7 @@ const browserProjects = browserServerMode === "disconnected"
 
 export default defineConfig({
   testDir: "./test/smoke",
-  outputDir: "./output/playwright/test-results",
+  outputDir: "../.build/desktop/playwright/test-results",
   fullyParallel: false,
   workers: 1,
   projects: [
@@ -47,6 +47,6 @@ export default defineConfig({
   },
   reporter: [
     ["list"],
-    ["html", { outputFolder: "./output/playwright/report", open: "never" }],
+    ["html", { outputFolder: "../.build/desktop/playwright/report", open: "never" }],
   ],
 });

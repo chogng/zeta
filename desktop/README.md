@@ -51,7 +51,7 @@ corepack pnpm dev:web:full
 TUI、zeterm 连接同一 profile/Workspace authority。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
-`desktop/.tmp/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
+`.build/desktop/dev/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的
 ripgrep 与平台 sandbox helper。Electron 默认生成 `hostProvidedNode` variant，
 不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
 没有 Electron runtime。开发态和发布态 Electron 都从相同的
@@ -65,7 +65,7 @@ Vite，并按浏览器连接管理 App Server。启动后不要关闭终端，�
 热更新分为两个单向依赖层：`src/zeta/base/common/hotReload.ts` 定义 Renderer realm 内通用的
 export-handler runtime，`src/zeta/base/common/hotReloadHelpers.ts` 在其上提供
 `readHotReloadableExport`、`observeHotReloadableExports` 和 `createHotClass`；两者都不依赖 Vite 或
-Workbench。`build/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
+Workbench。根 `build/vite/` 拥有开发入口、语法分析、HMR 边界注入和完整 Vite 配置。Workbench 产品
 源码不启用或配置开发工具。
 
 Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入口前启用 runtime。CSS 由 Vite
@@ -77,17 +77,17 @@ Renderer 开发服务器使用 Vite HMR。`build/vite/setup-dev.ts` 在产品入
 Vite 插件会在模块执行前比较 TypeScript 语法结构。只有普通实例方法、getter 和 setter 的变化进入
 原型热替换；构造器、实例字段、静态状态、装饰器、模块声明/副作用或继承关系变化都会自动执行完整
 页面重载，并在开发服务器日志中说明原因。这样旧实例不会静默保留过期的初始化状态。Electron Main
-与 Preload 仍会重启整个 Electron 进程。`build/typescript/watchElectron.mjs` 分别保留两个 TypeScript
+与 Preload 仍会重启整个 Electron 进程。`build/lib/watch/watchElectron.ts` 分别保留两个 TypeScript
 watch program，但只在两边都完成当前编译且为 0 errors 后重启 Electron；任何编译失败都会保留当前
 进程，避免加载同一轮增量编译中的半成品模块图。
 
-完整 Electron 开发命令还会运行 `build/serverHost/watch.mjs`。Rust 源码或 Cargo manifest 变化后，它先完成
+完整 Electron 开发命令还会运行 `build/lib/watch/watchServerHost.ts`。Rust 源码或 Cargo manifest 变化后，它先完成
 `zeta-server-host` 的 `dev-small` profile 构建，再发布一个不可变 generation；每个本地 Workbench window 随后通过现有 App
 Server supervisor 停止旧连接并启动新 generation。构建失败时当前 App Server 继续运行，初始化失败
 时自动回滚到上一 generation。Host 构建遵循 `CARGO_TARGET_DIR`，并直接读取 Cargo JSON artifact 报告的
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
 和一个回滚版本。Watcher 只接受 `zeta-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
-`target` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
+`.build/cargo` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
 `corepack pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
 不启动 Rust 的 disconnected Web 模式不会监听后端。
 
@@ -154,7 +154,7 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 
 普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
-App Server 不可用，产品操作明确失败。`dev:web:full` 则由 `build/vite/webAppServerPlugin.mjs`、
+App Server 不可用，产品操作明确失败。`dev:web:full` 则由 `build/vite/webAppServerPlugin.ts`、
 `ViteDevAppServerConnection` 与 `connectViteDevRendererApi()` 组成仅限本机开发的 host，并在
 Workbench 启动前注入同一份 `IRendererHost` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
 执行前注入：

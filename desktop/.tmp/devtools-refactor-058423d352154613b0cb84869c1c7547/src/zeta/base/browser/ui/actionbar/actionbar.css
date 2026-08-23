@@ -1,9 +1,0 @@
-.zeta-action-bar { display: flex; align-items: stretch; gap: 4px; }
-.zeta-action-view-item { display: flex; align-items: stretch; }
-.zeta-action-view-item-separator {
-  align-self: center;
-  width: 1px;
-  height: 16px;
-  background: currentColor;
-  opacity: .35;
-}

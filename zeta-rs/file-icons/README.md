@@ -70,7 +70,7 @@ adapter 各自实现同一解析顺序，并由两侧单元测试锁定关键 ca
 
 ## Desktop 集成
 
-`desktop/scripts/sync-file-icons.mjs` 在 Desktop build、dev、test 和 Renderer typecheck
+`build/desktop/resources/syncFileIcons.ts` 在 Desktop build、dev、test 和 Renderer typecheck
 之前把 manifest、WOFF 与 License 同步到 Desktop。也可以在仓库根目录单独执行：
 
 ```text

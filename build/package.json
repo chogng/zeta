@@ -1,0 +1,15 @@
+{
+  "name": "zeta-build",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test *.test.ts desktop/**/*.test.ts lib/watch/*.test.ts pnpm/*.test.ts vite/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p ../desktop/tsconfig.tokens.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "svgo": "4.0.1",
+    "vite": "8.0.13"
+  }
+}

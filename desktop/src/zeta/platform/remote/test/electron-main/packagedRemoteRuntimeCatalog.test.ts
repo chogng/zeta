@@ -123,7 +123,7 @@ test("packaged catalog rejects symbolic artifact paths", { skip: process.platfor
 });
 
 test("bundle location follows the canonical development and packaged roots", () => {
-  assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/repo/desktop", isPackaged: false, resourcesPath: "/ignored" }), resolve("/repo/desktop/.tmp/zeta-package/zeta-remote-runtimes"));
+  assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/repo/desktop", isPackaged: false, resourcesPath: "/ignored" }), resolve("/repo/.build/desktop/dev/zeta-package/zeta-remote-runtimes"));
   assert.equal(packagedRemoteRuntimeBundleRoot({ appPath: "/ignored", isPackaged: true, resourcesPath: "/Applications/Zeta.app/Contents/Resources" }), join("/Applications/Zeta.app/Contents/Resources", "zeta-remote-runtimes"));
 });
 

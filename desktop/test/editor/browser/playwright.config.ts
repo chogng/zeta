@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
   testMatch: "*.integration.spec.ts",
-  outputDir: "../../../output/playwright/editor-results",
+  outputDir: "../../../../.build/desktop/playwright/editor-results",
   fullyParallel: false,
   workers: 1,
   use: { baseURL: "http://127.0.0.1:5185" },
@@ -16,5 +16,5 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-  reporter: [["list"], ["html", { outputFolder: "../../../output/playwright/editor-report", open: "never" }]],
+  reporter: [["list"], ["html", { outputFolder: "../../../../.build/desktop/playwright/editor-report", open: "never" }]],
 });

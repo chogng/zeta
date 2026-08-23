@@ -5,7 +5,7 @@ export default defineConfig({
   root: resolve(import.meta.dirname),
   server: { host: "127.0.0.1", port: 5185, strictPort: true },
   build: {
-    outDir: resolve(import.meta.dirname, "dist"),
+    outDir: resolve(import.meta.dirname, "../../../../.build/desktop/editor-browser"),
     emptyOutDir: true,
     rollupOptions: {
       input: {

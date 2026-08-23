@@ -2,7 +2,7 @@
 
 > 本 README 拥有 shared sandbox policy 到 Linux Bubblewrap enforcement 的实现契约；
 > package source/build contract 见
-> [`scripts/zeta_package`](../../scripts/zeta_package/README.md)，跨平台决策见
+> [`build/release/zeta_package`](../../build/release/zeta_package/README.md)，跨平台决策见
 > [`docs/sandboxing.md`](../../docs/sandboxing.md)。
 
 `LinuxSandbox::discover` 在 host composition 时冻结 Bubblewrap executable。候选由

@@ -1,4 +1,11 @@
 packages:
+  - build
   - desktop
+  - docs-site
+storeDir: .tooling/pnpm/store
 allowBuilds:
-  electron: set this to true or false
+  electron: true
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
+  workerd: true

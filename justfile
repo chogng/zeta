@@ -22,12 +22,12 @@ zeterm-dev:
 
 # Stage an unsigned zeterm package; release CI signs and verifies the staged binary.
 zeterm-package *args:
-    python3 scripts/build_zeterm_package.py {{ args }}
+    python3 -B build/release/build_zeterm_package.py {{ args }}
 
 # Build, sign, and verify a zeterm package in a platform release job.
 zeterm-release:
-    scripts/release_zeterm_package.sh
+    build/release/release_zeterm_package.sh
 
 # Build a canonical Zeta package; pass normal build_zeta_package.py flags.
 package *args:
-    python3 scripts/build_zeta_package.py {{ args }}
+    python3 -B build/release/build_zeta_package.py {{ args }}

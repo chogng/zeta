@@ -1,5 +1,11 @@
-# Rust build products
+# Canonical local build products
+.build/
+/.tooling/
+
+# Legacy output paths remain ignored so older tools cannot re-add them.
 target/
+__pycache__/
+*.py[cod]
 
 # Bazel creates these workspace-root symlinks for its output tree.
 /bazel-*
@@ -16,7 +22,7 @@ output/
 !desktop/src/zeta/workbench/services/output/
 !desktop/src/zeta/workbench/services/output/**
 
-# Desktop build products
+# Legacy Desktop build products
 desktop/node_modules/
 desktop/dist/
 desktop/test/editor/browser/dist/

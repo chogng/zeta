@@ -6,7 +6,7 @@ executable, not a Zeta Rust crate and not a second Tool API.
 
 [`runtime-lock.json`](runtime-lock.json) is the release authority for the
 upstream version, package-target mapping, archive size, SHA-256 digest, format,
-and executable member. [`scripts/build_zeta_package.py`](../../scripts/build_zeta_package.py)
+and executable member. [`build/release/build_zeta_package.py`](../../build/release/build_zeta_package.py)
 downloads and validates one artifact, extracts only the named executable, and
 places it at `zeta-path/rg[.exe]`.
 

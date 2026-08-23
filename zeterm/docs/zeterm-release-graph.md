@@ -21,9 +21,9 @@ backend 不得依赖 zeterm/UI。workspace 是统一构建图，不替代产品�
 | Source/manifest input graph | Bazel zeterm package | `//zeterm:zeterm_sources` | ✅ |
 | Zeterm Rust target graph analysis | Bazel + patched `rules_rs` | `//zeterm:zeterm` | ✅ |
 | Package/signing input contract | `zeterm/packaging/*.json` | `//zeterm:zeterm_release_inputs` | ✅ |
-| Unsigned package staging | `scripts/build_zeterm_package.py` | `just zeterm-package` | ✅ |
+| Unsigned package staging | `build/release/build_zeterm_package.py` | `just zeterm-package` | ✅ |
 | Workspace boundary CI | Bazel | `bazel test //zeterm:zeterm_ci` | ✅ |
-| Platform signing and verification | `scripts/release_zeterm_package.sh` | policy file中的 native tool | ✅ 已接入 provider-neutral job |
+| Platform signing and verification | `build/release/release_zeterm_package.sh` | policy file中的 native tool | ✅ 已接入 provider-neutral job |
 | Hermetic Bazel Rust compile graph | `rules_rs` + single `@crates` hub | `//zeterm:zeterm` | ✅ 完整 zeterm binary build 已通过 |
 
 ### 根级 Bazel 基础设施
@@ -83,7 +83,7 @@ zeterm-package/
 `zeterm-package.json` 固定 product、target、profile、binary path 和 SHA-256；staging 拒绝覆盖已有
 目录，并把状态标成 `unsigned`。这一步不取得密钥、不签名，也不宣称 artifact 可发布。
 
-需要支持只安装 zeterm 的用户时，先运行 `scripts/build_remote_runtime_bundle.py`，输入一个或多个
+需要支持只安装 zeterm 的用户时，先运行 `build/release/build_remote_runtime_bundle.py`，输入一个或多个
 canonical packaged-node Zeta package directory，再给 staging 追加
 `--remote-runtime-bundle <bundle>`。builder 将 catalog SHA-256 通过
 `ZETERM_REMOTE_RUNTIME_CATALOG_SHA256` 编译进 zeterm，并输出：
@@ -138,7 +138,7 @@ ZETERM_PACKAGE_DIR=/absolute/path/to/zeterm-package \
 ZETERM_PLATFORM=darwin \
 ZETERM_REMOTE_RUNTIME_BUNDLE=/absolute/path/to/remote-runtimes \
 ZETERM_MACOS_SIGNING_IDENTITY="Developer ID Application: ..." \
-scripts/release_zeterm_package.sh
+build/release/release_zeterm_package.sh
 ```
 
 网络包改用 `ZETERM_REMOTE_RUNTIME_CATALOG_URL` 与

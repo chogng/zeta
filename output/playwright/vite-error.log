@@ -1,7 +1,0 @@
-[31merror when starting dev server:
-Error: Port 5173 is already in use
-    at httpServerStart (file:///C:/Users/lanxi/Desktop/zeta/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3/node_modules/vite/dist/node/chunks/node.js:11424:10)
-    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
-    at async startServer (file:///C:/Users/lanxi/Desktop/zeta/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3/node_modules/vite/dist/node/chunks/node.js:26083:30)
-    at async Object.listen (file:///C:/Users/lanxi/Desktop/zeta/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3/node_modules/vite/dist/node/chunks/node.js:25900:4)
-    at async CAC.<anonymous> (file:///C:/Users/lanxi/Desktop/zeta/node_modules/.pnpm/vite@8.1.5_@types+node@24.13.3/node_modules/vite/dist/node/cli.js:721:3)[39m

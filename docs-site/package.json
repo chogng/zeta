@@ -6,15 +6,18 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "check:docs": "node scripts/check-docs.mjs",
-    "generate:docs": "node scripts/generate-docs.mjs",
-    "predev": "npm run check:docs && npm run generate:docs",
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
-    "prebuild": "npm run check:docs && npm run generate:docs",
-    "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "check:docs": "node ../build/docs/checkDocs.ts",
+    "generate:docs": "node ../build/docs/generateDocs.ts",
+    "predev": "corepack pnpm run generate:docs",
+    "dev": "vinext dev",
+    "prebuild": "corepack pnpm run generate:docs",
+    "build": "vinext build",
+    "start": "vinext start",
+    "test": "corepack pnpm run build && node --test ../build/docs/renderedHtml.test.ts",
+    "prelint": "corepack pnpm run generate:docs",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "pretypecheck": "corepack pnpm run generate:docs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "markdown-it": "14.1.0",

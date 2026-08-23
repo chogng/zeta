@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { createReadStream, lstatSync, readFileSync } from "node:fs";
 import { lstat, readFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join } from "node:path";
+import { developmentArtifactsPath } from "../../environment/node/developmentArtifacts.js";
 import { validLocalCommand } from "./serverHostRemoteCommand.js";
 import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./serverHostRemoteRuntimeInstaller.js";
 
@@ -49,7 +50,7 @@ export function packagedRemoteRuntimeBundleRoot(location: RemoteRuntimePackageLo
 }
 
 function remoteRuntimePackageRoot(location: RemoteRuntimePackageLocation): string {
-  return location.isPackaged ? location.resourcesPath : resolve(location.appPath, ".tmp", "zeta-package");
+  return location.isPackaged ? location.resourcesPath : developmentArtifactsPath(location.appPath, "dev", "zeta-package");
 }
 
 /** A strictly validated catalog authenticated by the signed Desktop package containing it. */

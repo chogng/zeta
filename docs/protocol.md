@@ -700,7 +700,7 @@ cargo test --manifest-path Cargo.toml -p zeta-app-server-protocol
 ```bash
 cargo run --manifest-path Cargo.toml \
   -p zeta-app-server-protocol --bin write_schema_fixtures
-node desktop/scripts/sync-app-server-protocol.mjs
+node build/desktop/resources/syncAppServerProtocol.ts
 corepack pnpm --dir desktop run typecheck:renderer
 ```
 

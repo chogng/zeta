@@ -920,7 +920,7 @@ logout 转发 upstream logout，并将失败映射为稳定的 redacted diagnost
 ```bash
 cargo run --manifest-path Cargo.toml \
   -p zeta-app-server-protocol --bin write_schema_fixtures
-node desktop/scripts/sync-app-server-protocol.mjs
+node build/desktop/resources/syncAppServerProtocol.ts
 ```
 
 生成产物、Rust contract tests 和 Desktop TypeScript 编译必须同时通过。

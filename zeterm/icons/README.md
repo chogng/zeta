@@ -47,8 +47,8 @@ distance；Files pane rows consume `FILES` for branches and `FILE_TEXT` for leaf
 新增、删除或重命名 SVG 后运行：
 
 ```bash
-node scripts/sync-rust-icons.mjs
-node scripts/sync-rust-icons.mjs --check
+node build/zeterm/syncRustIcons.ts
+node build/zeterm/syncRustIcons.ts --check
 cargo test --manifest-path Cargo.toml -p zeta-icons
 ```
 

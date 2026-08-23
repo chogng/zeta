@@ -22,7 +22,7 @@ process arguments 转换后调用 upstream C entry point。用于构造 Bubblewr
 仍遵守 workspace 的 `unsafe_code = "forbid"`。
 
 ```text
-scripts/zeta_package/bubblewrap.py
+build/release/zeta_package/bubblewrap.py
 → verify/extract locked upstream source
 → ZETA_BWRAP_SOURCE_DIR
 → build.rs

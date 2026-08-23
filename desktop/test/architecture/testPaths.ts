@@ -6,6 +6,10 @@ export function findDesktopRoot(start: string): string {
   let candidate = resolve(start);
   while (true) {
     if (existsSync(resolve(candidate, "package.json")) && existsSync(resolve(candidate, "src/zeta"))) return candidate;
+    const nestedDesktop = resolve(candidate, "desktop");
+    if (existsSync(resolve(nestedDesktop, "package.json")) && existsSync(resolve(nestedDesktop, "src/zeta"))) {
+      return nestedDesktop;
+    }
     const parent = dirname(candidate);
     if (parent === candidate) throw new Error(`Could not locate the desktop package from ${start}`);
     candidate = parent;

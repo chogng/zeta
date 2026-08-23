@@ -49,7 +49,7 @@ bazel test //zeterm:zeterm_ci
 ```
 
 平台 release job 使用 `ZETERM_PACKAGE_DIR`、`ZETERM_PLATFORM` 以及对应的 signing identity 环境
-调用 `scripts/release_zeterm_package.sh`；该入口完成签名和验签后才留下 `verified` artifact。
+调用 `build/release/release_zeterm_package.sh`；该入口完成签名和验签后才留下 `verified` artifact。
 
 package staging 只生成 unsigned artifact、binary digest 和可选的 binary-bound Remote runtime
 bundle；签名、平台验证与发布顺序见
@@ -59,7 +59,7 @@ bundle；签名、平台验证与发布顺序见
 packaged-node Zeta package 组装成确定性 Remote runtime bundle，再在构建 zeterm 时绑定它：
 
 ```bash
-python3 scripts/build_remote_runtime_bundle.py \
+python3 -B build/release/build_remote_runtime_bundle.py \
   --bundle-dir /absolute/path/to/remote-runtimes \
   --package-dir /packages/x86_64-unknown-linux-gnu \
   --package-dir /packages/aarch64-unknown-linux-gnu

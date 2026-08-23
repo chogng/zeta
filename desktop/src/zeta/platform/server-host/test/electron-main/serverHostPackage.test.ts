@@ -11,7 +11,7 @@ test("development and production resolve the same canonical package entrypoint",
       platform: "linux",
       resourcesPath: "/installed/resources",
     }),
-    join(resolve("/workspace/desktop", ".tmp", "zeta-package"), "bin", "zeta-server"),
+    join(resolve("/workspace/.build/desktop/dev/zeta-package"), "bin", "zeta-server"),
   );
   assert.equal(
     serverHostExecutablePath({

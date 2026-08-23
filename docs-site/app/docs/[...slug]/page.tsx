@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { docGroups, docs } from "@/app/generated-docs";
+import { docGroups, docs } from "@zeta-generated-docs";
 import { DocsShell } from "@/components/docs-shell";
 import { displayTitle } from "@/lib/display-title";
 import { renderMarkdown } from "@/lib/markdown";

@@ -1,12 +1,12 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist/token-compiler",
-    "rootDir": ".",
+    "outDir": "../.build/desktop/token-compiler",
+    "rootDir": "..",
     "types": ["node"]
   },
   "include": [
-    "scripts/design-token-compiler.ts",
+    "../build/desktop/resources/designTokenCompiler.ts",
     "src/zeta/base/common/color.ts",
     "src/zeta/platform/theme/common/**/*.ts"
   ]

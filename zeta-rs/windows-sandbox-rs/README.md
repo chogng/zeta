@@ -2,7 +2,7 @@
 
 > 本 README 拥有 shared sandbox policy 到 Windows AppContainer enforcement 的实现契约；
 > package helper contract 见
-> [`scripts/zeta_package`](../../scripts/zeta_package/README.md)，跨平台决策见
+> [`build/release/zeta_package`](../../build/release/zeta_package/README.md)，跨平台决策见
 > [`docs/sandboxing.md`](../../docs/sandboxing.md)。
 > 真实 Windows 验收步骤与 golden expectations 见
 > [`Windows Sandbox 手工验收 Runbook`](../../docs/windows-sandbox-acceptance-runbook.md)。

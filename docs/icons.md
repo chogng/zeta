@@ -72,8 +72,8 @@ Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；t
 ## 5. 修改路径
 
 ```bash
-node scripts/sync-rust-icons.mjs
-node scripts/sync-rust-icons.mjs --check
+node build/zeterm/syncRustIcons.ts
+node build/zeterm/syncRustIcons.ts --check
 cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui
 ```
 

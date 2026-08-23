@@ -30,7 +30,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
 | 产品主题偏好 | profile `configuration.json` | Desktop/zeterm 使用 graphical key，Zeta Code 使用 TUI key；不进入 App Server Config revision |
 | 用户主题内容 | profile root 的 `themes/*.json` | 保存主题文档，不保存产品当前选择或 Config revision |
-| 离线治理 | `tokenCompiler.ts` 与 `scripts/compile-design-tokens.mjs` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
+| 离线治理 | `tokenCompiler.ts` 与 `build/desktop/compileDesignTokens.ts` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
 
 `src/zeta/base` 不引用主题平台或 workbench。颜色数学保持通用，注册、用户偏好和产品语义都位于更高层。
 

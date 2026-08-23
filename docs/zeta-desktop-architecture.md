@@ -214,7 +214,7 @@ desktop/
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
 开发态与发布态共享 canonical Zeta package contract。Node 开发组装器
-`desktop/scripts/prepare-dev-package.mjs` 在 `desktop/.tmp/zeta-package` 生成 debug
+`build/desktop/prepareDevPackage.ts` 在 `.build/desktop/dev/zeta-package` 生成 debug
 package；它读取 production builder 使用的同一份 runtime lock、校验 archive digest，并且
 只有新 package 完整构建并通过 layout validation 后才替换上一代。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
@@ -242,12 +242,7 @@ Main 必须：
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
 
-当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在
-积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；
-outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误
-都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、
-幂等，并在 graceful deadline 后强制终止。`npm run test:main` 覆盖分片 UTF-8、超限 frame、
-非法 framing、backpressure、stderr 和 close。
+当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`corepack pnpm --dir desktop run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 
 `JsonRpcPeer` 在 transport 之上负责双向 JSON-RPC envelope、request ID pairing、remote
 error、timeout/abort、late/unknown/duplicate response、入站 handler cancellation、pending
@@ -341,7 +336,7 @@ SQLite，也不能在旧 Workspace connection 上执行目标 Session。
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `zeta:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `verify-sandbox-preload.mjs` 检查这一约束。
+构建后的 preload 由 `build/desktop/verifySandboxPreload.ts` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
 常量，并组装领域化、强类型、可枚举的 `ZetaElectronRendererApi`。跨宿主领域能力由其父接口

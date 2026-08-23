@@ -1,6 +1,6 @@
 import MarkdownIt from "markdown-it";
 import markdownItAnchor from "markdown-it-anchor";
-import { docs } from "@/app/generated-docs";
+import { docs } from "@zeta-generated-docs";
 import type { ZetaDoc } from "@/lib/types";
 
 const sourceToSlug = new Map(docs.map((doc) => [doc.sourcePath, doc.slug]));
