@@ -701,7 +701,7 @@ cargo test --manifest-path Cargo.toml -p zeta-app-server-protocol
 cargo run --manifest-path Cargo.toml \
   -p zeta-app-server-protocol --bin write_schema_fixtures
 node build/desktop/resources/syncAppServerProtocol.ts
-corepack pnpm --dir desktop run typecheck:renderer
+corepack pnpm --dir zeta-ts run typecheck:renderer
 ```
 
 关键 contract tests 必须覆盖：

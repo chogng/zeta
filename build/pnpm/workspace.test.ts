@@ -15,13 +15,13 @@ test("pnpm owns every repository Node project with one lockfile", () => {
   assert.equal(rootManifest.packageManager, "pnpm@11.17.0");
   assert.equal(rootManifest.scripts?.preinstall, "node build/pnpm/preinstall.ts");
   const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
-  assert.deepEqual(packages, ["build", "desktop", "docs-site"]);
+  assert.deepEqual(packages, ["build", "zeta-ts", "docs-site"]);
   assert.match(workspace, /^storeDir: \.tooling\/pnpm\/store$/m);
   for (const dependency of ["electron", "esbuild", "sharp", "unrs-resolver", "workerd"]) {
     assert.match(workspace, new RegExp(`^  ${dependency}: true$`, "m"));
   }
 
-  for (const directory of ["build", "desktop", "docs-site"]) {
+  for (const directory of ["build", "zeta-ts", "docs-site"]) {
     const manifest = JSON.parse(readFileSync(join(repositoryRoot, directory, "package.json"), "utf8")) as {
       packageManager?: string;
       pnpm?: unknown;

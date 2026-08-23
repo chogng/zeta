@@ -38,9 +38,9 @@ command = "just zeterm-dev"
 [[actions]]
 name = "electron-code"
 icon = "debug"
-command = "corepack pnpm --dir desktop dev:code"
+command = "corepack pnpm --dir zeta-ts dev:code"
 
 [[actions]]
 name = "electron-aca"
 icon = "debug"
-command = "corepack pnpm --dir desktop dev:aca"
+command = "corepack pnpm --dir zeta-ts dev:aca"

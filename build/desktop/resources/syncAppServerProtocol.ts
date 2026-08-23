@@ -2,7 +2,7 @@ import { copyFile, mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const repositoryDirectory = resolve(import.meta.dirname, "../../..");
-const desktopDirectory = resolve(repositoryDirectory, "desktop");
+const desktopDirectory = resolve(repositoryDirectory, "zeta-ts");
 const source = resolve(
   repositoryDirectory,
   "zeta-rs/app-server-protocol/schema/types.ts",

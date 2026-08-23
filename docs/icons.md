@@ -31,7 +31,7 @@ resources/icons/*.svg
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | Canonical first-party SVG artwork | `resources/icons` | ✅ |
-| Desktop generated SVG factories | `desktop/generated/product-icons.ts` | ✅ |
+| Desktop generated SVG factories | `zeta-ts/generated/product-icons.ts` | ✅ |
 | Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
 | Rust semantic identity、definition 与 rendering mode | `zeta-icons` | ✅ |
 | Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |

@@ -5,7 +5,7 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 | Product | Description | Source | Start |
 | --- | --- | --- | --- |
 | `zeta code` | CLI and TUI | [`zeta-code`](zeta-code) | `just zeta` |
-| `zeta` | Electron Desktop | [`desktop`](desktop) | `just zeta-desktop` |
+| `zeta` | Electron Desktop | [`zeta-ts`](zeta-ts) | `just zeta-desktop` |
 | `zeterm` | Native Rust Desktop terminal | [`zeterm`](zeterm) | `just zeterm` |
 
 `zeta-rs` contains the shared Rust backend. The product-neutral backend executable is
@@ -79,7 +79,7 @@ cargo run -p zeterm
 
 - [`zeta-rs`](zeta-rs): shared protocol, App Server, domain, storage, execution, and runtime crates.
 - [`zeta-code`](zeta-code): CLI command host and TUI presentation.
-- [`desktop`](desktop): Electron Main, Preload, Renderer, and Browser Workbench.
+- [`zeta-ts`](zeta-ts): Electron Main, Preload, Renderer, and Browser Workbench.
 - [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
 - [`zeterm`](zeterm): native window, terminal, renderer, and product UI.
 - [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
@@ -101,4 +101,4 @@ Crate-level implementation details live in the `README.md` next to each crate.
 
 Zeta's original code and materials are proprietary and all rights reserved. See [`LICENSE`](LICENSE).
 Third-party components remain governed by their own licenses and notices, including
-[`desktop/THIRD_PARTY_NOTICES.md`](desktop/THIRD_PARTY_NOTICES.md).
+[`zeta-ts/THIRD_PARTY_NOTICES.md`](zeta-ts/THIRD_PARTY_NOTICES.md).

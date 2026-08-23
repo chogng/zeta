@@ -27,7 +27,7 @@ export interface ZetaHotReloadPlugin extends Plugin {
 
 /** Owns Vite's development-only bridge to the generic Renderer hot-reload runtime. */
 export function hotReloadPlugin(options: HotReloadPluginOptions = {}): ZetaHotReloadPlugin {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../desktop"));
+  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../zeta-ts"));
   const setupPath = resolve(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
   const analyses = new Map<string, HotReloadModuleAnalysis>();
   return {

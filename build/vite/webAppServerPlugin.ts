@@ -40,7 +40,7 @@ interface AppServerEnvironmentOptions {
  * HMR WebSocket and one stdio App Server child per browser connection.
  */
 export function webAppServerVitePlugin(options: WebAppServerPluginOptions = {}): Plugin {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../desktop"));
+  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../zeta-ts"));
   const repositoryRoot = resolve(options.repositoryRoot ?? resolve(desktopRoot, ".."));
   const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ZETA_WORKSPACE_ROOT ?? repositoryRoot);
   const profileRoot = resolve(options.profileRoot ?? process.env.ZETA_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, "dev", "web-profile"));

@@ -12,8 +12,8 @@ test("packaged second-instance arguments retain the Workspace target without pro
 
 test("development second-instance arguments remove Electron and the app entry", () => {
   assert.deepEqual(electronWorkspaceLaunchArguments({
-    arguments: ["/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron", "/repo/desktop", "/repo/desktop", "--folder", "/repo/project"],
+    arguments: ["/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron", "/repo/zeta-ts", "/repo/zeta-ts", "--folder", "/repo/project"],
     packaging: "development",
-    appPath: "/repo/desktop",
+    appPath: "/repo/zeta-ts",
   }), ["--folder", "/repo/project"]);
 });

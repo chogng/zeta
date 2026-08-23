@@ -43,7 +43,7 @@ Desktop consumes these files through the following build-time path:
 ```text
 resources/icons/*.svg
   -> build/desktop/resources/syncProductIcons.ts
-  -> desktop/generated/product-icons.ts
+  -> zeta-ts/generated/product-icons.ts
   -> base/common/lxiconsLibrary.ts
   -> register
   -> browser appendIcon
@@ -57,7 +57,7 @@ explicit semantic registry boundary lets Renderer builds remove unused SVG
 factories; registering the complete asset catalog eagerly would pull every icon
 into the bundle.
 
-Use these commands from `desktop/`:
+Use these commands from `zeta-ts/`:
 
 | Command | Purpose |
 | --- | --- |

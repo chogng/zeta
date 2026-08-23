@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
-const desktopRoot = path.join(repositoryRoot, "desktop");
+const desktopRoot = path.join(repositoryRoot, "zeta-ts");
 const tsc = path.join(desktopRoot, "node_modules/typescript/bin/tsc");
 const compilation = spawnSync(process.execPath, [tsc, "-p", "tsconfig.tokens.json"], { cwd: desktopRoot, encoding: "utf8", stdio: "pipe" });
 if (compilation.status !== 0) {

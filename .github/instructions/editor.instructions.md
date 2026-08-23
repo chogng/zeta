@@ -5,7 +5,7 @@ applyTo: "**/src/zeta/editor/**/*.ts,**/test/editor/**"
 
 # Editor Implementation Guidelines
 
-See [`src/zeta/editor/README.md`](../../desktop/src/zeta/editor/README.md), [`text-engine.md`](../../desktop/src/zeta/editor/text-engine.md), and [`document-engine.md`](../../desktop/src/zeta/editor/document-engine.md).
+See [`src/zeta/editor/README.md`](../../zeta-ts/src/zeta/editor/README.md), [`text-engine.md`](../../zeta-ts/src/zeta/editor/text-engine.md), and [`document-engine.md`](../../zeta-ts/src/zeta/editor/document-engine.md).
 
 ## Ownership
 

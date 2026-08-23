@@ -177,7 +177,7 @@ MCP 或 Agent definition 的路径规范化、目录 containment 和文件 ident
 ## 3. 目录边界
 
 ```text
-desktop/
+zeta-ts/
 ├── src/
 │   ├── main.ts
 │   ├── bootstrap.ts
@@ -209,7 +209,7 @@ desktop/
 启动过程不创建额外的 splash 窗口。gate 失败时，原生 Retry/Quit 对话框允许 supervisor
 回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
 
-`desktop/generated/` 由 zeta-rs 协议生成命令更新，不手写 wire DTO。
+`zeta-ts/generated/` 由 zeta-rs 协议生成命令更新，不手写 wire DTO。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
@@ -242,7 +242,7 @@ Main 必须：
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
 
-当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`corepack pnpm --dir desktop run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
+当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`corepack pnpm --dir zeta-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 
 `JsonRpcPeer` 在 transport 之上负责双向 JSON-RPC envelope、request ID pairing、remote
 error、timeout/abort、late/unknown/duplicate response、入站 handler cancellation、pending

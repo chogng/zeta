@@ -29,7 +29,7 @@ test("server-host watcher selects Rust sources and Cargo manifests", () => {
   assert.equal(shouldRebuildServerHost("target/debug/zeta-server"), false);
   assert.equal(shouldRebuildServerHost("target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildServerHost("crate/target/debug/build/generated/out/schema.rs"), false);
-  assert.equal(shouldRebuildServerHost("desktop/src/main.ts"), false);
+  assert.equal(shouldRebuildServerHost("zeta-ts/src/main.ts"), false);
 });
 
 test("server-host watcher excludes a custom Cargo target directory inside Rust sources", () => {

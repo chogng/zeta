@@ -1,6 +1,6 @@
 packages:
   - build
-  - desktop
+  - zeta-ts
   - docs-site
 storeDir: .tooling/pnpm/store
 allowBuilds:

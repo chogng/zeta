@@ -339,7 +339,7 @@ bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 `ResourceMetadataResult` 引用，字节不会嵌入编译响应。
 
 修改这些数据结构时，必须重新生成 `schema/schema.json` 和 `schema/types.ts`，同步
-`desktop/generated/app-server/types.ts`，并更新
+`zeta-ts/generated/app-server/types.ts`，并更新
 [`docs/typst.md`](../../docs/typst.md) 中的跨进程契约。
 
 测试验证 method/notification 唯一性、JSON-RPC 2.0 envelope、TypeScript model/patch shape、root

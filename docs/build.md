@@ -4,15 +4,15 @@
 
 ## 快速理解
 
-Zeta 使用 `build/` 保存构建源码，使用根 `.build/` 保存常规本地产物。日常构建、测试和开发不再向 `desktop/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接；Sites 部署协议要求的 `docs-site/dist/` 是唯一部署暂存例外，仍由统一清理入口删除。
+Zeta 使用 `build/` 保存构建源码，使用根 `.build/` 保存常规本地产物。日常构建、测试和开发不再向 `zeta-ts/` 或仓库根散落 `dist`、`output`、`target` 和 Bazel 便捷链接；Sites 部署协议要求的 `docs-site/dist/` 是唯一部署暂存例外，仍由统一清理入口删除。
 
 | 看到的路径 | 它是什么 | 是否受版本控制 | 能否整体删除 |
 | --- | --- | --- | --- |
 | `build/` | 按机制分类的构建配置、监听器和清理入口 | 是 | 否 |
 | `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `corepack pnpm clean` |
 | `docs-site/dist/` | Sites 要求的文档站部署暂存目录 | 否 | 是，运行 `corepack pnpm clean` |
-| `desktop/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
-| `desktop/docs/`、`desktop/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
+| `zeta-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
+| `zeta-ts/docs/`、`zeta-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
 | `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树 | 否 | 可通过 `corepack pnpm install` 重新安装 |
 | `.tooling/pnpm/store/` | pnpm 11 的工作区内容寻址缓存 | 否 | 可重新下载，不由产品构建清理 |
 | `.zeta/` | 当前工作区的 Zeta 配置或运行状态 | 按工作区用途决定 | 不应由构建清理 |
@@ -79,12 +79,12 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | `build/package.json` | 构建工具自身的依赖、测试和类型检查入口 |
 | `build/tsconfig.json` | 构建工具 TypeScript 边界 |
 
-根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行根命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`desktop` 和 `docs-site` 共用根锁文件、Vite 版本和 `.tooling/pnpm/store/` 内容缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
+根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行根命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`zeta-ts` 和 `docs-site` 共用根锁文件、Vite 版本和 `.tooling/pnpm/store/` 内容缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。`docs-site/vite.config.ts`、`next.config.ts`、`postcss.config.mjs`、`eslint.config.mjs` 和 `.openai/hosting.json` 是站点框架在项目根发现的适配配置；共享生成、打包和验收实现仍归 `build/docs/`。
 
 Node 构建脚本统一使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成一份中间 JavaScript 副本；`build/tsconfig.json` 通过 `erasableSyntaxOnly` 和严格类型检查保证这些源码同时满足 Node 运行时边界。`build/release/` 保留已有 Python/Shell 发布契约，因为它们由 Bazel 和平台签名流程直接调用，不伪装成 Node 工具。
 
-平台专属流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`desktop/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载、测试编排与发布逻辑统一由根 `build/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置。
+平台专属流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`zeta-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载、测试编排与发布逻辑统一由根 `build/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置。
 
-旧的 `target/`、`desktop/dist/`、`desktop/output/`、`desktop/.tmp/` 和根 `output/` 仍保留忽略规则，只为防止旧工具或旧分支重新提交这些产物；当前命令不得再写入这些路径。
+旧的 `target/`、`zeta-ts/dist/`、`zeta-ts/output/`、`zeta-ts/.tmp/` 和根 `output/` 仍保留忽略规则，只为防止旧工具或旧分支重新提交这些产物；当前命令不得再写入这些路径。

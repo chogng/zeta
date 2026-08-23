@@ -469,50 +469,50 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 
 ## 实现证据
 
-- Remote URI 与 authority：`desktop/src/zeta/platform/remote/common/remote.ts`
-- SSH launcher：`desktop/src/zeta/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
+- Remote URI 与 authority：`zeta-ts/src/zeta/platform/remote/common/remote.ts`
+- SSH launcher：`zeta-ts/src/zeta/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
 - Desktop Remote Terminal lease owner：
-  `desktop/src/zeta/platform/terminal/electron-main/reconnectableTerminalMainService.ts`
+  `zeta-ts/src/zeta/platform/terminal/electron-main/reconnectableTerminalMainService.ts`
 - Desktop Terminal 恢复投影：
-  `desktop/src/zeta/workbench/services/terminal/browser/terminalService.ts`
-- Desktop runtime probe：`desktop/src/zeta/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
-- Desktop install adapter：`desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeInstaller.ts`
-- Desktop signed catalog binding/fetch/provisioner：`desktop/src/zeta/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeFetcher.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeProvisioner.ts`
+  `zeta-ts/src/zeta/workbench/services/terminal/browser/terminalService.ts`
+- Desktop runtime probe：`zeta-ts/src/zeta/platform/remote/electron-main/sshAppServerProcessLauncher.ts`
+- Desktop install adapter：`zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeInstaller.ts`
+- Desktop signed catalog binding/fetch/provisioner：`zeta-ts/src/zeta/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeFetcher.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteRuntimeProvisioner.ts`
 - Desktop 安装进度状态、窄 IPC 与取消：
-  `desktop/src/zeta/platform/remote/electron-main/remoteRuntimeInstallProgressMainService.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/remoteRuntimeInstallProgressIpc.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteCommand.ts`
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteRuntimeInstallProgressMainService.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteRuntimeInstallProgressIpc.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteCommand.ts`
 - Desktop Workbench 前安装窗口：
-  `desktop/src/zeta/code/electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/electronRemoteRuntimeInstallWindow.ts`
+  `zeta-ts/src/zeta/code/electron-browser/remote-runtime-install/remoteRuntimeInstall.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/electronRemoteRuntimeInstallWindow.ts`
 - Desktop Remote 启动门禁与窗口上下文：
-  `desktop/src/zeta/platform/remote/electron-main/remoteRuntimeBootstrapMainService.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/remoteWindowMainContext.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/electronRemoteWindowMainHost.ts`
-- Desktop profile adapter：`desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteConnectionProfiles.ts`
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteRuntimeBootstrapMainService.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteWindowMainContext.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/electronRemoteWindowMainHost.ts`
+- Desktop profile adapter：`zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteConnectionProfiles.ts`
 - Desktop named-connection adapter/IPC 与多窗口打开：
-  `desktop/src/zeta/platform/remote/electron-main/zetaCliRemoteConnections.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/remoteConnectionIpc.ts`、
-  `desktop/src/zeta/code/electron-main/workbenchWindowRegistry.ts`、
-  `desktop/src/zeta/code/electron-main/electronWindowLaunch.ts`；窗口 registry、第二实例参数和真实
-  Electron 双 Workbench 覆盖分别位于 `desktop/src/zeta/code/test/electron-main/` 与
-  `desktop/test/smoke/areas/windows/multi-workbench.spec.ts`
-- Desktop saved-host Quick Pick 与图形管理器：`desktop/src/zeta/workbench/contrib/remote/browser/remoteActions.ts`、
-  `desktop/src/zeta/workbench/contrib/remote/browser/remoteConnectionManagement.ts`
+  `zeta-ts/src/zeta/platform/remote/electron-main/zetaCliRemoteConnections.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteConnectionIpc.ts`、
+  `zeta-ts/src/zeta/code/electron-main/workbenchWindowRegistry.ts`、
+  `zeta-ts/src/zeta/code/electron-main/electronWindowLaunch.ts`；窗口 registry、第二实例参数和真实
+  Electron 双 Workbench 覆盖分别位于 `zeta-ts/src/zeta/code/test/electron-main/` 与
+  `zeta-ts/test/smoke/areas/windows/multi-workbench.spec.ts`
+- Desktop saved-host Quick Pick 与图形管理器：`zeta-ts/src/zeta/workbench/contrib/remote/browser/remoteActions.ts`、
+  `zeta-ts/src/zeta/workbench/contrib/remote/browser/remoteConnectionManagement.ts`
 - Desktop 手动重连与 runtime 回滚协调：
-  `desktop/src/zeta/platform/remote/electron-main/remoteConnectionRecoveryCoordinator.ts`
-- Desktop 回滚命令与无路径 IPC：`desktop/src/zeta/workbench/contrib/remote/browser/remoteActions.ts`、
-  `desktop/src/zeta/platform/remote/common/remoteAgentApi.ts`
-- App Server lifecycle：`desktop/src/zeta/platform/app-server/electron-main/app-server-supervisor.ts`
-- Workspace 参数解析：`desktop/src/zeta/platform/workspaces/electron-main/workspacesMainService.ts`
-- Workbench service：`desktop/src/zeta/workbench/services/remote/common/remoteAgentService.ts`
-- Remote contribution：`desktop/src/zeta/workbench/contrib/remote/browser/remote.contribution.ts`
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteConnectionRecoveryCoordinator.ts`
+- Desktop 回滚命令与无路径 IPC：`zeta-ts/src/zeta/workbench/contrib/remote/browser/remoteActions.ts`、
+  `zeta-ts/src/zeta/platform/remote/common/remoteAgentApi.ts`
+- App Server lifecycle：`zeta-ts/src/zeta/platform/app-server/electron-main/app-server-supervisor.ts`
+- Workspace 参数解析：`zeta-ts/src/zeta/platform/workspaces/electron-main/workspacesMainService.ts`
+- Workbench service：`zeta-ts/src/zeta/workbench/services/remote/common/remoteAgentService.ts`
+- Remote contribution：`zeta-ts/src/zeta/workbench/contrib/remote/browser/remote.contribution.ts`
 - Desktop Remote Debug Workspace/源码 authority：
-  `desktop/src/zeta/workbench/services/debug/browser/debugService.ts`、
-  `desktop/src/zeta/workbench/services/debug/browser/debugAdapterSession.ts`、
-  `desktop/src/zeta/workbench/contrib/debug/browser/debugViewPane.ts`
+  `zeta-ts/src/zeta/workbench/services/debug/browser/debugService.ts`、
+  `zeta-ts/src/zeta/workbench/services/debug/browser/debugAdapterSession.ts`、
+  `zeta-ts/src/zeta/workbench/contrib/debug/browser/debugViewPane.ts`
 - Shared Rust Remote identity/SSH/Tunnel primitives：`zeta-rs/remote`、`zeta-rs/remote-connections`
 - Shared platform probe/package installer：`zeta-rs/remote-connections/src/install.rs`
 - Shared authenticated local catalog/network updater：`zeta-rs/remote-connections/src/catalog.rs`、
@@ -545,19 +545,19 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - Optional headless Remote runtime：`zeta-rs/remote-server`
 - Remote Terminal lease/attach：`zeta-rs/app-server/src/terminal_service.rs`、
   `zeterm/src/terminal_session_remote.rs`
-- Desktop Main Tunnel coordinator：`desktop/src/zeta/platform/remote/electron-main/sshRemoteTunnelService.ts`
+- Desktop Main Tunnel coordinator：`zeta-ts/src/zeta/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：
-  `desktop/src/zeta/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
+  `zeta-ts/src/zeta/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`
 - Desktop Remote Browser URL/Tunnel adapter 与生命周期：
-  `desktop/src/zeta/platform/browser/common/browserViewNavigation.ts`、
-  `desktop/src/zeta/platform/browser/electron-main/browserViewMainService.ts`、
-  `desktop/src/zeta/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
+  `zeta-ts/src/zeta/platform/browser/common/browserViewNavigation.ts`、
+  `zeta-ts/src/zeta/platform/browser/electron-main/browserViewMainService.ts`、
+  `zeta-ts/src/zeta/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
 - Desktop Remote Browser mapping、失败、取消、Workspace fencing 与异步 host retirement 测试：
-  `desktop/src/zeta/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
-  `desktop/src/zeta/platform/browser/test/electron-main/browser-automation.test.ts`
+  `zeta-ts/src/zeta/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
+  `zeta-ts/src/zeta/platform/browser/test/electron-main/browser-automation.test.ts`
 - Desktop Ports 面板与 Tunnel event projection：
-  `desktop/src/zeta/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
-  `desktop/src/zeta/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`
+  `zeta-ts/src/zeta/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
+  `zeta-ts/src/zeta/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`
 
 ## 后续演进
 

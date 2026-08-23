@@ -16,5 +16,5 @@ texts.
 Transitive dependencies and third-party material distributed by Electron or
 native runtimes remain governed by their own accompanying notices. Before a
 release, the packaging pipeline must retain those upstream notices and verify
-that this direct-dependency list still matches `desktop/package.json` and the
+that this direct-dependency list still matches `zeta-ts/package.json` and the
 Rust components linked into the shipped `zeta` executable.

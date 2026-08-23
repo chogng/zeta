@@ -62,7 +62,7 @@ Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的
 | 公开产品线 | 当前代码入口 | 当前状态 |
 | --- | --- | --- |
 | `zeta code` | `zeta-code/cli` 的 `zeta` binary → `zeta-tui` | TUI 产品路径已存在；TUI 通过 App Server Client 工作 |
-| `zeta` | `desktop` Electron client | Electron Desktop 已存在；统一 Renderer 包含 Code 与 Academic，默认模式为最近保存的选择 |
+| `zeta` | `zeta-ts` Electron client | Electron Desktop 已存在；统一 Renderer 包含 Code 与 Academic，默认模式为最近保存的选择 |
 | `zeterm` | `zeterm/` 的 `zeterm` binary | 终端宿主已存在，并直接组合 `zeta-terminal` 与 `zeta-utils-pty`；Agent 能力尚未作为 Native 旁路提供 |
 
 ## Canonical `just` 命令

@@ -1,8 +1,8 @@
 # zeta-utils-path-uri
 
 > 本 README 是 Rust `file:` URI 实现契约的 canonical owner。Desktop 通用资源 URI identity
-> 由 [`desktop/src/zeta/base/common/uri.ts`](../../../desktop/src/zeta/base/common/uri.ts) 与
-> [`resources.ts`](../../../desktop/src/zeta/base/common/resources.ts) 拥有；跨层 ownership 与
+> 由 [`zeta-ts/src/zeta/base/common/uri.ts`](../../../zeta-ts/src/zeta/base/common/uri.ts) 与
+> [`resources.ts`](../../../zeta-ts/src/zeta/base/common/resources.ts) 拥有；跨层 ownership 与
 > 当前状态见 [`docs/zeta-desktop-architecture.md`](../../../docs/zeta-desktop-architecture.md)；
 > 本机 filesystem normalization 由 [`zeta-utils-path`](../path-utils/README.md) 拥有。
 

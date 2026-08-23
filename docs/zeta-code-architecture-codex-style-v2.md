@@ -302,8 +302,8 @@ Markdown 也不以解析器输出作为信任边界。当前 Workbench 短内容
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-corepack pnpm --dir desktop test:main
-corepack pnpm --dir desktop typecheck:renderer
+corepack pnpm --dir zeta-ts test:main
+corepack pnpm --dir zeta-ts typecheck:renderer
 ```
 
 协议变更还必须重新生成 JSON Schema/TypeScript，并由 fixture test 校验生成结果逐字一致。

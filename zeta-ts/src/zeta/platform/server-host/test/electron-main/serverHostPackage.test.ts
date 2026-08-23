@@ -6,7 +6,7 @@ import { serverHostExecutablePath } from "../../../../platform/server-host/elect
 test("development and production resolve the same canonical package entrypoint", () => {
   assert.equal(
     serverHostExecutablePath({
-      appPath: "/workspace/desktop",
+      appPath: "/workspace/zeta-ts",
       isPackaged: false,
       platform: "linux",
       resourcesPath: "/installed/resources",
@@ -15,7 +15,7 @@ test("development and production resolve the same canonical package entrypoint",
   );
   assert.equal(
     serverHostExecutablePath({
-      appPath: "/workspace/desktop",
+      appPath: "/workspace/zeta-ts",
       isPackaged: true,
       platform: "win32",
       resourcesPath: resolve("/installed/resources"),

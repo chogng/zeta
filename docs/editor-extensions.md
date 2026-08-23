@@ -3,7 +3,7 @@
 > 本文是 Zeta 编辑器扩展的跨层架构权威文档，明确区分两条当前边界：声明式静态 Editor
 > Extension 与 Zeta 原生可执行 Editor Extension Host v1。静态目录实现见
 > [`zeta-rs/extensions/README.md`](../zeta-rs/extensions/README.md)，声明式 Workbench 投影见
-> [`desktop/src/zeta/workbench/services/extensions/README.md`](../desktop/src/zeta/workbench/services/extensions/README.md)，
+> [`zeta-ts/src/zeta/workbench/services/extensions/README.md`](../zeta-ts/src/zeta/workbench/services/extensions/README.md)，
 > 可执行进程与 RPC 实现见
 > [`zeta-rs/editor-extension-host/README.md`](../zeta-rs/editor-extension-host/README.md)。统一 Marketplace
 > artifact/capability 入口由 [`marketplace-integration.md`](marketplace-integration.md) 维护；legacy
@@ -348,10 +348,10 @@ Node/VS Code compatibility 若未来立项，仍是独立产品项目：需要 N
 cargo test --manifest-path Cargo.toml -p zeta-extensions
 cargo test --manifest-path Cargo.toml -p zeta-plugins
 powershell -NoProfile -ExecutionPolicy Bypass -File zeta-rs/editor-extension-host/check-standalone.ps1
-corepack pnpm --dir desktop test:extensions
-corepack pnpm --dir desktop typecheck:extensions
-corepack pnpm --dir desktop test:unit
-corepack pnpm --dir desktop test:scripts
+corepack pnpm --dir zeta-ts test:extensions
+corepack pnpm --dir zeta-ts typecheck:extensions
+corepack pnpm --dir zeta-ts test:unit
+corepack pnpm --dir zeta-ts test:scripts
 corepack pnpm --dir docs-site run check:docs
 ```
 

@@ -6,8 +6,8 @@
 
 ## 快速理解
 
-`zeta-rs` 作为 `desktop` 和 `zeterm` 共用的 Rust backend；`zeterm/` 作为 `zeterm` 的独立产品宿主；
-`desktop/` 继续作为 Electron 宿主。当前 `zeta-rs/native` 把产品宿主、Native UI framework 和 GPU
+`zeta-rs` 作为 `zeta-ts` 和 `zeterm` 共用的 Rust backend；`zeterm/` 作为 `zeterm` 的独立产品宿主；
+`zeta-ts/` 继续作为 Electron 宿主。当前 `zeta-rs/native` 把产品宿主、Native UI framework 和 GPU
 接线放在共享 Rust workspace 中，边界已经不再清晰。本计划先把宿主整体迁到 `zeterm/`，再把只服务
 Native UI 的 crate 从共享 workspace 中分离。
 
@@ -54,7 +54,7 @@ zeta/
 │   ├── editor-core/
 │   ├── terminal/
 │   └── ...
-└── desktop/                    # Electron product host
+└── zeta-ts/                    # Electron product host
 ```
 
 依赖方向固定为：
@@ -125,7 +125,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
 - [x] 接入 provider-neutral 的 platform signing/verification job；`build/release/release_zeterm_package.sh`
       负责 Build → Stage → Sign → Verify，平台 CI 只需绑定 native tool 和 secret 环境；只发布
       `verified` artifact；
-- [x] `desktop` 构建不拉入 Native UI/GPU 依赖；desktop 侧只保留自身的 platform adapter，边界检查未发现
+- [x] `zeta-ts` 构建不拉入 Native UI/GPU 依赖；desktop 侧只保留自身的 platform adapter，边界检查未发现
       对 zeterm UI/GPU crate 的依赖。
 - [ ] `zeta-rs` backend 可独立测试、发布和被多个宿主复用；
 - [ ] App Server protocol、theme manifest 和 shared domain revision 具备明确兼容策略；

@@ -204,8 +204,8 @@ Empty resource reload/revert 使用 profile 的 canonical empty-document factory
 
 ## 验证与修改影响
 
-- 修改 schema、transaction、selection、history、plugin 或 serialization：运行 `corepack pnpm --dir desktop run test:editor:unit`。
-- 修改 `EditorWidget`、clipboard、IME、node view 或 pane integration：运行 unit suite 和 `corepack pnpm --dir desktop run test:editor:browser`。
+- 修改 schema、transaction、selection、history、plugin 或 serialization：运行 `corepack pnpm --dir zeta-ts run test:editor:unit`。
+- 修改 `EditorWidget`、clipboard、IME、node view 或 pane integration：运行 unit suite 和 `corepack pnpm --dir zeta-ts run test:editor:browser`。
 - 修改 collaboration protocol、rebase、membership 或 persistence：同步运行对应 Rust/service tests、architecture tests 和 Renderer typecheck。
 - 所有改动运行 `git diff --check`。
 

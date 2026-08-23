@@ -56,7 +56,7 @@ TypstCompiler::compile
 - `Typst-NOTICE.txt`：Typst 要求保留的第三方声明；
 - `Typst-Assets-NOTICE.txt`：内置字体和其他 `typst-assets` 材料的许可证与声明。
 
-Desktop 发布包还必须携带 `desktop/THIRD_PARTY_NOTICES.md` 以及 `desktop/licenses/` 下的
+Desktop 发布包还必须携带 `zeta-ts/THIRD_PARTY_NOTICES.md` 以及 `zeta-ts/licenses/` 下的
 对应文件。这些是面向发布的副本，必须与组件目录逐字节一致。改变 Typst 版本、资源功能或字体
 来源时，必须重新审查许可证、同步两个位置，并检查确定性输出。
 

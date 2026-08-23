@@ -1,3 +1,3 @@
-import { enableHotReload } from "../../desktop/src/zeta/base/common/hotReload.ts";
+import { enableHotReload } from "../../zeta-ts/src/zeta/base/common/hotReload.ts";
 
 enableHotReload();

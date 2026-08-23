@@ -13,7 +13,7 @@ inventory. Third-party material is recorded according to how Zeta consumes it:
 | Downloaded native runtime or vendored implementation | `third_party/<name>/` | Preserve its provenance, checksum, license, and required notices |
 | Ordinary Rust or JavaScript dependency | Owning manifest and lockfile | Validate its license policy and include required notices in the product that distributes it |
 | Component-specific bundled assets | The owning component, for example `zeta-rs/utils/typst/licenses/` | Copy the applicable license and notice texts into the release |
-| Desktop release notices | `desktop/THIRD_PARTY_NOTICES.md` and `desktop/licenses/` | Ship them with the desktop application |
+| Desktop release notices | `zeta-ts/THIRD_PARTY_NOTICES.md` and `zeta-ts/licenses/` | Ship them with the desktop application |
 
 Do not add a package-manager dependency to this directory merely because it is
 third-party. Add it here only when Zeta owns the download, verification,

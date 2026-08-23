@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../cargo.ts";
 import { desktopBuildPath } from "../paths.ts";
 
-const desktopRoot = resolve(import.meta.dirname, "../../../desktop");
+const desktopRoot = resolve(import.meta.dirname, "../../../zeta-ts");
 const repositoryRoot = resolve(desktopRoot, "..");
 const sharedRustSource = join(repositoryRoot, "zeta-rs");
 const cargoWorkspace = join(repositoryRoot, "Cargo.toml");

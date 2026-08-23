@@ -6,7 +6,7 @@ on:
       - ".github/workflows/marketplace-capabilities.yml"
       - "Cargo.lock"
       - "Cargo.toml"
-      - "desktop/**"
+      - "zeta-ts/**"
       - "docs/plugins.md"
       - "resources/product-services/**"
       - "zeta-rs/app-server-protocol/**"
@@ -20,7 +20,7 @@ on:
       - ".github/workflows/marketplace-capabilities.yml"
       - "Cargo.lock"
       - "Cargo.toml"
-      - "desktop/**"
+      - "zeta-ts/**"
       - "docs/plugins.md"
       - "resources/product-services/**"
       - "zeta-rs/app-server-protocol/**"
@@ -64,7 +64,7 @@ jobs:
         run: corepack pnpm install --frozen-lockfile
       - name: Typecheck Marketplace projections
         run: |
-          corepack pnpm --dir desktop typecheck:renderer
-          corepack pnpm --dir desktop typecheck:extensions
+          corepack pnpm --dir zeta-ts typecheck:renderer
+          corepack pnpm --dir zeta-ts typecheck:extensions
       - name: Test Extension projection lifecycle
-        run: corepack pnpm --dir desktop test:extensions
+        run: corepack pnpm --dir zeta-ts test:extensions

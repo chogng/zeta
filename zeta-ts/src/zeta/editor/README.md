@@ -1,6 +1,6 @@
 # Aster
 
-> 本文是 `desktop/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Aster 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
+> 本文是 `zeta-ts/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Aster 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
 
 ## 快速理解
 

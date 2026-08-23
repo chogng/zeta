@@ -388,9 +388,9 @@ Desktop 与协议：
 
 ```bash
 pnpm verify:protocol
-pnpm --dir desktop run build:host
-pnpm --dir desktop run typecheck:renderer
-pnpm --dir desktop run test:main
+pnpm --dir zeta-ts run build:host
+pnpm --dir zeta-ts run typecheck:renderer
+pnpm --dir zeta-ts run test:main
 ```
 
 跨阶段必须持续覆盖（已实现部分回归 + 新增项）：

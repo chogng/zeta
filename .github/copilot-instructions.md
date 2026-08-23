@@ -19,7 +19,7 @@ Scoped instructions contain implementation rules. Architecture documents contain
 
 ## Repository ownership
 
-Desktop frontend paths below are relative to `desktop/`.
+Desktop frontend paths below are relative to `zeta-ts/`.
 
 | Path | Owner |
 | --- | --- |
@@ -33,7 +33,7 @@ Desktop frontend paths below are relative to `desktop/`.
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.
 
-`desktop` and `zeterm` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints belong to `zeta-rs/server-host`.
+`zeta-ts` and `zeterm` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints belong to `zeta-rs/server-host`.
 
 `zeta-rs`, `zeterm`, and `zeta-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
 

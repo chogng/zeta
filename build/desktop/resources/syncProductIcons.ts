@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { optimize } from "svgo";
 
 const repositoryDirectory = resolve(import.meta.dirname, "../../..");
-const desktopDirectory = resolve(repositoryDirectory, "desktop");
+const desktopDirectory = resolve(repositoryDirectory, "zeta-ts");
 const iconDirectory = resolve(repositoryDirectory, "resources/icons");
 const output = resolve(desktopDirectory, "generated/product-icons.ts");
 const iconFilePattern = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.svg$/;

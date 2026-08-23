@@ -28,12 +28,12 @@ Zeta 已经具备可持续运行、调用工具、等待批准、压缩上下文
 | 模型基础弹性 | 已实现 | 429、过载、传输错误最多四次尝试；空响应重试一次；Refusal 正常完成 | `zeta-rs/model-provider/src/error.rs`、`zeta-rs/core/src/turn/executor.rs` |
 | 工具安全与恢复 | 已实现 | 工具绑定、策略版本、批准、sandbox escalation、未知结果不重放 | `zeta-rs/core/src/turn/tool_scheduler.rs` |
 | ContextPlan 与自动压缩 | 已实现 | durable checkpoint、source digest、压缩后重规划；手动压缩和 overflow 恢复尚缺 | `zeta-rs/core/src/context/` |
-| 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`desktop/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
+| 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 部分具备 | `shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 可见；家族 profile、`update_plan` 和统一直接文件工具仍缺 | `zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
 | Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
 | 多 Agent | 部分具备 | spawn/message/wait、Fresh/ForkedPrefix、all/any/quorum、取消树和恢复已实现 | `zeta-rs/core/src/multi_agent/`、`zeta-rs/app-server/src/server/multi_agent_tools.rs` |
-| 模型目录与选择 | 已实现 | 静态模型、access badge、隐藏设置和刷新已接通；目录不探活，运行错误归属对话 Turn | `zeta-rs/app-server/src/model_catalog.rs`、`desktop/src/zeta/workbench/services/chat/` |
+| 模型目录与选择 | 已实现 | 静态模型、access badge、隐藏设置和刷新已接通；目录不探活，运行错误归属对话 Turn | `zeta-rs/app-server/src/model_catalog.rs`、`zeta-ts/src/zeta/workbench/services/chat/` |
 
 2026-08-23 基线验证：协议、App Server、Codex adapter 与订阅成功/失败路径的相关 Rust 测试通过；Desktop Renderer 类型检查及模型目录、Chat、Settings 和分层边界定向测试通过。Desktop 全量单测仍有三个既有失败，位于 Editor design token、组件 document contract 和目录架构检查，不属于 Agent Loop 变更的直接覆盖路径。后续工作项不得把该基线描述为全仓全绿。
 
@@ -174,7 +174,7 @@ flowchart TD
 | Provider 与 wire adapter | `cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-api -p zeta-model-provider` | Provider conformance matrix |
 | App Server 与 Codex | `cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server --lib -p zeta-codex-app-server` | 订阅集成测试 + JSONL/reconnect/fault matrix |
 | Protocol | `corepack pnpm run verify:protocol` | schema hash、fixtures、生成 TypeScript 和 Desktop consumer 同批通过 |
-| Desktop | `corepack pnpm --dir desktop run typecheck:renderer` | `corepack pnpm --dir desktop run test:unit`，已知范围外失败必须单独登记，不能静默忽略 |
+| Desktop | `corepack pnpm --dir zeta-ts run typecheck:renderer` | `corepack pnpm --dir zeta-ts run test:unit`，已知范围外失败必须单独登记，不能静默忽略 |
 | 文档 | `corepack pnpm --dir docs-site run check:docs` | 链接、状态、生成文档和 capability matrix 一致 |
 | Rust 全阶段 | 受影响 crate 的 `cargo fmt --check`、`cargo clippy` 和测试 | `cargo fmt --manifest-path zeta-rs/Cargo.toml --all -- --check`；`cargo clippy --manifest-path zeta-rs/Cargo.toml --workspace --all-targets -- -D warnings`；`cargo test --manifest-path zeta-rs/Cargo.toml --workspace` |
 

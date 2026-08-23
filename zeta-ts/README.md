@@ -94,14 +94,14 @@ executable 路径，不依赖默认 target layout；generation 以 executable �
 不带项目路径启动时，Zeta 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
 
 ```powershell
-corepack pnpm --dir desktop start -- C:\path\to\project
+corepack pnpm --dir zeta-ts start -- C:\path\to\project
 ```
 
 也可以显式声明目标类型：
 
 ```powershell
-corepack pnpm --dir desktop start -- --folder C:\path\to\project
-corepack pnpm --dir desktop start -- --workspace C:\path\to\team.zeta-workspace
+corepack pnpm --dir zeta-ts start -- --folder C:\path\to\project
+corepack pnpm --dir zeta-ts start -- --workspace C:\path\to\team.zeta-workspace
 ```
 
 单目录启动时，当前版本会把目录作为 App Server 的受限 workspace root，并通过
@@ -181,7 +181,7 @@ origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描
 只在 composition root 消费它生成的 `ZetaElectronRendererApi`，再注册按领域划分的 Workbench Service；
 contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrustedIpcRoutes()`
 继续负责 sender、main frame、入口 URL 和参数验证。若修改 preload、频道或 API 组装，必须同时
-运行 `corepack pnpm --dir desktop build` 与 `corepack pnpm --dir desktop test:main`。跨进程
+运行 `corepack pnpm --dir zeta-ts build` 与 `corepack pnpm --dir zeta-ts test:main`。跨进程
 所有权与安全取舍以 [`docs/zeta-desktop-architecture.md`](../docs/zeta-desktop-architecture.md)
 为准。
 
@@ -220,7 +220,7 @@ iframe 内容只能通过一次性获取的 `acquireZetaWebviewApi().postMessage
 
 ## Markdown
 
-DOMPurify 作为 `desktop/package.json` 的运行时依赖安装，源码中的唯一直接适配器是
+DOMPurify 作为 `zeta-ts/package.json` 的运行时依赖安装，源码中的唯一直接适配器是
 `base/browser/domSanitize.ts`。`base/browser/markdownRenderer.ts` 提供用于 Workbench
 标签、Hover 和消息等短内容的 `MarkdownElement`，采用 `marked` 解析后再由 DOMPurify
 统一清洗。
@@ -251,7 +251,7 @@ JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作
 
 ```powershell
 Remove-Item -LiteralPath .\node_modules -Recurse -Force
-Remove-Item -LiteralPath .\desktop\node_modules -Recurse -Force
+Remove-Item -LiteralPath .\zeta-ts\node_modules -Recurse -Force
 corepack pnpm install
 corepack pnpm dev:desktop
 ```
@@ -272,10 +272,10 @@ corepack pnpm test:desktop:app
 ZETA_WORKBENCH_MODE=academic corepack pnpm test:desktop:app
 
 # 只运行桌面端主进程测试
-corepack pnpm --dir desktop test:main
+corepack pnpm --dir zeta-ts test:main
 
 # 检查 renderer 类型
-corepack pnpm --dir desktop typecheck:renderer
+corepack pnpm --dir zeta-ts typecheck:renderer
 ```
 
 如果 Electron 的依赖安装被 pnpm 拦截，请确认安装提示中的 `electron` 构建脚本已被允许。
@@ -284,4 +284,4 @@ corepack pnpm --dir desktop typecheck:renderer
 
 Desktop 直接运行时依赖及其源码内保留的许可证文本见
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。发布打包必须包含该清单及
-`desktop/licenses/`，并同时保留 Electron 与所选原生运行时随附的上游 notices。
+`zeta-ts/licenses/`，并同时保留 Electron 与所选原生运行时随附的上游 notices。

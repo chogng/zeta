@@ -17,22 +17,22 @@ __pycache__/
 .temp
 .tmp/
 output/
-!desktop/src/zeta/workbench/contrib/output/
-!desktop/src/zeta/workbench/contrib/output/**
-!desktop/src/zeta/workbench/services/output/
-!desktop/src/zeta/workbench/services/output/**
+!zeta-ts/src/zeta/workbench/contrib/output/
+!zeta-ts/src/zeta/workbench/contrib/output/**
+!zeta-ts/src/zeta/workbench/services/output/
+!zeta-ts/src/zeta/workbench/services/output/**
 
 # Legacy Desktop build products
-desktop/node_modules/
-desktop/dist/
-desktop/test/editor/browser/dist/
-desktop/.tmp/
-desktop/debug.log
+zeta-ts/node_modules/
+zeta-ts/dist/
+zeta-ts/test/editor/browser/dist/
+zeta-ts/.tmp/
+zeta-ts/debug.log
 node_modules/
 .pnpm-store/
-desktop/generated/app-server/
-desktop/generated/file-icons/
-desktop/generated/product-icons.ts
+zeta-ts/generated/app-server/
+zeta-ts/generated/file-icons/
+zeta-ts/generated/product-icons.ts
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

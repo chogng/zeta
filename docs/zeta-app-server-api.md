@@ -928,7 +928,7 @@ logout 转发 upstream logout，并将失败映射为稳定的 redacted diagnost
 - Rust DTO 与 registry：`zeta-rs/app-server-protocol/src/protocol/`
 - JSON Schema：`zeta-rs/app-server-protocol/schema/schema.json`
 - TypeScript：`zeta-rs/app-server-protocol/schema/types.ts`
-- Desktop 同步产物：`desktop/generated/app-server/types.ts`
+- Desktop 同步产物：`zeta-ts/generated/app-server/types.ts`
 
 修改契约后执行：
 

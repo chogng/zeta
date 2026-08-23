@@ -174,7 +174,7 @@ TUI 有意只消费共享 token 子集，并根据终端能力降级到 TrueColo
 
 ## 开发与验证
 
-修改 Loader、Schema 或 token 后，在 `desktop` 目录运行：
+修改 Loader、Schema 或 token 后，在 `zeta-ts` 目录运行：
 
 ```text
 pnpm tokens:generate

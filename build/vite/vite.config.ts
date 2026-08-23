@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { ZetaDesktopApplication } from "../../desktop/src/zeta/product/common/product.js";
-import { WorkbenchModeRegistry } from "../../desktop/src/zeta/product/common/workbenchMode.js";
+import { ZetaDesktopApplication } from "../../zeta-ts/src/zeta/product/common/product.js";
+import { WorkbenchModeRegistry } from "../../zeta-ts/src/zeta/product/common/workbenchMode.js";
 import { desktopBuildPath } from "../lib/paths.ts";
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
@@ -9,7 +9,7 @@ import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
 import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
 
 export default defineConfig(() => {
-  const desktopRoot = resolve(import.meta.dirname, "../../desktop");
+  const desktopRoot = resolve(import.meta.dirname, "../../zeta-ts");
   const repositoryRoot = resolve(desktopRoot, "..");
   const workbenchModeId = WorkbenchModeRegistry.resolveModeId(process.env.ZETA_WORKBENCH_MODE);
   const webAppServerEnabled = process.env.ZETA_WEB_APP_SERVER === "1";

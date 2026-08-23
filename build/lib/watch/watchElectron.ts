@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import type { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
-const desktopRoot = resolve(import.meta.dirname, "../../../desktop");
+const desktopRoot = resolve(import.meta.dirname, "../../../zeta-ts");
 const typescriptExecutable = resolve(desktopRoot, "node_modules/typescript/bin/tsc");
 const electronRunner = resolve(import.meta.dirname, "../../desktop/runElectron.ts");
 const settleDelayMs = 150;

@@ -10,7 +10,7 @@ zeta-dev:
 
 # Launch the zeta Electron Desktop product.
 zeta-desktop:
-    corepack pnpm --dir desktop dev
+    corepack pnpm --dir zeta-ts dev
 
 # Launch the pure-Rust zeterm Desktop product.
 zeterm:

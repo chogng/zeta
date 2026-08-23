@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import "../../../desktop/src/zeta/platform/theme/common/colorTheme.js";
-import { compileDesignTokenArtifacts } from "../../../desktop/src/zeta/platform/theme/common/tokenCompiler.js";
+import "../../../zeta-ts/src/zeta/platform/theme/common/colorTheme.js";
+import { compileDesignTokenArtifacts } from "../../../zeta-ts/src/zeta/platform/theme/common/tokenCompiler.js";
 
 const outputs = {
   manifest: "design-tokens.json",

@@ -110,11 +110,11 @@ architecture drift.
 Run:
 
 ```text
-corepack pnpm --dir desktop test:extensions
-corepack pnpm --dir desktop typecheck:extensions
-corepack pnpm --dir desktop test:unit
-corepack pnpm --dir desktop typecheck:renderer
-corepack pnpm --dir desktop test:scripts
+corepack pnpm --dir zeta-ts test:extensions
+corepack pnpm --dir zeta-ts typecheck:extensions
+corepack pnpm --dir zeta-ts test:unit
+corepack pnpm --dir zeta-ts typecheck:renderer
+corepack pnpm --dir zeta-ts test:scripts
 ```
 
 Tests cover strict manifest/resource normalization, all supported contribution shapes, language
