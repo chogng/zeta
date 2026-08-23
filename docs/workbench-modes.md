@@ -17,7 +17,7 @@ Code 与 Academic 是同一个 Zeta Desktop 安装包中的两种内置 Workbenc
 
 ## 当前模式
 
-两个模式共享 Electron Main、Preload、Workbench runtime、布局 profile、Rust App Server、应用身份和用户数据根。发布构建同时包含两个模式的 Renderer chunk，统一输出到 `zeta-ts/dist/renderer/zeta`；模式仍使用独立的 renderer storage namespace，避免布局与视图状态互相覆盖。
+两个模式共享 Electron Main、Preload、Workbench runtime、布局 profile、Rust App Server、应用身份和用户数据根。发布构建同时包含两个模式的 Renderer chunk，统一输出到 `.build/desktop/renderer/zeta`；模式仍使用独立的 renderer storage namespace，避免布局与视图状态互相覆盖。
 
 | Workbench 模式 | 模式 ID | Editor 装配 | 模式能力 | Dedicated Sessions |
 | --- | --- | --- | --- | --- |

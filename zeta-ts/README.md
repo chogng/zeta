@@ -128,7 +128,7 @@ pnpm dev:ui
 pnpm start
 ```
 
-需要直接以 Academic 作为开发初始模式时仍使用相同命令，例如 `ZETA_WORKBENCH_MODE=academic pnpm dev`。无论初始模式为何，Vite 都把 Code、Academic 和 Code Sessions 入口输出到同一个 `dist/renderer/zeta` 目录。
+需要直接以 Academic 作为开发初始模式时仍使用相同命令，例如 `ZETA_WORKBENCH_MODE=academic pnpm dev`。无论初始模式为何，Vite 都把 Code、Academic 和 Code Sessions 入口输出到同一个 `.build/desktop/renderer/zeta` 目录。
 
 Ready 后在后台启动 App Server，并完成 initialize、server identity、protocol version
 与 schema hash 校验；门禁通过后才创建业务 Workbench 窗口。主窗口初始保持隐藏，
