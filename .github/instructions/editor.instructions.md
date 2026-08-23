@@ -5,7 +5,7 @@ applyTo: "**/src/zeta/editor/**/*.ts,**/test/editor/**"
 
 # Editor Implementation Guidelines
 
-See [`src/zeta/editor/README.md`](../../desktop/src/zeta/editor/README.md) and [`text-engine-architecture.md`](../../desktop/src/zeta/editor/text-engine-architecture.md).
+See [`src/zeta/editor/README.md`](../../desktop/src/zeta/editor/README.md), [`text-engine.md`](../../desktop/src/zeta/editor/text-engine.md), and [`document-engine.md`](../../desktop/src/zeta/editor/document-engine.md).
 
 ## Ownership
 
@@ -16,13 +16,15 @@ See [`src/zeta/editor/README.md`](../../desktop/src/zeta/editor/README.md) and [
 ## View parts and DOM
 
 - The object that creates stable DOM owns its lifecycle.
+- The view host mounts Part root nodes and owns their sibling order. A Part owns its root and internal nodes, but does not choose its host container.
 - Retain stable nodes when reuse is cheap. Repeated rendering must not leak nodes, listeners, canvases, or disposables.
 - A Part writes only its own DOM and consumes host layout; it does not become another viewport owner.
 
 ## Context and dependencies
 
-- Keep shared view context limited to current layout and canonical view-model, scheduling, measurement, and projection access.
-- Centralize overlay snapshot creation and version validation in the view context.
+- Keep long-lived view context limited to canonical view-model, layout, scheduling, measurement, and projection access.
+- Create one version-bound rendering context per render pass. Do not make each Part reconstruct the same frame snapshot.
+- Centralize overlay snapshot creation and version validation at the rendering-context boundary.
 - Keep feature state with its owner; decoration consumers depend directly on `DecorationsPart` rather than accessing it through the context.
 - Pass feature dependencies directly. Do not turn context into a service locator.
 

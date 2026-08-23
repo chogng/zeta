@@ -96,7 +96,9 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
     "editor.academic.all.ts",
     "editor.all.ts",
     "editor.api.ts",
-    "text-engine-implementation-ledger.md",
+    "README.md",
+    "text-engine.md",
+    "document-engine.md",
   ];
   for (const file of requiredFiles) assert.equal(statSafe(join(editorRoot, file)), true, file);
 
@@ -129,6 +131,9 @@ test("Flat editor layout keeps both engine owners and product bundles", () => {
     "browser/view/minimapProjection.ts",
     "browser/view/minimapPresentation.ts",
     "browser/view/minimapNavigationController.ts",
+    "text-engine-architecture.md",
+    "text-engine-implementation-ledger.md",
+    "document-engine-architecture.md",
   ];
   for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
   assert.equal(existsSync(join(editorRoot, "alpha")), false, "alpha directory");

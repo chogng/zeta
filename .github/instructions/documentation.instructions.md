@@ -13,6 +13,7 @@ Follow [`docs/documentation-guidelines.md`](../../docs/documentation-guidelines.
 - Implementation READMEs explain exact contracts, execution paths, failure semantics, integration obligations, tests, modification impact, limitations, and the private symbols that carry important ownership.
 - Durable documents describe the current system, not the chronology of commits, PRs, or a single refactor.
 - Commands, paths, type names, status claims, and links must be verifiable. Do not claim a check passed unless it ran successfully.
+- Keep one semantic paragraph on one physical line. Do not hard-wrap prose to a fixed column; let the editor soft-wrap it for display.
 - When a rule is mechanical, enforce it in a formatter, linter, generator, or repository gate; documentation explains its meaning and non-mechanical boundary.
 
 ## Learnings

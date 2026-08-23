@@ -1,6 +1,6 @@
 # Aster
 
-> Aster 是 Zeta 的可组装编辑器内核，类似 Monaco 在 VS Code 架构中的位置；`editor/` 只是它的扁平领域目录，不是第二个品牌或额外架构层。跨 Workbench、文件、语言服务与 Rust App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。Text Engine 和 Document Engine 的详细行为分别见 [`text-engine.md`](./text-engine.md) 与 [`document-engine.md`](./document-engine.md)。实现同时遵守通用 [`coding-guidelines.instructions.md`](../../../../.github/instructions/coding-guidelines.instructions.md) 和 editor scoped [`editor.instructions.md`](../../../../.github/instructions/editor.instructions.md)。
+> 本文是 `desktop/src/zeta/editor` 的 canonical 目录、所有权和装配入口。Aster 类似 Monaco 在 VS Code 中的位置；`editor/` 是一个扁平领域目录，不是第二个品牌或额外架构层。行式文本与结构化文档的设计规范分别见 [`text-engine.md`](./text-engine.md) 和 [`document-engine.md`](./document-engine.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。
 
 ## 快速理解
 
@@ -13,6 +13,18 @@ Aster 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` �
 | Academic editor 能力 | `editor.academic.all.ts` | 标准能力加结构化文档 engine contribution；不注册 Workbench pane |
 | DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、`DocumentModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整程序化入口 | `editor.main.ts` | `editor.all.ts` 与 `editor.api.ts` 的组合 |
+
+## 核心文档
+
+Editor 只维护三个核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
+
+| 文档 | Canonical responsibility | 不负责 |
+| --- | --- | --- |
+| [`README.md`](./README.md) | 扁平目录、两个 engine、依赖方向、bundle 和产品装配 | 单个 engine 的完整行为和实现台账 |
+| [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
+| [`document-engine.md`](./document-engine.md) | Schema、structured model、transaction、browser projection、profile 和 collaboration | 行式文本语义和产品 pane 生命周期 |
+
+跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
 ## 所有权与依赖方向
 
