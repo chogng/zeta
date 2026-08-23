@@ -13,7 +13,7 @@ export interface EditorRuler {
 }
 
 export interface RulersPartOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly textMeasurer: TextMeasurer;
 	readonly readTextLeft: () => number;
 	readonly rulers?: readonly EditorRuler[];
@@ -33,7 +33,7 @@ export class RulersPart extends DisposableOwner implements EditorViewPart {
 		this.textMeasurer = options.textMeasurer;
 		this.readTextLeft = options.readTextLeft;
 		this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));
-		this.domNode = this.adopt(h(options.ownerDocument, "div"), domNode => domNode.remove());
+		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("aster-editor-rulers");
 		this.domNode.setAttribute("role", "presentation");

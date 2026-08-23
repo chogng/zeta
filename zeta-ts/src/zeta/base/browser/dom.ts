@@ -1,8 +1,8 @@
 import { type IDisposable, toDisposable } from "../common/lifecycle.js";
 
-export type DomListenerOptions = boolean | AddEventListenerOptions;
-export type DomChild = Node | string;
-export type DomTreeChild =
+type DomListenerOptions = boolean | AddEventListenerOptions;
+type DomChild = Node | string;
+type DomTreeChild =
 	| Node
 	| string
 	| number
@@ -10,6 +10,10 @@ export type DomTreeChild =
 	| null
 	| undefined
 	| readonly DomTreeChild[];
+
+const DOCUMENT_NODE_TYPE = 9;
+const ELEMENT_NODE_TYPE = 1;
+const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
  * Registers a DOM event listener whose removal participates in disposable
@@ -37,40 +41,16 @@ export function addDisposableListener(
 ): IDisposable {
 	const eventListener = listener as EventListener;
 	target.addEventListener(type, eventListener, options);
+	const capture = typeof options === "boolean" ? options : options?.capture ?? false;
 	let activeTarget: EventTarget | undefined = target;
 	let activeListener: EventListener | undefined = eventListener;
 	return toDisposable(() => {
 		if (activeTarget && activeListener) {
-			activeTarget.removeEventListener(type, activeListener, options);
+			activeTarget.removeEventListener(type, activeListener, capture);
 		}
 		activeTarget = undefined;
 		activeListener = undefined;
 	});
-}
-
-/** Removes every child from a DOM container. */
-export function clearNode<T extends Element | DocumentFragment>(node: T): T {
-	node.replaceChildren();
-	return node;
-}
-
-/** Appends a child and returns it for fluent construction. */
-export function append<T extends Node>(
-	parent: Element | DocumentFragment,
-	child: T,
-): T;
-export function append(
-	parent: Element | DocumentFragment,
-	...children: readonly DomChild[]
-): void;
-export function append<T extends Node>(
-	parent: Element | DocumentFragment,
-	...children: readonly DomChild[]
-): T | void {
-	parent.append(...children);
-	return children.length === 1 && typeof children[0] !== "string"
-		? children[0] as T
-		: undefined;
 }
 
 /** Replaces a container's children with the supplied nodes or text. */
@@ -79,22 +59,6 @@ export function reset(
 	...children: readonly DomChild[]
 ): void {
 	parent.replaceChildren(...children);
-}
-
-/** Updates native visibility without overwriting layout-related styles. */
-export function setVisibility(
-	visible: boolean,
-	...elements: readonly HTMLElement[]
-): void {
-	for (const element of elements) element.hidden = !visible;
-}
-
-export function show(...elements: readonly HTMLElement[]): void {
-	setVisibility(true, ...elements);
-}
-
-export function hide(...elements: readonly HTMLElement[]): void {
-	setVisibility(false, ...elements);
 }
 
 /** Tests DOM ancestry without assuming that either node is connected. */
@@ -106,32 +70,30 @@ export function isAncestor(
 }
 
 export function isNode(value: unknown): value is Node {
-	return typeof value === "object" &&
-		value !== null &&
-		typeof (value as Node).nodeType === "number";
+	if (typeof value !== "object" || value === null) {
+		return false;
+	}
+	const nodeConstructor = getNodeConstructor(value);
+	if (nodeConstructor) {
+		return value instanceof nodeConstructor;
+	}
+	return typeof Node !== "undefined" && value instanceof Node;
 }
 
-/** Cross-realm Element guard that does not rely on global instanceof. */
+/** Cross-realm Element guard. */
 export function isElement(value: unknown): value is Element {
-	return isNode(value) && (value as Node).nodeType === 1;
+	return isNode(value) && value.nodeType === ELEMENT_NODE_TYPE;
 }
 
-/** Cross-realm HTMLElement guard that does not rely on global instanceof. */
+/** Cross-realm HTMLElement guard. */
 export function isHTMLElement(value: unknown): value is HTMLElement {
-	return isElement(value) &&
-		(value as Element).namespaceURI === "http://www.w3.org/1999/xhtml";
-}
-
-export function isHTMLInputElement(
-	value: unknown,
-): value is HTMLInputElement {
-	return isHTMLElement(value) && value.tagName === "INPUT";
-}
-
-export function isHTMLButtonElement(
-	value: unknown,
-): value is HTMLButtonElement {
-	return isHTMLElement(value) && value.tagName === "BUTTON";
+	if (!isElement(value)) {
+		return false;
+	}
+	const htmlElementConstructor = value.ownerDocument?.defaultView?.HTMLElement;
+	return typeof htmlElementConstructor === "function"
+		? value instanceof htmlElementConstructor
+		: value.namespaceURI === HTML_NAMESPACE;
 }
 
 /** Stops propagation and, by default, the browser's native behavior. */
@@ -160,7 +122,7 @@ export type DomElementProperties<TElement> = Partial<
 	Pick<TElement, SafeDomPropertyName<TElement>>
 >;
 
-export interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
+interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
 	readonly className?: string | readonly (string | false | null | undefined)[];
 	/** String-valued markup attributes. Use `properties` for native booleans. */
 	readonly attributes?: Readonly<
@@ -173,70 +135,9 @@ export interface DomElementOptions<TElement extends HTMLElement | SVGElement> {
 	readonly ref?: (element: TElement) => void;
 }
 
-export type HtmlElementForTag<TTag extends string> =
+type HtmlElementForTag<TTag extends string> =
 	TTag extends keyof HTMLElementTagNameMap ? HTMLElementTagNameMap[TTag]
 		: HTMLElement;
-
-/**
- * Document-bound DOM construction function.
- *
- * Binding construction to a document keeps auxiliary windows and test DOMs
- * isolated without relying on the process-global `document`.
- */
-export interface DomFactory {
-	readonly document: Document;
-
-	<TTag extends string>(
-		tag: TTag,
-		optionsOrChild?: DomElementOptions<HtmlElementForTag<TTag>> | DomTreeChild,
-		...children: readonly DomTreeChild[]
-	): HtmlElementForTag<TTag>;
-
-	svg<K extends keyof SVGElementTagNameMap>(
-		tag: K,
-		optionsOrChild?: DomElementOptions<SVGElementTagNameMap[K]> | DomTreeChild,
-		...children: readonly DomTreeChild[]
-	): SVGElementTagNameMap[K];
-
-	text(value: string | number): Text;
-	fragment(...children: readonly DomTreeChild[]): DocumentFragment;
-}
-
-/** Creates a callable DOM factory bound to `ownerDocument`. */
-export function createDom(ownerDocument: Document): DomFactory {
-	const factory = (<TTag extends string>(
-		tag: TTag,
-		optionsOrChild?: DomElementOptions<HtmlElementForTag<TTag>> | DomTreeChild,
-		...children: readonly DomTreeChild[]
-	): HtmlElementForTag<TTag> =>
-		h(ownerDocument, tag, optionsOrChild, ...children)) as DomFactory;
-
-	Object.defineProperties(factory, {
-		document: { value: ownerDocument, enumerable: true },
-		svg: {
-			value: <K extends keyof SVGElementTagNameMap>(
-				tag: K,
-				optionsOrChild?: DomElementOptions<SVGElementTagNameMap[K]> | DomTreeChild,
-				...children: readonly DomTreeChild[]
-			): SVGElementTagNameMap[K] =>
-				svg(ownerDocument, tag, optionsOrChild, ...children),
-			enumerable: true,
-		},
-		text: {
-			value: (value: string | number): Text =>
-				text(ownerDocument, value),
-			enumerable: true,
-		},
-		fragment: {
-			value: (...children: readonly DomTreeChild[]): DocumentFragment => {
-				return fragment(ownerDocument, ...children);
-			},
-			enumerable: true,
-		},
-	});
-
-	return factory;
-}
 
 /** Creates one HTML element in the supplied document. */
 export function h<TTag extends string>(
@@ -306,11 +207,11 @@ function applyElementOptions<TElement extends HTMLElement | SVGElement>(
 	for (const [name, value] of Object.entries(options.properties ?? {})) {
 		Reflect.set(element, name, value);
 	}
-	if (element.namespaceURI === "http://www.w3.org/1999/xhtml") {
-		const htmlElement = element as HTMLElement;
-		for (const [name, value] of Object.entries(options.dataset ?? {})) {
-			if (value === undefined) delete htmlElement.dataset[name];
-			else htmlElement.dataset[name] = value;
+	for (const [name, value] of Object.entries(options.dataset ?? {})) {
+		if (value === undefined) {
+			delete element.dataset[name];
+		} else {
+			element.dataset[name] = value;
 		}
 	}
 	for (const [name, value] of Object.entries(options.style ?? {})) {
@@ -324,6 +225,15 @@ function isDomElementOptions<TElement extends HTMLElement | SVGElement>(
 	value: DomElementOptions<TElement> | DomTreeChild,
 ): value is DomElementOptions<TElement> {
 	return typeof value === "object" && value !== null && !Array.isArray(value) && !isNode(value);
+}
+
+function getNodeConstructor(value: object): typeof Node | undefined {
+	const candidate = value as Node;
+	const ownerDocument = candidate.nodeType === DOCUMENT_NODE_TYPE
+		? value as Document
+		: candidate.ownerDocument;
+	const nodeConstructor = ownerDocument?.defaultView?.Node;
+	return typeof nodeConstructor === "function" ? nodeConstructor : undefined;
 }
 
 function splitElementArguments<TElement extends HTMLElement | SVGElement>(

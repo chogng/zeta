@@ -15,7 +15,7 @@ import { type EditorViewPart } from "../viewPart.js";
 export type MinimapMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 export interface MinimapPartOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly model: TextModel;
 	readonly readLayout: () => EditorViewportLayout;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
@@ -44,7 +44,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 		this.readLayout = options.readLayout;
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
-		const ownerDocument = options.ownerDocument;
+		const ownerDocument = options.host.ownerDocument;
 		this.domNode = this.adopt(h(ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.canvas = h(ownerDocument, "canvas");

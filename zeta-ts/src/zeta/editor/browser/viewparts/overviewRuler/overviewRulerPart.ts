@@ -13,7 +13,7 @@ const OVERVIEW_RULER_WIDTH = 6;
 export type OverviewRulerMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 export interface OverviewRulerPartOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly minimapEnabled: boolean;
 	readonly readLineCount: () => number;
 	readonly readMarkers: () => readonly OverviewRulerMarker[];
@@ -36,7 +36,7 @@ export class OverviewRulerPart extends DisposableOwner implements EditorViewPart
 		this.readLineCount = options.readLineCount;
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
-		this.domNode = this.adopt(h(options.ownerDocument, "div"), domNode => domNode.remove());
+		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("aster-editor-overview-ruler");
 		this.domNode.setAttribute("aria-hidden", "true");

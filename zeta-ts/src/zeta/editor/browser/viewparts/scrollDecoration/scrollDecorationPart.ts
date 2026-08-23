@@ -12,8 +12,9 @@ export class ScrollDecorationPart extends DisposableOwner implements EditorViewP
 	private readonly topShadow: FastDomNode<HTMLDivElement>;
 	private readonly bottomShadow: FastDomNode<HTMLDivElement>;
 
-	constructor(ownerDocument: Document) {
+	constructor(host: HTMLElement) {
 		super();
+		const ownerDocument = host.ownerDocument;
 		this.domNode = this.adopt(h(ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.topShadow = new FastDomNode(h(ownerDocument, "div"));

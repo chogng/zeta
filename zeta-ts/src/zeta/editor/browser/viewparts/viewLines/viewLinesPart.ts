@@ -13,7 +13,7 @@ import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
 export type ViewLinesTextDirection = "auto" | "ltr" | "rtl";
 
 export interface ViewLinesPartOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly model: TextModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
@@ -49,7 +49,7 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		this.lineGutterDecoration = options.lineGutterDecoration;
 		this.textDirection = options.textDirection;
-		this.domNode = this.adopt(h(options.ownerDocument, "div"), domNode => domNode.remove());
+		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("aster-editor-lines");
 	}

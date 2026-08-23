@@ -147,12 +147,12 @@ export class ReactiveElement<
 		for (const [name, value] of Object.entries(this.options.properties ?? {})) {
 			Reflect.set(this.element, name, read(value as ReactiveValue<unknown>, reader));
 		}
-		if (this.element.namespaceURI === "http://www.w3.org/1999/xhtml") {
-			const htmlElement = this.element as HTMLElement;
-			for (const [name, value] of Object.entries(this.options.dataset ?? {})) {
-				const resolved = read(value, reader);
-				if (resolved === undefined) delete htmlElement.dataset[name];
-				else htmlElement.dataset[name] = resolved;
+		for (const [name, value] of Object.entries(this.options.dataset ?? {})) {
+			const resolved = read(value, reader);
+			if (resolved === undefined) {
+				delete this.element.dataset[name];
+			} else {
+				this.element.dataset[name] = resolved;
 			}
 		}
 		for (const [name, value] of Object.entries(this.options.style ?? {})) {

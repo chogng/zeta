@@ -51,3 +51,20 @@ test("reactive DOM switches observable child trees without global document acces
 	assert.equal(live.element.innerHTML, "<em>Second</em>");
 	live.dispose();
 });
+
+test("reactive DOM projects and removes SVG dataset values", () => {
+	const ownerDocument = new JSDOM("<!doctype html><body></body>").window.document;
+	const n = createReactiveDom(ownerDocument);
+	const state = observableValue<string | undefined>("state", "ready");
+	const live = n.svg({
+		dataset: { state },
+	}, n.svgElem("path", { attributes: { d: "M0 0h16v16z" } })).toLiveElement();
+
+	assert.equal(
+		live.element.outerHTML,
+		'<svg data-state="ready"><path d="M0 0h16v16z"></path></svg>',
+	);
+	state.set(undefined);
+	assert.equal(live.element.outerHTML, '<svg><path d="M0 0h16v16z"></path></svg>');
+	live.dispose();
+});

@@ -276,7 +276,7 @@ export class EditorViewport extends DisposableOwner {
 		);
 		this.viewParts = this.own(new EditorViewPartCollection());
 		this.viewLinesPart = this.viewParts.register(new ViewLinesPart({
-			ownerDocument,
+			host: this.contentElement,
 			model: this.model,
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.visibleLineProjection.revision,
@@ -310,7 +310,7 @@ export class EditorViewport extends DisposableOwner {
 		const blockDecorationsPart = this.viewParts.register(new BlockDecorationsPart(
 			this.viewContext,
 			this.decorationsPart,
-			ownerDocument,
+			this.contentElement,
 		));
 		this.viewParts.register(new MarginDecorationsPart(this.viewContext, this.decorationsPart));
 		this.viewParts.register(new IndentGuidesPart(this.viewContext, {
@@ -320,7 +320,7 @@ export class EditorViewport extends DisposableOwner {
 		this.selectionsPart = this.viewParts.register(new SelectionsPart(this.viewContext, this.selectionController));
 		this.viewCursorsPart = this.viewParts.register(new ViewCursorsPart(this.viewContext, this.selectionController));
 		const rulersPart = this.viewParts.register(new RulersPart({
-			ownerDocument,
+			host: this.contentElement,
 			textMeasurer: this.textMeasurer,
 			readTextLeft: () => this.textLeft,
 			rulers: options.rulers,
@@ -332,7 +332,7 @@ export class EditorViewport extends DisposableOwner {
 			scrollTo: position => this.scrollTo(position),
 		}));
 		const minimapPart = this.viewParts.register(new MinimapPart({
-			ownerDocument,
+			host: this.element,
 			model: this.model,
 			readLayout: () => this.viewport.layout,
 			scrollTo: position => this.scrollTo(position),
@@ -341,13 +341,13 @@ export class EditorViewport extends DisposableOwner {
 			enabled: this.minimap === EditorMinimap.On,
 		}));
 		const overviewRulerPart = this.viewParts.register(new OverviewRulerPart({
-			ownerDocument,
+			host: this.element,
 			minimapEnabled: this.minimap === EditorMinimap.On,
 			readLineCount: () => this.model.lineCount,
 			readMarkers: () => this.decorationsPart.overviewMarkers(),
 			readMarkersRevision: () => this.decorationsPart.markersRevision,
 		}));
-		const scrollDecorationPart = this.viewParts.register(new ScrollDecorationPart(ownerDocument));
+		const scrollDecorationPart = this.viewParts.register(new ScrollDecorationPart(this.element));
 
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(

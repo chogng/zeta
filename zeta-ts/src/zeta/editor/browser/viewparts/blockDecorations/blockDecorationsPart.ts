@@ -13,11 +13,11 @@ export class BlockDecorationsPart extends EditorOverlayPart {
 	private readonly decorations: DecorationsPart;
 	private readonly blocks: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(context: EditorViewContext, decorations: DecorationsPart, ownerDocument: Document) {
+	constructor(context: EditorViewContext, decorations: DecorationsPart, host: HTMLElement) {
 		super(context);
 
 		this.decorations = decorations;
-		this.domNode = this.adopt(h(ownerDocument, 'div'), domNode => domNode.remove());
+		this.domNode = this.adopt(h(host.ownerDocument, 'div'), domNode => domNode.remove());
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName('aster-editor-block-decorations');
 		this.domNode.setAttribute('role', 'presentation');
