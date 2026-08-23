@@ -5,6 +5,72 @@
 	gap: 12px;
 }
 
+.zeta-model-settings-account {
+	display: grid;
+	min-height: 72px;
+	box-sizing: border-box;
+	align-items: center;
+	padding: 13px 14px;
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 8px;
+	background: var(--zeta-editor-background);
+	gap: 18px;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.zeta-model-settings-account-copy {
+	min-width: 0;
+}
+
+.zeta-model-settings-account h3,
+.zeta-model-settings-account p {
+	margin: 0;
+}
+
+.zeta-model-settings-account h3 {
+	color: var(--zeta-foreground);
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.zeta-model-settings-account p {
+	margin-top: 4px;
+	color: var(--zeta-description-foreground);
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.zeta-model-settings-account .zeta-model-settings-account-challenge {
+	color: var(--zeta-foreground);
+	font-family: var(--zeta-font-family-monospace);
+	font-weight: 600;
+}
+
+.zeta-model-settings-account-action {
+	min-height: 30px;
+	padding: 4px 11px;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	color: var(--zeta-button-foreground);
+	background: var(--zeta-button-background);
+	cursor: pointer;
+	font: inherit;
+}
+
+.zeta-model-settings-account-action:hover:not(:disabled) {
+	background: var(--zeta-button-hover-background);
+}
+
+.zeta-model-settings-account-action:focus-visible {
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: 1px;
+}
+
+.zeta-model-settings-account-action:disabled {
+	cursor: wait;
+	opacity: 0.65;
+}
+
 .zeta-model-settings-toolbar {
 	display: flex;
 	align-items: end;
@@ -63,7 +129,7 @@
 }
 
 .zeta-model-settings-list {
-	overflow: hidden;
+	overflow: visible;
 	border: 1px solid var(--zeta-widget-border);
 	border-radius: 8px;
 	background: var(--zeta-editor-background);
@@ -71,7 +137,7 @@
 
 .zeta-model-settings-row {
 	display: grid;
-	min-height: 78px;
+	min-height: 58px;
 	box-sizing: border-box;
 	align-items: center;
 	padding: 11px 14px;
@@ -81,10 +147,6 @@
 
 .zeta-model-settings-row + .zeta-model-settings-row {
 	border-top: 1px solid var(--zeta-widget-border);
-}
-
-.zeta-model-settings-row:hover {
-	background: var(--zeta-list-hover-background);
 }
 
 .zeta-model-settings-copy {
@@ -99,7 +161,6 @@
 }
 
 .zeta-model-settings-copy h4,
-.zeta-model-settings-copy p,
 .zeta-model-settings-status,
 .zeta-model-settings-empty {
 	margin: 0;
@@ -123,15 +184,6 @@
 	font-size: 10px;
 	font-weight: 600;
 	line-height: 16px;
-}
-
-.zeta-model-settings-copy p {
-	margin-top: 3px;
-	overflow: hidden;
-	color: var(--zeta-description-foreground);
-	font-size: 12px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .zeta-model-settings-control {

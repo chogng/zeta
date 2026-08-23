@@ -6,6 +6,7 @@ import type { IThemeService } from "../../../../platform/theme/common/themeServi
 import { ModalEditorPart } from "../../../browser/parts/editor/modalEditorPart.js";
 import type { IUserThemeService } from "../../../common/userThemes.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
+import type { IPreferencesService } from "../../../services/preferences/common/preferences.js";
 import type { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import type { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import type { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
@@ -21,13 +22,32 @@ import { WorkbenchModeRegistry } from "../../../../product/common/workbenchMode.
 import { SettingsEditor } from "./settingsEditor.js";
 import type { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
 import type { ModelSettingsCatalog } from "./modelSettings.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { IClipboardService } from "../../../../platform/clipboard/common/clipboardService.js";
+import type { IAccountService } from "../../../../platform/accounts/common/accountService.js";
+import { ConnectorSettingsPane } from "./connectorSettings.js";
+import { EditorSettingsPane } from "./editorSettings.js";
+import { GeneralSettingsPane } from "./generalSettings.js";
+import { IndexingSettingsPane } from "./indexingSettings.js";
+import { LocalizationSettingsPane } from "../../localization/browser/localizationSettings.js";
+import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
+import { ModelSettingsPane } from "./modelSettings.js";
+import { PluginSettingsPane } from "./pluginSettings.js";
+import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
+import { AppearanceSettingsPane } from "./appearanceSettings.js";
+import { SettingsPaneRegistry } from "./settingsPaneRegistry.js";
+import { SettingsSections } from "../common/settingsSections.js";
+import { WorkspaceTrustEditor } from "../../workspace/browser/workspaceTrustEditor.js";
 
 export interface SettingsEditorContributionOptions {
+	readonly clipboardService?: IClipboardService;
 	readonly configurationService: IConfigurationService;
 	readonly container: HTMLElement;
+	readonly contextMenuProvider?: IContextMenuProvider;
 	readonly contextViewProvider: IContextViewProvider;
 	readonly dialogService: IDialogService;
 	readonly settingsService: ISettingsService;
+	readonly preferencesService?: IPreferencesService;
 	readonly themeService: IThemeService;
 	readonly userThemeService: IUserThemeService;
 	readonly codeIndexService?: ICodeIndexService;
@@ -43,6 +63,7 @@ export interface SettingsEditorContributionOptions {
 	readonly workspaceContextService?: IWorkspaceContextService;
 	readonly workbenchModeService?: IWorkbenchModeService;
 	readonly modelCatalog?: ModelSettingsCatalog;
+	readonly accountService?: IAccountService;
 }
 
 /** Connects window Settings state to its modal editor host and content. */
@@ -52,30 +73,15 @@ export class SettingsEditorContribution extends DisposableOwner {
 
 	constructor(options: SettingsEditorContributionOptions) {
 		super();
+		const localizationService = options.localizationService ?? unavailableLocalizationService;
 		this.editor = this.own(new SettingsEditor(options.container, {
-			contextViewProvider: options.contextViewProvider,
-			configurationService: options.configurationService,
-			dialogService: options.dialogService,
+			localizationService,
+			paneRegistry: createSettingsPaneRegistry(options),
 			settingsService: options.settingsService,
-			themeService: options.themeService,
-			userThemeService: options.userThemeService,
-			codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
-			connectorService: options.connectorService ?? unavailableConnectorService,
-			pluginService: options.pluginService ?? unavailablePluginService,
-			marketplaceService: options.marketplaceService ?? unavailableMarketplaceService,
-			languagePackService: options.languagePackService ?? unavailableLanguagePackService,
-			localeService: options.localeService ?? unavailableLocaleService,
-			localizationService: options.localizationService ?? unavailableLocalizationService,
-			toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
-			workspaceTrustService: options.workspaceTrustService ?? unavailableWorkspaceTrustService,
-			workspaceOpenService: options.workspaceOpenService ?? unavailableWorkspaceOpenService,
-			workspaceContextService: options.workspaceContextService,
-			workbenchModeService: options.workbenchModeService ?? unavailableWorkbenchModeService,
-			modelCatalog: options.modelCatalog ?? unavailableModelCatalog,
 		}));
 		this.modalEditor = this.own(new ModalEditorPart({
 			container: options.container,
-			title: (options.localizationService ?? unavailableLocalizationService).translate("zeta.settings", "chrome.modalTitle", "Zeta Settings"),
+			title: localizationService.translate("zeta.settings", "chrome.modalTitle", "Zeta Settings"),
 			content: this.editor.element,
 			focusContent: () => this.editor.focus(),
 		}));
@@ -87,7 +93,7 @@ export class SettingsEditorContribution extends DisposableOwner {
 		this.own(options.settingsService.onDidChangeVisibility((visible) => {
 			if (visible) this.show();
 			else {
-				this.editor.cancelThemeEditing();
+				this.editor.cancelPendingChanges();
 				this.modalEditor.hide();
 			}
 		}));
@@ -99,6 +105,110 @@ export class SettingsEditorContribution extends DisposableOwner {
 		this.editor.layout();
 	}
 }
+
+function createSettingsPaneRegistry(options: SettingsEditorContributionOptions): SettingsPaneRegistry {
+	const clipboardService = options.clipboardService ?? unavailableClipboardService;
+	const contextMenuProvider = options.contextMenuProvider ?? unavailableContextMenuProvider;
+	const localizationService = options.localizationService ?? unavailableLocalizationService;
+	const marketplaceService = options.marketplaceService ?? unavailableMarketplaceService;
+	const registry = new SettingsPaneRegistry();
+	registry.register("general", {
+		create: container => new GeneralSettingsPane(container, {
+			clipboardService,
+			configurationService: options.configurationService,
+			contextMenuProvider,
+			contextViewProvider: options.contextViewProvider,
+			workbenchModeService: options.workbenchModeService ?? unavailableWorkbenchModeService,
+			preferencesService: options.preferencesService ?? unavailablePreferencesService,
+		}),
+	});
+	registry.register("appearance", {
+		create: container => new AppearanceSettingsPane(container, {
+			clipboardService,
+			configurationService: options.configurationService,
+			contextMenuProvider,
+			dialogService: options.dialogService,
+			themeService: options.themeService,
+			userThemeService: options.userThemeService,
+		}),
+	});
+	registry.register("editor", {
+		create: container => new EditorSettingsPane(container, {
+			clipboardService,
+			configurationService: options.configurationService,
+			contextMenuProvider,
+			contextViewProvider: options.contextViewProvider,
+		}),
+	});
+	registry.register("connectors", {
+		create: container => new ConnectorSettingsPane(container, options.connectorService ?? unavailableConnectorService),
+	});
+	registry.register("plugins", {
+		create: container => new PluginSettingsPane(container, options.pluginService ?? unavailablePluginService),
+	});
+	registry.register("languages", {
+		create: container => new MarketplaceSettingsPane(container, marketplaceService, "language", localizationService),
+	});
+	registry.register("localization", {
+		create: container => new LocalizationSettingsPane(
+			container,
+			localizationService,
+			options.localeService ?? unavailableLocaleService,
+			options.languagePackService ?? unavailableLanguagePackService,
+			contextMenuProvider,
+			clipboardService,
+		),
+	});
+	registry.register("marketplace", {
+		create: container => new MarketplaceSettingsPane(container, marketplaceService, undefined, localizationService),
+	});
+	registry.register("models", {
+		create: container => new ModelSettingsPane(container, {
+			clipboardService,
+			contextMenuProvider,
+			models: options.modelCatalog ?? unavailableModelCatalog,
+			accounts: options.accountService ?? unavailableAccountService,
+		}),
+	});
+	registry.register("indexing", {
+		create: container => new IndexingSettingsPane(container, {
+			clipboardService,
+			codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
+			contextMenuProvider,
+			dialogService: options.dialogService,
+			toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
+		}),
+	});
+	registry.register("workspace-trust", {
+		create: container => new WorkspaceTrustEditor(
+			container,
+			options.workspaceTrustService ?? unavailableWorkspaceTrustService,
+			options.workspaceOpenService ?? unavailableWorkspaceOpenService,
+			options.dialogService,
+			options.workspaceContextService,
+		),
+	});
+	for (const section of SettingsSections) {
+		if (!hasSectionOverviewSettings(section.id)) continue;
+		registry.register(section.id, {
+			create: container => new SectionOverviewSettingsPane(container, section.id, options.settingsService),
+		});
+	}
+	return registry;
+}
+
+const unavailableClipboardService: IClipboardService = {
+	writeText: () => Promise.reject(new Error("Clipboard access is unavailable.")),
+};
+
+const unavailablePreferencesService: IPreferencesService = {
+	openSettings: () => undefined,
+	openKeybindings: () => Promise.reject(new Error('Keyboard Shortcuts editor is unavailable.')),
+};
+
+const unavailableContextMenuProvider: IContextMenuProvider = {
+	showContextMenu: options => options.onHide?.(true),
+};
 
 const unavailableCodeIndexService: ICodeIndexService = {
 	readConfig: () => Promise.reject(new Error("Code index settings are unavailable.")),
@@ -115,6 +225,7 @@ const unavailableWorkbenchModeService: IWorkbenchModeService = {
 	currentModeId: WorkbenchModeRegistry.defaultModeId,
 	availableModes: WorkbenchModeRegistry.definitions.map(({ id, label }) => ({ id, label })),
 	switchMode: () => Promise.reject(new Error("Workbench mode switching is unavailable.")),
+	resetMode: () => Promise.reject(new Error("Workbench mode switching is unavailable.")),
 };
 
 const unavailableModelCatalog: ModelSettingsCatalog = {
@@ -123,6 +234,15 @@ const unavailableModelCatalog: ModelSettingsCatalog = {
 	refreshModels: () => Promise.reject(new Error("Model settings are unavailable.")),
 	isModelVisible: () => true,
 	setModelVisible: () => Promise.reject(new Error("Model settings are unavailable.")),
+};
+
+const unavailableAccountService: IAccountService = {
+	onDidChangeAccounts: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidCompleteLogin: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	read: () => Promise.reject(new Error("Account settings are unavailable.")),
+	startLogin: () => Promise.reject(new Error("Account sign-in is unavailable.")),
+	cancelLogin: () => Promise.reject(new Error("Kimi sign-in is unavailable.")),
+	logout: () => Promise.reject(new Error("Account settings are unavailable.")),
 };
 
 const unavailableToolSearchService: IToolSearchService = {

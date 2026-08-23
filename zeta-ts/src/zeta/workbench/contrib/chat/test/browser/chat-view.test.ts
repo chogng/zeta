@@ -8,7 +8,6 @@ import type { IAction } from "../../../../../base/common/actions.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { TAB_CLOSE_ACTION_ID } from "../../../../../base/browser/ui/tablist/tabList.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -20,7 +19,7 @@ import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../wor
 import { chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
-import { ISettingsService } from "../../../../../workbench/services/preferences/common/settings.js";
+import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import type { TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
@@ -141,17 +140,13 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	});
 	const services = new ServiceCollection();
 	let openedSettingsSection: string | undefined;
-	const settings: ISettingsService = {
-		onDidChangeVisibility: () => toDisposable(() => {}),
-		onDidChangeActiveSection: () => toDisposable(() => {}),
-		isOpen: false,
-		activeSectionId: "general",
-		open: (sectionId) => {
+	const preferences: PreferencesService = {
+		openSettings: (sectionId) => {
 			openedSettingsSection = sectionId;
 		},
-		close() {},
+		openKeybindings: () => Promise.resolve(),
 	};
-	services.set(ISettingsService, settings);
+	services.set(IPreferencesService, preferences);
 	services.set(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -334,14 +329,14 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button .zeta-button-label")?.textContent, "GPT-5.6 Sol");
-		assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "Subscription");
+		assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "ChatGPT subscription");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button")?.click();
 	assert.deepEqual(shownContextMenuActions.map(action => ({ label: action.label, badge: action.badge })), [
-		{ label: "GPT-5.6 Sol", badge: "Subscription" },
+		{ label: "GPT-5.6 Sol", badge: "ChatGPT subscription" },
 	]);
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.click();

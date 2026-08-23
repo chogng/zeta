@@ -417,7 +417,7 @@ class ChatInputSelectorViewItem extends DropdownMenuActionViewItem {
 }
 
 function modelAccessBadge(entry: ModelCatalogEntry): string | undefined {
-	return entry.access === "subscription" ? modelAccessLabel(entry.access) : undefined;
+	return entry.access === "subscription" ? modelAccessLabel(entry) : undefined;
 }
 
 /** Chat-owned HTML popup presentation for the mode selector. */

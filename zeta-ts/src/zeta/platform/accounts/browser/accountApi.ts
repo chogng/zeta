@@ -1,0 +1,42 @@
+import type { AccountLoginStartResult } from '../../../../../generated/app-server/types.js';
+import type { ViteDevAppServerConnection } from '../../app-server/browser/viteDevConnection.js';
+import { viteDevRequest } from '../../app-server/browser/viteDevRequest.js';
+import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type { IAccountApi } from '../common/accountApi.js';
+import type { IClipboardService } from '../../clipboard/common/clipboardService.js';
+import type { IOpenerService } from '../../opener/common/openerService.js';
+
+export interface BrowserAccountLoginHostServices {
+	readonly openerService: IOpenerService;
+	readonly clipboardService: IClipboardService;
+}
+
+export function createDisconnectedAccountApi(unavailable: UnavailableOperation): IAccountApi {
+	return {
+		read: () => unavailable('accounts.read'),
+		startLogin: () => unavailable('accounts.startLogin'),
+		cancelLogin: () => unavailable('accounts.cancelLogin'),
+		logout: () => unavailable('accounts.logout'),
+	};
+}
+
+export function createViteDevAccountApi(connection: ViteDevAppServerConnection, hostServices: BrowserAccountLoginHostServices): IAccountApi {
+	return {
+		read: () => viteDevRequest(connection, 'account/read', {}),
+		startLogin: params => startLogin(connection, params, hostServices),
+		cancelLogin: params => viteDevRequest(connection, 'account/login/cancel', params),
+		logout: params => viteDevRequest(connection, 'account/logout', params),
+	};
+}
+
+async function startLogin(connection: ViteDevAppServerConnection, params: Parameters<IAccountApi['startLogin']>[0], hostServices: BrowserAccountLoginHostServices): Promise<AccountLoginStartResult> {
+	const started = await viteDevRequest(connection, 'account/login/start', params);
+	try {
+		await hostServices.openerService.openExternal(started.type === 'browser' ? started.authorizationUrl : started.verificationUrl);
+		if (started.type === 'deviceCode') await hostServices.clipboardService.writeText(started.userCode);
+		return started;
+	} catch (error) {
+		await viteDevRequest(connection, 'account/login/cancel', { loginId: started.loginId }).catch(() => undefined);
+		throw error;
+	}
+}

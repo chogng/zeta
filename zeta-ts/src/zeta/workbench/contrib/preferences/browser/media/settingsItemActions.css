@@ -1,0 +1,44 @@
+.zeta-setting-item {
+	position: relative;
+}
+
+.zeta-setting-item-actions {
+	position: absolute;
+	top: 50%;
+	left: -32px;
+	z-index: 1;
+	display: flex;
+	width: 32px;
+	height: 24px;
+	align-items: center;
+	justify-content: center;
+	transform: translateY(-50%);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.zeta-setting-item:hover > .zeta-setting-item-actions,
+.zeta-setting-item:focus-within > .zeta-setting-item-actions,
+.zeta-setting-item-actions.is-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.zeta-setting-item-actions > .zeta-setting-item-actions-trigger {
+	width: 24px;
+	min-width: 24px;
+	height: 24px;
+	min-height: 24px;
+	box-sizing: border-box;
+	padding: 0;
+	color: var(--zeta-description-foreground);
+}
+
+.zeta-setting-item-actions-trigger:hover {
+	color: var(--zeta-foreground);
+	background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-setting-item-actions-trigger > .zeta-button-content > .zeta-button-label {
+	display: none;
+}

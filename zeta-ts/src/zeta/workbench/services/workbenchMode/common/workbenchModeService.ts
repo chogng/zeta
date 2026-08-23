@@ -13,6 +13,7 @@ export interface IWorkbenchModeService {
 	readonly currentModeId: WorkbenchModeId;
 	readonly availableModes: readonly WorkbenchModeOption[];
 	switchMode(modeId: WorkbenchModeId): Promise<void>;
+	resetMode(): Promise<void>;
 }
 
 export const IWorkbenchModeService = createServiceIdentifier<IWorkbenchModeService>('workbenchModeService');

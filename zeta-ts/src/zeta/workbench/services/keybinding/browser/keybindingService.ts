@@ -29,10 +29,10 @@ import {
 	type Context,
 	type IContextKey,
 	type IContextKeyService,
-	RawContextKey,
 } from "../../../../platform/contextkey/common/contextkey.js";
-import type {
+import {
 	IKeybindingService,
+	KeybindingContextKeys,
 } from "../../../../platform/keybinding/common/keybinding.js";
 import {
 	KeybindingResolveKind,
@@ -53,16 +53,7 @@ import type {
 import { StatusbarAlignment } from "../../statusbar/browser/statusbar.js";
 import type { IKeyboardShortcutTroubleshootingService } from "../common/keyboardShortcutTroubleshooting.js";
 
-export const KeybindingContextKeys = {
-	inChordMode: new RawContextKey<boolean>(
-		"keybinding.inChordMode",
-		false,
-	),
-	isComposing: new RawContextKey<boolean>(
-		"keybinding.isComposing",
-		false,
-	),
-};
+export { KeybindingContextKeys } from "../../../../platform/keybinding/common/keybinding.js";
 
 export interface WorkbenchKeybindingServiceOptions {
 	readonly ownerDocument: Document;
@@ -239,6 +230,11 @@ export class WorkbenchKeybindingService
 	 * Dispatches one native event and returns whether a keybinding consumed it.
 	 */
 	dispatchEvent(browserEvent: KeyboardEvent): boolean {
+		if (this.contextKeyService.getContext(keyboardEventTarget(browserEvent)).getValue(KeybindingContextKeys.isRecording.key)) {
+			this.singleModifierCandidate = undefined;
+			this.leaveChordMode();
+			return false;
+		}
 		const event = new StandardKeyboardEvent(browserEvent);
 		const nextEvent: KeybindingEvent = {
 			key: event.key,
@@ -288,6 +284,10 @@ export class WorkbenchKeybindingService
 
 	/** Dispatches a modifier-only binding after the key is released unused. */
 	dispatchKeyupEvent(browserEvent: KeyboardEvent): boolean {
+		if (this.contextKeyService.getContext(keyboardEventTarget(browserEvent)).getValue(KeybindingContextKeys.isRecording.key)) {
+			this.singleModifierCandidate = undefined;
+			return false;
+		}
 		if (!isModifierKey(browserEvent)) {
 			return false;
 		}

@@ -2,6 +2,7 @@ import "./media/connectorSettings.css";
 import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
+import { setSettingsItemIdentity } from "./settingsItem.js";
 
 /** Settings-owned projection of Connector catalog and credential actions. */
 export class ConnectorSettingsPane extends DisposableOwner {
@@ -53,6 +54,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
 	private connectorCard(catalogGeneration: number, connector: ConnectorView): HTMLElement {
 		const card = h(this.document, "section");
 		card.className = "zeta-integration-card";
+		setSettingsItemIdentity(card, `connectors.${connector.id}`, "resource");
 		const heading = h(this.document, "div");
 		heading.className = "zeta-integration-heading";
 		const title = h(this.document, "h4");

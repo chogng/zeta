@@ -38,6 +38,7 @@ import { createRemoteConnectionApi } from "../../remote/electron-browser/remoteC
 import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunnelApi.js";
 import { createMarketplaceApi } from "../../marketplace/electron-browser/marketplaceApi.js";
 import { createWorkspaceTrustApi } from "../../workspaceTrust/electron-browser/workspaceTrustApi.js";
+import { createAccountApi } from "../../accounts/electron-browser/accountApi.js";
 
 export type ElectronRendererCapabilityContribution = (appServer: IAppServerApi) => RendererHostCapabilities;
 
@@ -53,6 +54,7 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 			arch: sandboxProcess.arch,
 		},
 		appServer,
+		accounts: createAccountApi(),
 		remote: createRemoteAgentApi(),
 		remoteConnections: createRemoteConnectionApi(),
 		remoteTunnels: createRemoteTunnelApi(),

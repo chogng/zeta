@@ -137,25 +137,42 @@
   min-height: 1px;
 }
 
-.zeta-theme-setting {
+.zeta-theme-setting-item,
+.zeta-indexing-setting-item,
+.zeta-localization-setting {
   max-width: 760px;
+}
+
+.zeta-theme-setting,
+.zeta-indexing-setting {
+  width: 100%;
   margin: 0;
   padding: 0;
   border: 0;
+  box-sizing: border-box;
 }
 
 .zeta-indexing-setting {
   display: flex;
-  max-width: 760px;
-  margin: 0;
-  padding: 0;
-  border: 0;
   flex-direction: column;
   gap: 10px;
 }
 
-.zeta-indexing-setting + .zeta-indexing-setting {
+.zeta-indexing-setting-item + .zeta-indexing-setting-item {
   margin-top: 28px;
+}
+
+.zeta-localization-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zeta-theme-setting-item > .zeta-setting-item-actions,
+.zeta-indexing-setting-item > .zeta-setting-item-actions,
+.zeta-localization-setting > .zeta-setting-item-actions {
+  top: -3px;
+  transform: none;
 }
 
 .zeta-indexing-setting legend {

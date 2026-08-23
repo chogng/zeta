@@ -2,6 +2,7 @@ import { addDisposableListener, h, fragment as createFragment } from "../../../.
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 import "./media/connectorSettings.css";
+import { setSettingsItemIdentity } from "./settingsItem.js";
 
 /** Manages activation state for legacy Plugin installations.
  *
@@ -60,6 +61,7 @@ export class PluginSettingsPane extends DisposableOwner {
 	private pluginCard(catalog: PluginCatalogView, plugin: PluginPackageView): HTMLElement {
 		const card = h(this.document, "section");
 		card.className = "zeta-integration-card";
+		setSettingsItemIdentity(card, `plugins.${plugin.id}@${plugin.version}`, "resource");
 		const heading = h(this.document, "div");
 		heading.className = "zeta-integration-heading";
 		const title = h(this.document, "h4");

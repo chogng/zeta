@@ -13,10 +13,10 @@ export interface ModelCatalogEntry {
 	readonly outputTransport: ModelOutputTransport;
 }
 
-export function modelAccessLabel(access: ModelAccess): string {
-	switch (access) {
+export function modelAccessLabel(entry: Pick<ModelCatalogEntry, 'access' | 'model'>): string {
+	switch (entry.access) {
 		case 'apiKey': return 'API key';
-		case 'subscription': return 'Subscription';
+		case 'subscription': return entry.model.provider === 'openai' ? 'ChatGPT subscription' : 'Subscription';
 		case 'local': return 'Local';
 		case 'enterprise': return 'Enterprise';
 		case 'unknown': return 'Unknown';

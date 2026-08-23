@@ -13,11 +13,12 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IKeyboardShortcutTroubleshootingService } from '../../../services/keybinding/common/keyboardShortcutTroubleshooting.js';
 import { IOutputService } from '../../../services/output/common/outputService.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
-
-export const ChangeKeyboardLayoutCommandId = 'workbench.action.changeKeyboardLayout';
-export const InspectKeyMappingsCommandId = 'workbench.action.inspectKeyMappings';
-export const InspectKeyMappingsJsonCommandId = 'workbench.action.inspectKeyMappingsJSON';
-export const ToggleKeyboardShortcutsTroubleshootingCommandId = 'workbench.action.toggleKeyboardShortcutsTroubleshooting';
+import {
+	ChangeKeyboardLayoutCommandId,
+	InspectKeyMappingsCommandId,
+	InspectKeyMappingsJsonCommandId,
+	ToggleKeyboardShortcutsTroubleshootingCommandId,
+} from '../common/preferences.js';
 
 const KeyboardShortcutsOutputChannelId = 'keyboard-shortcuts';
 

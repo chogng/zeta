@@ -21,6 +21,7 @@ import { createDisconnectedPluginApi } from "../../plugins/browser/pluginApi.js"
 import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createDisconnectedWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
+import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -29,6 +30,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 	const appServer = createDisconnectedAppServerApi(unavailableOperation);
 	return {
 		appServer,
+		accounts: createDisconnectedAccountApi(unavailableOperation),
 		session: createDisconnectedSessionApi(unavailableOperation),
 		model: createDisconnectedModelApi(unavailableOperation),
 		thread: createDisconnectedThreadApi(unavailableOperation),

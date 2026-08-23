@@ -1,8 +1,12 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { IClipboardService } from "../../../../platform/clipboard/common/clipboardService.js";
 import type { ILanguagePackService, LanguagePackPackage } from "../../../../platform/languagePacks/common/languagePacksService.js";
-import type { ILocaleService } from "../../../services/localization/common/locale.js";
+import { LocalizationConfiguration, type ILocaleService } from "../../../services/localization/common/locale.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import { setSettingsItemIdentity } from "../../preferences/browser/settingsItem.js";
+import { SettingsItemActions } from "../../preferences/browser/settingsItemActions.js";
 
 /** Workbench contribution for selecting and installing client-local display languages. */
 export class LocalizationSettingsPane extends DisposableOwner {
@@ -22,6 +26,8 @@ export class LocalizationSettingsPane extends DisposableOwner {
 		localization: ILocalizationService,
 		localeService: ILocaleService,
 		languagePacks: ILanguagePackService,
+		private readonly contextMenuProvider: IContextMenuProvider,
+		private readonly clipboardService: IClipboardService,
 	) {
 		super();
 		this.localization = localization;
@@ -46,6 +52,8 @@ export class LocalizationSettingsPane extends DisposableOwner {
 		title.textContent = this.localization.translate("zeta.settings", "displayLanguage.title", "Display Language");
 		const description = h(this.document, "p");
 		description.textContent = this.localization.translate("zeta.settings", "displayLanguage.description", "Choose the language used by the Zeta interface.");
+		const setting = h(this.document, "div");
+		setting.className = "zeta-localization-setting";
 		const label = h(this.document, "label");
 		label.textContent = this.localization.translate("zeta.settings", "displayLanguage.select", "Interface language");
 		const select = h(this.document, "select");
@@ -67,7 +75,21 @@ export class LocalizationSettingsPane extends DisposableOwner {
 		this.status.textContent = this.isLoadingPackages
 			? this.localization.translate("zeta.settings", "displayLanguage.loading", "Loading available languages…")
 			: this.languagePackError;
-		this.element.replaceChildren(title, description, label, select, note, this.status);
+		setting.append(label, select, note, this.status);
+		this.rendered.add(new SettingsItemActions(setting, {
+			label: this.localization.translate("zeta.settings", "displayLanguage.select", "Interface language"),
+			reference: {
+				id: LocalizationConfiguration.locale.key,
+				isDefault: () => this.localeService.locale === LocalizationConfiguration.locale.defaultValue,
+				reset: () => this.localeService.setLocale(LocalizationConfiguration.locale.defaultValue),
+			},
+			contextMenuProvider: this.contextMenuProvider,
+			clipboardService: this.clipboardService,
+			onError: error => {
+				this.status.textContent = error instanceof Error ? error.message : "Unable to run the setting action.";
+			},
+		}));
+		this.element.replaceChildren(title, description, setting);
 		if (this.languagePackPackages.length > 0 || this.isLoadingPackages) this.renderLanguagePackPackages();
 	}
 
@@ -78,6 +100,7 @@ export class LocalizationSettingsPane extends DisposableOwner {
 		for (const packageValue of this.languagePackPackages) {
 			const item = h(this.document, "li");
 			item.className = "zeta-localization-package";
+			setSettingsItemIdentity(item, `languagePacks.${packageValue.id}@${packageValue.version}`, "resource");
 			const label = h(this.document, "span");
 			label.textContent = packageValue.displayName + " · " + packageValue.version;
 			const action = h(this.document, "button");

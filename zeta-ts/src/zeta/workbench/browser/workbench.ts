@@ -154,10 +154,14 @@ import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexServ
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
-import { ISettingsService } from "../services/preferences/common/settings.js";
+import { IPreferencesService } from "../services/preferences/common/preferences.js";
+import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
+import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import { AppServerWorkspaceTrustService } from "../services/workspaces/browser/appServerWorkspaceTrustService.js";
 import { IConnectorService } from "../../platform/connectors/common/connectorService.js";
 import { AppServerConnectorService } from "../services/connectors/browser/appServerConnectorService.js";
+import { IAccountService } from "../../platform/accounts/common/accountService.js";
+import { AppServerAccountService } from "../services/accounts/browser/appServerAccountService.js";
 import { IPluginService } from "../../platform/plugins/common/pluginService.js";
 import { AppServerPluginService } from "../services/plugins/browser/appServerPluginService.js";
 import { IMarketplaceService } from "../../platform/marketplace/common/marketplaceService.js";
@@ -209,6 +213,8 @@ import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteAction
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
 import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenchModeService.js";
+import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
+import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
@@ -378,6 +384,7 @@ export class Workbench extends DisposableOwner {
 		services.set(IGitService, gitService);
 		services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
 		services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
+		services.set(IAccountService, this.own(new AppServerAccountService(api.accounts, api.events)));
 		services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
 		const marketplaceService = this.own(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.set(IMarketplaceService, marketplaceService);
@@ -418,6 +425,7 @@ export class Workbench extends DisposableOwner {
 			throw new Error("Workbench requires an owner window");
 		}
 		this.ownerWindow = ownerWindow;
+		services.set(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const lifecycleService = this.own(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
 		this.lifecycleService = lifecycleService;
 		services.set(ILifecycleService, lifecycleService);
@@ -581,7 +589,10 @@ export class Workbench extends DisposableOwner {
 		}));
 		const editor = this.own(new EditorPart(workbenchRoot, {
 			configurationService: configuration,
+			contextKeyService: contextKeys,
 			keybindingService: keybindings,
+			keybindingsResourceService: services.get(IKeybindingsResourceService),
+			keyboardLayoutService: services.get(IKeyboardLayoutService),
 			fileService,
 			textFileService,
 			textMateService,
@@ -615,7 +626,7 @@ export class Workbench extends DisposableOwner {
 						? () => workspaceOpenService.openFolder()
 						: undefined,
 					connectViaSsh: () => commands.executeCommand(ConnectToRemoteCommandId),
-					connectGitHub: () => services.get(ISettingsService).open("connectors"),
+					connectGitHub: () => services.get(IPreferencesService).openSettings("connectors"),
 				},
 			},
 		}));

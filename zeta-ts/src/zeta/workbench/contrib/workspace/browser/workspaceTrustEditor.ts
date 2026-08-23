@@ -5,6 +5,7 @@ import type { IDialogService } from "../../../../platform/dialogs/common/dialogs
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IWorkspaceTrustService, WorkspaceTrustEntry, WorkspaceTrustSnapshot, WorkspaceTrustState } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
 import type { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
+import { setSettingsItemIdentity } from "../../preferences/browser/settingsItem.js";
 
 interface CurrentWorkspaceTrust {
 	readonly label: string;
@@ -104,6 +105,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		const document = this.element.ownerDocument;
 		const panel = h(document, "section");
 		panel.className = "zeta-workspace-trust-current";
+		setSettingsItemIdentity(panel, "workspaceTrust.current", "resource");
 		const heading = h(document, "h4");
 		heading.className = "zeta-workspace-trust-current-heading";
 		heading.textContent = "Current Workspace";
@@ -181,6 +183,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		const document = this.element.ownerDocument;
 		const item = h(document, "article");
 		item.className = "zeta-workspace-trust-entry";
+		setSettingsItemIdentity(item, `workspaceTrust.entries.${entry.workspace}`, "resource");
 		const copy = h(document, "div");
 		copy.className = "zeta-workspace-trust-entry-copy";
 		const path = h(document, "h5");

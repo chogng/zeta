@@ -19,7 +19,7 @@
 }
 
 .zeta-general-settings-list {
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--zeta-widget-border);
   border-radius: 8px;
   background: var(--zeta-editor-background);
@@ -40,8 +40,13 @@
   border-top: 1px solid var(--zeta-widget-border);
 }
 
-.zeta-general-setting:hover {
-  background: var(--zeta-list-hover-background);
+.zeta-general-setting > .zeta-setting-item-actions {
+  top: 24px;
+}
+
+.zeta-general-toggle-control {
+  width: 100%;
+  grid-column: 1 / -1;
 }
 
 .zeta-general-setting-copy {
@@ -84,6 +89,16 @@
 .zeta-general-setting-control:not(.zeta-select-box):focus-visible {
   outline: 1px solid var(--zeta-focus-border);
   outline-offset: 1px;
+}
+
+.zeta-general-setting-action {
+  justify-self: end;
+  border-color: var(--zeta-widget-border);
+  color: var(--zeta-foreground);
+}
+
+.zeta-general-setting-action:hover {
+  background: var(--zeta-list-hover-background);
 }
 
 .zeta-general-settings-status {

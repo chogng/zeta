@@ -23,6 +23,7 @@ import type { IRemoteConnectionService } from "../../remote/common/remoteConnect
 import type { IRemoteTunnelService } from "../../remote/common/remoteTunnelService.js";
 import type { IMarketplaceApi } from "../../marketplace/common/marketplaceApi.js";
 import type { IWorkspaceTrustApi } from "../../workspaceTrust/common/workspaceTrustApi.js";
+import type { IAccountApi } from "../../accounts/common/accountApi.js";
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -45,6 +46,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
 	readonly appServer: IAppServerApi;
+	readonly accounts: IAccountApi;
 	readonly remote?: IRemoteAgentApi;
 	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
 	readonly remoteConnections?: IRemoteConnectionService;

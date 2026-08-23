@@ -21,6 +21,7 @@ import { createViteDevPluginApi } from "../../plugins/browser/pluginApi.js";
 import { createViteDevExtensionHostApi } from "../../extensionHost/browser/extensionHostApi.js";
 import { createViteDevMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createViteDevWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
+import { createViteDevAccountApi } from "../../accounts/browser/accountApi.js";
 
 export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -52,6 +53,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, connectorHos
 	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
 	return {
 		appServer,
+		accounts: createViteDevAccountApi(connection, connectorHostServices),
 		session: createViteDevSessionApi(connection),
 		model: createViteDevModelApi(connection),
 		thread: createViteDevThreadApi(connection),

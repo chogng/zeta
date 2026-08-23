@@ -8,6 +8,9 @@ import type { IMenuService } from "../../../../platform/actions/common/menuServi
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
+import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
@@ -59,7 +62,10 @@ export const IEditorPart =
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
 	readonly configurationService?: IConfigurationService;
+	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
+	readonly keybindingsResourceService?: IKeybindingsResourceService;
+	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
@@ -109,7 +115,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.groupOptions = {
 			registry: options.registry ?? EditorPanes,
 			configurationService: options.configurationService,
+			contextKeyService: options.contextKeyService,
 			keybindingService: options.keybindingService,
+			keybindingsResourceService: options.keybindingsResourceService,
+			keyboardLayoutService: options.keyboardLayoutService,
 			fileService: options.fileService,
 			textFileService: options.textFileService,
 			textMateService: options.textMateService,

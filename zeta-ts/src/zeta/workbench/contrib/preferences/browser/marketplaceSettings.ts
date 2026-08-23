@@ -6,6 +6,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IMarketplaceService, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
+import { setSettingsItemIdentity } from "./settingsItem.js";
 
 const packageTypeFilters = [
 	{ label: "All", packageType: undefined },
@@ -160,6 +161,7 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 	private packageCard(summary: MarketplacePackageSummary, details: MarketplacePackageDetails | undefined, installed: readonly MarketplaceInstalledPackage[]): HTMLElement {
 		const card = h(this.document, "article");
 		card.className = "zeta-package-marketplace-card";
+		setSettingsItemIdentity(card, `marketplace.${summary.id}@${summary.version}`, "resource");
 		const heading = h(this.document, "h4");
 		heading.textContent = summary.displayName;
 		const description = h(this.document, "p");

@@ -53,6 +53,23 @@ test('selecting the active Workbench mode is a no-op', async () => {
 	assert.deepEqual(actions, []);
 });
 
+test('resetting Workbench mode removes the override before reloading the default mode', async () => {
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(WorkbenchConfiguration.mode, WorkbenchModeId.Academic);
+	const actions: string[] = [];
+	using service = new WorkbenchModeService({
+		currentModeId: WorkbenchModeId.Academic,
+		configurationService: configuration,
+		lifecycleService: lifecycleService(reason => actions.push(`shutdown:${reason}`)),
+		switchHostMode: async modeId => { actions.push(`host:${modeId}`); },
+	});
+
+	await service.resetMode();
+
+	assert.equal(configuration.getValue(WorkbenchConfiguration.mode), WorkbenchModeId.Code);
+	assert.deepEqual(actions, ['shutdown:reload', 'host:code']);
+});
+
 function lifecycleService(onShutdown: (reason: ShutdownReason) => void): ILifecycleService {
 	return {
 		phase: 'running',

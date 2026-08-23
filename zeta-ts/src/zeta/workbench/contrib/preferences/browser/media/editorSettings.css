@@ -26,7 +26,7 @@
 }
 
 .zeta-editor-settings-list {
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--zeta-widget-border);
   border-radius: 8px;
   background: var(--zeta-editor-background);
@@ -39,7 +39,7 @@
   align-items: center;
   padding: 12px 14px;
   color: var(--zeta-foreground);
-  cursor: pointer;
+  cursor: default;
   gap: 18px;
   grid-template-columns: minmax(0, 1fr) minmax(112px, 180px);
 }
@@ -48,8 +48,14 @@
   border-top: 1px solid var(--zeta-widget-border);
 }
 
-.zeta-editor-setting:hover {
-  background: var(--zeta-list-hover-background);
+.zeta-editor-setting > .zeta-setting-item-actions {
+  top: 24px;
+}
+
+.zeta-editor-toggle-control {
+  width: 100%;
+  cursor: pointer;
+  grid-column: 1 / -1;
 }
 
 .zeta-editor-setting-select-row {
@@ -102,11 +108,6 @@
 
 .zeta-editor-setting-text:focus-visible {
   border-color: var(--zeta-focus-border);
-}
-
-.zeta-editor-settings.is-saving .zeta-editor-setting {
-  cursor: wait;
-  opacity: .72;
 }
 
 .zeta-editor-settings-status {

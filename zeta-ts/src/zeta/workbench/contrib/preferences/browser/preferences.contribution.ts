@@ -10,6 +10,7 @@ import { IThemeService } from "../../../../platform/theme/common/themeService.js
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { IUserThemeService } from "../../../common/userThemes.js";
 import { ISettingsService } from "../../../services/preferences/common/settings.js";
+import { IPreferencesService } from "../../../services/preferences/common/preferences.js";
 import { ICodeIndexService } from "../../../../platform/codeIndex/common/codeIndexService.js";
 import { IToolSearchService } from "../../../../platform/toolSearch/common/toolSearchService.js";
 import { IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
@@ -24,9 +25,12 @@ import { IWorkspaceOpenService } from "../../../services/workspaces/browser/work
 import { SettingsEditorContribution } from "./settingsEditor.contribution.js";
 import { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
 import { IChatService } from "../../../services/chat/common/chatService.js";
+import { IClipboardService } from "../../../../platform/clipboard/common/clipboardService.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IAccountService } from "../../../../platform/accounts/common/accountService.js";
+import { OpenKeyboardShortcutsCommandId, OpenSettingsCommandId } from "../common/preferences.js";
 import "./keyboardLayoutPicker.js";
-
-export const OpenSettingsCommandId = "workbench.action.openSettings";
+import './keyboardShortcutsEditor.contribution.js';
 
 registerAction2(class OpenSettingsAction extends Action2 {
 	constructor() {
@@ -57,7 +61,21 @@ registerAction2(class OpenSettingsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(ISettingsService).open();
+		accessor.get(IPreferencesService).openSettings();
+	}
+});
+
+registerAction2(class OpenKeyboardShortcutsAction extends Action2 {
+	constructor() {
+		super({
+			id: OpenKeyboardShortcutsCommandId,
+			title: 'Preferences: Open Keyboard Shortcuts',
+			f1: true,
+		});
+	}
+
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IPreferencesService).openKeybindings();
 	}
 });
 
@@ -66,10 +84,13 @@ registerWorkbenchContribution(
 	WorkbenchPhase.BlockStartup,
 	(accessor) => new SettingsEditorContribution({
 		configurationService: accessor.get(IConfigurationService),
+		clipboardService: accessor.get(IClipboardService),
 		container: accessor.get(ILayoutService).mainContainer,
+		contextMenuProvider: accessor.get(IContextMenuService),
 		contextViewProvider: accessor.get(IContextViewService),
 		dialogService: accessor.get(IDialogService),
 		settingsService: accessor.get(ISettingsService),
+		preferencesService: accessor.get(IPreferencesService),
 		themeService: accessor.get(IThemeService),
 		userThemeService: accessor.get(IUserThemeService),
 		codeIndexService: accessor.get(ICodeIndexService),
@@ -85,5 +106,6 @@ registerWorkbenchContribution(
 		workspaceContextService: accessor.get(IWorkspaceContextService),
 		workbenchModeService: accessor.get(IWorkbenchModeService),
 		modelCatalog: accessor.get(IChatService),
+		accountService: accessor.get(IAccountService),
 	}),
 );

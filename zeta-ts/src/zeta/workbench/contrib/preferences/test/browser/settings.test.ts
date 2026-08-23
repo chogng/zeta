@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { CodeIndexConfigurationSnapshot, SemanticCodeIndexSelection } from "../../../../../platform/codeIndex/common/codeIndexService.js";
 import { h } from "../../../../../base/browser/dom.js";
+import type { IAction } from "../../../../../base/common/actions.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>", {
 	pretendToBeVisual: true,
@@ -53,6 +54,8 @@ const { parseUserColorTheme } = await import("../../../../../platform/theme/comm
 const { ColorScheme } = await import("../../../../../platform/theme/common/theme.js");
 const { ISettingsService } = await import("../../../../../workbench/services/preferences/common/settings.js");
 const { SettingsService } = await import("../../../../../workbench/services/preferences/common/settingsService.js");
+const { IPreferencesService } = await import("../../../../../workbench/services/preferences/common/preferences.js");
+const { PreferencesService } = await import("../../../../../workbench/services/preferences/common/preferencesService.js");
 const { WorkbenchConfiguration } = await import("../../../../../workbench/common/configuration.js");
 const { CodeEditorConfiguration } = await import("../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
@@ -62,12 +65,14 @@ const { UnavailableUserThemeService } = await import("../../../../../workbench/c
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
 const { WorkspaceContextService } = await import("../../../../../workbench/services/workspaces/browser/workspaceContextService.js");
 const { SettingsEditorContribution } = await import("../../../../../workbench/contrib/preferences/browser/settingsEditor.contribution.js");
+const { SettingsLayout } = await import("../../../../../workbench/contrib/preferences/browser/settingsLayout.js");
 const { SettingsTree } = await import("../../../../../workbench/contrib/preferences/browser/settingsTree.js");
 const { SettingsTreeModel } = await import("../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js");
 const { CommandService } = await import("../../../../../workbench/services/commands/common/commandService.js");
 const { BrowserKeyboardLayoutService } = await import("../../../../../workbench/services/keybinding/browser/keyboardLayoutService.js");
 const { WorkbenchKeybindingService } = await import("../../../../../workbench/services/keybinding/browser/keybindingService.js");
-const { OpenSettingsCommandId } = await import("../../../../../workbench/contrib/preferences/browser/preferences.contribution.js");
+await import("../../../../../workbench/contrib/preferences/browser/preferences.contribution.js");
+const { OpenSettingsCommandId } = await import("../../../../../workbench/contrib/preferences/common/preferences.js");
 
 const acceptingDialogService = {
 	showMessage: async () => {},
@@ -120,25 +125,32 @@ test("Settings tree renders validated group and item identities", () => {
 	assert.equal(renderer.element.classList.contains("zeta-settings-tree"), true);
 	assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-tree-group-id]")?.dataset.settingsTreeGroupId, "appearance.colors");
 	assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-tree-item-id]")?.dataset.settingsTreeItemId, "appearance.colors.theme");
+	assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-item-id]")?.dataset.settingsItemId, "appearance.colors.theme");
+	assert.equal(renderer.element.querySelector<HTMLElement>("[data-settings-item-kind]")?.dataset.settingsItemKind, "information");
 	assert.equal(renderer.element.querySelector("article")?.textContent, "Theme");
 	assert.equal(renderer.element.querySelectorAll("article").length, 2);
 	assert.equal(model.getNode("appearance.colors.theme")?.id, "appearance.colors.theme");
 	assert.equal(model.getParent("appearance.colors.theme")?.id, "appearance.colors");
 	assert.equal(model.getNode("appearance.colors")?.collapsible, false);
 	const themeElement = renderer.getItemElement("appearance.colors.theme");
+	themeElement!.tabIndex = 0;
+	themeElement!.focus();
 	model.setQuery("font family");
 	assert.deepEqual(model.visibleItems.map((item) => item.id), ["appearance.colors.font"]);
 	assert.equal(model.countVisibleItems("appearance.colors"), 1);
 	assert.equal(renderer.element.querySelector("article")?.textContent, "Font");
 	model.setQuery("theme");
 	assert.equal(renderer.getItemElement("appearance.colors.theme"), themeElement);
+	themeElement!.focus();
 	model.setQuery("");
 	assert.equal(renderer.element.querySelectorAll("article").length, 2);
+	assert.equal(ownerDocument.activeElement, themeElement);
 	model.setNodeChildren("appearance.colors", [{
 		element: { kind: "item", id: "appearance.colors.theme", title: "Theme", description: "Choose a theme.", value: "Updated Theme" },
 	}]);
 	assert.equal(renderer.getItemElement("appearance.colors.theme"), themeElement);
 	assert.equal(themeElement?.textContent, "Updated Theme");
+	assert.equal(ownerDocument.activeElement, themeElement);
 	assert.deepEqual(disposedItems, ["appearance.colors.font"]);
 	assert.throws(() => model.setChildren([
 		{ element: { kind: "item", id: "duplicate", title: "One", description: "", value: "one" } },
@@ -151,6 +163,35 @@ test("Settings tree renders validated group and item identities", () => {
 		element: { kind: "item", id: "parent-item", title: "Parent item", description: "", value: "parent" },
 		children: [{ element: { kind: "item", id: "child-item", title: "Child item", description: "", value: "child" } }],
 	}]), /must not have children/);
+});
+
+test('Settings layout projects stable groups and searchable item IDs', () => {
+	const layout = new SettingsLayout('editor', [{
+		id: 'display',
+		title: 'Display',
+		description: 'Editor presentation.',
+		settings: [
+			{ id: 'editor.minimap.enabled', title: 'Minimap', description: 'Show the minimap.' },
+			{ id: 'editor.lineNumbers', title: 'Line numbers', description: 'Show line numbers.', keywords: ['gutter'] },
+		],
+	}]);
+
+	assert.equal(layout.nodes[0]?.element.id, 'editor.group.display');
+	assert.deepEqual(layout.nodes[0]?.children?.map(node => node.element.id), [
+		'editor.minimap.enabled',
+		'editor.lineNumbers',
+	]);
+	assert.deepEqual(layout.nodes[0]?.children?.[1]?.element.keywords, ['editor.lineNumbers', 'gutter']);
+	assert.throws(() => new SettingsLayout('editor', [{
+		id: 'display',
+		title: 'Display',
+		description: '',
+		settings: [
+			{ id: 'editor.minimap.enabled', title: 'Minimap', description: '' },
+			{ id: 'editor.minimap.enabled', title: 'Duplicate', description: '' },
+		],
+	}]), /Duplicate Settings item ID/);
+	assert.throws(() => new SettingsLayout('', []), /section ID must not be empty/);
 });
 
 test("Settings overlay opens, closes, and restores focus", () => {
@@ -226,7 +267,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	);
 	assert.equal(navigationItems[0].getAttribute("aria-current"), "page");
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
-	assert.equal(root.querySelectorAll(".zeta-general-setting").length, 9);
+	assert.equal(root.querySelectorAll(".zeta-general-setting").length, 10);
 
 	search.value = "model";
 	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
@@ -316,6 +357,7 @@ test("Workspace Trust settings add, list, and revoke durable folder decisions", 
 		[...root.querySelectorAll<HTMLElement>('[data-workspace-trust-list="trusted"] .zeta-workspace-trust-entry h5')].map(element => element.textContent),
 		["/workspaces/trusted"],
 	);
+	assert.ok(root.querySelector('[data-settings-item-id="workspaceTrust.entries.sha256:trusted"][data-settings-item-kind="resource"]'));
 	assert.equal(root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.textContent, "Add Folder…");
 	root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-toolbar button")?.click();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
@@ -424,6 +466,7 @@ test("Workspace Trust settings exposes and updates the current Restricted worksp
 	settings.open("workspace-trust");
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.equal(root.querySelector(".zeta-workspace-trust-current .zeta-workspace-trust-status")?.textContent, "Restricted");
+	assert.ok(root.querySelector('[data-settings-item-id="workspaceTrust.current"][data-settings-item-kind="resource"]'));
 	const trustCurrent = root.querySelector<HTMLButtonElement>(".zeta-workspace-trust-current-actions button");
 	assert.equal(trustCurrent?.textContent, "Trust This Folder");
 	trustCurrent?.click();
@@ -442,12 +485,28 @@ test("General settings persist shared interaction preferences", async () => {
 	const settings = disposables.add(new SettingsService());
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const modeSwitches: string[] = [];
+	const copiedSettingIds: string[] = [];
+	let keyboardShortcutsOpens = 0;
+	let settingActions: readonly IAction[] = [];
+	let hideSettingActions = (): void => {};
 	disposables.add(new SettingsEditorContribution({
+		clipboardService: { writeText: async value => { copiedSettingIds.push(value); } },
 		configurationService: configuration,
 		container: root,
+		contextMenuProvider: {
+			showContextMenu: options => {
+				if (!("actions" in options)) throw new Error("Expected direct setting actions");
+				settingActions = options.actions;
+				hideSettingActions = () => options.onHide?.(false);
+			},
+		},
 		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
 		dialogService: acceptingDialogService,
 		settingsService: settings,
+		preferencesService: {
+			openSettings: sectionId => settings.open(sectionId),
+			openKeybindings: async () => { keyboardShortcutsOpens += 1; },
+		},
 		themeService: disposables.add(new ThemeService(darkColorTheme)),
 		userThemeService: UnavailableUserThemeService,
 		workbenchModeService: {
@@ -457,6 +516,7 @@ test("General settings persist shared interaction preferences", async () => {
 				{ id: "academic", label: "Academic" },
 			],
 			switchMode: async modeId => { modeSwitches.push(modeId); },
+			resetMode: async () => { modeSwitches.push("reset"); },
 		},
 	}));
 
@@ -477,6 +537,31 @@ test("General settings persist shared interaction preferences", async () => {
 	assert.equal(configuration.getValue(WorkbenchConfiguration.reduceMotion), "on");
 	assert.equal(configuration.getValue(HoverConfiguration.delay), 250);
 	assert.deepEqual(modeSwitches, ["academic"]);
+	const keyboardShortcutsButton = root.querySelector<HTMLButtonElement>('[data-setting-action-id="workbench.keyboardShortcuts"]');
+	assert.ok(keyboardShortcutsButton);
+	assert.equal(keyboardShortcutsButton.textContent, 'Open Keyboard Shortcuts');
+	keyboardShortcutsButton.click();
+	await Promise.resolve();
+	assert.equal(keyboardShortcutsOpens, 1);
+	assert.equal(root.querySelectorAll(".zeta-general-setting > .zeta-setting-item-actions").length, 9);
+	const hoverDelayRow = hoverDelay.closest<HTMLElement>(".zeta-general-setting");
+	assert.ok(hoverDelayRow);
+	assert.equal(hoverDelayRow.dataset.settingsItemId, "workbench.hover.delay");
+	assert.equal(hoverDelayRow.dataset.settingsItemKind, "setting");
+	const hoverDelayActions = hoverDelayRow.querySelector<HTMLButtonElement>(".zeta-setting-item-actions-trigger");
+	assert.equal(hoverDelayActions?.getAttribute("aria-label"), "More actions for Hover delay");
+	hoverDelayActions?.click();
+	assert.deepEqual(settingActions.map(action => ({ label: action.label, enabled: action.enabled })), [
+		{ label: "Reset Setting", enabled: true },
+		{ label: "Copy Setting ID", enabled: true },
+	]);
+	settingActions[1]?.run();
+	await Promise.resolve();
+	assert.deepEqual(copiedSettingIds, ["workbench.hover.delay"]);
+	hideSettingActions();
+	settingActions[0]?.run();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.equal(configuration.getValue(HoverConfiguration.delay), HoverConfiguration.delay.defaultValue);
 });
 
 test("Settings domains without writable services render honest capability overviews", () => {
@@ -499,8 +584,11 @@ test("Settings domains without writable services render honest capability overvi
 	for (const sectionId of overviewSections) {
 		settings.open(sectionId);
 		assert.ok(root.querySelectorAll(".zeta-settings-overview-item").length > 0, sectionId);
+		assert.equal(root.querySelectorAll(".zeta-settings-overview-item:not([data-settings-item-id])").length, 0, sectionId);
+		assert.equal(root.querySelectorAll('.zeta-settings-overview-item[data-settings-item-kind="information"]').length, root.querySelectorAll(".zeta-settings-overview-item").length, sectionId);
 	}
 	settings.open("chat");
+	assert.ok(root.querySelector('[data-settings-item-id="chat.group.conversations.item.untitled"]'));
 	[...root.querySelectorAll<HTMLButtonElement>(".zeta-settings-overview-action")].find(button => button.textContent === "Open Models")?.click();
 	assert.equal(settings.activeSectionId, "models");
 });
@@ -514,8 +602,11 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 	const settings = disposables.add(new SettingsService());
 	const changes = disposables.add(new Emitter<void>());
 	const hidden = new Set<string>();
+	const copiedSettingIds: string[] = [];
+	let settingActions: readonly IAction[] = [];
+	let hideSettingActions = (): void => {};
 	let refreshes = 0;
-	const catalog = [
+	let catalog = [
 		{
 			model: { provider: "openai", model: "gpt-5.6-sol" },
 			displayName: "GPT-5.6 Sol",
@@ -536,8 +627,16 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 		},
 	];
 	disposables.add(new SettingsEditorContribution({
+		clipboardService: { writeText: async value => { copiedSettingIds.push(value); } },
 		configurationService: disposables.add(new WorkbenchConfigurationService()),
 		container: root,
+		contextMenuProvider: {
+			showContextMenu: options => {
+				if (!("actions" in options)) throw new Error("Expected direct setting actions");
+				settingActions = options.actions;
+				hideSettingActions = () => options.onHide?.(false);
+			},
+		},
 		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
 		dialogService: acceptingDialogService,
 		settingsService: settings,
@@ -560,19 +659,143 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 	settings.open("models");
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["GPT-5.6 Sol", "Claude Opus 5", "GPT-5.6"]);
-	assert.equal(root.querySelector(".zeta-model-settings-access-badge")?.textContent, "Subscription");
+	assert.equal(root.querySelector(".zeta-model-settings-access-badge")?.textContent, "ChatGPT subscription");
 	assert.equal(root.querySelector(".zeta-model-settings-status")?.textContent, "3 models");
-	root.querySelector<HTMLInputElement>('.zeta-model-settings-row input[role="switch"]')?.click();
+	assert.equal(root.querySelectorAll(".zeta-model-settings-row > .zeta-setting-item-actions").length, 3);
+	assert.equal(root.querySelectorAll('.zeta-model-settings-row[data-settings-item-kind="setting"]').length, 3);
+	root.querySelector<HTMLButtonElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"] .zeta-setting-item-actions-trigger')?.click();
+	assert.deepEqual(settingActions.map(action => ({ label: action.label, enabled: action.enabled })), [
+		{ label: "Reset Setting", enabled: false },
+		{ label: "Copy Setting ID", enabled: true },
+	]);
+	settingActions[1]?.run();
+	await Promise.resolve();
+	assert.deepEqual(copiedSettingIds, ["openai/gpt-5.6-sol"]);
+	hideSettingActions();
+	const firstRow = root.querySelector<HTMLElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"]')!;
+	const firstToggle = firstRow.querySelector<HTMLInputElement>('input[role="switch"]')!;
+	firstToggle.click();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual([...hidden], ["openai/gpt-5.6-sol"]);
+	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"]'), firstRow);
+	assert.equal(firstRow.querySelector('input[role="switch"]'), firstToggle);
+	root.querySelector<HTMLButtonElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"] .zeta-setting-item-actions-trigger')?.click();
+	assert.equal(settingActions[0]?.enabled, true);
+	settingActions[0]?.run();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.deepEqual([...hidden], []);
 
 	const search = root.querySelector<HTMLInputElement>(".zeta-model-settings-search input")!;
+	const claudeRow = root.querySelector<HTMLElement>('.zeta-model-settings-row[data-settings-item-id="anthropic/claude-opus-5"]')!;
 	search.value = "anthropic";
 	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
 	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["Claude Opus 5"]);
+	catalog = [...catalog, {
+		model: { provider: "google", model: "gemini-3.6-flash" },
+		displayName: "Gemini 3.6 Flash",
+		access: "apiKey",
+		outputTransport: "nativeStreaming",
+	}];
 	root.querySelector<HTMLButtonElement>(".zeta-model-settings-refresh")?.click();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.equal(refreshes, 1);
+	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-item-id="anthropic/claude-opus-5"]'), claudeRow);
+	search.value = "";
+	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["GPT-5.6 Sol", "Claude Opus 5", "GPT-5.6", "Gemini 3.6 Flash"]);
+});
+
+test("Models settings keep ChatGPT and Kimi subscription accounts provider-scoped", async () => {
+	using disposables = new DisposableStore();
+	const ownerDocument = browserEnvironment.window.document;
+	ownerDocument.body.replaceChildren();
+	const root = h(ownerDocument, "div");
+	ownerDocument.body.append(root);
+	const settings = disposables.add(new SettingsService());
+	const accountChanges = disposables.add(new Emitter<any>());
+	const loginCompletions = disposables.add(new Emitter<any>());
+	const actions: string[] = [];
+	const readyAccount = {
+		provider: "kimi",
+		accountId: "current",
+		email: undefined,
+		displayName: "Kimi Code",
+		organization: undefined,
+		plan: "subscription",
+		status: "ready" as const,
+		credentialRevision: 1n,
+	};
+	const readyChatGptAccount = {
+		provider: "openai-chatgpt",
+		accountId: "chatgpt-account",
+		email: "person@example.com",
+		displayName: "ChatGPT",
+		organization: undefined,
+		plan: "plus",
+		status: "ready" as const,
+		credentialRevision: 1n,
+	};
+	disposables.add(new SettingsEditorContribution({
+		accountService: {
+			onDidChangeAccounts: accountChanges.event,
+			onDidCompleteLogin: loginCompletions.event,
+			read: async () => ({ revision: 0n, accounts: [] }),
+			startLogin: async method => {
+				actions.push(`start:${method.type}`);
+				return method.type === "kimiDeviceCode"
+					? { type: "deviceCode", loginId: "login-kimi", verificationUrl: "https://auth.kimi.com/device", userCode: "KIMI-CODE" }
+					: { type: "deviceCode", loginId: "login-chatgpt", verificationUrl: "https://auth.openai.com/codex/device", userCode: "OPENAI-CODE" };
+			},
+			cancelLogin: async loginId => { actions.push(`cancel:${loginId}`); },
+			logout: async provider => {
+				actions.push(`logout:${provider}`);
+			},
+		},
+		configurationService: disposables.add(new WorkbenchConfigurationService()),
+		container: root,
+		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+		dialogService: acceptingDialogService,
+		settingsService: settings,
+		themeService: disposables.add(new ThemeService(darkColorTheme)),
+		userThemeService: UnavailableUserThemeService,
+		modelCatalog: {
+			onDidChangeModels: () => toDisposable(() => {}),
+			listModelCatalog: async () => [],
+			refreshModels: async () => [],
+			isModelVisible: () => true,
+			setModelVisible: async () => {},
+		},
+	}));
+
+	settings.open("models");
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.deepEqual(
+		[...root.querySelectorAll(".zeta-model-settings-account h3")].map(element => element.textContent),
+		["ChatGPT subscription", "Kimi subscription"],
+	);
+	const chatgptCard = root.querySelector<HTMLElement>('.zeta-model-settings-account[data-provider="openai-chatgpt"]')!;
+	const chatgptButton = chatgptCard.querySelector<HTMLButtonElement>(".zeta-model-settings-account-action")!;
+	chatgptButton.click();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.equal(chatgptCard.querySelector(".zeta-model-settings-account-challenge")?.textContent, "Code: OPENAI-CODE");
+	loginCompletions.fire({ loginId: "login-chatgpt", status: { type: "succeeded" }, account: { revision: 1n, accounts: [readyChatGptAccount] } });
+	assert.equal(chatgptCard.querySelector(".zeta-model-settings-account-copy p")?.textContent, "Signed in as ChatGPT · plus");
+	chatgptButton.click();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+
+	const kimiCard = root.querySelector<HTMLElement>('.zeta-model-settings-account[data-provider="kimi"]')!;
+	const button = kimiCard.querySelector<HTMLButtonElement>(".zeta-model-settings-account-action")!;
+	button.click();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.equal(kimiCard.querySelector(".zeta-model-settings-account-challenge")?.textContent, "Code: KIMI-CODE");
+	assert.equal(button.textContent, "Cancel");
+	loginCompletions.fire({ loginId: "login-kimi", status: { type: "succeeded" }, account: { revision: 1n, accounts: [readyAccount] } });
+	assert.equal(kimiCard.querySelector(".zeta-model-settings-account-copy p")?.textContent, "Signed in as Kimi Code · subscription");
+	assert.equal(button.textContent, "Sign out");
+	button.click();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.deepEqual(actions, ["start:openAiChatGptDeviceCode", "logout:openai-chatgpt", "start:kimiDeviceCode", "logout:kimi"]);
+	assert.equal(button.textContent, "Sign in");
 });
 
 test("Editor settings render supported controls and persist typed preferences", async () => {
@@ -596,10 +819,17 @@ test("Editor settings render supported controls and persist typed preferences", 
 	settings.open("editor");
 	assert.deepEqual([...root.querySelectorAll(".zeta-editor-settings-group h4")].map(element => element.textContent), ["Editor selection", "Typography", "Display", "Editing", "Code intelligence", "Find and replace", "Workspace search", "Diff editor", "Files"]);
 	assert.equal(root.querySelectorAll(".zeta-editor-setting").length, 40);
+	assert.equal(root.querySelectorAll(".zeta-editor-setting > .zeta-setting-item-actions").length, 38);
+	assert.equal(root.querySelectorAll(".zeta-editor-informational-setting > .zeta-setting-item-actions").length, 0);
+	assert.equal(root.querySelectorAll('.zeta-editor-setting[data-settings-item-kind="setting"]').length, 38);
+	assert.equal(root.querySelectorAll('.zeta-editor-informational-setting[data-settings-item-kind="information"]').length, 2);
 	const fontFamily = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontFamily"]')!;
 	const fontSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.fontSize"]')!;
 	const wordWrap = root.querySelector<HTMLElement>('[data-configuration-key="editor.wordWrap"]')!;
 	const minimap = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.minimap.enabled"]')!;
+	const minimapRow = minimap.closest<HTMLElement>('.zeta-editor-setting')!;
+	const lineNumbers = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineNumbers"]')!;
+	const lineNumbersRow = lineNumbers.closest<HTMLElement>('.zeta-editor-setting')!;
 	const indentation = root.querySelector<HTMLElement>('[data-configuration-key="editor.indentation"]')!;
 	const tabSize = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.tabSize"]')!;
 	assert.equal(wordWrap.querySelector<HTMLButtonElement>(".zeta-select-box-button")?.getAttribute("role"), "combobox");
@@ -622,7 +852,7 @@ test("Editor settings render supported controls and persist typed preferences", 
 	assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="search.maxResults"]')?.value, "2000");
 	assert.equal(root.querySelector<HTMLInputElement>('[data-configuration-key="diffEditor.showInlineChanges"]')?.checked, true);
 	assert.equal(minimap.checked, true);
-	assert.equal(minimap.closest<HTMLElement>(".zeta-editor-setting")?.classList.contains("zeta-toggle-content-before-control"), true);
+	assert.ok(minimap.closest<HTMLElement>(".zeta-editor-setting")?.querySelector(".zeta-editor-toggle-control.zeta-toggle-content-before-control"));
 	assert.equal(settingValue(root, "editor.indentation"), "Spaces");
 	assert.equal(tabSize.value, "4");
 
@@ -634,12 +864,18 @@ test("Editor settings render supported controls and persist typed preferences", 
 	tabSize.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	minimap.click();
+	assert.equal(minimap.disabled, true);
+	assert.equal(lineNumbers.disabled, false);
+	assert.equal(root.querySelector('[data-settings-item-id="editor.minimap.enabled"]'), minimapRow);
+	assert.equal(root.querySelector('[data-settings-item-id="editor.lineNumbers"]'), lineNumbersRow);
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 
 	assert.equal(configuration.getValue(CodeEditorConfiguration.wordWrap), EditorLineWrapping.On);
 	assert.equal(configuration.getValue(CodeEditorConfiguration.indentationKind), EditorIndentationKind.Tabs);
 	assert.equal(configuration.getValue(CodeEditorConfiguration.tabSize), 2);
 	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), false);
+	assert.equal(minimap.disabled, false);
+	assert.equal(root.querySelector('[data-settings-item-id="editor.minimap.enabled"]'), minimapRow);
 	assert.equal(root.querySelector(".zeta-editor-settings-status")?.textContent, "Setting saved.");
 });
 
@@ -681,6 +917,8 @@ test("Connector settings project catalog state and invoke typed connect and disc
 	settings.open("connectors");
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual([...root.querySelectorAll(".zeta-integration-heading h4")].map(element => element.textContent), ["GitHub", "Slack"]);
+	assert.ok(root.querySelector('[data-settings-item-id="connectors.github"][data-settings-item-kind="resource"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="connectors.slack"][data-settings-item-kind="resource"]'));
 	const inputs = root.querySelectorAll<HTMLInputElement>(".zeta-connector-connect-form input");
 	inputs[0]!.value = "octocat";
 	inputs[1]!.value = "Octocat";
@@ -756,6 +994,7 @@ test("Marketplace settings discover and install through the generic service", as
 	assert.deepEqual([...root.querySelectorAll(".zeta-package-marketplace-filters [role='tab']")].map(tab => tab.textContent), ["All", "Plugins", "MCPs", "Skills", "Languages", "Localization", "Themes"]);
 	assert.equal(root.querySelector(".zeta-package-marketplace-filters .zeta-tab.checked")?.textContent, "All");
 	assert.equal(root.querySelector(".zeta-package-marketplace-card h4")?.textContent, "Docs MCP");
+	assert.ok(root.querySelector('[data-settings-item-id="marketplace.marketplace/docs-mcp@0.3.2"][data-settings-item-kind="resource"]'));
 	assert.match(root.textContent ?? "", /mcp: docs-mcp/);
 	assert.match(root.textContent ?? "", /Listed in the official MCP Registry · ac\.tandem\/docs-mcp@0\.3\.2/);
 	settings.open("general");
@@ -808,6 +1047,7 @@ test("Plugin settings project layered authority and send exact-package commands"
 	settings.open("plugins");
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.equal(root.querySelector(".zeta-integration-heading h4")?.textContent, "acme/github · 1.0.0");
+	assert.ok(root.querySelector('[data-settings-item-id="plugins.acme/github@1.0.0"][data-settings-item-kind="resource"]'));
 	const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-theme-action")];
 	assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Remove legacy installation"]);
 	buttons[0]!.click();
@@ -900,6 +1140,81 @@ test("Language settings reuse Marketplace discovery with a language package filt
 	assert.equal(root.querySelector<HTMLInputElement>('.zeta-package-marketplace input[type="search"]')?.placeholder, "Search language extensions");
 });
 
+test("Display Language exposes its configuration ID while language packs keep resource IDs", async () => {
+	using disposables = new DisposableStore();
+	const ownerDocument = browserEnvironment.window.document;
+	ownerDocument.body.replaceChildren();
+	const root = h(ownerDocument, "div");
+	ownerDocument.body.append(root);
+	const settings = disposables.add(new SettingsService());
+	const copiedSettingIds: string[] = [];
+	const selectedLocales: string[] = [];
+	let currentLocale = "zh-CN";
+	let settingActions: readonly IAction[] = [];
+	let hideSettingActions = (): void => {};
+	disposables.add(new SettingsEditorContribution({
+		clipboardService: { writeText: async value => { copiedSettingIds.push(value); } },
+		configurationService: disposables.add(new WorkbenchConfigurationService()),
+		container: root,
+		contextMenuProvider: {
+			showContextMenu: options => {
+				if (!("actions" in options)) throw new Error("Expected direct setting actions");
+				settingActions = options.actions;
+				hideSettingActions = () => options.onHide?.(false);
+			},
+		},
+		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
+		dialogService: acceptingDialogService,
+		languagePackService: {
+			onDidChange: () => toDisposable(() => {}),
+			whenReady: Promise.resolve(),
+			catalogs: [],
+			availableLocales: [
+				{ locale: "en", languageName: "English", localizedLanguageName: "English", source: "builtin" },
+				{ locale: "zh-CN", languageName: "Chinese", localizedLanguageName: "简体中文", source: "marketplace" },
+			],
+			installedPackages: [],
+			search: async () => [{ id: "zeta.language.fr", version: "1.2.0", displayName: "Français", description: "French", installed: false }],
+			install: async () => {},
+			refresh: async () => {},
+		},
+		localeService: {
+			get locale() { return currentLocale; },
+			onDidChangeLocale: () => toDisposable(() => {}),
+			whenReady: Promise.resolve(),
+			setLocale: async locale => {
+				currentLocale = locale;
+				selectedLocales.push(locale);
+			},
+		},
+		localizationService: {
+			onDidChange: () => toDisposable(() => {}),
+			whenReady: Promise.resolve(),
+			translate: (_bundle, _key, fallback) => fallback,
+		},
+		settingsService: settings,
+		themeService: disposables.add(new ThemeService(darkColorTheme)),
+		userThemeService: UnavailableUserThemeService,
+	}));
+
+	settings.open("localization");
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	const localeItem = root.querySelector<HTMLElement>('[data-settings-item-id="workbench.locale"]');
+	assert.equal(localeItem?.dataset.settingsItemKind, "setting");
+	assert.ok(root.querySelector('[data-settings-item-id="languagePacks.zeta.language.fr@1.2.0"][data-settings-item-kind="resource"]'));
+	localeItem?.querySelector<HTMLButtonElement>(".zeta-setting-item-actions-trigger")?.click();
+	assert.equal(settingActions[0]?.enabled, true);
+	settingActions[1]?.run();
+	await Promise.resolve();
+	assert.deepEqual(copiedSettingIds, ["workbench.locale"]);
+	hideSettingActions();
+	localeItem?.querySelector<HTMLButtonElement>(".zeta-setting-item-actions-trigger")?.click();
+	settingActions[0]?.run();
+	await Promise.resolve();
+	assert.deepEqual(selectedLocales, ["en"]);
+});
+
 test("Appearance settings persist and dynamically render registered theme preferences", async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
@@ -908,9 +1223,20 @@ test("Appearance settings persist and dynamically render registered theme prefer
 	ownerDocument.body.append(root);
 	const settings = disposables.add(new SettingsService());
 	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const copiedSettingIds: string[] = [];
+	let settingActions: readonly IAction[] = [];
+	let hideSettingActions = (): void => {};
 	disposables.add(new SettingsEditorContribution({
+		clipboardService: { writeText: async value => { copiedSettingIds.push(value); } },
 		configurationService: configuration,
 		container: root,
+		contextMenuProvider: {
+			showContextMenu: options => {
+				if (!("actions" in options)) throw new Error("Expected direct setting actions");
+				settingActions = options.actions;
+				hideSettingActions = () => options.onHide?.(false);
+			},
+		},
 		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
 		dialogService: acceptingDialogService,
 		settingsService: settings,
@@ -919,6 +1245,17 @@ test("Appearance settings persist and dynamically render registered theme prefer
 	}));
 
 	settings.open("appearance");
+	const appearanceItem = root.querySelector<HTMLElement>('[data-settings-item-id="workbench.colorTheme"]');
+	assert.equal(appearanceItem?.dataset.settingsItemKind, "setting");
+	appearanceItem?.querySelector<HTMLButtonElement>(".zeta-setting-item-actions-trigger")?.click();
+	assert.deepEqual(settingActions.map(action => ({ label: action.label, enabled: action.enabled })), [
+		{ label: "Reset Setting", enabled: false },
+		{ label: "Copy Setting ID", enabled: true },
+	]);
+	settingActions[1]?.run();
+	await Promise.resolve();
+	assert.deepEqual(copiedSettingIds, ["workbench.colorTheme"]);
+	hideSettingActions();
 	let options = [...root.querySelectorAll<HTMLInputElement>("[data-theme-preference] input")];
 	assert.deepEqual(options.map((option) => option.value), ["system", "zeta-light", "zeta-dark"]);
 	using themeRegistration = WorkbenchThemesRegistry.registerColorTheme(createColorTheme({
@@ -939,6 +1276,12 @@ test("Appearance settings persist and dynamically render registered theme prefer
 	await Promise.resolve();
 	assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), "zeta-light");
 	assert.equal(root.querySelector<HTMLInputElement>("[value='zeta-light']")?.checked, true);
+	root.querySelector<HTMLButtonElement>('[data-settings-item-id="workbench.colorTheme"] .zeta-setting-item-actions-trigger')?.click();
+	assert.equal(settingActions[0]?.enabled, true);
+	settingActions[0]?.run();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), WorkbenchConfiguration.colorTheme.defaultValue);
+	hideSettingActions();
 
 	root.querySelector<HTMLInputElement>("[value='zeta-dark']")?.click();
 	await Promise.resolve();
@@ -1053,6 +1396,16 @@ test("Settings service retains the active section across visibility changes", ()
 	assert.throws(() => settings.open(""), /must not be empty/);
 });
 
+test('Preferences service opens Settings without owning its editor state', () => {
+	using disposables = new DisposableStore();
+	const settings = disposables.add(new SettingsService());
+	const preferences = new PreferencesService(settings);
+
+	preferences.openSettings('editor');
+	assert.equal(settings.isOpen, true);
+	assert.equal(settings.activeSectionId, 'editor');
+});
+
 test("Indexing settings save Tool Search and semantic model consent configuration", async () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
@@ -1061,6 +1414,9 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
 	ownerDocument.body.append(root);
 	const settings = disposables.add(new SettingsService());
 	const configuration = disposables.add(new WorkbenchConfigurationService());
+	const copiedSettingIds: string[] = [];
+	let settingActions: readonly IAction[] = [];
+	let hideSettingActions = (): void => {};
 	const config = {
 		revision: 4,
 		generation: 4,
@@ -1099,8 +1455,16 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
 	const configuredSemantic: Array<{ selection: SemanticCodeIndexSelection; automaticContext: string; revision: number }> = [];
 	let authorizations = 0;
 	disposables.add(new SettingsEditorContribution({
+		clipboardService: { writeText: async value => { copiedSettingIds.push(value); } },
 		configurationService: configuration,
 		container: root,
+		contextMenuProvider: {
+			showContextMenu: options => {
+				if (!("actions" in options)) throw new Error("Expected direct setting actions");
+				settingActions = options.actions;
+				hideSettingActions = () => options.onHide?.(false);
+			},
+		},
 		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
 		dialogService: acceptingDialogService,
 		settingsService: settings,
@@ -1138,6 +1502,15 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
 		[...root.querySelectorAll(".zeta-indexing-setting legend")].map((legend) => legend.textContent),
 		["Agent tool search", "Semantic code search"],
 	);
+	const indexingItems = [...root.querySelectorAll<HTMLElement>('.zeta-indexing-setting-item[data-settings-item-kind="setting"]')];
+	assert.deepEqual(indexingItems.map(item => item.dataset.settingsItemId), ["toolSearch.configuration", "codeIndex.semanticCodeIndex"]);
+	for (const item of indexingItems) {
+		item.querySelector<HTMLButtonElement>(".zeta-setting-item-actions-trigger")?.click();
+		settingActions[1]?.run();
+		await Promise.resolve();
+		hideSettingActions();
+	}
+	assert.deepEqual(copiedSettingIds, ["toolSearch.configuration", "codeIndex.semanticCodeIndex"]);
 	assert.match(root.textContent ?? "", /Embedding search is unavailable: connection refused/);
 	const toolGroup = root.querySelectorAll<HTMLFieldSetElement>(".zeta-indexing-setting")[0];
 	assert.ok(toolGroup);
@@ -1199,21 +1572,26 @@ test("Indexing settings save Tool Search and semantic model consent configuratio
 		?.click();
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.equal(authorizations, 1);
+
+	root.querySelector<HTMLButtonElement>('[data-settings-item-id="toolSearch.configuration"] .zeta-setting-item-actions-trigger')?.click();
+	assert.equal(settingActions[0]?.enabled, true);
+	settingActions[0]?.run();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.deepEqual(configured.at(-1), { mode: "lexical", revision: 4 });
+	hideSettingActions();
+	root.querySelector<HTMLButtonElement>('[data-settings-item-id="codeIndex.semanticCodeIndex"] .zeta-setting-item-actions-trigger')?.click();
+	assert.equal(settingActions[0]?.enabled, true);
+	settingActions[0]?.run();
+	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.deepEqual(configuredSemantic.at(-1), { selection: { type: "disabled" }, automaticContext: "off", revision: 4 });
 });
 
-test("Zeta Settings titlebar action opens the window Settings service", async () => {
+test("Zeta Settings titlebar action opens the window Preferences service", async () => {
 	using disposables = new DisposableStore();
-	let opens = 0;
-	const settings = {
-		onDidChangeVisibility: () => toDisposable(() => {}),
-		onDidChangeActiveSection: () => toDisposable(() => {}),
-		get isOpen() { return opens > 0; },
-		activeSectionId: "general",
-		open() { opens += 1; },
-		close() {},
-	};
+	const settings = disposables.add(new SettingsService());
+	const preferences = new PreferencesService(settings);
 	const services = new ServiceCollection();
-	services.set(ISettingsService, settings);
+	services.set(IPreferencesService, preferences);
 	const commands = disposables.add(new CommandService(services));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const menus = new MenuService(commands, contextKeys);
@@ -1271,8 +1649,9 @@ test("Zeta Settings titlebar action opens the window Settings service", async ()
 	);
 	browserEnvironment.window.document.body.dispatchEvent(shortcut);
 	assert.equal(shortcut.defaultPrevented, true);
-	assert.equal(opens, 1);
+	assert.equal(settings.isOpen, true);
 
+	settings.close();
 	await commands.executeCommand(OpenSettingsCommandId);
-	assert.equal(opens, 2);
+	assert.equal(settings.isOpen, true);
 });

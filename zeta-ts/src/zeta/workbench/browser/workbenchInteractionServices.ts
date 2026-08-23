@@ -28,6 +28,9 @@ import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/
 import { WorkbenchKeybindingsResourceService } from "../services/keybinding/browser/keybindingsResourceService.js";
 import { ISettingsService } from "../services/preferences/common/settings.js";
 import { SettingsService } from "../services/preferences/common/settingsService.js";
+import { IPreferencesService } from "../services/preferences/common/preferences.js";
+import { PreferencesService } from "../services/preferences/common/preferencesService.js";
+import { IEditorService } from "../services/editor/common/editorService.js";
 import { WorkbenchQuickInputService } from "../services/quickinput/browser/quickInputService.js";
 import type { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 
@@ -103,7 +106,12 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 			layoutService: options.layoutService,
 		}));
 		services.set(IQuickInputService, quickInputService);
-		services.set(ISettingsService, this.own(new SettingsService()));
+		const settingsService = this.own(new SettingsService());
+		services.set(ISettingsService, settingsService);
+		services.set(IPreferencesService, new PreferencesService(
+			settingsService,
+			() => services.get(IEditorService),
+		));
 		this.contextMenuService = this.own(options.createContextMenuService({
 			menuService: this.menuService,
 			keybindingService: this.keybindingService,

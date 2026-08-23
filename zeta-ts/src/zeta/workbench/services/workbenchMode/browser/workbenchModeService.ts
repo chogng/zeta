@@ -31,15 +31,28 @@ export class WorkbenchModeService extends DisposableOwner implements IWorkbenchM
 
 	public switchMode(modeId: WorkbenchModeId): Promise<void> {
 		if (modeId === this.currentModeId) return Promise.resolve();
-		this.switchOperation ??= this.performSwitch(modeId).catch(error => {
-			this.switchOperation = undefined;
-			throw error;
-		});
-		return this.switchOperation;
+		return this.startSwitch(modeId, false);
 	}
 
-	private async performSwitch(modeId: WorkbenchModeId): Promise<void> {
-		await this.configurationService.updateValue(WorkbenchConfiguration.mode, modeId);
+	public resetMode(): Promise<void> {
+		return this.startSwitch(WorkbenchModeRegistry.defaultModeId, true);
+	}
+
+	private startSwitch(modeId: WorkbenchModeId, reset: boolean): Promise<void> {
+		if (this.switchOperation) return this.switchOperation;
+		const operation = this.performSwitch(modeId, reset);
+		this.switchOperation = operation;
+		void operation.then(
+			() => { if (this.switchOperation === operation) this.switchOperation = undefined; },
+			() => { if (this.switchOperation === operation) this.switchOperation = undefined; },
+		);
+		return operation;
+	}
+
+	private async performSwitch(modeId: WorkbenchModeId, reset: boolean): Promise<void> {
+		if (reset) await this.configurationService.resetValue(WorkbenchConfiguration.mode);
+		else await this.configurationService.updateValue(WorkbenchConfiguration.mode, modeId);
+		if (modeId === this.currentModeId) return;
 		await this.lifecycleService.shutdown('reload');
 		await this.switchHostMode(modeId);
 	}

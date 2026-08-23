@@ -25,6 +25,10 @@ import type { ILanguageDiagnosticsService } from "../../../../editor/common/serv
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
+import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
+import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
+import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 
 export enum EditorPaneVisibility {
 	Hidden,
@@ -62,6 +66,10 @@ export interface EditorPaneCreationOptions {
 	/** The input used to choose a profile-specific pane implementation. */
 	readonly input?: EditorInput;
 	readonly configurationService?: IConfigurationService;
+	readonly contextKeyService?: IContextKeyService;
+	readonly keybindingService?: IKeybindingService;
+	readonly keybindingsResourceService?: IKeybindingsResourceService;
+	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;

@@ -41,6 +41,9 @@ import { pluginIpcRoutes } from "../../platform/plugins/electron-main/pluginIpcR
 import { marketplaceIpcRoutes } from "../../platform/marketplace/electron-main/marketplaceIpcRoutes.js";
 import { toolSearchIpcRoutes } from "../../platform/toolSearch/electron-main/toolSearchIpcRoutes.js";
 import { workspaceTrustIpcRoutes } from "../../platform/workspaceTrust/electron-main/workspaceTrustIpcRoutes.js";
+import { accountIpcRoutes } from "../../platform/accounts/electron-main/accountIpcRoutes.js";
+import { ElectronClipboardService } from "../../platform/clipboard/electron-main/electronClipboardService.js";
+import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
 import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
 import { migrateLegacyKeybindings } from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
@@ -654,6 +657,10 @@ export class ZetaApplication extends DisposableOwner {
 		record.openWorkspace = (root) => transitionToFolder(root, true);
 		const ipcRoutes = [
 			...appServerIpcRoutes(supervisor),
+			...accountIpcRoutes(supervisor, {
+				openerService: new ElectronOpenerService(),
+				clipboardService: new ElectronClipboardService(),
+			}),
 			...remoteWindowContext.ipcRoutes,
 			...sessionIpcRoutes(supervisor),
 			...skillIpcRoutes(supervisor),

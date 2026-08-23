@@ -31,6 +31,9 @@ import type { ILanguageDiagnosticsService } from "../../../../editor/common/serv
 import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
+import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
+import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -57,7 +60,10 @@ export interface IEditorGroup {
 export interface EditorGroupOptions {
 	readonly registry: EditorPaneRegistry;
 	readonly configurationService?: IConfigurationService;
+	readonly contextKeyService?: IContextKeyService;
 	readonly keybindingService?: IKeybindingService;
+	readonly keybindingsResourceService?: IKeybindingsResourceService;
+	readonly keyboardLayoutService?: IKeyboardLayoutService;
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
@@ -98,6 +104,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly contentElement: HTMLDivElement;
 	private readonly registry: EditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
+	private readonly contextKeyService: IContextKeyService | undefined;
+	private readonly keybindingService: IKeybindingService | undefined;
+	private readonly keybindingsResourceService: IKeybindingsResourceService | undefined;
+	private readonly keyboardLayoutService: IKeyboardLayoutService | undefined;
 	private readonly fileService: IFileService | undefined;
 	private readonly textFileService: ITextFileService | undefined;
 	private readonly textMateService: ITextMateService | undefined;
@@ -130,6 +140,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		const ownerDocument = container.ownerDocument;
 		this.registry = options.registry;
 		this.configurationService = options.configurationService;
+		this.contextKeyService = options.contextKeyService;
+		this.keybindingService = options.keybindingService;
+		this.keybindingsResourceService = options.keybindingsResourceService;
+		this.keyboardLayoutService = options.keyboardLayoutService;
 		this.fileService = options.fileService;
 		this.textFileService = options.textFileService;
 		this.textMateService = options.textMateService;
@@ -259,6 +273,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		const pane = descriptor.create({
 			input,
 			configurationService: this.configurationService,
+			contextKeyService: this.contextKeyService,
+			keybindingService: this.keybindingService,
+			keybindingsResourceService: this.keybindingsResourceService,
+			keyboardLayoutService: this.keyboardLayoutService,
 			fileService: this.fileService,
 			textFileService: this.textFileService,
 			textMateService: this.textMateService,

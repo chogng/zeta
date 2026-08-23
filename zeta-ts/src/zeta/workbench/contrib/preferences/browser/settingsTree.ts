@@ -3,6 +3,7 @@ import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTree
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
 import { h } from "../../../../base/browser/dom.js";
+import { setSettingsItemIdentity } from "./settingsItem.js";
 
 export interface SettingsTreeOptions<T> {
 	readonly model: SettingsTreeModel<T>;
@@ -72,7 +73,7 @@ export class SettingsTree<T> extends DisposableOwner {
 
 	private render(): void {
 		const children = this.options.model.visibleChildren.map((node) => this.renderNode(node));
-		this.element.replaceChildren(...children);
+		reconcileSettingsChildren(this.element, children);
 		for (const [id, rendered] of this.rendered) {
 			if (this.options.model.has(id)) continue;
 			this.disposeRenderedNode(rendered);
@@ -96,6 +97,10 @@ export class SettingsTree<T> extends DisposableOwner {
 		if (previous) this.disposeRenderedNode(previous);
 		const element = this.options.renderItem(item);
 		element.dataset.settingsTreeItemId = item.id;
+		if (element.dataset.settingsItemId && element.dataset.settingsItemId !== item.id) {
+			throw new TypeError(`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`);
+		}
+		if (!element.dataset.settingsItemId) setSettingsItemIdentity(element, item.id, "information");
 		this.rendered.set(item.id, { kind: "item", element, item });
 		return element;
 	}
@@ -118,7 +123,7 @@ export class SettingsTree<T> extends DisposableOwner {
 		const children = node.collapsed
 			? []
 			: node.children.filter((child) => child.visible).map((child) => this.renderNode(child));
-		rendered.items.replaceChildren(...children);
+		reconcileSettingsChildren(rendered.items, children);
 		return rendered.element;
 	}
 
@@ -138,5 +143,21 @@ export class SettingsTree<T> extends DisposableOwner {
 	private disposeRenderedNode(rendered: RenderedSettingsNode<T>): void {
 		if (rendered.kind === "item") this.options.disposeItem?.(rendered.item, rendered.element);
 		rendered.element.remove();
+	}
+}
+
+function reconcileSettingsChildren(container: HTMLElement, children: readonly HTMLElement[]): void {
+	let current = container.firstChild;
+	for (const child of children) {
+		if (child === current) {
+			current = current.nextSibling;
+			continue;
+		}
+		container.insertBefore(child, current);
+	}
+	while (current) {
+		const next = current.nextSibling;
+		current.remove();
+		current = next;
 	}
 }
