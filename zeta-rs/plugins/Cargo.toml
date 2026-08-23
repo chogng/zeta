@@ -15,11 +15,10 @@ getrandom = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-zeta-tools = { workspace = true }
 sha2 = { workspace = true }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem"] }
+zeta-file-identity = { workspace = true }
+zeta-tools = { workspace = true }
+zeta-utils-path = { workspace = true }
 
 [lints]
 workspace = true

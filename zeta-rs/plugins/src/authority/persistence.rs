@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
 use serde::Deserialize;
 use serde::Serialize;
+use zeta_utils_path::write_atomically;
 
 use super::ActivePlugin;
 use super::InstalledKey;
@@ -166,86 +166,8 @@ impl FileAuthorityPersistence {
                 "Plugin authority record exceeds its size limit",
             ));
         }
-        let parent = self
-            .path
-            .parent()
-            .ok_or_else(|| persistence_error("Plugin authority path is invalid"))?;
-        let staging = parent.join(staging_filename()?);
-        let mut options = fs::OpenOptions::new();
-        options.create_new(true).write(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let result = (|| {
-            let mut file = options.open(&staging).map_err(io_error)?;
-            file.write_all(&bytes).map_err(io_error)?;
-            file.sync_all().map_err(io_error)?;
-            promote_file(&staging, &self.path)?;
-            sync_directory(parent)
-        })();
-        if staging.exists() {
-            let _ = fs::remove_file(staging);
-        }
-        result
+        write_atomically(&self.path, &bytes).map_err(io_error)
     }
-}
-
-fn staging_filename() -> Result<String, PluginError> {
-    let mut random = [0_u8; 16];
-    getrandom::getrandom(&mut random)
-        .map_err(|_| persistence_error("Plugin authority staging identity is unavailable"))?;
-    Ok(format!(
-        ".authority-{}.staging",
-        random
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    ))
-}
-
-#[cfg(not(windows))]
-fn promote_file(staging: &Path, destination: &Path) -> Result<(), PluginError> {
-    fs::rename(staging, destination).map_err(io_error)
-}
-
-#[cfg(windows)]
-fn promote_file(staging: &Path, destination: &Path) -> Result<(), PluginError> {
-    use std::os::windows::ffi::OsStrExt as _;
-    use windows_sys::Win32::Storage::FileSystem::MOVEFILE_REPLACE_EXISTING;
-    use windows_sys::Win32::Storage::FileSystem::MOVEFILE_WRITE_THROUGH;
-    use windows_sys::Win32::Storage::FileSystem::MoveFileExW;
-
-    let staging = staging
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let destination = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let result = unsafe {
-        MoveFileExW(
-            staging.as_ptr(),
-            destination.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if result == 0 {
-        return Err(io_error(std::io::Error::last_os_error()));
-    }
-    Ok(())
-}
-
-fn sync_directory(path: &Path) -> Result<(), PluginError> {
-    #[cfg(unix)]
-    fs::File::open(path)
-        .and_then(|directory| directory.sync_all())
-        .map_err(io_error)?;
-    Ok(())
 }
 
 fn io_error(_: impl std::fmt::Display) -> PluginError {

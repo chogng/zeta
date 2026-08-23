@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use zeta_file_identity::FileInformation;
 
 use super::local::PackageFileStats;
 use super::local::PluginPackageDigestAlgorithm;
@@ -39,7 +40,7 @@ pub(super) fn scan_and_digest(
     hasher.update(algorithm.domain());
     let mut manifest_bytes = None;
     let mut total_bytes = 0_u64;
-    for (relative, absolute, expected_metadata) in &files {
+    for (relative, absolute, expected_metadata, expected_information) in &files {
         total_bytes = total_bytes
             .checked_add(expected_metadata.len())
             .ok_or_else(|| unsafe_package("plugin package total size overflowed"))?;
@@ -52,7 +53,13 @@ pub(super) fn scan_and_digest(
         update_length(&mut hasher, relative.as_str().len() as u64);
         hasher.update(relative.as_str().as_bytes());
         update_length(&mut hasher, expected_metadata.len());
-        let bytes = hash_file(&mut hasher, absolute, relative, expected_metadata)?;
+        let bytes = hash_file(
+            &mut hasher,
+            absolute,
+            relative,
+            expected_metadata,
+            expected_information,
+        )?;
         if relative.as_str() == PLUGIN_MANIFEST_PATH {
             manifest_bytes = Some(bytes);
         }
@@ -79,7 +86,7 @@ fn walk_directory(
     root: &Path,
     directory: &Path,
     entries: &mut BTreeMap<PluginPath, ScannedEntryKind>,
-    files: &mut Vec<(PluginPath, PathBuf, Metadata)>,
+    files: &mut Vec<(PluginPath, PathBuf, Metadata, FileInformation)>,
 ) -> Result<(), PluginError> {
     let mut children: Vec<_> = fs::read_dir(directory)
         .map_err(|_| source_unavailable("plugin package directory cannot be read"))?
@@ -112,7 +119,12 @@ fn walk_directory(
                 "plugin package path '{relative}' is not a regular file or directory"
             )));
         }
-        if regular_file_has_multiple_links(&metadata) {
+        let information = FileInformation::from_path(&absolute).map_err(|_| {
+            source_unavailable(format!(
+                "plugin package path '{relative}' cannot be inspected"
+            ))
+        })?;
+        if information.number_of_links() > 1 {
             return Err(unsafe_package(format!(
                 "plugin package path '{relative}' is a hard link"
             )));
@@ -128,7 +140,7 @@ fn walk_directory(
             ));
         }
         entries.insert(relative.clone(), ScannedEntryKind::File);
-        files.push((relative, absolute, metadata));
+        files.push((relative, absolute, metadata, information));
     }
     Ok(())
 }
@@ -138,10 +150,30 @@ fn hash_file(
     absolute: &Path,
     relative: &PluginPath,
     expected_metadata: &Metadata,
+    expected_information: &FileInformation,
 ) -> Result<Vec<u8>, PluginError> {
     let mut file = File::open(absolute).map_err(|_| {
         source_unavailable(format!("plugin package path '{relative}' cannot be read"))
     })?;
+    let opened_metadata = file.metadata().map_err(|_| {
+        source_unavailable(format!(
+            "plugin package path '{relative}' cannot be inspected"
+        ))
+    })?;
+    let opened_information = FileInformation::from_file(&file).map_err(|_| {
+        source_unavailable(format!(
+            "plugin package path '{relative}' cannot be inspected"
+        ))
+    })?;
+    if !opened_metadata.is_file()
+        || opened_metadata.len() != expected_metadata.len()
+        || opened_information.identity() != expected_information.identity()
+        || opened_information.number_of_links() > 1
+    {
+        return Err(unsafe_package(format!(
+            "plugin package path '{relative}' changed during validation"
+        )));
+    }
     let capture = relative.as_str() == PLUGIN_MANIFEST_PATH;
     let mut captured = Vec::new();
     let mut bytes_read = 0_u64;
@@ -169,11 +201,17 @@ fn hash_file(
             "plugin package path '{relative}' changed during validation"
         ))
     })?;
+    let observed_information = FileInformation::from_path(absolute).map_err(|_| {
+        source_unavailable(format!(
+            "plugin package path '{relative}' changed during validation"
+        ))
+    })?;
     if observed_metadata.file_type().is_symlink()
         || !observed_metadata.is_file()
         || observed_metadata.len() != expected_metadata.len()
         || bytes_read != expected_metadata.len()
-        || !same_file(expected_metadata, &observed_metadata)
+        || observed_information.identity() != opened_information.identity()
+        || observed_information.number_of_links() > 1
     {
         return Err(unsafe_package(format!(
             "plugin package path '{relative}' changed during validation"
@@ -184,50 +222,6 @@ fn hash_file(
 
 fn update_length(hasher: &mut Sha256, length: u64) {
     hasher.update(length.to_be_bytes());
-}
-
-#[cfg(unix)]
-fn regular_file_has_multiple_links(metadata: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    metadata.nlink() > 1
-}
-
-#[cfg(windows)]
-fn regular_file_has_multiple_links(metadata: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    metadata.number_of_links().is_some_and(|links| links > 1)
-}
-
-#[cfg(not(any(unix, windows)))]
-fn regular_file_has_multiple_links(_: &Metadata) -> bool {
-    false
-}
-
-#[cfg(unix)]
-fn same_file(before: &Metadata, after: &Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    before.dev() == after.dev() && before.ino() == after.ino()
-}
-
-#[cfg(windows)]
-fn same_file(before: &Metadata, after: &Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    match (
-        before.volume_serial_number(),
-        before.file_index(),
-        after.volume_serial_number(),
-        after.file_index(),
-    ) {
-        (Some(before_volume), Some(before_file), Some(after_volume), Some(after_file)) => {
-            before_volume == after_volume && before_file == after_file
-        }
-        _ => true,
-    }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn same_file(_: &Metadata, _: &Metadata) -> bool {
-    true
 }
 
 fn source_unavailable(message: impl Into<String>) -> PluginError {

@@ -61,6 +61,32 @@ fn source_mutation_after_validation_fails_without_promoting_an_object() {
     );
 }
 
+#[cfg(any(unix, windows))]
+#[test]
+fn hard_link_introduced_after_validation_is_rejected_during_installation() {
+    let temporary = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Review");
+    let local = LocalPluginPackage::load(&source).unwrap();
+    fs::hard_link(
+        source.join("skills/review/SKILL.md"),
+        source.join("skills/review/linked.md"),
+    )
+    .unwrap();
+    let store = PluginPackageStore::open(temporary.path().join("store")).unwrap();
+
+    let error = store.install_local(&local).unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::PackageUnsafe);
+    assert!(error.to_string().contains("hard-linked"));
+    assert!(
+        fs::read_dir(temporary.path().join("store/objects"))
+            .unwrap()
+            .next()
+            .is_none()
+    );
+}
+
 #[test]
 fn activated_package_exposes_its_exact_immutable_object_root() {
     let temporary = tempfile::tempdir().unwrap();

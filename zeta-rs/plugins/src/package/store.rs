@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_file_identity::FileInformation;
 
 /// Immutable package object selected for one Plugin activation generation.
 #[derive(Clone, Debug)]
@@ -299,16 +300,28 @@ fn copy_package_tree(source: &Path, target: &Path) -> Result<(), PluginError> {
             fs::create_dir(&destination).map_err(store_io)?;
             copy_package_tree(&entry.path(), &destination)?;
         } else {
-            copy_file(&entry.path(), &destination, &inspected)?;
+            let inspected_information =
+                FileInformation::from_path(entry.path()).map_err(store_io)?;
+            if inspected_information.number_of_links() > 1 {
+                return Err(PluginError::new(
+                    PluginErrorKind::PackageUnsafe,
+                    "Plugin package changed to contain a hard-linked file during installation",
+                ));
+            }
+            copy_file(&entry.path(), &destination, &inspected_information)?;
         }
     }
     Ok(())
 }
 
-fn copy_file(source: &Path, target: &Path, inspected: &fs::Metadata) -> Result<(), PluginError> {
+fn copy_file(source: &Path, target: &Path, inspected: &FileInformation) -> Result<(), PluginError> {
     let mut input = fs::File::open(source).map_err(store_io)?;
     let opened = input.metadata().map_err(store_io)?;
-    if !opened.is_file() || !same_file_identity(inspected, &opened) {
+    let opened_information = FileInformation::from_file(&input).map_err(store_io)?;
+    if !opened.is_file()
+        || opened_information.identity() != inspected.identity()
+        || opened_information.number_of_links() > 1
+    {
         return Err(PluginError::new(
             PluginErrorKind::PackageUnsafe,
             "Plugin package entry changed while it was being installed",
@@ -326,20 +339,6 @@ fn copy_file(source: &Path, target: &Path, inspected: &fs::Metadata) -> Result<(
     output.sync_all().map_err(store_io)
 }
 
-#[cfg(unix)]
-fn same_file_identity(inspected: &fs::Metadata, opened: &fs::Metadata) -> bool {
-    use std::os::unix::fs::MetadataExt;
-
-    inspected.dev() == opened.dev() && inspected.ino() == opened.ino()
-}
-
-#[cfg(not(unix))]
-fn same_file_identity(inspected: &fs::Metadata, opened: &fs::Metadata) -> bool {
-    inspected.len() == opened.len()
-        && inspected.modified().ok() == opened.modified().ok()
-        && inspected.file_type() == opened.file_type()
-}
-
 fn sync_directory_tree(path: &Path) -> Result<(), PluginError> {
     let mut entries = fs::read_dir(path)
         .map_err(store_io)?
@@ -354,11 +353,16 @@ fn sync_directory_tree(path: &Path) -> Result<(), PluginError> {
     sync_directory(path)
 }
 
+#[cfg(unix)]
 fn sync_directory(path: &Path) -> Result<(), PluginError> {
-    #[cfg(unix)]
     fs::File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(store_io)?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_: &Path) -> Result<(), PluginError> {
     Ok(())
 }
 
