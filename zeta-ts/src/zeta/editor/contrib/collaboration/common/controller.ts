@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { DocumentModel, DocumentRemoteHistoryPolicy } from "../../../common/model/documentModel.js";
+import { TextModel } from "../../../common/model/textModel.js";
+import { TextModelRemoteHistoryPolicy } from "../../../common/model/textModelStructure.js";
 import { serializeDocument } from "../../../common/model/documentSerialization.js";
 import type { DocumentCollaborationConnection } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
@@ -28,7 +29,7 @@ export interface DocumentCollaborationPresenceChange {
 	readonly presences: readonly DocumentCollaborationPresence[];
 }
 
-/** Binds one Stanza document model to a server-ordered collaboration connection. */
+/** Binds one structured Stanza TextModel to a server-ordered collaboration connection. */
 export class DocumentCollaborationController extends DisposableOwner {
 	private readonly stateEmitter = this.own(new Emitter<DocumentCollaborationStateChange>());
 	private readonly presenceEmitter = this.own(new Emitter<DocumentCollaborationPresenceChange>());
@@ -41,7 +42,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 	readonly onDidChangeState: Event<DocumentCollaborationStateChange> = this.stateEmitter.event;
 	readonly onDidChangePresence: Event<DocumentCollaborationPresenceChange> = this.presenceEmitter.event;
 
-	constructor(private readonly model: DocumentModel, private readonly connection: DocumentCollaborationConnection) {
+	constructor(private readonly model: TextModel, private readonly connection: DocumentCollaborationConnection) {
 		super();
 		this.synchronizer = this.own(new DocumentCollaborationSynchronizer({
 			schema: model.schema,
@@ -51,7 +52,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		}));
 		this._presences = connection.currentPresence;
 		this.own(connection);
-		this.own(model.onDidChange(change => {
+		this.own(model.onDidChangeStructure(change => {
 			if (this.synchronizingModel || (change.origin !== "user" && change.origin !== "undo" && change.origin !== "redo")) return;
 			const envelope = this.synchronizer.dispatchLocal(change.transaction);
 			if (envelope) this.submit(envelope);
@@ -139,7 +140,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		});
 	}
 
-	private publishPresence(selection: DocumentModel["selection"]): void {
+	private publishPresence(selection: TextModel["selection"]): void {
 		if (this.disposed || this._state !== "connected") return;
 		void this.connection.updatePresence(selection, new AbortController().signal).catch(error => {
 			if (!this.disposed) this.setState("error", error instanceof Error ? error.message : "Publishing collaboration presence failed");
@@ -191,7 +192,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		this.model.rebaseHistory(entries => rebaseDocumentHistory(document, this.model.schema, entries, transaction));
 		this.synchronizingModel = true;
 		try {
-			this.model.dispatchRemote(transaction, DocumentRemoteHistoryPolicy.Preserve);
+			this.model.dispatchRemote(transaction, TextModelRemoteHistoryPolicy.Preserve);
 		} finally {
 			this.synchronizingModel = false;
 		}
@@ -217,7 +218,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 		if (serializeDocument(this.model.document, this.model.schema) === serializeDocument(this.synchronizer.document, this.model.schema)) return;
 		this.synchronizingModel = true;
 		try {
-			this.model.reset(this.synchronizer.document);
+			this.model.resetStructure(this.synchronizer.document);
 		} finally {
 			this.synchronizingModel = false;
 		}

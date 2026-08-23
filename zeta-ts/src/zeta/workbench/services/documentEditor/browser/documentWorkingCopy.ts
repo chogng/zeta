@@ -3,7 +3,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type DocumentNode } from "../../../../editor/common/model/document.js";
-import { DocumentModel } from "../../../../editor/common/model/documentModel.js";
+import { TextModel } from "../../../../editor/common/model/textModel.js";
 import { DocumentSerializationError, deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import { documentFromPlainText } from "../../../../editor/common/model/documentText.js";
@@ -15,7 +15,7 @@ import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/docum
 
 export interface DocumentWorkingCopyOptions {
 	readonly resource: URI;
-	readonly model: DocumentModel;
+	readonly model: TextModel;
 	readonly initialDocument: DocumentNode;
 	readonly initialRevision: string | undefined;
 	readonly textFiles: ITextFileService;
@@ -25,7 +25,7 @@ export interface DocumentWorkingCopyOptions {
 	readonly createEmptyDocument?: () => DocumentNode;
 }
 
-/** Persistence adapter for Stanza's immutable document model. */
+/** Persistence adapter for Group/Block metadata owned by Stanza's TextModel. */
 export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	private readonly dirtyEmitter = this.own(new Emitter<void>());
 	private readonly externalChangeEmitter = this.own(new Emitter<void>());
@@ -42,7 +42,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 	readonly backupContentType = ACADEMIC_DOCUMENT_CONTENT_TYPE;
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
-	readonly onDidChangeContent = (listener: () => void) => this.options.model.onDidChange(() => listener());
+	readonly onDidChangeContent = (listener: () => void) => this.options.model.onDidChangeStructure(() => listener());
 
 	constructor(private readonly options: DocumentWorkingCopyOptions) {
 		super();
@@ -52,7 +52,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 		this.initialContent = serializeDocument(options.initialDocument, this.schema);
 		this.savedContent = this.initialContent;
 		this.revision = options.initialRevision;
-		this.own(options.model.onDidChange(() => this.refreshDirty()));
+		this.own(options.model.onDidChangeStructure(() => this.refreshDirty()));
 		this.own(options.textFiles.onDidChangeFiles(event => {
 			if (this.resource.scheme === "untitled" || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
 			if (this.isDirty) {
@@ -77,7 +77,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 	}
 
 	restoreBackup(content: string): void {
-		this.options.model.reset(parseDocument(content, this.schema, this.options.createEmptyDocument));
+		this.options.model.resetStructure(parseDocument(content, this.schema, this.options.createEmptyDocument));
 	}
 
 	async save(signal: AbortSignal): Promise<void> {
@@ -118,7 +118,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 		throwIfCancelled(signal, "Document revert was cancelled");
 		if (this.resource.scheme === "untitled") {
 			this.savedContent = this.initialContent;
-			this.options.model.reset(this.initialDocument);
+			this.options.model.resetStructure(this.initialDocument);
 			this.setExternalChange(false);
 			return;
 		}
@@ -127,7 +127,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 		const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
 		this.savedContent = serializeDocument(document, this.schema);
 		this.revision = content.revision;
-		this.options.model.reset(document);
+		this.options.model.resetStructure(document);
 		this.setExternalChange(false);
 	}
 
@@ -141,7 +141,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 			const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
 			this.savedContent = serializeDocument(document, this.schema);
 			this.revision = content.revision;
-			this.options.model.reset(document);
+			this.options.model.resetStructure(document);
 			this.setExternalChange(false);
 		} catch {
 			this.setExternalChange(true);

@@ -2,6 +2,9 @@ import { createServiceIdentifier, type ServiceIdentifier } from "../../../platfo
 import { type Event } from "../../../base/common/event.js";
 import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
+import type { DocumentNode } from "../model/document.js";
+import type { DocumentPlugin } from "../model/documentPlugin.js";
+import type { DocumentSchema } from "../model/documentSchema.js";
 import { type TextModel } from "../model/textModel.js";
 import { type ITextResourceStore } from "./textResourceStore.js";
 
@@ -9,6 +12,14 @@ import { type ITextResourceStore } from "./textResourceStore.js";
 export interface TextModelInput {
 	readonly resource: URI;
 	readonly initialText?: string;
+}
+
+/** Optional Group/Block/Line configuration used when a profile opens a TextModel. */
+export interface TextModelStructureInput extends TextModelInput {
+	readonly schema: DocumentSchema;
+	readonly plugins?: readonly DocumentPlugin<unknown>[];
+	readonly createEmptyDocument?: () => DocumentNode;
+	readonly onSave?: () => Promise<void | boolean>;
 }
 
 /** A reference-counted text model plus its persisted-file state. */
@@ -23,9 +34,19 @@ export interface TextModelReference extends IDisposable {
 	revert(signal: AbortSignal): Promise<void>;
 }
 
+/** TextModel reference that also participates in Workbench backup and Save As. */
+export interface TextModelWorkingCopyReference extends TextModelReference {
+	readonly backupKind: "structuredDocument";
+	readonly backupContentType?: string;
+	readonly onDidChangeContent: Event<void>;
+	backup(): string;
+	restoreBackup(content: string): void;
+	saveAs(resource: URI, signal: AbortSignal): Promise<void>;
+}
+
 /** Owns the lifetime and persisted baseline of text models. */
-export interface ITextModelService extends IDisposable {
-	acquire(input: TextModelInput, signal: AbortSignal): Promise<TextModelReference>;
+export interface ITextModelService<TInput extends TextModelInput = TextModelInput, TReference extends TextModelReference = TextModelReference> extends IDisposable {
+	acquire(input: TInput, signal: AbortSignal): Promise<TReference>;
 }
 
 export type { ITextResourceStore } from "./textResourceStore.js";

@@ -5,7 +5,7 @@ import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/commands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../contrib/citation/common/references.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../contrib/academic/common/schema.js";
-import { DocumentModel } from "../../common/model/documentModel.js";
+import { TextModel } from "../../common/model/textModel.js";
 import { createDocumentDecoration, DocumentDecorationSet } from "../../common/model/documentDecoration.js";
 import { buildDocumentOutline } from "../../common/model/documentOutline.js";
 import { documentContentSize, documentNodeSize, documentPointToPosition, documentPositionToPoint, resolveDocumentPosition } from "../../common/core/documentPosition.js";
@@ -43,7 +43,7 @@ test("DocumentSchema creates and validates block, inline, and code-block nodes",
 	assert.throws(() => schema.createNode("codeBlock", { content: [schema.createText("one"), schema.createText("two")] }), /content does not match/);
 });
 
-test("DocumentModel updates plugin state across edits, history, and reset", () => {
+test("TextModel updates plugin state across edits, history, and reset", () => {
 	const schema = createDefaultDocumentSchema();
 	const key = new DocumentPluginKey<{ readonly origins: readonly string[]; readonly selections: readonly string[]; readonly versions: readonly number[] }>("audit");
 	const plugin = createDocumentPlugin(key, {
@@ -51,7 +51,7 @@ test("DocumentModel updates plugin state across edits, history, and reset", () =
 		apply: (value, context) => ({ origins: [...value.origins, context.origin], selections: value.selections, versions: [...value.versions, context.version] }),
 		applySelection: (value, context) => ({ origins: value.origins, selections: [...value.selections, context.selection?.kind ?? "none"], versions: value.versions }),
 	});
-	using model = new DocumentModel(schema, createDocument(schema), { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, createDocument(schema), { plugins: [plugin] });
 
 	assert.deepEqual(model.getPluginState(key), { origins: [], selections: [], versions: [1] });
 	model.setSelection(textSelection({ nodeId: "text-1", offset: 5 }));
@@ -60,31 +60,31 @@ test("DocumentModel updates plugin state across edits, history, and reset", () =
 	assert.ok(change);
 	assert.deepEqual(model.getPluginState(key), { origins: ["user"], selections: ["text"], versions: [1, 2] });
 
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.getPluginState(key), { origins: ["user", "undo"], selections: ["text"], versions: [1, 2, 3] });
-	model.redo();
+	model.redoStructure();
 	assert.deepEqual(model.getPluginState(key), { origins: ["user", "undo", "redo"], selections: ["text"], versions: [1, 2, 3, 4] });
 
 	const resetDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("Reset")] })], "reset-document");
-	model.reset(resetDocument);
+	model.resetStructure(resetDocument);
 	assert.deepEqual(model.getPluginState(key), { origins: ["user", "undo", "redo", "reset"], selections: ["text"], versions: [1, 2, 3, 4, 5] });
 });
 
-test("DocumentModel keeps document and plugin state unchanged when a plugin rejects a transaction", () => {
+test("TextModel keeps document and plugin state unchanged when a plugin rejects a transaction", () => {
 	const schema = createDefaultDocumentSchema();
 	const key = new DocumentPluginKey<number>("rejecting");
 	const plugin = createDocumentPlugin(key, { init: () => 0, apply: () => { throw new Error("plugin rejected change"); } });
-	using model = new DocumentModel(schema, createDocument(schema), { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, createDocument(schema), { plugins: [plugin] });
 	const before = model.document;
 
 	assert.throws(() => model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "X")), /plugin rejected change/);
 	assert.equal(model.document, before);
 	assert.equal(model.version, 1);
-	assert.equal(model.canUndo, false);
+	assert.equal(model.canUndoStructure, false);
 	assert.equal(model.getPluginState(key), 0);
 });
 
-test("DocumentModel exposes plugin-owned decoration sources without merging identities", () => {
+test("TextModel exposes plugin-owned decoration sources without merging identities", () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	const key = new DocumentPluginKey<DocumentDecorationSet>("search");
@@ -96,7 +96,7 @@ test("DocumentModel exposes plugin-owned decoration sources without merging iden
 		assert.equal(context.version, 1);
 		return state;
 	} });
-	using model = new DocumentModel(schema, document, { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, document, { plugins: [plugin] });
 
 	const sources = model.getPluginDecorations();
 	assert.equal(sources.length, 1);
@@ -112,7 +112,7 @@ test("DocumentTransaction metadata survives builder methods and history merging"
 		init: () => [],
 		apply: (value, context) => [...value, context.transaction.getMeta<string>(metaKey)],
 	});
-	using model = new DocumentModel(schema, createDocument(schema), { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, createDocument(schema), { plugins: [plugin] });
 	const first = new DocumentTransaction().replaceText("text-1", 5, 5, "!").withMeta(metaKey, "first").withHistoryGroup("typing");
 	const second = new DocumentTransaction().replaceText("text-1", 6, 6, "?").withMeta(metaKey, "second").withHistoryGroup("typing");
 	assert.equal(first.withSelection(textSelection({ nodeId: "text-1", offset: 6 })).getMeta<string>(metaKey), "first");
@@ -121,8 +121,8 @@ test("DocumentTransaction metadata survives builder methods and history merging"
 	model.dispatch(first);
 	model.dispatch(second);
 	assert.deepEqual(model.getPluginState(key), ["first", "second"]);
-	model.undo();
-	model.redo();
+	model.undoStructure();
+	model.redoStructure();
 	assert.deepEqual(model.getPluginState(key), ["first", "second", undefined, "second"]);
 });
 
@@ -137,7 +137,7 @@ test("Document plugins can atomically filter user, undo, and redo transactions",
 			return context.origin !== blockedOrigin;
 		},
 	});
-	using model = new DocumentModel(schema, createDocument(schema), { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, createDocument(schema), { plugins: [plugin] });
 	const before = model.document;
 
 	assert.equal(model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "blocked")), undefined);
@@ -145,16 +145,16 @@ test("Document plugins can atomically filter user, undo, and redo transactions",
 	blockedOrigin = undefined;
 	assert.ok(model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "ok")));
 	blockedOrigin = "undo";
-	assert.equal(model.undo(), undefined);
-	assert.equal(model.canUndo, true);
+	assert.equal(model.undoStructure(), undefined);
+	assert.equal(model.canUndoStructure, true);
 	blockedOrigin = undefined;
-	assert.ok(model.undo());
-	assert.equal(model.canRedo, true);
+	assert.ok(model.undoStructure());
+	assert.equal(model.canRedoStructure, true);
 	blockedOrigin = "redo";
-	assert.equal(model.redo(), undefined);
-	assert.equal(model.canRedo, true);
+	assert.equal(model.redoStructure(), undefined);
+	assert.equal(model.canRedoStructure, true);
 	blockedOrigin = undefined;
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	assert.deepEqual(origins, ["user", "user", "undo", "undo", "redo", "redo"]);
 });
 
@@ -223,9 +223,9 @@ test("Stanza converts nested text points to absolute positions with stable bound
 	assert.throws(() => documentPositionToPoint(document, schema, 30), /between 0 and 29/);
 });
 
-test("DocumentModel applies text transactions and preserves transaction-level undo", () => {
+test("TextModel applies text transactions and preserves transaction-level undo", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = new DocumentModel(schema, createDocument(schema));
+	using model = TextModel.createWithStructure(schema, createDocument(schema));
 	model.setSelection(textSelection({ nodeId: "text-1", offset: 5 }));
 
 	const change = model.dispatch(new DocumentTransaction()
@@ -235,19 +235,19 @@ test("DocumentModel applies text transactions and preserves transaction-level un
 	assert.ok(change);
 	assert.equal(model.document.content[0]?.content[0]?.text, "Hello structured");
 	assert.equal(model.selection?.kind, "text");
-	assert.equal(model.canUndo, true);
-	model.undo();
+	assert.equal(model.canUndoStructure, true);
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[0]?.text, "Hello");
 	assert.equal(model.selection?.kind, "text");
-	model.redo();
+	model.redoStructure();
 	assert.equal(model.document.content[0]?.content[0]?.text, "Hello structured");
 });
 
-test("DocumentModel maps implicit selections through text edits and node removal", () => {
+test("TextModel maps implicit selections through text edits and node removal", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
 	const second = schema.createNode("paragraph", { id: "paragraph-2", content: [schema.createText("World", { id: "text-2" })] });
-	using model = new DocumentModel(schema, schema.createDocument([first, second], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
+	using model = TextModel.createWithStructure(schema, schema.createDocument([first, second], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
 
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "Say "));
 	assert.deepEqual(model.selection, textSelection({ nodeId: "text-1", offset: 9 }));
@@ -259,27 +259,27 @@ test("DocumentModel maps implicit selections through text edits and node removal
 	assert.deepEqual(model.selection, textSelection({ nodeId: "text-2", offset: 0 }));
 });
 
-test("DocumentModel coalesces adjacent transactions with the same history group", () => {
+test("TextModel coalesces adjacent transactions with the same history group", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("a", { id: "text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 1 }) });
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 1 }) });
 
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 1, 1, "b").withSelection(textSelection({ nodeId: "text-1", offset: 2 })).withHistoryGroup("typing"));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 2, 2, "c").withSelection(textSelection({ nodeId: "text-1", offset: 3 })).withHistoryGroup("typing"));
 	assert.equal(model.document.content[0]?.content[0]?.text, "abc");
 
-	const undo = model.undo();
+	const undo = model.undoStructure();
 	assert.ok(undo);
 	assert.equal(model.document.content[0]?.content[0]?.text, "a");
 	assert.deepEqual(model.selection, textSelection({ nodeId: "text-1", offset: 1 }));
-	const redo = model.redo();
+	const redo = model.redoStructure();
 	assert.ok(redo);
 	assert.equal(model.document.content[0]?.content[0]?.text, "abc");
 	assert.deepEqual(model.selection, textSelection({ nodeId: "text-1", offset: 3 }));
 
 	model.setSelection(textSelection({ nodeId: "text-1", offset: 0 }));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "!").withSelection(textSelection({ nodeId: "text-1", offset: 1 })).withHistoryGroup("typing"));
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[0]?.text, "abc");
 });
 
@@ -323,7 +323,7 @@ test("DocumentSchema supports child groups, cardinality, and valid multi-step as
 	const defaultSchema = createDefaultDocumentSchema();
 	const emptyList = defaultSchema.createNode("bulletList");
 	const item = defaultSchema.createNode("listItem", { content: [defaultSchema.createNode("paragraph", { content: [defaultSchema.createText("assembled")] })] });
-	using model = new DocumentModel(defaultSchema, defaultSchema.createDocument([], "assembly-document"));
+	using model = TextModel.createWithStructure(defaultSchema, defaultSchema.createDocument([], "assembly-document"));
 	model.dispatch(new DocumentTransaction().insertNode("assembly-document", 0, emptyList).insertNode(emptyList.id, 0, item));
 	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, "assembled");
 });
@@ -361,12 +361,49 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 		schema.createNode("imageBlock", { attrs: { src: "image.png" }, content: [line("captionLine", "Figure 1")] }),
 	] });
 	const document = schema.createDocument([group]);
+	using model = TextModel.createWithStructure(schema, document);
 
 	assert.equal(document.content[0]?.content.length, 4);
 	assert.deepEqual(document.content[0]?.content.map(block => block.type), ["textBlock", "quoteBlock", "codeBlock", "imageBlock"]);
 	assert.equal(document.content[0]?.content[2]?.content.length, 2);
 	assert.equal(schema.getNodeSpec("group")?.kind, "group");
 	assert.equal(schema.getNodeSpec("codeLine")?.kind, "line");
+	assert.equal(model.getText(), "First\nSecond\nQuoted\nconst value = 1;\nreturn value;\n\uFFFC\nFigure 1");
+	assert.equal(model.structureIndex.groups.length, 1);
+	assert.equal(model.structureIndex.blocks.length, 4);
+	assert.equal(model.structureIndex.lines.length, 7);
+	assert.deepEqual(model.structureIndex.getGroup(group.id)?.blockIds, group.content.map(block => block.id));
+	assert.deepEqual(model.structureIndex.getBlock(group.content[2]!.id), {
+		id: group.content[2]!.id,
+		type: "codeBlock",
+		groupId: group.id,
+		startLine: 3,
+		endLine: 5,
+		attrs: group.content[2]!.attrs,
+	});
+	assert.equal(model.structureIndex.getBlockAtLine(4)?.type, "codeBlock");
+	const textChanges: { readonly reason: string; readonly changes: readonly { readonly rangeOffset: number; readonly rangeLength: number; readonly text: string }[] }[] = [];
+	model.onDidChange(change => textChanges.push(change));
+	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
+	const textBeforeEdit = model.getText();
+	model.dispatch(new DocumentTransaction().replaceText(firstCodeText.id, 0, firstCodeText.text!.length, "let value = 2;"));
+	assert.equal(model.getLineContent(3), "let value = 2;");
+	assert.equal(model.version, 2);
+	assert.equal(textChanges[0]?.reason, "structure");
+	assert.ok((textChanges[0]?.changes[0]?.rangeOffset ?? 0) > 0);
+	assert.ok((textChanges[0]?.changes[0]?.rangeLength ?? textBeforeEdit.length) < textBeforeEdit.length);
+	const textEdit = textChanges[0]!.changes[0]!;
+	assert.equal(textBeforeEdit.slice(0, textEdit.rangeOffset) + textEdit.text + textBeforeEdit.slice(textEdit.rangeOffset + textEdit.rangeLength), model.getText());
+	const textBeforeAttributeChange = model.getText();
+	model.dispatch(new DocumentTransaction().setNodeAttributes(group.content[2]!.id, { language: "rust" }));
+	assert.equal(model.version, 3);
+	assert.equal(model.getText(), textBeforeAttributeChange);
+	assert.equal(model.structureIndex.getBlock(group.content[2]!.id)?.attrs.language, "rust");
+	assert.equal(textChanges[1]?.reason, "structure");
+	assert.equal(textChanges[1]?.changes[0]?.rangeOffset, 0);
+	assert.equal(textChanges[1]?.changes[0]?.rangeLength, textBeforeAttributeChange.length);
+	assert.equal(textChanges[1]?.changes[0]?.text, textBeforeAttributeChange);
+	assert.throws(() => model.reset("detached text"), /must update Group\/Block metadata/);
 	assert.throws(() => schema.createDocument([schema.createNode("codeBlock", { content: [line("codeLine", "orphan")] })]), /cannot contain 'codeBlock'/);
 });
 
@@ -432,7 +469,7 @@ test("Academic citation nodes insert, select, delete, and export as inline atoms
 	const schema = createAcademicDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "citation-paragraph", content: [schema.createText("Read ", { id: "citation-before" }), schema.createText("now", { id: "citation-after" })] });
 	const document = schema.createDocument([paragraph], "citation-document");
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const command = createInsertCitationCommand(schema, model.document, paragraph.id, textSelection({ nodeId: "citation-before", offset: 5 }), "smith-2024", "[Smith 2024]");
 	assert.ok(command);
 	model.dispatch(command.transaction);
@@ -476,7 +513,7 @@ test("Citation reference command creates and appends a bibliography", () => {
 	const schema = createAcademicDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "reference-command-paragraph", content: [schema.createText("Body")] });
 	const document = schema.createDocument([paragraph], "reference-command-document");
-	using model = new DocumentModel(schema, document, { plugins: [createReferenceIndexPlugin()] });
+	using model = TextModel.createWithStructure(schema, document, { plugins: [createReferenceIndexPlugin()] });
 
 	const first = createInsertReferenceCommand(schema, model.document, "smith-2024", "Smith, 2024");
 	assert.ok(first);
@@ -493,14 +530,14 @@ test("Citation reference command creates and appends a bibliography", () => {
 	assert.deepEqual(updatedBibliography?.content.map(node => node.attrs.key), ["smith-2024", "doe-2023"]);
 });
 
-test("DocumentModel handles insertion, attributes, movement, and deletion as one history unit", () => {
+test("TextModel handles insertion, attributes, movement, and deletion as one history unit", () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	const secondParagraph = schema.createNode("paragraph", {
 		id: "paragraph-2",
 		content: [schema.createText("Second", { id: "text-2" })],
 	});
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 
 	model.dispatch(new DocumentTransaction()
 		.insertNode("document-1", 1, secondParagraph)
@@ -509,21 +546,21 @@ test("DocumentModel handles insertion, attributes, movement, and deletion as one
 
 	assert.deepEqual(model.document.content.slice(0, 2).map(node => node.id), ["paragraph-2", "paragraph-1"]);
 	assert.equal(model.document.content[1]?.attrs.alignment, "center");
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "code-1"]);
 	assert.equal(model.document.content[0]?.attrs.alignment, undefined);
 });
 
-test("DocumentModel rejects invalid transactions without partial mutation", () => {
+test("TextModel rejects invalid transactions without partial mutation", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = new DocumentModel(schema, createDocument(schema));
+	using model = TextModel.createWithStructure(schema, createDocument(schema));
 	const before = serializeDocument(model.document, schema);
 
 	assert.throws(() => model.dispatch(new DocumentTransaction()
 		.replaceText("text-1", 0, 100, "invalid")
 		.setNodeAttributes("paragraph-1", { alignment: "left" })), /must satisfy/);
 	assert.equal(serializeDocument(model.document, schema), before);
-	assert.equal(model.canUndo, false);
+	assert.equal(model.canUndoStructure, false);
 });
 
 test("Structured documents round-trip through a versioned serialization envelope", () => {
@@ -563,16 +600,16 @@ test("Stanza serializes every transaction step and preserves transport metadata"
 	assert.throws(() => deserializeDocumentTransaction("not json", schema), DocumentSerializationError);
 });
 
-test("DocumentModel applies remote transactions outside local history", () => {
+test("TextModel applies remote transactions outside local history", () => {
 	const schema = createDefaultDocumentSchema();
 	const key = new DocumentPluginKey<readonly string[]>("remote-origins");
 	const plugin = createDocumentPlugin(key, {
 		init: () => [],
 		apply: (value, context) => [...value, context.origin],
 	});
-	using model = new DocumentModel(schema, createDocument(schema), { plugins: [plugin] });
+	using model = TextModel.createWithStructure(schema, createDocument(schema), { plugins: [plugin] });
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "L"));
-	assert.equal(model.canUndo, true);
+	assert.equal(model.canUndoStructure, true);
 
 	const remote = deserializeDocumentTransaction(serializeDocumentTransaction(new DocumentTransaction()
 		.replaceText("text-1", 0, 1, "R")
@@ -584,8 +621,8 @@ test("DocumentModel applies remote transactions outside local history", () => {
 	assert.equal(model.document.content[0]?.content[0]?.text, "RHello");
 	assert.deepEqual(model.selection, textSelection({ nodeId: "text-1", offset: 1 }));
 	assert.deepEqual(model.storedMarks, [{ type: "strong", attrs: {} }]);
-	assert.equal(model.canUndo, false);
-	assert.equal(model.canRedo, false);
+	assert.equal(model.canUndoStructure, false);
+	assert.equal(model.canRedoStructure, false);
 	assert.deepEqual(model.getPluginState(key), ["user", "remote"]);
 });
 
@@ -621,7 +658,7 @@ test("Stanza supports whole-document clipboard text, fragments, replacement, and
 	assert.deepEqual(fragment.content.map(node => node.id), ["source-paragraph-1", "source-heading-1"]);
 
 	const targetParagraph = schema.createNode("paragraph", { id: "target-paragraph-1", content: [schema.createText("Target", { id: "target-text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([targetParagraph], "target-document"), { selection });
+	using model = TextModel.createWithStructure(schema, schema.createDocument([targetParagraph], "target-document"), { selection });
 	const paste = createInsertFragmentCommand(schema, model.document, targetParagraph.id, selection, fragment);
 	assert.ok(paste);
 	model.dispatch(paste.transaction);
@@ -663,7 +700,7 @@ test("Stanza extracts, serializes, and inserts structured clipboard fragments", 
 		id: "target-paragraph",
 		content: [schema.createText("Target", { id: "target-text" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([target], "target-document"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([target], "target-document"));
 	const insert = createInsertFragmentCommand(schema, model.document, "target-paragraph", textSelection({ nodeId: "target-text", offset: 3 }), decoded);
 	assert.ok(insert);
 	model.dispatch(insert.transaction);
@@ -683,7 +720,7 @@ test("Stanza block commands split, join, move, and insert through model transact
 		id: "paragraph-2",
 		content: [schema.createText("World", { id: "text-2" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([first, second], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([first, second], "document-1"));
 
 	const split = createSplitBlockCommand(schema, model.document, "paragraph-1", "text-1", 2);
 	assert.ok(split);
@@ -705,7 +742,7 @@ test("Stanza block commands split, join, move, and insert through model transact
 	assert.ok(moved);
 	model.dispatch(moved.transaction);
 	assert.equal(model.document.content[0]?.id, inserted.focus.blockId);
-	assert.equal(model.canUndo, true);
+	assert.equal(model.canUndoStructure, true);
 });
 
 test("Stanza moves a block down to the requested sibling index", () => {
@@ -714,14 +751,14 @@ test("Stanza moves a block down to the requested sibling index", () => {
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = new DocumentModel(schema, schema.createDocument(blocks, "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument(blocks, "document-1"));
 
 	const move = createMoveBlockCommand(model.document, "paragraph-1", "down");
 	assert.ok(move);
 	model.dispatch(move.transaction);
 
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-2", "paragraph-1", "paragraph-3"]);
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-2", "paragraph-3"]);
 });
 
@@ -731,7 +768,7 @@ test("Stanza inline mark commands split text runs and preserve the selection", (
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-1", offset: 4 });
 
 	const mark = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", selection, "strong");
@@ -742,9 +779,9 @@ test("Stanza inline mark commands split text runs and preserve the selection", (
 	assert.deepEqual(textRuns[1]?.marks, [{ type: "strong", attrs: {} }]);
 	assert.deepEqual(model.selection, textSelection({ nodeId: textRuns[1]!.id, offset: 0 }, { nodeId: textRuns[1]!.id, offset: 3 }));
 
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.text), ["Hello"]);
-	model.redo();
+	model.redoStructure();
 	const markedText = model.document.content[0]?.content[1];
 	assert.ok(markedText);
 	const unmark = createToggleMarkCommand(schema, model.document, "paragraph-1", markedText.id, textSelection({ nodeId: markedText.id, offset: 0 }, { nodeId: markedText.id, offset: markedText.text!.length }), "strong");
@@ -756,7 +793,7 @@ test("Stanza inline mark commands split text runs and preserve the selection", (
 test("Stanza stores collapsed mark toggles for subsequent text insertion", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
 
 	const toggle = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", model.selection!, "strong");
 	assert.ok(toggle);
@@ -786,7 +823,7 @@ test("Stanza link mark commands set, update, remove, and undo link attributes", 
 			schema.createText(" world", { id: "text-2", marks: [{ type: "strong", attrs: {} }] }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-2", offset: 6 });
 
 	const link = createSetLinkMarkCommand(schema, model.document, "paragraph-1", "text-1", selection, " https://example.test ");
@@ -815,7 +852,7 @@ test("Stanza link mark commands set, update, remove, and undo link attributes", 
 	model.dispatch(remove.transaction);
 	content = model.document.content[0]?.content ?? [];
 	assert.deepEqual(content.map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[1]?.marks.find(mark => mark.type === "link")?.attrs.href, "https://updated.test");
 });
 
@@ -825,7 +862,7 @@ test("Stanza text-style commands merge persistent font attributes", () => {
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-1", offset: 4 });
 
 	const setFamily = createSetTextStyleCommand(schema, model.document, "paragraph-1", "text-1", selection, { fontFamily: "serif" });
@@ -860,7 +897,7 @@ test("Stanza block commands preserve inline runs while splitting and joining", (
 			schema.createText("o", { id: "text-3" }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const split = createSplitBlockCommand(schema, model.document, "paragraph-1", "text-2", 1);
 	assert.ok(split);
@@ -891,7 +928,7 @@ test("Stanza structural block commands toggle blockquotes and insert horizontal 
 		id: "paragraph-2",
 		content: [schema.createText("Second", { id: "text-2" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([first, second], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([first, second], "document-1"));
 
 	const quote = createToggleBlockquoteCommand(schema, model.document, "paragraph-1");
 	assert.ok(quote);
@@ -909,7 +946,7 @@ test("Stanza structural block commands toggle blockquotes and insert horizontal 
 	assert.ok(rule);
 	model.dispatch(rule.transaction);
 	assert.deepEqual(model.document.content.map(node => node.type), ["paragraph", "horizontalRule", "paragraph"]);
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content.map(node => node.type), ["paragraph", "paragraph"]);
 });
 
@@ -919,7 +956,7 @@ test("Stanza replaces and undoes a text selection spanning sibling blocks", () =
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = new DocumentModel(schema, schema.createDocument(blocks, "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument(blocks, "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 2 }, { nodeId: "text-3", offset: 2 });
 
 	const replace = createReplaceTextCommand(schema, model.document, "paragraph-1", selection, "X");
@@ -930,7 +967,7 @@ test("Stanza replaces and undoes a text selection spanning sibling blocks", () =
 	assert.equal(model.selection?.kind, "text");
 	assert.equal(model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined, model.document.content[0]?.content[1]?.id);
 
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-2", "paragraph-3"]);
 	assert.deepEqual(model.document.content.map(node => node.content[0]?.text), ["First", "Middle", "Third"]);
 });
@@ -941,7 +978,7 @@ test("Stanza pastes multiline text across sibling blocks", () => {
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = new DocumentModel(schema, schema.createDocument(blocks, "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument(blocks, "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 2 }, { nodeId: "text-2", offset: 3 });
 
 	const paste = createPasteTextCommand(schema, model.document, "paragraph-1", selection, "A\nB\nC");
@@ -962,7 +999,7 @@ test("Stanza inline commands handle selections spanning multiple text runs", () 
 			schema.createText("o", { id: "text-3" }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const wholeText = textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-3", offset: 1 });
 
 	const mark = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", wholeText, "strong");
@@ -989,14 +1026,14 @@ test("Stanza paste commands turn multiline text into sibling blocks", () => {
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const paste = createPasteTextCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }), "A\nB\n");
 	assert.ok(paste);
 	model.dispatch(paste.transaction);
 	assert.deepEqual(model.document.content.map(node => node.content.map(child => child.text ?? "").join("")), ["HeA", "B", "llo"]);
 	assert.equal(model.selection?.kind, "text");
-	assert.equal(model.canUndo, true);
-	model.undo();
+	assert.equal(model.canUndoStructure, true);
+	model.undoStructure();
 	assert.deepEqual(model.document.content.map(node => node.content[0]?.text ?? ""), ["Hello"]);
 });
 
@@ -1008,7 +1045,7 @@ test("Stanza splits a list paragraph into sibling list items", () => {
 	});
 	const item = schema.createNode("listItem", { id: "item-1", content: [paragraph] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [item] });
-	using model = new DocumentModel(schema, schema.createDocument([list], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([list], "document-1"));
 
 	const split = createSplitListItemCommand(schema, model.document, "item-1", "paragraph-1", "text-1", 3);
 	assert.ok(split);
@@ -1017,7 +1054,7 @@ test("Stanza splits a list paragraph into sibling list items", () => {
 	assert.equal(result.type, "bulletList");
 	assert.deepEqual(result.content.map(listItem => listItem.content[0]?.content[0]?.text ?? ""), ["one", "Two"]);
 	assert.equal(result.content.length, 2);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, "oneTwo");
 });
 
@@ -1025,14 +1062,14 @@ test("Stanza joins, indents, and outdents list items as atomic commands", () => 
 	const schema = createDefaultDocumentSchema();
 	const createItem = (id: string, paragraphId: string, textId: string, text: string) => schema.createNode("listItem", { id, content: [schema.createNode("paragraph", { id: paragraphId, content: [schema.createText(text, { id: textId })] })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [createItem("item-1", "paragraph-1", "text-1", "one"), createItem("item-2", "paragraph-2", "text-2", "two"), createItem("item-3", "paragraph-3", "text-3", "three")] });
-	using model = new DocumentModel(schema, schema.createDocument([list], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([list], "document-1"));
 
 	const joined = createJoinAdjacentListItemCommand(model.document, "item-2", "paragraph-2", "backward");
 	assert.ok(joined);
 	model.dispatch(joined.transaction);
 	assert.equal(model.document.content[0]?.content.length, 2);
 	assert.equal(model.document.content[0]?.content[0]?.content.map(block => block.content.map(child => child.text ?? "").join("")).join(""), "onetwo");
-	model.undo();
+	model.undoStructure();
 
 	const indented = createListItemIndentationCommand(schema, model.document, "item-2", "paragraph-2", "in");
 	assert.ok(indented);
@@ -1047,9 +1084,9 @@ test("Stanza joins, indents, and outdents list items as atomic commands", () => 
 	model.dispatch(outdented.transaction);
 	assert.deepEqual(model.document.content[0]?.content.map(item => item.id), ["item-1", "item-2", "item-3"]);
 	assert.equal(model.document.content[0]?.content[0]?.content.some(child => child.type === "bulletList"), false);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[0]?.content.at(-1)?.content[0]?.id, "item-2");
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content[0]?.content.map(item => item.id), ["item-1", "item-2", "item-3"]);
 });
 
@@ -1057,20 +1094,20 @@ test("Stanza exits an empty list item at the list boundary", () => {
 	const schema = createDefaultDocumentSchema();
 	const emptyItem = schema.createNode("listItem", { id: "item-1", content: [schema.createNode("paragraph", { id: "paragraph-1" })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [emptyItem] });
-	using model = new DocumentModel(schema, schema.createDocument([list], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([list], "document-1"));
 	const exit = createExitEmptyListItemCommand(schema, model.document, "item-1", "paragraph-1");
 	assert.ok(exit);
 	model.dispatch(exit.transaction);
 	assert.deepEqual(model.document.content.map(node => node.type), ["paragraph"]);
 	assert.equal(model.document.content[0]?.content.length, 0);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.type, "bulletList");
 });
 
 test("Stanza block format commands change block and list types without replacing content", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const heading = createSetBlockTypeCommand(model.document, "paragraph-1", "heading");
 	assert.ok(heading);
@@ -1088,16 +1125,16 @@ test("Stanza block format commands change block and list types without replacing
 	assert.ok(ordered);
 	model.dispatch(ordered.transaction);
 	assert.equal(model.document.content[0]?.type, "orderedList");
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.type, "bulletList");
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.type, "heading");
 });
 
 test("Stanza inserts validated tables and inline images", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const table = createInsertTableCommand(schema, model.document, "paragraph-1", 2, 3);
 	assert.ok(table);
@@ -1112,7 +1149,7 @@ test("Stanza inserts validated tables and inline images", () => {
 	assert.ok(image);
 	model.dispatch(image.transaction);
 	assert.deepEqual(model.document.content[0]?.content.at(-1)?.attrs, { src: "https://example.test/image.png", alt: "Example" });
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content.at(-1)?.type, "text");
 });
 
@@ -1125,7 +1162,7 @@ test("Stanza inserts images at text selections while preserving inline runs", ()
 			schema.createText(" world", { id: "text-2", marks: [{ type: "strong", attrs: {} }] }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const middle = createInsertImageAtSelectionCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }), "data:image/png;base64,AA==", "middle");
 	assert.ok(middle);
@@ -1136,7 +1173,7 @@ test("Stanza inserts images at text selections while preserving inline runs", ()
 	assert.deepEqual(content.filter(node => node.text !== undefined).map(node => node.marks.map(mark => mark.type)), [[], [], ["strong"]]);
 	assert.equal(model.selection?.kind, "text");
 	assert.equal(model.selection?.kind === "text" ? model.selection.anchor.offset : undefined, 0);
-	model.undo();
+	model.undoStructure();
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.id), ["text-1", "text-2"]);
 
 	const crossRun = createInsertImageAtSelectionCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 3 }, { nodeId: "text-2", offset: 3 }), "data:image/png;base64,BB==");
@@ -1158,19 +1195,19 @@ test("Stanza deletes adjacent inline nodes through common boundary commands", ()
 			schema.createText("after", { id: "text-2" }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const backward = createDeleteAdjacentInlineNodeCommand(model.document, "paragraph-1", "text-2", "backward");
 	assert.ok(backward);
 	model.dispatch(backward.transaction);
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.id), ["text-1", "text-2"]);
-	model.undo();
+	model.undoStructure();
 
 	const forward = createDeleteAdjacentInlineNodeCommand(model.document, "paragraph-1", "text-1", "forward");
 	assert.ok(forward);
 	model.dispatch(forward.transaction);
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.id), ["text-1", "text-2"]);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[1]?.type, "image");
 });
 
@@ -1181,17 +1218,17 @@ test("Stanza deletes and restores a selected inline node", () => {
 		id: "paragraph-1",
 		content: [schema.createText("before", { id: "text-1" }), image, schema.createText("after", { id: "text-2" })],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"), { selection: nodeSelection(image.id) });
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"), { selection: nodeSelection(image.id) });
 
 	const deletion = createDeleteNodeSelectionCommand(model.document, model.selection!);
 	assert.ok(deletion);
 	model.dispatch(deletion.transaction);
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.type), ["text", "text"]);
 	assert.equal(model.selection?.kind, "text");
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[0]?.content[1]?.id, image.id);
 	assert.deepEqual(model.selection, nodeSelection(image.id));
-	model.redo();
+	model.redoStructure();
 	assert.equal(model.document.content[0]?.content.some(node => node.id === image.id), false);
 });
 
@@ -1205,7 +1242,7 @@ test("Stanza inserts hard breaks and deletes selections spanning inline nodes", 
 			schema.createText("world", { id: "text-2" }),
 		],
 	});
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 
 	const breakCommand = createInsertHardBreakCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }));
 	assert.ok(breakCommand);
@@ -1213,7 +1250,7 @@ test("Stanza inserts hard breaks and deletes selections spanning inline nodes", 
 	assert.deepEqual(model.document.content[0]?.content.map(node => node.type), ["text", "hardBreak", "text", "hardBreak", "text"]);
 	assert.equal(model.document.content[0]?.content[0]?.text, "He");
 	assert.equal(model.document.content[0]?.content[2]?.text, "llo");
-	model.undo();
+	model.undoStructure();
 
 	const deletion = createDeleteInlineSelectionCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }, { nodeId: "text-2", offset: 3 }));
 	assert.ok(deletion);
@@ -1226,7 +1263,7 @@ test("Stanza inserts hard breaks and deletes selections spanning inline nodes", 
 test("Stanza navigates table cells and applies row and column transactions", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Before", { id: "text-1" })] });
-	using model = new DocumentModel(schema, schema.createDocument([paragraph], "document-1"));
+	using model = TextModel.createWithStructure(schema, schema.createDocument([paragraph], "document-1"));
 	const insertTable = createInsertTableCommand(schema, model.document, "paragraph-1", 2, 2);
 	assert.ok(insertTable);
 	model.dispatch(insertTable.transaction);
@@ -1261,6 +1298,6 @@ test("Stanza navigates table cells and applies row and column transactions", () 
 	assert.ok(deletedRow);
 	model.dispatch(deletedRow.transaction);
 	assert.equal(model.document.content[1]?.content.length, 2);
-	model.undo();
+	model.undoStructure();
 	assert.equal(model.document.content[1]?.content.length, 3);
 });

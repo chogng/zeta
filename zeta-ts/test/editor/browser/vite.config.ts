@@ -10,7 +10,7 @@ export default defineConfig({
 		rollupOptions: {
 			input: {
 				textModel: resolve(import.meta.dirname, "textModel.html"),
-				documentModel: resolve(import.meta.dirname, "documentModel.html"),
+				academic: resolve(import.meta.dirname, "academic.html"),
 			},
 		},
 	},

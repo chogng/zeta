@@ -12,8 +12,8 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 | Bootstrap-text versus file-system resolution | `ITextFileService.resolve` | ✅ |
 | Text save transport and cancellation | `ITextFileService.save` | ✅ |
 | URI-to-`TextModel` references | `ITextModelService` | ✅, editor-owned |
-| Editor model references | Text and document model services | ✅, editor-domain-owned |
-| Format-specific dirty state, snapshot saves and explicit reverts | Text/document model services | ✅, editor-domain-owned |
+| Editor model references | Code and Academic TextModel services | ✅, editor-domain-owned |
+| Format-specific dirty state, snapshot saves and explicit reverts | Code/Academic TextModel services | ✅, editor-domain-owned |
 | Shared working-copy lifecycle and resource indexing | `IWorkingCopyService` | ✅, Workbench-owned contract, editor-owned implementation |
 | CRLF/LF source-line-ending preservation | `ITextModelService` | ✅, editor-owned |
 | Workspace external-change invalidation, clean reload, and dirty-model conflict state | `IFileService` → `ITextFileService` → `ITextModelService` | ✅, transport notification plus editor-owned policy |
@@ -56,7 +56,7 @@ Adding model caches, backup persistence, or conflict policy directly to
 `ExplorerViewPane` would signal architectural drift. Dirty state and conflict
 policy remain in the editor-domain adapters (`BrowserTextModelService` for the
 Text Engine and `DocumentWorkingCopy` for the Document Engine); the shared working-copy contract
-exposes their common lifecycle without requiring a cross-editor document model.
+exposes their common lifecycle without requiring a second editor model authority.
 
 ## Tests and modification impact
 

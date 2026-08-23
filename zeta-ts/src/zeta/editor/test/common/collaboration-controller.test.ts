@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { DocumentModel } from "../../common/model/documentModel.js";
+import { TextModel } from "../../common/model/textModel.js";
 import type { DocumentNode } from "../../common/model/document.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
@@ -21,7 +21,7 @@ import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collabor
 test("Stanza collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -49,7 +49,7 @@ test("Stanza collaboration submits only the in-flight snapshot while later typin
 test("Stanza collaboration shares an author's undo and redo as ordered transactions", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -58,7 +58,7 @@ test("Stanza collaboration shares an author's undo and redo as ordered transacti
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "AHello");
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	await flushMicrotasks();
 	assert.equal(connection.submissions.length, 2);
 	assert.equal(connection.submissions[1]?.envelope.baseVersion, 1);
@@ -66,7 +66,7 @@ test("Stanza collaboration shares an author's undo and redo as ordered transacti
 	connection.accept(1, 2);
 	await flushMicrotasks();
 
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	await flushMicrotasks();
 	assert.equal(connection.submissions.length, 3);
 	assert.equal(connection.submissions[2]?.envelope.baseVersion, 2);
@@ -79,7 +79,7 @@ test("Stanza collaboration shares an author's undo and redo as ordered transacti
 test("Stanza collaboration preserves a local author's history through an acknowledged remote edit", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -92,27 +92,27 @@ test("Stanza collaboration preserves a local author's history through an acknowl
 
 	connection.receiveRemote(new DocumentTransaction().replaceText("text-1", 1, 1, "B"), 3);
 	assert.equal(firstText(model.document), "CBAHello");
-	assert.equal(model.canUndo, true);
+	assert.equal(model.canUndoStructure, true);
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "BAHello");
 	connection.accept(2, 4);
 	await flushMicrotasks();
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "BHello");
 	connection.accept(3, 5);
 	await flushMicrotasks();
 
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "BAHello");
 	connection.accept(4, 6);
 	await flushMicrotasks();
 
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "CBAHello");
 	connection.accept(5, 7);
@@ -123,7 +123,7 @@ test("Stanza collaboration preserves a local author's history through an acknowl
 test("Stanza collaboration preserves local history when a remote update rebases in-flight typing", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -137,13 +137,13 @@ test("Stanza collaboration preserves local history when a remote update rebases 
 	connection.accept(1, 2);
 	await flushMicrotasks();
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "HBello");
 	connection.accept(2, 3);
 	await flushMicrotasks();
 
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	await flushMicrotasks();
 	assert.equal(firstText(model.document), "AHBello");
 	connection.accept(3, 4);
@@ -154,7 +154,7 @@ test("Stanza collaboration preserves local history when a remote update rebases 
 test("Stanza collaboration publishes local selections without versioning them and exposes remote selections", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = new DocumentModel(schema, document);
+	using model = TextModel.createWithStructure(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 	const received: (readonly { readonly clientId: string }[])[] = [];

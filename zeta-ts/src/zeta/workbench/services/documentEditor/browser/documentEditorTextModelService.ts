@@ -1,33 +1,31 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { DocumentModel } from "../../../../editor/common/model/documentModel.js";
-import type { DocumentModelInput } from "../../../../editor/common/services/documentModelService.js";
-import type { DocumentModelReference } from "../../../../editor/common/services/documentModelService.js";
-import type { IDocumentModelService } from "../../../../editor/common/services/documentModelService.js";
+import { TextModel } from "../../../../editor/common/model/textModel.js";
+import type { ITextModelService, TextModelStructureInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
 import { parseDocument } from "./documentWorkingCopy.js";
 
-/** Browser implementation of Stanza's structured document-model service. */
-export class BrowserDocumentModelService extends DisposableOwner implements IDocumentModelService {
+/** Workbench persistence adapter for a TextModel opened by the document editor. */
+export class DocumentEditorTextModelService extends DisposableOwner implements ITextModelService<TextModelStructureInput, TextModelWorkingCopyReference> {
 	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
 		super();
 		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
 			this.dispose();
-			throw new TypeError("Stanza document model service requires a Workbench text file service");
+			throw new TypeError("Stanza document editor TextModel service requires a Workbench text file service");
 		}
 	}
 
-	async acquire(input: DocumentModelInput, signal: AbortSignal): Promise<DocumentModelReference> {
-		throwIfCancelled(signal, "Stanza document model acquisition was cancelled");
+	async acquire(input: TextModelStructureInput, signal: AbortSignal): Promise<TextModelWorkingCopyReference> {
+		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
 		const content = await this.textFiles.resolve({
 			resource: input.resource,
 			...(input.initialText === undefined ? {} : { bootstrapText: input.initialText }),
 		}, signal);
-		throwIfCancelled(signal, "Stanza document model acquisition was cancelled");
+		throwIfCancelled(signal, "Stanza document editor TextModel acquisition was cancelled");
 		const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
-		const model = new DocumentModel(input.schema, document, { plugins: input.plugins });
+		const model = TextModel.createWithStructure(input.schema, document, { plugins: input.plugins });
 		const workingCopy = new DocumentWorkingCopy({
 			resource: input.resource,
 			model,
@@ -38,11 +36,11 @@ export class BrowserDocumentModelService extends DisposableOwner implements IDoc
 			onSave: input.onSave,
 			createEmptyDocument: input.createEmptyDocument,
 		});
-		return new BrowserDocumentModelReference(model, workingCopy);
+		return new TextModelWorkingCopyReferenceImpl(model, workingCopy);
 	}
 }
 
-class BrowserDocumentModelReference extends DisposableOwner implements DocumentModelReference {
+class TextModelWorkingCopyReferenceImpl extends DisposableOwner implements TextModelWorkingCopyReference {
 	readonly resource;
 	readonly model;
 	readonly onDidChangeDirty;
@@ -51,7 +49,7 @@ class BrowserDocumentModelReference extends DisposableOwner implements DocumentM
 	readonly backupKind;
 	readonly backupContentType;
 
-	constructor(model: DocumentModel, private readonly workingCopy: DocumentWorkingCopy) {
+	constructor(model: TextModel, private readonly workingCopy: DocumentWorkingCopy) {
 		super();
 		this.model = this.own(model);
 		this.workingCopy = this.own(workingCopy);
@@ -83,7 +81,7 @@ class BrowserDocumentModelReference extends DisposableOwner implements DocumentM
 		return this.workingCopy.save(signal);
 	}
 
-	saveAs(resource: DocumentModelReference["resource"], signal: AbortSignal): Promise<void> {
+	saveAs(resource: TextModelWorkingCopyReference["resource"], signal: AbortSignal): Promise<void> {
 		return this.workingCopy.saveAs(resource, signal);
 	}
 

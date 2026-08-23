@@ -2,11 +2,10 @@ import "./media/editorWidget.css";
 import { throwIfCancelled } from "../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import type { IDimension } from "../../base/browser/geometry.js";
 import { URI } from "../../base/common/uri.js";
+import type { IDimension } from "../../base/browser/geometry.js";
 import type { EditorResourceInput } from "../common/editorResource.js";
-import type { IEmbeddedTextEditorFactory } from "./widget/embeddedTextEditor.js";
-import { DocumentModel } from "../common/model/documentModel.js";
+import { TextModel } from "../common/model/textModel.js";
 import type { DocumentPlugin } from "../common/model/documentPlugin.js";
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../common/model/document.js";
 import { createDocumentDecoration, type DocumentDecoration } from "../common/model/documentDecoration.js";
@@ -23,9 +22,7 @@ import { getEditorContributions, type DocumentCollaborationContribution, type Do
 import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
 import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
 import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
-import { CodeBlockEditorWidget } from "./widget/codeBlockEditorWidget.js";
-import type { IDocumentModelService } from "../common/services/documentModelService.js";
-import type { DocumentModelReference } from "../common/services/documentModelService.js";
+import type { ITextModelService, TextModelStructureInput, TextModelWorkingCopyReference } from "../common/services/textModelService.js";
 import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationPresence } from "../common/services/documentCollaborationService.js";
@@ -37,7 +34,6 @@ import { FastDomNode } from "../../base/browser/fastDomNode.js";
 
 export interface EditorWidgetOptions {
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly embeddedTextEditorFactory?: IEmbeddedTextEditorFactory;
 	readonly plugins?: readonly DocumentPlugin<unknown>[];
 	readonly schema?: DocumentSchema;
 	/** Creates the canonical document when the loaded resource has no content. */
@@ -59,7 +55,7 @@ export interface EditorWidgetOptions {
 
 export interface NodeViewContext {
 	readonly node: DocumentNode;
-	readonly model: DocumentModel;
+	readonly model: TextModel;
 	readonly ownerDocument: Document;
 	readonly previousElement: HTMLElement | undefined;
 	readonly renderChildren: (parent: HTMLElement) => void;
@@ -75,7 +71,7 @@ export type NodeViewFactory = (context: NodeViewContext) => HTMLElement | NodeVi
 
 export interface InlineNodeViewContext {
 	readonly node: DocumentNode;
-	readonly model: DocumentModel;
+	readonly model: TextModel;
 	readonly ownerDocument: Document;
 	readonly select: () => void;
 }
@@ -83,7 +79,7 @@ export interface InlineNodeViewContext {
 export type InlineNodeViewFactory = (context: InlineNodeViewContext) => HTMLElement;
 
 export interface EditorToolbarActionContext {
-	readonly model: DocumentModel;
+	readonly model: TextModel;
 	readonly blockId: DocumentNodeId;
 	readonly selection: TextSelection | undefined;
 	readonly ownerDocument: Document;
@@ -114,21 +110,20 @@ const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: 
 type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 
 /**
- * One browser editor projected over a structured document model.
+ * One browser editor projected over a TextModel with Group/Block metadata.
  *
  * The editor owns the structured model, working copy, DOM projection, and
- * block-level input. `EditorPane` owns Workbench pane lifecycle, while
- * `CodeBlockEditorWidget` owns only an embedded text-model surface.
+ * block-level input. `EditorPane` owns Workbench pane lifecycle. Code blocks
+ * edit line ranges in this same TextModel rather than creating nested models.
  */
 export class EditorWidget extends DisposableOwner {
 
-	private readonly modelReferenceSlot = this.own(new DisposableSlot<DocumentModelReference>());
+	private readonly modelReferenceSlot = this.own(new DisposableSlot<TextModelWorkingCopyReference>());
 	private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly collaborationControllerSlot = this.own(new DisposableSlot<DocumentCollaborationController>());
 	private readonly collaborationStateListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly collaborationPresenceListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly schema: DocumentSchema;
-	private readonly embeddedEditors = new Map<string, CodeBlockEditorWidget>();
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
 	private container: HTMLDivElement | undefined;
 	private containerNode: FastDomNode<HTMLDivElement> | undefined;
@@ -141,22 +136,20 @@ export class EditorWidget extends DisposableOwner {
 	private composition: DocumentComposition | undefined;
 	private collaborationStart: AbortController | undefined;
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
-	private updatingEmbeddedCodeBlockModel: DocumentModel | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	get modelReference(): DocumentModelReference | undefined {
+	get modelReference(): TextModelWorkingCopyReference | undefined {
 		return this.modelReferenceSlot.value;
 	}
 
-	constructor(private readonly modelService: IDocumentModelService, private readonly options: EditorWidgetOptions = {}) {
+	constructor(private readonly modelService: ITextModelService<TextModelStructureInput, TextModelWorkingCopyReference>, private readonly options: EditorWidgetOptions = {}) {
 		super();
 		if (!modelService || typeof modelService.acquire !== "function") {
 			this.dispose();
-			throw new TypeError("Document editor requires a document model service");
+			throw new TypeError("Document editor requires a TextModel service");
 		}
 		this.schema = options.schema ?? createDefaultDocumentSchema();
 		this.defer(() => this.cancelCollaborationStart());
-		this.defer(() => this.disposeEmbeddedEditors());
 		this.defer(() => this.disposeNodeViews());
 	}
 
@@ -246,12 +239,9 @@ export class EditorWidget extends DisposableOwner {
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
 		this.modelReferenceSlot.replace(modelReference);
-		this.modelChangeListenerSlot.replace(model.onDidChange(() => {
-			if (this.updatingEmbeddedCodeBlockModel !== model) this.render();
-		}));
+		this.modelChangeListenerSlot.replace(model.onDidChangeStructure(() => this.render()));
 		this.input = input;
 		this.activeBlockId = undefined;
-		this.disposeEmbeddedEditors();
 		container.replaceChildren();
 		if (this.formattingContribution) this.formattingContribution.element.hidden = false;
 		if (this.collaborationContribution) {
@@ -270,7 +260,6 @@ export class EditorWidget extends DisposableOwner {
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
 		this.modelReferenceSlot.clear();
-		this.disposeEmbeddedEditors();
 		this.disposeNodeViews();
 		this.input = undefined;
 		this.activeBlockId = undefined;
@@ -289,16 +278,10 @@ export class EditorWidget extends DisposableOwner {
 		if (this.containerNode) {
 			this.containerNode.setWidth(this.dimension.width);
 			this.containerNode.setHeight(this.dimension.height);
-			for (const editor of this.embeddedEditors.values()) editor.layout(this.embeddedEditorDimension());
 		}
 	}
 
 	focus(): void {
-		const firstEmbeddedEditor = this.embeddedEditors.values().next().value;
-		if (firstEmbeddedEditor) {
-			firstEmbeddedEditor.focus();
-			return;
-		}
 		this.container?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
 	}
 
@@ -364,11 +347,6 @@ export class EditorWidget extends DisposableOwner {
 		for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
 		container.replaceChildren(fragment);
 		this.outlineNavigator?.setOutline(this.getOutline());
-		for (const [nodeId, editor] of this.embeddedEditors) {
-			if (activeNodeIds.has(nodeId)) continue;
-			editor.dispose();
-			this.embeddedEditors.delete(nodeId);
-		}
 		for (const [nodeId, slot] of this.nodeViewSlots) {
 			if (activeNodeIds.has(nodeId)) continue;
 			slot.view.dispose?.();
@@ -378,17 +356,12 @@ export class EditorWidget extends DisposableOwner {
 		this.updateInlineNodeSelection();
 	}
 
-	private disposeEmbeddedEditors(): void {
-		for (const editor of this.embeddedEditors.values()) editor.dispose();
-		this.embeddedEditors.clear();
-	}
-
 	private disposeNodeViews(): void {
 		for (const slot of this.nodeViewSlots.values()) slot.view.dispose?.();
 		this.nodeViewSlots.clear();
 	}
 
-	private renderNode(node: DocumentNode, model: DocumentModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): HTMLElement {
+	private renderNode(node: DocumentNode, model: TextModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): HTMLElement {
 		const document = this.requireContainer().ownerDocument;
 		const nodeKind = this.schema.getNodeSpec(node.type)?.kind ?? "block";
 		activeNodeIds.add(node.id);
@@ -439,7 +412,7 @@ export class EditorWidget extends DisposableOwner {
 			case "codeBlock":
 				element.className = "stanza-document-code-block";
 				element.dataset.editorKind = "code-block";
-				this.appendCodeBlockEditor(element, node, model, decorations);
+				this.appendEditableText(element, node, model, decorations);
 				break;
 			case "blockquote":
 				element.className = "stanza-document-blockquote";
@@ -475,71 +448,14 @@ export class EditorWidget extends DisposableOwner {
 		return element;
 	}
 
-	private appendCodeBlockEditor(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
-		const textNode = node.content.find(child => child.text !== undefined);
-		const text = textNode?.text ?? "";
-		const factory = this.options.embeddedTextEditorFactory;
-		if (!factory) {
-			this.appendEditableText(element, node, model, decorations);
-			return;
-		}
-		const existingEditor = this.embeddedEditors.get(node.id);
-		if (existingEditor) {
-			existingEditor.setValue(text);
-			existingEditor.layout(this.embeddedEditorDimension());
-			return;
-		}
-		element.replaceChildren();
-		const editor = new CodeBlockEditorWidget(factory, {
-			resource: URI.parse(`untitled:stanza-code-block/${encodeURIComponent(this.requireInput().resource.toString())}/${encodeURIComponent(node.id)}`),
-			label: `${this.requireInput().label ?? "Document"} code block`,
-			languageId: typeof node.attrs.language === "string" ? node.attrs.language : "plaintext",
-			initialText: text,
-			readOnly: this.requireInput().readOnly,
-		});
-		this.embeddedEditors.set(node.id, editor);
-		editor.onDidChange(value => {
-			const currentModel = this.modelReferenceSlot.value?.model;
-			if (currentModel !== model) return;
-			const currentNode = findNode(currentModel.document, node.id);
-			if (!currentNode) return;
-			const currentText = currentNode.content.find(child => child.text !== undefined);
-			if (currentText?.text === value) return;
-			this.updatingEmbeddedCodeBlockModel = currentModel;
-			try {
-				if (!currentText) {
-					if (value.length === 0) return;
-					currentModel.dispatch(new DocumentTransaction().insertNode(node.id, 0, currentModel.schema.createText(value, { id: `${node.id}-text` })).withHistoryGroup("typing"));
-					return;
-				}
-				currentModel.dispatch(new DocumentTransaction().replaceText(currentText.id, 0, currentText.text?.length ?? 0, value).withHistoryGroup("typing"));
-			} finally {
-				this.updatingEmbeddedCodeBlockModel = undefined;
-			}
-		});
-		editor.create(element);
-		editor.layout(this.embeddedEditorDimension());
-	}
-
-	private embeddedEditorDimension(): IDimension {
-		return {
-			width: Math.max(0, this.dimension.width),
-			height: Math.max(120, this.dimension.height),
-		};
-	}
-
-	private appendEditableText(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
+	private appendEditableText(element: HTMLElement, node: DocumentNode, model: TextModel, decorations: readonly ViewDecoration[]): void {
 		if (usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
 			this.appendRichText(element, node, model, decorations);
 			return;
 		}
 		const textNode = node.content.find(child => child.text !== undefined);
 		let textarea = element.querySelector<HTMLTextAreaElement>("textarea.stanza-document-text-input");
-		if (!textarea && element.childElementCount > 0) {
-			this.embeddedEditors.get(node.id)?.dispose();
-			this.embeddedEditors.delete(node.id);
-			element.replaceChildren();
-		}
+		if (!textarea && element.childElementCount > 0) element.replaceChildren();
 		const isNew = !textarea;
 		textarea ??= h(element.ownerDocument, "textarea");
 		textarea.className = "stanza-document-text-input";
@@ -608,11 +524,9 @@ export class EditorWidget extends DisposableOwner {
 		element.append(textarea);
 	}
 
-	private appendRichText(element: HTMLElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
+	private appendRichText(element: HTMLElement, node: DocumentNode, model: TextModel, decorations: readonly ViewDecoration[]): void {
 		let editor = element.querySelector<HTMLDivElement>("div.stanza-document-rich-text-input");
 		if (!editor) {
-			this.embeddedEditors.get(node.id)?.dispose();
-			this.embeddedEditors.delete(node.id);
 			const createdEditor = h(element.ownerDocument, "div");
 			editor = createdEditor;
 			createdEditor.className = "stanza-document-rich-text-input";
@@ -641,7 +555,7 @@ export class EditorWidget extends DisposableOwner {
 		this.renderInlineContent(editor, node, model, decorations);
 	}
 
-	private renderInlineContent(editor: HTMLDivElement, node: DocumentNode, model: DocumentModel, decorations: readonly ViewDecoration[]): void {
+	private renderInlineContent(editor: HTMLDivElement, node: DocumentNode, model: TextModel, decorations: readonly ViewDecoration[]): void {
 		const fragment = createFragment(editor.ownerDocument);
 		for (const child of node.content) {
 			if (child.text !== undefined) {
@@ -710,7 +624,7 @@ export class EditorWidget extends DisposableOwner {
 		editor.replaceChildren(fragment);
 	}
 
-	private handleRichTextInput(editor: HTMLDivElement, model: DocumentModel): void {
+	private handleRichTextInput(editor: HTMLDivElement, model: TextModel): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		if (this.isReadOnly() || !this.requireContainer().contains(editor) || this.composition?.element === editor) return;
 		const blockId = editor.dataset.blockId;
@@ -743,7 +657,7 @@ export class EditorWidget extends DisposableOwner {
 		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing"));
 	}
 
-	private beginComposition(model: DocumentModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: TextSelection | undefined): void {
+	private beginComposition(model: TextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: TextSelection | undefined): void {
 		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || !selection || selection.kind !== "text") return;
 		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
@@ -786,7 +700,7 @@ export class EditorWidget extends DisposableOwner {
 		if (this.modelReferenceSlot.value?.model === model) this.render();
 	}
 
-	private handleTextPaste(event: ClipboardEvent, model: DocumentModel, blockId: string, textarea: HTMLTextAreaElement): void {
+	private handleTextPaste(event: ClipboardEvent, model: TextModel, blockId: string, textarea: HTMLTextAreaElement): void {
 		if (this.isReadOnly()) {
 			event.preventDefault();
 			return;
@@ -832,7 +746,7 @@ export class EditorWidget extends DisposableOwner {
 		this.dispatchCommand(model, command);
 	}
 
-	private handleRichTextPaste(event: ClipboardEvent, model: DocumentModel, editor: HTMLDivElement): void {
+	private handleRichTextPaste(event: ClipboardEvent, model: TextModel, editor: HTMLDivElement): void {
 		if (this.isReadOnly()) {
 			event.preventDefault();
 			return;
@@ -873,7 +787,7 @@ export class EditorWidget extends DisposableOwner {
 		this.dispatchCommand(model, textCommand);
 	}
 
-	private handleRichTextClipboard(event: ClipboardEvent, model: DocumentModel, cut: boolean): void {
+	private handleRichTextClipboard(event: ClipboardEvent, model: TextModel, cut: boolean): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		if (cut && this.isReadOnly()) {
 			event.preventDefault();
@@ -902,7 +816,7 @@ export class EditorWidget extends DisposableOwner {
 		if (command) this.dispatchCommand(model, command);
 	}
 
-	private handleTextClipboard(event: ClipboardEvent, model: DocumentModel, blockId: string, textarea: HTMLTextAreaElement, cut: boolean): void {
+	private handleTextClipboard(event: ClipboardEvent, model: TextModel, blockId: string, textarea: HTMLTextAreaElement, cut: boolean): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		if (cut && this.isReadOnly()) {
 			event.preventDefault();
@@ -929,7 +843,7 @@ export class EditorWidget extends DisposableOwner {
 		if (command) this.dispatchCommand(model, command);
 	}
 
-	private async insertPastedImage(model: DocumentModel, blockId: string, image: File, selection?: TextSelection): Promise<void> {
+	private async insertPastedImage(model: TextModel, blockId: string, image: File, selection?: TextSelection): Promise<void> {
 		if (this.isReadOnly()) return;
 		const ownerDocument = this.container?.ownerDocument;
 		if (!ownerDocument) return;
@@ -947,7 +861,7 @@ export class EditorWidget extends DisposableOwner {
 		if (command) this.dispatchCommand(model, command);
 	}
 
-	private handleRichTextBeforeInput(event: InputEvent, model: DocumentModel, editor: HTMLDivElement): void {
+	private handleRichTextBeforeInput(event: InputEvent, model: TextModel, editor: HTMLDivElement): void {
 		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText") return;
 		const blockId = editor.dataset.blockId;
 		if (!blockId) return;
@@ -1007,7 +921,7 @@ export class EditorWidget extends DisposableOwner {
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
-	private syncRichTextSelection(editor: HTMLDivElement, model: DocumentModel, force = false): void {
+	private syncRichTextSelection(editor: HTMLDivElement, model: TextModel, force = false): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 		if (inlineSelection && !isTextSelectionInDocument(model.document, inlineSelection.selection)) return;
@@ -1030,7 +944,7 @@ export class EditorWidget extends DisposableOwner {
 		this.updateInlineNodeSelection();
 	}
 
-	private handleRichTextKeydown(event: KeyboardEvent, node: DocumentNode, model: DocumentModel, editor: HTMLDivElement): void {
+	private handleRichTextKeydown(event: KeyboardEvent, node: DocumentNode, model: TextModel, editor: HTMLDivElement): void {
 		if (this.isReadOnly() || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
 		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
@@ -1092,7 +1006,7 @@ export class EditorWidget extends DisposableOwner {
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
-	private handleTextKeydown(event: KeyboardEvent, node: DocumentNode, model: DocumentModel, textarea: HTMLTextAreaElement): void {
+	private handleTextKeydown(event: KeyboardEvent, node: DocumentNode, model: TextModel, textarea: HTMLTextAreaElement): void {
 		const currentModel = this.modelReferenceSlot.value?.model;
 		if (this.isReadOnly() || currentModel !== model || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
@@ -1146,16 +1060,16 @@ export class EditorWidget extends DisposableOwner {
 		this.dispatchCommand(model, command, historyGroup);
 	}
 
-	private handleHistoryShortcut(event: KeyboardEvent, model: DocumentModel): boolean {
+	private handleHistoryShortcut(event: KeyboardEvent, model: TextModel): boolean {
 		const action = historyShortcut(event);
 		if (!action) return false;
 		event.preventDefault();
-		const change = action === "undo" ? model.undo() : model.redo();
+		const change = action === "undo" ? model.undoStructure() : model.redoStructure();
 		if (change) this.restoreModelFocus(model, change.selectionAfter);
 		return true;
 	}
 
-	private restoreModelFocus(model: DocumentModel, selection: DocumentSelection | undefined): void {
+	private restoreModelFocus(model: TextModel, selection: DocumentSelection | undefined): void {
 		let blockId: string | undefined;
 		if (selection?.kind === "text") blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
 		if (selection?.kind === "node") blockId = findTextBearingBlockContainingNode(model.document, selection.nodeId);
@@ -1189,7 +1103,7 @@ export class EditorWidget extends DisposableOwner {
 		this.updateInlineNodeSelection();
 	}
 
-	private selectInlineNode(model: DocumentModel, blockId: string, nodeId: string, editor: HTMLDivElement): void {
+	private selectInlineNode(model: TextModel, blockId: string, nodeId: string, editor: HTMLDivElement): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		editor.focus();
 		model.setSelection(nodeSelection(nodeId));
@@ -1210,7 +1124,7 @@ export class EditorWidget extends DisposableOwner {
 		}
 	}
 
-	private handleTableCellTab(event: KeyboardEvent, model: DocumentModel, blockId: string): boolean {
+	private handleTableCellTab(event: KeyboardEvent, model: TextModel, blockId: string): boolean {
 		const context = findTableCellContext(model.document, blockId);
 		if (!context) return false;
 		event.preventDefault();
@@ -1229,7 +1143,7 @@ export class EditorWidget extends DisposableOwner {
 		return true;
 	}
 
-	private focusBlockAtBoundary(model: DocumentModel, blockId: string, direction: "backward" | "forward"): void {
+	private focusBlockAtBoundary(model: TextModel, blockId: string, direction: "backward" | "forward"): void {
 		const editor = findBlockEditor(this.requireContainer(), blockId);
 		if (!editor) return;
 		this.activeBlockId = blockId;
@@ -1249,7 +1163,7 @@ export class EditorWidget extends DisposableOwner {
 		this.updateToolbar();
 	}
 
-	private dispatchCommand(model: DocumentModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
+	private dispatchCommand(model: TextModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
 		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model) return;
 		this.activeBlockId = command.focus.blockId;
 		model.dispatch(historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction);
@@ -1378,7 +1292,7 @@ export class EditorWidget extends DisposableOwner {
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
 	}
 
-	private readActiveTextSelection(model: DocumentModel, blockId: string): TextSelection | undefined {
+	private readActiveTextSelection(model: TextModel, blockId: string): TextSelection | undefined {
 		const modelSelection = model.selection;
 		if (modelSelection?.kind === "text" && findTextBearingBlockId(model.document, modelSelection.anchor.nodeId) === blockId && isTextSelectionInDocument(model.document, modelSelection)) {
 			return modelSelection;
@@ -1430,7 +1344,7 @@ export class EditorWidget extends DisposableOwner {
 		});
 	}
 
-	private renderChildren(element: HTMLElement, node: DocumentNode, model: DocumentModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): void {
+	private renderChildren(element: HTMLElement, node: DocumentNode, model: TextModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): void {
 		const fragment = createFragment(element.ownerDocument);
 		for (const child of node.content) fragment.append(this.renderNode(child, model, previousElements, activeNodeIds, decorations));
 		element.replaceChildren(fragment);
@@ -1448,7 +1362,7 @@ export class EditorWidget extends DisposableOwner {
 		return container;
 	}
 
-	private requireModel(): DocumentModel {
+	private requireModel(): TextModel {
 		const model = this.modelReferenceSlot.value?.model;
 		assertDefined(model, new ReferenceError("Document editor has no active model"));
 		return model;
@@ -1536,7 +1450,7 @@ export class EditorWidget extends DisposableOwner {
 		this.collaborationStart = undefined;
 	}
 
-	private requireWorkingCopy(): DocumentModelReference {
+	private requireWorkingCopy(): TextModelWorkingCopyReference {
 		const workingCopy = this.modelReferenceSlot.value;
 		assertDefined(workingCopy, new ReferenceError("Document editor pane has no active working copy"));
 		return workingCopy;
@@ -1726,7 +1640,7 @@ interface ViewDecoration {
 }
 
 interface DocumentComposition {
-	readonly model: DocumentModel;
+	readonly model: TextModel;
 	readonly blockId: string;
 	readonly element: HTMLTextAreaElement | HTMLDivElement;
 	readonly selection: TextSelection;
@@ -1758,7 +1672,7 @@ function findSingleTextNodeInBlock(document: DocumentNode, blockId: string): Doc
 	return textNodes.length === 1 ? textNodes[0] : undefined;
 }
 
-function resolveViewDecorations(model: DocumentModel, externalDecorations: readonly DocumentDecoration[] = []): readonly ViewDecoration[] {
+function resolveViewDecorations(model: TextModel, externalDecorations: readonly DocumentDecoration[] = []): readonly ViewDecoration[] {
 	const result: ViewDecoration[] = [];
 	const decorations = [...model.getPluginDecorations().flatMap(source => source.set.decorations), ...externalDecorations];
 	for (const decoration of decorations) {
@@ -1804,7 +1718,7 @@ function presenceColorIndex(clientId: string): number {
 	return hash % 4;
 }
 
-function hasRenderableDecoration(model: DocumentModel, node: DocumentNode, decorations: readonly ViewDecoration[]): boolean {
+function hasRenderableDecoration(model: TextModel, node: DocumentNode, decorations: readonly ViewDecoration[]): boolean {
 	for (const child of node.content) {
 		if (child.text === undefined || child.text.length === 0) continue;
 		const start = documentPointToPosition(model.document, model.schema, { nodeId: child.id, offset: 0 });
@@ -2106,7 +2020,7 @@ function createListItemIndentationForBlock(schema: DocumentSchema, document: Doc
 	return createListItemIndentationCommand(schema, document, location.parent.id, paragraphId, direction);
 }
 
-function createDeleteBoundaryCommand(model: DocumentModel, blockId: string, selection: TextSelection, direction: "backward" | "forward"): DocumentCommand | undefined {
+function createDeleteBoundaryCommand(model: TextModel, blockId: string, selection: TextSelection, direction: "backward" | "forward"): DocumentCommand | undefined {
 	if (!isCollapsedTextSelection(selection)) return createDeleteInlineSelectionCommand(model.schema, model.document, blockId, selection) ?? createReplaceTextCommand(model.schema, model.document, blockId, selection, "");
 	const point = selection.anchor;
 	const textNode = findNode(model.document, point.nodeId);
@@ -2124,7 +2038,7 @@ function isCollapsedTextSelection(selection: TextSelection): boolean {
 	return selection.anchor.nodeId === selection.head.nodeId && selection.anchor.offset === selection.head.offset;
 }
 
-function documentInsertionMarks(model: DocumentModel, selection: DocumentSelection | undefined): readonly DocumentMark[] | undefined {
+function documentInsertionMarks(model: TextModel, selection: DocumentSelection | undefined): readonly DocumentMark[] | undefined {
 	if (model.storedMarks !== undefined) return model.storedMarks;
 	if (!selection || selection.kind !== "text" || !isCollapsedTextSelection(selection)) return undefined;
 	const node = findNode(model.document, selection.anchor.nodeId);

@@ -6,7 +6,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 /**
  * Format-neutral persistence lifecycle exposed by an editor domain to the Workbench.
  *
- * The implementation owns its document model and serialization policy. The Workbench
+ * The implementation owns its editor model and serialization policy. The Workbench
  * uses this contract for dirty state, save/revert commands, and resource coordination.
  */
 export interface IWorkingCopy extends IDisposable {

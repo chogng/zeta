@@ -1,39 +1,39 @@
 # Stanza Document Engine
 
-> 本文是结构化文档编辑器的 canonical 设计规范，拥有 schema、document model、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是结构化文档功能实现的 canonical 设计规范，拥有 schema、TextModel structure、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
 > 状态：Current。潜在演进会单独标记，不能被解释为已实现能力。
 
 ## 快速理解
 
-Stanza Document Engine 是 Zeta 唯一的结构化文档同步权威。`DocumentModel` 保存 schema-validated tree、selection、transaction、history 和 plugin state；`EditorWidget` 只负责浏览器投影；Workbench 负责 pane、resource reference、working copy 和产品 profile。
+Stanza 只有一个同步权威：按行存储的 `TextModel`。结构化 TextModel 在同一个 piece tree 和版本号上附加 schema-validated group/block 元数据、selection、transaction history 和 plugin state；`EditorWidget` 只负责浏览器投影；Workbench 负责 pane、resource reference、working copy 和产品 profile。
 
 | 场景 | Canonical owner | 关键保证 |
 | --- | --- | --- |
-| 修改节点、文本、mark 或表格 | `DocumentTransaction` → `DocumentModel` | 整个事务先验证再原子提交 |
-| selection、undo/redo 和 stored marks | `DocumentModel` | 与 document version 一起映射，不依赖 DOM lifetime |
+| 修改节点、文本、mark 或表格 | `DocumentTransaction` → `TextModel.dispatch()` | 结构索引与 piece tree 在同一版本上原子提交 |
+| selection、undo/redo 和 stored marks | structured `TextModel` | 与 TextModel version 一起映射，不依赖 DOM lifetime |
 | 结构化 DOM 和输入 | `EditorWidget` | DOM 只是 projection，不是文档权威 |
 | Academic schema、citation 和 toolbar | `EditorProfile` + matching contrib | 产品语义不进入通用 document core |
-| 打开、保存、revert 和 conflict | `BrowserDocumentModelService` + `DocumentWorkingCopy` | Workbench transport 不拥有 document mutation |
+| 打开、保存、revert 和 conflict | `DocumentEditorTextModelService` + `DocumentWorkingCopy` | Workbench transport 不拥有 model mutation |
 | 本地或远程 collaboration | collaboration contrib + `IDocumentCollaborationService` | server 排序；client 不伪装成完整 CRDT authority |
-| `codeBlock` 内嵌行编辑 | `IEmbeddedTextEditorFactory` | Document owns block identity；Text Engine 不依赖 document types |
+| `codeBlock` 行编辑 | owning `TextModel` + `TextModelStructureIndex` | 代码行仍属于当前文档，不创建嵌套模型 |
 
 ## 设计不变量
 
-- `DocumentModel` 是 document tree、selection、stored marks、version、history 和 plugin state 的唯一同步 mutation authority。
+- `TextModel` 是文本、分行、structure index、selection、stored marks、version、history 和 plugin state 的唯一同步 mutation authority。
 - `DocumentSchema` 决定 node/mark vocabulary、child order、group、cardinality 和 attributes；browser node view 不能绕过 schema。
-- Document Engine 与 Text Engine 共享 editor 目录和基础设施，但不共享 model、selection 或 transaction authority。
+- Code 与 Academic 共享 TextModel 的文本、行、版本和生命周期；Academic 的结构化 transaction 是同一模型的可选能力。
 - `DocumentPoint` 和 node identity 是 durable mapping anchor；DOM offset 和 DOM node lifetime 不能成为 model coordinate。
 - Transaction、selection mapping、plugin apply 和 final schema validation 要么全部成功，要么不改变 model/history/version。
 - Profile-specific schema、node views、toolbar 和 collaboration schema identity 留在 profile/contrib owner，不进入通用 `common/model`。
 - Workbench 拥有 pane/input、working copy、resource transport 和 product composition；Editor common 不依赖 Workbench。
-- Collaboration transport、room authorization 和 server ordering 不进入 `DocumentModel`。
+- Collaboration transport、room authorization 和 server ordering 不进入 `TextModel`。
 
 ## 分层与依赖方向
 
 ```mermaid
 flowchart LR
-    Core[common/core document coordinates] --> Model[common/model DocumentModel]
+    Core[common/core coordinates] --> Model[common/model TextModel]
     Schema[DocumentSchema] --> Model
     Commands[common/commands] --> Model
     Model --> Widget[browser/EditorWidget]
@@ -41,7 +41,7 @@ flowchart LR
     Feature[contrib feature] --> Model
     Feature --> Widget
     Widget --> Pane[Workbench DocumentEditorPane]
-    Pane --> ModelService[BrowserDocumentModelService]
+    Pane --> ModelService[DocumentEditorTextModelService]
     ModelService --> Persistence[Working copy / file transport]
     Collaboration[Collaboration contrib] --> Model
     Collaboration --> Transport[IDocumentCollaborationService adapter]
@@ -58,9 +58,9 @@ flowchart LR
 | Workbench document services | model reference、working copy、persistence、profile materialization | document edit semantics、browser internals |
 | Collaboration adapters | App Server/HTTP DTO、authentication、polling/retry | profile schema、optimistic editor state |
 
-依赖保持 `Workbench → editor/contrib/browser → editor/common → base`。`DocumentModel` 不依赖 `TextModel`；Text Engine 也不 import document schema 或 document node types。
+依赖保持 `Workbench → editor/contrib/browser → editor/common → base`。结构化状态由 `TextModel` 直接拥有，但普通 TextModel 不必启用 schema；Code 功能实现不依赖 Academic profile 或 document browser projection。
 
-## Schema 与 Document Model
+## Schema 与结构化 TextModel
 
 ### Document tree
 
@@ -109,7 +109,7 @@ Selection 使用 identity-based `DocumentPoint` 映射。`DocumentTransaction.wi
 
 ## Browser projection
 
-`EditorWidget` 是 canonical structured browser surface。它消费 caller-owned `DocumentModel`，创建 node/mark DOM、映射 browser input 与 selection，并拥有 node-view handle 的 `update`/`dispose` 生命周期。Disposing widget 不 dispose caller-owned model。
+`EditorWidget` 是 canonical structured browser surface。它消费 caller-owned structured `TextModel`，创建 node/mark DOM、映射 browser input 与 selection，并拥有 node-view handle 的 `update`/`dispose` 生命周期。Disposing widget 不 dispose caller-owned model。
 
 Browser surface 采用两种 text projection：
 
@@ -120,17 +120,16 @@ Browser surface 采用两种 text projection：
 
 Browser HTML 永远不是 trusted document state。Structured clipboard 使用 versioned custom MIME envelope；外部 HTML 只通过 restricted vocabulary converter 进入 schema-validated fragment，script、event attribute、unsafe URL、style 和 unknown state 被拒绝。Plain text 始终是 fallback。
 
-## Text Engine 嵌入边界
+## Code block 行范围
 
-`codeBlock` 是 Stanza Academic 功能实现中的结构化代码块：`DocumentModel` 拥有它的 block identity、顺序、attributes 和 document transaction，Academic-owned factory 负责它的行式编辑 surface。它可以复用 `TextModel` 与 `CodeEditorWidget` primitive，但不能挂载 Code mode 的 pane、contribution bundle 或 feature controller 集合。
+`codeBlock` 是 Stanza Academic 功能实现中的 typed block。它的 identity、顺序、attributes 和全部文本行都属于当前 structured `TextModel`；`TextModelStructureIndex` 给出它的 `startLine`/`endLine`，浏览器只投影并编辑该范围。
 
-Document browser 通过 `IEmbeddedTextEditorFactory` 请求一个嵌入式行编辑 surface：
+代码块遵守以下边界：
 
-- Document Engine 拥有 block identity、document transaction 和 schema；
-- `AcademicCodeBlockEditorFactory` 直接用 `TextModel` 与 `CodeEditorWidget` 提供实现；
-- Text Engine 不知道 document node、profile 或 document persistence；
-- Academic code-block implementation 不 import `CodeEditorPane`、`EditorPart` 或 `workbench/contrib/codeEditor`；
-- 没有 factory 时，Document Widget 可以使用自己的 text surface，不建立隐藏 `TextModel`。
+- 不创建第二个 `TextModel`，也不存在 embedded-editor factory；
+- 输入转换成 owning TextModel 的结构化 transaction，文本与 block 元数据使用同一版本；
+- Academic code-block projection 不 import `CodeEditorPane`、`EditorPart` 或 `workbench/contrib/codeEditor`；
+- 如果未来复用 Code 的高亮、gutter 或行布局，它们必须成为父 TextModel 行范围上的 projection，而不是新的编辑 authority。
 
 ## Profile 与 Contribution
 
@@ -143,13 +142,13 @@ Workbench `EditorProfile` 将以下产品选择稳定组合：
 - document plugins；
 - collaboration schema identity。
 
-Schema 在一个 pane 生命周期内固定。不同 schema 的 profile 不得共享同一个 pane instance。`createDocumentEditorPaneOptions` 在 Workbench composition root 把 profile 与 text-file、working-copy、embedded editor 和 collaboration services 组合。
+Schema 在一个 pane 生命周期内固定。不同 schema 的 profile 不得共享同一个 pane instance。`createDocumentEditorPaneOptions` 在 Workbench composition root 把 profile 与 text-file、working-copy 和 collaboration services 组合。
 
 通用 formatting、clipboard、collaboration 等能力属于独立 contribution。Academic title/abstract/section、citation/reference 等领域节点属于 matching profile/contrib，不得添加到默认 `DocumentSchema`。
 
 ## Collaboration
 
-Collaboration 使用 server-ordered transaction stream，而不是让 `DocumentModel` 自己选择分布式顺序。
+Collaboration 使用 server-ordered transaction stream，而不是让 `TextModel` 自己选择分布式顺序。
 
 ```mermaid
 flowchart LR
@@ -159,11 +158,11 @@ flowchart LR
     Authority --> Ordered[Ordered versioned update]
     Ordered --> Controller[DocumentCollaborationController]
     Controller --> Rebase[Rebase pending local/history]
-    Rebase --> Model[DocumentModel]
+    Rebase --> Model[TextModel with structure]
 ```
 
 - `DocumentCollaborationSynchronizer` 分开保存 canonical、exact in-flight 和 later optimistic buffer。较晚 typing 不能泄漏到较早 submit snapshot。
-- `DocumentCollaborationController` 把一个 `DocumentModel` 绑定到 `IDocumentCollaborationService` connection，应用 ordered remote updates 和 rebase。
+- `DocumentCollaborationController` 把一个 structured `TextModel` 绑定到 `IDocumentCollaborationService` connection，应用 ordered remote updates 和 rebase。
 - `rebaseDocumentTransaction` 只处理共享 base 上的一侧 pending-local transformation；它不是完整 OT/CRDT session。
 - `rebaseDocumentHistory` 重写 local undo/redo branch；无法安全 replay 的 branch 被 drop，而不是覆盖 remote content。
 - Snapshot resync 如果会丢弃 local intent，controller 停止并报告 `resyncRequired`，不静默 reset。
@@ -171,11 +170,11 @@ flowchart LR
 - Remote room 使用 owner/editor/viewer role。Viewer 在 widget 创建 optimistic edit 前就被投影为 read-only；只有 owner 可以管理 members。
 - Presence 和 remote selection 是带 lease 的 ephemeral stream，不进入 durable document history。
 
-`IDocumentCollaborationService` 是 editor-owned transport seam。Workbench adapter 持有 endpoint、credential、HTTP/App Server DTO 和 retry policy；这些信息不进入 document model 或 document serialization。
+`IDocumentCollaborationService` 是 editor-owned transport seam。Workbench adapter 持有 endpoint、credential、HTTP/App Server DTO 和 retry policy；这些信息不进入 TextModel 或 document serialization。
 
 ## 持久化与 Workbench
 
-`BrowserDocumentModelService` 解析一个 resource 为 caller-owned `DocumentModelReference`。`DocumentWorkingCopy` 适配 serialization、dirty/revert/conflict、expected-revision save 和 untitled Save As。`DocumentEditorPane` 负责 host layout、visibility、focus 和 working-copy exposure，不实现 document command。
+`DocumentEditorTextModelService` 解析一个 resource 为 caller-owned `TextModelWorkingCopyReference`。`DocumentWorkingCopy` 适配 serialization、dirty/revert/conflict、expected-revision save 和 untitled Save As。`DocumentEditorPane` 负责 host layout、visibility、focus 和 working-copy exposure，不实现 document command。
 
 Empty resource reload/revert 使用 profile 的 canonical empty-document factory；非空 plain text migration 使用通用 paragraph path。Persistence 反序列化必须使用当前 profile schema，不能先创建 generic document 再由 browser 修补。
 
@@ -207,7 +206,9 @@ Empty resource reload/revert 使用 profile 的 canonical empty-document factory
 | Symbol/file | Responsibility | 修改时同步检查 |
 | --- | --- | --- |
 | `common/model/documentSchema.ts` | node/mark/content contract | profile schema、serialization、fixtures |
-| `common/model/documentModel.ts` | document/selection/plugin/version authority | transaction、history、widget、collaboration tests |
+| `common/model/textModel.ts` | 唯一文本、行、版本与结构化 mutation authority | piece tree、structure、widget、language version gates |
+| `common/model/textModelStructure.ts` | schema、selection、plugin 与结构化 history | transaction、collaboration、atomic commit tests |
+| `common/model/textModelStructureIndex.ts` | group/block/line identity 与行范围 | schema、serialization、projection tests |
 | `common/model/documentTransaction.ts` | steps、mapping、metadata | selection、decoration、rebase、serialization |
 | `common/model/documentHistory.ts` | undo/redo branches | remote rebase、selection restore |
 | `common/model/documentPlugin.ts` | plugin lifecycle 和 filter/apply | atomicity、decoration projection |

@@ -1,10 +1,9 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/zeta/base/common/event.js";
 import { DisposableOwner } from "../../../src/zeta/base/common/lifecycle.js";
-import { AcademicCodeBlockEditorFactory } from "../../../src/zeta/editor/contrib/academic/browser/academicCodeBlockEditor.js";
 import { createDefaultDocumentSchema } from "../../../src/zeta/editor/editor.api.js";
 import { createTextNode } from "../../../src/zeta/editor/editor.api.js";
-import { DocumentModel } from "../../../src/zeta/editor/editor.api.js";
+import { TextModel } from "../../../src/zeta/editor/editor.api.js";
 import "../../../src/zeta/editor/editor.academic.all.js";
 import { DocumentEditorPane } from "../../../src/zeta/workbench/contrib/documentEditor/browser/documentEditorPane.js";
 import type { DocumentNode } from "../../../src/zeta/editor/common/model/document.js";
@@ -24,7 +23,7 @@ import type { DocumentCollaborationSubmitOutcome } from "../../../src/zeta/edito
 import type { IDocumentCollaborationService } from "../../../src/zeta/editor/common/services/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 
-interface IntegrationHarness {
+interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;
 	getCodeBlockText(): string | undefined;
 	getStructuredBlockTexts(): readonly string[];
@@ -37,7 +36,7 @@ interface IntegrationHarness {
 
 declare global {
 	interface Window {
-		zetaDocumentModelIntegration: IntegrationHarness;
+		zetaAcademicIntegration: AcademicIntegrationHarness;
 	}
 }
 
@@ -110,7 +109,7 @@ class BrowserDocumentCollaborationConnection extends DisposableOwner implements 
 
 const schema = createDefaultDocumentSchema();
 const apiDocument = schema.createDocument([schema.createNode("paragraph", { content: [schema.createText("editor-api")] })]);
-const apiModel = new DocumentModel(schema, apiDocument);
+const apiModel = TextModel.createWithStructure(schema, apiDocument);
 const codeBlockResource = URI.parse("inmemory://editor/code-block.zeta-academic");
 const structuredResource = URI.parse("inmemory://editor/document.zeta-academic");
 const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", {
@@ -120,7 +119,7 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
-const codeBlockPane = new DocumentEditorPane(codeBlockFiles, { embeddedTextEditorFactory: new AcademicCodeBlockEditorFactory() });
+const codeBlockPane = new DocumentEditorPane(codeBlockFiles);
 const structuredPane = new DocumentEditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
 
 codeBlockPane.create(requiredElement("#code-block"));
@@ -130,7 +129,7 @@ structuredPane.layout({ width: 900, height: 300 });
 await codeBlockPane.setInput({ resource: codeBlockResource, label: "snippet.ts" }, new AbortController().signal);
 await structuredPane.setInput({ resource: structuredResource, label: "paper" }, new AbortController().signal);
 
-window.zetaDocumentModelIntegration = {
+window.zetaAcademicIntegration = {
 	apiDocumentType: apiModel.document.type,
 	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,
 	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),

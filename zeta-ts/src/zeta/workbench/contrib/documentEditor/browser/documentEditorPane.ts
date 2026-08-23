@@ -8,7 +8,7 @@ import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutline } from "../../../../editor/common/model/documentOutline.js";
 import { EditorPaneVisibility, type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
-import { BrowserDocumentModelService } from "../../../services/documentEditor/browser/browserDocumentModelService.js";
+import { DocumentEditorTextModelService } from "../../../services/documentEditor/browser/documentEditorTextModelService.js";
 import type { ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -34,7 +34,7 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 
 	constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}) {
 		super();
-		const modelService = this.own(new BrowserDocumentModelService(textFiles, options.workingCopyService));
+		const modelService = this.own(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
 		const collaborationService = options.documentCollaborationService ? this.own(options.documentCollaborationService) : undefined;
 		this.editor = this.own(new EditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
 	}

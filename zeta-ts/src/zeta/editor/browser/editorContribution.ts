@@ -90,7 +90,7 @@ export interface DocumentCollaborationContribution extends IDisposable {
 	setState(state: "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error", options?: { readonly roomId?: string; readonly message?: string; readonly target?: DocumentCollaborationTarget; readonly principalId?: string; readonly canManageMembers?: boolean }): void;
 }
 
-/** Stable document-model mount point exposed to the same flat contribution registry. */
+/** Stable structured-TextModel mount point exposed to the same flat contribution registry. */
 export interface DocumentEditorContributionContext {
 	readonly kind: "document";
 	readonly container: HTMLElement;

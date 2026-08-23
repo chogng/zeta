@@ -7,7 +7,7 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 /** Origins that a document plugin can observe when Stanza advances its state. */
 export type DocumentPluginChangeOrigin = "user" | "remote" | "undo" | "redo" | "reset";
 
-/** Stable identity used to retrieve one plugin's state from a document model. */
+/** Stable identity used to retrieve one plugin's state from a TextModel structure. */
 export class DocumentPluginKey<T> {
 	constructor(readonly name: string) {
 		if (typeof name !== "string" || name.trim().length === 0) throw new TypeError("Document plugin keys require a non-empty name");
@@ -77,7 +77,7 @@ export interface DocumentPluginOptions<T = unknown> {
 	readonly decorations?: (state: T, context: DocumentPluginDecorationContext<T>) => DocumentDecorationSet | undefined;
 }
 
-/** Creates a validated immutable plugin descriptor for a Stanza document model. */
+/** Creates a validated immutable plugin descriptor for a structured Stanza TextModel. */
 export function createDocumentPlugin<T>(key: DocumentPluginKey<T>, state: DocumentPluginState<T>, options: DocumentPluginOptions<T> = {}): DocumentPlugin<T> {
 	if (!key || typeof key.name !== "string") throw new TypeError("Document plugins require a plugin key");
 	if (!state || typeof state.init !== "function" || typeof state.apply !== "function") throw new TypeError(`Document plugin '${key.name}' requires init and apply state functions`);

@@ -6,6 +6,14 @@ import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMod
 import { TextModelHistory, type TextModelHistoryEntry } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
 import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
+import type { DocumentSelection } from "../core/documentSelection.js";
+import type { DocumentMark, DocumentNode } from "./document.js";
+import type { DocumentHistoryEntries } from "./documentHistory.js";
+import type { DocumentPluginKey } from "./documentPlugin.js";
+import type { DocumentSchema } from "./documentSchema.js";
+import type { DocumentTransaction } from "./documentTransaction.js";
+import { TextModelRemoteHistoryPolicy, TextModelStructure, type TextModelPluginDecorationSource, type TextModelStructureChange, type TextModelStructureOptions } from "./textModelStructure.js";
+import { createTextModelStructureIndex, type TextModelStructureIndex } from "./textModelStructureIndex.js";
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -36,6 +44,13 @@ export interface TextModelOptions {
 	readonly historyLimit?: TextModelHistoryLimit;
 	/** Product-owned scheduling for non-semantic piece-tree maintenance. */
 	readonly maintenance?: TextModelMaintenanceOptions;
+	/** Optional Group/Block metadata owned by this same line-based model. */
+	readonly structure?: TextModelStructureInitialization;
+}
+
+export interface TextModelStructureInitialization extends TextModelStructureOptions {
+	readonly schema: DocumentSchema;
+	readonly document?: DocumentNode;
 }
 
 export interface TextEditOptions {
@@ -51,8 +66,8 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  *
  * The model owns normalized LF text, versioning, atomic non-overlapping edit
  * transactions, transaction-level undo/redo, and generic tracked ranges. It
- * deliberately has no DOM, URI, persistence, language, selection-instance, or
- * presentation dependency.
+ * Optional Group/Block metadata remains part of this same model and version.
+ * The model has no DOM, URI, persistence, language, or presentation dependency.
  */
 export class TextModel extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<TextModelChange>());
@@ -63,6 +78,7 @@ export class TextModel extends DisposableOwner {
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
 	private buffer: PieceTreeTextBuffer;
+	private readonly structureState: TextModelStructure | undefined;
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
@@ -87,13 +103,115 @@ export class TextModel extends DisposableOwner {
 			historyTransactionLimit,
 			historyTextUnitLimit,
 		);
-		this.buffer = new PieceTreeTextBuffer(normalizeTextLineEndings(initialText));
+		const structureDocument = options.structure?.document ?? options.structure?.schema.createDocument();
+		const normalizedInitialText = structureDocument && options.structure ? createTextModelStructureIndex(options.structure.schema, structureDocument).getText() : normalizeTextLineEndings(initialText);
+		this.buffer = new PieceTreeTextBuffer(normalizedInitialText);
 		this.largeFile = classifyTextModelSize(this.buffer.length, this.buffer.lineCount);
+		this.structureState = options.structure && structureDocument ? this.own(new TextModelStructure(
+			options.structure.schema,
+			structureDocument,
+			options.structure,
+			{
+				getVersion: () => this._version,
+				commitText: text => this.commitStructureText(text),
+				publishTextChange: change => this.changeEmitter.fire(change),
+			},
+		)) : undefined;
 		this.defer(() => {
 			this.disposed = true;
 			this.history.dispose();
 			this.buffer = new PieceTreeTextBuffer("");
 		});
+	}
+
+	/** Creates the single TextModel used by a Group/Block/Line document profile. */
+	static createWithStructure(schema: DocumentSchema, document = schema.createDocument(), options: TextModelStructureOptions = {}): TextModel {
+		return new TextModel(createTextModelStructureIndex(schema, document).getText(), { structure: { ...options, schema, document } });
+	}
+
+	get hasStructure(): boolean {
+		this.ensureAlive();
+		return this.structureState !== undefined;
+	}
+
+	get schema(): DocumentSchema {
+		return this.requireStructure().schema;
+	}
+
+	get document(): DocumentNode {
+		return this.requireStructure().document;
+	}
+
+	get structureIndex(): TextModelStructureIndex {
+		return this.requireStructure().index;
+	}
+
+	get selection(): DocumentSelection | undefined {
+		return this.requireStructure().selection;
+	}
+
+	get storedMarks(): readonly DocumentMark[] | undefined {
+		return this.requireStructure().storedMarks;
+	}
+
+	get onDidChangeStructure(): Event<TextModelStructureChange> {
+		return this.requireStructure().onDidChange;
+	}
+
+	get onDidChangeSelection(): Event<DocumentSelection | undefined> {
+		return this.requireStructure().onDidChangeSelection;
+	}
+
+	get onDidChangeStoredMarks(): Event<readonly DocumentMark[] | undefined> {
+		return this.requireStructure().onDidChangeStoredMarks;
+	}
+
+	get canUndoStructure(): boolean {
+		return this.requireStructure().canUndo;
+	}
+
+	get canRedoStructure(): boolean {
+		return this.requireStructure().canRedo;
+	}
+
+	dispatch(transaction: DocumentTransaction): TextModelStructureChange | undefined {
+		return this.requireStructure().dispatch(transaction);
+	}
+
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelStructureChange | undefined {
+		return this.requireStructure().dispatchRemote(transaction, historyPolicy);
+	}
+
+	rebaseHistory(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
+		this.requireStructure().rebaseHistory(mapper);
+	}
+
+	undoStructure(): TextModelStructureChange | undefined {
+		return this.requireStructure().undo();
+	}
+
+	redoStructure(): TextModelStructureChange | undefined {
+		return this.requireStructure().redo();
+	}
+
+	setSelection(selection: DocumentSelection | undefined): void {
+		this.requireStructure().setSelection(selection);
+	}
+
+	setStoredMarks(marks: readonly DocumentMark[] | undefined): void {
+		this.requireStructure().setStoredMarks(marks);
+	}
+
+	resetStructure(document: DocumentNode): TextModelStructureChange | undefined {
+		return this.requireStructure().reset(document);
+	}
+
+	getPluginState<T>(key: DocumentPluginKey<T>): T | undefined {
+		return this.requireStructure().getPluginState(key);
+	}
+
+	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
+		return this.requireStructure().getPluginDecorations();
 	}
 
 	get version(): number {
@@ -197,11 +315,13 @@ export class TextModel extends DisposableOwner {
 
 	beginHistoryRevision(historyGroup: TextEditHistoryGroup): void {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		this.history.beginRevision(historyGroup);
 	}
 
 	finishHistoryRevision(historyGroup: TextEditHistoryGroup): boolean {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		const entry = this.history.getRevisionEntry(historyGroup);
 		if (entry && this.offsetEditsAreNoOps(entry.edits)) {
 			this.history.discardRevision(historyGroup);
@@ -215,6 +335,7 @@ export class TextModel extends DisposableOwner {
 		historyGroup: TextEditHistoryGroup,
 	): TextModelChange | undefined {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		const entry = this.history.cancelRevision(historyGroup);
 		if (!entry || this.offsetEditsAreNoOps(entry.edits)) return undefined;
 		const result = this.commitOffsetEdits(entry.edits, {
@@ -244,6 +365,7 @@ export class TextModel extends DisposableOwner {
 		options: TextEditOptions = {},
 	): TextModelChange | undefined {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		const historyMergeMode =
 			options.historyMergeMode ??
 			TextEditHistoryMergeMode.Sequential;
@@ -315,6 +437,7 @@ export class TextModel extends DisposableOwner {
 	/** Clears edit history and replaces changed content as a non-undoable document reset. */
 	reset(text: string): TextModelChange | undefined {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		if (typeof text !== "string") {
 			throw new TypeError("TextModel reset text must be a string");
 		}
@@ -331,6 +454,7 @@ export class TextModel extends DisposableOwner {
 
 	undo(): TextModelChange | undefined {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeUndo();
 		if (!entry) return undefined;
@@ -355,6 +479,7 @@ export class TextModel extends DisposableOwner {
 
 	redo(): TextModelChange | undefined {
 		this.ensureAlive();
+		this.ensureDirectTextMutationAllowed();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeRedo();
 		if (!entry) return undefined;
@@ -541,6 +666,52 @@ export class TextModel extends DisposableOwner {
 				edit.endOffset,
 			) === edit.text,
 		);
+	}
+
+	/** Commits the flattened line text for one already-validated structure change. */
+	private commitStructureText(text: string): { readonly version: number; readonly change?: TextModelChange } {
+		const previousText = this.buffer.getText();
+		const nextText = normalizeTextLineEndings(text);
+		let prefixLength = 0;
+		const maximumPrefixLength = Math.min(previousText.length, nextText.length);
+		while (prefixLength < maximumPrefixLength && previousText.charCodeAt(prefixLength) === nextText.charCodeAt(prefixLength)) prefixLength += 1;
+		let suffixLength = 0;
+		const maximumSuffixLength = Math.min(previousText.length - prefixLength, nextText.length - prefixLength);
+		while (
+			suffixLength < maximumSuffixLength &&
+			previousText.charCodeAt(previousText.length - suffixLength - 1) === nextText.charCodeAt(nextText.length - suffixLength - 1)
+		) suffixLength += 1;
+		const result = this.commitOffsetEdits([{
+			startOffset: prefixLength,
+			endOffset: previousText.length - suffixLength,
+			text: nextText.slice(prefixLength, nextText.length - suffixLength),
+		}], { reason: TextModelChangeReason.Structure });
+		this.history.reset();
+		if (result) return { version: this._version, change: result.change };
+		this._version += 1;
+		const change = Object.freeze<TextModelChange>({
+			version: this._version,
+			transactionId: this.nextTransactionId++,
+			reason: TextModelChangeReason.Structure,
+			changes: Object.freeze([Object.freeze<TextModelContentChange>({
+				range: TextRange.from(TextPosition.at(0, 0), this.positionAt(this.buffer.length)),
+				rangeOffset: 0,
+				rangeLength: this.buffer.length,
+				text: previousText,
+			})]),
+		});
+		return { version: this._version, change };
+	}
+
+	private requireStructure(): TextModelStructure {
+		this.ensureAlive();
+		const structure = this.structureState;
+		if (!structure) throw new ReferenceError("TextModel has no Group/Block structure");
+		return structure;
+	}
+
+	private ensureDirectTextMutationAllowed(): void {
+		if (this.structureState) throw new Error("TextModel edits must update Group/Block metadata through dispatch()");
 	}
 
 	private ensureAlive(): void {

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { rebaseDocumentHistory, rebaseDocumentTransaction } from "../../contrib/collaboration/common/rebase.js";
-import { DocumentModel, DocumentRemoteHistoryPolicy } from "../../common/model/documentModel.js";
+import { TextModel } from "../../common/model/textModel.js";
+import { TextModelRemoteHistoryPolicy } from "../../common/model/textModelStructure.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
 import { nodeSelection, textSelection } from "../../common/core/documentSelection.js";
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
@@ -89,69 +90,69 @@ test("Stanza collaboration maps non-overlapping replacements after a remote repl
 
 test("Stanza collaboration rebases both undo and redo branches without removing remote text", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = new DocumentModel(schema, createDocument(schema));
+	using model = TextModel.createWithStructure(schema, createDocument(schema));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "C"));
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	const remote = new DocumentTransaction().replaceText("text-1", 1, 1, "B");
 
 	model.rebaseHistory(entries => rebaseDocumentHistory(model.document, schema, entries, remote));
-	model.dispatchRemote(remote, DocumentRemoteHistoryPolicy.Preserve);
+	model.dispatchRemote(remote, TextModelRemoteHistoryPolicy.Preserve);
 	assert.equal(model.document.content[0]?.content[0]?.text, "ABHello");
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	assert.equal(model.document.content[0]?.content[0]?.text, "BHello");
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	assert.equal(model.document.content[0]?.content[0]?.text, "ABHello");
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	assert.equal(model.document.content[0]?.content[0]?.text, "CABHello");
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	assert.equal(model.document.content[0]?.content[0]?.text, "ABHello");
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	assert.equal(model.document.content[0]?.content[0]?.text, "BHello");
 });
 
 test("Stanza collaboration replays structural history without moving an acknowledged remote block", () => {
 	const schema = createDefaultDocumentSchema();
 	const base = createDocument(schema);
-	using model = new DocumentModel(schema, base);
+	using model = TextModel.createWithStructure(schema, base);
 	const local = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
 	const remoteNode = schema.createNode("paragraph", { id: "paragraph-remote", content: [schema.createText("Remote", { id: "text-remote" })] });
 	model.dispatch(new DocumentTransaction().insertNode("document-1", 1, local));
 	const remote = new DocumentTransaction().insertNode("document-1", 2, remoteNode);
 
 	model.rebaseHistory(entries => rebaseDocumentHistory(model.document, schema, entries, remote));
-	model.dispatchRemote(remote, DocumentRemoteHistoryPolicy.Preserve);
+	model.dispatchRemote(remote, TextModelRemoteHistoryPolicy.Preserve);
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-local", "paragraph-remote", "paragraph-2"]);
 
-	assert.ok(model.undo());
+	assert.ok(model.undoStructure());
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-remote", "paragraph-2"]);
-	assert.ok(model.redo());
+	assert.ok(model.redoStructure());
 	assert.deepEqual(model.document.content.map(node => node.id), ["paragraph-1", "paragraph-local", "paragraph-remote", "paragraph-2"]);
 });
 
 test("Stanza collaboration drops a history branch that would overwrite a remote replacement", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = new DocumentModel(schema, createDocument(schema));
+	using model = TextModel.createWithStructure(schema, createDocument(schema));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 1, "A"));
 	const remote = new DocumentTransaction().replaceText("text-1", 0, 1, "B");
 
 	model.rebaseHistory(entries => rebaseDocumentHistory(model.document, schema, entries, remote));
-	model.dispatchRemote(remote, DocumentRemoteHistoryPolicy.Preserve);
+	model.dispatchRemote(remote, TextModelRemoteHistoryPolicy.Preserve);
 	assert.equal(model.document.content[0]?.content[0]?.text, "Bello");
-	assert.equal(model.canUndo, false);
-	assert.equal(model.canRedo, false);
+	assert.equal(model.canUndoStructure, false);
+	assert.equal(model.canRedoStructure, false);
 });
 
 test("Stanza collaboration drops structural history that would delete remote block content", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = new DocumentModel(schema, createDocument(schema));
+	using model = TextModel.createWithStructure(schema, createDocument(schema));
 	const local = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
 	model.dispatch(new DocumentTransaction().insertNode("document-1", 1, local));
 	const remote = new DocumentTransaction().replaceText("text-local", 0, 5, "Remote");
 
 	model.rebaseHistory(entries => rebaseDocumentHistory(model.document, schema, entries, remote));
-	model.dispatchRemote(remote, DocumentRemoteHistoryPolicy.Preserve);
+	model.dispatchRemote(remote, TextModelRemoteHistoryPolicy.Preserve);
 	assert.equal(model.document.content[1]?.content[0]?.text, "Remote");
-	assert.equal(model.canUndo, false);
+	assert.equal(model.canUndoStructure, false);
 });

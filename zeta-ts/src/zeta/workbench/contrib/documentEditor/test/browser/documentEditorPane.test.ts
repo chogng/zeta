@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type IDimension } from "../../../../../base/browser/geometry.js";
-import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileSaveConflictError, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
@@ -14,7 +12,6 @@ import { inlineNodeViews as citationInlineNodeViews, nodeViews as citationNodeVi
 import { citationToolbarActions } from "../../../../../editor/contrib/citation/browser/toolbarAction.js";
 import { createReferenceIndexPlugin } from "../../../../../editor/contrib/citation/common/references.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../editor/contrib/academic/common/schema.js";
-import type { EmbeddedTextEditorOptions, IEmbeddedTextEditor, IEmbeddedTextEditorFactory } from "../../../../../editor/browser/widget/embeddedTextEditor.js";
 import { createDocumentDecoration, DocumentDecorationSet } from "../../../../../editor/common/model/documentDecoration.js";
 import { createDocumentPlugin, DocumentPluginKey } from "../../../../../editor/common/model/documentPlugin.js";
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";
@@ -1609,7 +1606,7 @@ test("Stanza restores serialized blocks and releases its model", async () => {
 	environment.window.close();
 });
 
-test("Stanza delegates code blocks to its embedded line editor", async () => {
+test("Stanza edits Academic code-block lines through the owning TextModel", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	const files = new MemoryTextFiles(JSON.stringify({
 		format: "zeta.document",
@@ -1628,51 +1625,17 @@ test("Stanza delegates code blocks to its embedded line editor", async () => {
 			marks: [],
 		},
 	}));
-	const factory = new FakeEmbeddedTextEditorFactory();
 	const parent = h(environment.window.document, "main");
-	using pane = new EditorPane(files, { embeddedTextEditorFactory: factory });
+	using pane = new EditorPane(files);
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\paper.zeta-academic") }, new AbortController().signal);
 
-	assert.equal(factory.editors.length, 1);
-	assert.equal(factory.editors[0]?.options.languageId, "typescript");
-	const editor = factory.editors[0];
+	const editor = parent.querySelector<HTMLTextAreaElement>("[data-editor-kind='code-block'] textarea.stanza-document-text-input");
 	assert.ok(editor);
-	editor.emitChange("const value = 2;");
-	editor.emitChange("const value = 3;");
+	assert.equal(parent.querySelector("[data-editor-kind='code-block'] .stanza-editor"), null);
+	editor.value = "const value = 3;";
+	editor.dispatchEvent(new environment.window.Event("input", { bubbles: true }));
 	assert.equal(pane.getDocument().content[0]?.content[0]?.text, "const value = 3;");
-	assert.equal(factory.editors.length, 1);
-	assert.equal(editor.setValueCallCount, 0);
-	environment.window.close();
-});
-
-test("AcademicCodeBlockEditorFactory creates an Academic-owned line editor surface", async () => {
-	const environment = new JSDOM("<!doctype html><body></body>");
-	const parent = h(environment.window.document, "main");
-	const previousWindow = (globalThis as typeof globalThis & { window?: Window }).window;
-	const previousDocument = (globalThis as typeof globalThis & { document?: Document }).document;
-	const previousNode = (globalThis as typeof globalThis & { Node?: typeof Node }).Node;
-	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
-	Object.defineProperty(globalThis, "document", { configurable: true, value: environment.window.document });
-	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
-	try {
-		await import("../../../../../editor/editor.code.all.js");
-		const { AcademicCodeBlockEditorFactory } = await import("../../../../../editor/contrib/academic/browser/academicCodeBlockEditor.js");
-		using editor = new AcademicCodeBlockEditorFactory().create({
-			resource: URI.parse("untitled:test/code"),
-			label: "code",
-			languageId: "typescript",
-			initialText: "const value = 1;",
-		});
-		editor.create(parent);
-		await new Promise(resolve => setTimeout(resolve, 25));
-		assert.ok(parent.querySelector(".stanza-editor"));
-		assert.equal(editor.getValue(), "const value = 1;");
-	} finally {
-		Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
-		Object.defineProperty(globalThis, "document", { configurable: true, value: previousDocument });
-		Object.defineProperty(globalThis, "Node", { configurable: true, value: previousNode });
-	}
 	environment.window.close();
 });
 
@@ -1720,53 +1683,5 @@ class MemoryTextFiles implements ITextFileService {
 
 	private currentRevision(): string {
 		return `revision-${this.revision}`;
-	}
-}
-
-class FakeEmbeddedTextEditorFactory implements IEmbeddedTextEditorFactory {
-	readonly editors: FakeEmbeddedTextEditor[] = [];
-
-	create(options: EmbeddedTextEditorOptions): IEmbeddedTextEditor {
-		const editor = new FakeEmbeddedTextEditor(options);
-		this.editors.push(editor);
-		return editor;
-	}
-}
-
-class FakeEmbeddedTextEditor extends DisposableOwner implements IEmbeddedTextEditor {
-	private readonly changeEmitter = this.own(new Emitter<string>());
-	readonly onDidChange = this.changeEmitter.event;
-	private value: string;
-	setValueCallCount = 0;
-	readonly options: EmbeddedTextEditorOptions;
-
-	constructor(options: EmbeddedTextEditorOptions) {
-		super();
-		this.options = options;
-		this.value = options.initialText;
-	}
-
-	create(parent: HTMLElement): void {
-		const element = h(parent.ownerDocument, "textarea");
-		element.value = this.value;
-		parent.append(element);
-	}
-
-	setValue(value: string): void {
-		this.setValueCallCount += 1;
-		this.value = value;
-	}
-
-	getValue(): string {
-		return this.value;
-	}
-
-	layout(_dimension: IDimension): void {}
-
-	focus(): void {}
-
-	emitChange(value: string): void {
-		this.value = value;
-		this.changeEmitter.fire(value);
 	}
 }

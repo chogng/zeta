@@ -24,7 +24,7 @@ Editor tests follow VS Code's two-layer layout with one shared editor browser su
 
 | Layer | Location | Purpose |
 | --- | --- | --- |
-| Editor unit | `src/zeta/editor/test` and editor contribution `test` folders | Text/document model, command, controller, persistence, and projection contracts in Node/jsdom |
-| Editor browser | `test/editor/browser` | Text/document model mount points, mode bundles, pane, input, save, worker, embedded editor, and accessibility contracts in Chromium |
+| Editor unit | `src/zeta/editor/test` and editor contribution `test` folders | Code/Academic TextModel, command, controller, persistence, and projection contracts in Node/jsdom |
+| Editor browser | `test/editor/browser` | Code/Academic TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
 | Editor architecture | `test/architecture/editor-architecture.test.ts` | Flat `common/browser/contrib/test` ownership, mode bundles, and synchronous-layer dependency rules |
 Run `pnpm test:editor`; it runs the editor unit tests and the single browser integration suite.

@@ -40,18 +40,18 @@ export function documentSelectionToText(document: DocumentNode, selection: Docum
 }
 
 /** Converts the complete structured document to interoperable plain text. */
-export function documentToPlainText(document: DocumentNode): string {
+export function documentToPlainText(document: DocumentNode, schema?: DocumentSchema): string {
 	const blocks: string[] = [];
-	collectTextBearingBlocks(document, blocks);
+	collectTextBearingBlocks(document, blocks, schema);
 	return blocks.join("\n");
 }
 
-function collectTextBearingBlocks(node: DocumentNode, blocks: string[]): void {
-	if (isTextBearingBlock(node)) {
+function collectTextBearingBlocks(node: DocumentNode, blocks: string[], schema: DocumentSchema | undefined): void {
+	if (isTextBearingBlock(node) || schema?.getNodeSpec(node.type)?.kind === "line") {
 		blocks.push(textFromBlock(node));
 		return;
 	}
-	for (const child of node.content) collectTextBearingBlocks(child, blocks);
+	for (const child of node.content) collectTextBearingBlocks(child, blocks, schema);
 }
 
 interface TextBearingBlockLocation {

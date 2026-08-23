@@ -7,16 +7,18 @@ import { isDocumentSelectionValid, selectionsEqual, validateDocumentSelection, t
 import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./document.js";
 import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
+import type { TextModelChange } from "../core/text.js";
+import { createTextModelStructureIndex, type TextModelStructureIndex } from "./textModelStructureIndex.js";
 
 export type DocumentChangeOrigin = DocumentPluginChangeOrigin;
 
 /** Selects whether an already-rebased remote transaction retains local undo/redo entries. */
-export enum DocumentRemoteHistoryPolicy {
+export enum TextModelRemoteHistoryPolicy {
 	Clear = "clear",
 	Preserve = "preserve",
 }
 
-export interface DocumentChange {
+export interface TextModelStructureChange {
 	readonly version: number;
 	readonly origin: DocumentChangeOrigin;
 	readonly transaction: DocumentTransaction;
@@ -26,43 +28,50 @@ export interface DocumentChange {
 	readonly selectionAfter: DocumentSelection | undefined;
 }
 
-export interface DocumentModelOptions {
+export interface TextModelStructureOptions {
 	readonly historyLimit?: number;
 	readonly selection?: DocumentSelection;
 	readonly storedMarks?: readonly DocumentMark[];
 	readonly plugins?: readonly DocumentPlugin<unknown>[];
 }
 
-export interface DocumentPluginDecorationSource {
+export interface TextModelPluginDecorationSource {
 	readonly key: DocumentPluginKey<unknown>;
 	readonly set: DocumentDecorationSet;
 }
 
-/** Mutable document state around immutable Stanza snapshots and transactions. */
-export class DocumentModel extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<DocumentChange>());
+export interface TextModelStructureHost {
+	getVersion(): number;
+	commitText(text: string): { readonly version: number; readonly change?: TextModelChange };
+	publishTextChange(change: TextModelChange): void;
+}
+
+/** Group/block metadata, selection, and structured history owned by one TextModel. */
+export class TextModelStructure extends DisposableOwner {
+	private readonly changeEmitter = this.own(new Emitter<TextModelStructureChange>());
 	private readonly selectionEmitter = this.own(new Emitter<DocumentSelection | undefined>());
 	private readonly storedMarksEmitter = this.own(new Emitter<readonly DocumentMark[] | undefined>());
 	private readonly history: DocumentHistory;
 	private readonly plugins: readonly DocumentPlugin<unknown>[];
 	private pluginStates: Map<DocumentPluginKey<unknown>, unknown>;
 	private _document: DocumentNode;
+	private _index: TextModelStructureIndex;
 	private _selection: DocumentSelection | undefined;
 	private _storedMarks: readonly DocumentMark[] | undefined;
-	private _version = 1;
 	private disposed = false;
 
-	readonly onDidChange: Event<DocumentChange> = this.changeEmitter.event;
+	readonly onDidChange: Event<TextModelStructureChange> = this.changeEmitter.event;
 	readonly onDidChangeSelection: Event<DocumentSelection | undefined> = this.selectionEmitter.event;
 	readonly onDidChangeStoredMarks: Event<readonly DocumentMark[] | undefined> = this.storedMarksEmitter.event;
 
-	constructor(readonly schema: DocumentSchema, document = schema.createDocument(), options: DocumentModelOptions = {}) {
+	constructor(readonly schema: DocumentSchema, document: DocumentNode, options: TextModelStructureOptions, private readonly host: TextModelStructureHost) {
 		super();
 		const normalizedDocument = freezeDocumentNode(document);
 		schema.validate(normalizedDocument);
 		if (options.selection) validateDocumentSelection(normalizedDocument, options.selection);
 		if (options.storedMarks) schema.validateMarks(options.storedMarks);
 		this._document = normalizedDocument;
+		this._index = createTextModelStructureIndex(schema, normalizedDocument);
 		this._selection = options.selection;
 		this._storedMarks = cloneMarks(options.storedMarks);
 		this.history = new DocumentHistory(options.historyLimit);
@@ -74,7 +83,7 @@ export class DocumentModel extends DisposableOwner {
 		}
 		this.plugins = Object.freeze([...plugins]);
 		this.pluginStates = new Map();
-		const initContext: DocumentPluginInitContext = Object.freeze({ schema, document: normalizedDocument, selection: options.selection, version: this._version });
+		const initContext: DocumentPluginInitContext = Object.freeze({ schema, document: normalizedDocument, selection: options.selection, version: host.getVersion() });
 		for (const plugin of this.plugins) this.pluginStates.set(plugin.key, plugin.state.init(initContext));
 		this.defer(() => {
 			this.disposed = true;
@@ -86,9 +95,14 @@ export class DocumentModel extends DisposableOwner {
 		return this._document;
 	}
 
+	get index(): TextModelStructureIndex {
+		this.ensureAlive();
+		return this._index;
+	}
+
 	get version(): number {
 		this.ensureAlive();
-		return this._version;
+		return this.host.getVersion();
 	}
 
 	get selection(): DocumentSelection | undefined {
@@ -119,10 +133,10 @@ export class DocumentModel extends DisposableOwner {
 	}
 
 	/** Returns each plugin-owned decoration set without merging plugin identities. */
-	getPluginDecorations(): readonly DocumentPluginDecorationSource[] {
+	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
 		this.ensureAlive();
-		const context = { schema: this.schema, document: this._document, selection: this._selection, version: this._version };
-		const sources: DocumentPluginDecorationSource[] = [];
+		const context = { schema: this.schema, document: this._document, selection: this._selection, version: this.version };
+		const sources: TextModelPluginDecorationSource[] = [];
 		for (const plugin of this.plugins) {
 			if (!plugin.decorations) continue;
 			const state = this.pluginStates.get(plugin.key);
@@ -134,7 +148,7 @@ export class DocumentModel extends DisposableOwner {
 		return Object.freeze(sources);
 	}
 
-	dispatch(transaction: DocumentTransaction): DocumentChange | undefined {
+	dispatch(transaction: DocumentTransaction): TextModelStructureChange | undefined {
 		this.ensureAlive();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "user")) return undefined;
@@ -144,13 +158,13 @@ export class DocumentModel extends DisposableOwner {
 			const selectionAfter = transaction.selectionSet ? transaction.selection : this._selection;
 			const selectionChanged = !selectionsEqual(selectionBefore, selectionAfter);
 			if (selectionChanged) {
-				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this._version);
+				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this.version);
 				this._selection = selectionAfter;
 			}
 			if (selectionChanged || transaction.storedMarksSet) this.history.closeGroup();
 			if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
 			if (selectionChanged) this.selectionEmitter.fire(selectionAfter);
-			return Object.freeze({ version: this._version, origin: "user" as const, transaction, previousDocument: this._document, document: this._document, selectionBefore, selectionAfter });
+			return Object.freeze({ version: this.version, origin: "user" as const, transaction, previousDocument: this._document, document: this._document, selectionBefore, selectionAfter });
 		}
 		const applied = applyDocumentTransaction(this._document, this.schema, transaction, this._selection);
 		const selectionAfter = transaction.selectionSet ? transaction.selection : (isDocumentSelectionValid(applied.document, applied.selection) ? applied.selection : undefined);
@@ -164,7 +178,7 @@ export class DocumentModel extends DisposableOwner {
 	}
 
 	/** Applies an already-transformed remote transaction outside local author history. */
-	dispatchRemote(transaction: DocumentTransaction, historyPolicy: DocumentRemoteHistoryPolicy = DocumentRemoteHistoryPolicy.Clear): DocumentChange | undefined {
+	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelStructureChange | undefined {
 		this.ensureAlive();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "remote")) return undefined;
@@ -174,13 +188,13 @@ export class DocumentModel extends DisposableOwner {
 			const selectionAfter = transaction.selectionSet ? transaction.selection : this._selection;
 			const selectionChanged = !selectionsEqual(selectionBefore, selectionAfter);
 			if (selectionChanged) {
-				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this._version);
+				this.pluginStates = this.applyPluginSelection(this._document, selectionBefore, selectionAfter, this.version);
 				this._selection = selectionAfter;
 			}
 			if (transaction.storedMarksSet) this.setStoredMarks(transaction.storedMarks);
 			if (selectionChanged) this.selectionEmitter.fire(selectionAfter);
 			this.applyRemoteHistoryPolicy(historyPolicy);
-			return Object.freeze({ version: this._version, origin: "remote" as const, transaction, previousDocument: this._document, document: this._document, selectionBefore, selectionAfter });
+			return Object.freeze({ version: this.version, origin: "remote" as const, transaction, previousDocument: this._document, document: this._document, selectionBefore, selectionAfter });
 		}
 		const applied = applyDocumentTransaction(this._document, this.schema, transaction, this._selection);
 		const selectionAfter = transaction.selectionSet ? transaction.selection : (isDocumentSelectionValid(applied.document, applied.selection) ? applied.selection : undefined);
@@ -197,7 +211,7 @@ export class DocumentModel extends DisposableOwner {
 		this.history.rebase(mapper);
 	}
 
-	undo(): DocumentChange | undefined {
+	undo(): TextModelStructureChange | undefined {
 		this.ensureAlive();
 		this.history.closeGroup();
 		const entry = this.history.takeUndo();
@@ -217,7 +231,7 @@ export class DocumentModel extends DisposableOwner {
 		}
 	}
 
-	redo(): DocumentChange | undefined {
+	redo(): TextModelStructureChange | undefined {
 		this.ensureAlive();
 		this.history.closeGroup();
 		const entry = this.history.takeRedo();
@@ -241,7 +255,7 @@ export class DocumentModel extends DisposableOwner {
 		this.ensureAlive();
 		if (selection) validateDocumentSelection(this._document, selection);
 		if (selectionsEqual(this._selection, selection)) return;
-		const pluginStates = this.applyPluginSelection(this._document, this._selection, selection, this._version);
+		const pluginStates = this.applyPluginSelection(this._document, this._selection, selection, this.version);
 		this.history.closeGroup();
 		this._selection = selection;
 		this.pluginStates = pluginStates;
@@ -258,7 +272,7 @@ export class DocumentModel extends DisposableOwner {
 		this.storedMarksEmitter.fire(normalized);
 	}
 
-	reset(document: DocumentNode): DocumentChange | undefined {
+	reset(document: DocumentNode): TextModelStructureChange | undefined {
 		this.ensureAlive();
 		const normalizedDocument = freezeDocumentNode(document);
 		this.schema.validate(normalizedDocument);
@@ -266,7 +280,7 @@ export class DocumentModel extends DisposableOwner {
 		const previousDocument = this._document;
 		const previousSelection = this._selection;
 		const previousStoredMarks = this._storedMarks;
-		const previousVersion = this._version;
+		const previousVersion = this.version;
 		const version = previousVersion + 1;
 		const transaction = new DocumentTransaction([], { addToHistory: false, label: "reset" });
 		const change = Object.freeze({
@@ -279,13 +293,17 @@ export class DocumentModel extends DisposableOwner {
 			selectionAfter: undefined,
 		});
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document: normalizedDocument, transaction, previousSelection, selection: undefined, origin: "reset", previousVersion, version });
+		const nextIndex = createTextModelStructureIndex(this.schema, normalizedDocument);
+		const textCommit = this.host.commitText(nextIndex.getText());
+		if (textCommit.version !== version) throw new Error("TextModel structure reset did not commit exactly one model version");
 		this._document = normalizedDocument;
+		this._index = nextIndex;
 		this._selection = undefined;
 		this._storedMarks = undefined;
-		this._version = version;
 		this.pluginStates = pluginStates;
 		this.history.clear();
 		this.changeEmitter.fire(change);
+		if (textCommit.change) this.host.publishTextChange(textCommit.change);
 		if (previousSelection) this.selectionEmitter.fire(undefined);
 		if (previousStoredMarks) this.storedMarksEmitter.fire(undefined);
 		return change;
@@ -297,27 +315,31 @@ export class DocumentModel extends DisposableOwner {
 		origin: DocumentChangeOrigin,
 		selectionBefore: DocumentSelection | undefined,
 		selectionAfter: DocumentSelection | undefined,
-	): DocumentChange {
+	): TextModelStructureChange {
 		const previousDocument = this._document;
-		const previousVersion = this._version;
+		const previousVersion = this.version;
 		const version = previousVersion + 1;
 		const change = Object.freeze({ version, origin, transaction, previousDocument, document, selectionBefore, selectionAfter });
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document, transaction, previousSelection: selectionBefore, selection: selectionAfter, origin, previousVersion, version });
+		const nextIndex = createTextModelStructureIndex(this.schema, document);
+		const textCommit = this.host.commitText(nextIndex.getText());
+		if (textCommit.version !== version) throw new Error("TextModel structure transaction did not commit exactly one model version");
 		this._document = document;
+		this._index = nextIndex;
 		this._selection = selectionAfter;
-		this._version = version;
 		this.pluginStates = pluginStates;
 		this.changeEmitter.fire(change);
+		if (textCommit.change) this.host.publishTextChange(textCommit.change);
 		if (!selectionsEqual(selectionBefore, selectionAfter)) this.selectionEmitter.fire(selectionAfter);
 		return change;
 	}
 
-	private applyRemoteHistoryPolicy(historyPolicy: DocumentRemoteHistoryPolicy): void {
+	private applyRemoteHistoryPolicy(historyPolicy: TextModelRemoteHistoryPolicy): void {
 		switch (historyPolicy) {
-			case DocumentRemoteHistoryPolicy.Clear:
+			case TextModelRemoteHistoryPolicy.Clear:
 				this.history.clear();
 				return;
-			case DocumentRemoteHistoryPolicy.Preserve:
+			case TextModelRemoteHistoryPolicy.Preserve:
 				this.history.closeGroup();
 				return;
 		}
@@ -333,7 +355,7 @@ export class DocumentModel extends DisposableOwner {
 	}
 
 	private acceptsTransaction(transaction: DocumentTransaction, origin: DocumentPluginChangeOrigin): boolean {
-		const context: DocumentPluginTransactionContext = Object.freeze({ schema: this.schema, document: this._document, selection: this._selection, origin, version: this._version });
+		const context: DocumentPluginTransactionContext = Object.freeze({ schema: this.schema, document: this._document, selection: this._selection, origin, version: this.version });
 		return this.plugins.every(plugin => plugin.filterTransaction?.(transaction, context) ?? true);
 	}
 
@@ -348,7 +370,7 @@ export class DocumentModel extends DisposableOwner {
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("Document model is already disposed");
+		if (this.disposed) throw new ReferenceError("TextModel structure is already disposed");
 	}
 }
 

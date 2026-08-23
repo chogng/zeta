@@ -10,7 +10,7 @@ export interface DocumentMark {
 	readonly attrs: DocumentAttributes;
 }
 
-/** Immutable tree node used by Stanza's document model and serializers. */
+/** Immutable structure metadata used by a Stanza TextModel and its serializers. */
 export interface DocumentNode {
 	readonly id: DocumentNodeId;
 	readonly type: string;

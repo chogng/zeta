@@ -29,7 +29,6 @@ export interface EditorProfile {
 
 export interface EditorRuntimeOptions {
 	readonly onSave?: EditorWidgetOptions["onSave"];
-	readonly embeddedTextEditorFactory?: EditorWidgetOptions["embeddedTextEditorFactory"];
 	readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
 	readonly documentCollaborationService?: IDocumentCollaborationService;
 }
