@@ -65,17 +65,17 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-101 | 已实现 | 运行中 steering | durable `ThreadCommand::SteerTurn`、`TurnSteered`/delivery facts、App Server `session/request::SteerTurn`、Desktop 运行中发送，以及 Codex exact `turn/steer` 转发 | Running、WaitingForApproval、WaitingForUserInput 可追加；Cancelling 和终态稳定拒绝；多条 steer 保序；重启后不丢失、不重复；未知委托结果不重放 |
 | AL-102 | 已实现 | Provider 错误分类 | 增加 `ContextOverflow`、`AuthFailed`、`InvalidRequest`、`InvalidResponse` 和对应 stable Turn error；各 Provider 从状态码和错误体映射 | 401/403 不重试；无效响应只重试一次；错误码跨 App Server 和 Desktop 保持稳定；原始错误只进入受控日志 |
 | AL-103 | 已实现 | 溢出恢复 | Provider 返回 `ContextOverflow` 时触发一次 durable compaction，再以新 snapshot 重试一次 | checkpoint 与本 Turn 的恢复标记原子提交后才发重试调用；再次溢出稳定失败；取消立即生效；恢复过程不重复 checkpoint 或模型副作用 |
-| AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `tool_repetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
-| AL-105 | 待构建 | 交互错误 UI | Desktop 区分可重试、认证、上下文、预算和工具重复错误，并提供对应下一步 | UI 不从错误字符串推断类别；刷新和重连后展示与 canonical Thread 状态一致 |
+| AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `toolRepetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
+| AL-105 | 已实现 | 交互错误 UI | Desktop 从 canonical `StableTurnErrorCode` 投影对话内错误卡片；可重试失败开始新 Turn，认证错误打开模型选择，上下文或预算耗尽创建新对话，无效请求与工具重复失败聚焦输入以修改方案 | UI 只按稳定错误码分流；仅最新失败 Turn 暴露动作；刷新和重连从 canonical Thread 重建相同卡片；预算错误的运行时生产者仍由 AL-202 构建 |
 
-S1 顺序：AL-101 至 AL-104 已完成；接下来构建最后一项 AL-105。
+S1 已完成；接下来从 AL-201 开始构建 durable usage 账本，再以该账本作为 AL-202 资源预算的前置。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
 | AL-201 | 待构建 | Durable usage 账本 | 将 provider-reported input、cached input、output 和可用的 reasoning usage 作为 durable fact 记录并聚合到 Thread | crash/restart 前后聚合一致；重试调用分别记账；缺失或部分 usage 不伪造为精确值 |
-| AL-202 | 待构建 | Turn 资源预算 | 在 AL-201 上增加可选 token 与成本上限；成本使用带版本的模型价格 snapshot，不读取运行中漂移的目录值 | 默认只记账不设限；超限在下一个模型/工具安全点终止；稳定错误为 `turn_budget_exhausted`；恢复后继续使用冻结预算 |
+| AL-202 | 待构建 | Turn 资源预算 | 在 AL-201 上增加可选 token 与成本上限；成本使用带版本的模型价格 snapshot，不读取运行中漂移的目录值 | 默认只记账不设限；超限在下一个模型/工具安全点终止；稳定错误为 `turnBudgetExhausted`；恢复后继续使用冻结预算 |
 | AL-203 | 待构建 | 模型输入逐项限幅 | 在 ContextPlan 选入时统一限制 shell、文件读取、搜索、MCP 和图片内容，并保留截断诊断 | 任何单条工具结果不能独占窗口；截断标记说明原始大小和继续读取方式；durable 原始结果不被静默改写 |
 | AL-204 | 待构建 | 手动压缩 | 增加 `/compact` 与可选保留提示，复用现有 durable checkpoint contract | 只覆盖完整 durable 前缀；当前 Turn 和未完成工具组不被吸收；失败不提交半成品 checkpoint |
 | AL-205 | 待构建 | 预算校准 | 使用已记录 usage 校准估算误差，并为可用模型接入精确 tokenizer/preflight | 估算 revision 可追踪；未知窗口继续使用 provider-managed，不猜测固定窗口；校准不能改变历史 durable usage |
@@ -162,8 +162,8 @@ flowchart TD
 实际执行批次：
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
-2. 以已完成的 AL-101 至 AL-104 为交互与失败语义基线，推进 S1 最后一项 AL-105。
-3. S1 稳定后并行推进 S2、S3、S4；每个阶段独立维护 protocol 和测试门。
+2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
+3. 下一批先构建 AL-201 durable usage 账本；随后可并行推进 S2 的其余工作和 S3、S4，每个阶段独立维护 protocol 和测试门。
 4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。
 

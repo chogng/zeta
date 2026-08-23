@@ -17,11 +17,13 @@ import { IQuickInputService } from "../../../../../platform/quickinput/common/qu
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
+import { chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { ISettingsService } from "../../../../../workbench/services/preferences/common/settings.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
+import type { TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { AppServerSessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
@@ -437,6 +439,24 @@ test("Empty chat transcripts do not render a redundant placeholder", () => {
 
 	assert.equal(list.element.querySelector(".zeta-chat-empty"), null);
 	assert.equal(list.element.textContent, "");
+	dom.window.close();
+});
+
+test("Turn error cards invoke their typed action without interpreting message text", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	let requestedAction: ChatTurnErrorAction | undefined;
+	using list = new ChatListWidget(dom.window.document.body, {
+		onDidRequestErrorAction: (action) => { requestedAction = action; },
+	});
+	const item = chatTurnErrorListItem(failedTurn("providerAuth", false, "same opaque message"));
+	assert.ok(item);
+
+	list.render([item]);
+	list.element.querySelector<HTMLButtonElement>(".zeta-chat-turn-error-action")?.click();
+
+	assert.equal(list.element.querySelector(".zeta-chat-item-label")?.textContent, "Authentication");
+	assert.equal(list.element.querySelector("pre")?.textContent, "same opaque message");
+	assert.deepEqual(requestedAction, { type: "chooseModel", label: "Choose another model" });
 	dom.window.close();
 });
 
@@ -1077,8 +1097,100 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		text: "Model provider authentication failed",
 		transient: false,
 		isError: true,
+		label: "Authentication",
+		detail: "Choose a model with working credentials before sending another message.",
+		errorCode: "providerAuth",
+		action: { type: "chooseModel", label: "Choose another model" },
 	}]);
 	assert.equal(model.state, "ready");
+});
+
+test("Turn error presentation is selected only from the stable error code", () => {
+	const message = "same opaque message";
+	const cases: readonly { readonly code: TurnError["code"]; readonly retryable: boolean }[] = [
+		{ code: "modelInvocationFailed", retryable: true },
+		{ code: "contextOverflow", retryable: true },
+		{ code: "providerAuth", retryable: false },
+		{ code: "invalidRequest", retryable: false },
+		{ code: "invalidResponse", retryable: true },
+		{ code: "completionPersistenceFailed", retryable: true },
+		{ code: "interactionDeadlineElapsed", retryable: true },
+		{ code: "toolRepetition", retryable: false },
+		{ code: "turnBudgetExhausted", retryable: false },
+	];
+
+	assert.deepEqual(cases.map(({ code, retryable }) => {
+		const item = chatTurnErrorListItem(failedTurn(code, retryable, message));
+		return { code: item?.errorCode, label: item?.label, action: item?.action?.type, message: item?.text };
+	}), [
+		{ code: "modelInvocationFailed", label: "Model error", action: "retry", message },
+		{ code: "contextOverflow", label: "Context limit", action: "startNewChat", message },
+		{ code: "providerAuth", label: "Authentication", action: "chooseModel", message },
+		{ code: "invalidRequest", label: "Invalid request", action: "revise", message },
+		{ code: "invalidResponse", label: "Invalid response", action: "retry", message },
+		{ code: "completionPersistenceFailed", label: "Save failed", action: "retry", message },
+		{ code: "interactionDeadlineElapsed", label: "Interaction expired", action: "retry", message },
+		{ code: "toolRepetition", label: "Repeated tool failure", action: "revise", message },
+		{ code: "turnBudgetExhausted", label: "Turn budget", action: "startNewChat", message },
+	]);
+});
+
+test("ChatPaneModel rebuilds error actions from canonical Thread state after refresh and reconnect", async () => {
+	const activeSession = session("session-1", "thread-1");
+	let currentThread = threadWithFailure("providerAuth", false);
+	const fake = fakeApi({ sessions: [activeSession], thread: () => currentThread });
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: { session: activeSession, threadId: "thread-1" },
+	}, sessions);
+	await model.initialize();
+
+	currentThread = threadWithFailure("toolRepetition", false, 4);
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: currentThread.sequence,
+			update: {
+				type: "committed",
+				event: {
+					type: "turnFailed",
+					threadId: "thread-1",
+					turnId: "turn-1",
+					error: currentThread.turns[0]!.error!,
+				},
+			},
+		},
+	});
+	await waitFor(() => model.items[0]?.errorCode === "toolRepetition");
+	assert.equal(model.items[0]?.action?.type, "revise");
+
+	currentThread = threadWithFailure("turnBudgetExhausted", false, 5);
+	fake.emitReady();
+	await waitFor(() => model.items[0]?.errorCode === "turnBudgetExhausted");
+	assert.equal(model.items[0]?.action?.type, "startNewChat");
+});
+
+test("ChatPaneModel retries only the latest retryable failed Turn as a new visible Turn", async () => {
+	const activeSession = session("session-1", "thread-1");
+	const failedThread = threadWithFailure("modelInvocationFailed", true);
+	const fake = fakeApi({ sessions: [activeSession], thread: () => failedThread });
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: { session: activeSession, threadId: "thread-1" },
+	}, sessions);
+	await model.initialize();
+
+	await model.retryFailedTurn("turn-1");
+
+	assert.deepEqual(fake.turnStartRequests.map(({ expectedSequence, input }) => ({ expectedSequence, input })), [{
+		expectedSequence: failedThread.sequence,
+		input: [{ type: "text", text: "Try again." }],
+	}]);
+	await assert.rejects(model.retryFailedTurn("older-turn"), /Only the latest retryable failed Turn/);
 });
 
 interface FakeOptions {
@@ -1261,8 +1373,10 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
 	readonly emit: (notification: ServerNotification) => void;
+	readonly emitReady: () => void;
 } {
 	const listeners = new Set<(notification: ServerNotification) => void>();
+	const connectionListeners = new Set<(state: "ready") => void>();
 	const archiveRequests: SessionMutationParams[] = [];
 	const stopRequests: SessionMutationParams[] = [];
 	const createSessionRequests: SessionCreateParams[] = [];
@@ -1280,7 +1394,10 @@ function fakeApi(options: FakeOptions = {}): {
 		appServer: {
 			getConnectionState: async () => "ready" as const,
 			getSlashCommands: async () => [],
-			onConnectionState: () => ({ dispose() {} }),
+			onConnectionState: (next: (state: "ready") => void) => {
+				connectionListeners.add(next);
+				return { dispose: () => { connectionListeners.delete(next); } };
+			},
 		},
 		session: {
 			list: async () => ({ sessions: [...(options.sessions ?? [])] }),
@@ -1386,6 +1503,9 @@ function fakeApi(options: FakeOptions = {}): {
 		emit: (notification) => {
 			for (const listener of listeners) listener(notification);
 		},
+		emitReady: () => {
+			for (const listener of connectionListeners) listener("ready");
+		},
 	};
 }
 
@@ -1424,6 +1544,26 @@ function thread(agentText?: string): Thread {
 				}],
 			}]
 			: [],
+	};
+}
+
+function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn failed"): Thread["turns"][number] {
+	return {
+		turnId: "turn-1",
+		status: "failed",
+		items: [],
+		error: { code, message, retryable },
+	};
+}
+
+function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence = 3): Thread {
+	return {
+		sessionId: "session-1",
+		threadId: "thread-1",
+		title: "Main",
+		status: "active",
+		sequence,
+		turns: [failedTurn(code, retryable)],
 	};
 }
 

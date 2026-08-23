@@ -8,6 +8,7 @@ import type { ISessionsManagementService } from "../../../../../sessions/service
 import type { ChatInputDelegate } from "../input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import { ChatInputPart } from "../input/chatInputPart.js";
+import type { ChatTurnErrorAction } from "../list/chatListItems.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -18,6 +19,7 @@ export class ChatPane extends DisposableOwner {
 	private readonly model: ChatPaneModel;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
+	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
 
 	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
@@ -29,8 +31,11 @@ export class ChatPane extends DisposableOwner {
 		this.element.setAttribute("role", "tabpanel");
 		this.element.hidden = true;
 		container.append(this.element);
+		this.sessionService = sessionService;
 		this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
-		this.listWidget = this.own(new ChatListWidget(this.element));
+		this.listWidget = this.own(new ChatListWidget(this.element, {
+			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
+		}));
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, skills) => this.send(text, skills),
 			executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
@@ -103,6 +108,23 @@ export class ChatPane extends DisposableOwner {
 				this.updateConversationState();
 			}
 			throw error;
+		}
+	}
+
+	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
+		switch (action.type) {
+			case "retry":
+				await this.model.retryFailedTurn(action.turnId);
+				return;
+			case "chooseModel":
+				this.inputPart.openModelSelector();
+				return;
+			case "startNewChat":
+				this.sessionService.createUntitledSession();
+				return;
+			case "revise":
+				this.inputPart.focus();
+				return;
 		}
 	}
 

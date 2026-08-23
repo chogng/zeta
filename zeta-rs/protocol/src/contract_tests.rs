@@ -9,6 +9,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
         StableTurnError::invalid_request(),
         StableTurnError::invalid_response(),
         StableTurnError::tool_repetition(),
+        StableTurnError::turn_budget_exhausted(),
     ];
 
     assert_eq!(
@@ -22,6 +23,7 @@ fn stable_turn_error_categories_serialize_as_public_camel_case_codes() {
             json!("invalidRequest"),
             json!("invalidResponse"),
             json!("toolRepetition"),
+            json!("turnBudgetExhausted"),
         ]
     );
 }

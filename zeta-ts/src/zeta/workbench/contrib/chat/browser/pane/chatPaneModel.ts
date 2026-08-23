@@ -111,11 +111,13 @@ export class ChatPaneModel extends DisposableOwner {
 	}
 
 	get items(): readonly IChatListItem[] {
-		const committed = this._thread?.turns.flatMap((turn) => {
+		const turns = this._thread?.turns ?? [];
+		const latestTurnId = turns.at(-1)?.turnId;
+		const committed = turns.flatMap((turn) => {
 			const items = turn.items.map((item) => chatListItem(item));
-			const failure = chatTurnErrorListItem(turn);
+			const failure = chatTurnErrorListItem(turn, { actionsEnabled: turn.turnId === latestTurnId });
 			return failure ? [...items, failure] : items;
-		}) ?? [];
+		});
 		const committedIds = new Set(committed.map((item) => item.id));
 		const transient = [...this.transientItems.values()]
 			.filter((item) => !committedIds.has(item.itemId))
@@ -215,6 +217,15 @@ export class ChatPaneModel extends DisposableOwner {
 			this.setError(error);
 			throw error;
 		}
+	}
+
+	async retryFailedTurn(turnId: string): Promise<void> {
+		const turns = this._thread?.turns ?? [];
+		const turn = turns.at(-1);
+		if (turn?.turnId !== turnId || turn.status !== "failed" || turn.error?.retryable !== true) {
+			throw new Error("Only the latest retryable failed Turn can be retried");
+		}
+		await this.send("Try again.");
 	}
 
 	async interrupt(): Promise<void> {

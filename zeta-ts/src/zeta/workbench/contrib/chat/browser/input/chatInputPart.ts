@@ -126,6 +126,16 @@ export class ChatInputPart extends DisposableOwner {
 		this.input.focus();
 	}
 
+	openModelSelector(): void {
+		const button = this.inputToolbar.element.querySelector<HTMLButtonElement>(".zeta-chat-input-model-action");
+		if (!button || button.disabled || button.classList.contains("disabled")) {
+			this.focus();
+			return;
+		}
+		button.focus();
+		button.click();
+	}
+
 	setVisible(visible: boolean): void {
 		if (visible) this.input.layout();
 	}

@@ -198,3 +198,24 @@
 .zeta-chat-item.error {
   border-left-color: var(--zeta-error-foreground);
 }
+.zeta-chat-turn-error-detail {
+  margin: 0 8px 8px;
+  color: var(--zeta-description-foreground);
+}
+.zeta-chat-turn-error-action {
+  margin: 0 8px 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 4px;
+  color: var(--zeta-button-foreground);
+  background: var(--zeta-button-secondary-background);
+  font: inherit;
+  cursor: pointer;
+}
+.zeta-chat-turn-error-action:hover {
+  background: var(--zeta-button-hover-background);
+}
+.zeta-chat-turn-error-action:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}

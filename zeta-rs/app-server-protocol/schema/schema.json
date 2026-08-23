@@ -19793,7 +19793,8 @@
         "invalidResponse",
         "completionPersistenceFailed",
         "interactionDeadlineElapsed",
-        "toolRepetition"
+        "toolRepetition",
+        "turnBudgetExhausted"
       ],
       "type": "string"
     },

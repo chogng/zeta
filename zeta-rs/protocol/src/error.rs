@@ -74,6 +74,14 @@ impl StableTurnError {
             retryable: false,
         }
     }
+
+    pub fn turn_budget_exhausted() -> Self {
+        Self {
+            code: StableTurnErrorCode::TurnBudgetExhausted,
+            message: "The Turn resource budget was exhausted".into(),
+            retryable: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -87,4 +95,5 @@ pub enum StableTurnErrorCode {
     CompletionPersistenceFailed,
     InteractionDeadlineElapsed,
     ToolRepetition,
+    TurnBudgetExhausted,
 }

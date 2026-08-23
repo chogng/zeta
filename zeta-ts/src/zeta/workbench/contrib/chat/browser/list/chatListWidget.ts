@@ -1,8 +1,12 @@
 import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
+import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
-import type { IChatListItem } from "./chatListItems.js";
-import { h } from "../../../../../base/browser/dom.js";
+import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
+
+interface ChatListWidgetOptions {
+	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
+}
 
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
 export class ChatListWidget extends DisposableOwner {
@@ -10,11 +14,13 @@ export class ChatListWidget extends DisposableOwner {
 	private readonly scrollable: ScrollableElement;
 	private readonly transcript: HTMLDivElement;
 	private readonly renderedItems = this.own(new ResettableDisposableGroup());
+	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
 	private visible = false;
 	private shouldFollow = true;
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement, options: ChatListWidgetOptions = {}) {
 		super();
+		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
 		this.scrollable = this.own(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
@@ -76,11 +82,27 @@ export class ChatListWidget extends DisposableOwner {
 			content.textContent = item.text;
 			article.append(content);
 		}
+		if (item.detail) {
+			const detail = h(this.element.ownerDocument, "p");
+			detail.className = "zeta-chat-turn-error-detail";
+			detail.textContent = item.detail;
+			article.append(detail);
+		}
+		if (item.action) {
+			const action = item.action;
+			const button = h(this.element.ownerDocument, "button");
+			button.type = "button";
+			button.className = "zeta-chat-turn-error-action";
+			button.textContent = action.label;
+			article.append(button);
+			this.renderedItems.add(addDisposableListener(button, "click", () => this.onDidRequestErrorAction?.(action)));
+		}
 		return article;
 	}
 }
 
 function itemLabel(item: IChatListItem): string {
+	if (item.label) return item.label;
 	switch (item.type) {
 		case "userMessage":
 		case "userImage":
