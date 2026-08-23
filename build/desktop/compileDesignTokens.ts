@@ -17,7 +17,7 @@ const moduleUrl = pathToFileURL(path.join(repositoryRoot, ".build/desktop/token-
 const { runDesignTokenCompiler } = await import(`${moduleUrl.href}?v=${Date.now()}`);
 
 export async function compileDesignTokens(check = false) {
-  await runDesignTokenCompiler(check);
+  await runDesignTokenCompiler(check, path.join(repositoryRoot, "resources/design-tokens"));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

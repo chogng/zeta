@@ -5,8 +5,7 @@
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "preinstall": "node build/pnpm/preinstall.ts",
-    "build": "corepack pnpm run build:all",
-    "build:all": "corepack pnpm run build:desktop && corepack pnpm run build:rust",
+    "build": "corepack pnpm run build:desktop && corepack pnpm run build:rust",
     "build:desktop": "corepack pnpm --dir zeta-ts build",
     "build:docs": "corepack pnpm --dir docs-site build",
     "build:rust": "cargo build --workspace",

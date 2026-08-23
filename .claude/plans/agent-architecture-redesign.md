@@ -63,4 +63,4 @@
 
 - 文档中每一条"已实现"声明都以本次审读的代码符号为据（已核对：mailbox/incarnation/approval/escalation/circuit breaker/saga 均存在；ContextManager 等零引用）
 - 五篇文档交叉链接与状态标记一致性自查
-- `pnpm --dir docs-site run` 类文档生成如受影响则跑 `docs-site/scripts/generate-docs.mjs` 验证（仅当该脚本消费这些文档）
+- 文档生成如受影响则运行 `corepack pnpm --dir docs-site run generate:docs` 验证（仅当生成器消费这些文档）

@@ -11,14 +11,16 @@ const outputs = {
   userThemeTemplate: "color-theme.template.json",
 } as const;
 
-export async function runDesignTokenCompiler(check: boolean): Promise<void> {
-  const outputDirectory = resolve("../resources/design-tokens");
+export async function runDesignTokenCompiler(check: boolean, outputDirectory: string): Promise<void> {
+  const resolvedOutputDirectory = resolve(outputDirectory);
   const artifacts = compileDesignTokenArtifacts();
-  if (!check) await mkdir(outputDirectory, { recursive: true });
+  if (!check) {
+    await mkdir(resolvedOutputDirectory, { recursive: true });
+  }
   const stale: string[] = [];
   for (const [artifact, filename] of Object.entries(outputs)) {
     const expected = artifacts[artifact as keyof typeof artifacts];
-    const output = resolve(outputDirectory, filename);
+    const output = resolve(resolvedOutputDirectory, filename);
     if (check) {
       const actual = await readFile(output, "utf8").catch(() => "");
       if (actual !== expected) stale.push(filename);

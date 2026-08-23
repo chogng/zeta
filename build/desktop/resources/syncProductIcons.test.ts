@@ -71,7 +71,7 @@ test("product icon generation can update generated output without rewriting sour
   try {
     await mkdir(sourceDirectory);
     await writeFile(join(sourceDirectory, "add.svg"), addSvg);
-    const report = await syncProductIcons({ outputFile, sourceDirectory, writeSources: false });
+    const report = await syncProductIcons({ outputFile, sourceDirectory, sourceHandling: "ignore" });
     assert.equal(report.outputChanged, true);
     assert.equal(report.sourceChanged, false);
     assert.equal(await readFile(join(sourceDirectory, "add.svg"), "utf8"), addSvg);
@@ -89,6 +89,7 @@ test("product icon synchronization canonicalizes sources and supports a read-onl
     await mkdir(sourceDirectory);
     await writeFile(join(sourceDirectory, "add.svg"), addSvg);
     await assert.rejects(checkProductIcons({ sourceDirectory }), /require synchronization/);
+    await assert.rejects(syncProductIcons({ outputFile, sourceDirectory, sourceHandling: "check" }), /require synchronization/);
     const report = await syncProductIcons({ outputFile, sourceDirectory });
     const optimized = await readFile(join(sourceDirectory, "add.svg"), "utf8");
     assert.equal(report.sourceChanged, true);
@@ -96,6 +97,7 @@ test("product icon synchronization canonicalizes sources and supports a read-onl
     assert.doesNotMatch(optimized, /\bheight="16"/);
     assert.match(optimized, /viewBox="0 0 16 16"/);
     assert.equal((await checkProductIcons({ sourceDirectory })).count, 1);
+    assert.equal((await syncProductIcons({ outputFile, sourceDirectory, sourceHandling: "check" })).outputChanged, false);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

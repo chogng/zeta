@@ -8,7 +8,7 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 test("repository build orchestration is owned by the root build directory", () => {
   for (const directory of ["zeta-ts/scripts", "docs-site/build", "docs-site/scripts", "scripts"]) {
     const path = join(repositoryRoot, directory);
-    assert.deepEqual(existsSync(path) ? readdirSync(path) : [], [], `${directory} must not regain build scripts`);
+    assert.equal(existsSync(path), false, `${directory} must not regain a build directory`);
   }
   for (const category of ["desktop", "docs", "download", "lib", "pnpm", "release", "test", "vite", "zeterm"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);

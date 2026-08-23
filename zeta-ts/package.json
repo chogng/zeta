@@ -25,7 +25,7 @@
     "predev:renderer": "node ../build/desktop/resources/syncGeneratedResources.ts",
     "predev:web": "node ../build/desktop/resources/syncGeneratedResources.ts",
     "predev:web:full": "node ../build/desktop/resources/syncGeneratedResources.ts && node ../build/desktop/prepareDevPackage.ts --javascript-runtime packaged-node",
-    "pretest:main": "corepack pnpm run prepare:output && node ../build/desktop/resources/syncGeneratedResources.ts",
+    "pretest:main": "node ../build/desktop/resources/syncGeneratedResources.ts",
     "pretest:extensions": "corepack pnpm run prepare:output",
     "pretest:unit": "corepack pnpm run prepare:output",
     "pretest:editor:unit": "corepack pnpm run prepare:output",

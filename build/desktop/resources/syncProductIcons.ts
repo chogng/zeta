@@ -13,7 +13,7 @@ const unsafeSvgPattern = /<(?:script|foreignObject)\b|\son[a-z]+\s*=|(?:href|xli
 interface ProductIconOptions {
   readonly outputFile?: string;
   readonly sourceDirectory?: string;
-  readonly writeSources?: boolean;
+  readonly sourceHandling?: "check" | "ignore" | "write";
 }
 
 interface ProductIconReport {
@@ -31,23 +31,34 @@ interface ProductIconSourceUpdate {
 export async function syncProductIcons(options: ProductIconOptions = {}): Promise<ProductIconReport> {
   const sourceDirectory = options.sourceDirectory ?? iconDirectory;
   const outputFile = options.outputFile ?? output;
-  const writeSources = options.writeSources ?? true;
+  const sourceHandling = options.sourceHandling ?? "write";
   const compilation = await compileProductIcons(sourceDirectory);
-  if (writeSources) {
+  if (sourceHandling === "check") {
+    assertProductIconSourcesSynchronized(compilation.sourceUpdates);
+  } else if (sourceHandling === "write") {
     await Promise.all(compilation.sourceUpdates.map((update) => writeFile(update.path, update.content, "utf8")));
   }
   const outputChanged = await writeFileIfChanged(outputFile, compilation.generated);
-  return { count: compilation.count, outputChanged, sourceChanged: writeSources && compilation.sourceUpdates.length > 0 };
+  return {
+    count: compilation.count,
+    outputChanged,
+    sourceChanged: sourceHandling === "write" && compilation.sourceUpdates.length > 0,
+  };
 }
 
 export async function checkProductIcons(options: Pick<ProductIconOptions, "sourceDirectory"> = {}): Promise<{ readonly count: number }> {
   const sourceDirectory = options.sourceDirectory ?? iconDirectory;
   const compilation = await compileProductIcons(sourceDirectory);
-  if (compilation.sourceUpdates.length > 0) {
-    const fileNames = compilation.sourceUpdates.map((update) => update.fileName);
-    throw new Error(`${fileNames.length} product icon(s) require synchronization: ${fileNames.join(", ")}. Run 'pnpm icons:sync'.`);
-  }
+  assertProductIconSourcesSynchronized(compilation.sourceUpdates);
   return { count: compilation.count };
+}
+
+function assertProductIconSourcesSynchronized(sourceUpdates: readonly ProductIconSourceUpdate[]): void {
+  if (sourceUpdates.length === 0) {
+    return;
+  }
+  const fileNames = sourceUpdates.map((update) => update.fileName);
+  throw new Error(`${fileNames.length} product icon(s) require synchronization: ${fileNames.join(", ")}. Run 'pnpm icons:sync'.`);
 }
 
 async function compileProductIcons(sourceDirectory: string): Promise<{ readonly count: number; readonly generated: string; readonly sourceUpdates: ProductIconSourceUpdate[] }> {

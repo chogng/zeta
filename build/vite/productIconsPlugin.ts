@@ -46,7 +46,7 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Zet
         timer = setTimeout(() => {
           pending = pending
             .catch(() => undefined)
-            .then(() => syncProductIcons({ sourceDirectory, outputFile, writeSources: false }))
+            .then(() => syncProductIcons({ sourceDirectory, outputFile, sourceHandling: "ignore" }))
             .then((report) => {
               if (report.outputChanged) {
                 server.ws.send({ type: "full-reload" });
