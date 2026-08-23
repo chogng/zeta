@@ -7,8 +7,8 @@ export function projectAsterCurrentLineHighlight(context: ViewportOverlayContext
   const activeLineIndex = controller?.selections.primary.active.lineIndex;
   for (const [visualLineIndex, line] of context.renderedLines) {
     const active = context.activeLineHighlight === "on" && context.visualLineProjection.lineAt(visualLineIndex)?.logicalLineIndex === activeLineIndex;
-    line.numberElement.classList.toggle("active", active);
-    line.element.classList.toggle("active", active);
+    line.numberDomNode.setClassName(active ? "aster-editor-line-number active" : "aster-editor-line-number");
+    line.domNode.setClassName(active ? "aster-editor-line active" : "aster-editor-line");
   }
 }
 

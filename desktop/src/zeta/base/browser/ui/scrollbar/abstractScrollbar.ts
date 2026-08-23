@@ -1,4 +1,5 @@
 import { addDisposableListener, h } from "../../dom.js";
+import { FastDomNode } from "../../fastDomNode.js";
 import { StandardPointerEvent } from "../../mouseEvent.js";
 import {
   DisposableOwner,
@@ -19,6 +20,8 @@ export interface AbstractScrollbarOptions {
 export abstract class AbstractScrollbar extends DisposableOwner {
   readonly track: HTMLDivElement;
   readonly thumb: HTMLDivElement;
+  protected readonly thumbNode: FastDomNode<HTMLDivElement>;
+  private readonly trackNode: FastDomNode<HTMLDivElement>;
   private readonly trackClickBehavior: "jump" | "page";
   private readonly getMetrics: () => ScrollbarAxisMetrics;
   private readonly setPosition: (position: number) => void;
@@ -37,6 +40,8 @@ export abstract class AbstractScrollbar extends DisposableOwner {
     const thumb = h(container.ownerDocument, "div");
     this.track = track;
     this.thumb = thumb;
+    this.trackNode = new FastDomNode(track);
+    this.thumbNode = new FastDomNode(thumb);
     this.dragListeners = this.own(new ResettableDisposableGroup());
     this.defer(() => track.remove());
 
@@ -89,10 +94,10 @@ export abstract class AbstractScrollbar extends DisposableOwner {
   ): number | undefined;
 
   render(metrics: ScrollbarAxisMetrics, rendered: boolean): void {
-    this.track.hidden = !rendered;
-    this.track.tabIndex = rendered && metrics.maximumPosition > 0
+    this.trackNode.setHidden(!rendered);
+    this.trackNode.setTabIndex(rendered && metrics.maximumPosition > 0
       ? 0
-      : -1;
+      : -1);
     this.track.setAttribute(
       "aria-valuemax",
       String(Math.round(metrics.maximumPosition)),

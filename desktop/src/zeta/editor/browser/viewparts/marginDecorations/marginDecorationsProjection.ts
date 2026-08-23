@@ -28,24 +28,26 @@ export function projectAsterDiagnosticMarginDecorations(context: ViewportOverlay
     const diagnostics = visualLine?.firstForLogicalLine
       ? diagnosticsByLine.get(visualLine.logicalLineIndex) ?? []
       : [];
-    const marker = line.diagnosticElement;
-    marker.hidden = diagnostics.length === 0;
-    marker.classList.remove("error", "warning", "information", "hint");
-    delete marker.dataset.diagnosticHoverText;
-    marker.removeAttribute("title");
-    marker.textContent = "";
-    if (diagnostics.length === 0) continue;
+    const marker = line.diagnosticDomNode;
+    marker.setHidden(diagnostics.length === 0);
+    delete marker.domNode.dataset.diagnosticHoverText;
+    marker.domNode.removeAttribute("title");
+    if (diagnostics.length === 0) {
+      marker.setClassName("aster-editor-diagnostic-marker");
+      marker.setTextContent("");
+      continue;
+    }
     const highest = diagnostics.reduce((current, candidate) =>
       (DIAGNOSTIC_PRESENTATION_PRIORITY.get(candidate.presentation) ?? 0) > (DIAGNOSTIC_PRESENTATION_PRIORITY.get(current.presentation) ?? 0)
         ? candidate
         : current);
-    marker.classList.add(diagnosticMarkerClass(highest.presentation));
-    marker.textContent = "●";
+    marker.setClassName(`aster-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`);
+    marker.setTextContent("●");
     const hoverTexts = [...new Set(diagnostics.flatMap(diagnostic => diagnostic.hoverText === undefined ? [] : [diagnostic.hoverText]))];
     if (hoverTexts.length > 0) {
       const hoverText = hoverTexts.join("\n");
-      marker.dataset.diagnosticHoverText = hoverText;
-      marker.title = hoverText;
+      marker.domNode.dataset.diagnosticHoverText = hoverText;
+      marker.domNode.title = hoverText;
     }
   }
 }

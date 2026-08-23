@@ -1,4 +1,5 @@
 import { addDisposableListener } from "../../../base/browser/dom.js";
+import { FastDomNode } from "../../../base/browser/fastDomNode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
@@ -21,6 +22,7 @@ interface ActiveComposition {
  */
 export class CompositionController extends DisposableOwner {
   private readonly _onDidChange = this.own(new Emitter<boolean>());
+  private readonly inputNode: FastDomNode<HTMLTextAreaElement>;
   private readonly initialReadOnly: boolean;
   private activeComposition: ActiveComposition | undefined;
 
@@ -38,6 +40,7 @@ export class CompositionController extends DisposableOwner {
         "Aster composition and selection controllers must share one text model",
       );
     }
+    this.inputNode = new FastDomNode(element);
     this.initialReadOnly = element.readOnly;
     this.defer(() => {
       this.cancelComposition();
@@ -204,9 +207,9 @@ export class CompositionController extends DisposableOwner {
 
   private positionInput(position: TextPosition): void {
     const coordinates = this.viewport.getPositionContentCoordinates(position);
-    this.element.style.left = `${coordinates.left}px`;
-    this.element.style.top = `${coordinates.top}px`;
-    this.element.style.height = `${coordinates.height}px`;
+    this.inputNode.setLeft(coordinates.left);
+    this.inputNode.setTop(coordinates.top);
+    this.inputNode.setHeight(coordinates.height);
   }
 
   private finishPresentation(): void {
@@ -220,9 +223,9 @@ export class CompositionController extends DisposableOwner {
       this.element.classList.contains("ime-input");
     this.viewport.element.classList.remove("composing");
     this.element.classList.remove("ime-input");
-    this.element.style.removeProperty("left");
-    this.element.style.removeProperty("top");
-    this.element.style.removeProperty("height");
+    this.inputNode.setLeft("");
+    this.inputNode.setTop("");
+    this.inputNode.setHeight("");
     this.viewport.setCompositionRange(undefined);
     return changed;
   }

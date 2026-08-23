@@ -68,7 +68,7 @@ export function createAsterDomSelectionGeometry(context: ViewportOverlayContext,
     const left = getAsterDomTextCaretLeft(
       renderedLine.textElement,
       offset,
-      renderedLine.element,
+      renderedLine.domNode.domNode,
     );
     if (left === undefined) continue;
     caretIndexes.add(selectionIndex);
@@ -116,7 +116,7 @@ export function createAsterDomRangeRectangles(context: ViewportOverlayContext, r
       renderedLine.textElement,
       startOffset,
       endOffset,
-      renderedLine.element,
+      renderedLine.domNode.domNode,
     );
     if (!rectangles) return undefined;
     result.push(...rectangles.map(rectangle => Object.freeze({

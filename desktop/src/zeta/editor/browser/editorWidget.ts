@@ -33,6 +33,7 @@ import type { DocumentCollaborationInvite } from "../common/services/documentCol
 import type { DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 import { h, fragment as createFragment } from "../../base/browser/dom.js";
+import { FastDomNode } from "../../base/browser/fastDomNode.js";
 
 export interface EditorWidgetOptions {
   readonly onSave?: () => Promise<void | boolean>;
@@ -130,7 +131,8 @@ export class EditorWidget extends DisposableOwner {
   private readonly embeddedEditors = new Map<string, TextEditorWidget>();
   private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
   private container: HTMLDivElement | undefined;
-  private layoutContainer: HTMLDivElement | undefined;
+  private containerNode: FastDomNode<HTMLDivElement> | undefined;
+  private layoutContainerNode: FastDomNode<HTMLDivElement> | undefined;
   private formattingContribution: DocumentFormattingContribution | undefined;
   private collaborationContribution: DocumentCollaborationContribution | undefined;
   private outlineNavigator: DocumentOutlineNavigator | undefined;
@@ -199,7 +201,8 @@ export class EditorWidget extends DisposableOwner {
     this.collaborationContribution = collaborationContribution;
     this.formattingContribution = formattingContribution;
     this.container = container;
-    this.layoutContainer = layoutContainer;
+    this.containerNode = new FastDomNode(container);
+    this.layoutContainerNode = new FastDomNode(layoutContainer);
     this.outlineNavigator = outlineNavigator;
     const onSelectionChange = () => this.syncDocumentSelection();
     parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
@@ -210,10 +213,11 @@ export class EditorWidget extends DisposableOwner {
       this.collaborationContribution = undefined;
       formattingContribution?.element.remove();
       this.formattingContribution = undefined;
-      this.layoutContainer = undefined;
+      this.layoutContainerNode = undefined;
       container.remove();
       this.outlineNavigator = undefined;
       this.container = undefined;
+      this.containerNode = undefined;
     });
   }
 
@@ -276,13 +280,13 @@ export class EditorWidget extends DisposableOwner {
 
   layout(dimension: IDimension): void {
     this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
-    if (this.layoutContainer) {
-      this.layoutContainer.style.width = `${this.dimension.width}px`;
-      this.layoutContainer.style.height = `${this.dimension.height}px`;
+    if (this.layoutContainerNode) {
+      this.layoutContainerNode.setWidth(this.dimension.width);
+      this.layoutContainerNode.setHeight(this.dimension.height);
     }
-    if (this.container) {
-      this.container.style.width = `${this.dimension.width}px`;
-      this.container.style.height = `${this.dimension.height}px`;
+    if (this.containerNode) {
+      this.containerNode.setWidth(this.dimension.width);
+      this.containerNode.setHeight(this.dimension.height);
       for (const editor of this.embeddedEditors.values()) editor.layout(this.embeddedEditorDimension());
     }
   }

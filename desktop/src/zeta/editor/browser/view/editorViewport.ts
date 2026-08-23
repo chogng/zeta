@@ -1,5 +1,6 @@
 import "../media/editorViewport.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
+import { FastDomNode } from "../../../base/browser/fastDomNode.js";
 import { getClientArea } from "../../../base/browser/geometry.js";
 import { observeResize } from "../../../base/browser/observer.js";
 import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
@@ -123,6 +124,7 @@ export class EditorViewport extends DisposableOwner {
   private readonly model: TextModel;
   private readonly viewport: EditorViewportModel;
   private readonly contentElement: HTMLDivElement;
+  private readonly contentNode: FastDomNode<HTMLDivElement>;
   private readonly textMetricsElement: HTMLSpanElement;
   private readonly accessibilityStatusElement: HTMLDivElement;
   private readonly viewContext: EditorViewContext;
@@ -156,6 +158,7 @@ export class EditorViewport extends DisposableOwner {
     this.model = options.model;
     this.element = h(ownerDocument, "div");
     this.contentElement = h(ownerDocument, "div");
+    this.contentNode = new FastDomNode(this.contentElement);
     this.textMetricsElement = h(ownerDocument, "span");
     this.accessibilityStatusElement = h(ownerDocument, "div");
     this.selectionController = options.selectionController;
@@ -214,7 +217,7 @@ export class EditorViewport extends DisposableOwner {
     this.element.tabIndex = 0;
     this.element.setAttribute("role", "region");
     this.element.setAttribute("aria-label", options.ariaLabel ?? "Aster editor");
-    this.contentElement.className = "aster-editor-content";
+    this.contentNode.setClassName("aster-editor-content");
     this.textMetricsElement.className =
       "aster-editor-text-metrics";
     this.textMetricsElement.setAttribute("aria-hidden", "true");
@@ -273,7 +276,7 @@ export class EditorViewport extends DisposableOwner {
     );
     this.viewParts = this.own(new EditorViewPartCollection());
     this.viewLinesPart = this.viewParts.register(new ViewLinesPart({
-      container: this.contentElement,
+      ownerDocument,
       model: this.model,
       readVisualProjection: () => this.visualProjection,
       readProjectionRevision: () => this.visibleLineProjection.revision,
@@ -284,7 +287,7 @@ export class EditorViewport extends DisposableOwner {
     }));
     this.marginPart = this.viewParts.register(new MarginPart({
       host: this.element,
-      container: this.contentElement,
+      contentElement: this.contentElement,
       model: this.model,
       textMeasurer: this.textMeasurer,
       presentation: this.presentation,
@@ -304,7 +307,11 @@ export class EditorViewport extends DisposableOwner {
       options.decorationSources ?? [],
     ));
     this.viewParts.register(new LinesDecorationsPart(this.viewContext, this.decorationsPart));
-    this.viewParts.register(new BlockDecorationsPart(this.viewContext, this.decorationsPart, this.contentElement));
+    const blockDecorationsPart = this.viewParts.register(new BlockDecorationsPart(
+      this.viewContext,
+      this.decorationsPart,
+      ownerDocument,
+    ));
     this.viewParts.register(new MarginDecorationsPart(this.viewContext, this.decorationsPart));
     this.viewParts.register(new IndentGuidesPart(this.viewContext, {
       showIndentationGuides: this.showIndentationGuides,
@@ -312,8 +319,8 @@ export class EditorViewport extends DisposableOwner {
     }));
     this.selectionsPart = this.viewParts.register(new SelectionsPart(this.viewContext, this.selectionController));
     this.viewCursorsPart = this.viewParts.register(new ViewCursorsPart(this.viewContext, this.selectionController));
-    this.viewParts.register(new RulersPart({
-      container: this.contentElement,
+    const rulersPart = this.viewParts.register(new RulersPart({
+      ownerDocument,
       textMeasurer: this.textMeasurer,
       readTextLeft: () => this.textLeft,
       rulers: options.rulers,
@@ -324,8 +331,8 @@ export class EditorViewport extends DisposableOwner {
       viewport: this.element,
       scrollTo: position => this.scrollTo(position),
     }));
-    this.viewParts.register(new MinimapPart({
-      container: this.element,
+    const minimapPart = this.viewParts.register(new MinimapPart({
+      ownerDocument,
       model: this.model,
       readLayout: () => this.viewport.layout,
       scrollTo: position => this.scrollTo(position),
@@ -333,14 +340,27 @@ export class EditorViewport extends DisposableOwner {
       readMarkersRevision: () => this.decorationsPart.markersRevision,
       enabled: this.minimap === EditorMinimap.On,
     }));
-    this.viewParts.register(new OverviewRulerPart({
-      container: this.element,
+    const overviewRulerPart = this.viewParts.register(new OverviewRulerPart({
+      ownerDocument,
       minimapEnabled: this.minimap === EditorMinimap.On,
       readLineCount: () => this.model.lineCount,
       readMarkers: () => this.decorationsPart.overviewMarkers(),
       readMarkersRevision: () => this.decorationsPart.markersRevision,
     }));
-    this.viewParts.register(new ScrollDecorationPart(this.element));
+    const scrollDecorationPart = this.viewParts.register(new ScrollDecorationPart(ownerDocument));
+
+    // Root order is the visual stacking contract; Parts own nodes but do not choose their host.
+    this.contentElement.append(
+      this.viewLinesPart.domNode,
+      this.marginPart.domNode,
+      blockDecorationsPart.domNode,
+      rulersPart.domNode,
+    );
+    this.element.append(
+      minimapPart.domNode,
+      overviewRulerPart.domNode,
+      scrollDecorationPart.domNode,
+    );
     this.own(this.visibleLineProjection.onDidChange(() => this.project(viewport.layout)));
     if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
     this.own(this.decorationsPart.onDidChange(() => this.project(viewport.layout)));
@@ -541,7 +561,7 @@ export class EditorViewport extends DisposableOwner {
     let nearestColumn: number | undefined;
     let nearestDistance = Number.POSITIVE_INFINITY;
     for (const column of getTextGraphemeBoundaries(text)) {
-      const left = getAsterDomTextCaretLeft(line.textElement, column, line.element);
+      const left = getAsterDomTextCaretLeft(line.textElement, column, line.domNode.domNode);
       if (left === undefined) return undefined;
       const distance = Math.abs(left - horizontalOffset);
       if (distance < nearestDistance) {
@@ -630,7 +650,7 @@ export class EditorViewport extends DisposableOwner {
     if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
     const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
     return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
-      ? getAsterDomTextCaretLeft(line.textElement, offset, line.element)
+      ? getAsterDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
       : undefined;
   }
 
@@ -663,8 +683,8 @@ export class EditorViewport extends DisposableOwner {
     if (layout !== this.viewport.layout) return;
     this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
     this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
-    this.contentElement.style.width = `${layout.contentSize.width}px`;
-    this.contentElement.style.height = `${layout.contentSize.height}px`;
+    this.contentNode.setWidth(layout.contentSize.width);
+    this.contentNode.setHeight(layout.contentSize.height);
     this.viewParts.render(layout);
     this.syncScrollPosition(layout);
   }

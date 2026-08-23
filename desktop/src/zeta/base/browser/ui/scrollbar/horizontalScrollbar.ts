@@ -13,9 +13,8 @@ export class HorizontalScrollbar extends AbstractScrollbar {
   protected override applyThumbMetrics(
     metrics: ScrollbarAxisMetrics,
   ): void {
-    this.thumb.style.width = `${metrics.thumbSize}px`;
-    this.thumb.style.transform =
-      `translate3d(${metrics.thumbPosition}px, 0, 0)`;
+    this.thumbNode.setWidth(metrics.thumbSize);
+    this.thumbNode.setTransform(`translate3d(${metrics.thumbPosition}px, 0, 0)`);
   }
 
   protected override pointerCoordinate(

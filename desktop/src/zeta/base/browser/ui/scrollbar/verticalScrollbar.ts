@@ -13,9 +13,8 @@ export class VerticalScrollbar extends AbstractScrollbar {
   protected override applyThumbMetrics(
     metrics: ScrollbarAxisMetrics,
   ): void {
-    this.thumb.style.height = `${metrics.thumbSize}px`;
-    this.thumb.style.transform =
-      `translate3d(0, ${metrics.thumbPosition}px, 0)`;
+    this.thumbNode.setHeight(metrics.thumbSize);
+    this.thumbNode.setTransform(`translate3d(0, ${metrics.thumbPosition}px, 0)`);
   }
 
   protected override pointerCoordinate(

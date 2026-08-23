@@ -1,5 +1,6 @@
 import "./margin.css";
 import { h } from "../../../../base/browser/dom.js";
+import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
@@ -15,7 +16,7 @@ export type MarginPresentation = "document" | "embedded";
 
 export interface MarginPartOptions {
   readonly host: HTMLElement;
-  readonly container: HTMLElement;
+  readonly contentElement: HTMLElement;
   readonly model: TextModel;
   readonly textMeasurer: TextMeasurer;
   readonly presentation: MarginPresentation;
@@ -27,9 +28,10 @@ export interface MarginPartOptions {
 
 /** Owns the editor margin geometry, background, and feature-gutter projection. */
 export class MarginPart extends DisposableOwner implements EditorViewPart {
-  readonly element: HTMLDivElement;
+  readonly domNode: HTMLDivElement;
+  private readonly root: FastDomNode<HTMLDivElement>;
   private readonly host: HTMLElement;
-  private readonly container: HTMLElement;
+  private readonly contentElement: HTMLElement;
   private readonly model: TextModel;
   private readonly textMeasurer: TextMeasurer;
   private readonly presentation: MarginPresentation;
@@ -41,7 +43,7 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
   constructor(options: MarginPartOptions) {
     super();
     this.host = options.host;
-    this.container = options.container;
+    this.contentElement = options.contentElement;
     this.model = options.model;
     this.textMeasurer = options.textMeasurer;
     this.presentation = options.presentation;
@@ -49,12 +51,11 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
     this.lineGutterDecoration = options.lineGutterDecoration;
     this.readVisualProjection = options.readVisualProjection;
     this.readRenderedLines = options.readRenderedLines;
-    this.element = h(options.container.ownerDocument, "div");
-    this.element.className = "aster-editor-margin";
-    this.element.setAttribute("role", "presentation");
-    this.element.setAttribute("aria-hidden", "true");
-    options.container.append(this.element);
-    this.defer(() => this.element.remove());
+    this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
+    this.root = new FastDomNode(this.domNode);
+    this.root.setClassName("aster-editor-margin");
+    this.domNode.setAttribute("role", "presentation");
+    this.domNode.setAttribute("aria-hidden", "true");
   }
 
   get gutterWidth(): number {
@@ -86,9 +87,9 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
     const gutterWidth = this.gutterWidth;
     const featureGutterWidth = this.featureGutterWidth;
     const additionalFeatureGutterWidth = this.additionalFeatureGutterWidth;
-    this.element.style.width = `${gutterWidth}px`;
-    this.element.style.height = `${layout.contentSize.height}px`;
-    this.element.hidden = gutterWidth === 0;
+    this.root.setWidth(gutterWidth);
+    this.root.setHeight(layout.contentSize.height);
+    this.root.setHidden(gutterWidth === 0);
     for (const [visualLineIndex, line] of this.readRenderedLines()) {
       const visualLine = this.readVisualProjection().lineAt(visualLineIndex);
       if (!visualLine) continue;
@@ -97,8 +98,8 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
     this.host.style.setProperty("--aster-editor-gutter-width", `${gutterWidth}px`);
     this.host.style.setProperty("--aster-editor-feature-gutter-width", `${featureGutterWidth}px`);
     this.host.style.setProperty("--aster-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
-    this.container.style.setProperty("--aster-editor-gutter-width", `${gutterWidth}px`);
-    this.container.style.setProperty("--aster-editor-feature-gutter-width", `${featureGutterWidth}px`);
-    this.container.style.setProperty("--aster-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
+    this.contentElement.style.setProperty("--aster-editor-gutter-width", `${gutterWidth}px`);
+    this.contentElement.style.setProperty("--aster-editor-feature-gutter-width", `${featureGutterWidth}px`);
+    this.contentElement.style.setProperty("--aster-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
   }
 }

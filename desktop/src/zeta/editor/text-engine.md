@@ -83,7 +83,7 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 
 ## 视图架构
 
-VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Aster 采用这些边界，但不照搬 `FastDomNode`、全部 `ViewEventHandler` 事件或没有现实调用者的抽象。
+VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Aster 采用这些边界，并在 retained view root、virtual row、line number、diagnostic marker、block、ruler、scrollbar track/thumb、diff viewport 以及 IME input geometry 上使用按当前调用者补全的 `FastDomNode` contract 去重 geometry、line height、transform、visibility、tab order、class 和短文本写入；临时重建的 projection DOM 保持原生写入，也不复制没有现实调用者的 setter、全部 `ViewEventHandler` 事件或其他历史抽象。
 
 ### Current：现有渲染链路
 
@@ -102,7 +102,7 @@ flowchart LR
 - `EditorViewPartCollection` 按注册顺序同步 render；`ViewLinesPart` 先建立当前 rendered lines，后续 overlay Parts 再消费它们。
 - `EditorViewContext` 当前集中 layout 读取、overlay snapshot 创建和 version validation，减少重复 callback；它仍是过渡结构。
 - 当前每次 `project` 会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
-- 当前部分 Part 在构造函数中把根节点 append 到宿主；DOM topology 还没有完全收回 View host。
+- `EditorViewport` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
 
 ### Proposed：目标 View contract
 
@@ -153,6 +153,8 @@ this.viewParts.render(context);
 - 缓存是否减少了可测量的工作。
 
 没有这些条件时，直接使用 frame context 中的当前值。
+
+`FastDomNode` 只用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短文本的节点。`RenderedLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性；`DiffEditorWidget`、`DiffOverviewRuler`、`CompositionController` 和 document `EditorWidget` 只包装它们独占的 retained geometry。这个边界与 VS Code 一致：editor view 的 root 和 overflow/layout containers 使用 `FastDomNode`，generic `SplitView`、`ContextView` 和 `Resizable` 则保留直接 DOM 写入及各自已有的 size/layout guard。某个属性第一次通过 wrapper 写入后，该属性只能继续通过同一个 wrapper 更新，清除 inline geometry 也必须通过 wrapper 写入空值；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 
@@ -219,7 +221,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Token、diagnostic、completion、TextMate 和 Rust syntax facts | ✅ Current | version-bound async provider path |
 | Diff editor 与 Rust diff | ✅ Current | Rust 计算，Aster 投影 |
 | Stable view context 与 single frame context | 部分具备 | `EditorViewContext` 已存在；frame context 尚未独立 |
-| Host-owned Part DOM mounting | Proposed | 当前仍有 Part 自行 append 根节点 |
+| Host-owned Part DOM mounting | ✅ Current | `EditorViewport` 显式挂载 Part 根节点并固定 sibling 顺序 |
 | Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |
 | `prepareRender` read/write separation | Potential | 只有出现真实 DOM read/write phase 需求时引入 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |

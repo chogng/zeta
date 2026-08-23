@@ -156,6 +156,11 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
   const input = new TextInputController(viewport, selections);
 
   startAndUpdate(dom.window, input.element, "中");
+  const positionedInput = {
+    left: input.element.style.left,
+    top: input.element.style.top,
+    height: input.element.style.height,
+  };
   input.element.dispatchEvent(keyboardEvent(dom.window, "Escape", true));
   input.element.dispatchEvent(compositionEvent(dom.window, "compositionend", "中"));
   assert.deepEqual({
@@ -167,9 +172,19 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
     selections: initial,
     canUndo: false,
   });
+  assert.deepEqual({
+    left: input.element.style.left,
+    top: input.element.style.top,
+    height: input.element.style.height,
+  }, { left: "", top: "", height: "" });
 
   input.element.focus();
   startAndUpdate(dom.window, input.element, "X");
+  assert.deepEqual({
+    left: input.element.style.left,
+    top: input.element.style.top,
+    height: input.element.style.height,
+  }, positionedInput);
   input.element.blur();
   assert.equal(model.getText(), "abc");
   assert.equal(input.compositionController.composing, false);

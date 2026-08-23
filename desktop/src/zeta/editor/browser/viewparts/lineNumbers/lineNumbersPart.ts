@@ -29,9 +29,9 @@ export class LineNumbersPart extends DisposableOwner implements EditorViewPart {
     for (const [visualLineIndex, line] of this.readRenderedLines()) {
       const visualLine = visualProjection.lineAt(visualLineIndex);
       if (!visualLine) continue;
-      line.numberElement.textContent = this.showLineNumbers && visualLine.firstForLogicalLine
+      line.numberDomNode.setTextContent(this.showLineNumbers && visualLine.firstForLogicalLine
         ? String(visualLine.logicalLineIndex + 1)
-        : "";
+        : "");
     }
   }
 }

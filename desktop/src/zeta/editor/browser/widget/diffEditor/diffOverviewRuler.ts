@@ -1,4 +1,5 @@
 import { fragment as createFragment, h, reset } from "../../../../base/browser/dom.js";
+import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { createScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 
@@ -20,16 +21,20 @@ export interface DiffOverviewRulerLayout {
  */
 export class DiffOverviewRuler {
   readonly element: HTMLDivElement;
+  private readonly root: FastDomNode<HTMLDivElement>;
   private readonly originalLane: HTMLDivElement;
   private readonly modifiedLane: HTMLDivElement;
   private readonly viewport: HTMLDivElement;
+  private readonly viewportNode: FastDomNode<HTMLDivElement>;
 
   constructor(host: HTMLElement) {
     const ownerDocument = host.ownerDocument;
     this.element = h(ownerDocument, "div");
+    this.root = new FastDomNode(this.element);
     this.originalLane = h(ownerDocument, "div");
     this.modifiedLane = h(ownerDocument, "div");
     this.viewport = h(ownerDocument, "div");
+    this.viewportNode = new FastDomNode(this.viewport);
     this.element.className = "aster-diff-overview";
     this.element.setAttribute("aria-hidden", "true");
     this.originalLane.className = "aster-diff-overview-lane original";
@@ -45,12 +50,12 @@ export class DiffOverviewRuler {
   }
 
   layout(layout: DiffOverviewRulerLayout): void {
-    this.element.style.left = `${layout.scrollLeft + Math.max(0, layout.viewportWidth - DIFF_OVERVIEW_RULER_WIDTH)}px`;
-    this.element.style.top = `${layout.scrollTop}px`;
-    this.element.style.height = `${layout.viewportHeight}px`;
+    this.root.setLeft(layout.scrollLeft + Math.max(0, layout.viewportWidth - DIFF_OVERVIEW_RULER_WIDTH));
+    this.root.setTop(layout.scrollTop);
+    this.root.setHeight(layout.viewportHeight);
     const metrics = createScrollbarAxisMetrics(layout.viewportHeight, layout.contentHeight, layout.scrollTop, layout.viewportHeight, 2);
-    this.viewport.style.height = `${metrics.thumbSize}px`;
-    this.viewport.style.transform = `translate3d(0, ${metrics.thumbPosition}px, 0)`;
+    this.viewportNode.setHeight(metrics.thumbSize);
+    this.viewportNode.setTransform(`translate3d(0, ${metrics.thumbPosition}px, 0)`);
   }
 }
 

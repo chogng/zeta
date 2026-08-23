@@ -36,6 +36,17 @@ test("Aster editor migrates plain text and edits a structured paragraph", async 
   environment.window.document.body.append(parent);
   using pane = new EditorPane(files);
   pane.create(parent);
+  pane.layout({ width: 640, height: 480 });
+
+  const layoutContainer = parent.querySelector<HTMLElement>(".zeta-text-editor-widget-layout");
+  const editorContainer = parent.querySelector<HTMLElement>(".zeta-text-editor-widget-pane");
+  assert.deepEqual({
+    layout: { width: layoutContainer?.style.width, height: layoutContainer?.style.height },
+    editor: { width: editorContainer?.style.width, height: editorContainer?.style.height },
+  }, {
+    layout: { width: "640px", height: "480px" },
+    editor: { width: "640px", height: "480px" },
+  });
 
   await pane.setInput({
     resource: URI.file("C:\\project\\paper.zeta-academic"),

@@ -1,5 +1,6 @@
 import "./viewLines.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type EditorLineRange, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
@@ -12,7 +13,7 @@ import { createAsterRenderedLine, type RenderedLine } from "./renderedLine.js";
 export type ViewLinesTextDirection = "auto" | "ltr" | "rtl";
 
 export interface ViewLinesPartOptions {
-  readonly container: HTMLElement;
+  readonly ownerDocument: Document;
   readonly model: TextModel;
   readonly readVisualProjection: () => EditorVisualLineProjection;
   readonly readProjectionRevision: () => number;
@@ -24,7 +25,8 @@ export interface ViewLinesPartOptions {
 
 /** Owns the virtualized text rows and their semantic text projection. */
 export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
-  readonly element: HTMLDivElement;
+  readonly domNode: HTMLDivElement;
+  private readonly root: FastDomNode<HTMLDivElement>;
   private readonly model: TextModel;
   private readonly readVisualProjection: () => EditorVisualLineProjection;
   private readonly readProjectionRevision: () => number;
@@ -47,10 +49,9 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
     this.bracketColorizationSource = options.bracketColorizationSource;
     this.lineGutterDecoration = options.lineGutterDecoration;
     this.textDirection = options.textDirection;
-    this.element = h(options.container.ownerDocument, "div");
-    this.element.className = "aster-editor-lines";
-    options.container.append(this.element);
-    this.defer(() => this.element.remove());
+    this.domNode = this.adopt(h(options.ownerDocument, "div"), domNode => domNode.remove());
+    this.root = new FastDomNode(this.domNode);
+    this.root.setClassName("aster-editor-lines");
   }
 
   get renderedLines(): ReadonlyMap<number, RenderedLine> {
@@ -58,7 +59,7 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
   }
 
   render(layout: EditorViewportLayout): void {
-    this.element.style.transform = `translate3d(0, ${layout.renderTop}px, 0)`;
+    this.root.setTransform(`translate3d(0, ${layout.renderTop}px, 0)`);
     this.reconcileLines(layout);
   }
 
@@ -84,26 +85,26 @@ export class ViewLinesPart extends DisposableOwner implements EditorViewPart {
     ) return;
 
     const semanticTokens = this.resolveSemanticTokenRange(layout.renderLines);
-    const fragment = createFragment(this.element.ownerDocument);
+    const fragment = createFragment(this.domNode.ownerDocument);
     const next = new Map<number, RenderedLine>();
     for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
       const visualLine = visualProjection.lineAt(visualLineIndex);
       if (!visualLine) throw new Error("Viewport render range exceeds the visual line projection");
       const existing = this.lines.get(visualLineIndex);
-      const line = existing ?? createAsterRenderedLine(this.element.ownerDocument, visualLineIndex, this.lineGutterDecoration);
-      line.element.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
+      const line = existing ?? createAsterRenderedLine(this.domNode.ownerDocument, visualLineIndex, this.lineGutterDecoration);
+      line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
       if (!existing || this.renderedModelVersion !== layout.modelVersion || this.renderedProjectionRevision !== projectionRevision) {
         line.textElement.dir = this.textDirection;
         this.projectLineText(line, visualLine, semanticTokens.get(visualLine.logicalLineIndex) ?? []);
       }
       if (!existing || this.renderedLineHeight !== layout.lineHeight) {
-        line.element.style.height = `${layout.lineHeight}px`;
-        line.element.style.lineHeight = `${layout.lineHeight}px`;
+        line.domNode.setHeight(layout.lineHeight);
+        line.domNode.setLineHeight(layout.lineHeight);
       }
       next.set(visualLineIndex, line);
-      fragment.append(line.element);
+      fragment.append(line.domNode.domNode);
     }
-    reset(this.element, fragment);
+    reset(this.domNode, fragment);
     this.lines = next;
     this.renderedRange = layout.renderLines;
     this.renderedModelVersion = layout.modelVersion;

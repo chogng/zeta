@@ -1,5 +1,6 @@
 import "./rulers.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "../../measurement/fontMetrics.js";
@@ -12,7 +13,7 @@ export interface EditorRuler {
 }
 
 export interface RulersPartOptions {
-  readonly container: HTMLElement;
+  readonly ownerDocument: Document;
   readonly textMeasurer: TextMeasurer;
   readonly readTextLeft: () => number;
   readonly rulers?: readonly EditorRuler[];
@@ -20,47 +21,48 @@ export interface RulersPartOptions {
 
 /** Projects configured column guides into the scrollable editor content. */
 export class RulersPart extends DisposableOwner implements EditorViewPart {
-  readonly element: HTMLDivElement;
+  readonly domNode: HTMLDivElement;
+  private readonly root: FastDomNode<HTMLDivElement>;
   private readonly textMeasurer: TextMeasurer;
   private readonly readTextLeft: () => number;
   private readonly rulers: readonly EditorRuler[];
-  private readonly renderedRulers: HTMLDivElement[] = [];
+  private readonly renderedRulers: FastDomNode<HTMLDivElement>[] = [];
 
   constructor(options: RulersPartOptions) {
     super();
     this.textMeasurer = options.textMeasurer;
     this.readTextLeft = options.readTextLeft;
     this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));
-    this.element = h(options.container.ownerDocument, "div");
-    this.element.className = "aster-editor-rulers";
-    this.element.setAttribute("role", "presentation");
-    this.element.setAttribute("aria-hidden", "true");
-    options.container.append(this.element);
-    this.defer(() => this.element.remove());
+    this.domNode = this.adopt(h(options.ownerDocument, "div"), domNode => domNode.remove());
+    this.root = new FastDomNode(this.domNode);
+    this.root.setClassName("aster-editor-rulers");
+    this.domNode.setAttribute("role", "presentation");
+    this.domNode.setAttribute("aria-hidden", "true");
   }
 
   render(layout: EditorViewportLayout): void {
-    this.element.style.width = `${layout.contentSize.width}px`;
-    this.element.style.height = `${Math.min(layout.contentSize.height, 1_000_000)}px`;
+    const height = Math.min(layout.contentSize.height, 1_000_000);
+    this.root.setWidth(layout.contentSize.width);
+    this.root.setHeight(height);
     if (this.renderedRulers.length !== this.rulers.length) {
-      const fragment = createFragment(this.element.ownerDocument);
+      const fragment = createFragment(this.domNode.ownerDocument);
       this.renderedRulers.length = 0;
       for (const ruler of this.rulers) {
-        const element = h(this.element.ownerDocument, "div");
-        element.className = "aster-editor-ruler";
-        fragment.append(element);
+        const element = new FastDomNode(h(this.domNode.ownerDocument, "div"));
+        element.setClassName("aster-editor-ruler");
+        fragment.append(element.domNode);
         this.renderedRulers.push(element);
       }
-      reset(this.element, fragment);
+      reset(this.domNode, fragment);
     }
     for (let index = 0; index < this.rulers.length; index += 1) {
       const ruler = this.rulers[index]!;
       const element = this.renderedRulers[index]!;
-      element.style.left = `${this.readTextLeft() + this.textMeasurer.measureLineWidth("0".repeat(ruler.column))}px`;
-      element.style.height = `${Math.min(layout.contentSize.height, 1_000_000)}px`;
-      element.style.boxShadow = ruler.color
+      element.setLeft(this.readTextLeft() + this.textMeasurer.measureLineWidth("0".repeat(ruler.column)));
+      element.setHeight(height);
+      element.setBoxShadow(ruler.color
         ? `1px 0 0 0 ${ruler.color} inset`
-        : "";
+        : "");
     }
   }
 }

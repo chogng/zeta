@@ -1,12 +1,13 @@
 import { h } from "../../../../base/browser/dom.js";
+import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { type EditorLineGutterDecoration } from "../margin/lineGutterDecoration.js";
 
 /** DOM nodes shared by the line renderer and row-level visual parts. */
 export interface RenderedLine {
-  readonly element: HTMLDivElement;
-  readonly numberElement: HTMLSpanElement;
+  readonly domNode: FastDomNode<HTMLDivElement>;
+  readonly numberDomNode: FastDomNode<HTMLSpanElement>;
   readonly featureGutterElement: HTMLElement;
-  readonly diagnosticElement: HTMLSpanElement;
+  readonly diagnosticDomNode: FastDomNode<HTMLSpanElement>;
   readonly textElement: HTMLSpanElement;
   readonly indentationElement: HTMLDivElement;
   readonly decorationElement: HTMLDivElement;
@@ -18,11 +19,11 @@ export interface RenderedLine {
 
 /** Creates one reusable virtual-line DOM subtree owned by the ViewLines part. */
 export function createAsterRenderedLine(ownerDocument: Document, lineIndex: number, gutterDecoration: EditorLineGutterDecoration | undefined): RenderedLine {
-  const element = h(ownerDocument, "div");
-  const numberElement = h(ownerDocument, "span");
+  const domNode = new FastDomNode(h(ownerDocument, "div"));
+  const numberDomNode = new FastDomNode(h(ownerDocument, "span"));
   const featureGutterElement = gutterDecoration?.create(ownerDocument) ?? h(ownerDocument, "span");
   if (!gutterDecoration) featureGutterElement.hidden = true;
-  const diagnosticElement = h(ownerDocument, "span");
+  const diagnosticDomNode = new FastDomNode(h(ownerDocument, "span"));
   const textElement = h(ownerDocument, "span");
   const indentationElement = h(ownerDocument, "div");
   const decorationElement = h(ownerDocument, "div");
@@ -30,13 +31,13 @@ export function createAsterRenderedLine(ownerDocument: Document, lineIndex: numb
   const selectionElement = h(ownerDocument, "div");
   const cursorElement = h(ownerDocument, "div");
   const compositionElement = h(ownerDocument, "div");
-  element.className = "aster-editor-line";
-  element.dataset.lineIndex = String(lineIndex);
-  numberElement.className = "aster-editor-line-number";
-  numberElement.setAttribute("aria-hidden", "true");
-  diagnosticElement.className = "aster-editor-diagnostic-marker";
-  diagnosticElement.hidden = true;
-  diagnosticElement.setAttribute("aria-hidden", "true");
+  domNode.setClassName("aster-editor-line");
+  domNode.domNode.dataset.lineIndex = String(lineIndex);
+  numberDomNode.setClassName("aster-editor-line-number");
+  numberDomNode.domNode.setAttribute("aria-hidden", "true");
+  diagnosticDomNode.setClassName("aster-editor-diagnostic-marker");
+  diagnosticDomNode.setHidden(true);
+  diagnosticDomNode.domNode.setAttribute("aria-hidden", "true");
   textElement.className = "aster-editor-line-text";
   indentationElement.className = "aster-editor-line-indent-guides";
   indentationElement.setAttribute("aria-hidden", "true");
@@ -50,12 +51,12 @@ export function createAsterRenderedLine(ownerDocument: Document, lineIndex: numb
   cursorElement.setAttribute("aria-hidden", "true");
   compositionElement.className = "aster-editor-line-composition";
   compositionElement.setAttribute("aria-hidden", "true");
-  element.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, featureGutterElement, diagnosticElement, numberElement, textElement);
+  domNode.domNode.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, featureGutterElement, diagnosticDomNode.domNode, numberDomNode.domNode, textElement);
   return {
-    element,
-    numberElement,
+    domNode,
+    numberDomNode,
     featureGutterElement,
-    diagnosticElement,
+    diagnosticDomNode,
     textElement,
     indentationElement,
     decorationElement,
