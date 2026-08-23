@@ -432,9 +432,9 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
 | M0（基本完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装与工具指导已接线；家族 profile 指导随 M1 收口 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
-| M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan`、逐项限幅和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
+| M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding 且模型输入逐项限幅已接线；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan` 和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（部分具备）限幅/预算/压缩 | ContextPlan、配置窗口、preflight、durable compaction、模型调用 usage 账本及冻结 token/cost Turn 预算已实现；仍需逐项限幅、预算校准、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | AL-203 逐项限幅 |
+| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、durable compaction、模型调用 usage 账本及冻结 token/cost Turn 预算已实现；仍需预算校准、手动压缩和 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | AL-204 手动压缩 |
 | M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |

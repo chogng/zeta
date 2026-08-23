@@ -11,6 +11,7 @@ use zeta_utils_image::ImageMetadataPolicy;
 use zeta_utils_image::ImageSafetyLimits;
 use zeta_utils_image::PromptImageMode;
 use zeta_utils_image::PromptImagePolicy;
+use zeta_utils_image::PromptImageResizeLimits;
 use zeta_utils_image::SupportedImageFormat;
 use zeta_utils_image::data_url_from_bytes;
 use zeta_utils_image::detect_image_format;
@@ -54,9 +55,9 @@ impl ImageAttachments {
     pub fn import_data_url(
         &self,
         data_url: &str,
-        detail: ImageDetail,
+        _detail: ImageDetail,
     ) -> Result<ImageAttachmentRef, AttachmentError> {
-        let image = load_data_url_for_prompt(data_url, policy_for_detail(detail))
+        let image = load_data_url_for_prompt(data_url, storage_policy())
             .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
         self.store.put(&image)
     }
@@ -64,14 +65,11 @@ impl ImageAttachments {
     pub fn import_bytes(
         &self,
         bytes: Vec<u8>,
-        detail: ImageDetail,
+        _detail: ImageDetail,
     ) -> Result<ImageAttachmentRef, AttachmentError> {
-        let image = load_for_prompt_bytes(
-            Path::new("<attachment-upload>"),
-            bytes,
-            policy_for_detail(detail),
-        )
-        .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
+        let image =
+            load_for_prompt_bytes(Path::new("<attachment-upload>"), bytes, storage_policy())
+                .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
         self.store.put(&image)
     }
 
@@ -101,6 +99,36 @@ impl ImageAttachments {
             reference.media_type.mime_type(),
             &bytes,
         ))
+    }
+
+    /// Materializes a provider-bound clone without changing the durable attachment object.
+    pub fn materialize_data_url_with_limits(
+        &self,
+        reference: &ImageAttachmentRef,
+        limits: PromptImageResizeLimits,
+    ) -> Result<String, AttachmentError> {
+        let bytes = self.read_verified(reference)?;
+        let image = load_for_prompt_bytes(
+            Path::new("<provider-bound-attachment>"),
+            bytes.to_vec(),
+            prompt_policy(PromptImageMode::ResizeWithLimits(limits)),
+        )
+        .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
+        Ok(image.into_data_url())
+    }
+
+    /// Applies the same provider-bound policy to a legacy inline data URL.
+    pub fn prepare_data_url_with_limits(
+        &self,
+        data_url: &str,
+        limits: PromptImageResizeLimits,
+    ) -> Result<String, AttachmentError> {
+        let image = load_data_url_for_prompt(
+            data_url,
+            prompt_policy(PromptImageMode::ResizeWithLimits(limits)),
+        )
+        .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
+        Ok(image.into_data_url())
     }
 
     fn read_verified(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
@@ -147,7 +175,7 @@ pub(crate) fn verify_reference_bytes(
     let image = load_for_prompt_bytes(
         Path::new("<stored-attachment>"),
         bytes.to_vec(),
-        policy_for_detail(ImageDetail::Original),
+        storage_policy(),
     )
     .map_err(|_| AttachmentError::Corrupt)?;
     if image.width != reference.width || image.height != reference.height {
@@ -188,14 +216,13 @@ fn media_type_for_mime(mime: &str) -> Option<ImageMediaType> {
     }
 }
 
-fn policy_for_detail(detail: ImageDetail) -> PromptImagePolicy {
+fn storage_policy() -> PromptImagePolicy {
+    prompt_policy(PromptImageMode::Original)
+}
+
+fn prompt_policy(mode: PromptImageMode) -> PromptImagePolicy {
     PromptImagePolicy {
-        mode: match detail {
-            ImageDetail::Original => PromptImageMode::Original,
-            ImageDetail::Auto | ImageDetail::Low | ImageDetail::High => {
-                PromptImageMode::ResizeToFit
-            }
-        },
+        mode,
         safety_limits: ImageSafetyLimits {
             max_input_bytes: MAX_IMAGE_ATTACHMENT_BYTES,
             max_output_bytes: MAX_IMAGE_ATTACHMENT_BYTES,

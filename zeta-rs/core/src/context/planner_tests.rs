@@ -278,6 +278,58 @@ fn overflow_recovery_compacts_the_complete_terminal_prefix_and_excludes_the_curr
 }
 
 #[test]
+fn overflow_recovery_uses_bounded_tool_results_without_rewriting_durable_history() {
+    let old = id::<TurnId>("overflow-tool-old");
+    let current = id::<TurnId>("overflow-tool-current");
+    let call_id = id::<ToolCallId>("overflow-shell-call");
+    let durable_output = format!("HEAD\n{}\nTAIL", "x".repeat(100_000));
+    let snapshot = snapshot(
+        current.clone(),
+        vec![
+            ThreadItem::ToolCall {
+                item_id: id("overflow-shell-call-item"),
+                turn_id: old.clone(),
+                tool_call_id: call_id.clone(),
+                name: ToolName::new("shell-command").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+            ThreadItem::ToolResult {
+                item_id: id("overflow-shell-result"),
+                turn_id: old.clone(),
+                tool_call_id: call_id,
+                text: durable_output.clone(),
+                content: None,
+                is_error: false,
+            },
+            user_item("overflow-tool-current", current.clone(), "continue"),
+        ],
+    );
+    let input = ContextInput::new(
+        &snapshot,
+        current,
+        Vec::new(),
+        Vec::new(),
+        ContextBudget::provider_managed(),
+    );
+
+    let plan = ContextPlanner::prepare_overflow_recovery(&input).unwrap();
+
+    let ThreadItem::ToolResult { text: selected, .. } = &plan.source_items[1] else {
+        panic!("compaction source must preserve the paired Tool Result");
+    };
+    assert!(selected.len() <= 30 * 1024);
+    assert!(selected.contains("context truncated"));
+    assert!(selected.starts_with("HEAD"));
+    assert!(selected.ends_with("TAIL"));
+    let ThreadItem::ToolResult { text: durable, .. } = &snapshot.items[1] else {
+        panic!("snapshot must contain the durable Tool Result");
+    };
+    assert_eq!(durable, &durable_output);
+    assert_eq!(input.items(), snapshot.items);
+}
+
+#[test]
 fn overflow_recovery_rejects_a_turn_without_completed_history() {
     let current = id::<TurnId>("overflow-only-current");
     let snapshot = snapshot(

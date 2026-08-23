@@ -66,6 +66,51 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
 }
 
 #[test]
+fn assembles_a_bounded_shell_result_without_rewriting_the_durable_item() {
+    let turn_id = id::<TurnId>("bounded-shell-turn");
+    let call_id = id::<ToolCallId>("bounded-shell-call");
+    let durable_output = format!("HEAD\n{}\nTAIL", "x".repeat(100_000));
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![
+            ThreadItem::ToolCall {
+                item_id: id("bounded-shell-call-item"),
+                turn_id: turn_id.clone(),
+                tool_call_id: call_id.clone(),
+                name: ToolName::new("shell-command").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+            ThreadItem::ToolResult {
+                item_id: id("bounded-shell-result"),
+                turn_id,
+                tool_call_id: call_id,
+                text: durable_output.clone(),
+                content: None,
+                is_error: false,
+            },
+        ],
+    );
+
+    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+
+    let Some(InputItem::ToolResult(ToolResult { content, .. })) = request.input.last() else {
+        panic!("request must contain a Tool Result");
+    };
+    let [ContentPart::Text(selected)] = content.as_slice() else {
+        panic!("shell result must assemble as one text part");
+    };
+    assert!(selected.len() <= 30 * 1024);
+    assert!(selected.contains("context truncated"));
+    assert!(selected.starts_with("HEAD"));
+    assert!(selected.ends_with("TAIL"));
+    let ThreadItem::ToolResult { text: durable, .. } = &snapshot.items[1] else {
+        panic!("snapshot must retain the durable Tool Result");
+    };
+    assert_eq!(durable, &durable_output);
+}
+
+#[test]
 fn preserves_structured_tool_result_images_for_the_next_model_request() {
     let turn_id = id::<TurnId>("turn");
     let call_id = id::<ToolCallId>("call");

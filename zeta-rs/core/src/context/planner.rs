@@ -9,10 +9,12 @@ use super::InstructionFragment;
 use super::InstructionRetention;
 use super::OmittedInstruction;
 use super::compaction::estimate_compaction_input;
+use super::input_limits::limit_model_input_items;
 use super::plan::ContextPlanInput;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use zeta_context_engine::ResolvedContextBudget;
+use zeta_protocol::ContentPart;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceRange;
 use zeta_protocol::ThreadItem;
@@ -59,7 +61,8 @@ impl ContextPlanner {
             .cloned()
             .collect::<Vec<_>>();
         validate_items(&raw_items)?;
-        let groups = group_visible_items(&raw_items);
+        let model_items = limit_model_input_items(&raw_items);
+        let groups = group_visible_items(&model_items);
         let current_group = groups
             .iter()
             .find(|group| &group.turn_id == input.current_turn_id())
@@ -174,14 +177,14 @@ impl ContextPlanner {
             let covered_turns = bounded_compaction_prefix(
                 input,
                 checkpoint.as_ref(),
-                &raw_items,
+                &model_items,
                 &required_covered_turns,
                 maximum_compaction_input,
             )?;
             let covered_end_sequence = covered_turns
                 .iter()
                 .flat_map(|turn_id| {
-                    raw_items
+                    model_items
                         .iter()
                         .filter(move |item| item.turn_id() == turn_id)
                 })
@@ -193,7 +196,7 @@ impl ContextPlanner {
                     "context overflow did not identify a durable history prefix to compact".into(),
                 ));
             }
-            let source_items = raw_items
+            let source_items = model_items
                 .iter()
                 .filter(|item| {
                     input
@@ -298,7 +301,8 @@ impl ContextPlanner {
             .cloned()
             .collect::<Vec<_>>();
         validate_items(&raw_items)?;
-        let groups = group_visible_items(&raw_items);
+        let model_items = limit_model_input_items(&raw_items);
+        let groups = group_visible_items(&model_items);
         let current_group_index = groups
             .iter()
             .position(|group| &group.turn_id == input.current_turn_id())
@@ -330,7 +334,7 @@ impl ContextPlanner {
         if covered_end_sequence == 0 {
             return Err(ContextPreparationError::NoCompactionCandidate);
         }
-        let source_items = raw_items
+        let source_items = model_items
             .iter()
             .filter(|item| {
                 input
@@ -503,7 +507,7 @@ fn compaction_prefix(groups: &[&TurnGroup], available: ContextTokenCount) -> Vec
 fn bounded_compaction_prefix(
     input: &ContextInput,
     checkpoint: Option<&ContextCheckpoint>,
-    raw_items: &[ThreadItem],
+    model_items: &[ThreadItem],
     required_turns: &[TurnId],
     available: ContextTokenCount,
 ) -> Result<Vec<TurnId>, ContextPreparationError> {
@@ -535,14 +539,14 @@ fn bounded_compaction_prefix(
         let covered_end_sequence = selected
             .iter()
             .flat_map(|selected_turn| {
-                raw_items
+                model_items
                     .iter()
                     .filter(move |item| item.turn_id() == selected_turn)
             })
             .filter_map(|item| input.item_sequence(item.item_id()))
             .max()
             .unwrap_or(checkpoint_end);
-        let source_items = raw_items
+        let source_items = model_items
             .iter()
             .filter(|item| {
                 input
@@ -645,9 +649,27 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
             name.as_str().len().saturating_add(arguments_json.len()),
             TOOL_ITEM_OVERHEAD,
         ),
-        ThreadItem::ToolResult { text, .. } => estimate_bytes(text.len(), TOOL_ITEM_OVERHEAD),
+        ThreadItem::ToolResult { text, content, .. } => content.as_ref().map_or_else(
+            || estimate_bytes(text.len(), TOOL_ITEM_OVERHEAD),
+            |content| estimate_content(content),
+        ),
         ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. } => ContextTokenCount::ZERO,
     }
+}
+
+fn estimate_content(content: &[ContentPart]) -> ContextTokenCount {
+    content
+        .iter()
+        .fold(ContextTokenCount::new(TOOL_ITEM_OVERHEAD), |total, part| {
+            let tokens = match part {
+                ContentPart::Text(text) => estimate_bytes(text.len(), 0),
+                ContentPart::ImageAttachment { .. } => ContextTokenCount::new(IMAGE_TOKEN_ESTIMATE),
+                ContentPart::ImageUrl { url, .. } => ContextTokenCount::new(
+                    IMAGE_TOKEN_ESTIMATE.saturating_add(estimate_bytes(url.len(), 0).get()),
+                ),
+            };
+            total.saturating_add(tokens)
+        })
 }
 
 fn estimate_bytes(bytes: usize, overhead: u32) -> ContextTokenCount {

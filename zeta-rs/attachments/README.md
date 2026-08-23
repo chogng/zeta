@@ -9,10 +9,10 @@ The canonical path is:
 ```text
 local bytes / remote URL / Tool image
   -> bounded fetch or upload
-  -> zeta-utils-image validation and normalization
+  -> zeta-utils-image validation/canonicalization without provider-specific resizing
   -> ImageAttachmentStore put-before-event
   -> ImageAttachmentRef in Thread history
-  -> verified read and ephemeral data URL at model invocation
+  -> verified read and provider-policy downsampled ephemeral data URL at model invocation
 ```
 
 `FileImageAttachmentStore` writes content-addressed objects below `attachments/sha256`, fsyncs a
@@ -24,7 +24,9 @@ separate maintenance operation.
 metadata only after `zeta-utils-image` validation; `verify_reference_bytes` rechecks digest, byte
 length, encoding signature and dimensions whenever a reference is read. Product hosts install a
 `FileImageAttachmentStore`; tests and explicitly ephemeral hosts may use
-`MemoryImageAttachmentStore`.
+`MemoryImageAttachmentStore`. `materialize_data_url_with_limits` applies model-specific dimension
+and patch ceilings to an outbound clone; it never replaces or rewrites the content-addressed
+stored object.
 
 `SafeRemoteImageFetcher` uses a direct, redirect-rejecting HTTP client whose actual resolver
 rejects loopback, private, link-local, multicast, documentation, benchmark, and unspecified

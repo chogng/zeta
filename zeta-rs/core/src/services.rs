@@ -37,6 +37,64 @@ use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::TurnId;
 use zeta_sandboxing::SandboxPolicy;
 
+/// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ModelImageInputLimits {
+    pub max_dimension: u32,
+    pub max_patches: usize,
+}
+
+impl ModelImageInputLimits {
+    pub const fn new(max_dimension: u32, max_patches: usize) -> Self {
+        Self {
+            max_dimension,
+            max_patches,
+        }
+    }
+}
+
+/// Provider/model-specific image limits selected before attachment materialization.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ModelImageInputPolicy {
+    auto: ModelImageInputLimits,
+    low: ModelImageInputLimits,
+    high: ModelImageInputLimits,
+    original: ModelImageInputLimits,
+}
+
+impl ModelImageInputPolicy {
+    pub const fn new(
+        auto: ModelImageInputLimits,
+        low: ModelImageInputLimits,
+        high: ModelImageInputLimits,
+        original: ModelImageInputLimits,
+    ) -> Self {
+        Self {
+            auto,
+            low,
+            high,
+            original,
+        }
+    }
+
+    pub const fn limits_for(self, detail: zeta_protocol::ImageDetail) -> ModelImageInputLimits {
+        match detail {
+            zeta_protocol::ImageDetail::Auto => self.auto,
+            zeta_protocol::ImageDetail::Low => self.low,
+            zeta_protocol::ImageDetail::High => self.high,
+            zeta_protocol::ImageDetail::Original => self.original,
+        }
+    }
+}
+
+impl Default for ModelImageInputPolicy {
+    fn default() -> Self {
+        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
+        const STANDARD: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 1_536);
+        Self::new(STANDARD, LOW, STANDARD, STANDARD)
+    }
+}
+
 /// Holds a process-local or inter-process write lock for a Thread.
 ///
 /// Implementations release their underlying lease when the guard is dropped and must never let
@@ -83,6 +141,18 @@ pub trait ModelService: Send + Sync {
     /// behavior rather than receiving a fabricated context limit.
     fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         Ok(ContextBudget::provider_managed())
+    }
+
+    /// Returns the provider/model image limits used only for the outbound request clone.
+    ///
+    /// Unknown adapters use a conservative product default. Implementations that can resolve an
+    /// immutable provider/model snapshot should override this with that snapshot's declared
+    /// policy; durable attachment bytes are never changed by this operation.
+    fn image_input_policy(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ModelImageInputPolicy, CoreError> {
+        Ok(ModelImageInputPolicy::default())
     }
 
     /// Reports whether the selected immutable model can measure input locally or remotely.

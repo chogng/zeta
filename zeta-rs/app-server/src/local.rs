@@ -40,6 +40,8 @@ use zeta_core::ContextTokenMeasurementOutcome;
 use zeta_core::CoreError;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
+use zeta_core::ModelImageInputLimits;
+use zeta_core::ModelImageInputPolicy;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
 use zeta_core::ModelStreamSink as CoreModelStreamSink;
@@ -1680,6 +1682,17 @@ impl ModelService for ConfigBackedModelService {
         context_budget_for_config(&self.config_for_selection(selection)?)
     }
 
+    fn image_input_policy(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<ModelImageInputPolicy, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        Ok(image_input_policy_for_config(
+            &config,
+            &self.provider_configs,
+        ))
+    }
+
     fn input_token_measurement_capability(
         &self,
         selection: ModelSelection<'_>,
@@ -1907,6 +1920,48 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
         ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
         compaction_limit,
     ))
+}
+
+fn image_input_policy_for_config(
+    config: &ResolvedConfig,
+    providers: &ProviderConfigRegistry,
+) -> ModelImageInputPolicy {
+    // Conservative local resize budgets reviewed against provider guidance on 2026-08-23.
+    // Model capabilities decide whether OpenAI Auto/Original may use its larger original-detail
+    // envelope; unknown and compatible adapters intentionally keep Core's smaller default.
+    const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
+    const OPENAI_HIGH: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 2_440);
+    const OPENAI_ORIGINAL: ModelImageInputLimits = ModelImageInputLimits::new(6_000, 10_000);
+    const ANTHROPIC: ModelImageInputLimits = ModelImageInputLimits::new(1_568, 1_120);
+    const GOOGLE: ModelImageInputLimits = ModelImageInputLimits::new(3_072, 9_216);
+
+    let Some(model_ref) = config.preferred_model.as_ref() else {
+        return ModelImageInputPolicy::default();
+    };
+    let Some(provider) = providers.get(&model_ref.provider) else {
+        return ModelImageInputPolicy::default();
+    };
+    match provider.adapter {
+        zeta_model_provider_config::ProviderAdapter::Anthropic => {
+            ModelImageInputPolicy::new(ANTHROPIC, LOW, ANTHROPIC, ANTHROPIC)
+        }
+        zeta_model_provider_config::ProviderAdapter::Google => {
+            ModelImageInputPolicy::new(GOOGLE, LOW, GOOGLE, GOOGLE)
+        }
+        zeta_model_provider_config::ProviderAdapter::OpenAi => {
+            let supports_original = provider.models.iter().any(|model| {
+                model.id == model_ref.model
+                    && model.capabilities.image_detail_original
+                        == zeta_protocol::CapabilitySupport::Supported
+            });
+            if supports_original {
+                ModelImageInputPolicy::new(OPENAI_ORIGINAL, LOW, OPENAI_HIGH, OPENAI_ORIGINAL)
+            } else {
+                ModelImageInputPolicy::new(OPENAI_HIGH, LOW, OPENAI_HIGH, OPENAI_HIGH)
+            }
+        }
+        _ => ModelImageInputPolicy::default(),
+    }
 }
 
 struct WorkspaceConfigTracker {

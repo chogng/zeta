@@ -29,7 +29,7 @@ use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginAuthorityCommandRequest;
 use zeta_plugins::PluginPackageStore;
 use zeta_protocol::{
-    CommandId, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
+    CommandId, ImageDetail, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
 };
 use zeta_secrets::MemorySecretStore;
 use zeta_web_search_extension::WebSearchBackend;
@@ -524,6 +524,44 @@ fn configured_model_context_enables_core_managed_compaction() {
             ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
+    );
+}
+
+#[test]
+fn image_input_policy_tracks_the_selected_provider_and_original_detail_capability() {
+    let providers = ProviderConfigRegistry::builtin();
+    let openai = ResolvedConfig {
+        preferred_model: Some(ModelRef::new(
+            ProviderId::new("openai").unwrap(),
+            ModelId::new("gpt-5.6").unwrap(),
+        )),
+        ..ResolvedConfig::default()
+    };
+    let anthropic = ResolvedConfig {
+        preferred_model: Some(ModelRef::new(
+            ProviderId::new("anthropic").unwrap(),
+            ModelId::new("claude-sonnet-4-20250514").unwrap(),
+        )),
+        ..ResolvedConfig::default()
+    };
+
+    let openai_policy = image_input_policy_for_config(&openai, &providers);
+    assert_eq!(
+        openai_policy.limits_for(ImageDetail::Auto),
+        ModelImageInputLimits::new(6_000, 10_000)
+    );
+    assert_eq!(
+        openai_policy.limits_for(ImageDetail::High),
+        ModelImageInputLimits::new(2_048, 2_440)
+    );
+    let anthropic_policy = image_input_policy_for_config(&anthropic, &providers);
+    assert_eq!(
+        anthropic_policy.limits_for(ImageDetail::Auto),
+        ModelImageInputLimits::new(1_568, 1_120)
+    );
+    assert_eq!(
+        anthropic_policy.limits_for(ImageDetail::Original),
+        ModelImageInputLimits::new(1_568, 1_120)
     );
 }
 

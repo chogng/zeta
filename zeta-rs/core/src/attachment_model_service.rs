@@ -25,7 +25,12 @@ impl AttachmentModelService {
         Self { inner, attachments }
     }
 
-    fn materialize(&self, request: &ModelRequest) -> Result<ModelRequest, CoreError> {
+    fn materialize(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &ModelRequest,
+    ) -> Result<ModelRequest, CoreError> {
+        let policy = self.inner.image_input_policy(selection)?;
         let mut materialized = request.clone();
         for item in &mut materialized.input {
             let content = match item {
@@ -33,26 +38,67 @@ impl AttachmentModelService {
                 InputItem::ToolResult(result) => &mut result.content,
             };
             for part in content {
-                let ContentPart::ImageAttachment { attachment, detail } = part else {
-                    continue;
+                let replacement = match part {
+                    ContentPart::ImageAttachment { attachment, detail } => {
+                        let limits = policy.limits_for(*detail);
+                        let data_url = self
+                            .attachments
+                            .materialize_data_url_with_limits(
+                                attachment,
+                                zeta_utils_image::PromptImageResizeLimits {
+                                    max_dimension: limits.max_dimension,
+                                    max_patches: limits.max_patches,
+                                },
+                            )
+                            .map_err(|error| CoreError::Context(error.to_string()))?;
+                        Some(ContentPart::ImageUrl {
+                            url: data_url,
+                            detail: *detail,
+                        })
+                    }
+                    ContentPart::ImageUrl { url, detail } if is_data_url(url) => {
+                        let limits = policy.limits_for(*detail);
+                        let data_url = self
+                            .attachments
+                            .prepare_data_url_with_limits(
+                                url,
+                                zeta_utils_image::PromptImageResizeLimits {
+                                    max_dimension: limits.max_dimension,
+                                    max_patches: limits.max_patches,
+                                },
+                            )
+                            .map_err(|error| CoreError::Context(error.to_string()))?;
+                        Some(ContentPart::ImageUrl {
+                            url: data_url,
+                            detail: *detail,
+                        })
+                    }
+                    ContentPart::Text(_) | ContentPart::ImageUrl { .. } => None,
                 };
-                let data_url = self
-                    .attachments
-                    .materialize_data_url(attachment)
-                    .map_err(|error| CoreError::Context(error.to_string()))?;
-                *part = ContentPart::ImageUrl {
-                    url: data_url,
-                    detail: *detail,
-                };
+                if let Some(replacement) = replacement {
+                    *part = replacement;
+                }
             }
         }
         Ok(materialized)
     }
 }
 
+fn is_data_url(url: &str) -> bool {
+    url.get(.."data:".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
+}
+
 impl ModelService for AttachmentModelService {
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
         self.inner.context_budget(selection)
+    }
+
+    fn image_input_policy(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<crate::ModelImageInputPolicy, CoreError> {
+        self.inner.image_input_policy(selection)
     }
 
     fn input_token_measurement_capability(
@@ -68,8 +114,11 @@ impl ModelService for AttachmentModelService {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
-        self.inner
-            .measure_input(selection, &self.materialize(request)?, cancellation)
+        self.inner.measure_input(
+            selection,
+            &self.materialize(selection, request)?,
+            cancellation,
+        )
     }
 
     fn invoke(
@@ -78,8 +127,11 @@ impl ModelService for AttachmentModelService {
         request: &ModelRequest,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
-        self.inner
-            .invoke(selection, &self.materialize(request)?, cancellation)
+        self.inner.invoke(
+            selection,
+            &self.materialize(selection, request)?,
+            cancellation,
+        )
     }
 
     fn stream(
@@ -89,8 +141,12 @@ impl ModelService for AttachmentModelService {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelStreamSink,
     ) -> Result<ModelResponse, CoreError> {
-        self.inner
-            .stream(selection, &self.materialize(request)?, cancellation, sink)
+        self.inner.stream(
+            selection,
+            &self.materialize(selection, request)?,
+            cancellation,
+            sink,
+        )
     }
 }
 

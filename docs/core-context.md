@@ -296,6 +296,21 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 - provider 不支持的内容只能按显式降级策略转换或报错；
 - reasoning/plan 是否回灌必须由 canonical contract 明确允许。
 
+### 6.4 模型输入逐项限幅
+
+`ContextPlanner` 先校验 durable `ThreadItem` 形状，再从同一批 Item 生成只属于本次规划的
+bounded clone。Thread event、`ThreadSnapshot` 和 attachment object 都不被改写：shell 结果按
+30 KiB 保留头尾，`read_file` 按 2000 行和每行 2000 字符限制，`grep`/`glob` 保留 100 条，带
+MCP provenance 的结果按 25 KiB 保留头尾。截断诊断记录原始大小、遗漏量和继续读取或缩小查询的
+动作。
+
+普通 `ContextPlan`、预算估算、自动压缩和供应商 overflow recovery 共用这份 bounded clone，避免
+超大 durable 结果在截断前独占窗口；structured Tool Result 按实际 `ContentPart` 计量，不重复把
+fallback text 算作第二份模型内容。图片 admission 只做安全校验和必要的格式 canonicalization，不按
+provider 窗口降采样；模型调用和 preflight
+在 attachment materialization 边界读取选中 provider/model 的 detail policy，生成临时降采样 data
+URL，canonical attachment reference 继续作为 durable authority。
+
 ## 7. 上下文预算
 
 ### 7.1 预算输入

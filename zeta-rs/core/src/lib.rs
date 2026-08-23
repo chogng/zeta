@@ -55,6 +55,8 @@ pub use services::ContextSource;
 pub use services::ContextSourceRequest;
 pub use services::ExecPolicyToolGrant;
 pub use services::LeaseGuard;
+pub use services::ModelImageInputLimits;
+pub use services::ModelImageInputPolicy;
 pub use services::ModelSelection;
 pub use services::ModelService;
 pub use services::ModelStreamSink;

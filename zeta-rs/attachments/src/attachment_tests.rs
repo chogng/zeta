@@ -10,6 +10,10 @@ use zeta_http_client::HttpHeader;
 use zeta_http_client::HttpRequest;
 use zeta_http_client::HttpResponse;
 use zeta_protocol::ImageDetail;
+use zeta_utils_image::PromptImageMode;
+use zeta_utils_image::PromptImagePolicy;
+use zeta_utils_image::PromptImageResizeLimits;
+use zeta_utils_image::load_data_url_for_prompt;
 
 use crate::FileImageAttachmentStore;
 use crate::ImageAttachments;
@@ -46,6 +50,34 @@ fn duplicate_content_reuses_the_same_reference() {
     let second = service.import_bytes(bytes, ImageDetail::Auto).unwrap();
 
     assert_eq!(first, second);
+}
+
+#[test]
+fn provider_materialization_downsamples_an_ephemeral_clone_and_keeps_the_stored_image() {
+    let service = ImageAttachments::in_memory();
+    let reference = service
+        .import_bytes(test_png(2_400, 1_200), ImageDetail::Auto)
+        .unwrap();
+
+    let data_url = service
+        .materialize_data_url_with_limits(
+            &reference,
+            PromptImageResizeLimits {
+                max_dimension: 1_000,
+                max_patches: 1_000,
+            },
+        )
+        .unwrap();
+    let materialized = load_data_url_for_prompt(
+        &data_url,
+        PromptImagePolicy::for_mode(PromptImageMode::Original),
+    )
+    .unwrap();
+
+    assert_eq!((reference.width, reference.height), (2_400, 1_200));
+    assert!(materialized.width <= 1_000);
+    assert!(materialized.height <= 1_000);
+    assert!(service.verify(&reference).is_ok());
 }
 
 #[test]
