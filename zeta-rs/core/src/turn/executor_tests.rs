@@ -337,13 +337,15 @@ fn manual_context_compaction_does_not_absorb_an_unfinished_tool_group() {
 #[test]
 fn steering_during_a_model_call_discards_its_stale_completion_and_replans() {
     let (threads, thread_id, turn_id) = started_turn();
+    let updates = Arc::new(RecordingUpdates::default());
     let model = Arc::new(SteeringModel {
         threads: threads.clone(),
         thread_id: thread_id.clone(),
         turn_id: turn_id.clone(),
         requests: Mutex::new(Vec::new()),
     });
-    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_thread_updates(updates.clone());
 
     let outcome = executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
@@ -368,6 +370,22 @@ fn steering_during_a_model_call_discards_its_stale_completion_and_replans() {
     assert!(snapshot.items.iter().any(
         |item| matches!(item, ThreadItem::AgentMessage { text, .. } if text == "steered answer")
     ));
+    let mut first_sequence_by_instance = BTreeMap::new();
+    for cursor in updates
+        .updates()
+        .into_iter()
+        .filter_map(|update| update.stream_cursor)
+    {
+        first_sequence_by_instance
+            .entry(cursor.stream_instance_id.to_string())
+            .or_insert(cursor.sequence);
+    }
+    assert_eq!(first_sequence_by_instance.len(), 2);
+    assert!(
+        first_sequence_by_instance
+            .values()
+            .all(|sequence| *sequence == 1)
+    );
 }
 
 #[test]
@@ -1548,6 +1566,23 @@ fn streaming_delta_and_final_item_share_one_identity() {
         })
         .collect::<String>();
     assert_eq!(text, "hello");
+    let cursors = updates
+        .iter()
+        .filter_map(|update| update.stream_cursor.as_ref())
+        .collect::<Vec<_>>();
+    assert!(!cursors.is_empty());
+    assert!(
+        cursors
+            .iter()
+            .all(|cursor| cursor.stream_instance_id == cursors[0].stream_instance_id)
+    );
+    assert_eq!(
+        cursors
+            .iter()
+            .map(|cursor| cursor.sequence)
+            .collect::<Vec<_>>(),
+        (1..=u64::try_from(cursors.len()).unwrap()).collect::<Vec<_>>()
+    );
 }
 
 #[test]

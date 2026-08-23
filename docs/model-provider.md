@@ -315,6 +315,11 @@ model-provider
   → ModelInvoker stream
 ```
 
+`ProviderDefinition.output_transport` 是该路径的 capability authority。OpenAI Responses、通用
+OpenAI-compatible Chat、Google 与 Anthropic 声明 `nativeStreaming`；其他内置 adapter 当前声明
+`unary` 并使用 final-response bridge。App Server 将 exact value 投影进 model catalog，Desktop 不按
+provider 名称或协议 family 猜测。
+
 DeepSeek `: keep-alive` 的 frame 边界由 client 识别，作为无 payload 的 SSE comment 交给协议层；
 协议层确认它不形成 model output。Anthropic `event: ping` 同样由协议层过滤。Runtime 不解析
 `data:` 行或 provider event JSON。

@@ -26,6 +26,7 @@ use zeta_client::ResolvedApiTarget;
 use zeta_client::SseDecoder;
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
+const EPHEMERAL_CACHE_CONTROL: &str = "ephemeral";
 
 pub(crate) fn complete(
     endpoint: ApiEndpoint,
@@ -173,6 +174,7 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    crate::requests::require_materialized_images(request)?;
     let mut messages = Vec::new();
     for item in &request.input {
         match item {
@@ -188,6 +190,7 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
             })),
         }
     }
+    mark_rolling_message_cache_breakpoint(&mut messages);
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
         ("messages".into(), Value::Array(messages)),
@@ -197,13 +200,21 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
         ),
     ]);
     if let Some(instructions) = &request.instructions {
-        body.insert("system".into(), Value::String(instructions.clone()));
+        body.insert(
+            "system".into(),
+            json!([{
+                "type": "text",
+                "text": instructions,
+                "cache_control": ephemeral_cache_control(),
+            }]),
+        );
     }
     if !request.tools.is_empty() {
-        body.insert(
-            "tools".into(),
-            Value::Array(request.tools.iter().map(convert_tool).collect()),
-        );
+        let mut tools = request.tools.iter().map(convert_tool).collect::<Vec<_>>();
+        if let Some(last) = tools.last_mut() {
+            mark_cache_control(last);
+        }
+        body.insert("tools".into(), Value::Array(tools));
         body.insert(
             "tool_choice".into(),
             convert_anthropic_tool_choice(&request.tool_choice),
@@ -213,6 +224,37 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
         body.insert("temperature".into(), json!(temperature));
     }
     Ok(Value::Object(body))
+}
+
+fn mark_rolling_message_cache_breakpoint(messages: &mut [Value]) {
+    let Some(message_index) = messages
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, message)| message.get("role").and_then(Value::as_str) == Some("user"))
+        .map(|(index, _)| index)
+    else {
+        return;
+    };
+    let Some(content) = messages[message_index]
+        .get_mut("content")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    if let Some(last) = content.last_mut() {
+        mark_cache_control(last);
+    }
+}
+
+fn mark_cache_control(value: &mut Value) {
+    if let Some(object) = value.as_object_mut() {
+        object.insert("cache_control".into(), ephemeral_cache_control());
+    }
+}
+
+fn ephemeral_cache_control() -> Value {
+    json!({"type": EPHEMERAL_CACHE_CONTROL})
 }
 
 fn convert_message(message: &Message) -> Result<Value, ApiError> {

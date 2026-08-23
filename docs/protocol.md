@@ -265,9 +265,10 @@ StreamCursor { streamInstanceId, sequence }
 
 两者不能合并。进程重启后 stream cursor 可以失效，durable sequence 不能失效。
 
-当前瞬态 update、Core streaming model loop，以及 OpenAI Responses、OpenAI-compatible Chat
-Completions、Anthropic Messages 的生产 HTTP/SSE 路径已经贯通。三种 endpoint 都使用各自原生
-wire stream；其他 SSE profile、NDJSON 与 WebSocket 仍需按真实协议逐项接入。
+当前瞬态 update、Core streaming model loop，以及 OpenAI Responses、OpenAI-compatible Chat、
+Google Chat-compatible 与 Anthropic Messages 的生产 HTTP/SSE 路径已经贯通。模型目录通过
+`ModelOutputTransport` 显式区分 `nativeStreaming` 和 `unary`，Desktop 不按 provider 名称猜测；
+其他 SSE profile、NDJSON 与 WebSocket 仍需按真实协议逐项接入。
 
 ### 4.4 Agent 请求/响应：Turn 中的双向等待
 
@@ -587,11 +588,11 @@ zeta-rs/protocol/
 | 运行中 Turn steering | 已完成 | typed receipt、durable Item/marker/delivery、App Server、Desktop、本地 executor 与 Codex 委托均已接通 |
 | Tab 关闭到 Session 停止 | 已完成 | Chat 前端 → App Server `session/request` Stop → Core 内部停止编排；连接断开不触发停止 |
 | ThreadItem durable transcript | 基础完成 | text/image message、reasoning、plan、tool item 可重建 |
-| transient Item streaming | 类型已定义 | 当前没有完整异步 model stream producer |
+| transient Item streaming | 已完成 | 主力 Provider 原生 stream → Core incarnation/sequence → App Server writer → Desktop gap/resync 已贯通；显式 unary Provider 保留 final-response bridge |
 | Agent request/response | 基础完成 | durable request/resolve/cancel、deadline value、request correlation 和 typed resolve 已实现；owner delivery/timer 未实现 |
 | waiting Turn lifecycle | 基础完成 | event/reducer/recovery 已实现；异步 Agent loop 的继续执行尚未实现 |
 | provider-independent model values | 基础完成 | provider adapters 已使用，tool name/call ID 已收敛 |
-| 稳定错误分类 | 部分具备 | 供应商上下文、认证、无效请求、无效响应和工具重复已有持久化错误码；预算等后续类别仍缺 |
+| 稳定错误分类 | 已完成基础 contract | 供应商上下文、认证、无效请求、无效响应、工具重复和 Turn 预算均有持久化错误码；新增错误类别仍须同步协议与 Desktop |
 | usage/compaction provenance | 已完成基础 contract | checkpoint 有 source range/digest/revision；供应商溢出恢复有 durable Turn 绑定；普通生成与模型驱动 compaction usage 均逐次持久化并聚合 |
 | ID validation | 已完成 | constructor 与 deserialize 都拒绝空的 canonical ID |
 | public API discipline | 已完成 | private modules、named exports 与 speculative envelope 清理已落地 |

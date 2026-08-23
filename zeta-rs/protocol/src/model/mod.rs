@@ -4,7 +4,7 @@ mod invocation;
 pub use catalog::{
     CapabilitySupport, ContextWindow, InvalidModelIdentity, Model, ModelAccess, ModelAvailability,
     ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo, ModelLifecycle,
-    ModelMetadataQuality, ModelPreset, ModelRef, ProviderId, ReasoningEffort,
+    ModelMetadataQuality, ModelOutputTransport, ModelPreset, ModelRef, ProviderId, ReasoningEffort,
 };
 pub use invocation::{
     ContentPart, ImageDetail, ImageDetailDecision, ImageDetailDecisionReason, InputItem, Message,

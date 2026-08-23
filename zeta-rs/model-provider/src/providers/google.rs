@@ -1,6 +1,8 @@
 use super::ProviderAdapter;
 use super::api_endpoint;
+use super::stream_endpoint;
 use crate::ModelProviderError;
+use crate::provider::ModelEventSink;
 use zeta_api::ApiEndpoint;
 use zeta_api::ApiError;
 use zeta_api::ApiProtocol;
@@ -93,5 +95,24 @@ impl ProviderAdapter for GoogleAdapter {
                 cancellation,
             )
             .map_err(Into::into)
+    }
+
+    fn stream(
+        &self,
+        model: &str,
+        request: &ModelRequest,
+        client: &dyn OperationClient,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelEventSink,
+    ) -> Result<ModelResponse, ModelProviderError> {
+        stream_endpoint(
+            self.endpoint,
+            &self.target,
+            model,
+            request,
+            client,
+            cancellation,
+            sink,
+        )
     }
 }

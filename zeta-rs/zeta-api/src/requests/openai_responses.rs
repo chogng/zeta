@@ -163,6 +163,7 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    crate::requests::require_materialized_images(request)?;
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
         ("input".into(), Value::Array(convert_input(&request.input)?)),

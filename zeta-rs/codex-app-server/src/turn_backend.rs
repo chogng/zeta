@@ -7,6 +7,7 @@ use crate::CodexThreadId;
 use crate::CodexTurnDriver;
 use crate::CodexTurnEvent;
 use crate::CodexTurnId;
+use crate::CodexTurnInput;
 use crate::CodexUserInputAnswers;
 use crate::CodexUserInputRequest;
 use crate::StartCodexThread;
@@ -26,6 +27,7 @@ use std::sync::mpsc::sync_channel;
 use std::thread;
 use std::time::Duration;
 use zeta_core::CoreError;
+use zeta_core::ModelImageInputPolicy;
 use zeta_core::RequestTurnInteraction;
 use zeta_core::ThreadController;
 use zeta_core::ThreadExecutionContext;
@@ -38,6 +40,7 @@ use zeta_protocol::ActionApprovalRequest;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::CommandId;
+use zeta_protocol::ImageDetail;
 use zeta_protocol::InteractionCancelReason;
 use zeta_protocol::RequestId;
 use zeta_protocol::RequestUserInput;
@@ -173,9 +176,13 @@ impl CodexTurnExecutionBackend {
             ));
         }
         let compaction_retention = context_compaction_retention(&snapshot, turn_id);
-        let prompt = match &compaction_retention {
+        let input = match &compaction_retention {
             Some(_) => None,
-            None => Some(turn_prompt(&snapshot.items, turn_id)?),
+            None => Some(turn_input(
+                &snapshot.items,
+                turn_id,
+                self.inner.threads.as_ref(),
+            )?),
         };
         if compaction_retention
             .as_ref()
@@ -202,9 +209,9 @@ impl CodexTurnExecutionBackend {
                 .inner
                 .driver
                 .start_turn(
-                    &StartCodexTurn::text(
+                    &StartCodexTurn::new(
                         remote_thread.clone(),
-                        prompt.expect("ordinary Codex Turn has a prompt"),
+                        input.expect("ordinary Codex Turn has input"),
                     )
                     .map_err(codex_error)?,
                 )
@@ -894,15 +901,47 @@ impl CodexTurnExecutionBackend {
     }
 }
 
-fn turn_prompt(items: &[ThreadItem], turn_id: &TurnId) -> Result<String, CoreError> {
-    let mut messages = Vec::new();
+fn turn_input(
+    items: &[ThreadItem],
+    turn_id: &TurnId,
+    threads: &ThreadController,
+) -> Result<Vec<CodexTurnInput>, CoreError> {
+    let attachments = threads.image_attachments();
+    let image_limits = ModelImageInputPolicy::default().limits_for(ImageDetail::Auto);
+    let image_limits = zeta_utils_image::PromptImageResizeLimits {
+        max_dimension: image_limits.max_dimension,
+        max_patches: image_limits.max_patches,
+    };
+    let mut input = Vec::new();
     for item in items.iter().filter(|item| item.turn_id() == turn_id) {
         match item {
-            ThreadItem::UserMessage { text, .. } => messages.push(text.clone()),
-            ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
-                return Err(CoreError::Execution(
-                    "Codex Turn backend does not yet support local image inputs".into(),
-                ));
+            ThreadItem::UserMessage { text, .. } => input.push(
+                CodexTurnInput::text(text.clone())
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+            ),
+            ThreadItem::UserImage { url, .. } => {
+                if !is_data_url(url) {
+                    return Err(CoreError::InvalidInput(
+                        "legacy Codex image input must be normalized to a durable attachment"
+                            .into(),
+                    ));
+                }
+                let data_url = attachments
+                    .prepare_data_url_with_limits(url, image_limits)
+                    .map_err(|error| CoreError::Context(error.to_string()))?;
+                input.push(
+                    CodexTurnInput::inline_image(data_url, ImageDetail::Auto)
+                        .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+                );
+            }
+            ThreadItem::UserImageAttachment { attachment, .. } => {
+                let data_url = attachments
+                    .materialize_data_url_with_limits(attachment, image_limits)
+                    .map_err(|error| CoreError::Context(error.to_string()))?;
+                input.push(
+                    CodexTurnInput::inline_image(data_url, ImageDetail::Auto)
+                        .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+                );
             }
             ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
@@ -911,14 +950,18 @@ fn turn_prompt(items: &[ThreadItem], turn_id: &TurnId) -> Result<String, CoreErr
             | ThreadItem::ToolResult { .. } => {}
         }
     }
-    let prompt = messages.join("\n\n");
-    if prompt.trim().is_empty() {
+    if input.is_empty() {
         Err(CoreError::InvalidInput(
-            "Codex Turn requires a non-empty user message".into(),
+            "Codex Turn requires text or image input".into(),
         ))
     } else {
-        Ok(prompt)
+        Ok(input)
     }
+}
+
+fn is_data_url(url: &str) -> bool {
+    url.get(.."data:".len())
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
 }
 
 fn context_compaction_retention(

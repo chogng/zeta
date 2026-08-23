@@ -2,7 +2,7 @@
 
 > 物理位置：`zeta-rs/codex-app-server/`
 > Rust crate：`zeta_codex_app_server`
-> 当前状态：managed account/login、thread/Turn streaming 与 Core Turn backend adapter 已实现；
+> 当前状态：managed account/login、thread/Turn streaming、durable image input 与 Core Turn backend adapter 已实现；
 > 默认 App Server 已通过显式选择 `provider = openai, access = subscription` 的模型接入订阅 Turn
 > 登录控制面：[`login.md`](login.md)
 > Core 执行边界：[`core.md`](core.md)
@@ -44,7 +44,8 @@ backend compatibility 的所有权。Zeta 只适配可检查的本地 JSON-RPC c
 | Core `TurnExecutionBackend` adapter | ✅ | Core 保留 Thread authority；Codex 执行完整远端 Agent loop |
 | completed remote thread binding | ✅ | 成功 Turn 后持久化，重建后使用 thread/resume；不持久化或重放 in-flight Turn |
 | 默认产品执行 composition | ✅ | `model/list` 投影 Zeta 静态维护的 Codex 清单且不做账户探活；exact ModelRef 对应 row 的 access 决定路由，真实调用错误进入 Turn |
-| permission approval、diff/image/secret input、rate limit | 尚未完成 | 必须按独立语义切片接入或明确拒绝 |
+| durable image input | ✅ | Core attachment authority 在远程请求前物化为受限 inline data URL；image-only Turn 可执行，local path/URL fail closed |
+| permission approval、diff/secret input、rate limit | 尚未完成 | 必须按独立语义切片接入或明确拒绝 |
 
 当前兼容门以 initialize response 与所需 method/shape 为准；还没有声明固定的上游 semver 范围。
 method 缺失或响应 shape 不兼容会明确失败，不会改为直连 ChatGPT 私有 backend。
@@ -58,6 +59,7 @@ method 缺失或响应 shape 不兼容会明确失败，不会改为直连 ChatG
 - account/login 的安全 adapter；
 - Codex thread/Turn、approval、user-input 与 stream event 的 typed adapter；
 - `CodexTurnExecutionBackend` 对 Core item、interaction、cancellation 和 terminal outcome 的映射；
+- durable image attachment 的授权读取、统一下采样与 inline Codex input 物化；
 - 上游进程故障、版本不兼容和 unknown-outcome 的 fail-closed 处理。
 
 它不拥有：
@@ -120,6 +122,11 @@ ThreadController accepts/starts Turn
 upstream JSON-RPC request。重复 response、错误 response kind、旧 connection generation 或未知 request
 都被拒绝。含 secret 的 user input 当前直接拒绝，因为 Core 的 durable response 不能存 secret。
 
+图片输入只接受 Core 已持久化的 attachment reference。`CodexTurnExecutionBackend` 使用
+`ThreadController` 的 attachment authority 读取并按统一 image policy 下采样，然后在创建或恢复远程
+thread 之前物化为 inline data URL；底层 driver 不暴露可绕过该 authority 的公共图片入口。旧格式中的
+inline data URL 仍可兼容，但 local path、`file:` URL 和未规范化的远程 URL 都会在 transport 前被拒绝。
+
 默认产品组合从 `zeta-model-provider-config::STATIC_MODEL_CATALOG` 投影 `provider = openai` 且
 `access = subscription` 的 rows。列目录和选择模型不会调用上游 `account/read` 或 `model/list`，也不会把
 某次探测结果变成 UI 状态或提交门禁。Session 选择只校验精确 ModelRef 属于静态产品目录；真正的
@@ -140,13 +147,13 @@ completed，但后续不能保证恢复远端 thread continuity。in-flight remo
 - active Turn 在连接关闭后失败，不能把“未收到 terminal”解释为“上游未执行”；
 - connection generation 阻止旧 server request 被发送到重启后的新进程；
 - unknown method 以 JSON-RPC method-not-found 回答，invalid request 以 invalid-params 回答；
-- 不支持的 secret input、local image、approval capability 与 schema shape fail closed；
+- 不支持的 secret input、local image path、approval capability 与 schema shape fail closed；
 - stderr、credential-bearing payload 与 authorization query 不进入 RPC error 或 telemetry；
 - read-only 与 workspace-write 是显式构造选项，workspace 必须是绝对路径。
 
 ## 7. 当前限制与下一步
 
-1. 按 canonical product contract 增加 `item/permissions/requestApproval`、diff 更新、image input、
-   rate-limit 与 richer completed-item projection。
+1. 按 canonical product contract 增加 `item/permissions/requestApproval`、diff 更新、rate-limit 与
+   richer completed-item projection。
 2. 若要支持 secret user input，先建立不把 secret response 写入 durable Thread event 的专用通道。
 3. 固定并测试受支持的 Codex CLI/App Server 版本范围与 capability gate。

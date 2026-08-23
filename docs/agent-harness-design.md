@@ -32,14 +32,14 @@
 | --- | --- | --- |
 | System prompt | 每次调用注入身份、策略、工具指导、环境 | 部分：`SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；per-profile 工具指导仍未完成 |
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
-| 工具面 | 读/搜/改/执行闭环 | ❌ 只接了 `shell-command`；`file-system-tool`（仅 read/list/metadata）、`apply-patch`、`file-search` 是孤立 crate |
+| 工具面 | 读/搜/改/执行闭环 | 部分：`shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 已进入本地闭环；家族 ToolProfile、统一 ownership 与 `update_plan` 仍待 S3 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop、本地重规划和 Codex 转发均已接通 |
-| 工具结果限幅 | 模型侧截断 + 保留头尾 | 部分：shell 有 256 KiB 执行上限，但无模型输入预算 |
+| 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
 | 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
-| Prompt cache | 前缀稳定 + 断点标注 | ❌ 只解析 `cache_read_input_tokens`，不写 `cache_control` |
-| 多 Tool Call/响应 | 模型一次响应多个调用 | ❌ `parallel_tool_calls` 硬编码 `false` |
+| Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
+| 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
 | 计划工具 | 长任务显式计划状态 | 部分：`ThreadItem::Plan` 存在，无工具产生它，assembler 跳过它 |
 | 评测 | 任务集 + 指标回路 | ❌ 无 |
 
@@ -276,7 +276,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 | read_file | 2000 行 / 行内 2000 字符 | 尾部提示用 offset 继续 |
 | grep / glob | 100 条 | 标注总命中数 |
 | MCP 工具结果 | 25 KiB | 同 shell |
-| 图片 | 按 provider 上限降采样 | adapter 层 |
+| 图片 | durable 附件保持原图；调用前按 provider/Codex 上限生成受控 clone | attachment authority + provider/Codex adapter |
 
 ### 9.2 历史选择：不做静默滑窗
 
@@ -372,9 +372,9 @@ instructions（下一个 model safe point 重新冻结）
 ### 11.3 落点
 
 `cache_control` 不进 canonical `ModelRequest`，由 `zeta-api` 的 `anthropic_messages` 构造器
-注入：断点 1 = tools 末尾；断点 2 = system 末尾；断点 3 = 倒数第二条 user 消息末尾（滚动，
-命中上一轮全部历史）。观测：`cached_input_tokens` 已解析；**同一 Thread 连续 Turn 命中率
-应接近 100%，低于即组装层引入了前缀抖动，按 bug 处理**（§14 的回归断言）。
+注入：断点 1 = tools 末尾；断点 2 = system 末尾；断点 3 = 最新一条 user 消息末尾。下一 Turn
+把断点向前滚动时，Anthropic 在新断点前回看已缓存的稳定前缀。观测：`cached_input_tokens` 已解析；
+在 TTL 内且达到供应商最小 token 条件的连续 Turn 应出现 cache read；fixture 用稳定序列化防止组装层引入前缀抖动（§14）。
 
 ## 12. Skills 与 slash commands
 
@@ -390,7 +390,7 @@ instructions（下一个 model safe point 重新冻结）
 
 ## 13. 供应商差异矩阵
 
-canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `zeta-api` 两个请求构造器。
+canonical 层（`ModelRequest`）保持 provider 中立，差异全部压进 `zeta-api` 的 endpoint 请求构造器。
 authoring 规则以最严格交集为准：
 
 | 维度 | Anthropic Messages | OpenAI Responses | canonical 规则 |
@@ -402,9 +402,9 @@ authoring 规则以最严格交集为准：
 | 并行 Tool Call | 支持（`disable_parallel_tool_use`） | 支持（`parallel_tool_calls`） | profile 属性透传 |
 | Tool result | user 消息内 `tool_result` block | `function_call_output` item | assembler 已配对，adapter 负责 wire 形态 |
 | Tool call id | `tool_use.id` 回传 | `call_id` 回传 | `ToolCallId` 原样往返，adapter 不改写 |
-| 图片 | base64 source block | data URI / URL | `ContentPart::ImageUrl` 承载，adapter 转换（已实现） |
+| 图片 | base64/URL source block | data URI / URL | durable `ImageAttachmentRef` 先经 authority 校验和降采样，再以 ephemeral `ContentPart::ImageUrl` 交给 adapter（已实现） |
 | 缓存 | 显式断点（§11.3） | 自动 | adapter 差异，canonical 无感 |
-| reasoning | thinking + budget_tokens | `reasoning.effort` | `ReasoningConfig.effort` 映射：Anthropic 按档位换算 budget；v1 不把 reasoning 内容回灌历史（assembler 已跳过） |
+| reasoning | thinking content block | `reasoning.effort` | Anthropic 原生 stream 会归一化上游 thinking delta；canonical `ReasoningConfig` 到新旧 Anthropic thinking 配置尚未建立可靠映射，当前显式拒绝而不猜测 budget；历史 assembler 不回灌 reasoning |
 | 空响应/拒绝 | `stop_reason` + 空 content | `refusal` item | 统一映射 `ResponseItem::Refusal` / 空响应走 §7.1 |
 | 错误分类 | `overloaded_error` 等错误体 | `context_length_exceeded` 等 code | 映射进 §7.4 的 `ApiError` 新分类 |
 
@@ -448,7 +448,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M1（部分具备）工具最小闭环 | 当前工具面已能完成 coding 且模型输入逐项限幅已接线；仍需统一文件工具 ownership、家族 ToolProfile、`update_plan` 和 T1/T2 | 本地工具组合、executor contributions、profile 声明层 | ToolProfile 冻结 contract |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；仍需 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | S7 T4 fixture |
-| M4（部分具备）缓存 | 请求组装已有字节稳定基线且 cached usage 已解析；仍需 Anthropic cache breakpoint、命中观测和 Provider 回归 | `anthropic_messages` adapter、组装 fixture | 无 |
+| M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
 | M5（部分具备）MCP 策略 | registry snapshot、deferred exposure 与 tool search 已实现；仍需 ≤15/≤5k 平铺阈值和超阈值整体检索式 contract | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（部分具备）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read` 和 Desktop 显式选择已接通；仍需受信任自动 selector | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 

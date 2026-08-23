@@ -145,18 +145,86 @@ impl StartCodexThread {
 /// Inputs for starting one user Turn on an upstream Codex thread.
 pub struct StartCodexTurn {
     pub thread_id: CodexThreadId,
-    text: String,
+    input: Vec<CodexTurnInput>,
+}
+
+/// Provider-ready input admitted to one upstream Codex Turn.
+///
+/// Image bytes stay ephemeral: callers pass only validated inline data URLs, never local paths.
+pub(crate) enum CodexTurnInput {
+    Text(String),
+    InlineImage {
+        data_url: String,
+        detail: zeta_protocol::ImageDetail,
+    },
+}
+
+impl CodexTurnInput {
+    pub(crate) fn text(text: impl Into<String>) -> Result<Self, CodexTurnError> {
+        let text = text.into();
+        if text.trim().is_empty() {
+            return Err(CodexTurnError::invalid_input(
+                "Codex Turn text input must not be empty",
+            ));
+        }
+        Ok(Self::Text(text))
+    }
+
+    pub(crate) fn inline_image(
+        data_url: impl Into<String>,
+        detail: zeta_protocol::ImageDetail,
+    ) -> Result<Self, CodexTurnError> {
+        let data_url = data_url.into();
+        if !data_url
+            .get(.."data:".len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
+        {
+            return Err(CodexTurnError::invalid_input(
+                "Codex Turn image input must be an inline data URL",
+            ));
+        }
+        Ok(Self::InlineImage { data_url, detail })
+    }
+
+    fn wire_value(&self) -> Value {
+        match self {
+            Self::Text(text) => json!({
+                "type": "text",
+                "text": text,
+            }),
+            Self::InlineImage { data_url, detail } => json!({
+                "type": "image",
+                "url": data_url,
+                "detail": image_detail_name(*detail),
+            }),
+        }
+    }
 }
 
 impl StartCodexTurn {
-    pub fn text(thread_id: CodexThreadId, text: impl Into<String>) -> Result<Self, CodexTurnError> {
-        let text = text.into();
-        if text.trim().is_empty() {
+    pub(crate) fn new(
+        thread_id: CodexThreadId,
+        input: Vec<CodexTurnInput>,
+    ) -> Result<Self, CodexTurnError> {
+        if input.is_empty() {
             return Err(CodexTurnError::invalid_input(
                 "Codex Turn input must not be empty",
             ));
         }
-        Ok(Self { thread_id, text })
+        Ok(Self { thread_id, input })
+    }
+
+    pub fn text(thread_id: CodexThreadId, text: impl Into<String>) -> Result<Self, CodexTurnError> {
+        Self::new(thread_id, vec![CodexTurnInput::text(text)?])
+    }
+}
+
+fn image_detail_name(detail: zeta_protocol::ImageDetail) -> &'static str {
+    match detail {
+        zeta_protocol::ImageDetail::Auto => "auto",
+        zeta_protocol::ImageDetail::Low => "low",
+        zeta_protocol::ImageDetail::High => "high",
+        zeta_protocol::ImageDetail::Original => "original",
     }
 }
 
@@ -360,16 +428,18 @@ impl CodexTurnDriver {
     }
 
     pub fn start_turn(&self, request: &StartCodexTurn) -> Result<CodexTurnId, CodexTurnError> {
+        let input = request
+            .input
+            .iter()
+            .map(CodexTurnInput::wire_value)
+            .collect::<Vec<_>>();
         let response = self
             .runtime
             .request(
                 "turn/start",
                 json!({
                     "threadId": request.thread_id.as_str(),
-                    "input": [{
-                        "type": "text",
-                        "text": request.text.as_str(),
-                    }],
+                    "input": input,
                 }),
             )
             .map_err(turn_process_error)?;

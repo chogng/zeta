@@ -169,6 +169,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly access: ModelCatalogEntry["access"];
+		readonly outputTransport: ModelCatalogEntry["outputTransport"];
 	}[]): readonly ModelCatalogEntry[] {
 		const identities = new Set<string>();
 		const catalog = entries.map(entry => {
@@ -179,6 +180,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 				model: Object.freeze({ ...entry.model }),
 				displayName: entry.displayName,
 				access: entry.access,
+				outputTransport: entry.outputTransport,
 			});
 		});
 		const changed = !sameModelCatalog(this.modelCatalog, catalog);
@@ -203,6 +205,7 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 		return candidate !== undefined
 			&& entry.displayName === candidate.displayName
 			&& entry.access === candidate.access
+			&& entry.outputTransport === candidate.outputTransport
 			&& modelRefIdentity(entry.model) === modelRefIdentity(candidate.model);
 	});
 }

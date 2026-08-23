@@ -148,7 +148,9 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 invoker、request/response validation、OpenAI-compatible/Ollama runtime resolver，以及本地
 `zeta-code-index-semantic` 和 Tool Search consumers。
 当前 completion invocation 同时支持 unary 与 OpenAI Responses、OpenAI-compatible Chat Completions、
-Anthropic Messages 原生 HTTP/SSE stream；
+Google Chat-compatible、Anthropic Messages 原生 HTTP/SSE stream。每个 immutable provider definition
+显式发布 `ModelOutputTransport::{NativeStreaming, Unary}`；catalog/Desktop 只消费该声明，不从
+provider 名称或 `ApiProfile` 猜测；
 OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API key；Ollama 与
 OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
 credential 设置 UI、更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整

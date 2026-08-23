@@ -15,7 +15,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
 | 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、冻结到 Turn 的 token/成本预算，以及按模型和估算 revision 恢复的未来预算校准 | 以 T4 持续量化压缩后的质量与成本 | S2、S7 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | 模型选择已冻结，但模型可见工具面未按家族完整区分 | Turn 接受时冻结 ToolProfile，使用匹配训练分布的编辑工具 | S3 |
-| 使用 Codex 订阅模型 | 基础委托、流式、批准、用户输入和恢复已接通 | 增加能力协商、diff、图片、secret、rate-limit 与故障矩阵 | S5 |
+| 使用 Codex 订阅模型 | 基础委托、流式、图片、批准、用户输入和恢复已接通 | 增加能力协商、diff、secret、rate-limit 与故障矩阵 | S5 |
 | 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整评测和故障验证 | S6、S7 |
 
 ## 1. 当前实现基线
@@ -34,7 +34,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 部分具备 | `shell-command`、`file-system`、`apply-patch`、`grep`、`glob` 可见；家族 profile、`update_plan` 和统一直接文件工具仍缺 | `zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 部分具备 | slash、显式 SkillRef、`skills-read`、registry snapshot、deferred tool search 已有；自动 selector 和阈值策略仍缺 | `zeta-rs/skills`、`zeta-rs/tools` |
-| Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、运行中 steering、默认手动压缩、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
+| Codex 订阅执行 | 部分具备 | 整个远端 Agent Loop 委托、恢复、流式、运行中 steering、默认手动压缩、附件 authority 下的图片输入、命令/文件批准和结构化输入已接通 | `zeta-rs/codex-app-server/src/turn_backend.rs` |
 | 多 Agent | 部分具备 | spawn/message/wait、Fresh/ForkedPrefix、all/any/quorum、取消树和恢复已实现 | `zeta-rs/core/src/multi_agent/`、`zeta-rs/app-server/src/server/multi_agent_tools.rs` |
 | 模型目录与选择 | 已实现 | 静态模型、access badge、隐藏设置和刷新已接通；目录不探活，运行错误归属对话 Turn | `zeta-rs/app-server/src/model_catalog.rs`、`zeta-ts/src/zeta/workbench/services/chat/` |
 
@@ -100,11 +100,13 @@ S3 完成后建立 T1/T2 首批 fixture，但正式指标和 nightly gate 由 S7
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-401 | 待构建 | Anthropic 真流式接线 | 将已有 Anthropic SSE decoder 接入 production `ModelProvider` stream path | 文本、reasoning、工具调用、usage、取消和截断有 adapter 测试；不得通过 unary fallback 冒充流式 |
-| AL-402 | 待构建 | 其余主力 Provider 流式 | 按已配置主力顺序接 Google 和其他 Provider；不支持者显式声明 unary capability | capability 可查询；Desktop 不猜测；所有 stream 使用 incarnation + sequence 处理 retry 和 gap |
-| AL-403 | 待构建 | Anthropic Prompt Cache | 在 adapter 注入 tools/system/滚动历史 `cache_control` 断点，不污染 canonical `ModelRequest` | 连续 Turn 的稳定前缀命中；cached input usage 可观测；换模型、换 profile、压缩后的预期 miss 有测试 |
-| AL-404 | 待构建 | Provider conformance matrix | 为 OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 与主力兼容 Provider 建统一 fixture | instructions、tool call/result、refusal、usage、图片、错误分类和流式终止语义逐项通过；unsupported 明确失败 |
-| AL-405 | 待构建 | 多模态输入收口 | 统一图片大小、媒体类型、降采样和 Provider mapping，并接本地与 Codex 两条路径 | canonical attachment authority 不被绕过；超限在调用前失败；不把本地路径或 secret 写入模型 transcript |
+| AL-401 | 已实现 | Anthropic 真流式接线 | Anthropic SSE decoder 已接入 production `ModelProvider` stream path | 文本、reasoning、工具调用、usage、取消和截断已有 adapter 测试；stream fixture 会拒绝 unary fallback |
+| AL-402 | 已实现 | 其余主力 Provider 流式 | OpenAI Responses、OpenAI-compatible Chat、Google 与 Anthropic 显式声明 native streaming；其余内置 Provider 声明 unary | capability 经 model catalog 可查询并由 Desktop 直接消费；Core retry 新建 incarnation，Desktop 对 sequence gap 刷新且拒绝 retired incarnation |
+| AL-403 | 已实现 | Anthropic Prompt Cache | adapter 在 tools/system/最新 user 历史末尾注入三个滚动 `cache_control` 断点，不污染 canonical `ModelRequest` | 稳定序列化、滚动断点、cached usage，以及换模型、换 profile、压缩后的 cache scope 变化均有测试 |
+| AL-404 | 已实现 | Provider conformance matrix | OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 与兼容 Chat profile 共用 canonical fixture | instructions、tool call/result、refusal、usage、图片、错误分类和流式终止语义已有覆盖；未物化附件与 unsupported output 明确失败 |
+| AL-405 | 已实现 | 多模态输入收口 | 图片进入 durable attachment authority 后才按模型限制生成 provider-bound clone；本地与 Codex 两条路径均已接通 | MIME/字节/像素边界在调用前验证；Codex 只接收受控 inline data URL，不接收或持久化本地路径 |
+
+S4 已完成；新增 Provider 必须先声明 `ModelOutputTransport` 并加入 conformance fixture，不能由 Desktop 按协议名称猜测。
 
 ## 7. S5：Codex 订阅路径产品对齐（P1）
 
@@ -113,11 +115,11 @@ S3 完成后建立 T1/T2 首批 fixture，但正式指标和 nightly gate 由 S7
 | AL-501 | 已实现 | 模型目录收口 | 静态 curated catalog、access badge、隐藏模型设置和刷新；目录不探活、不阻止发送 | 选择、持久化和 `thread/start` 使用同一精确模型 ID；`model/list` 不调用账户或远端模型目录；真实调用失败成为当前对话的 durable Turn error，且不静默 fallback |
 | AL-502 | 待构建 | 能力与版本协商 | 启动时验证支持的 Codex App Server 版本和所需方法/事件能力 | 不支持版本 fail closed，并给出可行动错误；不得在执行中靠“未知方法”探测关键能力 |
 | AL-503 | 待构建 | Diff 与丰富 item 投影 | 将 upstream diff、命令、文件变更及支持的完成 item 映射到 canonical durable/notification contract | `DiffUpdated` 不再被静默丢弃；重连后可从 canonical state 重建；Desktop 不直接依赖 upstream DTO |
-| AL-504 | 待构建 | 图片与 secret input | 支持 Codex 图片输入，并为 `isSecret` 用户输入建立不进日志、不进普通 transcript 的安全响应路径 | secret 在 Debug、错误、Thread item 和 telemetry 中保持 redacted；图片受 workspace attachment authority 约束 |
+| AL-504 | 进行中 | 图片与 secret input | Codex 图片输入已由 S4 接通；仍需为 `isSecret` 用户输入建立不进日志、不进普通 transcript 的安全响应路径 | secret 在 Debug、错误、Thread item 和 telemetry 中保持 redacted；图片受 workspace attachment authority 约束 |
 | AL-505 | 待构建 | Account 与 rate-limit 状态 | 将 upstream 账户、额度和 rate-limit 状态投影到独立账户/对话状态，并丰富 Turn 错误上下文 | 状态不得改写或门禁静态模型目录；状态过期后显示未知，不把缓存值当永久事实；执行失败仍由 exact Turn 承载 |
 | AL-506 | 待构建 | 委托恢复故障矩阵 | 覆盖 upstream 启动失败、执行中退出、批准期间退出、绑定写入失败和重连 | 已记录 attempted 的不确定副作用不重放；remote thread binding 只在成功条件下推进；所有等待交互有终止结果 |
 
-AL-501 已完成；S5 其余工作在 S1 错误 contract 和 S4 capability contract 稳定后开始。
+AL-501 与 AL-504 的图片半程已完成；S4 capability contract 已稳定，S5 可继续推进版本协商、diff、secret、账户状态与恢复矩阵。
 
 ## 8. S6：Skills、MCP 与多 Agent 收口（P2）
 
@@ -165,21 +167,21 @@ flowchart TD
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
 2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
-3. S2 的 AL-201 至 AL-205 已完成；下一批从 S3 的 AL-301 ToolProfile contract 开始，并可并行推进 S4，每个阶段独立维护 protocol 和测试门。
-4. S4 capability contract 稳定后完成 S5；S2/S3 稳定后完成 S6。
+3. S2 的 AL-201 至 AL-205 与 S4 的 AL-401 至 AL-405 已完成；下一批从 S3 的 AL-301 ToolProfile contract 和 S5 的 AL-502 能力协商继续。
+4. S4 capability contract 已稳定；S2/S3 稳定后完成 S6。
 5. S3 开始时建立 S7 fixture；所有阶段完成后启用 AL-705 发布门。
 
 ## 11. 验证矩阵
 
 | 变更面 | 最小验证 | 阶段完成验证 |
 | --- | --- | --- |
-| Core loop、Context、多 Agent | `cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-core` | Core 故障恢复测试 + 对应 deterministic eval |
-| Provider 与 wire adapter | `cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-api -p zeta-model-provider` | Provider conformance matrix |
-| App Server 与 Codex | `cargo test --manifest-path zeta-rs/Cargo.toml -p zeta-app-server --lib -p zeta-codex-app-server` | 订阅集成测试 + JSONL/reconnect/fault matrix |
+| Core loop、Context、多 Agent | `cargo test --manifest-path Cargo.toml -p zeta-core` | Core 故障恢复测试 + 对应 deterministic eval |
+| Provider 与 wire adapter | `cargo test --manifest-path Cargo.toml -p zeta-api -p zeta-model-provider` | Provider conformance matrix |
+| App Server 与 Codex | `cargo test --manifest-path Cargo.toml -p zeta-app-server --lib -p zeta-codex-app-server` | 订阅集成测试 + JSONL/reconnect/fault matrix |
 | Protocol | `corepack pnpm run verify:protocol` | schema hash、fixtures、生成 TypeScript 和 Desktop consumer 同批通过 |
 | Desktop | `corepack pnpm --dir zeta-ts run typecheck:renderer` | `corepack pnpm --dir zeta-ts run test:unit`，已知范围外失败必须单独登记，不能静默忽略 |
 | 文档 | `corepack pnpm --dir docs-site run check:docs` | 链接、状态、生成文档和 capability matrix 一致 |
-| Rust 全阶段 | 受影响 crate 的 `cargo fmt --check`、`cargo clippy` 和测试 | `cargo fmt --manifest-path zeta-rs/Cargo.toml --all -- --check`；`cargo clippy --manifest-path zeta-rs/Cargo.toml --workspace --all-targets -- -D warnings`；`cargo test --manifest-path zeta-rs/Cargo.toml --workspace` |
+| Rust 全阶段 | 受影响 crate 的 `cargo fmt --check`、`cargo clippy` 和测试 | `cargo fmt --manifest-path Cargo.toml --all -- --check`；`cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings`；`cargo test --manifest-path Cargo.toml --workspace` |
 
 ## 12. Agent Loop v1 完成标准
 

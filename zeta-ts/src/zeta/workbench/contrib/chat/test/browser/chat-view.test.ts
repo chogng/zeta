@@ -123,6 +123,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
 		access: "subscription" as const,
+		outputTransport: "nativeStreaming" as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -1063,6 +1064,56 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 	assert.equal(model.thread?.sequence, 4);
 });
 
+test("ChatPaneModel refreshes on stream gaps and rejects retired incarnations", async () => {
+	const activeSession = session("session-1", "thread-1");
+	const fake = fakeApi({
+		sessions: [activeSession],
+		thread: () => thread(),
+	});
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(createChatService(fake.api), {
+		kind: "session",
+		active: {
+			session: activeSession,
+			threadId: "thread-1",
+		},
+	}, sessions);
+
+	await model.initialize();
+	const emitStarted = (streamInstanceId: string, sequence: number, itemId: string): void => {
+		fake.emit({
+			method: "session/thread/update",
+			params: {
+				sessionId: "session-1",
+				threadId: "thread-1",
+				durableSequence: 1,
+				streamCursor: { streamInstanceId, sequence },
+				update: {
+					type: "itemStarted",
+					turnId: "turn-1",
+					item: {
+						type: "agentMessage",
+						itemId,
+						turnId: "turn-1",
+						text: itemId,
+					},
+				},
+			},
+		});
+	};
+
+	emitStarted("stream-1", 1, "old-item");
+	assert.deepEqual(model.items.map((item) => item.text), ["old-item"]);
+	emitStarted("stream-1", 3, "gap-item");
+	await nextTask();
+	assert.equal(model.items.length, 0);
+
+	emitStarted("stream-2", 1, "new-item");
+	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
+	emitStarted("stream-1", 4, "late-old-item");
+	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
+});
+
 test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const failedThread: Thread = {
@@ -1215,6 +1266,7 @@ interface FakeOptions {
 		readonly model: ModelRef;
 		readonly displayName: string;
 		readonly access: "apiKey" | "subscription" | "local" | "enterprise" | "unknown";
+		readonly outputTransport: "nativeStreaming" | "unary";
 	}[];
 }
 
@@ -1262,16 +1314,19 @@ test("Chat service caches the static catalog and filters picker entries by user 
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
 		access: "subscription" as const,
+		outputTransport: "nativeStreaming" as const,
 	};
 	const second = {
 		model: { provider: "anthropic", model: "claude-opus-5" },
 		displayName: "Claude Opus 5",
 		access: "apiKey" as const,
+		outputTransport: "nativeStreaming" as const,
 	};
 	const third = {
 		model: { provider: "openai", model: "gpt-5.6" },
 		displayName: "GPT-5.6",
 		access: "apiKey" as const,
+		outputTransport: "nativeStreaming" as const,
 	};
 	const fake = fakeApi({ models: [first, second, third] });
 	using configuration = new WorkbenchConfigurationService();
@@ -1294,6 +1349,7 @@ test("Chat picker retains the selected Session model when it is hidden", async (
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
 		access: "subscription" as const,
+		outputTransport: "nativeStreaming" as const,
 	};
 	const activeSession = { ...session("session-1", "thread-1"), model: entry.model };
 	const fake = fakeApi({ sessions: [activeSession], models: [entry] });

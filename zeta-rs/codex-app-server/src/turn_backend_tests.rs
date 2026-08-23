@@ -77,6 +77,68 @@ fn delegated_turn_streams_and_commits_core_items() {
 
 #[test]
 #[cfg(unix)]
+fn delegated_turn_materializes_a_durable_image_as_inline_codex_input() {
+    const TINY_PNG_DATA_URL: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+    let (root, program) = fake_codex_backend_program(BackendScenario::Complete);
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("codex-image-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("codex-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "Codex image".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-codex-image-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "codex-policy-v1".into(),
+                approval_mode: ApprovalMode::AskPermissions,
+                resource_budget: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Image {
+                    url: TINY_PNG_DATA_URL.into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let before = threads.read_thread(&thread_id).unwrap();
+    assert!(before.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::UserImageAttachment { turn_id: item_turn_id, .. }
+            if item_turn_id == &turn_id
+    )));
+    assert!(!before.items.iter().any(|item| matches!(
+        item,
+        ThreadItem::UserImage { turn_id: item_turn_id, .. } if item_turn_id == &turn_id
+    )));
+
+    let backend = build_backend(program, Arc::clone(&threads));
+    backend.start(&thread_id, &turn_id).unwrap();
+    wait_until(|| turn_status(&threads, &thread_id, &turn_id) == TurnStatus::Completed);
+
+    let requests = std::fs::read_to_string(root.path().join("requests.log")).unwrap();
+    let turn_start = requests
+        .lines()
+        .find(|line| line.contains("\"method\":\"turn/start\""))
+        .unwrap();
+    assert!(turn_start.contains("\"type\":\"image\""));
+    assert!(turn_start.contains("\"url\":\"data:image/png;base64,"));
+    assert!(turn_start.contains("\"detail\":\"auto\""));
+    assert!(!turn_start.contains("localImage"));
+    assert!(!turn_start.contains("\"path\""));
+}
+
+#[test]
+#[cfg(unix)]
 fn delegated_manual_compaction_uses_the_upstream_compact_operation() {
     let (root, program) = fake_codex_backend_program(BackendScenario::Compaction);
     let threads = Arc::new(ThreadController::with_store(Arc::new(

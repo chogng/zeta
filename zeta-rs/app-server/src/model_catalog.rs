@@ -4,6 +4,7 @@ use zeta_core::CoreError;
 use zeta_model_provider_config::STATIC_MODEL_CATALOG;
 use zeta_model_provider_config::find_static_model;
 use zeta_protocol::ModelAccess;
+use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
 
 /// Supplies the product model catalog and validates Session-owned identities.
@@ -32,7 +33,11 @@ impl CombinedModelCatalog {
             .filter(|model| model.access == ModelAccess::Subscription)
             .map(|model| {
                 let info = model.model();
-                ModelCatalogEntry::from_info(model.model_ref(), &info)
+                ModelCatalogEntry::from_info(
+                    model.model_ref(),
+                    &info,
+                    ModelOutputTransport::NativeStreaming,
+                )
             })
             .collect()
     }

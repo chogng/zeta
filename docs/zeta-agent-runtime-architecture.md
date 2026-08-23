@@ -2,7 +2,7 @@
 
 > 状态：Accepted（2026-08-03 整体重审修订，替代此前 Proposed 版本）
 > 审查基线：`0df46ca9ff870489b58ebe6a3cbd0b1b8192928a` 加当前工作区改动
-> 最后状态核对：2026-08-12
+> 最后状态核对：2026-08-23
 > 适用范围：Session、Thread 执行控制、Agent loop、工具执行、上下文、流式、Provider
 > 切换和多 Agent 演进
 >
@@ -28,7 +28,7 @@
 
 | 审计问题 | 当前结论 | 深入阅读 |
 | --- | --- | --- |
-| 哪些已经落地，哪些还是纸面设计？ | 单 Agent 顺序执行、durable policy binding 与上下文纵向切片已实现；真实流式、多 Agent 和完整运行时快照仍为部分/仅设计 | [组件状态总账](#2-组件状态总账) |
+| 哪些已经落地，哪些还是纸面设计？ | 单 Agent、durable policy binding、上下文、主力 Provider 原生流式和多 Agent 纵向切片已实现；完整运行时快照仍为部分设计 | [组件状态总账](#2-组件状态总账) |
 | Session 和 Thread 谁是执行边界？ | Session 聚合任务；每个 Thread 独立排序、执行、恢复和持久化 | [分层与执行链](#3-分层与执行链) |
 | 执行内核会异步化（tokio）吗？ | 不承诺；保留同步端口 + per-Thread OS 线程，流式经 sink 达成 | [R2](#42-r2同步执行内核流式经-sink) |
 | Turn 中途策略会漂移吗？ | 模型选择与 policy revision 都在 `TurnAccepted` 冻结；恢复遇到 revision 变化会 fail closed | [R1](#41-r1策略冻结-durable-化) |
@@ -62,7 +62,7 @@
 | # | 原设计 | 修订立场 | 核心理由 |
 | --- | --- | --- | --- |
 | R1 | `TurnPolicySnapshot` 为进程内不可变结构 | policy 冻结改为 **durable fact**：Turn 接受时持久化 policy revision，恢复时据此重建 | 进程内快照不能跨 crash-resume 存活；恢复后的 Turn 会从当前配置重建 policy，违反"不得静默放宽"的验收标准。模型选择已经这样做（`TurnAccepted` 携带 model），policy 应对齐 |
-| R2 | 端口演进为 async streaming（隐含运行时异步化） | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 补独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例 |
+| R2 | 端口演进为 async streaming（隐含运行时异步化） | **不承诺 tokio 迁移**：保留同步端口 + per-Thread OS 线程邮箱；真实流式经 wire-level SSE decoder → `ModelStreamSink`；App Server 使用独立 outbound writer 线程 | 桌面级并发上限是几十个 Thread；同步代码对 durability 不变量更易验证；cancellation 已闭环；sink 契约已为流式预留。异步化收益不成比例 |
 | R3 | ContextManager 完整形态（cache / baseline / estimate）一步到位 | **裁剪落地**：纯函数 planner + `ContextPlan` 先行；ContextManager 只做薄协调（无 cache）；compaction checkpoint 的 durable schema 提前进 protocol | 纯函数可独立验证 precedence / budget / 配对 / 确定性；cache 失效是最难验对的部分，推迟到有真实性能证据 |
 | R4 | 多 Agent 按十步顺序整体落地 | **契约冻结与运行时分离**：先只冻结身份语义进 protocol（阶段 D）；coordinator 运行时 gate 在上下文系统完成之后（阶段 E） | context isolation 与 seed 依赖 `ContextPlan`；先冻结契约避免后续 protocol 破坏性变更 |
 | R5 | 文档以现在时描述未实现组件，差异只在"当前状态"小节标注 | 每个组件在其权威文档中挂**显式状态标记**（已实现/部分/仅设计/推迟），本文维护跨层状态总账 | 重审当时 `ContextManager`、`MultiAgentCoordinator`、两级快照在代码中零引用，但组件章节读起来像现状；后续以状态总账消除这一风险 |
@@ -96,9 +96,9 @@
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
 | `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
-| `ModelService` / `ModelStreamSink` 契约 | 已实现（同步桥接：默认 stream 只回放 final response） | `core/src/services.rs` |
+| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明 native streaming 的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core/src/services.rs`、`model-provider/src/providers/` |
 | 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
-| App Server 可唤醒 outbound 通知源（`ConnectionNotifications`） | 部分 | `app-server/src/server.rs`；stdio 主循环仍在每个请求处理后才 drain |
+| App Server 可唤醒 outbound 通知源与独立 writer | 已实现 | `app-server/src/server.rs` |
 
 ### 2.2 设计面（本计划的工作对象）
 
@@ -111,9 +111,9 @@
 | `ContextManager`（薄协调，无 cache） | 已实现 | B | `core/src/context_manager.rs`、`loaded_thread.rs` |
 | compaction checkpoint schema + 压缩流程 | 已实现 | B | 预算压缩和供应商溢出单次恢复均复用 durable checkpoint，见 [`core-context.md`](core-context.md) §8 |
 | `ContextCompactionService` / `Clock` / `IdGenerator` / `CapabilityBroker` 端口 | 部分 | B / 按需 | model-backed compaction 已实现；其余仍按需设计 |
-| provider wire-level SSE streaming | 仅设计 | C | 本文 §4.2 |
-| App Server 独立 outbound writer 线程 | 仅设计 | C | 本文 §4.2 |
-| Desktop projection gap/resync | 仅设计 | C | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) |
+| provider wire-level SSE streaming | 已实现 | C | OpenAI Responses、OpenAI-compatible Chat、Google 与 Anthropic；其他 Provider 显式 unary |
+| App Server 独立 outbound writer 线程 | 已实现 | C | 本文 §4.2 |
+| Desktop projection gap/resync | 已实现 | C | stream gap 触发 canonical refresh，新 incarnation 淘汰旧 incarnation |
 | `DelegationId` / `AgentMessageId` / `ThreadOrigin::AgentSpawn` / seed schema | 已实现 | D | [`core-multi-agent.md`](core-multi-agent.md) |
 | `MultiAgentCoordinator`、Fresh spawn saga、delivery、结构性 tree budget | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
 | Selected/ForkedPrefix inheritance、durable join、cancellation tree、Agent-tree UI projection | 已实现 | E | [`core-multi-agent.md`](core-multi-agent.md) |
@@ -202,20 +202,19 @@ authority。
 `ModelService` / `ToolService` / `ActionPolicyService` 端口、`CancellationToken` 协作取消。不进行
 tokio / async 迁移；重新评审触发条件见 [§1.3](#13-明确推迟的决策)。
 
-**真实流式不需要异步运行时。** `ModelService::stream` 契约已经存在；当前默认桥接在
-`invoke` 返回后一次性回放 final response。阶段 C 的工作是：
+**真实流式不需要异步运行时。** `ModelService::stream` 保留 unary 默认桥接；声明
+`NativeStreaming` 的 OpenAI Responses、OpenAI-compatible Chat、Google 和 Anthropic adapter 已在
+同步读循环中逐 chunk 解码并调用 `sink.emit(...)`。当前实现满足：
 
-- provider adapter 实现 wire-level SSE decoder，在同步读循环中逐 chunk 解码并调用
-  `sink.emit(...)`；每个 chunk 边界观察 cancellation；socket 层仍由 `zeta-http-client` 的
+- provider adapter 在每个 chunk 边界观察 cancellation；socket 层仍由 `zeta-http-client` 的
   bounded transport timeout 收束；
 - `InvocationStream`（Core 侧 sink 实现）已具备 stream incarnation + cursor 发布路径，无需
   改动契约；
 - transient delta 经有界 channel 发布，饱和时允许合并或丢弃；durable completion 不依赖
   transient stream。
 
-**App Server outbound topology。** 当前 `serve_jsonl` 是同步 read → dispatch → write →
-drain 循环：通知在下一个请求处理完成后才被取走。可唤醒的 `ConnectionNotifications`
-（wait / drain / close）已经存在，缺的是独立消费者。目标 topology：
+**App Server outbound topology。** `serve_jsonl` 已把 request dispatch 与唯一 outbound writer
+分离；response 和 notification 进入同一有界队列，由 writer 串行写出：
 
 ```text
 per-connection reader thread        per-connection writer thread
@@ -230,9 +229,9 @@ per-connection reader thread        per-connection writer thread
 `session/request` 的 `InterruptTurn`（durable Turn 推向 Interrupted）、connection close（清理 connection-owned
 资源并唤醒 writer 退出）、server shutdown（带 deadline 的全局 graceful stop）。
 
-Desktop Renderer 不持有 raw peer；由单一 projection service 消费 notification，检测 durable
-sequence / stream cursor gap，并通过 `session/subscribe` / `session/thread/subscribe` 的
-snapshot + gap 重建。
+Desktop Renderer 不持有 raw peer；由单一 projection service 消费 notification。相同
+incarnation 的 sequence gap 会清空 transient projection 并刷新 canonical Thread；新 incarnation
+会淘汰旧 incarnation，迟到的旧 delta 被拒绝。
 
 ### 4.3 R3：上下文系统裁剪落地
 
@@ -337,10 +336,11 @@ durable history 重新构造 context 并创建新的 invocation snapshot；运�
   fail closed，且不删除可供显式修复的原始 history；
 - ContextManager 丢弃后从 durable facts 重建等价 plan。
 
-### 阶段 C｜真实流式
+### 阶段 C｜真实流式（已完成）
 
 范围：[§4.2](#42-r2同步执行内核流式经-sink) 的 provider SSE decoder、App Server
-reader/writer 拆分、Desktop gap/resync。
+reader/writer 拆分、Desktop gap/resync。OpenAI Responses、OpenAI-compatible Chat、Google 与
+Anthropic 已声明 native streaming；其余内置 Provider 显式声明 unary。
 
 完成条件：
 

@@ -7,6 +7,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use zeta_protocol::Model;
+use zeta_protocol::ModelOutputTransport;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -99,6 +100,8 @@ pub struct ProviderDefinition {
     pub endpoint: EndpointPolicy,
     pub model_catalog_policy: ModelCatalogPolicy,
     #[serde(default)]
+    pub output_transport: ModelOutputTransport,
+    #[serde(default)]
     pub models: Vec<Model>,
     #[serde(default)]
     pub defaults: ProviderDefaults,
@@ -124,6 +127,7 @@ impl ProviderDefinition {
             api_profile,
             endpoint,
             model_catalog_policy,
+            output_transport: ModelOutputTransport::Unary,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
             input_token_count: None,
@@ -133,6 +137,11 @@ impl ProviderDefinition {
 
     pub fn with_models(mut self, models: impl IntoIterator<Item = Model>) -> Self {
         self.models.extend(models);
+        self
+    }
+
+    pub fn with_native_streaming(mut self) -> Self {
+        self.output_transport = ModelOutputTransport::NativeStreaming;
         self
     }
 

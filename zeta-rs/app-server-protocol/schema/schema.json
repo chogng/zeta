@@ -16923,6 +16923,9 @@
         "model": {
           "$ref": "#/$defs/ModelRef"
         },
+        "outputTransport": {
+          "$ref": "#/$defs/ModelOutputTransport"
+        },
         "supportedReasoningEfforts": {
           "items": {
             "$ref": "#/$defs/ReasoningEffort"
@@ -16934,6 +16937,7 @@
         "model",
         "displayName",
         "access",
+        "outputTransport",
         "capabilities",
         "supportedReasoningEfforts"
       ],
@@ -16999,6 +17003,14 @@
         "models"
       ],
       "type": "object"
+    },
+    "ModelOutputTransport": {
+      "description": "How one configured model runtime obtains completion output from its provider endpoint.\n\nThis describes the immutable adapter path, not whether a remote request is entitled or will\nsucceed. Unary runtimes may still publish one buffered final delta through Core's compatibility\nbridge.",
+      "enum": [
+        "nativeStreaming",
+        "unary"
+      ],
+      "type": "string"
     },
     "ModelPriceSnapshot": {
       "description": "Immutable USD price inputs used to evaluate one Turn's cost budget.\n\nRates are expressed as micro-USD per one million tokens so the durable contract never depends\non floating-point arithmetic or a mutable model catalog.",

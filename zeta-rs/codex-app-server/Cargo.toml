@@ -17,6 +17,7 @@ zeta-app-server-transport = { workspace = true }
 zeta-core = { workspace = true }
 zeta-login = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-utils-image = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

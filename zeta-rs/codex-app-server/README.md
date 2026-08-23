@@ -30,6 +30,12 @@ unique static catalog row declares subscription access; login state never change
 implicitly. The model provider remains `openai`; `openai-chatgpt` is only the managed-login account
 adapter identity.
 
+Image input follows the same Core attachment authority as local providers. A user data URL or remote
+image is validated into an immutable `ImageAttachmentRef` before it enters Thread history. Immediately
+before `turn/start`, the backend verifies the reference, applies the conservative provider-bound resize
+limits, and emits an inline Codex `image` input. No user-supplied local path is admitted or copied into
+the durable transcript.
+
 For steering, the backend waits until the local Turn has an exact active remote `(thread, turn)`
 route, then sends upstream `turn/steer` with `expectedTurnId`. App Server persists the local steer
 marker before this request and its delivery fact only after the matching upstream acknowledgement;
@@ -49,11 +55,12 @@ request carrying one fails explicitly instead of silently dropping user intent.
 - failed inference, approval, user-input, or login requests are not replayed after an unknown process
   outcome;
 - connection generations prevent late server requests from being answered on a restarted process;
-- unsupported secret user input, local image input, or approval semantics fail closed;
+- unsupported secret user input or approval semantics fail closed; image input accepts only
+  authority-verified attachments materialized as inline data URLs;
 - stderr is not captured into RPC errors or telemetry.
 
 The product App Server selects this backend through the canonical static model catalog and Session
 model selection. Account, entitlement, rate-limit, transport, and model support failures are decided
 by the real thread/Turn invocation and become durable Turn errors in the conversation; they are not
-preflight availability flags. Permission approval, diff projection, images, secret user input,
-rate-limit observation, and richer completed-item projection remain explicit follow-up slices.
+preflight availability flags. Diff projection, secret user input, rate-limit observation, and richer
+completed-item projection remain explicit follow-up slices.

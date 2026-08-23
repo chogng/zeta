@@ -373,6 +373,7 @@ use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelCapabilities;
+use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::Personality;
 use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolCallBinding;
@@ -2177,6 +2178,7 @@ typescript_bindings! {
     ThreadHistoryBoundary,
     CapabilitySupport,
     ModelAccess,
+    ModelOutputTransport,
     ModelCapabilities,
     ReasoningEffort,
     Personality,

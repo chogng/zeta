@@ -5,7 +5,6 @@ use zeta_attachments::ImageAttachments;
 
 #[test]
 fn normalizes_supported_image_data_to_a_durable_reference() {
-    let attachments = Arc::new(ImageAttachments::in_memory());
     let png = crate::test_image::one_pixel_png_data_url();
     let attachments = Arc::new(ImageAttachments::in_memory());
 

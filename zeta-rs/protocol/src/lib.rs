@@ -38,10 +38,10 @@ pub use model::{
     CapabilitySupport, ContentPart, ContextWindow, ImageDetail, ImageDetailDecision,
     ImageDetailDecisionReason, InputItem, InvalidModelIdentity, Message, MessageRole, Model,
     ModelAccess, ModelAvailability, ModelCapabilities, ModelCatalogFreshness, ModelId, ModelInfo,
-    ModelInputEstimate, ModelLifecycle, ModelMetadataQuality, ModelPreset, ModelRef, ModelRequest,
-    ModelResponse, ModelStreamEvent, ModelUsage, ModelUsageSummary, ModelUsageTotal, ProviderId,
-    ReasoningConfig, ReasoningEffort, ResponseItem, StopReason, ToolCall, ToolChoice,
-    ToolDefinition, ToolResult,
+    ModelInputEstimate, ModelLifecycle, ModelMetadataQuality, ModelOutputTransport, ModelPreset,
+    ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ModelUsageSummary,
+    ModelUsageTotal, ProviderId, ReasoningConfig, ReasoningEffort, ResponseItem, StopReason,
+    ToolCall, ToolChoice, ToolDefinition, ToolResult,
 };
 pub use multi_agent::{
     AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource, AgentJoin,
