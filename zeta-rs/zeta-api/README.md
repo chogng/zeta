@@ -54,6 +54,7 @@ compatible profile 也不能据此假设 cache、usage、error 或 streaming 语
 | `ApiEndpoint::headers` | crate-private | 合并 target headers，并补 Anthropic version | credential headers 仍由 provider runtime 提供 |
 | `validate_request` | private | 拒绝空 model/input 与零 max tokens | 在任何 transport 调用前执行 |
 | `requests::post_json` | crate-private | JSON serialization、`ClientRequest`、status 与 JSON parse | 不选择 retry policy或 codec |
+| `requests::require_materialized_images` | crate-private | 在 codec 前拒绝未经过 attachment authority 物化的 durable 引用 | 不读取附件 store 或本地路径 |
 | `requests::*::complete` | crate-private | 对应 endpoint 的 build/call/parse pipeline | endpoint dispatch 的唯一 codec target |
 | `requests::{google_count_tokens,kimi_estimate_tokens,zai_tokenizer}` | crate-private | provider count request/response JSON | 不声明准确度或调用频率 |
 | `requests::*::build_request` | private | canonical input → endpoint JSON | 不读取 provider config |
@@ -136,6 +137,11 @@ end of stream
 三种 endpoint 都由 `ApiEndpoint::stream_with_client_and_cancellation` 发起原生 wire stream，经过
 `zeta-client` framing 后边解码边投递 canonical delta，并返回权威 terminal `ModelResponse`。
 
+Anthropic request builder 还在 wire clone 上注入三个 ephemeral prompt-cache breakpoint：最后一个
+tool、system content 末尾和最新 user content 末尾。canonical `ModelRequest` 不被修改；模型、resolved
+profile target 或 compaction history 改变会形成新的 cache scope。`cache_read_input_tokens` 归一化为
+`ModelUsage.cached_input_tokens`。
+
 ## 错误语义
 
 | Condition | `ApiError` |
@@ -174,8 +180,9 @@ bazel test //zeta-rs/zeta-api:zeta-api-unit-tests
 ```
 
 当前 tests 重点覆盖三个 SSE decoder 的 delta mapping、Tool Call fragment assembly、usage、
-unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifecycle，并通过 injected
-`OperationClient`/provider contract tests 验证 request 与 response shape。
+unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifecycle。统一 provider
+conformance fixture 还覆盖 instructions、Tool Call/Result、图片、refusal、错误分类、未物化附件拒绝
+和 prompt-cache scope，并通过 injected `OperationClient` 验证 request 与 response shape。
 
 当前三种 HTTP/SSE endpoint 已有端到端 streaming invocation；NDJSON、WebSocket、更多
 provider-native catalog codec 和 provider-specific stream profile 仍是潜在演进。新增能力必须继续

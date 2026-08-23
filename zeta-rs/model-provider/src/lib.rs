@@ -49,6 +49,7 @@ pub use zeta_protocol::ContextWindow;
 pub use zeta_protocol::Model;
 pub use zeta_protocol::ModelCapabilities;
 pub use zeta_protocol::ModelId;
+pub use zeta_protocol::ModelOutputTransport;
 pub use zeta_protocol::ModelRef;
 pub use zeta_protocol::ProviderId;
 

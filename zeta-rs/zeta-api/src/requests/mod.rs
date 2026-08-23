@@ -3,6 +3,9 @@
 //! Each codec receives its method, relative path, and protocol-owned headers
 //! from `endpoint/`; it only owns JSON/body conversion.
 
+use crate::ContentPart;
+use crate::InputItem;
+use crate::ModelRequest;
 use crate::{ApiEndpoint, ApiError};
 use serde_json::Value;
 use zeta_async_utils::CancellationToken;
@@ -63,6 +66,40 @@ pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError
         400 => classify_provider_error(response.body(), ProviderErrorFallback::InvalidRequest),
         status => classify_provider_error(response.body(), ProviderErrorFallback::Status(status)),
     }
+}
+
+/// Enforces the attachment authority boundary before a provider codec examines content.
+///
+/// Durable references are intentionally not provider wire values. Core must resolve and validate
+/// them into ephemeral image URLs before any public API endpoint can encode a request.
+pub(crate) fn require_materialized_images(request: &ModelRequest) -> Result<(), ApiError> {
+    for content in request.input.iter().flat_map(|item| match item {
+        InputItem::Message(message) => message.content.as_slice(),
+        InputItem::ToolResult(result) => result.content.as_slice(),
+    }) {
+        match content {
+            ContentPart::ImageAttachment { .. } => {
+                return Err(ApiError::InvalidRequest(
+                    "durable image attachments must be materialized before API encoding".into(),
+                ));
+            }
+            ContentPart::ImageUrl { url, .. } if !is_provider_image_url(url) => {
+                return Err(ApiError::InvalidRequest(
+                    "image input must be an inline data URL or an HTTP(S) URL".into(),
+                ));
+            }
+            ContentPart::Text(_) | ContentPart::ImageUrl { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+fn is_provider_image_url(url: &str) -> bool {
+    url.starts_with("https://")
+        || url.starts_with("http://")
+        || url
+            .get(.."data:".len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
 }
 
 pub(crate) fn stream_error(body: &str) -> ApiError {

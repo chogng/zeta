@@ -127,6 +127,7 @@ impl OpenAiChatCompletionsBodySink<'_> {
 }
 
 pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    crate::requests::require_materialized_images(request)?;
     let mut messages = Vec::new();
     if let Some(instructions) = &request.instructions {
         messages.push(json!({"role": "system", "content": instructions}));
@@ -286,6 +287,13 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
     {
         output.push(OutputItem::Reasoning(reasoning.into()));
     }
+    if let Some(refusal) = message
+        .get("refusal")
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+    {
+        output.push(OutputItem::Refusal(refusal.into()));
+    }
     for call in message
         .get("tool_calls")
         .and_then(Value::as_array)
@@ -320,6 +328,11 @@ fn parse_response(response: Value) -> Result<ModelResponse, ApiError> {
         .any(|item| matches!(item, OutputItem::ToolCall(_)))
     {
         StopReason::ToolUse
+    } else if output
+        .iter()
+        .any(|item| matches!(item, OutputItem::Refusal(_)))
+    {
+        StopReason::Refusal
     } else {
         match finish_reason {
             "stop" => StopReason::Completed,

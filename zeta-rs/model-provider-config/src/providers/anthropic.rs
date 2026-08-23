@@ -14,6 +14,7 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::AnthropicMessages,
         "https://api.anthropic.com",
     )
+    .with_native_streaming()
     .with_input_token_count(InputTokenCountDefinition::invocation_base(
         InputTokenCountProfile::AnthropicMessages,
     ))

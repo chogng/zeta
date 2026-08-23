@@ -54,6 +54,7 @@ fn normalized_model(model: &str) -> Result<&str, ApiError> {
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
+    crate::requests::require_materialized_images(request)?;
     let mut system_parts = request
         .instructions
         .iter()

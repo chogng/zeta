@@ -5,6 +5,7 @@ use zeta_protocol::ContextWindow;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelCapabilities;
 use zeta_protocol::ModelInfo;
+use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
 use zeta_protocol::Personality;
 use zeta_protocol::ReasoningEffort;
@@ -15,6 +16,7 @@ pub struct ModelCatalogEntry {
     pub model: ModelRef,
     pub display_name: String,
     pub access: ModelAccess,
+    pub output_transport: ModelOutputTransport,
     pub context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
@@ -25,12 +27,17 @@ pub struct ModelCatalogEntry {
 
 impl ModelCatalogEntry {
     /// Projects provider-neutral model metadata into the public App Server catalog DTO.
-    pub fn from_info(model: ModelRef, info: &ModelInfo) -> Self {
+    pub fn from_info(
+        model: ModelRef,
+        info: &ModelInfo,
+        output_transport: ModelOutputTransport,
+    ) -> Self {
         debug_assert_eq!(model.model, info.id);
         Self {
             model,
             display_name: info.display_name.clone(),
             access: info.access,
+            output_transport,
             context_window: match info.context_window {
                 ContextWindow::Known(tokens) => Some(tokens),
                 ContextWindow::Unknown => None,
@@ -72,11 +79,19 @@ mod tests {
         info.default_reasoning_effort = Some(ReasoningEffort::High);
         info.default_personality = Some(Personality::Pragmatic);
 
-        let entry = ModelCatalogEntry::from_info(model.clone(), &info);
+        let entry = ModelCatalogEntry::from_info(
+            model.clone(),
+            &info,
+            ModelOutputTransport::NativeStreaming,
+        );
 
         assert_eq!(entry.model, model);
         assert_eq!(entry.display_name, "Test Model");
         assert_eq!(entry.access, ModelAccess::Subscription);
+        assert_eq!(
+            entry.output_transport,
+            ModelOutputTransport::NativeStreaming
+        );
         assert_eq!(entry.context_window, Some(1_000_000));
         assert_eq!(entry.auto_compact_token_limit, Some(900_000));
         assert_eq!(entry.capabilities.reasoning, CapabilitySupport::Supported);

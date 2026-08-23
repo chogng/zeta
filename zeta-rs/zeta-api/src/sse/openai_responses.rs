@@ -13,6 +13,12 @@ pub struct OpenAiResponsesSseDecoder {
     response: Option<Value>,
 }
 
+impl Default for OpenAiResponsesSseDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenAiResponsesSseDecoder {
     pub fn new() -> Self {
         Self {

@@ -15,9 +15,16 @@ pub struct OpenAiChatCompletionsSseDecoder {
     saw_chunk: bool,
     content: String,
     reasoning: String,
+    refusal: String,
     tool_calls: BTreeMap<u64, ToolCallState>,
     finish_reason: Option<String>,
     usage: Option<Value>,
+}
+
+impl Default for OpenAiChatCompletionsSseDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OpenAiChatCompletionsSseDecoder {
@@ -27,6 +34,7 @@ impl OpenAiChatCompletionsSseDecoder {
             saw_chunk: false,
             content: String::new(),
             reasoning: String::new(),
+            refusal: String::new(),
             tool_calls: BTreeMap::new(),
             finish_reason: None,
             usage: None,
@@ -101,6 +109,9 @@ impl OpenAiChatCompletionsSseDecoder {
                 events.push(ModelStreamEvent::ReasoningDelta(reasoning.into()));
             }
         }
+        if let Some(refusal) = optional_string(delta, "refusal")? {
+            self.refusal.push_str(refusal);
+        }
         for call in delta
             .get("tool_calls")
             .and_then(Value::as_array)
@@ -132,6 +143,9 @@ impl OpenAiChatCompletionsSseDecoder {
         }
         if !self.reasoning.is_empty() {
             message.insert("reasoning_content".into(), Value::String(self.reasoning));
+        }
+        if !self.refusal.is_empty() {
+            message.insert("refusal".into(), Value::String(self.refusal));
         }
         if !tool_calls.is_empty() {
             message.insert("tool_calls".into(), Value::Array(tool_calls));

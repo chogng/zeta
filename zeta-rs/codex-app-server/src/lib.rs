@@ -32,6 +32,7 @@ pub use turn_driver::CodexTurnError;
 pub use turn_driver::CodexTurnErrorKind;
 pub use turn_driver::CodexTurnEvent;
 pub use turn_driver::CodexTurnId;
+pub(crate) use turn_driver::CodexTurnInput;
 pub use turn_driver::CodexTurnStatus;
 pub use turn_driver::CodexUserInputAnswers;
 pub use turn_driver::CodexUserInputOption;

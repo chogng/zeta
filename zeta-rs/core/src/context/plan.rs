@@ -50,6 +50,17 @@ pub(crate) enum ContextBudgetReport {
 }
 
 impl ContextBudgetReport {
+    pub(crate) const fn estimator_revision(&self) -> &'static str {
+        match self {
+            Self::ProviderManaged {
+                estimator_revision, ..
+            }
+            | Self::CoreManaged {
+                estimator_revision, ..
+            } => estimator_revision,
+        }
+    }
+
     pub(crate) fn total_input(&self) -> ContextTokenCount {
         match self {
             Self::ProviderManaged {

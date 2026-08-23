@@ -102,6 +102,121 @@ impl OperationClient for StreamingTransport {
     }
 }
 
+struct StreamingAnthropicTransport;
+
+impl OperationClient for StreamingAnthropicTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("registered Anthropic models must retain the streaming operation path")
+    }
+
+    fn execute_streaming(
+        &self,
+        _: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        let payload = concat!(
+            "event: message_start\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":11,\"output_tokens\":0}}}\n\n",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"inspect\"}}\n\n",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"live\"}}\n\n",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+            "event: content_block_start\n",
+            "data: {\"type\":\"content_block_start\",\"index\":2,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"lookup\",\"input\":{}}}\n\n",
+            "event: content_block_delta\n",
+            "data: {\"type\":\"content_block_delta\",\"index\":2,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"query\\\":\\\"value\\\"}\"}}\n\n",
+            "event: content_block_stop\n",
+            "data: {\"type\":\"content_block_stop\",\"index\":2}\n\n",
+            "event: message_delta\n",
+            "data: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":4}}\n\n",
+            "event: message_stop\n",
+            "data: {\"type\":\"message_stop\"}\n\n",
+        );
+        for chunk in payload.as_bytes().chunks(29) {
+            sink.emit(chunk)?;
+        }
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
+struct TruncatedAnthropicTransport;
+
+impl OperationClient for TruncatedAnthropicTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("truncated Anthropic stream fixture must not use unary execution")
+    }
+
+    fn execute_streaming(
+        &self,
+        _: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        sink.emit(
+            concat!(
+                "event: message_start\n",
+                "data: {\"type\":\"message_start\",\"message\":{\"content\":[],\"usage\":{}}}\n\n",
+            )
+            .as_bytes(),
+        )?;
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
+#[derive(Default)]
+struct CancellingAnthropicTransport {
+    cancellable_stream_path: AtomicBool,
+}
+
+impl OperationClient for CancellingAnthropicTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("cancelled Anthropic stream fixture must not use unary execution")
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        _: &ClientRequest,
+        _: &zeta_async_utils::CancellationToken,
+        _: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        self.cancellable_stream_path.store(true, Ordering::Relaxed);
+        Err(ClientError::Cancelled(
+            "cancelled during Anthropic stream".into(),
+        ))
+    }
+}
+
+struct StreamingChatTransport;
+
+impl OperationClient for StreamingChatTransport {
+    fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        panic!("registered streaming Chat Completions models must not use unary execution")
+    }
+
+    fn execute_streaming(
+        &self,
+        _: &ClientRequest,
+        sink: &mut dyn OperationStreamSink,
+    ) -> Result<ClientResponse, ClientError> {
+        let payload = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"live\"},\"finish_reason\":null}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":2}}\n\n",
+            "data: [DONE]\n\n",
+        );
+        for chunk in payload.as_bytes().chunks(17) {
+            sink.emit(chunk)?;
+        }
+        Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
+    }
+}
+
 #[derive(Default)]
 struct RecordedModelEvents(Vec<ModelStreamEvent>);
 
@@ -209,6 +324,178 @@ fn registered_openai_model_propagates_wire_stream_events() {
 
     assert_eq!(events.0, vec![ModelStreamEvent::TextDelta("live".into())]);
     assert_eq!(response.text(), "live");
+}
+
+#[test]
+fn registered_anthropic_model_propagates_wire_stream_events() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(StreamingAnthropicTransport));
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("anthropic", "https://example.test"),
+            &model_ref("anthropic", "claude-test"),
+        )
+        .unwrap();
+    let mut events = RecordedModelEvents::default();
+
+    let response = model
+        .stream_with_cancellation(
+            &ModelRequest::text("hello"),
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(
+        events.0,
+        vec![
+            ModelStreamEvent::ReasoningDelta("inspect".into()),
+            ModelStreamEvent::TextDelta("live".into()),
+        ]
+    );
+    assert_eq!(response.text(), "live");
+    assert_eq!(response.usage.as_ref().unwrap().output_tokens, Some(4));
+    assert_eq!(
+        response.tool_calls().next().unwrap().arguments,
+        json!({"query": "value"})
+    );
+}
+
+#[test]
+fn registered_anthropic_model_rejects_a_truncated_stream() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(TruncatedAnthropicTransport));
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("anthropic", "https://example.test"),
+            &model_ref("anthropic", "claude-test"),
+        )
+        .unwrap();
+
+    let result = model.stream_with_cancellation(
+        &ModelRequest::text("hello"),
+        &CancellationSource::new().token(),
+        &mut RecordedModelEvents::default(),
+    );
+
+    assert!(matches!(
+        result,
+        Err(ModelProviderError::InvalidResponse(_))
+    ));
+}
+
+#[test]
+fn registered_anthropic_model_propagates_stream_cancellation() {
+    let transport = Arc::new(CancellingAnthropicTransport::default());
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("anthropic", "https://example.test"),
+            &model_ref("anthropic", "claude-test"),
+        )
+        .unwrap();
+
+    let result = model.stream_with_cancellation(
+        &ModelRequest::text("hello"),
+        &CancellationSource::new().token(),
+        &mut RecordedModelEvents::default(),
+    );
+
+    assert_eq!(
+        result,
+        Err(ModelProviderError::Cancelled(
+            "cancelled during Anthropic stream".into()
+        ))
+    );
+    assert!(transport.cancellable_stream_path.load(Ordering::Relaxed));
+}
+
+#[test]
+fn registered_google_model_propagates_wire_stream_events() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(StreamingChatTransport));
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("google", "https://example.test/v1beta/openai"),
+            &model_ref("google", "gemini-test"),
+        )
+        .unwrap();
+    let mut events = RecordedModelEvents::default();
+
+    let response = model
+        .stream_with_cancellation(
+            &ModelRequest::text("hello"),
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(events.0, vec![ModelStreamEvent::TextDelta("live".into())]);
+    assert_eq!(response.text(), "live");
+    assert_eq!(response.usage.unwrap().input_tokens, Some(7));
+}
+
+#[test]
+fn registered_openai_compatible_model_propagates_wire_stream_events() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(StreamingChatTransport));
+    let model = runtime
+        .build_model(
+            &provider_config_with_endpoint("openai-compatible", "https://example.test/v1"),
+            &model_ref("openai-compatible", "compatible-test"),
+        )
+        .unwrap();
+    let mut events = RecordedModelEvents::default();
+
+    let response = model
+        .stream_with_cancellation(
+            &ModelRequest::text("hello"),
+            &CancellationSource::new().token(),
+            &mut events,
+        )
+        .unwrap();
+
+    assert_eq!(events.0, vec![ModelStreamEvent::TextDelta("live".into())]);
+    assert_eq!(response.text(), "live");
+    assert_eq!(response.usage.unwrap().input_tokens, Some(7));
+}
+
+#[test]
+fn registered_models_report_their_declared_output_transport() {
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(FailingTransport));
+    for (provider, model, expected) in [
+        (
+            "openai",
+            "gpt-5.6",
+            zeta_protocol::ModelOutputTransport::NativeStreaming,
+        ),
+        (
+            "anthropic",
+            "claude-test",
+            zeta_protocol::ModelOutputTransport::NativeStreaming,
+        ),
+        (
+            "google",
+            "gemini-test",
+            zeta_protocol::ModelOutputTransport::NativeStreaming,
+        ),
+        (
+            "openai-compatible",
+            "compatible-test",
+            zeta_protocol::ModelOutputTransport::NativeStreaming,
+        ),
+        (
+            "deepseek",
+            "deepseek-test",
+            zeta_protocol::ModelOutputTransport::Unary,
+        ),
+    ] {
+        let config = if provider == "openai-compatible" {
+            provider_config_with_endpoint(provider, "https://example.test/v1")
+        } else {
+            provider_config(provider)
+        };
+        let model = runtime
+            .build_model(&config, &model_ref(provider, model))
+            .unwrap();
+        assert_eq!(model.output_transport(), expected, "provider {provider}");
+    }
 }
 
 #[test]

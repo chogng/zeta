@@ -520,16 +520,19 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 			model: { provider: "openai", model: "gpt-5.6-sol" },
 			displayName: "GPT-5.6 Sol",
 			access: "subscription" as const,
+			outputTransport: "nativeStreaming" as const,
 		},
 		{
 			model: { provider: "anthropic", model: "claude-opus-5" },
 			displayName: "Claude Opus 5",
 			access: "apiKey" as const,
+			outputTransport: "nativeStreaming" as const,
 		},
 		{
 			model: { provider: "openai", model: "gpt-5.6" },
 			displayName: "GPT-5.6",
 			access: "apiKey" as const,
+			outputTransport: "nativeStreaming" as const,
 		},
 	];
 	disposables.add(new SettingsEditorContribution({

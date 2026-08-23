@@ -33,6 +33,7 @@ pub use registry::RegistryMergePolicy;
 pub use static_model_spec::StaticModelSpec;
 pub use zeta_protocol::Model;
 pub use zeta_protocol::ModelId;
+pub use zeta_protocol::ModelOutputTransport;
 pub use zeta_protocol::ProviderId;
 
 use schemars::{Schema, schema_for};

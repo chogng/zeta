@@ -22,7 +22,7 @@ use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::TurnId;
 
-const ESTIMATOR_REVISION: &str = "deterministic-bytes-v1";
+pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-v1";
 const TEXT_ITEM_OVERHEAD: u32 = 6;
 const TOOL_ITEM_OVERHEAD: u32 = 12;
 const IMAGE_TOKEN_ESTIMATE: u32 = 1_024;
@@ -115,7 +115,7 @@ impl ContextPlanner {
                         tools: input.tools().to_vec(),
                         budget: ContextBudgetReport::ProviderManaged {
                             estimated_input,
-                            estimator_revision: ESTIMATOR_REVISION,
+                            estimator_revision: CONTEXT_ESTIMATOR_REVISION,
                         },
                     },
                 )));
@@ -155,7 +155,7 @@ impl ContextPlanner {
             current_turn_tokens,
             history_tokens,
             evidence_tokens: ContextTokenCount::ZERO,
-            estimator_revision: ESTIMATOR_REVISION,
+            estimator_revision: CONTEXT_ESTIMATOR_REVISION,
         };
         if history_tokens > after_current {
             let checkpoint_capacity = after_current
@@ -261,7 +261,7 @@ impl ContextPlanner {
             current_turn_tokens,
             history_tokens,
             evidence_tokens,
-            estimator_revision: ESTIMATOR_REVISION,
+            estimator_revision: CONTEXT_ESTIMATOR_REVISION,
         };
         let selected_items = groups
             .iter()
@@ -365,7 +365,7 @@ impl ContextPlanner {
             target_tokens,
             budget: ContextBudgetReport::ProviderManaged {
                 estimated_input: history_tokens,
-                estimator_revision: ESTIMATOR_REVISION,
+                estimator_revision: CONTEXT_ESTIMATOR_REVISION,
             },
         })
     }
@@ -498,7 +498,7 @@ impl ContextPlanner {
             target_tokens,
             budget: ContextBudgetReport::ProviderManaged {
                 estimated_input: history_tokens,
-                estimator_revision: ESTIMATOR_REVISION,
+                estimator_revision: CONTEXT_ESTIMATOR_REVISION,
             },
         })
     }

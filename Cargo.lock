@@ -9698,6 +9698,7 @@ dependencies = [
  "zeta-core",
  "zeta-login",
  "zeta-protocol",
+ "zeta-utils-image",
 ]
 
 [[package]]

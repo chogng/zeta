@@ -5,7 +5,8 @@ use super::{
 use crate::CoreError;
 use crate::ThreadCommandResult;
 use zeta_protocol::{
-    ItemId, ModelUsage, RequestId, StreamInstanceId, ThreadEvent, ThreadId, ThreadItem, TurnId,
+    ItemId, ModelInputEstimate, ModelUsage, RequestId, StreamInstanceId, ThreadEvent, ThreadId,
+    ThreadItem, TurnId,
 };
 
 #[cfg(test)]
@@ -28,6 +29,29 @@ impl ThreadController {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
                     usage,
+                    input_estimate: None,
+                }],
+            )?;
+            Ok(snapshot.sequence)
+        })
+    }
+
+    /// Durably accounts for one completed provider invocation and its pre-call input estimate.
+    pub(crate) fn record_model_usage_with_input_estimate(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        usage: Option<ModelUsage>,
+        input_estimate: ModelInputEstimate,
+    ) -> Result<u64, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ModelUsageRecorded {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    usage,
+                    input_estimate: Some(input_estimate),
                 }],
             )?;
             Ok(snapshot.sequence)

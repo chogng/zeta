@@ -13,6 +13,7 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiResponses,
         "https://api.openai.com/v1",
     )
+    .with_native_streaming()
     .with_input_token_count(InputTokenCountDefinition::invocation_base(
         InputTokenCountProfile::OpenAiResponses,
     ))

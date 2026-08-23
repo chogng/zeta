@@ -1,9 +1,10 @@
 use serde_json::{Value, json};
 use std::sync::Mutex;
 use zeta_api::{
-    ApiEndpoint, ApiError, ApiProtocol, ApiStreamSink, InputTokenCountEndpoint, ModelRequest,
-    ModelStreamEvent, ReasoningConfig, ReasoningEffort, SemanticApiEndpoint, StopReason,
-    ToolDefinition, ToolName,
+    ApiEndpoint, ApiError, ApiProtocol, ApiStreamSink, ContentPart, ImageDetail, InputItem,
+    InputTokenCountEndpoint, Message, MessageRole, ModelRequest, ModelStreamEvent, OutputItem,
+    ReasoningConfig, ReasoningEffort, SemanticApiEndpoint, StopReason, ToolCall, ToolCallId,
+    ToolDefinition, ToolName, ToolResult,
 };
 use zeta_async_utils::CancellationSource;
 use zeta_client::{
@@ -140,6 +141,238 @@ fn tool_request() -> ModelRequest {
         summary: true,
     });
     request
+}
+
+fn conformance_request() -> ModelRequest {
+    let call_id = ToolCallId::new("call_1").unwrap();
+    let tool_name = ToolName::new("weather").unwrap();
+    let mut request = tool_request();
+    request.reasoning = None;
+    request.input = vec![
+        InputItem::Message(Message {
+            role: MessageRole::User,
+            content: vec![
+                ContentPart::Text("What is the weather?".into()),
+                ContentPart::ImageUrl {
+                    url: "data:image/png;base64,iVBORw0KGgo=".into(),
+                    detail: ImageDetail::Auto,
+                },
+            ],
+            tool_calls: Vec::new(),
+        }),
+        InputItem::Message(Message {
+            role: MessageRole::Assistant,
+            content: Vec::new(),
+            tool_calls: vec![ToolCall {
+                id: call_id.clone(),
+                name: tool_name.clone(),
+                arguments: json!({"city": "Paris"}),
+            }],
+        }),
+        InputItem::ToolResult(ToolResult {
+            call_id,
+            name: tool_name,
+            content: vec![ContentPart::Text("sunny".into())],
+            is_error: false,
+        }),
+    ];
+    request
+}
+
+#[test]
+fn provider_conformance_matrix_maps_images_tool_calls_results_and_usage() {
+    let cases = [
+        (
+            "responses",
+            ApiEndpoint::OpenAiResponses,
+            target(),
+            json!({
+                "id": "resp_1",
+                "status": "completed",
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "sunny"}]
+                }],
+                "usage": {"input_tokens": 20, "output_tokens": 4}
+            }),
+        ),
+        (
+            "chat",
+            ApiEndpoint::OpenAiChatCompletions,
+            target(),
+            json!({
+                "id": "chatcmpl_1",
+                "choices": [{
+                    "message": {"role": "assistant", "content": "sunny"},
+                    "finish_reason": "stop"
+                }],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 4}
+            }),
+        ),
+        (
+            "anthropic",
+            ApiEndpoint::AnthropicMessages,
+            ResolvedApiTarget::new(
+                "https://api.anthropic.com",
+                vec![HttpHeader::new("x-api-key", "secret")],
+            ),
+            json!({
+                "id": "msg_1",
+                "content": [{"type": "text", "text": "sunny"}],
+                "stop_reason": "end_turn",
+                "usage": {"input_tokens": 20, "output_tokens": 4}
+            }),
+        ),
+    ];
+
+    for (name, endpoint, target, response) in cases {
+        let transport = CapturingTransport::new(response);
+        let result = endpoint
+            .complete_with_client(&target, "model-test", &conformance_request(), &transport)
+            .unwrap();
+        assert_eq!(result.text(), "sunny", "{name}");
+        assert_eq!(result.usage.unwrap().input_tokens, Some(20), "{name}");
+        let (_, _, body) = transport.request.lock().unwrap().clone().unwrap();
+        match name {
+            "responses" => {
+                assert_eq!(body["input"][0]["content"][1]["type"], "input_image");
+                assert_eq!(body["input"][1]["type"], "function_call");
+                assert_eq!(body["input"][2]["type"], "function_call_output");
+            }
+            "chat" => {
+                assert_eq!(body["messages"][1]["content"][1]["type"], "image_url");
+                assert_eq!(body["messages"][2]["tool_calls"][0]["id"], "call_1");
+                assert_eq!(body["messages"][3]["role"], "tool");
+            }
+            "anthropic" => {
+                assert_eq!(body["messages"][0]["content"][1]["type"], "image");
+                assert_eq!(body["messages"][1]["content"][0]["type"], "tool_use");
+                assert_eq!(body["messages"][2]["content"][0]["type"], "tool_result");
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[test]
+fn provider_conformance_matrix_rejects_unmaterialized_durable_images() {
+    let attachment = zeta_protocol::ImageAttachmentRef {
+        content_digest: zeta_protocol::ContentDigest::sha256(b"test-image"),
+        media_type: zeta_protocol::ImageMediaType::Png,
+        encoded_bytes: 10,
+        width: 1,
+        height: 1,
+    };
+    let mut request = ModelRequest::text("inspect");
+    let InputItem::Message(message) = &mut request.input[0] else {
+        unreachable!()
+    };
+    message.content = vec![ContentPart::ImageAttachment {
+        attachment,
+        detail: ImageDetail::Auto,
+    }];
+
+    for endpoint in [
+        ApiEndpoint::OpenAiResponses,
+        ApiEndpoint::OpenAiChatCompletions,
+        ApiEndpoint::AnthropicMessages,
+    ] {
+        let transport = CapturingTransport::new(json!({}));
+        let error = endpoint
+            .complete_with_client(&target(), "model-test", &request, &transport)
+            .unwrap_err();
+        assert!(matches!(error, ApiError::InvalidRequest(_)));
+        assert!(transport.request.lock().unwrap().is_none());
+    }
+
+    let transport = CapturingTransport::new(json!({}));
+    let error = InputTokenCountEndpoint::GoogleGenerateContent
+        .count_with_client(&target(), "gemini-test", &request, &transport)
+        .unwrap_err();
+    assert!(matches!(error, ApiError::InvalidRequest(_)));
+    assert!(transport.request.lock().unwrap().is_none());
+}
+
+#[test]
+fn provider_conformance_matrix_rejects_local_image_paths_before_transport() {
+    let mut request = ModelRequest::text("inspect");
+    let InputItem::Message(message) = &mut request.input[0] else {
+        unreachable!()
+    };
+    message.content = vec![ContentPart::ImageUrl {
+        url: "file:///Users/example/secret.png".into(),
+        detail: ImageDetail::Auto,
+    }];
+
+    for endpoint in [
+        ApiEndpoint::OpenAiResponses,
+        ApiEndpoint::OpenAiChatCompletions,
+        ApiEndpoint::AnthropicMessages,
+    ] {
+        let transport = CapturingTransport::new(json!({}));
+        let error = endpoint
+            .complete_with_client(&target(), "model-test", &request, &transport)
+            .unwrap_err();
+        assert!(matches!(error, ApiError::InvalidRequest(_)));
+        assert!(transport.request.lock().unwrap().is_none());
+    }
+}
+
+#[test]
+fn provider_conformance_maps_refusals_or_fails_unsupported_output_explicitly() {
+    let responses = CapturingTransport::new(json!({
+        "status": "completed",
+        "output": [{
+            "type": "message",
+            "content": [{"type": "refusal", "refusal": "cannot comply"}]
+        }]
+    }));
+    let response = ApiEndpoint::OpenAiResponses
+        .complete_with_client(
+            &target(),
+            "gpt-test",
+            &ModelRequest::text("hello"),
+            &responses,
+        )
+        .unwrap();
+    assert_eq!(
+        response.output,
+        vec![OutputItem::Refusal("cannot comply".into())]
+    );
+    assert_eq!(response.stop_reason, StopReason::Refusal);
+
+    let chat = CapturingTransport::new(json!({
+        "choices": [{
+            "message": {"role": "assistant", "content": null, "refusal": "cannot comply"},
+            "finish_reason": "stop"
+        }]
+    }));
+    let response = ApiEndpoint::OpenAiChatCompletions
+        .complete_with_client(&target(), "gpt-test", &ModelRequest::text("hello"), &chat)
+        .unwrap();
+    assert_eq!(
+        response.output,
+        vec![OutputItem::Refusal("cannot comply".into())]
+    );
+    assert_eq!(response.stop_reason, StopReason::Refusal);
+
+    let anthropic = CapturingTransport::new(json!({
+        "content": [{"type": "unsupported_refusal", "text": "cannot comply"}],
+        "stop_reason": "end_turn"
+    }));
+    let error = ApiEndpoint::AnthropicMessages
+        .complete_with_client(
+            &ResolvedApiTarget::new(
+                "https://api.anthropic.com",
+                vec![HttpHeader::new("x-api-key", "secret")],
+            ),
+            "claude-test",
+            &ModelRequest::text("hello"),
+            &anthropic,
+        )
+        .unwrap_err();
+    assert!(matches!(error, ApiError::InvalidResponse(_)));
 }
 
 #[test]
@@ -353,7 +586,7 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
     let transport = StreamingPayloadTransport::new(
         concat!(
             "event: message_start\n",
-            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\n",
+            "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"cache_read_input_tokens\":8,\"output_tokens\":0}}}\n\n",
             "event: content_block_start\n",
             "data: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n",
             "event: content_block_delta\n",
@@ -405,7 +638,7 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
     assert_eq!(response.stop_reason, StopReason::ToolUse);
     let usage = response.usage.unwrap();
     assert_eq!(usage.output_tokens, Some(6));
-    assert_eq!(usage.cached_input_tokens, None);
+    assert_eq!(usage.cached_input_tokens, Some(8));
     assert_eq!(usage.reasoning_tokens, None);
     assert_eq!(
         transport.request.lock().unwrap().as_ref().unwrap()["stream"],
@@ -445,6 +678,41 @@ fn anthropic_messages_counts_the_frozen_input_payload() {
             .iter()
             .any(|header| { header.name().eq_ignore_ascii_case("anthropic-version") })
     );
+}
+
+#[test]
+fn anthropic_prompt_cache_profile_scope_uses_the_resolved_target_and_credentials() {
+    let response = json!({
+        "id": "msg_1",
+        "content": [{"type": "text", "text": "ok"}],
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 2, "cache_read_input_tokens": 6}
+    });
+    let first = CapturingTransport::new(response.clone());
+    let second = CapturingTransport::new(response);
+    let first_target = ResolvedApiTarget::new(
+        "https://profile-a.example/v1",
+        vec![HttpHeader::new("x-api-key", "profile-a-secret")],
+    );
+    let second_target = ResolvedApiTarget::new(
+        "https://profile-b.example/v1",
+        vec![HttpHeader::new("x-api-key", "profile-b-secret")],
+    );
+    let request = ModelRequest::text("stable prompt");
+
+    let first_response = ApiEndpoint::AnthropicMessages
+        .complete_with_client(&first_target, "claude-test", &request, &first)
+        .unwrap();
+    ApiEndpoint::AnthropicMessages
+        .complete_with_client(&second_target, "claude-test", &request, &second)
+        .unwrap();
+
+    let (first_url, first_headers, first_body) = first.request.lock().unwrap().clone().unwrap();
+    let (second_url, second_headers, second_body) = second.request.lock().unwrap().clone().unwrap();
+    assert_ne!(first_url, second_url);
+    assert_ne!(first_headers[0].value(), second_headers[0].value());
+    assert_eq!(first_body, second_body);
+    assert_eq!(first_response.usage.unwrap().cached_input_tokens, Some(6));
 }
 
 #[test]

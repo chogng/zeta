@@ -8,4 +8,5 @@ pub(super) fn definition() -> ProviderDefinition {
         ProviderAdapter::OpenAiCompatible,
         ApiProfile::OpenAiChatCompletions,
     )
+    .with_native_streaming()
 }

@@ -1225,10 +1225,12 @@ fn model_selection_is_catalog_backed_and_session_scoped() {
             zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 default.clone(),
                 &default_info,
+                zeta_protocol::ModelOutputTransport::Unary,
             ),
             zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                 alternate.clone(),
                 &alternate_info,
+                zeta_protocol::ModelOutputTransport::Unary,
             ),
         ],
         default,

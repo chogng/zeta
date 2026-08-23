@@ -33,6 +33,7 @@ use zeta_models_manager::ModelRequirements;
 use zeta_models_manager::ModelsManager;
 use zeta_models_manager::ModelsManagerError;
 use zeta_protocol::CapabilitySupport;
+use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
 use zeta_secrets::SecretStore;
 use zeta_secrets::UnavailableSecretStore;
@@ -405,6 +406,11 @@ impl ModelRuntimeRequest {
 pub trait ModelInvoker: Send + Sync {
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError>;
 
+    /// Reports whether this immutable runtime uses a native provider stream or a unary call.
+    fn output_transport(&self) -> ModelOutputTransport {
+        ModelOutputTransport::Unary
+    }
+
     /// Reports the cost category of this immutable model's input-token measurement contract.
     fn input_token_measurement_capability(&self) -> ContextTokenMeasurementCapability {
         ContextTokenMeasurementCapability::Unavailable
@@ -503,6 +509,10 @@ impl ModelInvoker for RegisteredModelInvoker {
         let request = self.prepare_request(request);
         self.provider
             .complete_with_cancellation(&self.model.id, &request, cancellation)
+    }
+
+    fn output_transport(&self) -> ModelOutputTransport {
+        self.provider.definition.output_transport
     }
 
     fn stream_with_cancellation(

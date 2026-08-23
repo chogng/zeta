@@ -4,11 +4,13 @@ import type { ModelRef } from '../../../../sessions/services/sessions/common/ses
 const MaximumHiddenModels = 2_048;
 
 export type ModelAccess = 'apiKey' | 'subscription' | 'local' | 'enterprise' | 'unknown';
+export type ModelOutputTransport = 'nativeStreaming' | 'unary';
 
 export interface ModelCatalogEntry {
 	readonly model: ModelRef;
 	readonly displayName: string;
 	readonly access: ModelAccess;
+	readonly outputTransport: ModelOutputTransport;
 }
 
 export function modelAccessLabel(access: ModelAccess): string {

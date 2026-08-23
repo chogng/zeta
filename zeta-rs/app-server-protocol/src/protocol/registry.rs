@@ -373,6 +373,7 @@ use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelCapabilities;
+use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::Personality;
 use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolCallBinding;
@@ -391,8 +392,8 @@ use zeta_protocol::{
     DelegatedPolicyCeiling, DelegatedTask, DelegationArtifactRef, DelegationId, DelegationResult,
     DelegationResultDigest, DelegationResultStatus, DynamicToolCall, DynamicToolOutput,
     DynamicToolResponse, ForkedAgentContext, FrozenSkillActivation, InteractionCancelReason,
-    InteractionDeadline, ItemDelta, ModelPriceSnapshot, ModelUsage, ModelUsageSummary,
-    ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
+    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelPriceSnapshot, ModelUsage,
+    ModelUsageSummary, ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
     ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
     SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
@@ -2177,6 +2178,7 @@ typescript_bindings! {
     ThreadHistoryBoundary,
     CapabilitySupport,
     ModelAccess,
+    ModelOutputTransport,
     ModelCapabilities,
     ReasoningEffort,
     Personality,
@@ -2215,6 +2217,7 @@ typescript_bindings! {
     ImageAttachmentRef,
     ImageMediaType,
     ImageDetail,
+    ModelInputEstimate,
     ModelUsage,
     ModelUsageTotal,
     ModelUsageSummary,

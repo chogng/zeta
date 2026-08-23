@@ -1,4 +1,5 @@
 mod assembler;
+mod calibration;
 mod compaction;
 mod input_limits;
 mod instructions;
@@ -9,6 +10,10 @@ mod plan;
 mod planner;
 
 pub(crate) use assembler::ContextAssembler;
+pub(crate) use calibration::CONTEXT_CALIBRATION_REVISION;
+pub(crate) use calibration::ContextCalibration;
+pub(crate) use calibration::calibrated_budget;
+pub(crate) use calibration::next_context_calibrations;
 pub use compaction::ContextCompactionRequest;
 pub use compaction::ContextCompactionResult;
 pub use compaction::ContextCompactionService;
@@ -33,6 +38,7 @@ pub(crate) use plan::ContextPlan;
 pub(crate) use plan::ContextPreparation;
 pub(crate) use plan::ContextPreparationError;
 pub(crate) use plan::OmittedInstruction;
+pub(crate) use planner::CONTEXT_ESTIMATOR_REVISION;
 pub(crate) use planner::ContextPlanner;
 pub use zeta_context_engine::ContextBudget;
 pub use zeta_context_engine::ContextCompactionLimit;

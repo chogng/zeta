@@ -1766,12 +1766,21 @@ impl ModelCatalog for ConfigBackedModelService {
                 zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                     entry.model().clone(),
                     entry.info(),
+                    self.provider_configs
+                        .get(&entry.model().provider)
+                        .expect("listed model provider came from the same registry")
+                        .output_transport,
                 )
             })
             .collect::<Vec<_>>();
         if let Some(preferred) = config.preferred_model
             && !models.iter().any(|entry| entry.model == preferred)
         {
+            let output_transport = self
+                .provider_configs
+                .get(&preferred.provider)
+                .expect("preferred model provider was validated against the same registry")
+                .output_transport;
             let resolved = self
                 .models_manager
                 .resolve_static(&preferred, &ModelRequirements::agent())
@@ -1780,6 +1789,7 @@ impl ModelCatalog for ConfigBackedModelService {
                 zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                     preferred,
                     resolved.entry().info(),
+                    output_transport,
                 ),
             );
         }

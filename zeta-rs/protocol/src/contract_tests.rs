@@ -96,6 +96,7 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
             thread_id: ThreadId::new("thread_1").unwrap(),
             turn_id: TurnId::new("turn_1").unwrap(),
             usage: Some(first),
+            input_estimate: None,
         })
         .unwrap(),
         json!({
@@ -107,6 +108,35 @@ fn model_usage_preserves_partial_reports_and_aggregate_completeness() {
                 "outputTokens": 3,
                 "cachedInputTokens": 2,
                 "reasoningTokens": null
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadEvent::ModelUsageRecorded {
+            thread_id: ThreadId::new("thread_1").unwrap(),
+            turn_id: TurnId::new("turn_1").unwrap(),
+            usage: Some(second),
+            input_estimate: Some(ModelInputEstimate {
+                estimated_input_tokens: 9,
+                estimator_revision: "deterministic-bytes-v1".into(),
+                calibration_revision: "usage-underestimate-asymmetric-ema-v1".into(),
+            }),
+        })
+        .unwrap(),
+        json!({
+            "type": "modelUsageRecorded",
+            "threadId": "thread_1",
+            "turnId": "turn_1",
+            "usage": {
+                "inputTokens": 7,
+                "outputTokens": null,
+                "cachedInputTokens": null,
+                "reasoningTokens": 1
+            },
+            "inputEstimate": {
+                "estimatedInputTokens": 9,
+                "estimatorRevision": "deterministic-bytes-v1",
+                "calibrationRevision": "usage-underestimate-asymmetric-ema-v1"
             }
         })
     );

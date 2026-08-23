@@ -42,6 +42,7 @@ export class ChatPaneModel extends DisposableOwner {
 	private subscriptionPromise: Promise<void> | undefined;
 	private streamInstanceId: string | undefined;
 	private streamSequence = 0;
+	private readonly retiredStreamInstanceIds = new Set<string>();
 	private _models: readonly ModelCatalogEntry[] = [];
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillCommands: readonly SkillCommandDefinition[] = [];
@@ -343,6 +344,7 @@ export class ChatPaneModel extends DisposableOwner {
 			model: selected,
 			displayName: selected.model,
 			access: "unknown" as const,
+			outputTransport: "unary" as const,
 		};
 		return [...visible, selectedEntry];
 	}
@@ -441,6 +443,8 @@ export class ChatPaneModel extends DisposableOwner {
 		const cursor = update.streamCursor;
 		if (!cursor) return true;
 		if (cursor.streamInstanceId !== this.streamInstanceId) {
+			if (this.retiredStreamInstanceIds.has(cursor.streamInstanceId)) return false;
+			if (this.streamInstanceId) this.retiredStreamInstanceIds.add(this.streamInstanceId);
 			this.streamInstanceId = cursor.streamInstanceId;
 			this.streamSequence = cursor.sequence;
 			this.transientItems.clear();
@@ -460,6 +464,7 @@ export class ChatPaneModel extends DisposableOwner {
 	private resetStreamCursor(): void {
 		this.streamInstanceId = undefined;
 		this.streamSequence = 0;
+		this.retiredStreamInstanceIds.clear();
 	}
 
 	private acceptCommittedEvent(update: ThreadUpdateEnvelope): void {

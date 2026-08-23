@@ -19,6 +19,12 @@ pub struct AnthropicMessagesSseDecoder {
     completed_blocks: BTreeMap<u64, Value>,
 }
 
+impl Default for AnthropicMessagesSseDecoder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AnthropicMessagesSseDecoder {
     pub fn new() -> Self {
         Self {
