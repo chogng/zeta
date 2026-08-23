@@ -1,11 +1,10 @@
 use std::time::Instant;
 
-use zeta_keybinding::{
-    KeyboardShortcutRow, KeyboardShortcutsIds,
-    KeyboardShortcutsState as GenericKeyboardShortcutsState,
-};
 use zeta_keybindings_host::recording_chord;
 use zeta_winit::{ElementState, Key, KeyEvent, NamedKey};
+use zeterm_keybinding_ui::KeyboardShortcutRow;
+use zeterm_keybinding_ui::KeyboardShortcutsIds;
+use zeterm_keybinding_ui::KeyboardShortcutsState as GenericKeyboardShortcutsState;
 use zui::ElementId;
 
 use crate::NativeApp;

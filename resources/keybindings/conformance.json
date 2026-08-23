@@ -1,0 +1,194 @@
+{
+  "parser": [
+    {
+      "input": "ctrl+k ctrl+c",
+      "valid": true,
+      "canonical": "ctrl+k ctrl+c",
+      "chords": 2
+    },
+    {
+      "input": "cmdorctrl+space",
+      "valid": true,
+      "canonical": "primary+space",
+      "chords": 1
+    },
+    {
+      "input": "windows+k",
+      "valid": true,
+      "canonical": "meta+k",
+      "chords": 1
+    },
+    {
+      "input": "alt+shift+[KeyP]",
+      "valid": true,
+      "canonical": "alt+shift+[KeyP]",
+      "chords": 1
+    },
+    {
+      "input": "CTRL+K",
+      "valid": true,
+      "canonical": "ctrl+k",
+      "chords": 1
+    },
+    {
+      "input": "",
+      "valid": false
+    },
+    {
+      "input": "primary+ctrl+k",
+      "valid": false
+    },
+    {
+      "input": "ctrl+k+c",
+      "valid": false
+    },
+    {
+      "input": "ctrl+a ctrl+b ctrl+c ctrl+d ctrl+e",
+      "valid": false
+    },
+    {
+      "input": "ctrl+shift",
+      "valid": false
+    }
+  ],
+  "resolver": [
+    {
+      "name": "user source wins before explicit priority",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "builtin-high",
+          "source": "builtin",
+          "priority": 10
+        },
+        {
+          "binding": "ctrl+k",
+          "command": "user-low",
+          "source": "user",
+          "priority": -10
+        }
+      ],
+      "result": { "kind": "command", "command": "user-low" }
+    },
+    {
+      "name": "explicit priority wins within one source",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "normal",
+          "source": "builtin",
+          "priority": 0
+        },
+        {
+          "binding": "ctrl+k",
+          "command": "high",
+          "source": "builtin",
+          "priority": 10
+        }
+      ],
+      "result": { "kind": "command", "command": "high" }
+    },
+    {
+      "name": "latest registration wins a tie",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "first",
+          "source": "builtin",
+          "priority": 0
+        },
+        {
+          "binding": "ctrl+k",
+          "command": "latest",
+          "source": "builtin",
+          "priority": 0
+        }
+      ],
+      "result": { "kind": "command", "command": "latest" }
+    },
+    {
+      "name": "inactive conditions are filtered",
+      "context": ["editor"],
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "terminal",
+          "source": "user",
+          "priority": 0,
+          "when": "terminal"
+        },
+        {
+          "binding": "ctrl+k",
+          "command": "editor",
+          "source": "builtin",
+          "priority": 0,
+          "when": "editor"
+        }
+      ],
+      "result": { "kind": "command", "command": "editor" }
+    },
+    {
+      "name": "blocker consumes the winning binding",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "copy",
+          "source": "builtin",
+          "priority": 0
+        },
+        {
+          "binding": "ctrl+k",
+          "block": true,
+          "source": "user",
+          "priority": 0
+        }
+      ],
+      "result": { "kind": "blocked" }
+    },
+    {
+      "name": "matching a chord prefix waits for more input",
+      "events": [
+        { "key": "k", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k ctrl+c",
+          "command": "comment",
+          "source": "builtin",
+          "priority": 0
+        }
+      ],
+      "result": { "kind": "pending" }
+    },
+    {
+      "name": "unmatched input has no result",
+      "events": [
+        { "key": "x", "control": true }
+      ],
+      "rules": [
+        {
+          "binding": "ctrl+k",
+          "command": "copy",
+          "source": "builtin",
+          "priority": 0
+        }
+      ],
+      "result": { "kind": "noMatch" }
+    }
+  ]
+}

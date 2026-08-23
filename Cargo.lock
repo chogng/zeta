@@ -10047,8 +10047,8 @@ dependencies = [
 name = "zeta-keybinding"
 version = "0.1.0"
 dependencies = [
- "zeta-ui",
- "zui",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -10650,6 +10650,7 @@ dependencies = [
  "zeta-client",
  "zeta-diff",
  "zeta-file-search",
+ "zeta-keybinding",
  "zeta-protocol",
  "zeta-slash-commands",
  "zeta-terminal-detection",
@@ -10844,6 +10845,16 @@ dependencies = [
  "zeta-wgpu",
  "zeta-winit",
  "zeta-workspace",
+ "zeterm-keybinding-ui",
+ "zui",
+]
+
+[[package]]
+name = "zeterm-keybinding-ui"
+version = "0.1.0"
+dependencies = [
+ "zeta-keybinding",
+ "zeta-ui",
  "zui",
 ]
 

@@ -150,8 +150,8 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | 稳定 product command identity、request 与注册式执行入口 | `zeta-commands::{ZetermCommandId, CommandRequest, CommandRegistry}` / `NativeApp::dispatch_command` | ✅；pointer、menu 与 shortcut 汇合到宿主注册的 handler |
 | 平台按键转换、Chord 生命周期与当前 context | `keybindings::NativeKeybindings` | ✅；1.5 秒超时，失焦或 IME 事件取消 |
 | 用户快捷键资源、验证与热更新 | `zeta-keybindings-host::KeybindingsResource` | ✅；读取 `<ZETA_PROFILE_ROOT>/keybindings.json`，坏更新保留上一份有效规则 |
-| 快捷键模型、设置、录制与 Chord 提示 | [`zeta-keybinding`](keybinding/README.md) | 委托；zeterm 提供命令行、事件 adapter 与保存接线 |
-| 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](keybinding/README.md) | 委托 |
+| 快捷键设置、录制与 Chord 提示 | [`zeterm-keybinding-ui`](keybinding-ui/README.md) | 委托；zeterm 提供命令行、事件 adapter 与保存接线 |
+| 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](../zeta-rs/keybinding/README.md) | 委托 |
 | 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zui` | 委托 |
 | accessibility semantics → 平台屏幕阅读器 | 尚无 native adapter | 尚未完成 |
 | Transparent native chrome 与窗口拖动 adapter | `zeta-winit` | 委托 |
@@ -187,6 +187,8 @@ zeterm → zeta-winit
             → zeta-ui → zui
             → zeta-commands
             → zeta-keybinding
+            → zeterm-keybinding-ui → zeta-keybinding
+                                  → zeta-ui → zui
             → zeta-app-server-client
             → zeta-remote → zeta-remote-connections
             → zeta-protocol
@@ -216,7 +218,7 @@ authority。下表把仍保留的历史 shell vocabulary 映射到当前产品�
 | `zeta_layout::RootLayout` | 用 `GridLayout` 解析固定 Product leaf 与可选 Inspector leaf | Native window 根布局 | ✅；窗口扩展后 Inspector 获得独立 360px sibling leaf，Product bounds 不变 |
 | `ShellLayout` | 组合 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | Top Bar 与 Workspace 外部布局 | ✅；Sessions 使用外层单轴 split |
 | `zeta_layout::TerminalWorkspaceLayout` | 用 `GridLayout` 投影活动终端与可选 Agent Sidebar Leaf bounds | Workspace Pane geometry adapter | ✅；尚无多 Terminal Pane Tree；Session/Thread 与 Session-to-PTY switching 由 Native/App Server adapter 负责 |
-| `zeta-commands` / `command_dispatch` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `CommandRequest`，再交给 `CommandRegistry` 的宿主 handler；向 `zeta-keybinding` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
+| `zeta-commands` / `command_dispatch` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `CommandRequest`，再交给 `CommandRegistry` 的宿主 handler；向 `zeterm-keybinding-ui` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
 | `shell_scene` / `thread_timeline` | Agent Surface 绘制 canonical Thread items；Terminal Surface 绘制活动 grid | Agent Workspace / Terminal compatibility | ✅ |
 | `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，自动显示 ancestor、authored row/column/width/height、computed size/padding/gap/radius、layer 与源码位置 |
 | `composer_editor` / `agent_composer` / `composer_interaction` / `composer_interaction_pane` / `composer_panel` / `terminal_input` | Compact `CodeEditor` 共享 Agent/Shell 多行文档；`zeta-input-classifier` 统一提供路由和 Shell completion；Shell 候选收敛为光标后的单条 ghost text，Tab 接受、Escape 隐藏；active View model 只接管 Slash/模型选择；`zeta-composer` 与 zeta-ui list 基座拥有几何和滚动 | Agent Composer、Slash/模型选择、Shell 补全与 explicit Shell Turn | ✅ |
@@ -387,9 +389,9 @@ point 与标准化键盘事件映射到 `CommandRequest`；`NativeApp` 启动时
 `command_dispatch::builtin_command_registry` 注册完整产品命令目录，`NativeApp::dispatch_command`
 从注册表取出 handler，是唯一产品执行入口。`KeybindingsResource` 每秒检查 `<ZETA_PROFILE_ROOT>/keybindings.json`，只在完整资源通过
 大小、字段、按键、条件和命令校验后替换 User 规则；内容无效时保留上一份有效规则并把诊断
-显示在快捷键设置页。`zeta-keybinding::KeyboardShortcutsState` 录制最多四段按键，暂停一秒后
+显示在快捷键设置页。`zeterm-keybinding-ui::KeyboardShortcutsState` 录制最多四段按键，暂停一秒后
 把 commit 交回 Native 资源层原子写入；设置浮层、深灰 keycap 与 Chord 提示也由同一快捷键
-crate 拥有。Native 的 `keyboard_shortcuts` 只分配产品 `ElementId`、投影
+UI crate 拥有。Native 的 `keyboard_shortcuts` 只分配产品 `ElementId`、投影
 `ZetermCommandId` 行并连接保存结果。
 `zeta-keybinding` 解析平台无关按键和 `when` 表达式，不读取 focus、不执行命令，也不拥有
 Chord timer。

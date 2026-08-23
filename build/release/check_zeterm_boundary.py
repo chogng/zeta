@@ -15,7 +15,7 @@ EXPECTED_ZETERM_MEMBERS = {
     "zeterm/editor",
     "zeterm/icon",
     "zeterm/icons",
-    "zeterm/keybinding",
+    "zeterm/keybinding-ui",
     "zeterm/layout",
     "zeterm/markdown",
     "zeterm/native-keybindings",
@@ -33,7 +33,6 @@ RETIRED_PRODUCT_PATHS = {
     "zeta-rs/agent-sidebar",
     "zeta-rs/editor",
     "zeta-rs/icons",
-    "zeta-rs/keybinding",
     "zeta-rs/markdown",
     "zeta-rs/renderer",
     "zeta-rs/settings",
@@ -46,7 +45,6 @@ RETIRED_UI_PACKAGE_NAMES = {
     "zeta-agent-sidebar",
     "zeta-editor",
     "zeta-icons",
-    "zeta-keybinding",
     "zeta-markdown",
     "zeta-renderer",
     "zeta-settings",
@@ -103,6 +101,22 @@ def main() -> int:
         fail("zeterm/Cargo.toml still defines a nested workspace")
     if package_name(zeterm_manifest) != "zeterm":
         fail(f"expected zeterm package zeterm, got {package_name(zeterm_manifest)!r}")
+    shared_keybinding_path = repository_root / "zeta-rs" / "keybinding" / "Cargo.toml"
+    if not shared_keybinding_path.exists():
+        fail("shared zeta-rs/keybinding crate is missing")
+    shared_keybinding_manifest = shared_keybinding_path.read_text()
+    if package_name(shared_keybinding_manifest) != "zeta-keybinding":
+        fail("zeta-rs/keybinding must provide the zeta-keybinding package")
+    forbidden_keybinding_dependencies = (
+        "crossterm",
+        "winit",
+        "zeta-ui",
+        "zeta-winit",
+        "zui",
+    )
+    for dependency in forbidden_keybinding_dependencies:
+        if re.search(rf"(?m)^{re.escape(dependency)}\s*=", shared_keybinding_manifest):
+            fail(f"shared zeta-keybinding depends on platform/UI crate: {dependency}")
     launch_path = repository_root / "zeterm" / "src" / "launch.rs"
     launch_text = launch_path.read_text()
     if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:

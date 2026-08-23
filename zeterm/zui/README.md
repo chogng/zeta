@@ -162,7 +162,7 @@ Split/Grid、interaction 与 primitive contract。修改以下边界时还需同
 
 - scene primitive 或 batch ordering：`zeta-renderer` 与全部 backend；
 - font/text contract：`zeta-wgpu`、`zeta-ui`、`zeta-editor`、`zeta-markdown`；
-- Element/Component contract：`zeta-ui`、`zeta-keybinding`、`zeta-editor` 与 native 架构审计；
+- Element/Component contract：`zeta-ui`、`zeterm-keybinding-ui`、`zeta-editor` 与 native 架构审计；
 - geometry/layout/interaction contract：native root/split/grid tests。
 
 ## 6. 当前限制与扩展点

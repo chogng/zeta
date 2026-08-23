@@ -327,8 +327,8 @@ impl KeyStroke {
 }
 
 fn normalize_key(value: String) -> Option<String> {
-    if value == " " {
-        return Some(value);
+    if value == " " || value.trim().eq_ignore_ascii_case("space") {
+        return Some(" ".to_owned());
     }
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_lowercase())

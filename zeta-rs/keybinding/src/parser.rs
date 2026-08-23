@@ -1,7 +1,12 @@
 use std::fmt;
 
+use crate::Chord;
+use crate::HostPlatform;
+use crate::KeyIdentity;
+use crate::KeySequence;
+use crate::KeySequenceError;
+use crate::ShortcutModifiers;
 use crate::key::MAX_CHORDS;
-use crate::{Chord, HostPlatform, KeyIdentity, KeySequence, KeySequenceError, ShortcutModifiers};
 
 /// A malformed portable keybinding string.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -233,7 +238,7 @@ fn modifier(value: &str) -> Option<Modifier> {
         "ctrl" | "control" => Some(Modifier::Control),
         "shift" => Some(Modifier::Shift),
         "alt" | "option" => Some(Modifier::Alt),
-        "cmd" | "command" | "meta" | "super" | "win" => Some(Modifier::Meta),
+        "cmd" | "command" | "meta" | "super" | "win" | "windows" => Some(Modifier::Meta),
         _ => None,
     }
 }

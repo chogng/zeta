@@ -1,9 +1,22 @@
-use super::{
-    BindingPriority, BindingSet, BindingSource, Chord, HostPlatform, KeySequence, KeySequenceError,
-    KeyStroke, KeybindingParseError, KeybindingResolver, LogicalKey, Modifiers, PhysicalKey,
-    ResolveResult, ShortcutModifiers, format_key_sequence, keycap_labels, parse_key_sequence,
-    serialize_key_sequence,
-};
+use super::BindingPriority;
+use super::BindingSet;
+use super::BindingSource;
+use super::Chord;
+use super::HostPlatform;
+use super::KeySequence;
+use super::KeySequenceError;
+use super::KeyStroke;
+use super::KeybindingParseError;
+use super::KeybindingResolver;
+use super::LogicalKey;
+use super::Modifiers;
+use super::PhysicalKey;
+use super::ResolveResult;
+use super::ShortcutModifiers;
+use super::format_key_sequence;
+use super::keycap_labels;
+use super::parse_key_sequence;
+use super::serialize_key_sequence;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
@@ -205,6 +218,13 @@ fn rejects_ambiguous_or_incomplete_chords() {
         parse_key_sequence("ctrl+k+c"),
         Err(KeybindingParseError::MultipleKeys { chord: 1 })
     ));
+}
+
+#[test]
+fn normalizes_space_and_portable_modifier_aliases() {
+    let sequence = parse_key_sequence("cmdorctrl+space windows+k").expect("keybinding");
+
+    assert_eq!(serialize_key_sequence(&sequence), "primary+space meta+k");
 }
 
 fn resolver<C, A>(

@@ -1,3 +1,5 @@
+//! Product-neutral boolean and string conditions for shortcut rules.
+
 use std::fmt;
 
 /// One value exposed by a product host to keybinding `when` expressions.

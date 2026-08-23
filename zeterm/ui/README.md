@@ -7,7 +7,7 @@
 > [`zeta-wgpu`](../wgpu/README.md)；native 文本输入的跨 crate ownership 见
 > [`docs/native-text-input.md`](../docs/native-text-input.md)；product icon system 见
 > [`docs/icons.md`](../../docs/icons.md)。`Keycap` 的快捷键产品组合由
-> [`zeta-keybinding`](../keybinding/README.md) 拥有。
+> [`zeterm-keybinding-ui`](../keybinding-ui/README.md) 拥有。
 
 `zeta-ui` 基于 `zui` 提供 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、
 TabList、Keycap、Sash、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，

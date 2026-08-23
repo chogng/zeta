@@ -49,6 +49,9 @@ export type KeybindingChord =
 	| LogicalKeybindingChord
 	| PhysicalKeybindingChord;
 
+/** Maximum number of ordered chords accepted by the shared shortcut grammar. */
+export const MAX_KEYBINDING_CHORDS = 4;
+
 /** Creates a layout-aware chord without exposing representation details. */
 export function logicalKey(
 	key: string,
@@ -84,6 +87,11 @@ export class Keybinding {
 	constructor(chords: readonly KeybindingChord[]) {
 		if (chords.length === 0) {
 			throw new TypeError("A keybinding requires at least one chord");
+		}
+		if (chords.length > MAX_KEYBINDING_CHORDS) {
+			throw new TypeError(
+				`A keybinding supports at most ${MAX_KEYBINDING_CHORDS} chords`,
+			);
 		}
 		this.chords = [...chords];
 	}

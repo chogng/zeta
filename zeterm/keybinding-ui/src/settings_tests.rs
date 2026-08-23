@@ -1,8 +1,19 @@
-use zeta_ui::{Color, Point, Rect, UiScene};
-use zui::{ElementId, InteractionFrame, UiDispatch, UiFrame};
+use zeta_ui::Color;
+use zeta_ui::Point;
+use zeta_ui::Rect;
+use zeta_ui::UiScene;
+use zui::ElementId;
+use zui::InteractionFrame;
+use zui::UiDispatch;
+use zui::UiFrame;
 
-use super::{KeyboardShortcutRow, KeyboardShortcuts, KeyboardShortcutsIds, paint_chord_hint};
-use crate::{HostPlatform, KeyboardShortcutsState, parse_key_sequence};
+use super::KeyboardShortcutRow;
+use super::KeyboardShortcuts;
+use super::KeyboardShortcutsIds;
+use super::paint_chord_hint;
+use crate::KeyboardShortcutsState;
+use zeta_keybinding::HostPlatform;
+use zeta_keybinding::parse_key_sequence;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {

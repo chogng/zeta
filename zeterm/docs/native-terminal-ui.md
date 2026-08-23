@@ -119,10 +119,10 @@ Session Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度�
 | 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
 | Session Tab 右键菜单生命周期与 command identity | `zeterm/src/session_context_menu` | 保存目标、锚点与恢复焦点；菜单关闭后不保留第二份 Session 状态 |
 | Product command identity 与注册式执行 | [`zeta-commands`](../commands/README.md) / `zeterm/src/command_dispatch` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `CommandRequest`，再由宿主注册的 handler 执行 |
-| 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
+| 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../../zeta-rs/keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
 | winit 按键转换、Native context 与 Chord 生命周期 | `zeterm/src/keybindings` | 内建 Copy/Paste；1.5 秒超时，失焦或 IME 取消；保持 alternate terminal Control 序列透传 |
 | Native 用户快捷键资源 | `zeterm/src/keybindings_resource` | 读取 `<ZETA_PROFILE_ROOT>/keybindings.json`；完整校验成功才替换，坏更新保留上一份规则 |
-| 快捷键模型、设置、录制和提示 | [`zeta-keybinding`](../keybinding/README.md) | 同一 feature crate 拥有规则解析、浮层 lifecycle、录制 deadline、诊断呈现和组件样式；zeterm 提供产品 command、事件 adapter 与保存接线 |
+| 快捷键设置、录制和提示 | [`zeterm-keybinding-ui`](../keybinding-ui/README.md) | 拥有浮层 lifecycle、录制 deadline、诊断呈现和组件样式；zeterm 提供产品 command、事件 adapter 与保存接线 |
 | Terminal Session product state | App Server/terminal session runtime | 拥有进程、cwd、环境、输出与退出状态 |
 | Terminal grid、screen/mode state、基础 escape sequence 与 BlockList | `zeta-terminal::TerminalCore` | 不由 `UiScene` 或 `InputBox` 推断 |
 | PTY process、write、resize 与 exit | `zeterm/src/terminal_session` + `zeta-utils-pty` | process mechanism 与 terminal model 分离；创建在后台 worker 完成 |

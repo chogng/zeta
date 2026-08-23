@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 import {
 	getKeybindingLabel,
 	KeybindingLabelStyle,
 } from "../../common/keybindingLabels.js";
-import { parseKeybinding } from "../../common/keybindingParser.js";
+import {
+	parseKeybinding,
+	serializeKeybinding,
+} from "../../common/keybindingParser.js";
 import {
 	Keybinding,
 	KeybindingChordKind,
@@ -24,6 +29,17 @@ import {
 	ScanCode,
 	ScanCodeUtils,
 } from "../../common/keyCodes.js";
+
+interface ParserFixture {
+	readonly input: string;
+	readonly valid: boolean;
+	readonly canonical?: string;
+	readonly chords?: number;
+}
+
+interface ConformanceFixtures {
+	readonly parser: readonly ParserFixture[];
+}
 
 test("canonical key codes distinguish logical keys from physical scan codes", () => {
 	assert.equal(KeyCodeUtils.fromString("ArrowLeft"), KeyCode.LeftArrow);
@@ -120,4 +136,23 @@ test("space has a stable user representation", () => {
 		),
 		"Ctrl+Space",
 	);
+});
+
+test("shared keybinding parser fixtures match the TypeScript implementation", () => {
+	const fixturePath = resolve(
+		process.cwd(),
+		"../resources/keybindings/conformance.json",
+	);
+	const fixtures = JSON.parse(
+		readFileSync(fixturePath, "utf8"),
+	) as ConformanceFixtures;
+
+	for (const fixture of fixtures.parser) {
+		const parsed = parseKeybinding(fixture.input);
+		assert.equal(Boolean(parsed), fixture.valid, fixture.input);
+		if (parsed) {
+			assert.equal(parsed.chords.length, fixture.chords, fixture.input);
+			assert.equal(serializeKeybinding(parsed), fixture.canonical, fixture.input);
+		}
+	}
 });

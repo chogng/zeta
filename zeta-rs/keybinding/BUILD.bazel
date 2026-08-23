@@ -1,0 +1,16 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "keybinding",
+    crate_name = "zeta_keybinding",
+    data = ["//resources/keybindings:conformance.json"],
+)
+
+filegroup(
+    name = "keybinding_sources",
+    srcs = glob([
+        "src/**/*.rs",
+        "Cargo.toml",
+    ]),
+    visibility = ["//visibility:public"],
+)

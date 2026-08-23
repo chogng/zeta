@@ -2,11 +2,13 @@ use super::{KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_i
 use crate::keybindings::NativeKeybindings;
 use std::time::{Duration, Instant};
 use zeta_commands::ZetermCommandId;
-use zeta_keybinding::{
-    Chord, HostPlatform, KeyboardShortcuts, ShortcutModifiers, paint_chord_hint,
-    serialize_key_sequence,
-};
+use zeta_keybinding::Chord;
+use zeta_keybinding::HostPlatform;
+use zeta_keybinding::ShortcutModifiers;
+use zeta_keybinding::serialize_key_sequence;
 use zeta_ui::{Color, Point, Rect, UiScene};
+use zeterm_keybinding_ui::KeyboardShortcuts;
+use zeterm_keybinding_ui::paint_chord_hint;
 use zui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]

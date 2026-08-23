@@ -1,6 +1,11 @@
-use crate::binding::{BindingRule, BindingSet, BindingTarget};
-use crate::{HostPlatform, KeySequence, KeyStroke};
+use crate::HostPlatform;
+use crate::KeySequence;
+use crate::KeyStroke;
+use crate::binding::BindingRule;
+use crate::binding::BindingSet;
+use crate::binding::BindingTarget;
 
+/// Result of resolving an ordered input prefix against the active rules.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ResolveResult<A> {
     NoMatch,

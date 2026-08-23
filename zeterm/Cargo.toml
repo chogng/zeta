@@ -27,6 +27,7 @@ zeta-install-context = { workspace = true }
 zeta-input-classifier = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-keybindings-host = { workspace = true }
+zeterm-keybinding-ui = { workspace = true }
 zeta-layout = { workspace = true }
 zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }

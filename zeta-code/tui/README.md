@@ -6,6 +6,7 @@
 > [`docs/app-server-client.md`](../../docs/app-server-client.md)。本文不把 Proposed 架构写成
 > 当前能力。
 > 三条产品线与宿主边界见 [`docs/product-lines.md`](../../docs/product-lines.md)。
+> 三端快捷键语义与端侧输入边界见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 
 `zeta-tui` 是 `zeta code` 产品线的 TUI 实现。它当前是 `AppServerSession` 上的 presentation
 shell：从 owned session 取得 cloneable typed request handle 与独立 `AppServerEvents`，创建或切换
@@ -85,6 +86,9 @@ Tool、approval policy 或 persistence。
 - footer 最左侧显示当前 Turn 权限模式；Shift-Tab 在 `ask permissions on`、`auto review on` 与
   `bypass permissions on` 之间循环。提交时把当前模式写入 typed `StartTurn`，因此切换只影响之后
   提交的 Turn；TUI 不解释策略结果，也不自行签发执行授权；
+- `app/keymap.rs` 把 Crossterm 事件转成 `zeta-keybinding::KeyStroke`，并用共享 Resolver 处理
+  Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z；composer 编辑、selection 导航和 transcript 滚动仍由
+  各 component 拥有，不进入全局 Keymap；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
   通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
@@ -172,6 +176,7 @@ src/
 ├── lib.rs                         # narrow public startup API; delegates to app::run
 ├── app/
 │   ├── event_loop.rs              # terminal/client/background coordination
+│   ├── keymap.rs                   # Crossterm adapter + fixed root keymap
 │   ├── state.rs                   # single-writer presentation state
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
@@ -226,6 +231,7 @@ src/
 | `StatusLineModel` | crate-private | 把 preferred model、workspace 与 Git 的窄输入变成长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存领域 authority、不渲染 |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先委托局部输入，再处理未消费的全局键 | 不直接调用 client |
+| `GlobalKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，按局部上下文解析根级 action | 不处理 composer 编辑、selection 导航、滚动、I/O 或命令副作用 |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
 | `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，通过 1024 项有界队列汇入单写者 loop | Tick 可合并；control/input 不静默丢失；不应用 UI state |
@@ -415,6 +421,8 @@ gap/runtime switch 会移除旧 transient row 并 resync。canonical snapshot �
 transient 永远不决定 completed/failed/interrupted。
 
 ## 键盘状态机
+
+下列根级组合由 `app/keymap.rs` 注册到共享 `zeta-keybinding` Resolver；局部输入仍先经过当前 interaction/component，只有未消费事件进入 global fallback。
 
 ```text
 Ready / Error

@@ -1,7 +1,9 @@
 import {
 	Keybinding,
 	type KeybindingChord,
+	KeybindingChordKind,
 	logicalKey,
+	MAX_KEYBINDING_CHORDS,
 	physicalKey,
 } from "./keybindings.js";
 import { KeyCode, KeyCodeUtils, ScanCode, ScanCodeUtils } from "./keyCodes.js";
@@ -17,7 +19,9 @@ const modifierNames = new Map<string, ModifierName>([
 	["command", "metaKey"],
 	["win", "metaKey"],
 	["windows", "metaKey"],
+	["super", "metaKey"],
 	["primary", "primaryKey"],
+	["cmdorctrl", "primaryKey"],
 ]);
 
 type ModifierName =
@@ -36,6 +40,7 @@ type ModifierName =
 export function parseKeybinding(value: string): Keybinding | undefined {
 	const chordTexts = value.trim().split(/\s+/).filter(Boolean);
 	if (chordTexts.length === 0) return undefined;
+	if (chordTexts.length > MAX_KEYBINDING_CHORDS) return undefined;
 
 	const chords: KeybindingChord[] = [];
 	for (const chordText of chordTexts) {
@@ -44,6 +49,24 @@ export function parseKeybinding(value: string): Keybinding | undefined {
 		chords.push(chord);
 	}
 	return new Keybinding(chords);
+}
+
+/** Serializes a keybinding into the canonical shared user-settings syntax. */
+export function serializeKeybinding(keybinding: Keybinding): string {
+	return keybinding.chords.map((chord) => {
+		const parts: string[] = [];
+		if (chord.modifiers.primaryKey) parts.push("primary");
+		if (chord.modifiers.ctrlKey) parts.push("ctrl");
+		if (chord.modifiers.metaKey) parts.push("meta");
+		if (chord.modifiers.altKey) parts.push("alt");
+		if (chord.modifiers.shiftKey) parts.push("shift");
+		if (chord.kind === KeybindingChordKind.Physical) {
+			parts.push(`[${chord.code}]`);
+		} else {
+			parts.push(chord.key === " " ? "space" : chord.key);
+		}
+		return parts.join("+");
+	}).join(" ");
 }
 
 function parseChord(value: string): KeybindingChord | undefined {

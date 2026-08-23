@@ -1,15 +1,37 @@
-use zeta_ui::{
-    Border, BoxShadow, Color, Component, ComponentContext, ComponentElement, ComputedElement,
-    CornerRadii, Element, InteractionRegion, KeycapSequence, KeycapStyle, PaintRect, Point, Rect,
-    Size, TextBlock, TextStyle, UiScene,
-};
-use zui::{
-    AccessibilityRole, CursorFeedback, ElementId, FocusBehavior, NavigationAxis, NavigationGroupId,
-    NodeAction, UiDispatch, UiNode,
-};
+use zeta_ui::Border;
+use zeta_ui::BoxShadow;
+use zeta_ui::Color;
+use zeta_ui::Component;
+use zeta_ui::ComponentContext;
+use zeta_ui::ComponentElement;
+use zeta_ui::ComputedElement;
+use zeta_ui::CornerRadii;
+use zeta_ui::Element;
+use zeta_ui::InteractionRegion;
+use zeta_ui::KeycapSequence;
+use zeta_ui::KeycapStyle;
+use zeta_ui::PaintRect;
+use zeta_ui::Point;
+use zeta_ui::Rect;
+use zeta_ui::Size;
+use zeta_ui::TextBlock;
+use zeta_ui::TextStyle;
+use zeta_ui::UiScene;
+use zui::AccessibilityRole;
+use zui::CursorFeedback;
+use zui::ElementId;
+use zui::FocusBehavior;
+use zui::NavigationAxis;
+use zui::NavigationGroupId;
+use zui::NodeAction;
+use zui::UiDispatch;
+use zui::UiNode;
 
 use crate::recording::KeyboardShortcutsState;
-use crate::{HostPlatform, KeySequence, format_key_sequence, keycap_labels};
+use zeta_keybinding::HostPlatform;
+use zeta_keybinding::KeySequence;
+use zeta_keybinding::format_key_sequence;
+use zeta_keybinding::keycap_labels;
 
 const PANEL_WIDTH: f32 = 660.0;
 const PANEL_HEIGHT: f32 = 470.0;

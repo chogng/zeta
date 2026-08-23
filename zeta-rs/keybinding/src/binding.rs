@@ -1,5 +1,6 @@
 use crate::KeySequence;
 
+/// Origin used before explicit priority and registration order are compared.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BindingSource {
     Builtin,

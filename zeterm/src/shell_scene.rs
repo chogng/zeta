@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use zeta_keybinding::{KeyboardShortcuts, paint_chord_hint};
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
     Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InteractionRegion,
@@ -8,6 +7,8 @@ use zeta_ui::{
     ScrollbarPresentation, SplitViewResizeSnapshot, TextBlock, TextInputLayoutEngine, TextStyle,
     UiScene,
 };
+use zeterm_keybinding_ui::KeyboardShortcuts;
+use zeterm_keybinding_ui::paint_chord_hint;
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::agent_composer::ComposerMode;

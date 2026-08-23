@@ -1,6 +1,9 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use crate::{Chord, KeySequence, MAX_CHORDS};
+use zeta_keybinding::Chord;
+use zeta_keybinding::KeySequence;
+use zeta_keybinding::MAX_CHORDS;
 
 const RECORDING_TIMEOUT: Duration = Duration::from_millis(1_000);
 

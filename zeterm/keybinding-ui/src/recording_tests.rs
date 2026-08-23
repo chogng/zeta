@@ -1,6 +1,9 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use crate::{Chord, ShortcutModifiers, serialize_key_sequence};
+use zeta_keybinding::Chord;
+use zeta_keybinding::ShortcutModifiers;
+use zeta_keybinding::serialize_key_sequence;
 
 use super::KeyboardShortcutsState;
 

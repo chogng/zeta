@@ -39,6 +39,7 @@
 | 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
 | 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → [`localization.md`](localization.md) 或对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
+| 设计或修改三端快捷键 | [`keybindings.md`](keybindings.md) → 对应端的实现 README |
 | 开发 SSH Remote Workspace | [`remote-development.md`](remote-development.md) → [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`app-server-client.md`](app-server-client.md) |
 | 改 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) → 对应产品文档 → [`zeterm/README.md`](../zeterm/README.md) |
 | 写 / 改文档本身 | [`documentation-guidelines.md`](documentation-guidelines.md) |
@@ -105,6 +106,7 @@
 [`workbench-pane-composite-design.md`](workbench-pane-composite-design.md)、
 [`design-tokens.md`](design-tokens.md)、[`theme-authoring-template.md`](theme-authoring-template.md)（模板）、
 [`menu-system.md`](menu-system.md)、[`icons.md`](icons.md)、[`search.md`](search.md)、
+[`keybindings.md`](keybindings.md)、
 [`code-intelligence.md`](code-intelligence.md)、
 [`code-index.md`](code-index.md)、
 [`syntax-analysis.md`](syntax-analysis.md)、[`lsp.md`](lsp.md)、

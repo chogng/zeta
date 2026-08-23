@@ -732,7 +732,8 @@ TerminalEvent / ClientResult / ServerNotification
 - `ServerNotification`：App Server typed notification。
 
 不要把所有类型压成一个包含任意闭包、JSON 或字符串 method 的总线。原始 key event 应先由
-当前焦点和 keymap 转换为用户意图，再进入业务 command。
+当前焦点和 keymap 转换为用户意图，再进入业务 command。三端共享语法和 Zeta Code 的根级
+Keymap 边界见 [`keybindings.md`](keybindings.md)。
 
 单个 event-loop iteration 应有界，长请求、resource 读取和大型 transcript projection 不得阻塞
 terminal event pump。重绘可以合并，但 committed update、输入和退出事件不能因为 frame
@@ -907,6 +908,7 @@ app/
 ├── event_loop.rs
 ├── frame/
 ├── help.rs
+├── keymap.rs
 ├── request_completion.rs
 ├── state.rs
 └── state_tests.rs
@@ -996,7 +998,10 @@ lib_tests.rs
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
-- `App` 处理 presentation coordination 与全局键，并直接委托 `InteractionPane` 的
+- `app/keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与
+  Ctrl-C/D/O/V/Z，并把 Crossterm event 单向转换为标准 `KeyStroke`；composer 编辑、selection
+  导航与 transcript 滚动继续由局部 component 拥有；
+- `App` 处理 presentation coordination 与 Keymap action，并直接委托 `InteractionPane` 的
   composer/temporary-view 输入；`ChatWidget` 与过渡目录 `toppane/` 已移除，不再存在第二份
   transcript 或模糊的 top-pane owner；
 - composer、editor、attachment、paste、slash/mention state 与各自纯 view 已迁入

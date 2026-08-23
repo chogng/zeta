@@ -1,5 +1,8 @@
 use super::command::AppCommand;
 use super::event::AppEvent;
+use super::keymap::GlobalKeymap;
+use super::keymap::GlobalKeymapAction;
+use super::keymap::GlobalKeymapContext;
 use crate::components::composer::ComposerInput;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
@@ -37,7 +40,6 @@ use crate::features::workspace_files::FileSelectionView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
@@ -61,6 +63,7 @@ pub(crate) enum Status {
 #[derive(Debug)]
 pub(crate) struct App {
     interaction_pane: InteractionPane,
+    global_keymap: GlobalKeymap,
     thread: ThreadFeatureState,
     transcript_scroll: TranscriptScroll,
     selection_actions: Vec<SelectionActions>,
@@ -90,6 +93,7 @@ impl App {
     pub(crate) fn new() -> Self {
         Self {
             interaction_pane: InteractionPane::new(),
+            global_keymap: GlobalKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
@@ -114,6 +118,7 @@ impl App {
     ) -> Self {
         Self {
             interaction_pane: InteractionPane::with_slash_commands(slash_commands),
+            global_keymap: GlobalKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
             selection_actions: Vec::new(),
@@ -651,53 +656,51 @@ impl App {
     }
 
     fn handle_global_key(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
-        if self.selection_view().is_none()
-            && self.accepts_input()
-            && key.kind == KeyEventKind::Press
-            && key.code == KeyCode::BackTab
-        {
-            self.approval_mode = match self.approval_mode {
-                ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
-                ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
-                ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
-            };
-            return None;
+        let keymap_context = GlobalKeymapContext {
+            accepts_input: self.accepts_input(),
+            has_selection: self.selection_view().is_some(),
+            composer_empty: self.input().is_empty(),
+            is_press: key.kind == KeyEventKind::Press,
+        };
+        if let Some(action) = self.global_keymap.resolve(&key, keymap_context) {
+            return self.apply_global_keymap_action(action, now);
         }
         if self.selection_view().is_none() && self.transcript_scroll.handle_key(key) {
-            return (key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Home)
-                .then_some(AppCommand::LoadOlderHistory);
-        }
-        if key.code == KeyCode::Esc
-            && key.modifiers.is_empty()
-            && key.kind == KeyEventKind::Press
-            && self.accepts_input()
-        {
-            if self
-                .last_root_escape
-                .take()
-                .is_some_and(|previous| now.duration_since(previous) <= DOUBLE_ESCAPE_WINDOW)
-            {
-                return Some(AppCommand::OpenRewindPane);
-            }
-            self.last_root_escape = Some(now);
-            return None;
-        }
-        if self.accepts_input()
-            && key.modifiers.contains(KeyModifiers::CONTROL)
-            && matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&'v'))
-        {
-            return Some(AppCommand::ReadClipboardImage);
-        }
-        if key.modifiers.contains(KeyModifiers::CONTROL) {
-            return match key.code {
-                KeyCode::Char('c') => self.quit_or_interrupt(),
-                KeyCode::Char('d') if self.input().is_empty() => self.quit_or_interrupt(),
-                KeyCode::Char('o') => Some(AppCommand::CopyLastResponse),
-                KeyCode::Char('z') => Some(AppCommand::Suspend),
-                _ => None,
-            };
+            return (key.code == KeyCode::Home).then_some(AppCommand::LoadOlderHistory);
         }
         None
+    }
+
+    fn apply_global_keymap_action(
+        &mut self,
+        action: GlobalKeymapAction,
+        now: Instant,
+    ) -> Option<AppCommand> {
+        match action {
+            GlobalKeymapAction::CycleApprovalMode => {
+                self.approval_mode = match self.approval_mode {
+                    ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
+                    ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
+                    ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
+                };
+                None
+            }
+            GlobalKeymapAction::RootEscape => {
+                if self
+                    .last_root_escape
+                    .take()
+                    .is_some_and(|previous| now.duration_since(previous) <= DOUBLE_ESCAPE_WINDOW)
+                {
+                    return Some(AppCommand::OpenRewindPane);
+                }
+                self.last_root_escape = Some(now);
+                None
+            }
+            GlobalKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
+            GlobalKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),
+            GlobalKeymapAction::CopyLastResponse => Some(AppCommand::CopyLastResponse),
+            GlobalKeymapAction::Suspend => Some(AppCommand::Suspend),
+        }
     }
 
     fn handle_slash_command(&mut self, invocation: SlashCommandInvocation) -> Option<AppCommand> {

@@ -50,6 +50,7 @@ const groups: DocGroupDefinition[] = [
       "design-tokens",
       "theme-authoring-template",
       "menu-system",
+      "keybindings",
       "icons",
       "search",
       "code-intelligence",

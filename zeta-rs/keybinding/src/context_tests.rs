@@ -1,4 +1,5 @@
-use super::{ContextExpression, ContextValue};
+use super::ContextExpression;
+use super::ContextValue;
 
 #[test]
 fn evaluates_boolean_precedence_parentheses_and_negation() {
