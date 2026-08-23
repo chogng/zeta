@@ -39,7 +39,7 @@ import { OverviewRulerPart } from "../viewparts/overviewRuler/overviewRulerPart.
 import { ScrollDecorationPart } from "../viewparts/scrollDecoration/scrollDecorationPart.js";
 import { SelectionsPart } from "../viewparts/selections/selectionsPart.js";
 import { ViewCursorsPart } from "../viewparts/viewCursors/viewCursorsPart.js";
-import { EditorViewPartCollection } from "../viewparts/viewPart.js";
+import { EditorViewContext, EditorViewPartCollection } from "../viewparts/viewPart.js";
 import { ViewLinesPart } from "../viewparts/viewLines/viewLinesPart.js";
 
 export type EditorViewportPresentation = "document" | "embedded";
@@ -125,6 +125,7 @@ export class EditorViewport extends DisposableOwner {
   private readonly contentElement: HTMLDivElement;
   private readonly textMetricsElement: HTMLSpanElement;
   private readonly accessibilityStatusElement: HTMLDivElement;
+  private readonly viewContext: EditorViewContext;
   private readonly viewParts: EditorViewPartCollection;
   private readonly viewLinesPart: ViewLinesPart;
   private readonly marginPart: MarginPart;
@@ -266,6 +267,10 @@ export class EditorViewport extends DisposableOwner {
     }));
     this.viewport = viewport;
     this.onDidChangeLayout = viewport.onDidChange;
+    this.viewContext = new EditorViewContext(
+      () => viewport.layout,
+      layout => this.overlayContext(layout),
+    );
     this.viewParts = this.own(new EditorViewPartCollection());
     this.viewLinesPart = this.viewParts.register(new ViewLinesPart({
       container: this.contentElement,
@@ -293,48 +298,27 @@ export class EditorViewport extends DisposableOwner {
       readVisualProjection: () => this.visualProjection,
       readRenderedLines: () => this.viewLinesPart.renderedLines,
     }));
-    this.decorationsPart = this.viewParts.register(new DecorationsPart({
-      model: this.model,
-      decorationSources: options.decorationSources ?? [],
-      readOverlayContext: layout => this.overlayContext(layout),
-    }));
-    this.viewParts.register(new LinesDecorationsPart({
-      readOverlayContext: layout => this.overlayContext(layout),
-      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
-    }));
-    this.viewParts.register(new BlockDecorationsPart({
-      container: this.contentElement,
-      readOverlayContext: layout => this.overlayContext(layout),
-      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
-    }));
-    this.viewParts.register(new MarginDecorationsPart({
-      readOverlayContext: layout => this.overlayContext(layout),
-      readDecorations: layout => this.decorationsPart.visibleDecorations(layout),
-    }));
-    this.viewParts.register(new IndentGuidesPart({
+    this.decorationsPart = this.viewParts.register(new DecorationsPart(
+      this.viewContext,
+      this.model,
+      options.decorationSources ?? [],
+    ));
+    this.viewParts.register(new LinesDecorationsPart(this.viewContext, this.decorationsPart));
+    this.viewParts.register(new BlockDecorationsPart(this.viewContext, this.decorationsPart, this.contentElement));
+    this.viewParts.register(new MarginDecorationsPart(this.viewContext, this.decorationsPart));
+    this.viewParts.register(new IndentGuidesPart(this.viewContext, {
       showIndentationGuides: this.showIndentationGuides,
       tabSize: this.indentation.tabSize,
-      readOverlayContext: layout => this.overlayContext(layout),
     }));
-    this.selectionsPart = this.viewParts.register(new SelectionsPart({
-      selectionController: this.selectionController,
-      readOverlayContext: layout => this.overlayContext(layout),
-    }));
-    this.viewCursorsPart = this.viewParts.register(new ViewCursorsPart({
-      selectionController: this.selectionController,
-      readOverlayContext: layout => this.overlayContext(layout),
-    }));
+    this.selectionsPart = this.viewParts.register(new SelectionsPart(this.viewContext, this.selectionController));
+    this.viewCursorsPart = this.viewParts.register(new ViewCursorsPart(this.viewContext, this.selectionController));
     this.viewParts.register(new RulersPart({
       container: this.contentElement,
       textMeasurer: this.textMeasurer,
       readTextLeft: () => this.textLeft,
       rulers: options.rulers,
     }));
-    this.compositionPart = this.viewParts.register(new CompositionPart({
-      model: this.model,
-      readLayout: () => this.viewport.layout,
-      readOverlayContext: layout => this.overlayContext(layout),
-    }));
+    this.compositionPart = this.viewParts.register(new CompositionPart(this.viewContext, this.model));
     this.viewParts.register(new EditorScrollbarPart({
       container: this.element,
       viewport: this.element,

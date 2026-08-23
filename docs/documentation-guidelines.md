@@ -2,6 +2,7 @@
 
 > 状态：Current repository convention。
 > 适用范围：crate README、`docs/*.md` 架构/设计文档及两者之间的引用关系。
+> 修改 Markdown 时同时遵守 scoped [`documentation.instructions.md`](../.github/instructions/documentation.instructions.md)；该 instruction 只保留任务期规则，完整信息架构与写作标准仍由本文拥有。
 
 本文是整个仓库文档系统的全局规范，不是权限、沙箱或少数示例文档的局部写法。所有现有文档、
 新增文档和文档站页面都必须遵守；发现不一致时，将其视为需要修正的文档缺陷，不能把旧页面

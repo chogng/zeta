@@ -38,6 +38,11 @@ Workbench parts may host the browser editor and own its external box, but must
 not reach through its component internals. Visual rules follow
 [`docs/ui-styling-ownership.md`](../../../../../docs/ui-styling-ownership.md).
 
+Browser implementation follows the frontend-wide
+[`coding-guidelines.instructions.md`](../../../../../.github/instructions/coding-guidelines.instructions.md),
+editor-scoped [`editor.instructions.md`](../../../../../.github/instructions/editor.instructions.md),
+and browser UI [`browser-ui.instructions.md`](../../../../../.github/instructions/browser-ui.instructions.md).
+
 Aster is a sibling structured-editor domain. Aster browser code must not import Aster or expose its document types through the line-editor contracts.
 
 ## Current implementation

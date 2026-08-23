@@ -1,6 +1,6 @@
 # Aster
 
-> Aster 是 Zeta 的可组装编辑器内核，类似 Monaco 在 VS Code 架构中的位置；`editor/` 只是它的扁平领域目录，不是第二个品牌或额外架构层。跨 Workbench、文件、语言服务与 Rust App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。Text Engine 和 Document Engine 的详细行为分别见 [`text-engine.md`](./text-engine.md) 与 [`document-engine.md`](./document-engine.md)。
+> Aster 是 Zeta 的可组装编辑器内核，类似 Monaco 在 VS Code 架构中的位置；`editor/` 只是它的扁平领域目录，不是第二个品牌或额外架构层。跨 Workbench、文件、语言服务与 Rust App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)。Text Engine 和 Document Engine 的详细行为分别见 [`text-engine.md`](./text-engine.md) 与 [`document-engine.md`](./document-engine.md)。实现同时遵守通用 [`coding-guidelines.instructions.md`](../../../../.github/instructions/coding-guidelines.instructions.md) 和 editor scoped [`editor.instructions.md`](../../../../.github/instructions/editor.instructions.md)。
 
 ## 快速理解
 

@@ -1,5 +1,7 @@
 # `zeta code` TUI 架构与产品支持边界
 
+> 修改 `zeta-code` 时同时遵守 scoped [`tui.instructions.md`](../.github/instructions/tui.instructions.md)；该 instruction 只保留任务期规则，完整产品架构和当前状态仍由本文拥有。
+
 > 物理位置：`zeta-code/tui/`；ANSI/Ratatui adapter：`zeta-code/ansi-escape/`
 > 宿主：`zeta-code/cli/`
 > 文档所有权：本文是 TUI 跨 crate ownership、长期不变量、产品支持边界与已接受架构迁移顺序的 canonical 文档。

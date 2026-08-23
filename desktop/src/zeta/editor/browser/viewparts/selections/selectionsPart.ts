@@ -1,30 +1,23 @@
 import "./selections.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { projectAsterCurrentLineHighlight, projectAsterSelectionOverlays } from "./selectionProjection.js";
-import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
-import { type EditorViewPart } from "../viewPart.js";
-
-export interface SelectionsPartOptions {
-  readonly selectionController: EditorSelectionController | undefined;
-  readonly readOverlayContext: (layout: EditorViewportLayout) => ViewportOverlayContext;
-}
+import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
 /** Projects selection ranges and current-line state without owning selection state. */
-export class SelectionsPart extends DisposableOwner implements EditorViewPart {
+export class SelectionsPart extends EditorOverlayPart {
   private readonly selectionController: EditorSelectionController | undefined;
-  private readonly readOverlayContext: (layout: EditorViewportLayout) => ViewportOverlayContext;
 
-  constructor(options: SelectionsPartOptions) {
-    super();
-    this.selectionController = options.selectionController;
-    this.readOverlayContext = options.readOverlayContext;
+  constructor(context: EditorViewContext, selectionController: EditorSelectionController | undefined) {
+    super(context);
+    this.selectionController = selectionController;
   }
 
-  render(layout: EditorViewportLayout): void {
-    const context = this.readOverlayContext(layout);
-    if (context.visualLineProjection.modelVersion !== context.model.version) return;
+  public render(layout: EditorViewportLayout): void {
+    const context = this.context.overlayContext(layout);
+    if (!context) {
+      return;
+    }
     projectAsterCurrentLineHighlight(context, this.selectionController);
     projectAsterSelectionOverlays(context, this.selectionController);
   }

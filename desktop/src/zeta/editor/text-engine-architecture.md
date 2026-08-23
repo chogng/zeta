@@ -2,7 +2,7 @@
 
 > 文档所有权：`desktop/src/zeta/editor` 中的行式文本 engine。
 >
-> 本文是 Aster 行式文本 engine 的开发架构文档和文件迁移清单。它规定文件命名、职责、依赖方向、当前实现状态和后续迁移顺序；统一目录与装配边界见 [`README.md`](./README.md)，行为细节、测试证据和已知限制见 [`text-engine.md`](./text-engine.md)。
+> 本文是 Aster 行式文本 engine 的开发架构文档和文件迁移清单。它规定文件命名、职责、依赖方向、当前实现状态和后续迁移顺序；统一目录与装配边界见 [`README.md`](./README.md)，实现规则见 [`coding-guidelines.instructions.md`](../../../../.github/instructions/coding-guidelines.instructions.md) 与 [`editor.instructions.md`](../../../../.github/instructions/editor.instructions.md)，行为细节、测试证据和已知限制见 [`text-engine.md`](./text-engine.md)。
 >
 > 状态：Current implementation + Proposed target。`Current` 表示当前代码和测试已经支持；`Partial` 表示能力存在但职责或文件位置仍需调整；`Planned` 表示目标已确定但尚未实现；`Non-goal` 表示明确不由 Aster editor 拥有。
 
