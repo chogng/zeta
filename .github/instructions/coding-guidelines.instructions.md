@@ -89,4 +89,4 @@ private visible = false;
 - Keep short, complete algorithms together. Do not extract helpers that only rename consecutive steps.
 - Extract shared semantics, independent lifecycle, complex mechanism, or substantial duplication.
 - Judge complexity by concepts and cross-file jumps, not line count alone.
-- Prefer production modules below roughly 500 lines. Near 800 lines, add new responsibility in another module unless a documented constraint requires otherwise.
+- Use roughly 800 lines as a review trigger, not an extraction criterion. When a file remains near or above that size, inspect it for independently owned responsibilities; do not split a cohesive implementation only to reduce line count.
