@@ -42,21 +42,32 @@
 	width: 100%;
 	height: 34px;
 	min-width: 0;
-	padding: 0 10px;
 	color: inherit;
-	font: inherit;
-	text-align: left;
 	background: color-mix(in srgb, var(--zeta-editor-background) 92%, var(--zeta-foreground));
-	border: 0;
 	border-bottom: 1px solid var(--zeta-widget-border);
-	cursor: pointer;
 }
 
 .stanza-multi-diff-editor-header:hover {
 	background: var(--zeta-toolbar-hover-background);
 }
 
-.stanza-multi-diff-editor-header:focus-visible {
+.stanza-multi-diff-editor-header-toggle {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	box-sizing: border-box;
+	height: 100%;
+	min-width: 0;
+	padding: 0 10px;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+.stanza-multi-diff-editor-header-toggle:focus-visible {
 	outline: 1px solid var(--zeta-focus-border);
 	outline-offset: -1px;
 }
@@ -80,6 +91,15 @@
 	color: var(--zeta-description-foreground);
 	font-size: 0.9em;
 	text-overflow: ellipsis;
+}
+
+.stanza-multi-diff-editor-file-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	box-sizing: border-box;
+	height: 100%;
+	padding-right: 4px;
 }
 
 .stanza-multi-diff-editor-body {

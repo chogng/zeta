@@ -29,6 +29,8 @@ import type { IKeybindingService } from "../../../../platform/keybinding/common/
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 
 export enum EditorPaneVisibility {
 	Hidden,
@@ -67,6 +69,12 @@ export interface EditorPaneCreationOptions {
 	readonly input?: EditorInput;
 	readonly configurationService?: IConfigurationService;
 	readonly contextKeyService?: IContextKeyService;
+	/** Group-scoped action services for pane-owned menus and toolbars. */
+	readonly actionServices?: {
+		readonly menuService: IMenuService;
+		readonly contextMenuProvider: IContextMenuProvider;
+		readonly contextKeyService?: IContextKeyService;
+	};
 	readonly keybindingService?: IKeybindingService;
 	readonly keybindingsResourceService?: IKeybindingsResourceService;
 	readonly keyboardLayoutService?: IKeyboardLayoutService;

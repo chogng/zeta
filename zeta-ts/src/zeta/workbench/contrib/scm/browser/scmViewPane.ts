@@ -6,7 +6,6 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import type { ICommandService } from "../../../../platform/commands/common/commands.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
@@ -15,7 +14,7 @@ import type { IEditorService } from "../../../services/editor/common/editorServi
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
 import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
-import { resolveGitChangeInputs } from "./scmChangeEditorInput.js";
+import { repositoryFileUri, resolveGitChangeInputs } from "./scmChangeEditorInput.js";
 import { gitErrorMessage } from "./scmError.js";
 
 type GitChangeSide = "index" | "worktree";
@@ -432,15 +431,6 @@ function dirname(path: string): string {
 	const normalized = path.replaceAll("\\", "/");
 	const separator = normalized.lastIndexOf("/");
 	return separator < 0 ? "" : normalized.slice(0, separator);
-}
-
-function repositoryFileUri(workspacePath: string | undefined, path: string): URI {
-	const normalizedPath = path.replaceAll("\\", "/").replace(/^\/+/, "");
-	const normalizedWorkspace = workspacePath?.replaceAll("\\", "/").replace(/\/+$/, "");
-	if (normalizedWorkspace && (normalizedWorkspace.startsWith("/") || /^[A-Za-z]:\//.test(normalizedWorkspace))) {
-		return URI.file(`${normalizedWorkspace}/${normalizedPath}`);
-	}
-	return URI.parse(`file:///${normalizedPath.split("/").map(encodeURIComponent).join("/")}`);
 }
 
 function statusCode(status: GitChangeStatus): string {

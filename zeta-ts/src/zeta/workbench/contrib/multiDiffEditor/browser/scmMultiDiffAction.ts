@@ -40,6 +40,7 @@ export class OpenScmMultiDiffEditorAction extends Action2 {
 					label: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
 					original: inputs.original,
 					modified: inputs.modified,
+					...(inputs.goToFile ? { goToFile: inputs.goToFile } : {}),
 				});
 			}
 		}

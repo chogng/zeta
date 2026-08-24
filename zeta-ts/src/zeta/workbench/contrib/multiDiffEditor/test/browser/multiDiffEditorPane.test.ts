@@ -4,7 +4,11 @@ import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { type DiffComputationRequest, type IDiffComputationService } from '../../../../../editor/common/diff/diffComputationService.js';
 import { type LineDiff } from '../../../../../editor/common/diff/lineDiff.js';
+import { MenuService } from '../../../../../platform/actions/common/menuService.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ServiceCollection } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
@@ -29,11 +33,19 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
+	using commands = new CommandService(new ServiceCollection());
+	using contexts = new ContextKeyService();
+	const menus = new MenuService(commands, contexts);
 	const pane = new MultiDiffEditorPane({
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 		lineHeight: 24,
 		showLineNumbers: false,
+		fileActions: {
+			menuService: menus,
+			contextMenuProvider: { showContextMenu() {} },
+			contextKeyService: contexts,
+		},
 	});
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
@@ -52,6 +64,8 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-pane').length, 1);
 	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
+	assert.equal(parent.querySelectorAll('.stanza-multi-diff-editor-file-actions > .zeta-toolbar').length, 2);
+	assert.equal(parent.querySelectorAll('button button').length, 0);
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor')?.getAttribute('aria-label'), 'Review changes, 2 files');
 	assert.equal(parent.querySelector('.stanza-multi-diff-editor')?.classList.contains('hide-line-numbers'), true);
 	pane.focus();

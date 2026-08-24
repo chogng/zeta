@@ -5,7 +5,7 @@ import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { getClientArea, type IDimension } from '../../../../base/browser/geometry.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { getWindow } from '../../../../base/browser/window.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
@@ -36,6 +36,8 @@ export interface MultiDiffEditorWidgetOptions {
 	readonly loopChanges?: boolean;
 	readonly overscanRowCount?: number;
 	readonly ariaLabel?: string;
+	/** Populates the dedicated action slot owned by each file header. */
+	readonly createItemActions?: (container: HTMLElement, item: MultiDiffEditorItem) => IDisposable;
 }
 
 export interface MultiDiffEditorLocation {
@@ -93,8 +95,12 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 		this.accessibilityStatusDomNode.className = 'stanza-multi-diff-editor-accessibility-status';
 		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
 		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
-		this.sections = this.items.map((item) => this.own(new MultiDiffSection(ownerDocument, item, () => this.toggleItem(item.id))));
-		for (const section of this.sections) this.contentDomNode.append(section.domNode);
+		this.sections = this.items.map((item) => this.own(new MultiDiffSection(
+			this.contentDomNode,
+			item,
+			() => this.toggleItem(item.id),
+			options.createItemActions,
+		)));
 		this.domNode.append(this.contentDomNode, this.accessibilityStatusDomNode);
 		options.container.append(this.domNode);
 		this.defer(() => this.domNode.remove());
@@ -273,7 +279,8 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 
 class MultiDiffSection extends DisposableOwner {
 	public readonly domNode: HTMLElement;
-	private readonly headerDomNode: HTMLButtonElement;
+	private readonly headerDomNode: HTMLDivElement;
+	private readonly toggleDomNode: HTMLButtonElement;
 	private readonly bodyDomNode: HTMLDivElement;
 	private readonly rowsDomNode: HTMLDivElement;
 	private readonly rowsNode: FastDomNode<HTMLDivElement>;
@@ -282,23 +289,38 @@ class MultiDiffSection extends DisposableOwner {
 	private renderedEndRow = -1;
 	private renderedActiveRow = -1;
 
-	constructor(ownerDocument: Document, private readonly item: MultiDiffEditorItem, toggle: () => void) {
+	constructor(
+		container: HTMLElement,
+		private readonly item: MultiDiffEditorItem,
+		toggle: () => void,
+		createItemActions: MultiDiffEditorWidgetOptions['createItemActions'],
+	) {
 		super();
+		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'stanza-multi-diff-editor-section';
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', item.label);
-		this.headerDomNode = h(ownerDocument, 'button');
-		this.headerDomNode.type = 'button';
+		this.headerDomNode = h(ownerDocument, 'div');
 		this.headerDomNode.className = 'stanza-multi-diff-editor-header';
-		this.headerDomNode.setAttribute('aria-expanded', 'true');
+		this.toggleDomNode = h(ownerDocument, 'button');
+		this.toggleDomNode.type = 'button';
+		this.toggleDomNode.className = 'stanza-multi-diff-editor-header-toggle';
+		this.toggleDomNode.setAttribute('aria-expanded', 'true');
 		const titleDomNode = h(ownerDocument, 'span');
 		titleDomNode.className = 'stanza-multi-diff-editor-title';
 		titleDomNode.textContent = item.label;
 		const labelsDomNode = h(ownerDocument, 'span');
 		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
 		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter((label) => label !== undefined).join(' ↔ ');
-		this.headerDomNode.append(titleDomNode, labelsDomNode);
+		this.toggleDomNode.append(titleDomNode, labelsDomNode);
+		this.headerDomNode.append(this.toggleDomNode);
+		if (createItemActions) {
+			const actionsDomNode = h(ownerDocument, 'div');
+			actionsDomNode.className = 'stanza-multi-diff-editor-file-actions';
+			this.headerDomNode.append(actionsDomNode);
+			this.own(createItemActions(actionsDomNode, item));
+		}
 		this.bodyDomNode = h(ownerDocument, 'div');
 		this.bodyDomNode.className = 'stanza-multi-diff-editor-body';
 		this.rowsDomNode = h(ownerDocument, 'div');
@@ -308,7 +330,9 @@ class MultiDiffSection extends DisposableOwner {
 		this.statusDomNode.className = 'stanza-multi-diff-editor-status';
 		this.bodyDomNode.append(this.rowsDomNode, this.statusDomNode);
 		this.domNode.append(this.headerDomNode, this.bodyDomNode);
-		this.own(addDisposableListener(this.headerDomNode, 'click', toggle));
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
+		this.own(addDisposableListener(this.toggleDomNode, 'click', toggle));
 	}
 
 	public layout(layout: MultiDiffSectionLayout): void {
@@ -319,7 +343,7 @@ class MultiDiffSection extends DisposableOwner {
 
 	public setCollapsed(collapsed: boolean): void {
 		this.domNode.classList.toggle('collapsed', collapsed);
-		this.headerDomNode.setAttribute('aria-expanded', String(!collapsed));
+		this.toggleDomNode.setAttribute('aria-expanded', String(!collapsed));
 		if (collapsed) this.clearRows();
 	}
 
@@ -386,6 +410,7 @@ function validateOptions(options: MultiDiffEditorWidgetOptions): void {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}
 	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
+	if (options.createItemActions !== undefined && typeof options.createItemActions !== 'function') throw new TypeError('Multi-diff editor item actions must be created by a function');
 	const ownerWindow = getWindow(options.container);
 	if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error('Multi-diff editor container must belong to its owner window');
 }

@@ -9,6 +9,8 @@ export interface MultiDiffEditorInputItem {
 	readonly label: string;
 	readonly original: EditorInput;
 	readonly modified: EditorInput;
+	/** Resource opened by the per-file Open File action. Defaults to the modified side. */
+	readonly goToFile?: EditorInput;
 }
 
 export interface MultiDiffEditorInput extends EditorInput {
@@ -28,10 +30,12 @@ export function createMultiDiffEditorInput(resource: URI, items: readonly MultiD
 		}
 		assertTextResourceInput(item.original, 'Multi-diff original input');
 		assertTextResourceInput(item.modified, 'Multi-diff modified input');
+		if (item.goToFile !== undefined) assertTextResourceInput(item.goToFile, 'Multi-diff Open File input');
 		const normalized = Object.freeze({
 			label: item.label.trim(),
 			original: item.original,
 			modified: item.modified,
+			...(item.goToFile ? { goToFile: item.goToFile } : {}),
 		});
 		const key = multiDiffEditorItemKey(normalized);
 		if (keys.has(key)) throw new TypeError(`Duplicate multi-diff comparison '${normalized.label}'`);
@@ -67,7 +71,8 @@ function isMultiDiffEditorInputItem(value: unknown): value is MultiDiffEditorInp
 	return typeof value === 'object' && value !== null &&
 		'label' in value && typeof value.label === 'string' && value.label.trim().length > 0 &&
 		'original' in value && isTextResourceInput(value.original) &&
-		'modified' in value && isTextResourceInput(value.modified);
+		'modified' in value && isTextResourceInput(value.modified) &&
+		(!('goToFile' in value) || value.goToFile === undefined || isTextResourceInput(value.goToFile));
 }
 
 function assertTextResourceInput(value: unknown, owner: string): asserts value is EditorInput {

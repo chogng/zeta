@@ -1,4 +1,5 @@
 import './media/multiDiffEditorPane.css';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { h } from '../../../../base/browser/dom.js';
 import { type IDimension } from '../../../../base/browser/geometry.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
@@ -8,6 +9,10 @@ import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLo
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
 import { type ITextModelService, type TextModelReference } from '../../../../editor/common/services/textModelService.js';
+import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
+import type { IMenuService } from '../../../../platform/actions/common/menuService.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';
@@ -23,6 +28,11 @@ export interface MultiDiffEditorPaneOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showInlineChanges?: boolean;
 	readonly loopChanges?: boolean;
+	readonly fileActions?: {
+		readonly menuService: IMenuService;
+		readonly contextMenuProvider: IContextMenuProvider;
+		readonly contextKeyService?: IContextKeyService;
+	};
 }
 
 interface ResolvedMultiDiffItem {
@@ -163,6 +173,8 @@ class MultiDiffEditorPaneSession extends DisposableOwner {
 					computationService,
 				})),
 			}));
+			const inputsById = new Map(resolved.map((item) => [multiDiffEditorItemKey(item.input), item.input]));
+			const fileActions = options.fileActions;
 			this.editor = this.own(new MultiDiffEditorWidget({
 				container,
 				items,
@@ -174,6 +186,24 @@ class MultiDiffEditorPaneSession extends DisposableOwner {
 				showInlineChanges: options.showInlineChanges,
 				loopChanges: options.loopChanges,
 				ariaLabel: `${label}, ${items.length} files`,
+				...(fileActions ? {
+					createItemActions: (container: HTMLElement, item: MultiDiffEditorItem) => {
+						const input = inputsById.get(item.id);
+						if (!input) throw new RangeError(`Unknown multi-diff item '${item.id}'`);
+						return new MenuWorkbenchToolBar(
+							container,
+							fileActions.menuService,
+							fileActions.contextMenuProvider,
+							MenuId.MultiDiffEditorFileToolbar,
+							{
+								ariaLabel: `${input.label} actions`,
+								contextKeyService: fileActions.contextKeyService,
+								menuOptions: { arg: input.goToFile ?? input.modified },
+								presentation: 'inherit-foreground',
+							},
+						);
+					},
+				} : {}),
 			}));
 		} catch (error) {
 			this.dispose();

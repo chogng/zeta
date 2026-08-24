@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../../base/browser/dom.js';
 import { type DiffComputationRequest, type IDiffComputationService } from '../../../common/diff/diffComputationService.js';
 import { LineDiffKind, type LineDiff } from '../../../common/diff/lineDiff.js';
 import { TextModel } from '../../../common/model/textModel.js';
@@ -32,6 +33,7 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	using firstModel = new DiffModel({ original: firstOriginal, modified: firstModified, computationService });
 	using secondModel = new DiffModel({ original: secondOriginal, modified: secondModified, computationService });
 	await Promise.all([waitForReady(firstModel), waitForReady(secondModel)]);
+	let disposedItemActions = 0;
 	using editor = new MultiDiffEditorWidget({
 		container,
 		items: [
@@ -41,6 +43,19 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 		lineHeight: 20,
 		overscanRowCount: 1,
 		showLineNumbers: false,
+		createItemActions: (container, item) => {
+			const button = h(container.ownerDocument, 'button');
+			button.type = 'button';
+			button.textContent = `Open ${item.label}`;
+			container.append(button);
+			let disposed = false;
+			const dispose = () => {
+				if (disposed) return;
+				disposed = true;
+				disposedItemActions += 1;
+			};
+			return { dispose, [Symbol.dispose]: dispose };
+		},
 	});
 	editor.layout({ width: 480, height: 80 });
 
@@ -51,12 +66,14 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	);
 	assert.equal(editor.domNode.classList.contains('hide-line-numbers'), true);
 	assert.ok(editor.domNode.querySelectorAll('.stanza-diff-editor-row').length < 102);
+	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-file-actions').length, 2);
+	assert.equal(editor.domNode.querySelectorAll('button button').length, 0);
 
-	const firstHeader = requiredElement<HTMLButtonElement>(editor.domNode, '.stanza-multi-diff-editor-header');
+	const firstHeader = requiredElement<HTMLButtonElement>(editor.domNode, '.stanza-multi-diff-editor-header-toggle');
 	editor.collapseAll();
-	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header')].every((header) => header.getAttribute('aria-expanded') === 'false'));
+	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every((header) => header.getAttribute('aria-expanded') === 'false'));
 	editor.expandAll();
-	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header')].every((header) => header.getAttribute('aria-expanded') === 'true'));
+	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every((header) => header.getAttribute('aria-expanded') === 'true'));
 	firstHeader.click();
 	assert.equal(firstHeader.getAttribute('aria-expanded'), 'false');
 	assert.equal(editor.nextChange()?.itemId, 'first');
@@ -67,6 +84,8 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	assert.equal(keyboardNavigation.defaultPrevented, true);
 	assert.equal(editor.currentChange?.itemId, 'second');
 	assert.match(editor.domNode.querySelector('.stanza-multi-diff-editor-accessibility-status')?.textContent ?? '', /Change 2 of 101/);
+	editor.dispose();
+	assert.equal(disposedItemActions, 2);
 	dom.window.close();
 });
 

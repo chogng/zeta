@@ -129,6 +129,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
 	private readonly createLineGutterDecorations: ((resource: URI) => readonly EditorLineGutterDecoration[]) | undefined;
 	private readonly createDecorationSources: ((resource: URI, model: TextModel) => readonly OwnedDecorationSource[]) | undefined;
+	private readonly titleActions: EditorTitleActions | undefined;
 	private readonly titleControl: EditorTitleControl;
 	private readonly welcome: EditorWelcome;
 	private readonly welcomeElement: HTMLElement;
@@ -166,6 +167,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
 		this.createLineGutterDecorations = options.createLineGutterDecorations;
 		this.createDecorationSources = options.createDecorationSources;
+		this.titleActions = options.titleActions;
 		this.element = h(ownerDocument, "section");
 		this.element.className = "zeta-editor-group";
 		this.element.setAttribute("aria-label", "Editor group");
@@ -289,6 +291,13 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			input,
 			configurationService: this.configurationService,
 			contextKeyService: this.contextKeyService,
+			...(this.titleActions ? {
+				actionServices: {
+					menuService: this.titleActions.menuService,
+					contextMenuProvider: this.titleActions.contextMenuProvider,
+					contextKeyService: this.scopedContextKeyService,
+				},
+			} : {}),
 			keybindingService: this.keybindingService,
 			keybindingsResourceService: this.keybindingsResourceService,
 			keyboardLayoutService: this.keyboardLayoutService,

@@ -29,6 +29,7 @@ export const lxiconsLibrary = {
 	ellipsis: register("ellipsis", svg.ellipsis),
 	eraser: register("eraser", svg.eraser),
 	error: register("error", svg.error),
+	fileText: register("file-text", svg.fileText),
 	files: register("files", svg.files),
 	filter: register("filter", svg.filter),
 	fold: register("fold", svg.fold),

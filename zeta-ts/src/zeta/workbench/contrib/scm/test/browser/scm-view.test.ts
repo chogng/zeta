@@ -13,6 +13,27 @@ import { IGitService, type GraphQuery, type GitStatus } from "../../../../../wor
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
+import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
+
+test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
+	const status: GitStatus = {
+		streamInstanceId: "git-input-stream",
+		revision: 1,
+		workspacePath: "/workspace",
+		head: { type: "branch", name: "main", objectId: "1234567890", upstream: undefined },
+		changes: [],
+	};
+	const gitService = {
+		changeFile: async (path: string) => path.endsWith("deleted.ts")
+			? { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "missing" as const } }
+			: { original: { kind: "text" as const, text: "before\n" }, modified: { kind: "text" as const, text: "after\n" } },
+	} as unknown as IGitService;
+	const live = await resolveGitChangeInputs(gitService, status, change("src/working.ts", "unmodified", "modified"), "unstaged");
+	const deleted = await resolveGitChangeInputs(gitService, status, change("src/deleted.ts", "unmodified", "deleted"), "unstaged");
+
+	assert.equal(live.goToFile?.resource.toString(), "file:///workspace/src/working.ts");
+	assert.equal(deleted.goToFile, deleted.original);
+});
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -528,7 +549,12 @@ test("ScmViewPane groups App Server Git status", async () => {
 		viewAllChanges.click();
 		await waitFor(() => opened.length === 4);
 		assert.equal(opened[3].input.contentType, "application/vnd.stanza.editor-multi-diff");
-		assert.equal((opened[3].input as EditorInput & { readonly items: readonly unknown[] }).items.length, 2);
+		const multiDiffInput = opened[3].input as EditorInput & { readonly items: readonly { readonly goToFile?: EditorInput }[] };
+		assert.equal(multiDiffInput.items.length, 2);
+		assert.deepEqual(multiDiffInput.items.map((item) => item.goToFile?.resource.toString()), [
+			"file:///src/working.ts",
+			"file:///both.ts",
+		]);
 		assert.equal(opened[3].options?.pinned, true);
 
 		const stageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage All Changes"]');

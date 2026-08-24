@@ -6,11 +6,13 @@ import { createMultiDiffEditorInput, matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID 
 
 test('Stanza multi-diff inputs keep one caller-owned tab identity and ordered comparisons', () => {
 	const source = URI.parse('zeta-multi-diff:/scm/working?revision=7');
+	const firstFile = { resource: URI.parse('file:///workspace/src/first.ts'), label: 'first.ts' };
 	const input = createMultiDiffEditorInput(source, [
 		{
 			label: 'src/first.ts',
 			original: { resource: URI.parse('git-change:/first/original'), label: 'first.ts (Index)' },
 			modified: { resource: URI.parse('git-change:/first/modified'), label: 'first.ts (Working Tree)' },
+			goToFile: firstFile,
 		},
 		{
 			label: 'src/second.ts',
@@ -23,6 +25,8 @@ test('Stanza multi-diff inputs keep one caller-owned tab identity and ordered co
 	assert.equal(input.resource, source);
 	assert.equal(input.readOnly, true);
 	assert.deepEqual(input.items.map((item) => item.label), ['src/first.ts', 'src/second.ts']);
+	assert.equal(input.items[0]!.goToFile, firstFile);
+	assert.equal(input.items[1]!.goToFile, undefined);
 	assert.equal(matchMultiDiffEditor(input), EditorPaneMatch.Default);
 });
 

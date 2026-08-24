@@ -5,7 +5,7 @@ import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
+import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
 import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
 import { OpenScmMultiDiffEditorAction } from './scmMultiDiffAction.js';
 
@@ -13,6 +13,7 @@ registerAction2(MultiDiffGoToNextChangeAction);
 registerAction2(MultiDiffGoToPreviousChangeAction);
 registerAction2(MultiDiffCollapseAllAction);
 registerAction2(MultiDiffExpandAllAction);
+registerAction2(MultiDiffGoToFileAction);
 registerAction2(OpenScmMultiDiffEditorAction);
 
 registerEditorPane({
@@ -35,6 +36,7 @@ registerEditorPane({
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
 			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
+			fileActions: options.actionServices,
 		});
 	},
 });
