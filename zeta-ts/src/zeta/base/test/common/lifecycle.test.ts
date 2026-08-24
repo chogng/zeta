@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
+	AbstractDisposable,
 	AsyncDisposableStore,
 	DisposableSlot,
 	DisposableStore,
@@ -8,6 +9,22 @@ import {
 	DisposableOwner,
 	toDisposable,
 } from "../../common/lifecycle.js";
+
+test("AbstractDisposable runs leaf cleanup once", () => {
+	class Resource extends AbstractDisposable {
+		public cleanupCalls = 0;
+
+		protected override disposeCore(): void {
+			this.cleanupCalls += 1;
+		}
+	}
+
+	const resource = new Resource();
+	resource.dispose();
+	resource[Symbol.dispose]();
+
+	assert.equal(resource.cleanupCalls, 1);
+});
 
 test("project disposables support explicit disposal and using", () => {
 	let calls = 0;

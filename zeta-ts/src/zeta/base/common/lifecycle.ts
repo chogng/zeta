@@ -97,6 +97,38 @@ export function markAsDisposed(disposable: TrackableDisposable): void {
 }
 
 /**
+ * Provides tracked, idempotent synchronous disposal without owning a resource
+ * collection. Subclasses implement cleanup in `disposeCore`.
+ */
+export abstract class AbstractDisposable implements IDisposable {
+	private lifecycleDisposed = false;
+
+	constructor() {
+		trackDisposable(this);
+	}
+
+	protected get isLifecycleDisposed(): boolean {
+		return this.lifecycleDisposed;
+	}
+
+	public dispose(): void {
+		if (this.lifecycleDisposed) return;
+		this.lifecycleDisposed = true;
+		try {
+			this.disposeCore();
+		} finally {
+			markAsDisposed(this);
+		}
+	}
+
+	public [Symbol.dispose](): void {
+		this.dispose();
+	}
+
+	protected abstract disposeCore(): void;
+}
+
+/**
  * Creates an idempotent project disposable from a cleanup callback.
  */
 export function toDisposable(fn: () => void): IDisposable {
@@ -213,17 +245,16 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 
 /**
  * Optional base class for composite objects that own independently created
- * synchronous resources. Leaf cleanup adapters implement `IDisposable`
- * directly.
+ * synchronous resources. Leaf cleanup adapters extend `AbstractDisposable`.
  *
  * Subclasses register cleanup through `own`, `adopt`, or `defer` and must not
  * override the two disposal entry points.
  */
-export abstract class DisposableOwner implements IDisposable {
+export abstract class DisposableOwner extends AbstractDisposable {
 	private readonly resources = new DisposableStore();
 
 	constructor() {
-		trackDisposable(this);
+		super();
 		setDisposableOwner(this.resources, this);
 	}
 
@@ -239,16 +270,8 @@ export abstract class DisposableOwner implements IDisposable {
 		this.resources.defer(onDispose);
 	}
 
-	dispose(): void {
-		try {
-			this.resources.dispose();
-		} finally {
-			markAsDisposed(this);
-		}
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
+	protected override disposeCore(): void {
+		this.resources.dispose();
 	}
 }
 

@@ -1,7 +1,6 @@
 import {
+	AbstractDisposable,
 	type IDisposable,
-	markAsDisposed,
-	trackDisposable,
 	toDisposable,
 } from "./lifecycle.js";
 
@@ -81,17 +80,16 @@ export function runWithBufferedEvents<T>(mutation: () => T): T {
  * function. Reentrant events are delivered after the current event finishes
  * so every listener observes events in FIFO order.
  */
-export class Emitter<T> implements IDisposable {
+export class Emitter<T> extends AbstractDisposable {
 	private readonly listeners = new Set<ListenerRegistration<T>>();
 	private readonly deliveryQueue: EventDelivery<T>[] = [];
 	private readonly onListenerError: (error: unknown) => void;
 	private readonly onWillAddFirstListener: (() => void) | undefined;
 	private readonly onDidRemoveLastListener: (() => void) | undefined;
 	private delivering = false;
-	private disposed = false;
 
 	readonly event: Event<T> = (listener) => {
-		if (this.disposed) {
+		if (this.isLifecycleDisposed) {
 			throw new ReferenceError("Emitter is already disposed");
 		}
 		if (this.listeners.size === 0) {
@@ -113,15 +111,15 @@ export class Emitter<T> implements IDisposable {
 	};
 
 	constructor(options: EmitterOptions = {}) {
+		super();
 		this.onWillAddFirstListener = options.onWillAddFirstListener;
 		this.onDidRemoveLastListener = options.onDidRemoveLastListener;
 		this.onListenerError =
 			options.onListenerError ?? reportListenerError;
-		trackDisposable(this);
 	}
 
 	fire(event: T): void {
-		if (this.disposed) return;
+		if (this.isLifecycleDisposed) return;
 		const deliveries = [...this.listeners].map(registration => ({ registration, event }));
 		if (activeEventBuffer) {
 			activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });
@@ -150,24 +148,14 @@ export class Emitter<T> implements IDisposable {
 		}
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
+	protected override disposeCore(): void {
 		const hadListeners = this.listeners.size > 0;
-		try {
-			for (const registration of this.listeners) {
-				registration.active = false;
-			}
-			this.listeners.clear();
-			this.deliveryQueue.length = 0;
-			if (hadListeners) this.onDidRemoveLastListener?.();
-		} finally {
-			markAsDisposed(this);
+		for (const registration of this.listeners) {
+			registration.active = false;
 		}
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
+		this.listeners.clear();
+		this.deliveryQueue.length = 0;
+		if (hadListeners) this.onDidRemoveLastListener?.();
 	}
 
 	private reportListenerError(error: unknown): void {

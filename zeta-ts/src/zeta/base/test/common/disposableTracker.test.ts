@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
+	AbstractDisposable,
 	DisposableStore,
 	DisposableOwner,
 	toDisposable,
@@ -9,6 +10,23 @@ import {
 	DisposableTracker,
 	installDisposableTracker,
 } from "../../common/disposableTracker.js";
+
+test("AbstractDisposable closes its tracking record when cleanup throws", () => {
+	class Resource extends AbstractDisposable {
+		protected override disposeCore(): void {
+			throw new Error("cleanup failed");
+		}
+	}
+
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const resource = new Resource();
+
+	assert.equal(tracker.leaks()[0]?.label, "Resource");
+	assert.throws(() => resource.dispose(), /cleanup failed/);
+	tracker.assertNoLeaks();
+	resource.dispose();
+});
 
 test("DisposableTracker reports an unowned disposable until it is disposed", () => {
 	const tracker = new DisposableTracker();
