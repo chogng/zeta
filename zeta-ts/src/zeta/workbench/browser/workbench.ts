@@ -118,7 +118,7 @@ import {
 	bindWorkbenchPartVisibilityContextKeys,
 } from "./contextkeys.js";
 import { WorkbenchThemeController } from "./theme.js";
-import { WorkbenchLayout } from "./layout.js";
+import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
@@ -204,7 +204,6 @@ import { IWorkbenchHostService } from "../services/host/common/workbenchHostServ
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
-import { createWorkbenchProfile, type WorkbenchProfile } from "./workbenchProfile.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
@@ -216,10 +215,19 @@ import { IWorkbenchModeService } from "../services/workbenchMode/common/workbenc
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { IClipboardService } from "../../platform/clipboard/common/clipboardService.js";
 
+const DEFAULT_WORKBENCH_LAYOUT = {
+	parts: {
+		sidebar: false,
+		auxiliarybar: false,
+		agentSidebar: false,
+		panel: false,
+	},
+} as const satisfies WorkbenchDefaultLayout;
+
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
-	readonly profile: WorkbenchProfile;
+	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
@@ -237,7 +245,7 @@ export interface IStartWorkbenchOptions {
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export function startWorkbench({
 	modeId,
-	profile,
+	defaultLayout,
 	api,
 	container,
 	workspace,
@@ -253,7 +261,7 @@ export function startWorkbench({
 }: IStartWorkbenchOptions): Workbench {
 	return new Workbench(
 		modeId,
-		profile,
+		defaultLayout,
 		api,
 		container,
 		workspace,
@@ -271,7 +279,6 @@ export function startWorkbench({
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
 export class Workbench extends DisposableOwner {
-	readonly profile: WorkbenchProfile;
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
@@ -288,7 +295,7 @@ export class Workbench extends DisposableOwner {
 
 	constructor(
 		modeId: WorkbenchModeId,
-		profile: WorkbenchProfile,
+		defaultLayout: WorkbenchDefaultLayout | undefined,
 		api: IRendererHost,
 		workbenchRoot: HTMLElement,
 		workspace: IWorkspace,
@@ -304,8 +311,6 @@ export class Workbench extends DisposableOwner {
 	) {
 		super();
 		const mode = WorkbenchModeRegistry.get(modeId);
-		const normalizedProfile = createWorkbenchProfile(profile);
-		this.profile = normalizedProfile;
 		const services = new ServiceCollection();
 		const instantiationService = new InstantiationService(services);
 		const logService = this.own(new LogService({ sinks: [new ConsoleLogSink()] }));
@@ -628,10 +633,9 @@ export class Workbench extends DisposableOwner {
 		}));
 		services.set(IEditorPart, editor);
 		services.set(IEditorService, new BrowserEditorService(editor));
-		const sidebarCompositeDescriptor = requiredViewContainer(
+		const sidebarCompositeDescriptor = requiredDefaultViewContainer(
 			viewDescriptors,
 			ViewContainerLocation.Sidebar,
-			normalizedProfile.composition.sidebar,
 		);
 		const openSidebarComposite = (
 			compositeId: string,
@@ -700,10 +704,9 @@ export class Workbench extends DisposableOwner {
 		this.own(recentWorkspaces.onDidChange(() => {
 			editor.setWelcomeRecentProjects(welcomeRecentProjects());
 		}));
-		const panelCompositeDescriptor = requiredViewContainer(
+		const panelCompositeDescriptor = requiredDefaultViewContainer(
 			viewDescriptors,
 			ViewContainerLocation.Panel,
-			normalizedProfile.composition.panel,
 		);
 		const openPanelComposite = (
 			compositeId: string,
@@ -737,10 +740,9 @@ export class Workbench extends DisposableOwner {
 			viewDescriptorService: viewDescriptors,
 			localizationService,
 		}));
-		const auxiliaryViewContainer = requiredViewContainer(
+		const auxiliaryViewContainer = requiredDefaultViewContainer(
 			viewDescriptors,
 			ViewContainerLocation.AuxiliaryBar,
-			normalizedProfile.composition.auxiliarybar,
 		);
 		const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
 
@@ -755,7 +757,12 @@ export class Workbench extends DisposableOwner {
 		]);
 		const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
-			profile: normalizedProfile,
+			defaultLayout: {
+				parts: {
+					...DEFAULT_WORKBENCH_LAYOUT.parts,
+					...defaultLayout?.parts,
+				},
+			},
 			storageService: storage,
 		}));
 		workbenchLayout = layout;
@@ -791,8 +798,11 @@ export class Workbench extends DisposableOwner {
 			return composite;
 		};
 		openAuxiliaryComposite(auxiliaryViewContainer.id);
-		if (normalizedProfile.layout.agentSidebar.visible) {
-			openAgentSidebarComposite(normalizedProfile.composition.agentSidebar);
+		if (layout.isPartVisible("agentSidebar")) {
+			openAgentSidebarComposite(requiredDefaultViewContainer(
+				viewDescriptors,
+				ViewContainerLocation.AgentSidebar,
+			).id);
 		}
 		const viewsService = new ViewsService({
 			viewDescriptorService: viewDescriptors,
@@ -903,17 +913,14 @@ export class Workbench extends DisposableOwner {
 	}
 }
 
-function requiredViewContainer(
+function requiredDefaultViewContainer(
 	service: IViewDescriptorService,
 	location: ViewContainerLocation,
-	containerId: string,
 ) {
-	const container = service
-		.getViewContainers(location)
-		.find((candidate) => candidate.id === containerId);
+	const container = service.getDefaultViewContainer(location);
 	if (!container) {
 		throw new Error(
-			`Workbench session references an unavailable ${location} view container: ${containerId}`,
+			`Workbench has no default ${location} view container`,
 		);
 	}
 	return container;

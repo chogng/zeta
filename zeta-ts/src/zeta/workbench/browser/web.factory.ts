@@ -34,7 +34,7 @@ export function createWebWorkbench(
 	installBaseUiStyles();
 	return startWorkbench({
 		modeId,
-		profile: options.profile,
+		defaultLayout: options.defaultLayout,
 		api: options.api,
 		container: options.container,
 		workspace: workspaceFromIdentifier(options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE),
@@ -51,13 +51,12 @@ export function createWebWorkbench(
  */
 export function startWebWorkbench(
 	modeId: WorkbenchModeId,
-	profile: IWebWorkbenchConstructionOptions["profile"],
 ): IDisposable {
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();
 	const instance = createWebWorkbench(modeId, {
 		api: host?.api ?? createDisconnectedRendererApi(),
-		profile,
+		defaultLayout: host?.defaultLayout,
 		workspace: host?.workspace,
 		container: host?.container ??
 			document.querySelector<HTMLElement>("#app") ??

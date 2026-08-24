@@ -20,14 +20,12 @@ import {
 	createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
 import { loadUserThemes } from "./userThemes.js";
-import type { WorkbenchProfile } from "../browser/workbenchProfile.js";
 import { type ElectronRendererCapabilityContribution } from "../../platform/native/electron-browser/rendererApi.js";
 import { switchElectronWorkbenchMode } from "../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js";
 
 /** Starts one Electron renderer for the selected Workbench mode. */
 export async function startElectronWorkbench(
 	modeId: WorkbenchModeId,
-	profile: WorkbenchProfile,
 	rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
 ): Promise<void> {
 	document.title = WorkbenchModeRegistry.get(modeId).title;
@@ -42,7 +40,6 @@ export async function startElectronWorkbench(
 	const userThemes = await loadUserThemes(api.userThemes);
 	const workbench = startWorkbench({
 		modeId,
-		profile,
 		api,
 		container: document.querySelector<HTMLElement>("#app") ?? document.body,
 		workspace: parseWorkspace(await api.workspace.getWorkspace()),

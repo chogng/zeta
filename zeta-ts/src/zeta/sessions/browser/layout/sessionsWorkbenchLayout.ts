@@ -5,7 +5,7 @@ import { Emitter } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { ILayoutOffsetInfo } from "../../../platform/layout/common/layoutService.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
-import { WorkbenchPartView } from "../../../workbench/browser/layout/workbenchPartView.js";
+import { WorkbenchPartView } from "../../../workbench/browser/workbenchPartView.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { type ISessionsLayoutService, type SessionsPartId, type SessionsPartVisibilityChangeEvent, sessionsPartIds } from "../../services/layout/common/sessionsLayoutService.js";
 import { createDefaultSessionsWorkbenchLayoutState, type SessionsWorkbenchLayoutState, SessionsWorkbenchLayoutStateModel } from "./sessionsWorkbenchLayoutState.js";

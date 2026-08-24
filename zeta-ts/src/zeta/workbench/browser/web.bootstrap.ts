@@ -4,25 +4,24 @@ import { connectViteDevRendererApi, type ViteDevRendererCapabilityContribution }
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
 import { startWebWorkbench } from "./web.factory.js";
-import type { WorkbenchProfile } from "./workbenchProfile.js";
 
 declare const __ZETA_WEB_APP_SERVER__: boolean;
 
 /** Starts a Workbench mode after resolving its optional development host. */
-export function startBrowserWorkbench(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
+export function startBrowserWorkbench(modeId: WorkbenchModeId, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[] = []): void {
 	document.title = WorkbenchModeRegistry.get(modeId).title;
-	void startBrowserWorkbenchAsync(modeId, profile, rendererCapabilities);
+	void startBrowserWorkbenchAsync(modeId, rendererCapabilities);
 }
 
-async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, profile: WorkbenchProfile, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
+async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapabilities: readonly ViteDevRendererCapabilityContribution[]): Promise<void> {
 	if (globalThis.zetaWebWorkbenchHost !== undefined || !__ZETA_WEB_APP_SERVER__) {
-		startWebWorkbench(modeId, profile);
+		startWebWorkbench(modeId);
 		return;
 	}
 	const hot = import.meta.hot;
 	if (!hot) {
 		console.error("Zeta Web App Server development mode requires the Vite hot channel");
-		startWebWorkbench(modeId, profile);
+		startWebWorkbench(modeId);
 		return;
 	}
 	let disposeConnectedHost: (() => void) | undefined;
@@ -43,7 +42,7 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, profile: Work
 		console.error("Failed to connect the Zeta Web development host", error);
 	}
 	try {
-		startWebWorkbench(modeId, profile);
+		startWebWorkbench(modeId);
 	} catch (error) {
 		disposeConnectedHost?.();
 		throw error;

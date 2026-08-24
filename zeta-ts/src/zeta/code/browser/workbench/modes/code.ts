@@ -3,8 +3,7 @@ import { createViteDevDebugAdapterCapability } from "../../../../platform/debug/
 import { WorkbenchModeId } from "../../../../product/common/workbenchMode.js";
 import { codeSessionsProfile } from "../../../../sessions/browser/code/codeSessionsProfile.js";
 import { registerSessionsTitlebarEntry } from "../../../../sessions/browser/common/sessionTitlebarEntry.js";
-import { defaultWorkbenchProfile } from "../../../../workbench/browser/defaultWorkbenchProfile.js";
 import { startBrowserWorkbench } from "../../../../workbench/browser/web.bootstrap.js";
 
 registerSessionsTitlebarEntry(codeSessionsProfile.titlebarActionId, "Open Code Sessions", { kind: "page", relativePath: "../sessions/sessions-code.html" });
-startBrowserWorkbench(WorkbenchModeId.Code, defaultWorkbenchProfile, [createViteDevDebugAdapterCapability]);
+startBrowserWorkbench(WorkbenchModeId.Code, [createViteDevDebugAdapterCapability]);

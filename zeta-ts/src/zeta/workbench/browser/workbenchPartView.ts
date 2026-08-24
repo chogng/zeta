@@ -1,8 +1,8 @@
-import { Dimension, type IRectangle } from "../../../base/browser/geometry.js";
-import type { Event } from "../../../base/common/event.js";
-import type { WorkbenchPartId } from "../../services/layout/common/workbenchLayoutService.js";
-import type { WorkbenchPart } from "../part.js";
-import { h } from "../../../base/browser/dom.js";
+import { h } from "../../base/browser/dom.js";
+import { Dimension, type IRectangle } from "../../base/browser/geometry.js";
+import type { Event } from "../../base/common/event.js";
+import type { WorkbenchPartId } from "../services/layout/common/workbenchLayoutService.js";
+import type { WorkbenchPart } from "./part.js";
 
 export interface WorkbenchPartFrameInsets {
 	readonly top: number;

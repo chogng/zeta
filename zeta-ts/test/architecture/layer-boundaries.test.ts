@@ -38,7 +38,8 @@ test("Sessions owns canonical Session management independently from Workbench co
 	assert.equal(existsSync(join(sessionsServicesRoot, "sessions/browser/appServerSessionsManagementService.ts")), true);
 	assert.equal(existsSync(join(sourceRoot, "workbench/services/sessions/common/sessionService.ts")), false);
 	assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchSession.ts")), false);
-	assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchProfile.ts")), true);
+	assert.equal(existsSync(join(sourceRoot, "workbench/browser/defaultWorkbenchProfile.ts")), false);
+	assert.equal(existsSync(join(sourceRoot, "workbench/browser/workbenchProfile.ts")), false);
 	assert.deepEqual(violations, []);
 });
 

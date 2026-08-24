@@ -89,10 +89,6 @@ const { CommandService } = await import(
 const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
 	"../../../platform/instantiation/common/instantiation.js"
 );
-const { defaultWorkbenchProfile } = await import(
-	"../../../workbench/browser/defaultWorkbenchProfile.js"
-);
-
 type WorkbenchPartId =
 	import("../../../workbench/services/layout/browser/layoutService.js").WorkbenchPartId;
 type WorkbenchLayoutInstance =
@@ -424,11 +420,18 @@ test("Workbench sash reset keeps unrelated sidebars at their current widths", ()
 	dom.window.close();
 });
 
-test("Workbench layout applies the shared profile defaults", () => {
+test("Workbench layout applies host defaults without exposing persisted state", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
-		profile: defaultWorkbenchProfile,
+		defaultLayout: {
+			parts: {
+				sidebar: false,
+				auxiliarybar: false,
+				agentSidebar: false,
+				panel: false,
+			},
+		},
 	});
 	harness.layout.layout(new Dimension(1_200, 800));
 

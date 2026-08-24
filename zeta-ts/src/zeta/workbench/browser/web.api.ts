@@ -4,8 +4,8 @@ import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleSe
 import type {
 	IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
-import type { WorkbenchProfile } from "./workbenchProfile.js";
 import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import type { WorkbenchDefaultLayout } from "./layout.js";
 
 /**
  * Capabilities and identity supplied by an embedding Web application.
@@ -17,15 +17,16 @@ export interface IWebWorkbenchHost {
 	readonly api: IRendererHost;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container?: HTMLElement | null;
+	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
 /** Inputs used to create one browser-hosted Workbench instance. */
 export interface IWebWorkbenchConstructionOptions {
 	readonly api: IRendererHost;
-	readonly profile: WorkbenchProfile;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly container: HTMLElement;
+	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly switchWorkbenchMode?: (modeId: WorkbenchModeId) => Promise<void>;
 }
 
