@@ -1,4 +1,4 @@
-import "./media/workspaceTrustEditor.css";
+import "./media/workspaceTrustItems.css";
 import { h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
@@ -14,17 +14,16 @@ interface CurrentWorkspaceTrust {
 	readonly state: WorkspaceTrustState;
 }
 
-/** Editor surface owned by the Workspace contrib for current state and the durable trust allowlist. */
-export class WorkspaceTrustEditor extends DisposableOwner {
+/** Workspace-owned item collection for current trust state and the durable allowlist. */
+export class WorkspaceTrustItems extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	private readonly rendered = this.own(new ResettableDisposableGroup());
 	private active = true;
 
-	constructor(container: HTMLElement, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService, private readonly workspaceContextService?: IWorkspaceContextService) {
+	constructor(document: Document, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService, private readonly workspaceContextService?: IWorkspaceContextService) {
 		super();
-		this.element = h(container.ownerDocument, "div");
+		this.element = h(document, "div");
 		this.element.className = "zeta-workspace-trust-editor";
-		container.append(this.element);
 		this.defer(() => { this.active = false; });
 		if (workspaceContextService) this.own(workspaceContextService.onDidChangeWorkspace(() => { void this.load(); }));
 		void this.load();
@@ -39,7 +38,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		this.element.replaceChildren(loading);
 		try {
 			const snapshot = await this.service.list();
-			const current = this.workspaceContextService ? await this.readCurrentWorkspaceTrust() : Object.freeze([]);
+			const current = this.workspaceContextService ? await this.readCurrentWorkspaceTrust() : undefined;
 			if (!this.active) return;
 			this.render(snapshot, current);
 		} catch (error) {
@@ -50,7 +49,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		}
 	}
 
-	private render(snapshot: WorkspaceTrustSnapshot, current: readonly CurrentWorkspaceTrust[]): void {
+	private render(snapshot: WorkspaceTrustSnapshot, current: CurrentWorkspaceTrust | undefined): void {
 		const document = this.element.ownerDocument;
 		const intro = h(document, "p");
 		intro.className = "zeta-workspace-trust-intro";
@@ -95,12 +94,13 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		this.element.replaceChildren(...(currentPanel ? [intro, note, currentPanel, toolbar, heading, summary, list] : [intro, note, toolbar, heading, summary, list]));
 	}
 
-	private async readCurrentWorkspaceTrust(): Promise<readonly CurrentWorkspaceTrust[]> {
-		const current = currentWorkspaceRoots(this.workspaceContextService?.getWorkspace());
-		return Promise.all(current.map(async folder => ({ ...folder, state: await this.service.read(folder.root) })));
+	private async readCurrentWorkspaceTrust(): Promise<CurrentWorkspaceTrust | undefined> {
+		const current = currentWorkspaceRoot(this.workspaceContextService?.getWorkspace());
+		if (!current) return undefined;
+		return { ...current, state: await this.service.read(current.root) };
 	}
 
-	private renderCurrentWorkspace(snapshot: WorkspaceTrustSnapshot, current: readonly CurrentWorkspaceTrust[]): HTMLElement {
+	private renderCurrentWorkspace(snapshot: WorkspaceTrustSnapshot, current: CurrentWorkspaceTrust | undefined): HTMLElement {
 		const document = this.element.ownerDocument;
 		const panel = h(document, "section");
 		panel.className = "zeta-workspace-trust-current";
@@ -109,41 +109,34 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		heading.className = "zeta-workspace-trust-current-heading";
 		heading.textContent = "Current Workspace";
 		panel.append(heading);
-		if (current.length === 0) {
+		if (!current) {
 			const status = h(document, "p");
 			status.className = "zeta-workspace-trust-current-detail";
-			status.textContent = "No local workspace folder is open, so there is no active Workspace Trust state to manage.";
+			status.textContent = "No single local folder is open, so there is no active Workspace Trust state to manage.";
 			panel.append(status);
 			return panel;
 		}
-		for (const folder of current) {
-			const item = h(document, "article");
-			item.className = "zeta-workspace-trust-entry";
-			const copy = h(document, "div");
-			copy.className = "zeta-workspace-trust-entry-copy";
-			const path = h(document, "p");
-			path.className = "zeta-workspace-trust-current-path";
-			path.textContent = folder.root;
-			path.title = folder.root;
-			const status = h(document, "p");
-			status.className = `zeta-workspace-trust-status ${folder.state}`;
-			status.textContent = folder.state === "trusted" ? "Trusted" : "Restricted";
-			const detail = h(document, "p");
-			detail.className = "zeta-workspace-trust-current-detail";
-			detail.textContent = folder.state === "trusted"
-				? "Workspace capabilities are enabled for this folder."
-				: "Restricted Mode keeps terminals, Git mutations, tasks, executable workspace configuration, and executable language services disabled.";
-			copy.append(path, status, detail);
-			const actions = h(document, "div");
-			actions.className = "zeta-workspace-trust-current-actions";
-			const action = this.rendered.add(new Button(actions, {
-				label: folder.state === "trusted" ? "Revoke Trust" : `Trust ${folder.label}`,
-				presentation: folder.state === "trusted" ? "danger" : "primary",
-				onClick: () => void this.updateCurrentTrust(folder, snapshot.revision, action, item),
-			}));
-			item.append(copy, actions);
-			panel.append(item);
-		}
+
+		const path = h(document, "p");
+		path.className = "zeta-workspace-trust-current-path";
+		path.textContent = current.root;
+		path.title = current.root;
+		const status = h(document, "p");
+		status.className = `zeta-workspace-trust-status ${current.state}`;
+		status.textContent = current.state === "trusted" ? "Trusted" : "Restricted";
+		const detail = h(document, "p");
+		detail.className = "zeta-workspace-trust-current-detail";
+		detail.textContent = current.state === "trusted"
+			? "Workspace capabilities are enabled for this folder."
+			: "Restricted Mode keeps terminals, Git mutations, tasks, executable workspace configuration, and executable language services disabled.";
+		const actions = h(document, "div");
+		actions.className = "zeta-workspace-trust-current-actions";
+		const action = this.rendered.add(new Button(actions, {
+			label: current.state === "trusted" ? "Revoke Trust" : `Trust This ${current.label}`,
+			presentation: current.state === "trusted" ? "danger" : "primary",
+			onClick: () => void this.updateCurrentTrust(current, snapshot.revision, action, panel),
+		}));
+		panel.append(path, status, detail, actions);
 		return panel;
 	}
 
@@ -240,9 +233,10 @@ function compareEntries(left: WorkspaceTrustEntry, right: WorkspaceTrustEntry): 
 	return (left.root ?? left.workspace).localeCompare(right.root ?? right.workspace);
 }
 
-function currentWorkspaceRoots(workspace: ReturnType<IWorkspaceContextService["getWorkspace"]> | undefined): readonly { label: string; root: string }[] {
-	if (!workspace) return Object.freeze([]);
-	return Object.freeze(workspace.folders.flatMap(folder => folder.uri.scheme === "file"
-		? [{ label: workspace.folders.length === 1 ? "This Folder" : folder.name || "Folder", root: folder.uri.fsPath }]
-		: []));
+function currentWorkspaceRoot(workspace: ReturnType<IWorkspaceContextService["getWorkspace"]> | undefined): { label: string; root: string } | undefined {
+	if (!workspace) return undefined;
+	if (workspace.folders.length !== 1) return undefined;
+	const uri = workspace.folders[0]?.uri;
+	if (!uri || uri.scheme !== "file") return undefined;
+	return { label: "Folder", root: uri.fsPath };
 }

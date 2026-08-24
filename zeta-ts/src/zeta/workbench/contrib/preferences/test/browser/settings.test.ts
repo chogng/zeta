@@ -65,7 +65,7 @@ const { UnavailableUserThemeService } = await import("../../../../../workbench/c
 const { WorkbenchConfigurationService } = await import("../../../../../workbench/services/configuration/browser/configurationService.js");
 const { WorkspaceContextService } = await import("../../../../../workbench/services/workspaces/browser/workspaceContextService.js");
 const { SettingsEditorContribution } = await import("../../../../../workbench/contrib/preferences/browser/settingsEditor.contribution.js");
-const { SettingsLayout } = await import("../../../../../workbench/contrib/preferences/browser/settingsLayout.js");
+const { SettingsLayout, settingsResourceItemId } = await import("../../../../../workbench/contrib/preferences/browser/settingsLayout.js");
 const { SettingsTree } = await import("../../../../../workbench/contrib/preferences/browser/settingsTree.js");
 const { SettingsTreeModel } = await import("../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js");
 const { CommandService } = await import("../../../../../workbench/services/commands/common/commandService.js");
@@ -191,6 +191,7 @@ test('Settings layout projects stable groups and searchable item IDs', () => {
 		'editor.lineNumbers',
 	]);
 	assert.deepEqual(layout.nodes[0]?.children?.[1]?.element.keywords, ['editor.lineNumbers', 'gutter']);
+	assert.equal(settingsResourceItemId('models', 'openai', 'gpt-5.6/sol'), 'models.item.openai.gpt-5%2E6%2Fsol');
 	assert.throws(() => new SettingsLayout('editor', [{
 		id: 'display',
 		title: 'Display',
@@ -201,6 +202,12 @@ test('Settings layout projects stable groups and searchable item IDs', () => {
 		],
 	}]), /Duplicate Settings item ID/);
 	assert.throws(() => new SettingsLayout('', []), /section ID must not be empty/);
+	assert.throws(() => new SettingsLayout('models', [{
+		id: 'catalog',
+		title: 'Catalog',
+		description: '',
+		settings: [{ id: 'models.item.openai\0gpt', title: 'Invalid', description: '' }],
+	}]), /must not contain control characters/);
 });
 
 test("Settings overlay opens, closes, and restores focus", () => {
@@ -246,6 +253,9 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	assert.equal(ownerDocument.activeElement, search);
 	const navigationTree = root.querySelector<HTMLElement>(".zeta-settings-navigation-tree");
 	assert.ok(navigationTree);
+	assert.equal(navigationTree.classList.contains('zeta-settings-toc-tree'), true);
+	const contentTree = root.querySelector<HTMLElement>('.zeta-settings-content-tree');
+	assert.ok(contentTree);
 	assert.equal(navigationTree.getAttribute("role"), "tree");
 	assert.equal(navigationTree.getAttribute("aria-label"), "Settings categories");
 	assert.equal(navigationTree.classList.contains("zeta-tree-selection-subtle"), true);
@@ -263,17 +273,11 @@ test("Settings overlay opens, closes, and restores focus", () => {
 			"Editor",
 			"Languages",
 			"Display Language",
-			"Agents",
-			"Models",
 			"Git",
 			"Worktrees",
 			"Marketplace",
 			"Plugins",
 			"Connectors",
-			"Rules",
-			"Skills & Subagents",
-			"Tools & MCPs",
-			"Hooks",
 			"Browser",
 			"Tabs",
 			"Indexing",
@@ -281,6 +285,10 @@ test("Settings overlay opens, closes, and restores focus", () => {
 			"Documentation",
 		],
 	);
+	const agentsGroup = root.querySelector<HTMLElement>("[data-settings-group-id='agents']");
+	assert.ok(agentsGroup);
+	assert.equal(agentsGroup.textContent, "Agents");
+	assert.equal(agentsGroup.closest(".zeta-tree-row")?.getAttribute("aria-expanded"), "false");
 	const generalRow = navigationItems[0].closest<HTMLElement>(".zeta-tree-row");
 	assert.equal(generalRow?.getAttribute("aria-selected"), "true");
 	assert.equal(generalRow?.getAttribute("aria-expanded"), "false");
@@ -291,7 +299,10 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	);
 	assert.equal(root.querySelector("[data-tree-id='general']")?.getAttribute("aria-expanded"), "true");
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
+	assert.ok(root.querySelector(".zeta-general-settings.zeta-configuration-settings"));
+	assert.equal(root.querySelectorAll(".zeta-general-settings-list.zeta-configuration-settings-list").length, 4);
 	assert.equal(root.querySelectorAll(".zeta-general-setting").length, 10);
+	assert.equal(root.querySelectorAll(".zeta-general-setting.zeta-configuration-setting").length, 10);
 	root.querySelector<HTMLElement>("[data-settings-target-id='general.group.mode']")?.click();
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Workbench Mode");
 	assert.equal(root.querySelectorAll(".zeta-general-settings-group").length, 1);
@@ -300,6 +311,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
 	assert.equal(root.querySelectorAll(".zeta-general-settings-group").length, 4);
 	root.querySelector<HTMLElement>("[data-settings-section-id='editor']")?.click();
+	assert.equal(root.querySelector('.zeta-settings-content-tree'), contentTree);
 	for (const target of root.querySelectorAll<HTMLElement>("[data-settings-target-id^='editor.']")) {
 		const targetId = target.dataset.settingsTargetId;
 		assert.ok(targetId);
@@ -344,11 +356,32 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	assert.equal(root.querySelector(".zeta-settings-page")?.classList.contains("has-navigation-target"), false);
 	assert.equal(root.querySelectorAll(".zeta-editor-settings-group").length, 10);
 
+	root.querySelector<HTMLElement>("[data-settings-group-id='agents']")?.closest<HTMLElement>(".zeta-tree-row")?.click();
+	assert.equal(root.querySelector("[data-tree-id='group.agents']")?.getAttribute("aria-expanded"), "true");
+	assert.deepEqual(
+		["agents", "teams", "agent-defaults", "models", "rules", "skills", "tools-and-mcps", "hooks"]
+			.map(sectionId => root.querySelector<HTMLElement>(`[data-settings-section-id='${sectionId}']`)?.textContent),
+		["My Agents", "Teams", "Defaults", "Models", "Rules", "Skills", "Tools & MCPs", "Hooks"],
+	);
+	assert.equal(settings.activeSectionId, "editor");
+	assert.equal(root.querySelector("[data-tree-id='editor']")?.getAttribute("aria-selected"), "true");
+	assert.equal(root.querySelector("[data-tree-id='group.agents']")?.getAttribute("aria-selected"), "false");
+	root.querySelector<HTMLElement>("[data-settings-section-id='teams']")?.click();
+	assert.equal(root.querySelector('.zeta-settings-content-tree'), contentTree);
+	assert.equal(settings.activeSectionId, "teams");
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Teams");
+	assert.ok(root.querySelector("[data-settings-tree-group-id='teams.group.multi-agent-teams']"));
+	root.querySelector<HTMLElement>("[data-settings-group-id='agents']")?.closest<HTMLElement>(".zeta-tree-row")?.click();
+	assert.equal(settings.activeSectionId, "teams");
+	assert.equal(root.querySelector("[data-tree-id='group.agents']")?.getAttribute("aria-selected"), "true");
+	root.querySelector<HTMLElement>("[data-settings-group-id='agents']")?.closest<HTMLElement>(".zeta-tree-row")?.click();
+	assert.equal(root.querySelector("[data-tree-id='teams']")?.getAttribute("aria-selected"), "true");
+
 	search.value = "model";
 	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>("[data-settings-section-id]")].map((item) => item.textContent),
-		["Models", "Tools & MCPs"],
+		["Chat", "My Agents", "Defaults", "Models", "Tools & MCPs", "Hooks", "Tabs", "Experimental"],
 	);
 	assert.deepEqual(
 		[...root.querySelectorAll<HTMLElement>(".zeta-settings-navigation-tree .find-match [data-settings-section-id]")]
@@ -358,6 +391,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	const modelsItem = root.querySelector<HTMLElement>("[data-settings-section-id='models']");
 	assert.ok(modelsItem);
 	modelsItem.click();
+	assert.equal(root.querySelector('.zeta-settings-content-tree'), contentTree);
 	assert.equal(settings.activeSectionId, "models");
 	assert.equal(modelsItem.closest(".zeta-tree-row")?.getAttribute("aria-selected"), "true");
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
@@ -365,7 +399,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 		root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
 		"models",
 	);
-	assert.ok(root.querySelector(".zeta-model-settings"));
+	assert.ok(root.querySelector(".zeta-models-settings"));
 
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -662,7 +696,7 @@ test("Settings domains without writable services render honest capability overvi
 		themeService: disposables.add(new ThemeService(darkColorTheme)),
 		userThemeService: UnavailableUserThemeService,
 	}));
-	const overviewSections = ["chat", "user", "agents", "git", "worktrees", "rules", "skills-and-subagents", "tools-and-mcps", "hooks", "browser", "tabs", "experimental", "documentation"];
+	const overviewSections = ["chat", "user", "agents", "teams", "agent-defaults", "git", "worktrees", "rules", "skills", "tools-and-mcps", "hooks", "browser", "tabs", "experimental", "documentation"];
 	for (const sectionId of overviewSections) {
 		settings.open(sectionId);
 		assert.ok(root.querySelectorAll(".zeta-settings-overview-item").length > 0, sectionId);
@@ -740,38 +774,46 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 
 	settings.open("models");
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+	assert.equal(root.querySelector("[data-tree-id='models']")?.getAttribute('aria-selected'), 'true');
 	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["GPT-5.6 Sol", "Claude Opus 5", "GPT-5.6"]);
 	assert.equal(root.querySelector(".zeta-model-settings-access-badge")?.textContent, "ChatGPT subscription");
 	assert.equal(root.querySelector(".zeta-model-settings-status")?.textContent, "3 models");
 	assert.equal(root.querySelectorAll(".zeta-model-settings-row > .zeta-setting-item-actions").length, 3);
 	assert.equal(root.querySelectorAll('.zeta-model-settings-row[data-settings-item-kind="setting"]').length, 3);
-	root.querySelector<HTMLButtonElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"] .zeta-setting-item-actions-trigger')?.click();
+	const firstRow = [...root.querySelectorAll<HTMLElement>('.zeta-model-settings-row')]
+		.find(row => row.querySelector('h4')?.textContent === 'GPT-5.6 Sol');
+	assert.ok(firstRow);
+	assert.equal(firstRow.dataset.settingsTreeItemId, 'models.item.openai.gpt-5%2E6-sol');
+	firstRow.querySelector<HTMLButtonElement>('.zeta-setting-item-actions-trigger')?.click();
 	assert.deepEqual(settingActions.map(action => ({ label: action.label, enabled: action.enabled })), [
 		{ label: "Reset Setting", enabled: false },
 		{ label: "Copy Setting ID", enabled: true },
 	]);
 	settingActions[1]?.run();
 	await Promise.resolve();
-	assert.deepEqual(copiedSettingIds, ["openai/gpt-5.6-sol"]);
+	assert.deepEqual(copiedSettingIds, ["models.item.openai.gpt-5%2E6-sol"]);
 	hideSettingActions();
-	const firstRow = root.querySelector<HTMLElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"]')!;
 	const firstToggle = firstRow.querySelector<HTMLInputElement>('input[role="switch"]')!;
 	firstToggle.click();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual([...hidden], ["openai/gpt-5.6-sol"]);
-	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"]'), firstRow);
+	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-tree-item-id="models.item.openai.gpt-5%2E6-sol"]'), firstRow);
 	assert.equal(firstRow.querySelector('input[role="switch"]'), firstToggle);
-	root.querySelector<HTMLButtonElement>('.zeta-model-settings-row[data-settings-item-id="openai/gpt-5.6-sol"] .zeta-setting-item-actions-trigger')?.click();
+	firstRow.querySelector<HTMLButtonElement>('.zeta-setting-item-actions-trigger')?.click();
 	assert.equal(settingActions[0]?.enabled, true);
 	settingActions[0]?.run();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual([...hidden], []);
 
-	const search = root.querySelector<HTMLInputElement>(".zeta-model-settings-search input")!;
-	const claudeRow = root.querySelector<HTMLElement>('.zeta-model-settings-row[data-settings-item-id="anthropic/claude-opus-5"]')!;
+	const search = root.querySelector<HTMLInputElement>('.zeta-settings-search input')!;
+	const claudeRow = [...root.querySelectorAll<HTMLElement>('.zeta-model-settings-row')]
+		.find(row => row.querySelector('h4')?.textContent === 'Claude Opus 5')!;
 	search.value = "anthropic";
 	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
 	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["Claude Opus 5"]);
+	search.value = "";
+	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-tree-item-id="models.item.anthropic.claude-opus-5"]'), claudeRow);
 	catalog = [...catalog, {
 		model: { provider: "google", model: "gemini-3.6-flash" },
 		displayName: "Gemini 3.6 Flash",
@@ -781,9 +823,8 @@ test("Models settings show catalog metadata and persist picker visibility", asyn
 	root.querySelector<HTMLButtonElement>(".zeta-model-settings-refresh")?.click();
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	assert.equal(refreshes, 1);
-	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-item-id="anthropic/claude-opus-5"]'), claudeRow);
-	search.value = "";
-	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
+	assert.equal(root.querySelector("[data-tree-id='models']")?.getAttribute('aria-selected'), 'true');
+	assert.equal(root.querySelector('.zeta-model-settings-row[data-settings-tree-item-id="models.item.anthropic.claude-opus-5"]'), claudeRow);
 	assert.deepEqual([...root.querySelectorAll(".zeta-model-settings-copy h4")].map(element => element.textContent), ["GPT-5.6 Sol", "Claude Opus 5", "GPT-5.6", "Gemini 3.6 Flash"]);
 });
 
@@ -900,7 +941,10 @@ test("Editor settings render supported controls and persist typed preferences", 
 
 	settings.open("editor");
 	assert.deepEqual([...root.querySelectorAll(".zeta-editor-settings-group h4")].map(element => element.textContent), ["Editor selection", "Typography", "Display", "Minimap", "Editing", "Code intelligence", "Find and replace", "Workspace search", "Diff editor", "Files"]);
+	assert.ok(root.querySelector(".zeta-editor-settings.zeta-configuration-settings"));
+	assert.equal(root.querySelectorAll(".zeta-editor-settings-list.zeta-configuration-settings-list").length, 10);
 	assert.equal(root.querySelectorAll(".zeta-editor-setting").length, 40);
+	assert.equal(root.querySelectorAll(".zeta-editor-setting.zeta-configuration-setting").length, 40);
 	assert.equal(root.querySelectorAll(".zeta-editor-setting > .zeta-setting-item-actions").length, 38);
 	assert.equal(root.querySelectorAll(".zeta-editor-informational-setting > .zeta-setting-item-actions").length, 0);
 	assert.equal(root.querySelectorAll('.zeta-editor-setting[data-settings-item-kind="setting"]').length, 38);
@@ -910,6 +954,8 @@ test("Editor settings render supported controls and persist typed preferences", 
 	const wordWrap = root.querySelector<HTMLElement>('[data-configuration-key="editor.wordWrap"]')!;
 	const minimap = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.minimap.enabled"]')!;
 	const minimapRow = minimap.closest<HTMLElement>('.zeta-editor-setting')!;
+	const minimapCopy = minimapRow.querySelector<HTMLElement>('.zeta-editor-setting-copy')!;
+	const minimapToggle = minimap.closest<HTMLElement>('.zeta-switch')!;
 	const lineNumbers = root.querySelector<HTMLInputElement>('[data-configuration-key="editor.lineNumbers"]')!;
 	const lineNumbersRow = lineNumbers.closest<HTMLElement>('.zeta-editor-setting')!;
 	const indentation = root.querySelector<HTMLElement>('[data-configuration-key="editor.indentation"]')!;
@@ -946,9 +992,14 @@ test("Editor settings render supported controls and persist typed preferences", 
 	tabSize.dispatchEvent(new browserEnvironment.window.Event("change", { bubbles: true }));
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 	minimap.click();
+	assert.equal(minimap.checked, false);
 	assert.equal(minimap.disabled, true);
+	assert.equal(minimapToggle.classList.contains('busy'), true);
+	assert.equal(minimapToggle.classList.contains('disabled'), false);
 	assert.equal(lineNumbers.disabled, false);
+	assert.equal(root.querySelector('[data-configuration-key="editor.minimap.enabled"]'), minimap);
 	assert.equal(root.querySelector('[data-settings-item-id="editor.minimap.enabled"]'), minimapRow);
+	assert.equal(minimapRow.querySelector('.zeta-editor-setting-copy'), minimapCopy);
 	assert.equal(root.querySelector('[data-settings-item-id="editor.lineNumbers"]'), lineNumbersRow);
 	await new Promise(resolve => globalThis.setTimeout(resolve, 0));
 
@@ -957,8 +1008,11 @@ test("Editor settings render supported controls and persist typed preferences", 
 	assert.equal(configuration.getValue(CodeEditorConfiguration.tabSize), 2);
 	assert.equal(configuration.getValue(CodeEditorConfiguration.minimapEnabled), false);
 	assert.equal(minimap.disabled, false);
+	assert.equal(minimapToggle.classList.contains('busy'), false);
+	assert.equal(root.querySelector('[data-configuration-key="editor.minimap.enabled"]'), minimap);
 	assert.equal(root.querySelector('[data-settings-item-id="editor.minimap.enabled"]'), minimapRow);
-	assert.equal(root.querySelector(".zeta-editor-settings-status")?.textContent, "Setting saved.");
+	assert.equal(root.querySelector<HTMLElement>('.zeta-configuration-settings-status')?.hidden, true);
+	assert.equal(root.querySelector('.zeta-configuration-settings-status')?.textContent, '');
 });
 
 test("Connector settings project catalog state and invoke typed connect and disconnect actions", async () => {
@@ -1129,7 +1183,7 @@ test("Plugin settings project layered authority and send exact-package commands"
 	settings.open("plugins");
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.equal(root.querySelector(".zeta-integration-heading h4")?.textContent, "acme/github · 1.0.0");
-	assert.ok(root.querySelector('[data-settings-item-id="plugins.acme/github@1.0.0"][data-settings-item-kind="resource"]'));
+	assert.ok(root.querySelector('[data-settings-item-id="plugins.item.acme%2Fgithub.1%2E0%2E0"][data-settings-item-kind="resource"]'));
 	const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-button")];
 	assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Remove legacy installation"]);
 	assert.equal(buttons[2]?.classList.contains("zeta-button-danger"), true);

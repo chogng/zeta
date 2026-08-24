@@ -120,12 +120,13 @@ export class SettingsTree<T> extends DisposableOwner {
 			rendered.group = group;
 		} else {
 			if (previous) this.disposeRenderedNode(previous);
-			rendered = this.createGroup(group);
+			rendered = this.createGroup(node, group);
 			this.rendered.set(group.id, rendered);
 		}
 		rendered.heading.textContent = group.title;
 		rendered.description.textContent = group.description;
 		rendered.element.classList.toggle("collapsed", node.collapsed);
+		rendered.element.classList.toggle("is-navigation-target", this.model.navigationTarget === group.id);
 		rendered.element.dataset.settingsTreeGroupId = group.id;
 		const children = node.collapsed
 			? []
@@ -134,16 +135,24 @@ export class SettingsTree<T> extends DisposableOwner {
 		return rendered.element;
 	}
 
-	private createGroup(group: SettingsTreeGroup): RenderedSettingsGroup<T> {
+	private createGroup(node: ObjectTreeNode<SettingsTreeElement<T>>, group: SettingsTreeGroup): RenderedSettingsGroup<T> {
 		const document = this.element.ownerDocument;
 		const element = h(document, "section");
-		element.className = this.options.groupClassName;
+		element.className = `zeta-settings-tree-group ${this.options.groupClassName}`;
 		const heading = h(document, "h4");
 		heading.className = "zeta-settings-tree-group-title";
 		const description = h(document, "p");
 		description.className = `zeta-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 		const items = h(document, "div");
 		items.className = this.options.itemsClassName;
+		const sectionId = settingsSectionId(node);
+		if (!node.parent || node.parent.element === undefined) {
+			element.classList.add("is-section-root", `zeta-${sectionId}-settings`, "zeta-configuration-settings");
+		} else {
+			element.classList.add(`zeta-${sectionId}-settings-group`);
+			description.classList.add(`zeta-${sectionId}-settings-group-description`);
+			items.classList.add(`zeta-${sectionId}-settings-list`);
+		}
 		element.append(heading, description, items);
 		return { kind: "group", element, heading, description, items, group };
 	}
@@ -152,6 +161,12 @@ export class SettingsTree<T> extends DisposableOwner {
 		if (rendered.kind === "item") this.options.disposeItem?.(rendered.item, rendered.element);
 		rendered.element.remove();
 	}
+}
+
+function settingsSectionId<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): string {
+	let current = node;
+	while (current.parent?.element !== undefined) current = current.parent;
+	return current.element.id;
 }
 
 function reconcileSettingsChildren(container: HTMLElement, children: readonly HTMLElement[]): void {

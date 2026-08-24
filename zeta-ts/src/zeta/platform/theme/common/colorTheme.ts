@@ -6,6 +6,7 @@ import "./colors/collaborationColors.js";
 import * as componentColors from "./colors/componentColors.js";
 import * as editorColors from "./colors/editorColors.js";
 import * as filesColors from "./colors/filesColors.js";
+import * as settingsColors from "./colors/settingsColors.js";
 import * as terminalColors from "./colors/terminalColors.js";
 import * as tuiColors from "./colors/tuiColors.js";
 import * as workbenchColors from "./colors/workbenchColors.js";
@@ -69,6 +70,8 @@ export const ColorId = Object.freeze({
 	quickInputBackdropBackground: componentColors.quickInputBackdropBackground,
 	textCodeBlockBackground: componentColors.textCodeBlockBackground,
 	searchMatchBackground: componentColors.searchMatchBackground,
+	settingsItemBackground: settingsColors.itemBackground,
+	settingsItemSeparator: settingsColors.itemSeparator,
 	chatTabBackground: chatColors.chatTabBackground,
 	emptyExplorerOpenFolderBackground: filesColors.emptyExplorerOpenFolderBackground,
 	emptyExplorerOpenFolderHoverBackground: filesColors.emptyExplorerOpenFolderHoverBackground,

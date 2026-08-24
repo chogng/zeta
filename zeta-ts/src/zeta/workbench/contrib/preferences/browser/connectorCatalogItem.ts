@@ -1,4 +1,4 @@
-import "./media/connectorSettings.css";
+import "./media/integrationItems.css";
 import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
@@ -6,18 +6,17 @@ import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorSer
 import { setSettingsItemIdentity } from "./settingsItem.js";
 
 /** Settings-owned projection of Connector catalog and credential actions. */
-export class ConnectorSettingsPane extends DisposableOwner {
+export class ConnectorCatalogItem extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	private readonly document: Document;
 	private readonly rows = this.own(new ResettableDisposableGroup());
 	private loadGeneration = 0;
 
-	constructor(container: HTMLElement, private readonly connectors: IConnectorService) {
+	constructor(document: Document, private readonly connectors: IConnectorService) {
 		super();
-		this.document = container.ownerDocument;
+		this.document = document;
 		this.element = h(this.document, "div");
 		this.element.className = "zeta-integration-settings";
-		container.append(this.element);
 		this.own(connectors.onDidChange(() => void this.reload()));
 		void this.reload();
 		this.defer(() => this.element.remove());

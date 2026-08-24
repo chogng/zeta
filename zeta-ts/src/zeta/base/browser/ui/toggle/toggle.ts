@@ -18,6 +18,8 @@ export class Toggle extends DisposableOwner {
 	readonly input: HTMLInputElement;
 	protected readonly contentElement: HTMLSpanElement | undefined;
 	private readonly _onDidChange = this.own(new Emitter<boolean>());
+	private enabledState: boolean;
+	private busyState = false;
 	readonly onDidChange: Event<boolean> = this._onDidChange.event;
 
 	constructor(container: HTMLElement, options: ToggleOptions) {
@@ -32,7 +34,8 @@ export class Toggle extends DisposableOwner {
 		this.input = input;
 		input.type = "checkbox";
 		input.checked = options.checked ?? false;
-		input.disabled = options.disabled === true;
+		this.enabledState = options.disabled !== true;
+		input.disabled = !this.enabledState;
 		if (options.ariaLabel) input.setAttribute("aria-label", options.ariaLabel);
 		element.append(input);
 		const content = options.content ?? (options.label ? createText(ownerDocument, options.label) : undefined);
@@ -64,14 +67,24 @@ export class Toggle extends DisposableOwner {
 	get checked(): boolean { return this.input.checked; }
 
 	set checked(value: boolean) {
+		if (value === this.input.checked) return;
 		this.input.checked = value;
 		this.syncState();
 	}
 
-	get enabled(): boolean { return !this.input.disabled; }
+	get enabled(): boolean { return this.enabledState; }
 
 	set enabled(value: boolean) {
-		this.input.disabled = !value;
+		if (value === this.enabledState) return;
+		this.enabledState = value;
+		this.syncState();
+	}
+
+	get busy(): boolean { return this.busyState; }
+
+	set busy(value: boolean) {
+		if (value === this.busyState) return;
+		this.busyState = value;
 		this.syncState();
 	}
 
@@ -84,8 +97,12 @@ export class Toggle extends DisposableOwner {
 	}
 
 	protected syncState(): void {
+		this.input.disabled = !this.enabledState || this.busyState;
 		this.element.classList.toggle("checked", this.input.checked);
-		this.element.classList.toggle("disabled", this.input.disabled);
+		this.element.classList.toggle("disabled", !this.enabledState);
+		this.element.classList.toggle("busy", this.busyState);
+		if (this.busyState) this.input.setAttribute("aria-busy", "true");
+		else this.input.removeAttribute("aria-busy");
 		if (this.input.getAttribute("role") === "switch") {
 			this.input.setAttribute("aria-checked", String(this.input.checked));
 		}

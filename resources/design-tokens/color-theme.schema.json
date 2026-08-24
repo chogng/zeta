@@ -148,6 +148,8 @@
           "editor.semanticToken.operatorForeground",
           "files.emptyExplorerOpenFolderBackground",
           "files.emptyExplorerOpenFolderHoverBackground",
+          "settings.itemBackground",
+          "settings.itemSeparator",
           "sectionHeader.foreground",
           "workbench.background",
           "editor.background",

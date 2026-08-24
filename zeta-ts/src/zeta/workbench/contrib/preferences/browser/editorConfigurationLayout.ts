@@ -1,4 +1,4 @@
-import './media/editorSettings.css';
+import './media/editorConfiguration.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -9,33 +9,32 @@ import { EditorSelectionConfiguration } from '../../../common/editorSelectionCon
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { WorkspaceSearchConfiguration } from '../../search/common/searchConfiguration.js';
 import { booleanSetting, type ConfigurationSettingsGroupDescriptor, informationSetting, numberSetting, selectSetting, textSetting } from '../common/settingsDescriptors.js';
-import { ConfigurationSettingsPane } from './configurationSettings.js';
+import { ConfigurationItemsContribution } from './configurationItems.js';
 
-interface EditorSettingsPaneOptions {
+interface EditorConfigurationContributionOptions {
 	readonly clipboardService: IClipboardService;
 	readonly configurationService: IConfigurationService;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly contextViewProvider: IContextViewProvider;
+	readonly onStatus: (message: string, isError: boolean) => void;
 }
 
-const EditorSettingsNote = 'Workspace search defaults update immediately. Editor and diff presentation changes apply when that editor is opened.';
-
 /** Product settings declarations for Stanza-backed code editors. */
-export class EditorSettingsPane extends ConfigurationSettingsPane {
-	constructor(container: HTMLElement, options: EditorSettingsPaneOptions) {
-		super(container, {
+export class EditorConfigurationContribution extends ConfigurationItemsContribution {
+	constructor(document: Document, options: EditorConfigurationContributionOptions) {
+		super('editor', document, {
 			clipboardService: options.clipboardService,
 			configurationService: options.configurationService,
 			contextMenuProvider: options.contextMenuProvider,
 			contextViewProvider: options.contextViewProvider,
-			groups: EditorSettingsGroups,
-			note: EditorSettingsNote,
+			groups: EditorConfigurationGroups,
+			onStatus: options.onStatus,
 			presentation: 'editor',
 		});
 	}
 }
 
-const EditorSettingsGroups: readonly ConfigurationSettingsGroupDescriptor[] = [
+const EditorConfigurationGroups: readonly ConfigurationSettingsGroupDescriptor[] = [
 	{
 		id: 'selection',
 		title: 'Editor selection',

@@ -10,7 +10,7 @@ import type { IDialogService } from '../../../../platform/dialogs/common/dialogs
 import { ToolSearchSettingId, type IToolSearchService, type ToolSearchEmbeddingStatus } from '../../../../platform/toolSearch/common/toolSearchService.js';
 import { SettingsItemActions } from './settingsItemActions.js';
 
-interface IndexingSettingsPaneOptions {
+interface SearchIndexConfigurationItemsOptions {
 	readonly clipboardService: IClipboardService;
 	readonly codeIndexService: ICodeIndexService;
 	readonly contextMenuProvider: IContextMenuProvider;
@@ -19,17 +19,16 @@ interface IndexingSettingsPaneOptions {
 }
 
 /** Owns Tool Search and semantic code-index settings independently of the Settings shell. */
-export class IndexingSettingsPane extends DisposableOwner {
+export class SearchIndexConfigurationItems extends DisposableOwner {
 	public readonly element: HTMLDivElement;
 	private readonly renderBindings = this.own(new ResettableDisposableGroup());
 	private active = true;
 	private renderRevision = 0;
 
-	constructor(container: HTMLElement, private readonly options: IndexingSettingsPaneOptions) {
+	constructor(document: Document, private readonly options: SearchIndexConfigurationItemsOptions) {
 		super();
-		this.element = h(container.ownerDocument, 'div');
+		this.element = h(document, 'div');
 		this.element.className = 'zeta-indexing-settings';
-		container.append(this.element);
 		this.defer(() => {
 			this.active = false;
 			this.renderRevision += 1;

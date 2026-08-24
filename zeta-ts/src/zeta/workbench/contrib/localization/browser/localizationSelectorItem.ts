@@ -10,7 +10,7 @@ import { setSettingsItemIdentity } from "../../preferences/browser/settingsItem.
 import { SettingsItemActions } from "../../preferences/browser/settingsItemActions.js";
 
 /** Workbench contribution for selecting and installing client-local display languages. */
-export class LocalizationSettingsPane extends DisposableOwner {
+export class LocalizationSelectorItem extends DisposableOwner {
 	readonly element: HTMLElement;
 	private readonly document: Document;
 	private readonly localization: ILocalizationService;
@@ -23,7 +23,7 @@ export class LocalizationSettingsPane extends DisposableOwner {
 	private readonly rendered = this.own(new ResettableDisposableGroup());
 
 	constructor(
-		container: HTMLElement,
+		document: Document,
 		localization: ILocalizationService,
 		localeService: ILocaleService,
 		languagePacks: ILanguagePackService,
@@ -34,12 +34,11 @@ export class LocalizationSettingsPane extends DisposableOwner {
 		this.localization = localization;
 		this.localeService = localeService;
 		this.languagePacks = languagePacks;
-		this.document = container.ownerDocument;
+		this.document = document;
 		this.element = h(this.document, "section");
 		this.element.className = "zeta-localization-settings";
 		this.status = h(this.document, "p");
 		this.status.className = "zeta-settings-message";
-		container.append(this.element);
 		this.own(localization.onDidChange(() => this.render()));
 		this.own(languagePacks.onDidChange(() => { void this.loadLanguagePackPackages(); }));
 		void Promise.all([localization.whenReady, localeService.whenReady]).then(() => this.render());
@@ -49,10 +48,6 @@ export class LocalizationSettingsPane extends DisposableOwner {
 
 	private render(): void {
 		this.rendered.clear();
-		const title = h(this.document, "h3");
-		title.textContent = this.localization.translate("zeta.settings", "displayLanguage.title", "Display Language");
-		const description = h(this.document, "p");
-		description.textContent = this.localization.translate("zeta.settings", "displayLanguage.description", "Choose the language used by the Zeta interface.");
 		const setting = h(this.document, "div");
 		setting.className = "zeta-localization-setting";
 		const label = h(this.document, "label");
@@ -90,7 +85,7 @@ export class LocalizationSettingsPane extends DisposableOwner {
 				this.status.textContent = error instanceof Error ? error.message : "Unable to run the setting action.";
 			},
 		}));
-		this.element.replaceChildren(title, description, setting);
+		this.element.replaceChildren(setting);
 		if (this.languagePackPackages.length > 0 || this.isLoadingPackages) this.renderLanguagePackPackages();
 	}
 

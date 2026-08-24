@@ -22,23 +22,23 @@ import type { IWorkspaceOpenService } from "../../../services/workspaces/browser
 import { WorkbenchModeRegistry } from "../../../../product/common/workbenchMode.js";
 import { SettingsEditor } from "./settingsEditor.js";
 import type { IWorkbenchModeService } from "../../../services/workbenchMode/common/workbenchModeService.js";
-import type { ModelSettingsCatalog } from "./modelSettings.js";
+import type { ModelCatalogSource } from "./modelCatalogItems.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IClipboardService } from "../../../../platform/clipboard/common/clipboardService.js";
 import type { IAccountService } from "../../../../platform/accounts/common/accountService.js";
-import { ConnectorSettingsPane } from "./connectorSettings.js";
-import { EditorSettingsPane } from "./editorSettings.js";
-import { GeneralSettingsPane } from "./generalSettings.js";
-import { IndexingSettingsPane } from "./indexingSettings.js";
-import { LocalizationSettingsPane } from "../../localization/browser/localizationSettings.js";
-import { MarketplaceSettingsPane } from "./marketplaceSettings.js";
-import { ModelSettingsPane } from "./modelSettings.js";
-import { PluginSettingsPane } from "./pluginSettings.js";
-import { hasSectionOverviewSettings, SectionOverviewSettingsPane } from "./sectionOverviewSettings.js";
-import { AppearanceSettingsPane } from "./appearanceSettings.js";
-import { SettingsPaneRegistry } from "./settingsPaneRegistry.js";
-import { SettingsSections } from "../common/settingsSections.js";
-import { WorkspaceTrustEditor } from "../../workspace/browser/workspaceTrustEditor.js";
+import { ConnectorCatalogItem } from "./connectorCatalogItem.js";
+import { EditorConfigurationContribution } from "./editorConfigurationLayout.js";
+import { CoreConfigurationContribution } from "./coreConfigurationLayout.js";
+import { SearchIndexConfigurationItems } from "./searchIndexConfigurationItems.js";
+import { LocalizationSelectorItem } from "../../localization/browser/localizationSelectorItem.js";
+import { MarketplaceCatalogItem } from "./marketplaceCatalogItem.js";
+import { ModelCatalogContribution } from "./modelCatalogItems.js";
+import { PluginCatalogContribution } from "./pluginCatalogItems.js";
+import { CapabilityOverviewContribution, hasSectionOverviewSettings } from "./capabilityOverviewItems.js";
+import { ThemePreferenceItem } from "./themePreferenceItem.js";
+import { SettingsContributionRegistry } from "./settingsContributions.js";
+import { settingsResourceItemId, SettingsSections } from "./settingsLayout.js";
+import { WorkspaceTrustItems } from "../../workspace/browser/workspaceTrustItems.js";
 
 export interface SettingsEditorContributionOptions {
 	readonly clipboardService?: IClipboardService;
@@ -63,7 +63,7 @@ export interface SettingsEditorContributionOptions {
 	readonly workspaceOpenService?: IWorkspaceOpenService;
 	readonly workspaceContextService?: IWorkspaceContextService;
 	readonly workbenchModeService?: IWorkbenchModeService;
-	readonly modelCatalog?: ModelSettingsCatalog;
+	readonly modelCatalog?: ModelCatalogSource;
 	readonly accountService?: IAccountService;
 }
 
@@ -76,8 +76,8 @@ export class SettingsEditorContribution extends DisposableOwner {
 		super();
 		const localizationService = options.localizationService ?? unavailableLocalizationService;
 		this.editor = this.own(new SettingsEditor(options.container, {
+			contributions: createSettingsContributionRegistry(options),
 			localizationService,
-			paneRegistry: createSettingsPaneRegistry(options),
 			settingsService: options.settingsService,
 		}));
 		this.modalEditor = this.own(new ModalEditorPart({
@@ -107,93 +107,146 @@ export class SettingsEditorContribution extends DisposableOwner {
 	}
 }
 
-function createSettingsPaneRegistry(options: SettingsEditorContributionOptions): SettingsPaneRegistry {
+function createSettingsContributionRegistry(options: SettingsEditorContributionOptions): SettingsContributionRegistry {
 	const clipboardService = options.clipboardService ?? unavailableClipboardService;
 	const contextMenuProvider = options.contextMenuProvider ?? unavailableContextMenuProvider;
 	const localizationService = options.localizationService ?? unavailableLocalizationService;
 	const marketplaceService = options.marketplaceService ?? unavailableMarketplaceService;
-	const registry = new SettingsPaneRegistry();
-	registry.register("general", {
-		create: container => new GeneralSettingsPane(container, {
-			clipboardService,
-			configurationService: options.configurationService,
-			contextMenuProvider,
-			contextViewProvider: options.contextViewProvider,
-			workbenchModeService: options.workbenchModeService ?? unavailableWorkbenchModeService,
-			preferencesService: options.preferencesService ?? unavailablePreferencesService,
-		}),
-	});
-	registry.register("appearance", {
-		create: container => new AppearanceSettingsPane(container, {
-			clipboardService,
-			configurationService: options.configurationService,
-			contextMenuProvider,
-			dialogService: options.dialogService,
-			themeService: options.themeService,
-			userThemeService: options.userThemeService,
-		}),
-	});
-	registry.register("editor", {
-		create: container => new EditorSettingsPane(container, {
-			clipboardService,
-			configurationService: options.configurationService,
-			contextMenuProvider,
-			contextViewProvider: options.contextViewProvider,
-		}),
-	});
-	registry.register("connectors", {
-		create: container => new ConnectorSettingsPane(container, options.connectorService ?? unavailableConnectorService),
-	});
-	registry.register("plugins", {
-		create: container => new PluginSettingsPane(container, options.pluginService ?? unavailablePluginService),
-	});
-	registry.register("languages", {
-		create: container => new MarketplaceSettingsPane(container, marketplaceService, "language", localizationService),
-	});
-	registry.register("localization", {
-		create: container => new LocalizationSettingsPane(
-			container,
-			localizationService,
-			options.localeService ?? unavailableLocaleService,
-			options.languagePackService ?? unavailableLanguagePackService,
-			contextMenuProvider,
-			clipboardService,
-		),
-	});
-	registry.register("marketplace", {
-		create: container => new MarketplaceSettingsPane(container, marketplaceService, undefined, localizationService),
-	});
-	registry.register("models", {
-		create: container => new ModelSettingsPane(container, {
-			clipboardService,
-			contextMenuProvider,
-			models: options.modelCatalog ?? unavailableModelCatalog,
-			accounts: options.accountService ?? unavailableAccountService,
-		}),
-	});
-	registry.register("indexing", {
-		create: container => new IndexingSettingsPane(container, {
-			clipboardService,
-			codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
-			contextMenuProvider,
-			dialogService: options.dialogService,
-			toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
-		}),
-	});
-	registry.register("workspace-trust", {
-		create: container => new WorkspaceTrustEditor(
-			container,
-			options.workspaceTrustService ?? unavailableWorkspaceTrustService,
-			options.workspaceOpenService ?? unavailableWorkspaceOpenService,
-			options.dialogService,
-			options.workspaceContextService,
-		),
-	});
+	const registry = new SettingsContributionRegistry();
+	registry.register(new CoreConfigurationContribution(options.container.ownerDocument, {
+		clipboardService,
+		configurationService: options.configurationService,
+		contextMenuProvider,
+		contextViewProvider: options.contextViewProvider,
+		workbenchModeService: options.workbenchModeService ?? unavailableWorkbenchModeService,
+		preferencesService: options.preferencesService ?? unavailablePreferencesService,
+		onStatus: registry.reportStatus,
+	}));
+	registry.registerLayout('appearance', [{
+		id: 'theme',
+		title: 'Color theme',
+		description: 'Choose and customize the colors used by Zeta.',
+		settings: [{
+			id: settingsResourceItemId('appearance', 'theme-preference'),
+			title: 'Color theme',
+			description: 'Choose an appearance or keep Zeta synchronized with your operating system.',
+			createView: document => new ThemePreferenceItem(document, {
+				clipboardService,
+				configurationService: options.configurationService,
+				contextMenuProvider,
+				dialogService: options.dialogService,
+				themeService: options.themeService,
+				userThemeService: options.userThemeService,
+			}),
+		}],
+	}]);
+	registry.register(new EditorConfigurationContribution(options.container.ownerDocument, {
+		clipboardService,
+		configurationService: options.configurationService,
+		contextMenuProvider,
+		contextViewProvider: options.contextViewProvider,
+		onStatus: registry.reportStatus,
+	}));
+	registry.registerLayout('connectors', [{
+		id: 'available',
+		title: 'Available connectors',
+		description: 'Connect external accounts contributed by active plugins.',
+		settings: [{
+			id: settingsResourceItemId('connectors', 'catalog'),
+			title: 'Connector catalog',
+			description: 'Manage connector credentials and authorization.',
+			createView: document => new ConnectorCatalogItem(document, options.connectorService ?? unavailableConnectorService),
+		}],
+	}]);
+	registry.register(new PluginCatalogContribution(options.pluginService ?? unavailablePluginService, registry.reportStatus));
+	registry.registerLayout('languages', [{
+		id: 'marketplace',
+		title: 'Language packages',
+		description: 'Discover and manage Marketplace language extensions.',
+		settings: [{
+			id: settingsResourceItemId('languages', 'marketplace'),
+			title: 'Language Marketplace',
+			description: 'Search available language packages.',
+			createView: document => new MarketplaceCatalogItem(document, marketplaceService, 'language', localizationService),
+		}],
+	}]);
+	registry.registerLayout('localization', [{
+		id: 'display-language',
+		title: 'Display language',
+		description: 'Choose and install interface languages.',
+		settings: [{
+			id: settingsResourceItemId('localization', 'interface-language'),
+			title: 'Interface language',
+			description: 'Choose the language used by the Zeta interface.',
+			createView: document => new LocalizationSelectorItem(
+				document,
+				localizationService,
+				options.localeService ?? unavailableLocaleService,
+				options.languagePackService ?? unavailableLanguagePackService,
+				contextMenuProvider,
+				clipboardService,
+			),
+		}],
+	}]);
+	registry.registerLayout('marketplace', [{
+		id: 'packages',
+		title: 'Packages',
+		description: 'Discover and manage packages from the signed catalog.',
+		settings: [{
+			id: settingsResourceItemId('marketplace', 'packages'),
+			title: 'Marketplace packages',
+			description: 'Search Plugins, Skills, MCP servers, languages, and themes.',
+			createView: document => new MarketplaceCatalogItem(document, marketplaceService, undefined, localizationService),
+		}],
+	}]);
+	registry.register(new ModelCatalogContribution({
+		clipboardService,
+		contextMenuProvider,
+		models: options.modelCatalog ?? unavailableModelCatalog,
+		accounts: options.accountService ?? unavailableAccountService,
+		onStatus: registry.reportStatus,
+	}));
+	registry.registerLayout('indexing', [{
+		id: 'search',
+		title: 'Search indexes',
+		description: 'Configure tool discovery and semantic workspace search.',
+		settings: [{
+			id: settingsResourceItemId('indexing', 'configuration'),
+			title: 'Indexing configuration',
+			description: 'Configure Tool Search and semantic code indexing.',
+			createView: document => {
+				const item = new SearchIndexConfigurationItems(document, {
+					clipboardService,
+					codeIndexService: options.codeIndexService ?? unavailableCodeIndexService,
+					contextMenuProvider,
+					dialogService: options.dialogService,
+					toolSearchService: options.toolSearchService ?? unavailableToolSearchService,
+				});
+				item.activate();
+				return item;
+			},
+		}],
+	}]);
+	registry.registerLayout('workspace-trust', [{
+		id: 'trusted-folders',
+		title: 'Trusted folders',
+		description: 'Review and revoke folders allowed to run workspace capabilities.',
+		settings: [{
+			id: settingsResourceItemId('workspace-trust', 'folders'),
+			title: 'Workspace trust',
+			description: 'Manage the current workspace and durable folder decisions.',
+			createView: document => new WorkspaceTrustItems(
+				document,
+				options.workspaceTrustService ?? unavailableWorkspaceTrustService,
+				options.workspaceOpenService ?? unavailableWorkspaceOpenService,
+				options.dialogService,
+				options.workspaceContextService,
+			),
+		}],
+	}]);
 	for (const section of SettingsSections) {
 		if (!hasSectionOverviewSettings(section.id)) continue;
-		registry.register(section.id, {
-			create: container => new SectionOverviewSettingsPane(container, section.id, options.settingsService),
-		});
+		registry.register(new CapabilityOverviewContribution(section.id, options.settingsService));
 	}
 	return registry;
 }
@@ -229,7 +282,7 @@ const unavailableWorkbenchModeService: IWorkbenchModeService = {
 	resetMode: () => Promise.reject(new Error("Workbench mode switching is unavailable.")),
 };
 
-const unavailableModelCatalog: ModelSettingsCatalog = {
+const unavailableModelCatalog: ModelCatalogSource = {
 	onDidChangeModels: noEvent,
 	listModelCatalog: () => Promise.reject(new Error("Model settings are unavailable.")),
 	refreshModels: () => Promise.reject(new Error("Model settings are unavailable.")),

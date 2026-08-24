@@ -6,17 +6,17 @@
 
 ## 快速理解
 
-Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/资源预算治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth target 的 ChatGPT 订阅本地 Agent Loop。后续建设不再以“搭出第一轮模型调用”为目标，而是优先建立端到端评测，再扩展 ChatGPT 订阅兼容验证、Skills、MCP 与多 Agent 的产品完整性。
+Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/资源预算治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth target 的 ChatGPT 订阅本地 Agent Loop。Core、App Server 和 Desktop 的确定性行为由现有测试与 smoke 入口覆盖；后续重点是 ChatGPT 订阅兼容收口，真实模型 benchmark 与 production telemetry 仅在产品确有需要时再建设。
 
 | 用户场景 | 当前表现 | 本计划完成后的结果 | 对应阶段 |
 | --- | --- | --- | --- |
-| 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持冻结工具 profile、durable 计划、批准、取消和恢复 | 用确定性 fixture 与可用的受控数据量化成功率 | S3、S7 |
-| Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；所有模型都由本地执行器在模型安全点重规划 | 增加后续评测与完整故障矩阵 | S1、S5 |
+| 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持冻结工具 profile、durable 计划、批准、取消和恢复 | 用现有行为测试验证确定性闭环；真实模型成功率后置 | S3、S7 |
+| Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；所有模型都由本地执行器在模型安全点重规划 | 增加完整故障矩阵和恢复验证 | S1、S5 |
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
-| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、冻结到 Turn 的 token/成本预算，以及按模型和估算 revision 恢复的未来预算校准 | 以 T4 持续量化压缩后的质量与成本 | S2、S7 |
-| 切换 OpenAI、Anthropic 或 Google 模型 | Turn 接受时已冻结同一套 coding ToolProfile；`apply_patch` 默认承担通用变更，`edit` 只承担唯一字符串微编辑和降级 | 用 S7 的模型行为评测量化统一 profile 的成功率，不凭模型名分流 | S3、S7 |
+| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、冻结到 Turn 的 token/成本预算，以及按模型和估算 revision 恢复的未来预算校准 | 由现有压缩、usage 和预算测试验证；质量/成本 benchmark 后置 | S2、S7 |
+| 切换 OpenAI、Anthropic 或 Google 模型 | Turn 接受时已冻结同一套 coding ToolProfile；`apply_patch` 默认承担通用变更，`edit` 只承担唯一字符串微编辑和降级 | 由 provider conformance 与行为测试保持统一 profile；模型对比 benchmark 后置 | S3、S7 |
 | 使用 ChatGPT 订阅模型 | native device OAuth、SecretStore、refresh、Responses target 与本地 Agent Loop 已接通 | 增加兼容探测、secret、rate-limit 与故障矩阵 | S5 |
-| 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整评测和故障验证 | S6、S7 |
+| 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整故障验证 | S6、S7 |
 
 ## 1. 当前实现基线
 
@@ -71,7 +71,7 @@ S1 是下一阶段的 release blocker。完成前不把 Agent Loop 标记为产�
 | AL-104 | 已实现 | 重复失败工具熔断 | 从 durable Tool Call/Result 按“工具名 + canonical arguments digest”重建 Turn 内连续失败窗口 | 第 3 次附加 durable reminder；第 5 次以 `toolRepetition` 失败；成功、参数变化或工具变化清零；恢复保持相同错误；不增加固定 loop 次数上限 |
 | AL-105 | 已实现 | 交互错误 UI | Desktop 从 canonical `StableTurnErrorCode` 投影对话内错误卡片；可重试失败开始新 Turn，认证错误打开模型选择，上下文或预算耗尽创建新对话，无效请求与工具重复失败聚焦输入以修改方案 | UI 只按稳定错误码分流；仅最新失败 Turn 暴露动作；刷新和重连从 canonical Thread 重建相同卡片 |
 
-S1、S2 与 S3 已完成；下一阶段继续 S5 能力协商和 S7 deterministic fixture。
+S1、S2 与 S3 已完成；确定性行为由现有测试覆盖，下一阶段继续 S5 能力协商。真实模型 baseline 和 production telemetry 属于后置工作，不作为当前闭环的隐含前置条件。
 
 ## 4. S2：Usage、预算与上下文质量（P1）
 
@@ -95,7 +95,7 @@ AL-201 至 AL-205 已完成，S2 收口；统一工具面与 durable 计划由 S
 | AL-304 | 已实现 | 工具 schema 与提示词回归 | 固定统一 profile 的工具顺序、schema、描述和 digest fixture；system prompt 升至 `system-v4` 并固定编辑选择 guidance | 同一 snapshot 组装稳定；两个不同 Provider/model 使用相同 canonical schema；提示词明确 `apply_patch` 默认、`edit` 微编辑/降级；definition 变化要求新 revision/digest |
 | AL-305 | 已实现 | 多工具调用顺序 | 保持 `parallel_tool_calls: true`，执行侧继续按 durable 调用顺序串行 | 一次模型响应中的多个调用先完整持久化，再依次批准和执行；取消后未开始调用不得执行；不引入并行写副作用 |
 
-S3 已完成；T1/T2 正式模型行为指标和发布门仍由 S7 拥有，不要求 PR 或 S3 依赖真实模型 API。
+S3 已完成；模型行为指标和发布门属于 S7 的后置可选工作，不要求 PR 或 S3 依赖真实模型 API。
 
 ## 6. S4：供应商流式与 Prompt 缓存（P1）
 
@@ -139,15 +139,15 @@ Agent-tree 累计 token/cost scheduler；这些不能反向削弱本表已经冻
 
 ## 9. S7：评测、观测与发布门（横向）
 
-S3 已为 S7 冻结工具 contract；下一步建设 deterministic fixture。Agent Loop v1 只有在本阶段门禁启用后才算完成。
+S3 已为 S7 冻结工具 contract；现有 Rust/TS 测试与项目 smoke 入口提供确定性回归覆盖。Agent Loop v1 不依赖独立 `evals/` 目录；真实模型 baseline、production telemetry 和发布检查表按产品需要后置。
 
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
-| AL-701 | 待构建 | 封闭任务集 | 在 `evals/harness/` 建立 T1 单文件修复、T2 跨文件功能、T3 长循环和 T4 强制压缩夹具 | 每题有冻结仓库、任务、确定性 `verify.sh` 和允许能力；失败保留可重放 artifact |
-| AL-702 | 待构建 | Deterministic smoke | 使用 fake `ModelService` 覆盖 retry、steering、overflow、approval、repetition、budget、stream gap 和恢复 | PR gate 100% 通过；不依赖网络或真实凭据；事件序列和副作用断言稳定 |
-| AL-703 | 待构建 | 模型行为评测数据 | 有受控测试凭据时按主力 provider/model × 候选 profile 运行 T1–T4；无凭据时只使用明确启用、去内容化的用户聚合指标，记录成功率、token、cache、工具选择、失败次数和墙钟时间 | PR 与 S3 不依赖真实模型凭据；任何按模型细分工具面的提案必须有版本控制的评测或达到最小样本门槛的隐私受控聚合证据；没有证据时继续使用统一 profile |
+| AL-701 | 暂缓 | 封闭任务集 | 当前不维护独立 fixture corpus；需要模型对比时再按版本化 benchmark 任务集建立 | 任务集的维护有明确产品目标、受控模型预算和去内容化结果策略后再启动 |
+| AL-702 | 已实现 | Deterministic smoke | Core、App Server 和 Desktop 现有测试覆盖 retry、steering、overflow、approval、repetition、budget、stream gap 与恢复；通过项目标准测试入口运行 | 不依赖网络或真实凭据；事件序列、canonical 状态和副作用由对应单测/集成测试断言 |
+| AL-703 | 后置 | 模型行为评测数据 | 需要时按 provider/model/profile 记录成功率、token、cache、工具选择、失败次数和墙钟时间的去内容化结果；当前无受控 baseline | 启动前必须有版本化任务集、受控凭据或明确启用的隐私受控聚合；没有证据时继续使用统一 profile |
 | AL-704 | 待构建 | 运行时观测 | 为模型调用、重试、压缩、usage、批准等待、工具 terminal outcome、编辑工具选择、验证结果和委托恢复提供结构化指标 | telemetry 不含 prompt、secret、工具参数、diff 或文件内容；用户聚合数据必须明确启用且去内容化；可按 Thread/Turn 关联但不能恢复用户正文 |
-| AL-705 | 待构建 | 发布检查表 | 汇总 S1–S6 capability matrix、已知限制、迁移和回滚条件 | 没有 P0 缺口；protocol/schema/docs 同步；主力路径通过故障注入；未支持能力在产品中显式隐藏或解释 |
+| AL-705 | 待构建 | 发布检查表 | 在确定产品发布范围后汇总 S1–S6 capability matrix、已知限制、迁移和回滚条件 | 没有 P0 缺口；protocol/schema/docs 同步；主力路径通过故障注入；未支持能力在产品中显式隐藏或解释 |
 
 ## 10. 构建顺序
 
@@ -173,9 +173,9 @@ flowchart TD
 
 1. 以已完成的 AL-501 和可重复运行的订阅集成测试作为后续构建基线。
 2. 以已完成的 AL-101 至 AL-105 作为交互与失败语义基线。
-3. S2 的 AL-201 至 AL-205、S3 的 AL-301 至 AL-305 与 S4 的 AL-401 至 AL-405 已完成；下一批从 S5 的 AL-502 能力协商和 S7 的 deterministic fixture 继续。
+3. S2 的 AL-201 至 AL-205、S3 的 AL-301 至 AL-305 与 S4 的 AL-401 至 AL-405 已完成；下一批从 S5 的 AL-502 能力协商继续，模型 benchmark 和 production telemetry 仅在确有产品需求时启动。
 4. S4 capability contract 与 S3 ToolProfile contract 已稳定；在此基础上完成 S6。
-5. S7 的 PR gate 使用 fake `ModelService`，真实模型行为数据只在有受控凭据或明确启用、去内容化的用户聚合指标时收集；所有阶段完成后启用 AL-705 发布门。
+5. S7 的确定性回归使用现有项目测试入口；真实模型行为数据只在有受控凭据或明确启用、去内容化的用户聚合指标时收集。AL-705 在确定发布范围后再建立。
 
 ## 11. 验证矩阵
 
@@ -199,7 +199,7 @@ flowchart TD
 - S4 完成所有已声明主力 Provider 的流式、错误、usage 和 cache capability；
 - S5 全部完成，ChatGPT 订阅 OAuth、模型调用与错误映射没有静默丢弃受支持的响应事件；
 - S6 完成受信任自动选择、MCP 阈值和多 Agent 故障矩阵；
-- S7 的 deterministic smoke、可用的受控模型评测或隐私受控聚合 baseline、隐私边界和发布门实际启用；
+- S7 的现有 deterministic 测试通过；如产品需要模型评测或隐私受控聚合，再单独建立版本化任务集、隐私边界和发布门；
 - 所有 durable side effect 在 crash/restart 测试中保持 once-only 或明确的 unknown outcome，绝不静默重放。
 
 ## 13. 明确不做

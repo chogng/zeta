@@ -1,10 +1,9 @@
-import "./media/sectionOverviewSettings.css";
+import "./media/capabilityOverviewItems.css";
 import { h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
-import { SettingsTree } from "./settingsTree.js";
-import { SettingsTreeModel, type SettingsTreeNode } from "./settingsTreeModels.js";
+import type { SettingsItemContribution, SettingsItemView, SettingsSectionContribution } from "./settingsContributions.js";
 
 type OverviewStatusTone = "available" | "managed" | "unavailable";
 
@@ -68,13 +67,37 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
 	],
 	agents: [
 		{
-			id: "agent-behavior",
-			title: "Agent behavior",
-			description: "Agent execution composes rules, skills, tools, and verified Workspace context.",
+			id: "agent-profiles",
+			title: "Agent profiles",
+			description: "An Agent profile composes identity, instructions, skills, tools, and execution policy.",
 			items: [
-				{ id: "instructions", title: "Instructions", description: "Repository and user instruction sources constrain Agent behavior before a task starts.", status: "Managed in Rules", tone: "managed", targetSectionId: "rules", actionLabel: "Open Rules" },
-				{ id: "delegation", title: "Delegation", description: "Installed Skills may define bounded subagent workflows; availability is projected into Chat.", status: "Skill-owned", tone: "managed", targetSectionId: "skills-and-subagents", actionLabel: "Manage Skills" },
-				{ id: "tool-discovery", title: "Tool discovery", description: "Tool metadata is searched locally by default, with optional configured embedding ranking.", status: "Available", tone: "available", targetSectionId: "indexing", actionLabel: "Configure Indexing" },
+				{ id: "profiles", title: "Custom agents", description: "The current build has no canonical Agent profile service, so creation and switching are not exposed as inert controls.", status: "Not available", tone: "unavailable" },
+				{ id: "delegation", title: "Subagent delegation", description: "A subagent is a bounded delegation relationship owned by an Agent or workflow, rather than a reusable Team.", status: "Workflow-owned", tone: "managed" },
+				{ id: "capabilities", title: "Shared capabilities", description: "Models, rules, skills, tools, and hooks are configured independently and can later be assigned to Agent profiles.", status: "Available by category", tone: "available", targetSectionId: "models", actionLabel: "Open Models" },
+			],
+		},
+	],
+	teams: [
+		{
+			id: "multi-agent-teams",
+			title: "Multi-agent teams",
+			description: "A Team is a reusable group of Agents with explicit roles and a coordination policy.",
+			items: [
+				{ id: "saved-teams", title: "Saved teams", description: "No Team registry is installed in the current build, so team creation and switching are not available yet.", status: "Not available", tone: "unavailable" },
+				{ id: "members", title: "Members and roles", description: "Team members remain independent Agent profiles; membership does not turn them into subagents.", status: "Team-owned", tone: "managed", targetSectionId: "agents", actionLabel: "Open My Agents" },
+				{ id: "coordination", title: "Coordination policy", description: "Team mode will own routing, handoffs, shared context, concurrency, and limits when its runtime contract is added.", status: "Runtime not available", tone: "unavailable" },
+			],
+		},
+	],
+	"agent-defaults": [
+		{
+			id: "agent-defaults",
+			title: "Agent defaults",
+			description: "Defaults apply when a Session or workflow does not select a specific Agent or Team.",
+			items: [
+				{ id: "default-agent", title: "Default agent", description: "A default cannot be persisted until the Agent profile service provides stable Agent identities.", status: "Not available", tone: "unavailable", targetSectionId: "agents", actionLabel: "Open My Agents" },
+				{ id: "default-team", title: "Default Team mode", description: "Team mode remains opt-in until a Team registry and coordination runtime are available.", status: "Not available", tone: "unavailable", targetSectionId: "teams", actionLabel: "Open Teams" },
+				{ id: "default-model", title: "Model defaults", description: "Available model providers and visibility are managed independently from future Agent selection defaults.", status: "Managed in Models", tone: "managed", targetSectionId: "models", actionLabel: "Open Models" },
 			],
 		},
 	],
@@ -109,11 +132,11 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
 			items: [
 				{ id: "repository", title: "Repository instructions", description: "Workspace instruction files such as AGENTS.md are discovered from the repository hierarchy and applied within their scope.", status: "Workspace-owned", tone: "managed" },
 				{ id: "user", title: "User instructions", description: "The current Settings service has no canonical editor for global Agent rules, so this page does not pretend to save one.", status: "Editor not available", tone: "unavailable" },
-				{ id: "skills", title: "Skill instructions", description: "Skills load their complete instructions only when selected or automatically activated.", status: "Managed in Skills", tone: "managed", targetSectionId: "skills-and-subagents", actionLabel: "Open Skills" },
+				{ id: "skills", title: "Skill instructions", description: "Skills load their complete instructions only when selected or automatically activated.", status: "Managed in Skills", tone: "managed", targetSectionId: "skills", actionLabel: "Open Skills" },
 			],
 		},
 	],
-	"skills-and-subagents": [
+	skills: [
 		{
 			id: "skills",
 			title: "Skills",
@@ -121,7 +144,7 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
 			items: [
 				{ id: "installed", title: "Installed Skills", description: "Skill metadata is discovered from enabled packages; full instructions remain lazy until activation.", status: "Plugin-managed", tone: "managed", targetSectionId: "plugins", actionLabel: "Manage Plugins" },
 				{ id: "discovery", title: "Skill discovery", description: "Install additional Skill packages from the generic Marketplace.", status: "Available", tone: "available", targetSectionId: "marketplace", actionLabel: "Browse Marketplace" },
-				{ id: "subagent-workflows", title: "Subagent workflows", description: "Delegation is available only when an active Skill or Agent workflow explicitly defines bounded subagent work.", status: "Workflow-owned", tone: "managed", targetSectionId: "agents", actionLabel: "Open Agents" },
+				{ id: "agent-assignment", title: "Agent assignment", description: "Skills remain reusable capabilities that can later be assigned to Agent profiles without becoming Agents themselves.", status: "Agent-owned", tone: "managed", targetSectionId: "agents", actionLabel: "Open My Agents" },
 			],
 		},
 	],
@@ -198,32 +221,40 @@ const SectionOverviewContent: Readonly<Record<string, readonly OverviewGroup[]>>
 	],
 });
 
-/** Honest capability overview used when a domain has no canonical writable settings service. */
-export class SectionOverviewSettingsPane extends DisposableOwner {
-	readonly element: HTMLDivElement;
+/** Honest capability contribution used when a domain has no writable settings service. */
+export class CapabilityOverviewContribution extends DisposableOwner implements SettingsSectionContribution {
+	public readonly groups;
 
-	constructor(container: HTMLElement, sectionId: string, settingsService: ISettingsService) {
+	constructor(public readonly sectionId: string, settingsService: ISettingsService) {
 		super();
-		const ownerDocument = container.ownerDocument;
 		const groups = SectionOverviewContent[sectionId];
 		if (!groups) throw new RangeError(`No Settings overview content is registered for '${sectionId}'`);
-		const model = this.own(new SettingsTreeModel<OverviewItem>());
-		model.setChildren(groups.map((group) => this.groupNode(sectionId, group)));
-		const tree = this.own(new SettingsTree(container, {
-			model,
-			rootClassName: "zeta-section-overview-settings",
-			groupClassName: "zeta-settings-overview-group",
-			groupDescriptionClassName: "zeta-settings-overview-group-description",
-			itemsClassName: "zeta-settings-overview-items",
-			renderItem: (item) => this.renderItem(item.value, ownerDocument, settingsService),
+		this.groups = groups.map(group => ({
+			id: group.id,
+			title: group.title,
+			description: group.description,
+			settings: group.items.map(item => overviewContributionItem(sectionId, group.id, item, settingsService)),
 		}));
-		this.element = tree.element;
 	}
+}
 
-	private renderItem(item: OverviewItem, ownerDocument: Document, settingsService: ISettingsService): HTMLElement {
-		const document = ownerDocument;
-		const element = h(document, "article");
-		element.className = "zeta-settings-overview-item";
+function overviewContributionItem(sectionId: string, groupId: string, item: OverviewItem, settingsService: ISettingsService): SettingsItemContribution {
+	return {
+		id: `${sectionId}.group.${groupId}.item.${item.id}`,
+		title: item.title,
+		description: item.description,
+		keywords: [item.status, item.actionLabel ?? ""],
+		createView: document => new OverviewSettingsItemView(document, item, settingsService),
+	};
+}
+
+class OverviewSettingsItemView extends DisposableOwner implements SettingsItemView {
+	public readonly element: HTMLElement;
+
+	constructor(document: Document, item: OverviewItem, settingsService: ISettingsService) {
+		super();
+		this.element = h(document, "article");
+		this.element.className = "zeta-settings-overview-item";
 		const copy = h(document, "div");
 		copy.className = "zeta-settings-overview-copy";
 		const headingRow = h(document, "div");
@@ -237,9 +268,9 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
 		const description = h(document, "p");
 		description.textContent = item.description;
 		copy.append(headingRow, description);
-		element.append(copy);
+		this.element.append(copy);
 		if (item.targetSectionId) {
-			const action = this.own(new Button(element, {
+			const action = this.own(new Button(this.element, {
 				label: item.actionLabel ?? "Open settings",
 				presentation: "secondary",
 				size: "small",
@@ -247,24 +278,6 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
 			}));
 			action.toggleClassName("zeta-settings-overview-action", true);
 		}
-		return element;
-	}
-
-	private groupNode(sectionId: string, group: OverviewGroup): SettingsTreeNode<OverviewItem> {
-		const groupId = `${sectionId}.group.${group.id}`;
-		return {
-			element: { kind: "group", id: groupId, title: group.title, description: group.description },
-			children: group.items.map((item): SettingsTreeNode<OverviewItem> => ({
-				element: {
-					kind: "item",
-					id: `${groupId}.item.${item.id}`,
-					title: item.title,
-					description: item.description,
-					keywords: [item.status, item.actionLabel ?? ""],
-					value: item,
-				},
-			})),
-		};
 	}
 }
 

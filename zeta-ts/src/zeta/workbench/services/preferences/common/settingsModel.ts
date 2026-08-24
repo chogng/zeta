@@ -61,25 +61,25 @@ export class SettingsItemModel<T> extends DisposableOwner implements SettingRefe
 
 	public async update(value: T): Promise<void> {
 		if (this.pending) return;
+		this.value = value;
 		this.setPending(true);
 		try {
 			await this.binding.updateValue(value);
-			this.refresh();
 		} finally {
+			this.value = this.binding.getValue();
 			this.setPending(false);
-			this.refresh();
 		}
 	}
 
 	public async reset(): Promise<void> {
 		if (this.pending) return;
+		this.value = this.binding.defaultValue;
 		this.setPending(true);
 		try {
 			await this.binding.resetValue();
-			this.refresh();
 		} finally {
+			this.value = this.binding.getValue();
 			this.setPending(false);
-			this.refresh();
 		}
 	}
 

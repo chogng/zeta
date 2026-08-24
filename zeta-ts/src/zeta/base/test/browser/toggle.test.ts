@@ -43,6 +43,15 @@ test("Switch projects the shared state as a switch control", () => {
 	assert.equal(switchControl.input.getAttribute("role"), "switch");
 	assert.equal(switchControl.input.getAttribute("aria-checked"), "true");
 	assert.equal(switchControl.element.querySelector(".zeta-switch-track"), switchControl.track);
+	switchControl.busy = true;
+	assert.equal(switchControl.enabled, true);
+	assert.equal(switchControl.input.disabled, true);
+	assert.equal(switchControl.input.getAttribute("aria-busy"), "true");
+	assert.equal(switchControl.element.classList.contains("busy"), true);
+	assert.equal(switchControl.element.classList.contains("disabled"), false);
+	switchControl.busy = false;
+	assert.equal(switchControl.input.disabled, false);
+	assert.equal(switchControl.input.hasAttribute("aria-busy"), false);
 
 	switchControl.input.click();
 

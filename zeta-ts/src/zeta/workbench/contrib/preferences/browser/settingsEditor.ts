@@ -2,47 +2,47 @@ import './media/settingsEditor.css';
 import { h, stopEvent } from '../../../../base/browser/dom.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
-import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
-import { DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
+import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISettingsService } from '../../../services/preferences/common/settings.js';
-import { getSettingsSection, SettingsSections, type SettingsNavigationTargetDescriptor, type SettingsSectionDescriptor } from '../common/settingsSections.js';
-import type { SettingsPane, SettingsPaneRegistry } from './settingsPaneRegistry.js';
+import type { SettingsContributionRegistry, SettingsItemContribution, SettingsItemView } from './settingsContributions.js';
+import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor, type SettingsSectionGroupDescriptor } from './settingsLayout.js';
+import { SettingsTree } from './settingsTree.js';
+import { SettingsTreeModel } from './settingsTreeModels.js';
+import { TOCTree, TOCTreeModel, type SettingsTOCEntry } from './tocTree.js';
 
 export interface SettingsEditorOptions {
 	readonly localizationService: ILocalizationService;
-	readonly paneRegistry: SettingsPaneRegistry;
+	readonly contributions: SettingsContributionRegistry;
 	readonly settingsService: ISettingsService;
 }
 
 let nextSettingsEditorId = 1;
 
-type SettingsNavigationEntry =
-	| { readonly kind: 'section'; readonly id: string; readonly section: SettingsSectionDescriptor }
-	| { readonly kind: 'target'; readonly id: string; readonly section: SettingsSectionDescriptor; readonly target: SettingsNavigationTargetDescriptor };
-
-/** Search, navigation, and active-pane lifecycle hosted by the Workbench modal editor. */
+/** Owns one Settings tree whose layout-derived scope changes with navigation and search. */
 export class SettingsEditor extends DisposableOwner {
 	public readonly element: HTMLDivElement;
-	private readonly activePane = this.own(new DisposableSlot<SettingsPane>());
 	private readonly content: HTMLElement;
 	private readonly contentDescription: HTMLParagraphElement;
 	private readonly contentHeading: HTMLHeadingElement;
+	private readonly contentStatus: HTMLParagraphElement;
 	private readonly contentScrollable: ScrollableElement;
 	private readonly navigationEmpty: HTMLParagraphElement;
 	private readonly navigationScrollable: ScrollableElement;
-	private readonly navigationTree: ObjectTree<SettingsNavigationEntry>;
-	private activeNavigationTarget: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined;
-	private pendingNavigationTarget: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined;
+	private readonly tocTree: TOCTree;
+	private activeNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
+	private pendingNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
 	private readonly searchInput: InputBox;
 	private readonly sectionContent: HTMLDivElement;
+	private readonly settingsModel: SettingsTreeModel<SettingsItemContribution>;
+	private readonly settingsTree: SettingsTree<SettingsItemContribution>;
+	private readonly itemViews = new Map<string, SettingsItemView>();
 
 	constructor(container: HTMLElement, private readonly options: SettingsEditorOptions) {
 		super();
+		this.own(options.contributions);
 		for (const section of SettingsSections) {
-			if (!options.paneRegistry.has(section.id)) throw new Error(`Settings section '${section.id}' has no pane registration`);
+			if (!options.contributions.has(section.id)) throw new Error(`Settings section '${section.id}' has no layout contribution`);
 		}
 
 		const ownerDocument = container.ownerDocument;
@@ -76,36 +76,14 @@ export class SettingsEditor extends DisposableOwner {
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('zeta-settings-sidebar-scrollable');
-		this.navigationTree = this.own(new ObjectTree(this.navigationScrollable.contentElement, {
+		this.tocTree = this.own(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(options.contributions), {
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
-			scrolling: 'external',
-			expandOnlyOnTwistieClick: false,
-			findMatchType: TreeFindMatchType.Contiguous,
-			findMode: TreeFindMode.Filter,
-			getHeight: () => 26,
-			indent: 12,
-			keyboardNavigationLabelProvider: {
-				getKeyboardNavigationLabel: entry => entry.kind === 'section'
-					? `${this.localizedSectionLabel(entry.section)} ${this.localizedSectionDescription(entry.section)}`
-					: [entry.target.label, ...(entry.target.keywords ?? [])].join(' '),
-			},
-			modelOptions: {
-				defaultCollapseState: 'collapsed',
-				identityProvider: { getId: entry => entry.id },
-			},
-			selectionPresentation: 'subtle',
-			renderElement: entry => {
-				const label = h(ownerDocument, 'span');
-				label.className = 'zeta-settings-navigation-label';
-				if (entry.kind === 'section') label.dataset.settingsSectionId = entry.section.id;
-				else label.dataset.settingsTargetId = entry.target.targetId;
-				label.textContent = entry.kind === 'section' ? this.localizedSectionLabel(entry.section) : entry.target.label;
-				return label;
-			},
+			groupLabel: group => this.localizedGroupLabel(group),
+			groupDescription: group => this.localizedGroupDescription(group),
+			sectionLabel: section => this.localizedSectionLabel(section),
+			sectionDescription: section => this.localizedSectionDescription(section),
 		}));
-		this.navigationTree.element.classList.add('zeta-settings-navigation-tree');
-		this.navigationTree.element.id = `${editorId}-navigation`;
-		this.navigationTree.setChildren(settingsNavigationElements());
+		this.tocTree.element.id = `${editorId}-navigation`;
 		this.navigationEmpty = h(ownerDocument, 'p');
 		this.navigationEmpty.className = 'zeta-settings-navigation-empty';
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
@@ -134,30 +112,57 @@ export class SettingsEditor extends DisposableOwner {
 		this.sectionContent = h(ownerDocument, 'div');
 		this.sectionContent.className = 'zeta-settings-section-content';
 		this.sectionContent.dataset.settingsSectionContent = '';
-		contentInner.append(this.contentHeading, this.contentDescription, this.sectionContent);
+		this.contentStatus = h(ownerDocument, 'p');
+		this.contentStatus.className = 'zeta-configuration-settings-status';
+		this.contentStatus.setAttribute('role', 'status');
+		this.contentStatus.setAttribute('aria-live', 'polite');
+		this.contentStatus.hidden = true;
+		contentInner.append(this.contentHeading, this.contentDescription, this.sectionContent, this.contentStatus);
 		this.contentScrollable.append(contentInner);
 		this.content.append(this.contentScrollable.element);
 
 		layout.append(navigation, this.content);
 		this.element.append(search, layout);
-		this.renderSection(getSettingsSection(this.options.settingsService.activeSectionId));
+		const initialSection = getSettingsSection(this.options.settingsService.activeSectionId);
+		this.settingsModel = this.own(new SettingsTreeModel<SettingsItemContribution>());
+		this.settingsModel.setChildren(options.contributions.rootNodes);
+		this.settingsModel.setNavigationTarget(initialSection.id);
+		this.settingsTree = this.own(new SettingsTree(this.sectionContent, {
+			model: this.settingsModel,
+			rootClassName: 'zeta-settings-content-tree',
+			groupClassName: 'zeta-configuration-settings-group zeta-settings-content-group',
+			groupDescriptionClassName: 'zeta-configuration-settings-group-description',
+			itemsClassName: 'zeta-configuration-settings-list',
+			renderItem: item => this.renderSettingsItem(item.value),
+			updateItem: item => this.itemViews.get(item.id)?.update?.(item.value),
+			disposeItem: item => this.disposeSettingsItem(item.id),
+		}));
+		this.renderSection(initialSection);
 
 		this.own(this.options.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		this.own(this.options.contributions.onDidChangeSection(sectionId => {
+			this.settingsModel.setNodeChildren(sectionId, this.options.contributions.getSectionChildren(sectionId));
+			this.tocTree.refresh();
+		}));
+		this.own(this.options.contributions.onDidChangeStatus(status => {
+			this.contentStatus.textContent = status.message;
+			this.contentStatus.classList.toggle('is-error', status.isError);
+			this.contentStatus.hidden = !status.message;
+		}));
 		this.own(this.options.settingsService.onDidChangeActiveSection(sectionId => this.renderSection(getSettingsSection(sectionId))));
-		this.own(this.navigationTree.onDidChangeSelection(({ elements, browserEvent }) => {
-			const entry = elements[0];
-			if (entry && browserEvent) this.openNavigationEntry(entry);
+		this.own(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
+		this.own(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
+			if (element.kind !== 'group') return;
+			const activeSectionId = this.options.settingsService.activeSectionId;
+			const containsActiveSection = element.group.sections.some(section => section.id === activeSectionId);
+			this.tocTree.setSelection([containsActiveSection && collapsed ? element.id : activeSectionId]);
 		}));
-		this.own(this.navigationTree.onDidAccept(({ element, node }) => {
-			if (node.collapsible) this.navigationTree.toggleCollapsed(element.id);
-			this.openNavigationEntry(element);
-		}));
-		this.own(this.navigationTree.onDidChangeFind(({ pattern, matches }) => {
+		this.own(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
 			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
 		}));
 		this.own(this.searchInput.onDidChange(value => {
 			this.filterNavigation(value);
-			this.activePane.value?.setQuery?.(value);
+			this.settingsModel.setQuery(value);
 		}));
 		this.own(this.searchInput.onKeyDown(event => this.handleSearchKeydown(event)));
 		this.defer(() => this.element.remove());
@@ -173,33 +178,28 @@ export class SettingsEditor extends DisposableOwner {
 	}
 
 	public cancelPendingChanges(): void {
-		this.activePane.value?.cancelPendingChanges?.();
+		this.options.contributions.cancelPendingChanges();
+		for (const view of this.itemViews.values()) view.cancelPendingChanges?.();
 	}
 
 	private renderSection(section: SettingsSectionDescriptor): void {
 		const pendingTarget = this.pendingNavigationTarget?.section.id === section.id ? this.pendingNavigationTarget : undefined;
 		const navigationId = pendingTarget?.id ?? section.id;
-		this.navigationTree.expandTo(navigationId);
-		this.navigationTree.setSelection([navigationId]);
+		this.tocTree.expandTo(navigationId);
+		this.tocTree.setSelection([navigationId]);
 		this.content.dataset.activeSettingsSection = section.id;
 		this.contentHeading.textContent = this.localizedSectionLabel(section);
 		this.contentDescription.textContent = this.localizedSectionDescription(section);
-		this.activePane.clear();
-		this.sectionContent.replaceChildren();
-		const pane = this.options.paneRegistry.create(section.id, this.sectionContent);
-		this.activePane.replace(pane);
-		if (pane.element.parentElement !== this.sectionContent) this.sectionContent.replaceChildren(pane.element);
-		pane.setQuery?.(this.searchInput.value);
-		pane.activate?.();
 		this.showNavigationTarget(section, pendingTarget);
 		this.pendingNavigationTarget = undefined;
 	}
 
-	private openNavigationEntry(entry: SettingsNavigationEntry): void {
+	private openNavigationEntry(entry: SettingsTOCEntry): void {
+		if (entry.kind === 'group') return;
 		if (entry.kind === 'section') {
 			this.pendingNavigationTarget = undefined;
 			if (this.options.settingsService.activeSectionId === entry.section.id) {
-				this.navigationTree.setSelection([entry.id]);
+				this.tocTree.setSelection([entry.id]);
 				this.showNavigationTarget(entry.section, undefined);
 				return;
 			}
@@ -208,8 +208,8 @@ export class SettingsEditor extends DisposableOwner {
 		}
 		this.pendingNavigationTarget = entry;
 		if (this.options.settingsService.activeSectionId === entry.section.id) {
-			this.navigationTree.expandTo(entry.id);
-			this.navigationTree.setSelection([entry.id]);
+			this.tocTree.expandTo(entry.id);
+			this.tocTree.setSelection([entry.id]);
 			this.showNavigationTarget(entry.section, entry);
 			this.pendingNavigationTarget = undefined;
 			return;
@@ -219,16 +219,18 @@ export class SettingsEditor extends DisposableOwner {
 
 	private showNavigationTarget(
 		section: SettingsSectionDescriptor,
-		entry: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined,
+		entry: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined,
 	): void {
-		const target = this.activePane.value?.setNavigationTarget?.(entry?.target.targetId);
-		if (entry && !target) throw new RangeError(`Settings pane '${section.id}' does not expose navigation target '${entry.target.targetId}'`);
+		const targetId = entry?.target.targetId ?? section.id;
+		const target = this.settingsModel.getGroup(targetId);
+		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
+		this.settingsTree.setNavigationTarget(targetId);
 		this.activeNavigationTarget = entry;
 		this.content.classList.toggle('has-navigation-target', entry !== undefined);
 		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;
 		else delete this.content.dataset.activeSettingsTarget;
-		this.contentHeading.textContent = target?.title ?? this.localizedSectionLabel(section);
-		this.contentDescription.textContent = target?.description ?? this.localizedSectionDescription(section);
+		this.contentHeading.textContent = entry ? target.title : this.localizedSectionLabel(section);
+		this.contentDescription.textContent = entry ? target.description : this.localizedSectionDescription(section);
 		this.contentScrollable.scrollTo(0, 0);
 		this.contentScrollable.layout();
 	}
@@ -240,14 +242,14 @@ export class SettingsEditor extends DisposableOwner {
 			return;
 		}
 		if (event.key !== 'ArrowDown') return;
-		if (!this.navigationTree.focus) return;
+		if (!this.tocTree.focus) return;
 		stopEvent(event);
-		this.navigationTree.domFocus();
+		this.tocTree.domFocus();
 	}
 
 	private filterNavigation(value: string): void {
 		const query = value.trim().toLocaleLowerCase();
-		this.navigationTree.setFindPattern(query);
+		this.tocTree.setFindPattern(query);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
 	}
@@ -257,7 +259,7 @@ export class SettingsEditor extends DisposableOwner {
 		this.searchInput.placeholder = searchLabel;
 		this.searchInput.inputElement.setAttribute('aria-label', searchLabel);
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
-		this.navigationTree.rerender();
+		this.tocTree.rerender();
 		const section = getSettingsSection(this.options.settingsService.activeSectionId);
 		if (this.activeNavigationTarget) {
 			this.contentHeading.textContent = this.activeNavigationTarget.target.label;
@@ -265,6 +267,23 @@ export class SettingsEditor extends DisposableOwner {
 			this.contentHeading.textContent = this.localizedSectionLabel(section);
 			this.contentDescription.textContent = this.localizedSectionDescription(section);
 		}
+	}
+
+	private renderSettingsItem(item: SettingsItemContribution): HTMLElement {
+		const view = item.createView(this.element.ownerDocument);
+		if (this.itemViews.has(item.id)) {
+			view.dispose();
+			throw new Error(`Settings item view is already rendered: ${item.id}`);
+		}
+		this.itemViews.set(item.id, view);
+		return view.element;
+	}
+
+	private disposeSettingsItem(itemId: string): void {
+		const view = this.itemViews.get(itemId);
+		if (!view) return;
+		view.dispose();
+		this.itemViews.delete(itemId);
 	}
 
 	private localized(key: string, fallback: string): string {
@@ -278,19 +297,12 @@ export class SettingsEditor extends DisposableOwner {
 	private localizedSectionDescription(section: SettingsSectionDescriptor): string {
 		return this.localized(`sections.${section.id}.description`, section.description);
 	}
-}
 
-function settingsNavigationElements(): readonly ObjectTreeElement<SettingsNavigationEntry>[] {
-	return SettingsSections.map(section => {
-		const targets: readonly SettingsNavigationTargetDescriptor[] = 'navigationTargets' in section ? section.navigationTargets : [];
-		const targetChildren = targets.map((target): ObjectTreeElement<SettingsNavigationEntry> => ({
-			element: { kind: 'target', id: `${section.id}.target.${target.id}`, section, target },
-		}));
-		return {
-			element: { kind: 'section', id: section.id, section },
-			children: targetChildren,
-			collapsible: targetChildren.length > 0,
-			collapsed: targetChildren.length > 0,
-		};
-	});
+	private localizedGroupLabel(group: SettingsSectionGroupDescriptor): string {
+		return this.localized(`groups.${group.id}.label`, group.label);
+	}
+
+	private localizedGroupDescription(group: SettingsSectionGroupDescriptor): string {
+		return this.localized(`groups.${group.id}.description`, group.description);
+	}
 }

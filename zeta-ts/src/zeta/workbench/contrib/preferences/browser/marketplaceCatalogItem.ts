@@ -1,4 +1,4 @@
-import "./media/marketplaceSettings.css";
+import "./media/marketplaceCatalogItem.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
@@ -20,7 +20,7 @@ const packageTypeFilters = [
 ] as const;
 
 /** Generic package discovery and installation surface backed only by Marketplace business APIs. */
-export class MarketplaceSettingsPane extends DisposableOwner {
+export class MarketplaceCatalogItem extends DisposableOwner {
 	readonly element: HTMLElement;
 	private readonly document: Document;
 	private readonly input: HTMLInputElement;
@@ -33,14 +33,13 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 	private readonly localization: ILocalizationService | undefined;
 	private readonly rendered = this.own(new ResettableDisposableGroup());
 
-	constructor(container: HTMLElement, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string, localization?: ILocalizationService) {
+	constructor(document: Document, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string, localization?: ILocalizationService) {
 		super();
 		this.localization = localization;
-		this.document = container.ownerDocument;
+		this.document = document;
 		this.selectedPackageType = fixedPackageType;
 		this.element = h(this.document, "section");
 		this.element.className = "zeta-package-marketplace";
-		container.append(this.element);
 		const toolbar = h(this.document, "form");
 		toolbar.className = "zeta-package-marketplace-toolbar";
 		const searchControl = h(this.document, "div");

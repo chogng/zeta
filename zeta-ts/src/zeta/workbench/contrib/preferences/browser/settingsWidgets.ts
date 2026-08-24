@@ -42,9 +42,9 @@ export class SettingsWidgets extends DisposableOwner {
 	private readonly rendered = new Map<string, RenderedSettingsWidget>();
 	private readonly document: Document;
 
-	constructor(container: HTMLElement, private readonly options: SettingsWidgetsOptions) {
+	constructor(document: Document, private readonly options: SettingsWidgetsOptions) {
 		super();
-		this.document = container.ownerDocument;
+		this.document = document;
 		this.defer(() => {
 			for (const widget of this.rendered.values()) widget.resources.dispose();
 			this.rendered.clear();
@@ -117,7 +117,7 @@ export class SettingsWidgets extends DisposableOwner {
 		toggle.input.dataset.configurationKey = descriptor.key.key;
 		const model = this.bindSetting(setting, descriptor, configurationSettingBinding(this.options.configurationService, descriptor.key), state => {
 			toggle.checked = state.value;
-			toggle.enabled = !state.isPending;
+			toggle.busy = state.isPending;
 		}, resources);
 		resources.add(toggle.onDidChange(checked => void this.updateSetting(model, checked)));
 		return setting;
@@ -230,7 +230,7 @@ export class SettingsWidgets extends DisposableOwner {
 
 	private createSettingDomNode(kind?: 'information' | 'select' | 'toggle'): HTMLDivElement {
 		const setting = h(this.document, 'div');
-		setting.className = `zeta-${this.options.presentation}-setting`;
+		setting.className = `zeta-configuration-setting zeta-${this.options.presentation}-setting`;
 		if (kind === 'information') setting.classList.add(`zeta-${this.options.presentation}-informational-setting`);
 		if (kind === 'select' && this.options.presentation === 'editor') setting.classList.add('zeta-editor-setting-select-row');
 		if (kind === 'toggle') setting.classList.add(`zeta-${this.options.presentation}-toggle-setting`);
@@ -239,12 +239,12 @@ export class SettingsWidgets extends DisposableOwner {
 
 	private createSettingCopy(label: string, description: string): HTMLElement {
 		const copy = h(this.document, 'span');
-		copy.className = `zeta-${this.options.presentation}-setting-copy`;
+		copy.className = `zeta-configuration-setting-copy zeta-${this.options.presentation}-setting-copy`;
 		const title = h(this.document, 'span');
-		title.className = `zeta-${this.options.presentation}-setting-title`;
+		title.className = `zeta-configuration-setting-title zeta-${this.options.presentation}-setting-title`;
 		title.textContent = label;
 		const hint = h(this.document, 'span');
-		hint.className = `zeta-${this.options.presentation}-setting-description`;
+		hint.className = `zeta-configuration-setting-description zeta-${this.options.presentation}-setting-description`;
 		hint.textContent = description;
 		copy.append(title, hint);
 		return copy;
@@ -262,18 +262,18 @@ export class SettingsWidgets extends DisposableOwner {
 	}
 
 	private async updateSetting<T>(model: SettingsItemModel<T>, value: T): Promise<void> {
+		this.options.onStatus('', false);
 		try {
 			await model.update(value);
-			this.options.onStatus('Setting saved.', false);
 		} catch (error) {
 			this.options.onStatus(error instanceof Error ? error.message : 'Unable to save the setting.', true);
 		}
 	}
 
 	private async resetSetting<T>(model: SettingsItemModel<T>): Promise<void> {
+		this.options.onStatus('', false);
 		try {
 			await model.reset();
-			this.options.onStatus('Setting reset.', false);
 		} catch (error) {
 			this.options.onStatus(error instanceof Error ? error.message : 'Unable to reset the setting.', true);
 			throw error;

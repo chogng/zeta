@@ -22,7 +22,7 @@
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
 | 缓存怎么搞？ | 前缀字节稳定 + append-only；`cache_control` 由 Anthropic adapter 注入 | [§11](#11-prompt-缓存) |
-| 怎么知道 harness 变好了？ | 三层任务集 + token/成功率指标 + 前缀稳定性回归断言 | [§14](#14-评测) |
+| 怎么知道 harness 变好了？ | 现有 Rust/TS 行为测试覆盖确定性回归；真实模型 benchmark 后置 | [§14](#14-评测) |
 
 ## 1. 现状差距
 
@@ -41,7 +41,7 @@
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
 | 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
-| 评测 | 任务集 + 指标回路 | ❌ 无 |
+| 评测 | 任务集 + 指标回路 | 确定性行为由 Core、App Server 和 Desktop 测试覆盖；真实模型 baseline 与 production telemetry 尚未接入 |
 
 ## 2. 一次模型调用的目标形态
 
@@ -407,14 +407,13 @@ authoring 规则以最严格交集为准：
 | 空响应/拒绝 | `stop_reason` + 空 content | `refusal` item | 统一映射 `ResponseItem::Refusal` / 空响应走 §7.1 |
 | 错误分类 | `overloaded_error` 等错误体 | `context_length_exceeded` 等 code | 映射进 §7.4 的 `ApiError` 新分类 |
 
-## 14. 评测
+## 14. 评测（后置，可选）
 
-harness 的每层都直接影响成功率与 token 成本；没有评测回路，§9/§10 的所有参考值无法调优。
+普通行为正确性由 Core、App Server、Desktop 的单元、集成和 smoke 测试覆盖。只有需要比较模型或 profile 的成功率、token 成本和长会话质量时，才建立独立的版本化 benchmark；当前不维护 `evals/harness/` 任务集。
 
-### 14.1 任务集
+### 14.1 未来任务集
 
-仓库内 `evals/harness/` 下的封闭夹具，每题 = 冻结的小型 git 仓库 + 任务提示 +
-`verify.sh`（退出码 0 = 成功）：
+如果后续需要真实模型行为对比，可按下列层次建立独立 benchmark。它们不是当前 Agent Loop 闭环的完成前置条件：
 
 | 层 | 数量 | 内容 | 考察 |
 | --- | --- | --- | --- |
@@ -429,11 +428,12 @@ harness 的每层都直接影响成功率与 token 成本；没有评测回路�
 
 ### 14.3 运行方式
 
-- **PR smoke（无真模型）**：组装快照测试——固定 Thread 夹具跑 assembler，断言
-  （a）请求字节稳定（连续 Turn 前缀不变，§11 回归）；（b）限幅与结构不变量；用
-  deterministic fake `ModelService` 跑 T1 子集的 loop 行为（重试、steering、循环终止）；
-- **模型行为评测**：有受控测试凭据时运行全任务集 × 主力 provider/model × 候选 profile；没有凭据时维持统一 profile，只使用明确启用且去内容化的用户聚合指标看趋势；
-- M0–M6 每个里程碑的验收 = 对应任务层在接线前后的指标对比。
+- **PR smoke（无真模型）**：使用现有 assembler、Core、App Server 和 Desktop 测试，断言
+  （a）请求字节稳定（连续 Turn 前缀不变，§11 回归）；（b）限幅与结构不变量；（c）重试、steering、循环终止和 stream gap 恢复；
+- **模型行为 benchmark（可选）**：只有在有受控测试凭据和明确产品目标时，才运行版本化任务集 × 主力 provider/model × 候选 profile；没有 benchmark 时继续使用统一 profile；
+- M0–M6 每个里程碑的验收优先使用对应的确定性测试；模型指标只在 benchmark 启动后作为补充。
+
+当前 PR 只运行现有 Rust/TS 测试和项目既有 smoke 入口，不依赖网络或真实模型凭据。未来模型 benchmark 若启用，只记录明确允许的去内容化指标；workspace、日志和任务输出不得进入聚合。
 
 ## 15. 落地顺序
 
@@ -442,14 +442,14 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
 | M0（完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装、工具指导与统一编辑选择 guidance 已接线 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
-| M1（实现完成，待评测）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；T1/T2 指标由 S7 拥有 | 本地工具组合、executor contributions、profile 声明层 | S7 T1/T2 fixture |
+| M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（部分具备）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；仍需 T4 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | S7 T4 fixture |
+| M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | 现有行为测试 |
 | M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
 | M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（完成）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 
-当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
+当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。真实模型 benchmark 属于后置的产品度量工作，不阻塞本地闭环。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
 
 ## 16. 参考
 

@@ -1,0 +1,37 @@
+.zeta-general-setting {
+	grid-template-columns: minmax(0, 1fr) minmax(132px, 190px);
+}
+
+.zeta-general-toggle-control {
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.zeta-general-setting-control {
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+}
+
+.zeta-general-setting-control.zeta-select-box {
+  justify-self: end;
+}
+
+.zeta-general-setting-control:not(.zeta-select-box) {
+  padding: 4px 8px;
+  border: 1px solid var(--zeta-input-border);
+  border-radius: 4px;
+  outline: none;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  font: inherit;
+}
+
+.zeta-general-setting-control:not(.zeta-select-box):focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-general-setting-action {
+  justify-self: end;
+}

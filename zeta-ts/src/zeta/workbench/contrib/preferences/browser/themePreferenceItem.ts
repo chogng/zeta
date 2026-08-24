@@ -14,7 +14,7 @@ import { SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../co
 import type { IUserThemeService } from '../../../common/userThemes.js';
 import { SettingsItemActions } from './settingsItemActions.js';
 
-interface AppearanceSettingsPaneOptions {
+interface ThemePreferenceItemOptions {
 	readonly clipboardService: IClipboardService;
 	readonly configurationService: IConfigurationService;
 	readonly contextMenuProvider: IContextMenuProvider;
@@ -35,17 +35,16 @@ type ThemeDraft =
 	| { readonly kind: 'update'; readonly originalTheme: IColorTheme; source: string; readonly themeId: string };
 
 /** Owns color-theme selection and user-theme editing independently of the Settings shell. */
-export class AppearanceSettingsPane extends DisposableOwner {
+export class ThemePreferenceItem extends DisposableOwner {
 	public readonly element: HTMLDivElement;
 	private readonly renderBindings = this.own(new ResettableDisposableGroup());
 	private themeDraft: ThemeDraft | undefined;
 	private themeMessage = '';
 
-	constructor(container: HTMLElement, private readonly options: AppearanceSettingsPaneOptions) {
+	constructor(document: Document, private readonly options: ThemePreferenceItemOptions) {
 		super();
-		this.element = h(container.ownerDocument, 'div');
+		this.element = h(document, 'div');
 		this.element.className = 'zeta-appearance-settings';
-		container.append(this.element);
 		this.render();
 		this.own(options.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) this.render();

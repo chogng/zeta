@@ -615,5 +615,5 @@ base.md 的身份/优先级/防注入/工作行为四段保留在前。
 
 1. 对应实现 crate 的 schema/文案常量与测试；
 2. `zeta-prompts` 中引用该工具名的指导段（附录 A）与 revision；
-3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照 fixture；
-4. 评测跑 T1/T2 对比，回归超阈值不合入。
+3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
+4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。

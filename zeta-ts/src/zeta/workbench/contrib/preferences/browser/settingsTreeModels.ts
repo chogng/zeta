@@ -37,6 +37,10 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		return this._query;
 	}
 
+	get navigationTarget(): string | undefined {
+		return this.navigationTargetId;
+	}
+
 	get visibleItems(): readonly SettingsTreeItem<T>[] {
 		return this.visibleNodes
 			.map((node) => node.element)
@@ -51,6 +55,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	setNodeChildren(parentId: string, children: readonly SettingsTreeNode<T>[]): void {
 		validateSettingsNodes(children);
 		super.setNodeChildren(parentId, asNonCollapsibleSettingsTree(children));
+		this.refreshNavigationScope();
 	}
 
 	setQuery(query: string): void {
@@ -66,6 +71,14 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		if (targetId !== undefined && !this.has(targetId)) throw new RangeError(`Unknown Settings navigation target '${targetId}'`);
 		this.navigationTargetId = targetId;
 		this.navigationScopeIds = targetId === undefined ? undefined : collectNavigationScopeIds(this.getNode(targetId)!);
+		this.refilter();
+	}
+
+	private refreshNavigationScope(): void {
+		if (this.navigationTargetId === undefined) return;
+		const target = this.getNode(this.navigationTargetId);
+		if (!target) return;
+		this.navigationScopeIds = collectNavigationScopeIds(target);
 		this.refilter();
 	}
 

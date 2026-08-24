@@ -1,4 +1,4 @@
-import './media/generalSettings.css';
+import './media/coreConfiguration.css';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -11,32 +11,34 @@ import type { IWorkbenchModeService } from '../../../services/workbenchMode/comm
 import type { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { MaximumSashHoverDelay, MaximumSashSize, MinimumSashHoverDelay, MinimumSashSize, SashConfiguration } from '../../sash/common/sash.js';
 import { actionSetting, booleanSetting, boundSelectSetting, type ConfigurationSettingsGroupDescriptor, numberSetting, selectSetting } from '../common/settingsDescriptors.js';
-import { ConfigurationSettingsPane } from './configurationSettings.js';
+import { ConfigurationItemsContribution } from './configurationItems.js';
 
-interface GeneralSettingsPaneOptions {
+interface CoreConfigurationContributionOptions {
 	readonly clipboardService: IClipboardService;
 	readonly configurationService: IConfigurationService;
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly contextViewProvider: IContextViewProvider;
 	readonly workbenchModeService: IWorkbenchModeService;
 	readonly preferencesService: IPreferencesService;
+	readonly onStatus: (message: string, isError: boolean) => void;
 }
 
 /** Core application preferences declared independently of their browser controls. */
-export class GeneralSettingsPane extends ConfigurationSettingsPane {
-	constructor(container: HTMLElement, options: GeneralSettingsPaneOptions) {
-		super(container, {
+export class CoreConfigurationContribution extends ConfigurationItemsContribution {
+	constructor(document: Document, options: CoreConfigurationContributionOptions) {
+		super('general', document, {
 			clipboardService: options.clipboardService,
 			configurationService: options.configurationService,
 			contextMenuProvider: options.contextMenuProvider,
 			contextViewProvider: options.contextViewProvider,
-			groups: generalSettingsGroups(options.workbenchModeService, options.preferencesService),
+			groups: coreConfigurationGroups(options.workbenchModeService, options.preferencesService),
+			onStatus: options.onStatus,
 			presentation: 'general',
 		});
 	}
 }
 
-function generalSettingsGroups(workbenchModeService: IWorkbenchModeService, preferencesService: IPreferencesService): readonly ConfigurationSettingsGroupDescriptor[] {
+function coreConfigurationGroups(workbenchModeService: IWorkbenchModeService, preferencesService: IPreferencesService): readonly ConfigurationSettingsGroupDescriptor[] {
 	return [
 		{
 			id: 'mode',

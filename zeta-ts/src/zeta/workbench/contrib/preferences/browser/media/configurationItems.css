@@ -1,0 +1,99 @@
+.zeta-configuration-settings {
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.zeta-configuration-settings-group h4 {
+  margin: 0;
+  color: var(--zeta-foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.zeta-configuration-settings-group-description {
+  margin: 5px 0 12px;
+  color: var(--zeta-description-foreground);
+  line-height: 1.5;
+}
+
+.zeta-configuration-settings-list {
+  overflow: visible;
+  border-radius: 8px;
+  background: var(--zeta-settings-item-background);
+}
+
+.zeta-settings-tree-group.is-section-root > .zeta-configuration-settings-list {
+  display: flex;
+  overflow: visible;
+  flex-direction: column;
+  border-radius: 0;
+  background: transparent;
+  gap: 30px;
+}
+
+.zeta-settings-tree-group:not(.is-section-root) > .zeta-configuration-settings-list > * {
+	position: relative;
+}
+
+.zeta-settings-tree-group:not(.is-section-root) > .zeta-configuration-settings-list > * + *::before {
+	position: absolute;
+	top: 0;
+	right: 14px;
+	left: 14px;
+	height: 1px;
+	background: var(--zeta-settings-item-separator);
+	content: "";
+	pointer-events: none;
+}
+
+.zeta-configuration-setting {
+  position: relative;
+  display: grid;
+  min-height: 68px;
+  box-sizing: border-box;
+  align-items: center;
+  padding: 12px 14px;
+  color: var(--zeta-foreground);
+  gap: 18px;
+}
+
+.zeta-configuration-setting > .zeta-setting-item-actions {
+  top: 24px;
+}
+
+.zeta-configuration-setting-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.zeta-configuration-setting-title {
+  font-weight: 600;
+}
+
+.zeta-configuration-setting-description {
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.zeta-configuration-settings-status {
+  min-height: 18px;
+  margin: -18px 0 0;
+  color: var(--zeta-description-foreground);
+  font-size: 12px;
+}
+
+.zeta-configuration-settings-status.is-error {
+  color: var(--zeta-error-foreground);
+}
+
+@media (max-width: 720px) {
+  .zeta-configuration-settings .zeta-configuration-setting {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

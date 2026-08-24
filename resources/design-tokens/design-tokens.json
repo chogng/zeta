@@ -2171,6 +2171,46 @@
       }
     },
     {
+      "id": "settings.itemBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-item-background",
+      "owner": "workbench.preferences",
+      "description": "Background for configuration items in the Settings editor.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      },
+      "values": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      }
+    },
+    {
+      "id": "settings.itemSeparator",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-item-separator",
+      "owner": "workbench.preferences",
+      "description": "Separator between configuration items in the Settings editor.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#383838",
+        "light": "#e0e0e0",
+        "high-contrast-dark": "#383838",
+        "high-contrast-light": "#e0e0e0"
+      },
+      "values": {
+        "dark": "#383838",
+        "light": "#e0e0e0",
+        "high-contrast-dark": "#383838",
+        "high-contrast-light": "#e0e0e0"
+      }
+    },
+    {
       "id": "sectionHeader.foreground",
       "kind": "color",
       "cssVariable": "--zeta-section-header-foreground",

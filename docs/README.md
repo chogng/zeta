@@ -61,7 +61,7 @@
 
 | 文档 | 类型 | 一句话 |
 | --- | --- | --- |
-| [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) | 计划 | coding 最小闭环（WI1–WI6）的文件级步骤 |
+| [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) | 计划 | Agent Loop S1–S7 的构建顺序、状态和发布门 |
 | [`agent-tools-spec.md`](agent-tools-spec.md) | 规格 | 逐工具 schema / 描述正文 / 错误文案 + 系统提示词扩写 |
 | [`agent-harness-design.md`](agent-harness-design.md) | 设计 | harness 行为策略：提示词、循环、失败、裁剪、压缩、缓存 |
 | [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) | 设计 | 执行内核总体设计、组件状态总账、阶段 A–E |

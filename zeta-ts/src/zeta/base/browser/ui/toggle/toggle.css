@@ -32,8 +32,12 @@
 }
 
 .zeta-toggle.disabled {
-  opacity: .5;
   cursor: default;
+}
+
+.zeta-toggle.disabled > input,
+.zeta-toggle.disabled > .zeta-switch-track {
+  opacity: .5;
 }
 
 .zeta-toggle > input:focus-visible {
@@ -74,8 +78,8 @@
   border-radius: 10px;
   background: var(--zeta-input-background);
   transition:
-    background var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1),
-    border-color var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1);
+    background var(--zeta-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--zeta-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .zeta-switch-track::after {
@@ -88,8 +92,8 @@
   background: var(--zeta-description-foreground);
   content: "";
   transition:
-    left var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1),
-    background var(--zeta-animation-duration-fast, 120ms) cubic-bezier(0.4, 0, 0.2, 1);
+    transform var(--zeta-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1),
+    background var(--zeta-animation-duration-normal, 200ms) cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .zeta-switch.checked > .zeta-switch-track {
@@ -98,7 +102,7 @@
 }
 
 .zeta-switch.checked > .zeta-switch-track::after {
-  left: 18px;
+  transform: translateX(16px);
   background: var(--zeta-list-active-selection-foreground);
 }
 
