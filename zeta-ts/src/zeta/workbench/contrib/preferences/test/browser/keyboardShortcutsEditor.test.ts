@@ -35,9 +35,8 @@ const { BrowserKeyboardLayoutService } = await import('../../../../../workbench/
 const { WorkbenchKeybindingService } = await import('../../../../../workbench/services/keybinding/browser/keybindingService.js');
 const { KeybindingsResourceContribution } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceContribution.js');
 const { WorkbenchKeybindingsResourceService } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceService.js');
-const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/common/keybindingsEditorInput.js');
-const { PreferencesService } = await import('../../../../../workbench/services/preferences/common/preferencesService.js');
-const { SettingsService } = await import('../../../../../workbench/services/preferences/common/settingsService.js');
+const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
+const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -92,13 +91,12 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 		keyboardLayoutService: keyboardLayout,
 	}));
 	const editorService = new BrowserEditorService(editor);
-	const settings = disposables.add(new SettingsService());
-	const preferences = new PreferencesService(settings, () => editorService);
-	settings.open('general');
+	const preferences = disposables.add(new PreferencesService(() => editorService));
+	preferences.openSettings('general');
 
 	await preferences.openKeybindings();
 	await preferences.openKeybindings();
-	assert.equal(settings.isOpen, false);
+	assert.equal(preferences.isSettingsOpen, false);
 	assert.equal(editor.activeGroup.inputs.length, 1);
 	assert.equal(editor.activeInput?.resource.toString(), createKeyboardShortcutsEditorInput().resource.toString());
 	assert.equal(ownerDocument.querySelector('.zeta-tab-label')?.textContent, 'Keyboard Shortcuts');

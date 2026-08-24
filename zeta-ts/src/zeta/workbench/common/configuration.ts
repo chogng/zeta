@@ -22,6 +22,17 @@ export const WorkbenchConfiguration = Object.freeze({
 			if (typeof value !== "string" || !isColorThemePreference(value)) throw new TypeError(`Unknown workbench color theme preference: ${String(value)}`);
 			return value;
 		},
+		setting: {
+			valueType: "select",
+			title: "Color theme",
+			description: "Choose a built-in theme or follow the operating-system appearance.",
+			get options() {
+				return [
+					{ value: SystemColorThemePreference, label: "System" },
+					...WorkbenchThemesRegistry.getColorThemes().map(theme => ({ value: theme.id, label: theme.label })),
+				];
+			},
+		},
 	}),
 });
 

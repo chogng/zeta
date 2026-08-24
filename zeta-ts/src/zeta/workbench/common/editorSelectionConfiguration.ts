@@ -12,5 +12,15 @@ export const EditorSelectionConfiguration = Object.freeze({
 			if (value === "buildMode" || value === "code" || value === "academic") return value;
 			throw new TypeError(`workbench.editor.defaultNewDocumentEditor must be buildMode, code, or academic; received ${String(value)}`);
 		},
+		setting: {
+			valueType: "select",
+			title: "Default editor for new documents",
+			description: "Follow the active build mode, or explicitly prefer the Code or Academic editor for new untitled documents.",
+			options: [
+				{ value: "buildMode", label: "Default" },
+				{ value: "code", label: "Code" },
+				{ value: "academic", label: "Academic" },
+			],
+		},
 	}),
 });

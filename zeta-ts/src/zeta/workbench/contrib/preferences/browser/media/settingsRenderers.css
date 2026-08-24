@@ -80,6 +80,103 @@
   line-height: 1.45;
 }
 
+.zeta-setting-item {
+	position: relative;
+}
+
+.zeta-setting-item-actions {
+	position: absolute;
+	top: 50%;
+	left: -32px;
+	z-index: 1;
+	display: flex;
+	width: 32px;
+	height: 24px;
+	align-items: center;
+	justify-content: center;
+	transform: translateY(-50%);
+	opacity: 0;
+	pointer-events: none;
+}
+
+.zeta-setting-item:hover > .zeta-setting-item-actions,
+.zeta-setting-item:focus-within > .zeta-setting-item-actions,
+.zeta-setting-item-actions.is-open {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.zeta-setting-item-actions > .zeta-setting-item-actions-trigger {
+	width: 24px;
+	min-width: 24px;
+	height: 24px;
+	min-height: 24px;
+	box-sizing: border-box;
+	padding: 0;
+	color: var(--zeta-description-foreground);
+}
+
+.zeta-setting-item-actions-trigger:hover {
+	color: var(--zeta-foreground);
+	background: var(--zeta-toolbar-hover-background);
+}
+
+.zeta-setting-item-actions-trigger > .zeta-button-content > .zeta-button-label {
+	display: none;
+}
+
+.zeta-general-setting {
+	grid-template-columns: minmax(0, 1fr) minmax(132px, 190px);
+}
+
+.zeta-general-toggle-control,
+.zeta-editor-toggle-control {
+	width: 100%;
+	grid-column: 1 / -1;
+}
+
+.zeta-editor-toggle-control {
+	cursor: pointer;
+}
+
+.zeta-general-setting-control,
+.zeta-editor-setting-select,
+.zeta-editor-setting-number,
+.zeta-editor-setting-text {
+	width: 100%;
+	min-height: 30px;
+	box-sizing: border-box;
+}
+
+.zeta-general-setting-control.zeta-select-box {
+	justify-self: end;
+}
+
+.zeta-general-setting-control:not(.zeta-select-box),
+.zeta-editor-setting-text {
+	padding: 4px 8px;
+	border: 1px solid var(--zeta-input-border);
+	border-radius: 4px;
+	outline: none;
+	color: var(--zeta-input-foreground);
+	background: var(--zeta-input-background);
+	font: inherit;
+}
+
+.zeta-general-setting-control:not(.zeta-select-box):focus-visible {
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: 1px;
+}
+
+.zeta-editor-setting {
+	cursor: default;
+	grid-template-columns: minmax(0, 1fr) minmax(112px, 180px);
+}
+
+.zeta-editor-setting-text:focus-visible {
+	border-color: var(--zeta-focus-border);
+}
+
 .zeta-configuration-settings-status {
   min-height: 18px;
   margin: -18px 0 0;

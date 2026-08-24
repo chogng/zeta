@@ -17,8 +17,8 @@ import type { IKeybindingsResourceService } from '../../../../platform/keybindin
 import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import type { EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/common/keybindingsEditorInput.js';
-import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/common/keybindingsEditorModel.js';
+import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
+import { KeyboardShortcutsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
 
 export const KeyboardShortcutsEditorId = 'workbench.editor.keyboardShortcuts';
 

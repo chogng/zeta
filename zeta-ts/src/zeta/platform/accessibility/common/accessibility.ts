@@ -19,22 +19,46 @@ export type AccessibilitySupportConfiguration = "auto" | "off" | "on";
 /** The user policy for motion and transparency reduction. */
 export type AccessibilityReductionConfiguration = "auto" | "off" | "on";
 
+const triStateSettingOptions = [
+	{ value: "auto", label: "Auto" },
+	{ value: "on", label: "On" },
+	{ value: "off", label: "Off" },
+] as const;
+
 /** Configuration keys consumed by the shared accessibility service. */
 export const AccessibilityConfiguration = Object.freeze({
 	editorAccessibilitySupport: ConfigurationsRegistry.registerConfiguration<AccessibilitySupportConfiguration>({
 		key: "editor.accessibilitySupport",
 		defaultValue: "auto",
 		parse: parseAccessibilitySupportConfiguration,
+		setting: {
+			valueType: "select",
+			title: "Screen reader optimization",
+			description: "Let the operating system decide, or explicitly enable or disable optimized editor accessibility behavior.",
+			options: triStateSettingOptions,
+		},
 	}),
 	reduceMotion: ConfigurationsRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
 		key: "workbench.reduceMotion",
 		defaultValue: "auto",
 		parse: parseAccessibilityReductionConfiguration,
+		setting: {
+			valueType: "select",
+			title: "Reduce motion",
+			description: "Limit non-essential animation throughout the Workbench.",
+			options: triStateSettingOptions,
+		},
 	}),
 	reduceTransparency: ConfigurationsRegistry.registerConfiguration<AccessibilityReductionConfiguration>({
 		key: "workbench.reduceTransparency",
 		defaultValue: "off",
 		parse: parseAccessibilityReductionConfiguration,
+		setting: {
+			valueType: "select",
+			title: "Reduce transparency",
+			description: "Prefer opaque surfaces where the active theme supports them.",
+			options: triStateSettingOptions,
+		},
 	}),
 	underlineLinks: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "accessibility.underlineLinks",
@@ -44,6 +68,11 @@ export const AccessibilityConfiguration = Object.freeze({
 				throw new TypeError("accessibility.underlineLinks must be a boolean");
 			}
 			return value;
+		},
+		setting: {
+			valueType: "boolean",
+			title: "Always underline links",
+			description: "Keep link affordances visible without requiring hover or focus.",
 		},
 	}),
 });

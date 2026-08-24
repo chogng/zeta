@@ -1,6 +1,6 @@
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
-import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/common/keybindingsEditorInput.js';
+import { isKeyboardShortcutsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
 import { KeyboardShortcutsEditor, KeyboardShortcutsEditorId } from './keyboardShortcutsEditor.js';
 
 registerEditorPane({

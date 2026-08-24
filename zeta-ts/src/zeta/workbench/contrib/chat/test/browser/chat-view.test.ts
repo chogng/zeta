@@ -20,6 +20,7 @@ import { chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
+import { PreferencesService as BrowserPreferencesService } from "../../../../../workbench/services/preferences/browser/preferencesService.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
@@ -144,13 +145,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		registry: new WorkbenchViewRegistry(),
 	});
 	const services = new ServiceCollection();
-	let openedSettingsSection: string | undefined;
-	const preferences: PreferencesService = {
-		openSettings: (sectionId) => {
-			openedSettingsSection = sectionId;
-		},
-		openKeybindings: () => Promise.resolve(),
-	};
+	using preferences: PreferencesService = new BrowserPreferencesService();
 	services.set(IPreferencesService, preferences);
 	services.set(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
@@ -293,7 +288,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		],
 	);
 	await chatActions[3]?.run();
-	assert.equal(openedSettingsSection, "chat");
+	assert.equal(preferences.isSettingsOpen, true);
+	assert.equal(preferences.activeSettingsSectionId, "general");
 	const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
 	assert.equal(tabs?.length, 2);
 	assert.deepEqual(

@@ -155,7 +155,6 @@ import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexServ
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
-import { IPreferencesService } from "../services/preferences/common/preferences.js";
 import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
 import { IKeyboardLayoutService } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import { AppServerWorkspaceTrustService } from "../services/workspaces/browser/appServerWorkspaceTrustService.js";
@@ -624,7 +623,6 @@ export class Workbench extends DisposableOwner {
 						? () => workspaceOpenService.openFolder()
 						: undefined,
 					connectViaSsh: () => commands.executeCommand(ConnectToRemoteCommandId),
-					connectGitHub: () => services.get(IPreferencesService).openSettings("connectors"),
 				},
 			},
 		}));

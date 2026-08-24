@@ -11,6 +11,13 @@ export const HoverConfiguration = Object.freeze({
 		key: "workbench.hover.delay",
 		defaultValue: 500,
 		parse: (value) => parseHoverDelay(value, "workbench.hover.delay"),
+		setting: {
+			valueType: "number",
+			title: "Hover delay",
+			description: "Milliseconds before standard managed hovers appear.",
+			minimum: MinimumHoverDelay,
+			maximum: MaximumHoverDelay,
+		},
 	}),
 	reducedDelay: ConfigurationsRegistry.registerConfiguration<number>({
 		key: "workbench.hover.reducedDelay",
@@ -19,6 +26,13 @@ export const HoverConfiguration = Object.freeze({
 			value,
 			"workbench.hover.reducedDelay",
 		),
+		setting: {
+			valueType: "number",
+			title: "Fast hover delay",
+			description: "Milliseconds used for controls that request reduced-delay hover feedback.",
+			minimum: MinimumHoverDelay,
+			maximum: MaximumHoverDelay,
+		},
 	}),
 });
 

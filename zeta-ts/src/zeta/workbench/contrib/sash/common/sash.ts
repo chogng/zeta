@@ -16,6 +16,13 @@ export const SashConfiguration = Object.freeze({
 			MinimumSashSize,
 			MaximumSashSize,
 		),
+		setting: {
+			valueType: "number",
+			title: "Resize handle size",
+			description: "Width in pixels of Workbench resize handles.",
+			minimum: MinimumSashSize,
+			maximum: MaximumSashSize,
+		},
 	}),
 	hoverDelay: ConfigurationsRegistry.registerConfiguration<number>({
 		key: "workbench.sash.hoverDelay",
@@ -26,6 +33,13 @@ export const SashConfiguration = Object.freeze({
 			MinimumSashHoverDelay,
 			MaximumSashHoverDelay,
 		),
+		setting: {
+			valueType: "number",
+			title: "Resize handle hover delay",
+			description: "Milliseconds before resize handles show hover feedback.",
+			minimum: MinimumSashHoverDelay,
+			maximum: MaximumSashHoverDelay,
+		},
 	}),
 });
 

@@ -4,8 +4,8 @@ import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectT
 import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
-import type { SettingsContributionRegistry, SettingsItemContribution } from './settingsContributions.js';
-import { SettingsNavigation, type SettingsSectionDescriptor, type SettingsSectionGroupDescriptor } from './settingsLayout.js';
+import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
+import { SettingsLayout, SettingsNavigation, type SettingsSectionDescriptor } from './settingsLayout.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 
 export interface SettingsTOCTarget {
@@ -16,38 +16,25 @@ export interface SettingsTOCTarget {
 }
 
 export type SettingsTOCEntry =
-	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsSectionGroupDescriptor }
 	| { readonly kind: 'section'; readonly id: string; readonly section: SettingsSectionDescriptor }
 	| { readonly kind: 'target'; readonly id: string; readonly section: SettingsSectionDescriptor; readonly target: SettingsTOCTarget };
 
 export interface TOCTreeOptions {
 	readonly ariaLabel: string;
-	readonly groupLabel: (group: SettingsSectionGroupDescriptor) => string;
-	readonly groupDescription: (group: SettingsSectionGroupDescriptor) => string;
 	readonly sectionLabel: (section: SettingsSectionDescriptor) => string;
 	readonly sectionDescription: (section: SettingsSectionDescriptor) => string;
 }
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly contributions: SettingsContributionRegistry) {}
+	constructor(private readonly settingsModel: ISettingsEditorModel) {}
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
-		return SettingsNavigation.map(entry => {
-			if ('sections' in entry) {
-				return {
-					element: { kind: 'group', id: `group.${entry.id}`, group: entry },
-					children: entry.sections.map(section => this.sectionElement(section)),
-					collapsible: true,
-					collapsed: true,
-				};
-			}
-			return this.sectionElement(entry);
-		});
+		return SettingsNavigation.map(section => this.sectionElement(section));
 	}
 
 	private sectionElement(section: SettingsSectionDescriptor): ObjectTreeElement<SettingsTOCEntry> {
-		const targets = this.contributions.getSectionChildren(section.id).map(node => ({
+		const targets = new SettingsLayout(section.id, this.settingsModel.getSectionGroups(section.id)).nodes.map(node => ({
 			id: node.element.id,
 			label: node.element.title,
 			targetId: node.element.id,
@@ -65,9 +52,9 @@ export class TOCTreeModel {
 	}
 }
 
-function tocSearchKeywords(node: SettingsTreeNode<SettingsItemContribution>): readonly string[] {
+function tocSearchKeywords(node: SettingsTreeNode<ISetting>): readonly string[] {
 	const keywords: string[] = [];
-	const visit = (candidate: SettingsTreeNode<SettingsItemContribution>): void => {
+	const visit = (candidate: SettingsTreeNode<ISetting>): void => {
 		keywords.push(candidate.element.title, candidate.element.description, ...(candidate.element.keywords ?? []));
 		for (const child of candidate.children ?? []) visit(child);
 	};
@@ -113,11 +100,11 @@ export class TOCTree extends DisposableOwner {
 		this.onDidChangeFind = this.tree.onDidChangeFind;
 		this.own(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
 			const entry = elements[0];
-			if (entry && browserEvent && entry.kind !== 'group') this.openEmitter.fire(entry);
+			if (entry && browserEvent) this.openEmitter.fire(entry);
 		}));
 		this.own(this.tree.onDidAccept(({ element, node }) => {
 			if (node.collapsible) this.tree.toggleCollapsed(element.id);
-			if (element.kind !== 'group') this.openEmitter.fire(element);
+			this.openEmitter.fire(element);
 		}));
 	}
 
@@ -154,7 +141,6 @@ export class TOCTree extends DisposableOwner {
 	}
 
 	private keyboardLabel(entry: SettingsTOCEntry): string {
-		if (entry.kind === 'group') return `${this.options.groupLabel(entry.group)} ${this.options.groupDescription(entry.group)}`;
 		if (entry.kind === 'section') return `${this.options.sectionLabel(entry.section)} ${this.options.sectionDescription(entry.section)}`;
 		return [entry.target.label, ...(entry.target.keywords ?? [])].join(' ');
 	}
@@ -162,12 +148,9 @@ export class TOCTree extends DisposableOwner {
 	private renderEntry(document: Document, entry: SettingsTOCEntry): HTMLElement {
 		const label = h(document, 'span');
 		label.className = 'zeta-settings-navigation-label';
-		if (entry.kind === 'group') label.dataset.settingsGroupId = entry.group.id;
-		else if (entry.kind === 'section') label.dataset.settingsSectionId = entry.section.id;
+		if (entry.kind === 'section') label.dataset.settingsSectionId = entry.section.id;
 		else label.dataset.settingsTargetId = entry.target.targetId;
-		label.textContent = entry.kind === 'group'
-			? this.options.groupLabel(entry.group)
-			: entry.kind === 'section' ? this.options.sectionLabel(entry.section) : entry.target.label;
+		label.textContent = entry.kind === 'section' ? this.options.sectionLabel(entry.section) : entry.target.label;
 		return label;
 	}
 }

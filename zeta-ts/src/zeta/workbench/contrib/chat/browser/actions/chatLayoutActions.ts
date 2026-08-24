@@ -133,6 +133,6 @@ registerAction2(class OpenChatSettingsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		accessor.get(IPreferencesService).openSettings("chat");
+		accessor.get(IPreferencesService).openSettings();
 	}
 });

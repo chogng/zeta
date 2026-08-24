@@ -1,10 +1,50 @@
 import type { IConfigurationKey } from "./configurationService.js";
 
+interface IConfigurationSettingSchemaBase {
+	readonly title: string;
+	readonly description: string;
+	readonly keywords?: readonly string[];
+}
+
+export interface IBooleanConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'boolean';
+}
+
+export interface INumberConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'number';
+	readonly minimum: number;
+	readonly maximum: number;
+}
+
+export interface ISelectConfigurationSettingSchema<T extends string = string> extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'select';
+	readonly options: readonly { readonly value: T; readonly label: string }[];
+}
+
+export interface ITextConfigurationSettingSchema extends IConfigurationSettingSchemaBase {
+	readonly valueType: 'text';
+	readonly placeholder: string;
+}
+
+export type IConfigurationSettingSchema = IBooleanConfigurationSettingSchema | INumberConfigurationSettingSchema | ISelectConfigurationSettingSchema | ITextConfigurationSettingSchema;
+
+export type ConfigurationSettingSchemaFor<T> =
+	[T] extends [boolean] ? IBooleanConfigurationSettingSchema
+		: [T] extends [number] ? INumberConfigurationSettingSchema
+			: [T] extends [string] ? ISelectConfigurationSettingSchema<T & string> | ITextConfigurationSettingSchema
+				: never;
+
+export interface IRegisteredConfiguration {
+	readonly key: IConfigurationKey<unknown>;
+	readonly setting?: IConfigurationSettingSchema;
+}
+
 export interface IConfigurationKeyDefinition<T> {
 	readonly key: string;
 	readonly defaultValue: T;
 	readonly parse: (value: unknown) => T;
 	readonly serialize?: (value: T) => unknown;
+	readonly setting?: ConfigurationSettingSchemaFor<T>;
 }
 
 /**
@@ -14,7 +54,7 @@ export interface IConfigurationKeyDefinition<T> {
  * services use the registry to validate complete persisted snapshots.
  */
 export class ConfigurationRegistry {
-	private readonly keys = new Map<string, IConfigurationKey<unknown>>();
+	private readonly configurations = new Map<string, IRegisteredConfiguration>();
 
 	registerConfiguration<T>(
 		definition: IConfigurationKeyDefinition<T>,
@@ -22,7 +62,7 @@ export class ConfigurationRegistry {
 		if (!isConfigurationKey(definition.key)) {
 			throw new TypeError(`Invalid configuration key: ${definition.key}`);
 		}
-		if (this.keys.has(definition.key)) {
+		if (this.configurations.has(definition.key)) {
 			throw new Error(
 				`Configuration key is already registered: ${definition.key}`,
 			);
@@ -33,19 +73,23 @@ export class ConfigurationRegistry {
 			parse: definition.parse,
 			serialize: definition.serialize ?? ((value: T) => value),
 		});
-		this.keys.set(
-			definition.key,
-			key as IConfigurationKey<unknown>,
-		);
+		this.configurations.set(definition.key, {
+			key: key as IConfigurationKey<unknown>,
+			setting: definition.setting as IConfigurationSettingSchema | undefined,
+		});
 		return key;
 	}
 
 	getConfigurations(): readonly IConfigurationKey<unknown>[] {
-		return [...this.keys.values()];
+		return [...this.configurations.values()].map(configuration => configuration.key);
+	}
+
+	getRegisteredConfigurations(): readonly IRegisteredConfiguration[] {
+		return [...this.configurations.values()];
 	}
 
 	owns<T>(key: IConfigurationKey<T>): boolean {
-		return this.keys.get(key.key) === key;
+		return this.configurations.get(key.key)?.key === key;
 	}
 }
 

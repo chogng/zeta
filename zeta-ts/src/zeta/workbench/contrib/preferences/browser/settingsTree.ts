@@ -3,7 +3,6 @@ import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTree
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
 import { h } from "../../../../base/browser/dom.js";
-import { setSettingsItemIdentity } from "./settingsItem.js";
 
 export interface SettingsTreeOptions<T> {
 	readonly model: SettingsTreeModel<T>;
@@ -107,7 +106,10 @@ export class SettingsTree<T> extends DisposableOwner {
 		if (element.dataset.settingsItemId && element.dataset.settingsItemId !== item.id) {
 			throw new TypeError(`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`);
 		}
-		if (!element.dataset.settingsItemId) setSettingsItemIdentity(element, item.id, "information");
+		if (!element.dataset.settingsItemId) {
+			element.dataset.settingsItemId = item.id;
+			element.dataset.settingsItemKind = "setting";
+		}
 		this.rendered.set(item.id, { kind: "item", element, item });
 		return element;
 	}
