@@ -182,7 +182,6 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 	private polling: AbortController | undefined;
 	private presencePolling: AbortController | undefined;
 	private readonly presenceHeartbeat: ReturnType<typeof setInterval>;
-	private disposed = false;
 	private _version: number;
 	private _presenceGeneration = 0;
 	private _currentPresence: readonly DocumentCollaborationPresence[] = [];
@@ -200,7 +199,6 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 		this._version = initialSnapshot.version;
 		this.presenceHeartbeat = setInterval(() => this.heartbeatPresence(), 20_000);
 		this.defer(() => {
-			this.disposed = true;
 			this.polling?.abort();
 			this.presencePolling?.abort();
 			clearInterval(this.presenceHeartbeat);
@@ -224,49 +222,49 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 	}
 
 	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
 		return this.service.submit(this, envelope, document, signal);
 	}
 
 	async updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		if (this.disposed) throw new ReferenceError("Remote Stanza collaboration connection is disposed");
+		if (this.isDisposed) throw new ReferenceError("Remote Stanza collaboration connection is disposed");
 		await this.service.updatePresence(this, selection, signal);
 		this.presence = selection;
 	}
 
 	createInvite(displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
 		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot create room invitations"));
 		return this.service.createInvite(this, displayName, role, signal);
 	}
 
 	listMembers(signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
 		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot inspect room members"));
 		return this.service.listMembers(this, signal);
 	}
 
 	rotateMemberAccessToken(principalId: string, signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
 		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
 		return this.service.rotateMemberAccessToken(this, principalId, signal);
 	}
 
 	revokeMember(principalId: string, signal: AbortSignal): Promise<void> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Remote Stanza collaboration connection is disposed"));
 		if (!this.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
 		return this.service.revokeMember(this, principalId, signal);
 	}
 
 	private async poll(): Promise<void> {
 		let retryDelay = INITIAL_POLL_RETRY_DELAY_MS;
-		while (!this.disposed) {
+		while (!this.isDisposed) {
 			const polling = new AbortController();
 			this.polling = polling;
 			try {
 				const replay = await this.service.poll(this, polling.signal);
 				retryDelay = INITIAL_POLL_RETRY_DELAY_MS;
-				if (this.disposed || polling.signal.aborted) return;
+				if (this.isDisposed || polling.signal.aborted) return;
 				if (replay.kind === "resync") {
 					this._version = replay.snapshot.version;
 					this.snapshotEmitter.fire(replay.snapshot);
@@ -278,7 +276,7 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 					this.updateEmitter.fire(update);
 				}
 			} catch (error) {
-				if (this.disposed || polling.signal.aborted) return;
+				if (this.isDisposed || polling.signal.aborted) return;
 				const failure = error instanceof Error ? error : new Error("Remote Stanza collaboration updates failed");
 				if (!isRetryablePollFailure(failure)) {
 					this.failureEmitter.fire(failure);
@@ -294,18 +292,18 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 
 	private async pollPresence(): Promise<void> {
 		let retryDelay = INITIAL_POLL_RETRY_DELAY_MS;
-		while (!this.disposed) {
+		while (!this.isDisposed) {
 			const polling = new AbortController();
 			this.presencePolling = polling;
 			try {
 				const replay = await this.service.pollPresence(this, polling.signal);
 				retryDelay = INITIAL_POLL_RETRY_DELAY_MS;
-				if (this.disposed || polling.signal.aborted) return;
+				if (this.isDisposed || polling.signal.aborted) return;
 				this._presenceGeneration = replay.generation;
 				this._currentPresence = Object.freeze(replay.presences.filter(presence => presence.clientId !== this.clientId));
 				this.presenceEmitter.fire(this._currentPresence);
 			} catch (error) {
-				if (this.disposed || polling.signal.aborted) return;
+				if (this.isDisposed || polling.signal.aborted) return;
 				const failure = error instanceof Error ? error : new Error("Remote Stanza collaboration presence updates failed");
 				if (!isRetryablePollFailure(failure)) {
 					this.failureEmitter.fire(failure);
@@ -320,9 +318,9 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 	}
 
 	private heartbeatPresence(): void {
-		if (this.disposed || this.presence === undefined) return;
+		if (this.isDisposed || this.presence === undefined) return;
 		void this.updatePresence(this.presence, new AbortController().signal).catch(error => {
-			if (!this.disposed) this.failureEmitter.fire(error instanceof Error ? error : new Error("Remote Stanza collaboration presence heartbeat failed"));
+			if (!this.isDisposed) this.failureEmitter.fire(error instanceof Error ? error : new Error("Remote Stanza collaboration presence heartbeat failed"));
 		});
 	}
 }

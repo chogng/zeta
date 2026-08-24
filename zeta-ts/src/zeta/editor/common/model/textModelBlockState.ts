@@ -58,7 +58,6 @@ export class TextModelBlockState extends DisposableOwner {
 	private _snapshot: TextModelBlockSnapshot;
 	private _selection: DocumentSelection | undefined;
 	private _storedMarks: readonly DocumentMark[] | undefined;
-	private disposed = false;
 
 	readonly onDidChange: Event<TextModelBlockChange> = this.changeEmitter.event;
 	readonly onDidChangeSelection: Event<DocumentSelection | undefined> = this.selectionEmitter.event;
@@ -85,56 +84,53 @@ export class TextModelBlockState extends DisposableOwner {
 		this.pluginStates = new Map();
 		const initContext: DocumentPluginInitContext = Object.freeze({ schema, document: normalizedDocument, selection: options.selection, version: host.getVersion() });
 		for (const plugin of this.plugins) this.pluginStates.set(plugin.key, plugin.state.init(initContext));
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	get document(): DocumentNode {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._document;
 	}
 
 	get snapshot(): TextModelBlockSnapshot {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._snapshot;
 	}
 
 	get version(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.host.getVersion();
 	}
 
 	get selection(): DocumentSelection | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._selection;
 	}
 
 	/** Marks explicitly requested for the next text insertion, or undefined for inherited marks. */
 	get storedMarks(): readonly DocumentMark[] | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._storedMarks;
 	}
 
 	get canUndo(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.history.canUndo;
 	}
 
 	get canRedo(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.history.canRedo;
 	}
 
 	/** Returns the current state owned by a registered plugin. */
 	getPluginState<T>(key: DocumentPluginKey<T>): T | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.pluginStates.get(key) as T | undefined;
 	}
 
 	/** Returns each plugin-owned decoration set without merging plugin identities. */
 	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const context = { schema: this.schema, document: this._document, selection: this._selection, version: this.version };
 		const sources: TextModelPluginDecorationSource[] = [];
 		for (const plugin of this.plugins) {
@@ -149,7 +145,7 @@ export class TextModelBlockState extends DisposableOwner {
 	}
 
 	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "user")) return undefined;
 		if (transaction.steps.length === 0) {
@@ -179,7 +175,7 @@ export class TextModelBlockState extends DisposableOwner {
 
 	/** Applies an already-transformed remote transaction outside local author history. */
 	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
 		if (!this.acceptsTransaction(transaction, "remote")) return undefined;
 		if (transaction.steps.length === 0) {
@@ -207,12 +203,12 @@ export class TextModelBlockState extends DisposableOwner {
 
 	/** Rewrites locally authored undo/redo branches before a preserving remote dispatch. */
 	rebaseHistory(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.history.rebase(mapper);
 	}
 
 	undo(): TextModelBlockChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.history.closeGroup();
 		const entry = this.history.takeUndo();
 		if (!entry) return undefined;
@@ -232,7 +228,7 @@ export class TextModelBlockState extends DisposableOwner {
 	}
 
 	redo(): TextModelBlockChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.history.closeGroup();
 		const entry = this.history.takeRedo();
 		if (!entry) return undefined;
@@ -252,7 +248,7 @@ export class TextModelBlockState extends DisposableOwner {
 	}
 
 	setSelection(selection: DocumentSelection | undefined): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (selection) validateDocumentSelection(this._document, selection);
 		if (selectionsEqual(this._selection, selection)) return;
 		const pluginStates = this.applyPluginSelection(this._document, this._selection, selection, this.version);
@@ -264,7 +260,7 @@ export class TextModelBlockState extends DisposableOwner {
 
 	/** Sets the insertion marks without changing the document or its history. */
 	setStoredMarks(marks: readonly DocumentMark[] | undefined): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (marks) this.schema.validateMarks(marks);
 		const normalized = cloneMarks(marks);
 		if (marksEqual(this._storedMarks, normalized)) return;
@@ -273,7 +269,7 @@ export class TextModelBlockState extends DisposableOwner {
 	}
 
 	reset(document: DocumentNode): TextModelBlockChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const normalizedDocument = freezeDocumentNode(document);
 		this.schema.validate(normalizedDocument);
 		if (normalizedDocument === this._document) return undefined;
@@ -369,9 +365,6 @@ export class TextModelBlockState extends DisposableOwner {
 		return next;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextModel block state is already disposed");
-	}
 }
 
 function cloneMarks(marks: readonly DocumentMark[] | undefined): readonly DocumentMark[] | undefined {

@@ -1,4 +1,4 @@
-import { DisposableStore, type IDisposable } from "../common/lifecycle.js";
+import { AbstractDisposable, DisposableStore, setDisposableOwner, type IDisposable } from "../common/lifecycle.js";
 import { autorun, type IObservable, type IReader, isObservable } from "../common/observable.js";
 import type { DomElementProperties } from "./dom.js";
 
@@ -171,19 +171,17 @@ export class ReactiveElement<
 	}
 }
 
-export class LiveElement<TElement extends HTMLElement | SVGElement>
-	implements IDisposable {
+export class LiveElement<TElement extends HTMLElement | SVGElement> extends AbstractDisposable {
 	constructor(
-		readonly element: TElement,
+		public readonly element: TElement,
 		private readonly registration: IDisposable,
-	) {}
-
-	dispose(): void {
-		this.registration.dispose();
+	) {
+		super();
+		setDisposableOwner(registration, this);
 	}
 
-	[Symbol.dispose](): void {
-		this.dispose();
+	protected override disposeCore(): void {
+		this.registration.dispose();
 	}
 }
 

@@ -49,7 +49,6 @@ export class ModelSettingsPane extends DisposableOwner {
 	private query = '';
 	private loadGeneration = 0;
 	private hasAcceptedCatalog = false;
-	private disposed = false;
 
 	constructor(container: HTMLElement, private readonly options: ModelSettingsPaneOptions) {
 		super();
@@ -106,14 +105,13 @@ export class ModelSettingsPane extends DisposableOwner {
 		this.own(options.models.onDidChangeModels(() => void this.reload(false)));
 		void this.reload(false);
 		this.defer(() => {
-			this.disposed = true;
 			this.loadGeneration++;
 			this.element.remove();
 		});
 	}
 
 	private async reload(refresh: boolean): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const generation = ++this.loadGeneration;
 		const showProgress = refresh || !this.hasAcceptedCatalog || !this.refreshButton.enabled;
 		if (showProgress) {

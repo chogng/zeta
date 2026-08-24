@@ -34,7 +34,6 @@ export class ScmViewPane extends ViewPane {
 	private revision = 0;
 	private busy = false;
 	private unavailable = false;
-	private disposed = false;
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService, private readonly commandService: ICommandService, private readonly contextMenuProvider: IContextMenuProvider) {
 		super(container, options);
@@ -84,7 +83,6 @@ export class ScmViewPane extends ViewPane {
 			if (this.status) this.renderStatus(this.status);
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.revision += 1;
 		});
 		this.setBusy(true);
@@ -97,12 +95,12 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.textContent = "Reading Git status…";
 		try {
 			const status = await this.gitService.status();
-			if (this.disposed || revision !== this.revision) return;
+			if (this.isDisposed || revision !== this.revision) return;
 			this.renderStatus(status);
 		} catch (error) {
 			this.renderError(error, revision);
 		} finally {
-			if (!this.disposed && revision === this.revision) this.setBusy(false);
+			if (!this.isDisposed && revision === this.revision) this.setBusy(false);
 		}
 	}
 
@@ -118,13 +116,13 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.textContent = "Committing staged changes…";
 		try {
 			const result = await this.gitService.commit(message);
-			if (this.disposed || revision !== this.revision) return;
+			if (this.isDisposed || revision !== this.revision) return;
 			this.commitInput.value = "";
 			this.renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
 		} catch (error) {
 			this.renderError(error, revision);
 		} finally {
-			if (!this.disposed && revision === this.revision) this.setBusy(false);
+			if (!this.isDisposed && revision === this.revision) this.setBusy(false);
 		}
 	}
 
@@ -150,17 +148,17 @@ export class ScmViewPane extends ViewPane {
 				: action === "unstage"
 				? await this.gitService.unstage(paths)
 				: await this.gitService.discardWorktree(paths);
-			if (this.disposed || revision !== this.revision) return;
+			if (this.isDisposed || revision !== this.revision) return;
 			this.renderStatus(result);
 		} catch (error) {
 			this.renderError(error, revision);
 		} finally {
-			if (!this.disposed && revision === this.revision) this.setBusy(false);
+			if (!this.isDisposed && revision === this.revision) this.setBusy(false);
 		}
 	}
 
 	private onStatusChanged(status: GitStatus): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (
 			this.status &&
 			status.streamInstanceId === this.status.streamInstanceId &&
@@ -288,7 +286,7 @@ export class ScmViewPane extends ViewPane {
 		const comparison: GitChangeFileComparison = side === "index" ? "staged" : "unstaged";
 		try {
 			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			if (inputs.original && inputs.modified) {
 				await this.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), { pinned });
 			} else if (inputs.modified) {
@@ -297,7 +295,7 @@ export class ScmViewPane extends ViewPane {
 				await this.editorService.openEditor(inputs.original, { pinned });
 			}
 		} catch (error) {
-			if (!this.disposed) this.statusElement.textContent = gitErrorMessage(error);
+			if (!this.isDisposed) this.statusElement.textContent = gitErrorMessage(error);
 		}
 	}
 
@@ -321,12 +319,12 @@ export class ScmViewPane extends ViewPane {
 		try {
 			const options: OpenScmMultiDiffEditorOptions = { title, comparison, status, changes };
 			const result = await this.commandService.executeCommand<OpenScmMultiDiffEditorResult>(OpenScmMultiDiffEditorCommandId, options);
-			if (this.disposed || this.status !== status) return;
+			if (this.isDisposed || this.status !== status) return;
 			if (result === "empty") {
 				this.statusElement.textContent = `No text changes are available in ${title}.`;
 			}
 		} catch (error) {
-			if (!this.disposed) this.statusElement.textContent = gitErrorMessage(error);
+			if (!this.isDisposed) this.statusElement.textContent = gitErrorMessage(error);
 		}
 	}
 
@@ -357,7 +355,7 @@ export class ScmViewPane extends ViewPane {
 	}
 
 	private renderError(error: unknown, revision: number): void {
-		if (this.disposed || revision !== this.revision) return;
+		if (this.isDisposed || revision !== this.revision) return;
 		this.status = undefined;
 		this.unavailable = true;
 		this.actionViewItems.length = 0;

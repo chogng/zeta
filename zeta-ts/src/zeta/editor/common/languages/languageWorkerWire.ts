@@ -32,7 +32,6 @@ export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> e
 	private readonly stagedResultStates = new Map<number, StagedWireResultState<TLane, TResult>>();
 	private mirroredVersion: number | undefined;
 	private terminalFailure: Error | undefined;
-	private disposed = false;
 
 	readonly onDidFail: Event<Error> = this.failureEmitter.event;
 
@@ -47,7 +46,6 @@ export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> e
 		this.own(port.onMessage(message => this.receive(message)));
 		this.own(port.onFailure(error => this.fail(asError(error, "Language worker transport failed"))));
 		this.defer(() => {
-			this.disposed = true;
 			this.mirroredVersion = undefined;
 			this.resultStates.clear();
 			this.stagedResultStates.clear();
@@ -195,7 +193,7 @@ export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> e
 	}
 
 	private ensureAvailable(): void {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			throw new ReferenceError("LanguageWorkerWireClient is already disposed");
 		}
 		if (this.terminalFailure) throw this.terminalFailure;
@@ -207,7 +205,6 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 	private readonly active = new Map<number, AbortController>();
 	private readonly resultStates = new Map<TLane, LanguageWorkerWireResultState<TResult>>();
 	private mirror: LanguageWorkerDocumentMirror | undefined;
-	private disposed = false;
 
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
@@ -222,7 +219,6 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 		this.own(worker);
 		this.own(port.onMessage(message => this.receive(message)));
 		this.defer(() => {
-			this.disposed = true;
 			this.mirror = undefined;
 			this.resultStates.clear();
 			for (const controller of this.active.values()) {
@@ -271,7 +267,7 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 	}
 
 	private async runRequest(message: RequestWireMessage): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (this.active.has(message.requestId)) {
 			this.sendFailure(message.requestId, new RangeError(`Duplicate language worker request '${message.requestId}'`));
 			return;
@@ -300,7 +296,7 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 		const resultBase = currentBase?.requestId === message.resultBaseRequestId ? currentBase : undefined;
 		try {
 			const result = await this.worker.run(request, controller.signal);
-			if (!this.disposed && !controller.signal.aborted) {
+			if (!this.isDisposed && !controller.signal.aborted) {
 				const encoded = this.codec.encodeResult(request.lane, result, request.snapshot, resultBase);
 				this.port.send(createResultMessage(message.requestId, encoded));
 				const current = this.resultStates.get(request.lane);
@@ -313,7 +309,7 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 				}
 			}
 		} catch (error) {
-			if (!this.disposed && !controller.signal.aborted) {
+			if (!this.isDisposed && !controller.signal.aborted) {
 				this.sendFailure(message.requestId, error);
 			}
 		} finally {
@@ -324,7 +320,7 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 	}
 
 	private sendFailure(requestId: number, error: unknown): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.port.send(createFailureMessage(requestId, error));
 	}
 }

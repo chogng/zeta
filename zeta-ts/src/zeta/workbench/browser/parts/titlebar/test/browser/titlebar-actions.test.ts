@@ -8,6 +8,7 @@ import type {
 	IMenubarControl,
 } from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
 import { h } from "../../../../../../base/browser/dom.js";
+import { noEvent } from "../../../../../../base/common/event.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -26,7 +27,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { DisposableStore, toDisposable } = await import(
+const { DisposableStore } = await import(
 	"../../../../../../base/common/lifecycle.js"
 );
 const { MenuId, MenusRegistry } = await import(
@@ -53,8 +54,6 @@ const { BrowserTitlebarPart } = await import(
 const { BrowserMenubarControl } = await import(
 	"../../../../../../workbench/browser/parts/titlebar/menubarControl.js"
 );
-
-const noEvent = () => toDisposable(() => {});
 
 const contextMenuService: IContextMenuService = {
 	onDidShowContextMenu: noEvent,

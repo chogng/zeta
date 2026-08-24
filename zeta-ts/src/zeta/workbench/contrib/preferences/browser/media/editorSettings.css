@@ -12,6 +12,10 @@
   line-height: 1.5;
 }
 
+.zeta-editor-settings.has-navigation-target > .zeta-editor-settings-note {
+  display: none;
+}
+
 .zeta-editor-settings-group h4 {
   margin: 0;
   color: var(--zeta-foreground);

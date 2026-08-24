@@ -32,7 +32,6 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 	private requestSequence = 1;
 	private readSequence = 0;
 	private polling = false;
-	private disposed = false;
 	private _state: DebugSessionState = "starting";
 	private _reason: string | undefined;
 	private _threadId: number | undefined;
@@ -50,7 +49,6 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 	private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly workspace: URI, private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
 		super();
 		this.sessionId = id;
-		this.defer(() => { this.disposed = true; });
 		this.defer(() => {
 			for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error("Debug session was disposed")); }
 			this.pending.clear();
@@ -216,7 +214,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 	}
 
 	private async poll(): Promise<void> {
-		while (this.polling && !this.disposed) {
+		while (this.polling && !this.isDisposed) {
 			try {
 				const read = await this.processService.read(this.sessionId, this.readSequence, 128);
 				if (read.outputGap) throw new Error("Debug Adapter output exceeded the retained buffer");

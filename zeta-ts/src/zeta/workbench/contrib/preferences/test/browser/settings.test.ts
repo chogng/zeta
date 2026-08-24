@@ -145,6 +145,15 @@ test("Settings tree renders validated group and item identities", () => {
 	model.setQuery("");
 	assert.equal(renderer.element.querySelectorAll("article").length, 2);
 	assert.equal(ownerDocument.activeElement, themeElement);
+	renderer.setNavigationTarget("appearance.colors.theme");
+	assert.equal(renderer.element.classList.contains("has-navigation-target"), true);
+	assert.equal(renderer.element.dataset.settingsNavigationTargetId, "appearance.colors.theme");
+	assert.equal(renderer.element.querySelectorAll("article").length, 1);
+	assert.equal(renderer.element.querySelector("article")?.textContent, "Theme");
+	renderer.setNavigationTarget(undefined);
+	assert.equal(renderer.element.classList.contains("has-navigation-target"), false);
+	assert.equal(renderer.element.querySelectorAll("article").length, 2);
+	assert.throws(() => renderer.setNavigationTarget("appearance.colors.unknown"), /Unknown Settings navigation target/);
 	model.setNodeChildren("appearance.colors", [{
 		element: { kind: "item", id: "appearance.colors.theme", title: "Theme", description: "Choose a theme.", value: "Updated Theme" },
 	}]);
@@ -235,8 +244,14 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	assert.equal(search.type, "search");
 	assert.equal(search.placeholder, "Search settings");
 	assert.equal(ownerDocument.activeElement, search);
-	const navigationItems = [...root.querySelectorAll<HTMLButtonElement>("[data-settings-section-id]")];
-	assert.equal(navigationItems.every(item => item.classList.contains("zeta-button")), true);
+	const navigationTree = root.querySelector<HTMLElement>(".zeta-settings-navigation-tree");
+	assert.ok(navigationTree);
+	assert.equal(navigationTree.getAttribute("role"), "tree");
+	assert.equal(navigationTree.getAttribute("aria-label"), "Settings categories");
+	assert.equal(navigationTree.classList.contains("zeta-tree-selection-subtle"), true);
+	assert.equal(navigationTree.style.overflow, "visible");
+	assert.ok(navigationTree.querySelector(".zeta-tree-twistie .zeta-icon"));
+	const navigationItems = [...root.querySelectorAll<HTMLElement>("[data-settings-section-id]")];
 	assert.deepEqual(
 		navigationItems.map((item) => item.textContent),
 		[
@@ -266,16 +281,92 @@ test("Settings overlay opens, closes, and restores focus", () => {
 			"Documentation",
 		],
 	);
-	assert.equal(navigationItems[0].getAttribute("aria-current"), "page");
+	const generalRow = navigationItems[0].closest<HTMLElement>(".zeta-tree-row");
+	assert.equal(generalRow?.getAttribute("aria-selected"), "true");
+	assert.equal(generalRow?.getAttribute("aria-expanded"), "false");
+	generalRow?.click();
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>("[data-settings-target-id]")].map(item => item.textContent),
+		["Workbench Mode", "Keyboard", "Accessibility", "Interaction"],
+	);
+	assert.equal(root.querySelector("[data-tree-id='general']")?.getAttribute("aria-expanded"), "true");
 	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
 	assert.equal(root.querySelectorAll(".zeta-general-setting").length, 10);
+	root.querySelector<HTMLElement>("[data-settings-target-id='general.group.mode']")?.click();
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Workbench Mode");
+	assert.equal(root.querySelectorAll(".zeta-general-settings-group").length, 1);
+	assert.equal(root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-target"), "general.group.mode");
+	root.querySelector<HTMLElement>("[data-settings-section-id='general']")?.click();
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "General");
+	assert.equal(root.querySelectorAll(".zeta-general-settings-group").length, 4);
+	root.querySelector<HTMLElement>("[data-settings-section-id='editor']")?.click();
+	for (const target of root.querySelectorAll<HTMLElement>("[data-settings-target-id^='editor.']")) {
+		const targetId = target.dataset.settingsTargetId;
+		assert.ok(targetId);
+		const contentTarget = root.querySelector<HTMLElement>(`[data-settings-tree-group-id="${targetId}"], [data-settings-tree-item-id="${targetId}"]`);
+		assert.ok(contentTarget);
+		assert.equal(contentTarget.querySelector(":scope > .zeta-settings-tree-group-title")?.textContent, target.textContent);
+	}
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>("[data-settings-target-id]")].map(item => ({
+			label: item.textContent,
+			targetId: item.dataset.settingsTargetId,
+		})),
+		[
+			{ label: "Editor selection", targetId: "editor.group.selection" },
+			{ label: "Typography", targetId: "editor.group.typography" },
+			{ label: "Display", targetId: "editor.group.display" },
+			{ label: "Minimap", targetId: "editor.group.minimap" },
+			{ label: "Editing", targetId: "editor.group.editing" },
+			{ label: "Code intelligence", targetId: "editor.group.code-intelligence" },
+			{ label: "Find and replace", targetId: "editor.group.find-and-replace" },
+			{ label: "Workspace search", targetId: "editor.group.workspace-search" },
+			{ label: "Diff editor", targetId: "editor.group.diff-editor" },
+			{ label: "Files", targetId: "editor.group.files" },
+		],
+	);
+	const minimapNavigationItem = root.querySelector<HTMLElement>("[data-settings-target-id='editor.group.minimap']");
+	assert.ok(minimapNavigationItem);
+	minimapNavigationItem.click();
+	assert.equal(settings.activeSectionId, "editor");
+	assert.equal(minimapNavigationItem.closest(".zeta-tree-row")?.getAttribute("aria-selected"), "true");
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Minimap");
+	assert.equal(root.querySelector(".zeta-settings-description")?.textContent, "Control the compact document overview shown beside the editor.");
+	assert.equal(root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-target"), "editor.group.minimap");
+	assert.equal(root.querySelector(".zeta-settings-page")?.classList.contains("has-navigation-target"), true);
+	assert.equal(root.querySelectorAll(".zeta-editor-settings-group").length, 1);
+	assert.ok(root.querySelector("[data-settings-tree-group-id='editor.group.minimap']"));
+	assert.ok(root.querySelector("[data-settings-tree-item-id='editor.minimap.enabled']"));
+	assert.equal(root.querySelector("[data-settings-tree-group-id='editor.group.selection']"), null);
+	root.querySelector<HTMLElement>("[data-settings-section-id='editor']")?.click();
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Editor");
+	assert.equal(root.querySelector(".zeta-settings-page")?.hasAttribute("data-active-settings-target"), false);
+	assert.equal(root.querySelector(".zeta-settings-page")?.classList.contains("has-navigation-target"), false);
+	assert.equal(root.querySelectorAll(".zeta-editor-settings-group").length, 10);
 
 	search.value = "model";
 	search.dispatchEvent(new browserEnvironment.window.Event("input", { bubbles: true }));
 	assert.deepEqual(
-		navigationItems.filter((item) => !item.parentElement?.hidden).map((item) => item.textContent),
+		[...root.querySelectorAll<HTMLElement>("[data-settings-section-id]")].map((item) => item.textContent),
 		["Models", "Tools & MCPs"],
 	);
+	assert.deepEqual(
+		[...root.querySelectorAll<HTMLElement>(".zeta-settings-navigation-tree .find-match [data-settings-section-id]")]
+			.map(item => item.textContent),
+		["Models", "Tools & MCPs"],
+	);
+	const modelsItem = root.querySelector<HTMLElement>("[data-settings-section-id='models']");
+	assert.ok(modelsItem);
+	modelsItem.click();
+	assert.equal(settings.activeSectionId, "models");
+	assert.equal(modelsItem.closest(".zeta-tree-row")?.getAttribute("aria-selected"), "true");
+	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
+	assert.equal(
+		root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
+		"models",
+	);
+	assert.ok(root.querySelector(".zeta-model-settings"));
+
 	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
@@ -283,17 +374,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	}));
 	assert.equal(settings.isOpen, true);
 	assert.equal(search.value, "");
-
-	navigationItems[9].click();
-	assert.equal(settings.activeSectionId, "models");
-	assert.equal(navigationItems[0].hasAttribute("aria-current"), false);
-	assert.equal(navigationItems[9].getAttribute("aria-current"), "page");
-	assert.equal(root.querySelector(".zeta-settings-page h3")?.textContent, "Models");
-	assert.equal(
-		root.querySelector(".zeta-settings-page")?.getAttribute("data-active-settings-section"),
-		"models",
-	);
-	assert.ok(root.querySelector(".zeta-model-settings"));
+	assert.equal(root.querySelector("[data-tree-id='models']")?.getAttribute("aria-selected"), "true");
 
 	surface.dispatchEvent(new browserEnvironment.window.KeyboardEvent(
 		"keydown",
@@ -818,7 +899,7 @@ test("Editor settings render supported controls and persist typed preferences", 
 	}));
 
 	settings.open("editor");
-	assert.deepEqual([...root.querySelectorAll(".zeta-editor-settings-group h4")].map(element => element.textContent), ["Editor selection", "Typography", "Display", "Editing", "Code intelligence", "Find and replace", "Workspace search", "Diff editor", "Files"]);
+	assert.deepEqual([...root.querySelectorAll(".zeta-editor-settings-group h4")].map(element => element.textContent), ["Editor selection", "Typography", "Display", "Minimap", "Editing", "Code intelligence", "Find and replace", "Workspace search", "Diff editor", "Files"]);
 	assert.equal(root.querySelectorAll(".zeta-editor-setting").length, 40);
 	assert.equal(root.querySelectorAll(".zeta-editor-setting > .zeta-setting-item-actions").length, 38);
 	assert.equal(root.querySelectorAll(".zeta-editor-informational-setting > .zeta-setting-item-actions").length, 0);

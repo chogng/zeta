@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { type IDisposable, markAsDisposed, toDisposable, trackDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableOwner, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import type { LocalAppServerProcessLauncher } from "../../app-server/electron-main/localAppServerProcessLauncher.js";
 
@@ -19,31 +19,31 @@ export interface DevelopmentServerHostReloaderOptions {
 }
 
 /** Restarts one local App Server connection when a complete Rust generation is published. */
-export class DevelopmentServerHostReloader implements IDisposable {
-	private readonly watcher: IDisposable;
-	private readonly stateWatcher: IDisposable;
+export class DevelopmentServerHostReloader extends DisposableOwner {
 	private readonly debounceMs: number;
 	private readonly readGeneration: (generationFile: string) => Promise<string | undefined>;
 	private readonly log: (message: string, error?: unknown) => void;
 	private timeout?: NodeJS.Timeout;
 	private pendingExecutable?: string;
 	private drainPromise?: Promise<void>;
-	private disposed = false;
 
 	constructor(private readonly options: DevelopmentServerHostReloaderOptions) {
+		super();
 		this.debounceMs = positiveInteger(options.debounceMs, 200, "debounceMs");
 		this.readGeneration = options.readGeneration ?? readDevelopmentServerHostGeneration;
 		this.log = options.log ?? ((message, error) => error === undefined ? console.info(message) : console.error(message, error));
-		this.watcher = (options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule());
-		this.stateWatcher = options.supervisor.onStateChange(state => {
+		this.own((options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule()));
+		this.own(options.supervisor.onStateChange(state => {
 			if (this.pendingExecutable && isStableState(state)) void this.ensureDrain().catch(error => this.log("[server-host] Development restart failed", error));
+		}));
+		this.defer(() => {
+			if (this.timeout) clearTimeout(this.timeout);
 		});
-		trackDisposable(this);
 	}
 
 	/** Applies the newest published generation and resolves after any queued restart. */
 	async reloadNow(): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const executable = await this.readGeneration(this.options.generationFile);
 		if (!executable || executable === this.options.launcher.executable) return;
 		this.pendingExecutable = executable;
@@ -51,7 +51,7 @@ export class DevelopmentServerHostReloader implements IDisposable {
 	}
 
 	private schedule(): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (this.timeout) clearTimeout(this.timeout);
 		this.timeout = setTimeout(() => {
 			this.timeout = undefined;
@@ -60,7 +60,7 @@ export class DevelopmentServerHostReloader implements IDisposable {
 	}
 
 	private async drain(): Promise<void> {
-		while (!this.disposed && this.pendingExecutable) {
+		while (!this.isDisposed && this.pendingExecutable) {
 			const executable = this.pendingExecutable;
 			if (!isStableState(this.options.supervisor.state)) return;
 			this.pendingExecutable = undefined;
@@ -88,23 +88,11 @@ export class DevelopmentServerHostReloader implements IDisposable {
 	private completeDrain(drain: Promise<void>): void {
 		if (this.drainPromise !== drain) return;
 		this.drainPromise = undefined;
-		if (this.pendingExecutable && isStableState(this.options.supervisor.state) && !this.disposed) {
+		if (this.pendingExecutable && isStableState(this.options.supervisor.state) && !this.isDisposed) {
 			void this.ensureDrain().catch(error => this.log("[server-host] Development restart failed", error));
 		}
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		if (this.timeout) clearTimeout(this.timeout);
-		this.watcher.dispose();
-		this.stateWatcher.dispose();
-		markAsDisposed(this);
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
 }
 
 export async function readDevelopmentServerHostGeneration(generationFile: string): Promise<string | undefined> {

@@ -108,7 +108,6 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 	private readonly snapshotEmitter = this.own(new Emitter<DocumentCollaborationSnapshot>());
 	private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
 	private readonly failureEmitter = this.own(new Emitter<Error>());
-	private disposed = false;
 	private _presenceGeneration = 0;
 	private _currentPresence: readonly DocumentCollaborationPresence[] = [];
 
@@ -121,7 +120,6 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 		super();
 		this.roomId = initialSnapshot.roomId;
 		this.defer(() => {
-			this.disposed = true;
 			void service.updatePresence(this, undefined, new AbortController().signal).catch(() => undefined);
 			service.remove(this);
 		});
@@ -137,12 +135,12 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 	}
 
 	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
 		return this.service.submit(this, envelope, document, signal);
 	}
 
 	updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration connection is disposed"));
 		return this.service.updatePresence(this, selection, signal);
 	}
 
@@ -163,12 +161,12 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 	}
 
 	acceptUpdate(value: AppServerDocumentCollaborationUpdate): void {
-		if (this.disposed || value.roomId !== this.roomId) return;
+		if (this.isDisposed || value.roomId !== this.roomId) return;
 		this.updateEmitter.fire(decodeUpdate(value, this.schema));
 	}
 
 	acceptPresence(value: AppServerDocumentCollaborationPresenceSnapshot): void {
-		if (this.disposed || value.roomId !== this.roomId || value.generation < this._presenceGeneration) return;
+		if (this.isDisposed || value.roomId !== this.roomId || value.generation < this._presenceGeneration) return;
 		const presence = decodePresence(value);
 		this._presenceGeneration = presence.generation;
 		this._currentPresence = presence.presences.filter(candidate => candidate.clientId !== this.clientId);

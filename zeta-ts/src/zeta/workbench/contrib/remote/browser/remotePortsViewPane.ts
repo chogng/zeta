@@ -26,7 +26,6 @@ export class RemotePortsViewPane extends ViewPane {
 	private connectionRevision = 0;
 	private opening = false;
 	private closingAll = false;
-	private disposed = false;
 	private error: string | undefined;
 	private activeConnectionIdentity: string | undefined;
 
@@ -75,7 +74,6 @@ export class RemotePortsViewPane extends ViewPane {
 		this.defer(() => tunnelSubscription.dispose());
 		this.own(remoteAgentService.onDidChangeConnection(connection => this.acceptConnection(connection)));
 		this.own(remoteAgentService.onDidChangeConnectionState(() => this.render()));
-		this.defer(() => { this.disposed = true; });
 		this.render();
 		this.refresh();
 	}
@@ -149,7 +147,7 @@ export class RemotePortsViewPane extends ViewPane {
 	}
 
 	private acceptTunnelChange(change: RemoteTunnelChange): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.tunnelRevision += 1;
 		if (change.kind === "upsert") this.tunnels.set(change.tunnel.id, change.tunnel);
 		else {
@@ -160,7 +158,7 @@ export class RemotePortsViewPane extends ViewPane {
 	}
 
 	private acceptConnection(connection: RemoteAgentConnection): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.connectionRevision += 1;
 		this.opening = false;
 		this.closingAll = false;
@@ -275,7 +273,7 @@ export class RemotePortsViewPane extends ViewPane {
 	}
 
 	private isCurrentConnection(revision: number): boolean {
-		return !this.disposed && revision === this.connectionRevision;
+		return !this.isDisposed && revision === this.connectionRevision;
 	}
 }
 

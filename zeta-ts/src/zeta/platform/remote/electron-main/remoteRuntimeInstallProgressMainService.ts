@@ -25,11 +25,20 @@ export class RemoteRuntimeInstallProgressMainService extends DisposableOwner {
 
 	readonly onDidChange: Event<RemoteRuntimeInstallProgressState | undefined> = this.changeEmitter.event;
 
+	constructor() {
+		super();
+		this.defer(() => {
+			this.cancel();
+			this.active = undefined;
+		});
+	}
+
 	getState(): RemoteRuntimeInstallProgressState | undefined {
 		return this.active?.state;
 	}
 
 	begin(host: string): RemoteRuntimeInstallProgressOperation {
+		this.assertNotDisposed();
 		if (this.active) throw new Error("A Remote runtime installation is already active");
 		const normalizedHost = createSshRemoteAuthority(host).host;
 		const identity = Symbol("remoteRuntimeInstall");
@@ -53,12 +62,6 @@ export class RemoteRuntimeInstallProgressMainService extends DisposableOwner {
 		active.state = Object.freeze({ ...active.state, status: "cancelling" });
 		this.changeEmitter.fire(active.state);
 		active.cancellation.abort("Remote runtime installation cancelled by the user");
-	}
-
-	override dispose(): void {
-		this.cancel();
-		this.active = undefined;
-		super.dispose();
 	}
 
 	private report(identity: symbol, progress: RemoteRuntimeInstallProgress): void {

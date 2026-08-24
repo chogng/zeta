@@ -8,7 +8,6 @@ import type { IOutputChannel, IOutputService } from "../common/outputService.js"
 export class SystemOutputService extends DisposableOwner implements ILogSink {
 	private readonly windowChannel: IOutputChannel;
 	private readonly appServerChannel: IOutputChannel;
-	private disposed = false;
 
 	constructor(output: IOutputService, appServer: IAppServerApi, hostService: IWorkbenchHostService) {
 		super();
@@ -18,16 +17,10 @@ export class SystemOutputService extends DisposableOwner implements ILogSink {
 		const connection = appServer.onConnectionState(state => this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : state === "restarting" ? "warning" : "information", category: "connection", text: `App Server connection is ${state}.` }));
 		this.own(toDisposable(() => connection.dispose()));
 		void appServer.getConnectionState().then(state => {
-			if (!this.disposed) this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : "information", category: "connection", text: `Initial App Server connection state: ${state}.` });
+			if (!this.isDisposed) this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : "information", category: "connection", text: `Initial App Server connection state: ${state}.` });
 		}).catch(error => {
-			if (!this.disposed) this.appServerChannel.appendLine({ severity: "error", category: "connection", text: `Could not read App Server connection state: ${errorMessage(error)}` });
+			if (!this.isDisposed) this.appServerChannel.appendLine({ severity: "error", category: "connection", text: `Could not read App Server connection state: ${errorMessage(error)}` });
 		});
-	}
-
-	override dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		super.dispose();
 	}
 
 	log(entry: LogEntry): void {

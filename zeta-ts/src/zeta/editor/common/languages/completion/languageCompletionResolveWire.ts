@@ -10,7 +10,6 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 	private readonly pending = new Map<number, PendingResolveRequest>();
 	private nextRequestId = 1;
 	private failure: Error | undefined;
-	private disposed = false;
 
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
@@ -23,7 +22,6 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 		}
 		this.own(port.onMessage(message => this.receive(message)));
 		this.defer(() => {
-			this.disposed = true;
 			this.failPending(new ReferenceError("LanguageCompletionResolveWireClient is already disposed"));
 		});
 	}
@@ -126,9 +124,7 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionResolveWireClient is already disposed");
-		}
+		this.assertNotDisposed();
 		if (this.failure) throw this.failure;
 	}
 }
@@ -136,7 +132,6 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 /** Worker-side dispatcher for deferred completion item details. */
 export class LanguageCompletionResolveWireServer extends DisposableOwner {
 	private readonly active = new Map<number, AbortController>();
-	private disposed = false;
 
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
@@ -149,14 +144,13 @@ export class LanguageCompletionResolveWireServer extends DisposableOwner {
 		}
 		this.own(port.onMessage(message => this.receive(message)));
 		this.defer(() => {
-			this.disposed = true;
 			for (const controller of this.active.values()) controller.abort("serverDisposed");
 			this.active.clear();
 		});
 	}
 
 	private receive(value: unknown): void {
-		if (!isResolveMessage(value) || this.disposed) return;
+		if (!isResolveMessage(value) || this.isDisposed) return;
 		let requestId: number;
 		try {
 			assertEnvelope(value);
@@ -185,7 +179,7 @@ export class LanguageCompletionResolveWireServer extends DisposableOwner {
 		try {
 			const details = await this.resolver.resolveCompletionItem(target, controller.signal);
 			controller.signal.throwIfAborted();
-			if (!this.disposed) {
+			if (!this.isDisposed) {
 				this.port.send(Object.freeze({
 					protocol: RESOLVE_PROTOCOL,
 					version: RESOLVE_PROTOCOL_VERSION,
@@ -196,7 +190,7 @@ export class LanguageCompletionResolveWireServer extends DisposableOwner {
 				}));
 			}
 		} catch (error) {
-			if (!this.disposed && !controller.signal.aborted) this.sendFailure(requestId, error);
+			if (!this.isDisposed && !controller.signal.aborted) this.sendFailure(requestId, error);
 		} finally {
 			if (this.active.get(requestId) === controller) this.active.delete(requestId);
 		}

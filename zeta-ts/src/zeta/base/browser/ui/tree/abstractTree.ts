@@ -1,13 +1,16 @@
 import { addDisposableListener, isNode, stopEvent, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
-import type { ListDragAndDrop, ListDragData } from "../list/list.js";
+import { appendIcon } from "../icon/icon.js";
+import type { ListDragAndDrop, ListDragData, ListScrolling } from "../list/list.js";
 import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
-import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeTwistieState } from "./tree.js";
+import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState } from "./tree.js";
 
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: TNode) => boolean);
@@ -16,6 +19,7 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly keyboardNavigationLabelProvider?: TreeKeyboardNavigationLabelProvider<T>;
 	readonly findMode?: TreeFindMode;
 	readonly findMatchType?: TreeFindMatchType;
+	readonly selectionPresentation?: TreeSelectionPresentation;
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly renderElement: (element: TNode) => HTMLElement;
@@ -66,6 +70,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.list = this.own(new List<TNode>(container, {
 			ariaLabel: options.ariaLabel,
 			role: "tree",
+			scrolling: options.scrolling,
 			loopNavigation: false,
 			keyboardNavigation: true,
 			focusOnMouseMove: false,
@@ -84,7 +89,11 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			renderItem: (node, _index, row) => this.renderRow(node, row),
 		}));
 		this.element = this.list.element;
-		this.element.classList.add("zeta-tree", `zeta-tree-indent-guides-${options.indentGuides ?? "none"}`);
+		this.element.classList.add(
+			"zeta-tree",
+			`zeta-tree-indent-guides-${options.indentGuides ?? "none"}`,
+			`zeta-tree-selection-${options.selectionPresentation ?? "active"}`,
+		);
 		if (options.indent !== undefined) this.element.style.setProperty("--zeta-tree-indent", `${options.indent}px`);
 		if (options.enableStickyScroll) {
 			this.stickyContainer = h(this.element.ownerDocument, "div");
@@ -102,6 +111,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }
+	domFocus(): void { this.list.domFocus(); }
 	set items(items: readonly TNode[]) {
 		this.sourceItems = items;
 		const candidates = this.findCandidates.length > 0 ? this.findCandidates : items;
@@ -173,7 +183,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const twistie = h(document, "span");
 		twistie.className = "zeta-tree-twistie";
 		twistie.setAttribute("aria-hidden", "true");
-		this.options.renderTwistie?.(node, { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed }, twistie);
+		const twistieState = { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed };
+		if (this.options.renderTwistie) this.options.renderTwistie(node, twistieState, twistie);
+		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? lxiconsLibrary.chevronDown : lxiconsLibrary.chevronRight, twistie);
 		const contents = h(document, "span");
 		contents.className = "zeta-tree-contents";
 		contents.append(this.options.renderElement(node));

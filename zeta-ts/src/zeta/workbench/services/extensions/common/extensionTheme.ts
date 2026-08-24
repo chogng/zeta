@@ -39,25 +39,23 @@ export interface ExtensionThemeSource {
 export class ExtensionThemeRegistry extends DisposableOwner implements ExtensionThemeSource {
 	private readonly changeEmitter = this.own(new Emitter<ExtensionThemeCatalog>());
 	private catalog: ExtensionThemeCatalog = Object.freeze({ revision: 0, themes: Object.freeze([]) });
-	private disposed = false;
 
 	readonly onDidChange: Event<ExtensionThemeCatalog> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.catalog = Object.freeze({ revision: this.catalog.revision, themes: Object.freeze([]) });
 		});
 	}
 
 	get currentCatalog(): ExtensionThemeCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
 	replace(themes: readonly ExtensionThemeDefinition[]): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Array.isArray(themes)) throw new TypeError("Extension theme replacement must be an array");
 		const normalized = themes.map(normalizeTheme);
 		const ids = new Set<string>();
@@ -69,9 +67,6 @@ export class ExtensionThemeRegistry extends DisposableOwner implements Extension
 		this.changeEmitter.fire(this.catalog);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("ExtensionThemeRegistry is already disposed");
-	}
 }
 
 /** Parses the declarative subset of a VS Code color-theme document. */

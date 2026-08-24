@@ -110,7 +110,6 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 	private readonly workerSlot = this.own(new DisposableSlot<LanguageWorker<TLane, TPayload, TResult>>());
 	private readonly activeRequests = new Map<TLane, ActiveLanguageRequest<TLane>>();
 	private nextRequestId = 1;
-	private disposed = false;
 
 	constructor(
 		private readonly model: TextModel,
@@ -126,25 +125,24 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			this.synchronizeWorker(change);
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
 		});
 	}
 
 	startWorker(): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.getWorker();
 	}
 
 	restartWorker(): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!this.workerSlot.value) return;
 		this.cancelAll(LanguageRequestCancellationReason.WorkerRestarted);
 		this.workerSlot.clear();
 	}
 
 	async runLatest(lane: TLane, payload: TPayload, apply: LanguageResultApplier<TResult>, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLane(lane);
 		if (typeof apply !== "function") {
 			throw new TypeError("Language result applier must be a function");
@@ -162,7 +160,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 		const worker = this.getWorker();
 		const versionAfterWorkerCreation = this.readModelVersion();
-		if (this.disposed) {
+		if (this.isDisposed) {
 			return cancelledOutcome(requestId, snapshot.version, {
 				reason: LanguageRequestCancellationReason.CoordinatorDisposed,
 			});
@@ -329,11 +327,6 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageRequestCoordinator is already disposed");
-		}
-	}
 }
 
 function supportsModelSynchronization(value: Disposable): value is Disposable & LanguageWorkerModelSynchronizer {

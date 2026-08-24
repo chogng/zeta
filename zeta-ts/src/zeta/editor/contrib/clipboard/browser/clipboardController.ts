@@ -70,7 +70,6 @@ export class ClipboardController extends DisposableOwner {
 	private readonly richTextReader: ClipboardRichTextReader | undefined;
 	private readonly richTextWriter: ClipboardRichTextWriter | undefined;
 	private asynchronousPasteRequest = 0;
-	private disposed = false;
 
 	constructor(
 		private readonly element: HTMLTextAreaElement,
@@ -116,7 +115,6 @@ export class ClipboardController extends DisposableOwner {
 		this.richTextReader = options.richTextReader ?? createStanzaBrowserClipboardRichTextReader(element.ownerDocument);
 		this.richTextWriter = options.richTextWriter ?? createStanzaBrowserClipboardRichTextWriter(element.ownerDocument);
 		this.defer(() => {
-			this.disposed = true;
 			this.asynchronousPasteRequest += 1;
 		});
 		this.own(addDisposableListener<ClipboardEvent>(
@@ -217,7 +215,7 @@ export class ClipboardController extends DisposableOwner {
 		stopEvent(event);
 		void file.text().then(text => {
 			if (
-				this.disposed ||
+				this.isDisposed ||
 				request !== this.asynchronousPasteRequest ||
 				text.length > TEXT_FILE_TRANSFER_MAX_BYTES ||
 				!this.isEditingAllowed() ||
@@ -246,7 +244,7 @@ export class ClipboardController extends DisposableOwner {
 		void provideStanzaClipboardPaste(this.pasteProviders, transfer).then(text => {
 			if (
 				text === undefined ||
-				this.disposed ||
+				this.isDisposed ||
 				request !== this.asynchronousPasteRequest ||
 				!this.isEditingAllowed() ||
 				model.version !== expectedVersion ||
@@ -272,7 +270,7 @@ export class ClipboardController extends DisposableOwner {
 		void Promise.resolve(reader.readText()).then(text => {
 			if (
 				text.length === 0 ||
-				this.disposed ||
+				this.isDisposed ||
 				request !== this.asynchronousPasteRequest ||
 				!this.isEditingAllowed() ||
 				model.version !== expectedVersion ||
@@ -298,7 +296,7 @@ export class ClipboardController extends DisposableOwner {
 		stopEvent(event);
 		void Promise.resolve(reader.readText()).then(item => {
 			const text = item?.plainText ?? (item?.html ? readEditorHtmlText(item.html, this.element.ownerDocument) : "");
-			if (text.length === 0 || this.disposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
+			if (text.length === 0 || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
 			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
 			this.afterEdit();
 		}).catch(() => {
@@ -317,7 +315,7 @@ export class ClipboardController extends DisposableOwner {
 		const payload = this.createClipboardPayload(entries);
 		stopEvent(event);
 		void Promise.resolve(writer.writeText(payload)).then(() => {
-			if (!cut || this.disposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
+			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
 			this.executeCut();
 		}).catch(() => {
 			// Permission failures must never mutate the model, especially for cut.

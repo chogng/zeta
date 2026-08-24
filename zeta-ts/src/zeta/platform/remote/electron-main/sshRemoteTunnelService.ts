@@ -70,7 +70,6 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 	private readonly startupTimeoutMs: number;
-	private disposed = false;
 	private nextId = 1;
 
 	constructor(readonly options: SshRemoteTunnelServiceOptions) {
@@ -94,7 +93,6 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 		this.now = options.now ?? Date.now;
 		this.wait = options.wait ?? wait;
 		this.defer(() => {
-			this.disposed = true;
 			this.cancellation.abort();
 			for (const record of this.tunnels.values()) {
 				record.cancellation.abort();
@@ -114,7 +112,7 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 		const authority = this.remoteAuthority();
 		const localPort = await this.reserveLocalPort();
 		validatePort(localPort, "localPort");
-		if (this.disposed) throw new Error("Remote tunnel service was disposed during startup");
+		if (this.isDisposed) throw new Error("Remote tunnel service was disposed during startup");
 		const child = this.spawnTunnel(authority.host, localPort, request.remotePort);
 		try {
 			await waitForStartup(child, localPort, this.startupTimeoutMs, this.probeLoopbackListener, this.wait, this.now, this.cancellation.signal);
@@ -122,7 +120,7 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 			await stopChild(child);
 			throw error instanceof Error ? error : new Error("SSH tunnel failed to start");
 		}
-		if (this.disposed) {
+		if (this.isDisposed) {
 			await stopChild(child);
 			throw new Error("Remote tunnel service was disposed during startup");
 		}
@@ -268,7 +266,7 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 	}
 
 	private isCurrent(record: TunnelRecord): boolean {
-		return !this.disposed && !record.cancellation.signal.aborted && this.tunnels.get(record.tunnel.id) === record;
+		return !this.isDisposed && !record.cancellation.signal.aborted && this.tunnels.get(record.tunnel.id) === record;
 	}
 }
 

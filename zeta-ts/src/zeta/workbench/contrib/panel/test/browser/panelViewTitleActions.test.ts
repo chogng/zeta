@@ -2,15 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
-import type { Event } from "../../../../../base/common/event.js";
+import { noEvent } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import { OutputService } from "../../../../../workbench/services/output/browser/outputService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../../workbench/services/terminal/common/terminal.js";
 import type { IViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
-
-const noEvent = (() => toDisposable(() => undefined)) as Event<never>;
 
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");

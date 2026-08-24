@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { Emitter, noEvent } from "../../../../../base/common/event.js";
 import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -13,7 +13,6 @@ import { type ITerminalService } from "../../../../services/terminal/common/term
 import { DebugAdapterFactoryRegistry, createStaticDebugAdapterFactory } from "../../common/debugAdapterFactory.js";
 import { DebugService } from "../../browser/debugService.js";
 
-const noEvent = (() => toDisposable(() => undefined)) as Event<never>;
 const launchJson = `{
   "version": "0.2.0",
   "configurations": [

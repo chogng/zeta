@@ -148,14 +148,12 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 	private readonly revisions = new Map<string, number>();
 	private readonly resolved = new Map<string, ResolvedLanguageConfiguration>();
 	private nextOrder = 1;
-	private disposed = false;
 
 	readonly onDidChangeConfiguration: Event<LanguageConfigurationChangeEvent> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.contributions.clear();
 			this.revisions.clear();
 			this.resolved.clear();
@@ -167,7 +165,7 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 	}
 
 	registerMany(contributions: readonly LanguageConfigurationContributionInput[]): LanguageConfigurationRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replace(owner, contributions);
 		let disposed = false;
@@ -178,14 +176,14 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 		}) as LanguageConfigurationRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Language configuration registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
 		return registration;
 	}
 
 	getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		const cached = this.resolved.get(languageId);
 		if (cached) return cached;
@@ -203,9 +201,6 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageConfigurationRegistry is already disposed");
-	}
 
 	private replace(owner: object, contributions: readonly LanguageConfigurationContributionInput[]): void {
 		if (!Array.isArray(contributions)) throw new TypeError("Language configuration contributions must be an array");
@@ -228,7 +223,7 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 	private removeOwner(owner: object): void {
 		const affected = this.ownerLanguageIds(owner);
 		this.deleteOwner(owner);
-		if (!this.disposed) for (const languageId of [...affected].sort()) this.publishChange(languageId);
+		if (!this.isDisposed) for (const languageId of [...affected].sort()) this.publishChange(languageId);
 	}
 
 	private deleteOwner(owner: object): void {

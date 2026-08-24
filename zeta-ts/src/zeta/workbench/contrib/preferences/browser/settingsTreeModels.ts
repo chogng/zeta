@@ -23,6 +23,8 @@ export type SettingsTreeNode<T> = ObjectTreeElement<SettingsTreeElement<T>>;
 
 /** Settings group/item model with query filtering over canonical item metadata. */
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
+	private navigationScopeIds: ReadonlySet<string> | undefined;
+	private navigationTargetId: string | undefined;
 	private queryTerms: readonly string[] = [];
 	private _query = "";
 
@@ -59,6 +61,14 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		this.refilter();
 	}
 
+	setNavigationTarget(targetId: string | undefined): void {
+		if (targetId === this.navigationTargetId) return;
+		if (targetId !== undefined && !this.has(targetId)) throw new RangeError(`Unknown Settings navigation target '${targetId}'`);
+		this.navigationTargetId = targetId;
+		this.navigationScopeIds = targetId === undefined ? undefined : collectNavigationScopeIds(this.getNode(targetId)!);
+		this.refilter();
+	}
+
 	getGroup(id: string): SettingsTreeGroup | undefined {
 		const node = this.getElement(id);
 		return node?.kind === "group" ? node : undefined;
@@ -77,11 +87,28 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	private filterNode(node: SettingsTreeElement<T>): boolean | TreeVisibility {
+		if (this.navigationScopeIds && !this.navigationScopeIds.has(node.id)) return false;
 		if (this.queryTerms.length === 0) return TreeVisibility.Visible;
 		if (node.kind === "group") return TreeVisibility.Recurse;
 		const text = normalizeSearchText([node.title, node.description, ...(node.keywords ?? [])].join(" "));
 		return this.queryTerms.every((term) => text.includes(term));
 	}
+}
+
+function collectNavigationScopeIds<T>(target: ObjectTreeNode<SettingsTreeElement<T>>): ReadonlySet<string> {
+	const ids = new Set<string>();
+	let ancestor: ObjectTreeNode<SettingsTreeElement<T>> | undefined = target;
+	while (ancestor) {
+		if (ancestor.element === undefined) break;
+		ids.add(ancestor.element.id);
+		ancestor = ancestor.parent;
+	}
+	const visit = (node: ObjectTreeNode<SettingsTreeElement<T>>): void => {
+		ids.add(node.element.id);
+		for (const child of node.children) visit(child);
+	};
+	visit(target);
+	return ids;
 }
 
 function countVisibleItems<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): number {

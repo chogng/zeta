@@ -36,7 +36,6 @@ export class TextMateScopeThemeModel extends DisposableOwner implements TextMate
 	private readonly changeEmitter = this.own(new Emitter<TextMateScopeTheme>());
 	private theme: TextMateScopeTheme;
 	private resolver: TextMateScopeResolver;
-	private disposed = false;
 
 	readonly onDidChangeTheme: Event<TextMateScopeTheme> = this.changeEmitter.event;
 
@@ -44,16 +43,15 @@ export class TextMateScopeThemeModel extends DisposableOwner implements TextMate
 		super();
 		this.theme = normalizeTextMateScopeTheme(initialTheme);
 		this.resolver = createTextMateScopeThemeResolver(this.theme);
-		this.defer(() => { this.disposed = true; });
 	}
 
 	get currentTheme(): TextMateScopeTheme {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.theme;
 	}
 
 	replace(theme: TextMateScopeTheme): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const normalized = normalizeTextMateScopeTheme(theme);
 		if (normalized.revision <= this.theme.revision) {
 			throw new RangeError("TextMate scope theme revision must increase");
@@ -65,13 +63,10 @@ export class TextMateScopeThemeModel extends DisposableOwner implements TextMate
 
 	/** Resolves current rules first and preserves the stable fallback vocabulary. */
 	resolve(scopes: readonly string[]): TextMateResolvedTokenStyle | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.resolver(scopes);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateScopeThemeModel is already disposed");
-	}
 }
 
 /** Creates a pure resolver for a normalized, transferable scope theme. */

@@ -67,6 +67,13 @@ export class SettingsTree<T> extends DisposableOwner {
 		return rendered?.kind === "item" ? rendered.element : undefined;
 	}
 
+	setNavigationTarget(targetId: string | undefined): void {
+		this.model.setNavigationTarget(targetId);
+		this.element.classList.toggle("has-navigation-target", targetId !== undefined);
+		if (targetId === undefined) delete this.element.dataset.settingsNavigationTargetId;
+		else this.element.dataset.settingsNavigationTargetId = targetId;
+	}
+
 	setQuery(query: string): void {
 		this.model.setQuery(query);
 	}
@@ -132,8 +139,9 @@ export class SettingsTree<T> extends DisposableOwner {
 		const element = h(document, "section");
 		element.className = this.options.groupClassName;
 		const heading = h(document, "h4");
+		heading.className = "zeta-settings-tree-group-title";
 		const description = h(document, "p");
-		description.className = this.options.groupDescriptionClassName;
+		description.className = `zeta-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 		const items = h(document, "div");
 		items.className = this.options.itemsClassName;
 		element.append(heading, description, items);

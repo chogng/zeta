@@ -136,7 +136,6 @@ class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireCli
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
 	private readonly failureEmitter = this.own(new Emitter<unknown>());
 	private peer: MemoryCatalogPort | undefined;
-	private disposed = false;
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
 	readonly onFailure: Event<unknown> = this.failureEmitter.event;
@@ -144,7 +143,6 @@ class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireCli
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.peer = undefined;
 		});
 	}
@@ -154,13 +152,13 @@ class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireCli
 	}
 
 	send(message: unknown): void {
-		if (this.disposed || !this.peer) {
+		if (this.isDisposed || !this.peer) {
 			throw new ReferenceError("Memory catalog port is unavailable");
 		}
 		const peer = this.peer;
 		const cloned = structuredClone(message);
 		queueMicrotask(() => {
-			if (!peer.disposed) peer.messageEmitter.fire(cloned);
+			if (!peer.isDisposed) peer.messageEmitter.fire(cloned);
 		});
 	}
 }

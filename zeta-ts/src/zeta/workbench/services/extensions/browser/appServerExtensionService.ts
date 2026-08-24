@@ -42,7 +42,6 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 	});
 	private loading: Promise<void> | undefined;
 	private reloadQueued = false;
-	private disposed = false;
 	private readonly grammarRegistration: TextMateGrammarRegistration;
 	private readonly languageRegistration: LanguageDescriptionRegistration | undefined;
 	private readonly languageConfigurationRegistration: LanguageConfigurationRegistration | undefined;
@@ -67,6 +66,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 
 	constructor(private readonly options: AppServerExtensionServiceOptions) {
 		super();
+		this.defer(() => { this.reloadQueued = false; });
 		this.themeRegistry = this.own(new ExtensionThemeRegistry());
 		this.fileTemplateRegistry = this.own(new ExtensionFileTemplateRegistry());
 		this.debugAdapterRegistry = this.own(new ExtensionDebugAdapterRegistry());
@@ -108,17 +108,17 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 	}
 
 	get currentCatalog(): ExtensionCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
 	start(): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.reload();
 	}
 
 	reload(): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.reloadQueued = true;
 		if (this.loading) return this.loading;
 		const operation = this.drainReloads();
@@ -131,16 +131,9 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 		return operation;
 	}
 
-	override dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		this.reloadQueued = false;
-		super.dispose();
-	}
-
 	private async drainReloads(): Promise<void> {
 		let firstFailure: { readonly error: unknown } | undefined;
-		while (!this.disposed && this.reloadQueued) {
+		while (!this.isDisposed && this.reloadQueued) {
 			this.reloadQueued = false;
 			try {
 				await this.loadAndRegister();
@@ -148,7 +141,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 				firstFailure ??= { error };
 			}
 		}
-		if (!this.disposed && firstFailure) throw firstFailure.error;
+		if (!this.isDisposed && firstFailure) throw firstFailure.error;
 	}
 
 	private async loadAndRegister(): Promise<void> {
@@ -166,12 +159,12 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 		let activeExtension: ExtensionDescriptor | undefined;
 		try {
 			const transportCatalog = await this.options.api.list("refresh");
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			const catalog = projectExtensionCatalog(transportCatalog);
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				await verifyManifestDigest(extension);
-				if (this.disposed) return;
+				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
 				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageFeaturesService) {
 					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
@@ -191,7 +184,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 						const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);
 						languageConfigurationResources.set(key, configuration);
 						const resolvedConfiguration = await configuration;
-						if (this.disposed) return;
+						if (this.isDisposed) return;
 						languageConfigurations.push({ languageId: language.id, configuration: resolvedConfiguration, options: { priority: 100 } });
 					}
 				}
@@ -200,7 +193,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 					const definitions = snippetFiles.get(key) ?? this.loadSnippetFile(resources, catalog.generation, extension.id, snippet.path);
 					snippetFiles.set(key, definitions);
 					const parsed = await definitions;
-					if (this.disposed) return;
+					if (this.isDisposed) return;
 					for (const languageId of snippet.language) {
 						const providerSnippets = parsed.filter(candidate => candidate.prefixes.length > 0 && (!candidate.scopes || candidate.scopes.includes(languageId)));
 						if (providerSnippets.length > 0) completionProviders.push(createExtensionSnippetProvider(`${extension.id}.snippet.${snippetIndex}.${languageId}`, languageId, providerSnippets));
@@ -219,12 +212,12 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 					const definition = await this.loadTheme(resources, catalog.generation, extension, themeIndex, theme.id, theme.label, theme.path, theme.uiTheme);
 					themes.push(definition);
 					workbenchThemes.push(createExtensionWorkbenchColorTheme(definition));
-					if (this.disposed) return;
+					if (this.isDisposed) return;
 				}
 				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
 				for (const grammar of manifest.contributes.grammars) {
 					const content = await this.loadGrammar(resources, catalog.generation, extension.id, grammar.path);
-					if (this.disposed) return;
+					if (this.isDisposed) return;
 					const definition: TextMateGrammarDefinition = {
 						scopeName: grammar.scopeName,
 						...(grammar.language === undefined ? {} : { languageId: grammar.language }),
@@ -243,7 +236,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 			const debugAdapterFactories = debugAdapters.map(definition => createStaticDebugAdapterFactory(definition.type, definition.label, `declarative:${definition.extensionId}`, { program: definition.program, arguments: definition.arguments }));
 			const previousGrammars = this.activeGrammars;
 			const preparedGrammars = await this.options.textMateService.grammars.prepareGrammars(this.grammarRegistration, grammars);
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			try {
 				runWithBufferedEvents(() => {
 					preparedGrammars.commit();
@@ -258,11 +251,11 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 					this.changeEmitter.fire(catalog);
 				});
 			} catch (error) {
-				if (!this.disposed) await this.restoreActivation(previousGrammars, error);
+				if (!this.isDisposed) await this.restoreActivation(previousGrammars, error);
 				throw error;
 			}
 		} catch (error) {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.failureEmitter.fire(Object.freeze({ extension: activeExtension, error }));
 			throw error;
 		}
@@ -362,9 +355,6 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 		return loading;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("AppServerExtensionService is already disposed");
-	}
 }
 
 function projectExtensionCatalog(catalog: TransportExtensionCatalog): ExtensionCatalog {

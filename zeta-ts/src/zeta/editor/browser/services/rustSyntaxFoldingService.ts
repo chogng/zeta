@@ -9,7 +9,6 @@ import { RustSyntaxFactsService, syntaxLanguageForStanzaLanguage } from "./rustS
 export class RustSyntaxFoldingService extends DisposableOwner {
 	private readonly supported: boolean;
 	private generation = 0;
-	private disposed = false;
 	private _ranges: readonly EditorFoldingRange[] = Object.freeze([]);
 
 	get ranges(): readonly EditorFoldingRange[] {
@@ -25,7 +24,6 @@ export class RustSyntaxFoldingService extends DisposableOwner {
 	) {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.generation += 1;
 		});
 		this.supported = syntaxLanguageForStanzaLanguage(languageId) !== undefined;
@@ -55,11 +53,11 @@ export class RustSyntaxFoldingService extends DisposableOwner {
 	private async analyze(generation: number, snapshot: TextSnapshot): Promise<void> {
 		try {
 			const result = await this.facts.analyze(this.languageId, snapshot, new AbortController().signal);
-			if (this.disposed || this.generation !== generation) return;
+			if (this.isDisposed || this.generation !== generation) return;
 			this._ranges = result ? projectRustSyntaxFoldingRanges(result, snapshot.version) : Object.freeze([]);
 			this.onDidChange();
 		} catch (error) {
-			if (!this.disposed && this.generation === generation) this.onError(error);
+			if (!this.isDisposed && this.generation === generation) this.onError(error);
 		}
 	}
 }

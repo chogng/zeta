@@ -90,7 +90,7 @@
   background: var(--zeta-list-hover-background);
 }
 
-.zeta-tree:focus-within .zeta-tree-row.selected {
+.zeta-tree-selection-active:focus-within .zeta-tree-row.selected {
   color: var(--zeta-list-active-selection-foreground);
   background: var(--zeta-list-active-selection-background);
 }

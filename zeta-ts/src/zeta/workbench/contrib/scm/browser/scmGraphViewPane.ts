@@ -47,7 +47,6 @@ export class ScmGraphViewPane extends ViewPane {
 	private list: HTMLOListElement | undefined;
 	private readonly refs = new Map<string, readonly GitReference[]>();
 	private readonly expanded = new Map<string, ExpandedCommit>();
-	private disposed = false;
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
@@ -71,9 +70,6 @@ export class ScmGraphViewPane extends ViewPane {
 			contextKeyService,
 			refreshGraph: () => this.refresh(),
 		}));
-		this.defer(() => {
-			this.disposed = true;
-		});
 		void this.refresh();
 	}
 
@@ -98,14 +94,14 @@ export class ScmGraphViewPane extends ViewPane {
 				this.gitService.graph({ limit: PageSize }),
 				this.gitService.status(),
 			]);
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			this.page = graph;
 			this.head = status.head;
 			this.cursor = graph.nextCursor;
 			this.renderGraph(graph, status.head);
 			if (graph.hasMore) void this.loadMore();
 		} catch (error) {
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			const document = this.graphElement.ownerDocument;
 			const message = h(document, "p");
 			message.className = "zeta-scm-empty";
@@ -250,7 +246,7 @@ export class ScmGraphViewPane extends ViewPane {
 			while (this.page?.hasMore) {
 				const current = this.page;
 				const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) });
-				if (this.disposed || generation !== this.generation) return;
+				if (this.isDisposed || generation !== this.generation) return;
 				const commits = [...current.commits];
 				const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
 				const additions: GitCommitSummary[] = [];
@@ -272,7 +268,7 @@ export class ScmGraphViewPane extends ViewPane {
 			this.updateMore();
 			this.renderRows();
 		} catch (error) {
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			this.loading = false;
 			this.moreError = gitErrorMessage(error);
 			this.updateMore();
@@ -430,10 +426,10 @@ export class ScmGraphViewPane extends ViewPane {
 		this.renderRows();
 		try {
 			const result = await this.gitService.commitChanges(commit.objectId);
-			if (this.disposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
+			if (this.isDisposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
 			this.expanded.set(commit.objectId, { state: "ready", result });
 		} catch (error) {
-			if (this.disposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
+			if (this.isDisposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
 			this.expanded.set(commit.objectId, { state: "error", message: gitErrorMessage(error) });
 		}
 		this.renderRows();

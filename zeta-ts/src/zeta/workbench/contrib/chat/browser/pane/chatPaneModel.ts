@@ -35,7 +35,6 @@ export class ChatPaneModel extends DisposableOwner {
 	private _state: ChatPaneState = "loading";
 	private _error: string | undefined;
 	private generation = 0;
-	private disposed = false;
 	private readPending = false;
 	private initializePromise: Promise<void> | undefined;
 	private subscriptionThreadId: ThreadId | undefined;
@@ -59,7 +58,6 @@ export class ChatPaneModel extends DisposableOwner {
 		this.own(chatService.onDidChangeModels(() => void this.loadModels()));
 		this.own(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
 		this.defer(() => {
-			this.disposed = true;
 			this.generation++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
@@ -312,7 +310,7 @@ export class ChatPaneModel extends DisposableOwner {
 		this.setState("loading");
 		if (this.selection.kind === "untitled") {
 			await this.loadCatalogs();
-			if (!this.disposed && this.selection.kind === "untitled") {
+			if (!this.isDisposed && this.selection.kind === "untitled") {
 				this.setState("ready");
 			}
 			return;
@@ -392,7 +390,7 @@ export class ChatPaneModel extends DisposableOwner {
 		}
 		try {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
 			this.discardCommittedTransientItems();
 			for (const update of result.updates) {
@@ -402,7 +400,7 @@ export class ChatPaneModel extends DisposableOwner {
 			}
 			this.setState("ready");
 		} catch (error) {
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			this.setError(error);
 		}
 	}
@@ -517,7 +515,7 @@ export class ChatPaneModel extends DisposableOwner {
 		try {
 			const thread = await this.chatService.readThread(active.session.sessionId, threadId);
 			if (
-				this.disposed ||
+				this.isDisposed ||
 				generation !== this.generation ||
 				thread.threadId !== this.threadId
 			) return;
@@ -527,7 +525,7 @@ export class ChatPaneModel extends DisposableOwner {
 			this._state = "ready";
 			this._onDidChange.fire();
 		} catch (error) {
-			if (!this.disposed && generation === this.generation) {
+			if (!this.isDisposed && generation === this.generation) {
 				this.setError(error);
 			}
 		}
@@ -565,7 +563,7 @@ export class ChatPaneModel extends DisposableOwner {
 		if (this.selection.kind === "session") return this.selection.active;
 		const untitledSession = this.selection.session;
 		const created = await this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId);
-		if (this.disposed) {
+		if (this.isDisposed) {
 			this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created);
 			throw new Error("Untitled Chat Session was closed while its durable Session was being created");
 		}

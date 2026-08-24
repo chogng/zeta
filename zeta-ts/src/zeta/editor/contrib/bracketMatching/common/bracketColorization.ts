@@ -21,7 +21,6 @@ interface CachedColorizedLine {
 /** Caches lexical bracket nesting colors while retaining no renderer state. */
 export class LanguageBracketColorizationIndex extends DisposableOwner {
 	private cachedLines: CachedColorizedLine[] = [];
-	private disposed = false;
 
 	constructor(readonly textModel: TextModel, private readonly brackets: LanguageStructuralBracketSource, private readonly colorCount = 6) {
 		super();
@@ -37,13 +36,12 @@ export class LanguageBracketColorizationIndex extends DisposableOwner {
 			this.cachedLines = [];
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.cachedLines = [];
 		});
 	}
 
 	getLineColorizations(lineIndex: number): readonly LanguageBracketColorization[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.textModel.lineCount) {
 			throw new RangeError("Bracket colorization line is outside the text model");
 		}
@@ -76,7 +74,4 @@ export class LanguageBracketColorizationIndex extends DisposableOwner {
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageBracketColorizationIndex is already disposed");
-	}
 }

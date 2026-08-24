@@ -85,7 +85,6 @@ export class TextModel extends DisposableOwner {
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
-	private disposed = false;
 
 	readonly onDidChange: Event<TextModelChange> = this.changeEmitter.event;
 
@@ -122,7 +121,6 @@ export class TextModel extends DisposableOwner {
 			},
 		)) : undefined;
 		this.defer(() => {
-			this.disposed = true;
 			this.history.dispose();
 			this.buffer = createTextBuffer("");
 		});
@@ -134,7 +132,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	get groups(): readonly TextModelGroup[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.blockState?.snapshot.groups ?? this.codeGroups;
 	}
 
@@ -151,7 +149,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	getBlockAtLine(lineIndex: number): TextModelBlock | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.buffer.lineCount) throw new RangeError("Block line index is outside the TextModel");
 		for (const group of this.groups) {
 			const block = group.blockTree.getBlockAtLine(lineIndex);
@@ -237,43 +235,43 @@ export class TextModel extends DisposableOwner {
 	}
 
 	get version(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._version;
 	}
 
 	get lineCount(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.lineCount;
 	}
 
 	get length(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.length;
 	}
 
 	/** The document length in the same line/column algebra used by core edits. */
 	get textLength(): TextLength {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return new TextLength(this.buffer.lineCount - 1, this.buffer.getLineLength(this.buffer.lineCount - 1));
 	}
 
 	get canUndo(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.history.canUndo;
 	}
 
 	get canRedo(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.history.canRedo;
 	}
 
 	getText(): string {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.getText();
 	}
 
 	createSnapshot(): TextSnapshot {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const version = this._version;
 		const snapshot = this.buffer.createSnapshot();
 		return Object.freeze({
@@ -289,7 +287,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	getTextInRange(range: TextRange): string {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.getTextInRange(
 			this.offsetAt(range.start),
 			this.offsetAt(range.end),
@@ -297,17 +295,17 @@ export class TextModel extends DisposableOwner {
 	}
 
 	getLineContent(lineIndex: number): string {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.getLineContent(lineIndex);
 	}
 
 	getLineLength(lineIndex: number): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.getLineLength(lineIndex);
 	}
 
 	offsetAt(position: TextPosition): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.buffer.offsetAt(
 			position.lineIndex,
 			position.columnIndex,
@@ -315,7 +313,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	positionAt(offset: number): TextPosition {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const position = this.buffer.positionAt(offset);
 		return TextPosition.at(
 			position.lineIndex,
@@ -327,7 +325,7 @@ export class TextModel extends DisposableOwner {
 		range: TextRange,
 		stickiness: TrackedRangeStickiness,
 	): TrackedRange {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.trackedRanges.add(
 			this.offsetAt(range.start),
 			this.offsetAt(range.end),
@@ -336,13 +334,13 @@ export class TextModel extends DisposableOwner {
 	}
 
 	beginHistoryRevision(historyGroup: TextEditHistoryGroup): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		this.history.beginRevision(historyGroup);
 	}
 
 	finishHistoryRevision(historyGroup: TextEditHistoryGroup): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		const entry = this.history.getRevisionEntry(historyGroup);
 		if (entry && this.offsetEditsAreNoOps(entry.edits)) {
@@ -356,7 +354,7 @@ export class TextModel extends DisposableOwner {
 	cancelHistoryRevision(
 		historyGroup: TextEditHistoryGroup,
 	): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		const entry = this.history.cancelRevision(historyGroup);
 		if (!entry || this.offsetEditsAreNoOps(entry.edits)) return undefined;
@@ -386,7 +384,7 @@ export class TextModel extends DisposableOwner {
 		edits: readonly TextEdit[],
 		options: TextEditOptions = {},
 	): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		const historyMergeMode =
 			options.historyMergeMode ??
@@ -458,7 +456,7 @@ export class TextModel extends DisposableOwner {
 
 	/** Clears edit history and replaces changed content as a non-undoable document reset. */
 	reset(text: string): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		if (typeof text !== "string") {
 			throw new TypeError("TextModel reset text must be a string");
@@ -475,7 +473,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	undo(): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeUndo();
@@ -500,7 +498,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	redo(): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		this.history.prepareForEdit(undefined);
 		const entry = this.history.takeRedo();
@@ -611,7 +609,7 @@ export class TextModel extends DisposableOwner {
 			pending = maintenance.schedule(() => {
 				ranSynchronously = true;
 				this.pendingMaintenance.clear();
-				if (!this.disposed) this.buffer.maintainIfNeeded();
+				if (!this.isDisposed) this.buffer.maintainIfNeeded();
 			});
 			if (!pending || typeof pending.dispose !== "function") {
 				throw new TypeError("TextModel maintenance scheduler must return a disposable");
@@ -727,7 +725,7 @@ export class TextModel extends DisposableOwner {
 	}
 
 	private requireBlockState(): TextModelBlockState {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const blockState = this.blockState;
 		if (!blockState) throw new ReferenceError("TextModel has no schema-backed Block state");
 		return blockState;
@@ -737,11 +735,6 @@ export class TextModel extends DisposableOwner {
 		if (this.blockState) throw new Error("TextModel edits must update schema-backed Blocks through dispatch()");
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("TextModel is already disposed");
-		}
-	}
 }
 
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {

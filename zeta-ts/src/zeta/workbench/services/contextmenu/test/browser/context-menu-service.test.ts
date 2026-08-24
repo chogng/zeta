@@ -46,13 +46,10 @@ class TestContextMenuImplementation
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 	lastOptions: ContextMenuOptions | undefined;
-	disposed = false;
+	get disposed(): boolean { return this.isDisposed; }
 
 	constructor() {
 		super();
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	showContextMenu(options: ContextMenuOptions): void {

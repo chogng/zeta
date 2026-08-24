@@ -285,7 +285,6 @@ export class Workbench extends DisposableOwner {
 	private readonly lifecycleService: ILifecycleService;
 	private readonly ownerWindow: Window;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
-	private disposed = false;
 
 	constructor(
 		modeId: WorkbenchModeId,
@@ -841,7 +840,6 @@ export class Workbench extends DisposableOwner {
 				openPanelComposite(compositeId);
 			},
 		));
-		this.defer(() => { this.disposed = true; });
 		void sessionService.initialize();
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
@@ -854,9 +852,9 @@ export class Workbench extends DisposableOwner {
 
 	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
 		await Promise.allSettled(extensionReady);
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		await this.restoreWorkingCopyBackups(backups, editor);
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		this.own(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
 	}

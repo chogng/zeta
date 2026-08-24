@@ -35,42 +35,40 @@ export class DebugAdapterFactoryRegistry extends DisposableOwner implements Debu
 	private readonly changeEmitter = this.own(new Emitter<readonly DebugAdapterFactory[]>());
 	private readonly entries = new Map<string, OwnedDebugAdapterFactory>();
 	private factoriesValue: readonly DebugAdapterFactory[] = Object.freeze([]);
-	private disposed = false;
 
 	readonly onDidChange: Event<readonly DebugAdapterFactory[]> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.entries.clear();
 			this.factoriesValue = Object.freeze([]);
 		});
 	}
 
 	get factories(): readonly DebugAdapterFactory[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.factoriesValue;
 	}
 
 	get(type: string): DebugAdapterFactory | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.entries.get(normalizeIdentifier(type, "Debug Adapter type"))?.factory;
 	}
 
 	registerFactories(factories: readonly DebugAdapterFactory[]): DebugAdapterFactoryRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replace(owner, factories);
 		let disposed = false;
 		const registration = toDisposable(() => {
 			if (disposed) return;
 			disposed = true;
-			if (this.deleteOwner(owner) && !this.disposed) this.updateFactories();
+			if (this.deleteOwner(owner) && !this.isDisposed) this.updateFactories();
 		}) as DebugAdapterFactoryRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Debug Adapter factory registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
 		return registration;
@@ -105,9 +103,6 @@ export class DebugAdapterFactoryRegistry extends DisposableOwner implements Debu
 		this.changeEmitter.fire(this.factoriesValue);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("DebugAdapterFactoryRegistry is already disposed");
-	}
 }
 
 export const DebugAdapterFactoriesRegistry = new DebugAdapterFactoryRegistry();

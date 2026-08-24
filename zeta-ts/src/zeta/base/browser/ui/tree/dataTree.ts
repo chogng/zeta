@@ -1,11 +1,13 @@
 import type { Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import type { ListScrolling } from "../list/list.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
 import type { TreeDataSource, TreeDragAndDrop, TreeFilter, TreeFindMatchType, TreeFindMode, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreeSorter, TreeTwistieState } from "./tree.js";
 
 export interface DataTreeOptions<T> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
@@ -44,6 +46,7 @@ export class DataTree<TInput, T> extends DisposableOwner {
 		super();
 		this.tree = this.own(new ObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,

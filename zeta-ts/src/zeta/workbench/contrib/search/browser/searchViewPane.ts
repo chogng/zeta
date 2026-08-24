@@ -25,7 +25,6 @@ export class SearchViewPane extends ViewPane {
 	private readonly groups = new Map<string, SearchFileGroup>();
 	private searchController: AbortController | undefined;
 	private searchRevision = 0;
-	private disposed = false;
 
 	constructor(
 		container: HTMLElement,
@@ -105,7 +104,6 @@ export class SearchViewPane extends ViewPane {
 			) this.applyConfiguration();
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.searchController?.abort();
 			this.groups.clear();
 		});
@@ -136,7 +134,7 @@ export class SearchViewPane extends ViewPane {
 					signal: controller.signal,
 					onProgress: (matches) => {
 						if (
-							this.disposed ||
+							this.isDisposed ||
 							revision !== this.searchRevision
 						) return;
 						this.appendMatches(matches);
@@ -145,7 +143,7 @@ export class SearchViewPane extends ViewPane {
 					},
 				},
 			);
-			if (this.disposed || revision !== this.searchRevision) return;
+			if (this.isDisposed || revision !== this.searchRevision) return;
 			if (complete.error) {
 				this.statusElement.textContent = complete.error;
 			} else if (complete.resultCount === 0) {
@@ -157,7 +155,7 @@ export class SearchViewPane extends ViewPane {
 			}
 		} catch (error) {
 			if (
-				this.disposed ||
+				this.isDisposed ||
 				revision !== this.searchRevision ||
 				isAbortError(error)
 			) return;
@@ -165,7 +163,7 @@ export class SearchViewPane extends ViewPane {
 				? error.message
 				: "Workspace search failed.";
 		} finally {
-			if (!this.disposed && revision === this.searchRevision) {
+			if (!this.isDisposed && revision === this.searchRevision) {
 				this.submitButton.disabled = false;
 				this.searchController = undefined;
 			}

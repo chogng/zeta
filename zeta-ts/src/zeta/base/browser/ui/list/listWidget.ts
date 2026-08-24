@@ -2,12 +2,13 @@ import { addDisposableListener, stopEvent } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
-import type { ListAccessibilityProvider, ListDragAndDrop } from "./list.js";
+import type { ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
 import { ListView } from "./listView.js";
 
 export interface ListOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: "listbox" | "tree";
+	readonly scrolling?: ListScrolling;
 	readonly loopNavigation?: boolean;
 	readonly keyboardNavigation?: boolean;
 	readonly focusOnMouseMove?: boolean;
@@ -72,6 +73,7 @@ export class List<T> extends DisposableOwner {
 		this.view = this.own(new ListView(container, {
 			ariaLabel: options.ariaLabel,
 			role: options.role,
+			scrolling: options.scrolling,
 			domFocusable: options.domFocusable,
 			getId: options.getId,
 			getHeight: options.getHeight,

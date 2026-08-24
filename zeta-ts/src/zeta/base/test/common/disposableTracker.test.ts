@@ -2,8 +2,10 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
 	AbstractDisposable,
+	DisposableMap,
 	DisposableStore,
 	DisposableOwner,
+	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
 import {
@@ -25,7 +27,7 @@ test("AbstractDisposable closes its tracking record when cleanup throws", () => 
 	assert.equal(tracker.leaks()[0]?.label, "Resource");
 	assert.throws(() => resource.dispose(), /cleanup failed/);
 	tracker.assertNoLeaks();
-	resource.dispose();
+	resource[Symbol.dispose]();
 });
 
 test("DisposableTracker reports an unowned disposable until it is disposed", () => {
@@ -39,7 +41,7 @@ test("DisposableTracker reports an unowned disposable until it is disposed", () 
 	assert.match(leak?.createdAt ?? "", /disposableTracker\.test/);
 	assert.throws(() => tracker.assertNoLeaks(), /1 undisposed disposable/);
 
-	resource.dispose();
+	resource[Symbol.dispose]();
 	tracker.assertNoLeaks();
 });
 
@@ -53,6 +55,47 @@ test("DisposableTracker records ownership and closes the complete subtree", () =
 	assert.equal(child?.ownerLabel, "DisposableStore");
 
 	store.dispose();
+	tracker.assertNoLeaks();
+});
+
+test("DisposableTracker follows values owned by DisposableMap", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const resources = new DisposableMap<string>();
+	resources.set("resource", toDisposable(() => {}));
+
+	const child = tracker.leaks().find((leak) => leak.label === "toDisposable");
+	assert.equal(child?.ownerLabel, "DisposableMap");
+
+	resources.dispose();
+	tracker.assertNoLeaks();
+});
+
+test("DisposableMap releases leaked values from its ownership graph", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const resources = new DisposableMap<string>();
+	const resource = resources.set("resource", toDisposable(() => {}));
+
+	assert.equal(resources.deleteAndLeak("resource"), resource);
+	const child = tracker.leaks().find((leak) => leak.label === "toDisposable");
+	assert.equal(child?.ownerLabel, undefined);
+
+	resources.dispose();
+	resource[Symbol.dispose]();
+	tracker.assertNoLeaks();
+});
+
+test("noneDisposable can be shared by independent owners", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const first = new DisposableStore();
+	const second = new DisposableStore();
+	first.add(noneDisposable);
+	second.add(noneDisposable);
+
+	first.dispose();
+	second.dispose();
 	tracker.assertNoLeaks();
 });
 

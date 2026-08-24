@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
+import type { ListScrolling } from "../list/list.js";
 import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { CompressibleTreeElement, CompressedTreeNode } from "./compressedObjectTreeModel.js";
 import type { ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
@@ -11,6 +12,7 @@ export interface AsyncTreeTwistieState extends TreeTwistieState {
 
 interface AsyncDataTreeCommonOptions<T> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly identityProvider?: ObjectTreeIdentityProvider<T>;
@@ -92,6 +94,7 @@ interface AsyncTreeView<T> extends IDisposable {
 	readonly onDidChangeCollapseState: Event<AsyncTreeCollapseEvent<T>>;
 	readonly focus: T | undefined;
 	readonly selection: readonly T[];
+	domFocus(): void;
 	setChildren(children: readonly CompressibleTreeElement<T>[]): void;
 	collapse(element: T): boolean;
 	expand(element: T): boolean;
@@ -127,7 +130,6 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	private generatedId = 0;
 	private requestSequence = 0;
 	private generation = 0;
-	private disposed = false;
 
 	readonly onDidChangeLoadState: Event<AsyncDataTreeLoadStateEvent<T>> = this._onDidChangeLoadState.event;
 	readonly onDidError: Event<AsyncDataTreeErrorEvent<T>> = this._onDidError.event;
@@ -141,7 +143,6 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 			if (!collapsed && state?.hasChildren && state.children === undefined) void this.updateChildren(element).catch(() => undefined);
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.generation += 1;
 			this.requests.clear();
 		});
@@ -152,6 +153,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 	getInput(): TInput | undefined { return this.input; }
 	get focus(): T | undefined { return this.tree.focus; }
 	get selection(): readonly T[] { return this.tree.selection; }
+	domFocus(): void { this.tree.domFocus(); }
 	setFindPattern(pattern: string): void { this.tree.setFindPattern(pattern); }
 	findNext(): T | undefined { return this.tree.findNext(); }
 	findPrevious(): T | undefined { return this.tree.findPrevious(); }
@@ -247,7 +249,7 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 		};
 	}
 
-	private isCurrentRequest(key: string, request: number, generation: number): boolean { return !this.disposed && generation === this.generation && this.requests.get(key) === request; }
+	private isCurrentRequest(key: string, request: number, generation: number): boolean { return !this.isDisposed && generation === this.generation && this.requests.get(key) === request; }
 	private requireInput(): TInput {
 		if (this.input === undefined) throw new Error("AsyncDataTree input is not set");
 		return this.input;
@@ -266,6 +268,7 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 	protected createTree(container: HTMLElement, options: AsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new ObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
@@ -279,7 +282,9 @@ export class AsyncDataTree<TInput, T> extends AbstractAsyncDataTree<TInput, T, A
 			modelOptions: { defaultCollapseState: "collapsed", identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter },
 			onWillRender: options.onWillRender,
 			renderElement: options.renderElement,
-			renderTwistie: (element, state, container) => options.renderTwistie?.(element, { ...state, loading: this.isLoading(element) }, container),
+			renderTwistie: options.renderTwistie
+				? (element, state, container) => options.renderTwistie!(element, { ...state, loading: this.isLoading(element) }, container)
+				: undefined,
 		});
 		return objectTreeView(tree, (element) => this.getId(element));
 	}
@@ -299,6 +304,7 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 	protected createTree(container: HTMLElement, options: CompressibleAsyncDataTreeOptions<T>): AsyncTreeView<T> {
 		const tree = new CompressibleObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: options.expandOnlyOnTwistieClick,
@@ -311,7 +317,9 @@ export class CompressibleAsyncDataTree<TInput, T> extends AbstractAsyncDataTree<
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 			modelOptions: { defaultCollapseState: "collapsed", identityProvider: { getId: (element) => this.getId(element) }, sorter: options.sorter, filter: options.filter, compressionEnabled: options.compressionEnabled },
 			renderCompressedElements: options.renderCompressedElements,
-			renderTwistie: (elements, state, container) => options.renderTwistie?.(elements, { ...state, loading: this.isLoading(last(elements)) }, container),
+			renderTwistie: options.renderTwistie
+				? (elements, state, container) => options.renderTwistie!(elements, { ...state, loading: this.isLoading(last(elements)) }, container)
+				: undefined,
 		});
 		return compressibleTreeView(tree);
 	}
@@ -328,11 +336,12 @@ function objectTreeView<T>(tree: ObjectTree<T>, getId: (element: T) => string): 
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
 		collapse: (element) => tree.collapse(getId(element)),
 		expand: (element) => tree.expand(getId(element)),
 		expandTo: (element) => tree.expandTo(getId(element)),
-		rerender: (element) => { if (tree.model.has(getId(element))) tree.model.rerender(getId(element)); },
+		rerender: (element) => { if (tree.model.has(getId(element))) tree.rerender(getId(element)); },
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),
@@ -354,11 +363,12 @@ function compressibleTreeView<T>(tree: CompressibleObjectTree<T>): AsyncTreeView
 		onDidChangeCollapseState: tree.onDidChangeCollapseState,
 		get focus() { return tree.focus; },
 		get selection() { return tree.selection; },
+		domFocus: () => tree.domFocus(),
 		setChildren: (children) => tree.setChildren(children),
 		collapse: (element) => tree.collapse(element),
 		expand: (element) => tree.expand(element),
 		expandTo: (element) => tree.expandTo(element),
-		rerender: (element) => { if (tree.model.getNode(element)) tree.model.rerender(element); },
+		rerender: (element) => { if (tree.model.getNode(element)) tree.rerender(element); },
 		setFindPattern: (pattern) => tree.setFindPattern(pattern),
 		findNext: () => tree.findNext(),
 		findPrevious: () => tree.findPrevious(),

@@ -21,7 +21,6 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 	private readonly choiceIndexes = new Map<number, number>();
 	private readonly finalRange: TrackedRange;
 	private currentGroupIndex = 0;
-	private disposed = false;
 
 	constructor(
 		model: TextModel,
@@ -77,7 +76,6 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 				TrackedRangeStickiness.NeverGrowsAtEdges,
 			);
 			this.defer(() => {
-				this.disposed = true;
 				for (const group of this.groups) {
 					for (const range of group.ranges) range.dispose();
 				}
@@ -91,13 +89,11 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 	}
 
 	/** Whether this session has released its tracked tabstops. */
-	get isDisposed(): boolean {
-		return this.disposed;
-	}
+	get isDisposed(): boolean { return super.isDisposed; }
 
 	/** Advances to the next tabstop or consumes the final Tab that leaves the snippet. */
 	selectNext(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.currentGroupIndex + 1 < this.groups.length) {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
 			this.currentGroupIndex += 1;
@@ -116,7 +112,7 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 
 	/** Moves to the preceding tabstop; no selection changes occur before the first group. */
 	selectPrevious(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.currentGroupIndex === this.groups.length) {
 			this.currentGroupIndex -= 1;
 			this.selectGroup(this.currentGroupIndex);
@@ -141,7 +137,7 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 
 	/** Leaves navigation active text unchanged and releases its tracked tabstops. */
 	cancel(): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.dispose();
 	}
 
@@ -155,7 +151,7 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 	}
 
 	private selectRelativeChoice(delta: number): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const group = this.groups[this.currentGroupIndex];
 		if (!group?.choices || group.choices.length === 0) return false;
 		const current = this.choiceIndexes.get(this.currentGroupIndex) ?? 0;
@@ -216,9 +212,6 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 		if (edits.length > 0) model.applyEdits(edits);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("Language completion snippet session is already disposed");
-	}
 }
 
 interface SnippetTrackedGroup {

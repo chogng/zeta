@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { Emitter, noEvent } from "../../../../../base/common/event.js";
 import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
@@ -91,8 +91,6 @@ test("TaskService retains the last good task set when a provider refresh fails",
 	assert.equal(service.tasks, previous);
 	assert.deepEqual(service.tasks.map(task => task.id), ["extension:stable:test"]);
 });
-
-const noEvent = (() => toDisposable(() => undefined)) as Event<never>;
 
 class FakeFileService implements IFileService {
 	readonly onDidChangeFiles = noEvent;

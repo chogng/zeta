@@ -290,6 +290,7 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const tree = new ObjectTree<TestNode>(dom.window.document.body, {
 		ariaLabel: "Object tree",
+		scrolling: "external",
 		modelOptions: { identityProvider: { getId: (node) => node.id } },
 		renderElement: (element) => {
 			const label = h(dom.window.document, "span");
@@ -312,6 +313,8 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	assert.equal(tree.element.tagName, "DIV");
 	assert.equal(tree.element.getAttribute("role"), "tree");
 	assert.equal(tree.element.getAttribute("aria-label"), "Object tree");
+	assert.equal(tree.element.style.overflow, "visible");
+	assert.equal(tree.element.classList.contains("zeta-tree-selection-active"), true);
 	assert.equal(tree.element.tabIndex, 0);
 	assert.equal(tree.element.querySelectorAll(".zeta-tree-group, .zeta-tree-node").length, 0);
 	assert.equal(tree.element.querySelectorAll(":scope > .zeta-tree-row").length, 2);
@@ -324,6 +327,7 @@ test("ObjectTree projects the model as flat list rows with tree ARIA", () => {
 	assert.equal(parent.getAttribute("aria-posinset"), "1");
 	assert.equal(parent.getAttribute("aria-setsize"), "2");
 	assert.equal(parent.getAttribute("aria-expanded"), "false");
+	assert.equal(parent.querySelectorAll(".zeta-tree-twistie .zeta-icon").length, 1);
 	assert.equal(sibling.getAttribute("aria-posinset"), "2");
 	assert.equal(tree.expand("parent"), true);
 	assert.deepEqual(collapsed, ["parent:false"]);
@@ -376,7 +380,7 @@ test("ObjectTree delegates focus, selection, and keyboard navigation to List", (
 	assert.equal(firstRow.tabIndex, -1);
 	assert.equal(secondRow.tabIndex, -1);
 
-	tree.element.focus();
+	tree.domFocus();
 	tree.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" }));
 	assert.equal(dom.window.document.activeElement, tree.element);
 	assert.equal(tree.focus?.id, "second");

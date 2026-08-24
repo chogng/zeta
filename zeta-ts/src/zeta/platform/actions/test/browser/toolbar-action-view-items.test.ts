@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
+import { noEvent } from "../../../../base/common/event.js";
 
 test("toolbar submenu items retain toolbar button semantics", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -399,7 +400,6 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	}
 	const [
 		{ Separator },
-		{ toDisposable },
 		{ ToolBar },
 		{ ContextKeyService },
 		{ MenuService },
@@ -409,7 +409,6 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ BrowserContextMenuService },
 	] = await Promise.all([
 		import("../../../../base/common/actions.js"),
-		import("../../../../base/common/lifecycle.js"),
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
 		import("../../../../platform/contextkey/common/contextkey.js"),
 		import("../../../../platform/actions/common/menuService.js"),
@@ -424,7 +423,6 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const commands = new CommandService(new ServiceCollection());
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
-	const noEvent = () => toDisposable(() => {});
 	using contextMenus = new BrowserContextMenuService(
 		menus,
 		{

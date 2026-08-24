@@ -86,7 +86,6 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	private pendingAction: RefreshAction | undefined;
 	private refreshRunner: Promise<void> | undefined;
 	private started = false;
-	private disposed = false;
 
 	readonly onDidChangeState: Event<ExtensionHostState> = this.stateEmitter.event;
 	readonly onDidChange: Event<ExtensionHostSnapshot> = this.changeEmitter.event;
@@ -106,7 +105,6 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 		this.own(toDisposable(() => changed.dispose()));
 		this.own(toDisposable(() => connection.dispose()));
 		this.defer(() => {
-			this.disposed = true;
 			this.started = false;
 			this.connectionRevision += 1;
 			this.authorityRevision += 1;
@@ -119,22 +117,22 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	get currentSnapshot(): ExtensionHostSnapshot { return this.snapshot; }
 
 	async start(): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.started) return this.refreshRunner ?? Promise.resolve();
 		this.started = true;
 		this.setState("starting");
 		const revision = this.connectionRevision;
 		try {
 			const state = await this.options.api.getConnectionState();
-			if (!this.disposed && this.started && revision === this.connectionRevision) await this.acceptConnectionState(state, false);
+			if (!this.isDisposed && this.started && revision === this.connectionRevision) await this.acceptConnectionState(state, false);
 		} catch (error) {
-			if (!this.disposed && this.started && revision === this.connectionRevision) this.failRefresh(error);
+			if (!this.isDisposed && this.started && revision === this.connectionRevision) this.failRefresh(error);
 		}
 		return this.refreshRunner ?? Promise.resolve();
 	}
 
 	reload(): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!this.started) return this.start();
 		if (!this.connectionReady) {
 			this.setState("starting");
@@ -144,7 +142,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	}
 
 	stop(): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!this.started) return Promise.resolve();
 		this.started = false;
 		this.authorityRevision += 1;
@@ -159,7 +157,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	}
 
 	private acceptChanged(generation: number): void {
-		if (this.disposed || !this.started) return;
+		if (this.isDisposed || !this.started) return;
 		if (!Number.isSafeInteger(generation) || generation < 1) {
 			this.failRefresh(new TypeError("Extension Host notification generation is invalid"));
 			return;
@@ -169,13 +167,13 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	}
 
 	private async acceptConnectionState(state: AppServerConnectionState, fromEvent = true): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (fromEvent) this.connectionRevision += 1;
 		if (!this.started) return;
 		if (state === "ready") {
 			const revision = this.connectionRevision;
 			const available = await this.options.api.isAvailable();
-			if (this.disposed || !this.started || revision !== this.connectionRevision) return;
+			if (this.isDisposed || !this.started || revision !== this.connectionRevision) return;
 			this.connectionReady = available;
 			if (!available) {
 				runWithBufferedEvents(() => {
@@ -199,7 +197,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 	}
 
 	private requestRefresh(action: RefreshAction): Promise<void> {
-		if (this.disposed || !this.started || !this.connectionReady) return Promise.resolve();
+		if (this.isDisposed || !this.started || !this.connectionReady) return Promise.resolve();
 		this.pendingAction = mergeAction(this.pendingAction, action);
 		if (!this.activeContributions) this.setState("starting");
 		if (!this.refreshRunner) this.refreshRunner = this.drainRefreshes();
@@ -208,13 +206,13 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 
 	private async drainRefreshes(): Promise<void> {
 		try {
-			while (!this.disposed && this.started && this.connectionReady && this.pendingAction) {
+			while (!this.isDisposed && this.started && this.connectionReady && this.pendingAction) {
 				const action = this.pendingAction;
 				this.pendingAction = undefined;
 				const revision = this.authorityRevision;
 				try {
 					const snapshot = action === "reconcile" ? await this.options.api.reconcile("refresh") : await this.options.api.list();
-					if (this.disposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
+					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					if (snapshot.generation < this.desiredGeneration) {
 						this.pendingAction = mergeAction(this.pendingAction, "list");
 						continue;
@@ -222,13 +220,13 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 					this.desiredGeneration = 0;
 					this.acceptSnapshot(snapshot);
 				} catch (error) {
-					if (this.disposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
+					if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision) continue;
 					this.failRefresh(error);
 				}
 			}
 		} finally {
 			this.refreshRunner = undefined;
-			if (!this.disposed && this.started && this.connectionReady && this.pendingAction) this.refreshRunner = this.drainRefreshes();
+			if (!this.isDisposed && this.started && this.connectionReady && this.pendingAction) this.refreshRunner = this.drainRefreshes();
 		}
 	}
 
@@ -462,9 +460,6 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 		return channel;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("AppServerExtensionHostService is already disposed");
-	}
 }
 
 function namedOutputKey(extensionId: string, channelId: string): string {

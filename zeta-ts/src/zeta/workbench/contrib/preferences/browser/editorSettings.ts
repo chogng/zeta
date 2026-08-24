@@ -70,13 +70,20 @@ const EditorSettingsGroups: readonly ConfigurationSettingsGroupDescriptor[] = [
 				{ value: EditorLineWrapping.Off, label: 'Off' },
 				{ value: EditorLineWrapping.On, label: 'On' },
 			]),
-			booleanSetting(CodeEditorConfiguration.minimapEnabled, 'Minimap', 'Show a compact document overview on the right side of the editor.'),
 			booleanSetting(CodeEditorConfiguration.lineNumbers, 'Line numbers', 'Show line numbers in the editor gutter.'),
 			booleanSetting(CodeEditorConfiguration.indentationGuides, 'Indentation guides', 'Show vertical guides aligned with indentation levels.'),
 			booleanSetting(CodeEditorConfiguration.bracketPairColorization, 'Bracket pair colorization', 'Use matching colors to distinguish nested bracket pairs.'),
 			booleanSetting(CodeEditorConfiguration.stickyScroll, 'Sticky scroll', 'Keep enclosing scopes visible at the top while scrolling.'),
 			booleanSetting(CodeEditorConfiguration.highlightActiveLine, 'Highlight active line', 'Give the line containing the cursor a subtle background highlight.'),
 			booleanSetting(CodeEditorConfiguration.unicodeHighlights, 'Unicode highlights', 'Call attention to invisible or easily confused Unicode characters.'),
+		],
+	},
+	{
+		id: 'minimap',
+		title: 'Minimap',
+		description: 'Control the compact document overview shown beside the editor.',
+		settings: [
+			booleanSetting(CodeEditorConfiguration.minimapEnabled, 'Enabled', 'Show a compact document overview on the right side of the editor.'),
 		],
 	},
 	{

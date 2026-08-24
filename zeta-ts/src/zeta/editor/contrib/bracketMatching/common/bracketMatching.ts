@@ -24,7 +24,6 @@ interface BracketLocation {
 export class LanguageBracketMatcher extends DisposableOwner {
 	readonly textModel: TextModel;
 	private readonly maxScanLineCount: number;
-	private disposed = false;
 
 	constructor(
 		textModel: TextModel,
@@ -51,9 +50,6 @@ export class LanguageBracketMatcher extends DisposableOwner {
 			this.brackets = brackets;
 			if (brackets.textModel !== textModel) throw new TypeError("Language bracket matcher requires a structural source for its text model");
 			this.maxScanLineCount = readMaxScanLineCount(options.maxScanLineCount);
-			this.defer(() => {
-				this.disposed = true;
-			});
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -61,7 +57,7 @@ export class LanguageBracketMatcher extends DisposableOwner {
 	}
 
 	findMatch(position: TextPosition): LanguageBracketMatch | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.textModel.offsetAt(position);
 		const candidate = this.findCandidate(position);
 		if (!candidate) return undefined;
@@ -132,9 +128,6 @@ export class LanguageBracketMatcher extends DisposableOwner {
 
 	private readonly brackets: LanguageStructuralBracketSource;
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("Language bracket matcher is already disposed");
-	}
 }
 
 function match(opening: BracketLocation, closing: BracketLocation): LanguageBracketMatch {

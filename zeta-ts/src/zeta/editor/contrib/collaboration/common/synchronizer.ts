@@ -38,7 +38,6 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 	private _buffer: DocumentTransaction | undefined;
 	private _version: number;
 	private _sequence = 0;
-	private disposed = false;
 
 	readonly onDidChange: Event<DocumentCollaborationSynchronizationChange> = this.changeEmitter.event;
 
@@ -54,9 +53,6 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 		this._document = document;
 		this._version = version;
 		this.clientId = options.clientId;
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	readonly schema: DocumentSchema;
@@ -64,46 +60,46 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 	readonly clientId: string;
 
 	get document(): DocumentNode {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._document;
 	}
 
 	get canonicalDocument(): DocumentNode {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._canonicalDocument;
 	}
 
 	get version(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._version;
 	}
 
 	/** All local intent not yet represented by the canonical server snapshot. */
 	get pending(): DocumentTransaction | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return composeTransactions(this._inFlight?.transaction, this._buffer);
 	}
 
 	/** The exact envelope currently awaiting an ordered App Server result. */
 	get inFlight(): DocumentCollaborationEnvelope | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._inFlight;
 	}
 
 	/** Snapshot produced by the exact in-flight update, excluding later local typing. */
 	get inFlightDocument(): DocumentNode | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._inFlight ? applySynchronizerTransaction(this._canonicalDocument, this.schema, this._inFlight.transaction).document : undefined;
 	}
 
 	get pendingSequence(): number | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this._inFlight?.sequence;
 	}
 
 	/** Applies a local transaction optimistically and returns an immediately sendable envelope when idle. */
 	dispatchLocal(transaction: DocumentTransaction): DocumentCollaborationEnvelope | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const applied = applySynchronizerTransaction(this._document, this.schema, transaction);
 		this._document = applied.document;
 		if (transaction.steps.length === 0) return undefined;
@@ -118,7 +114,7 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 
 	/** Returns the buffered local transaction once the preceding server submission has settled. */
 	takeNextSubmission(): DocumentCollaborationEnvelope | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this._inFlight || !this._buffer) return undefined;
 		const envelope = this.beginSubmission(this._buffer);
 		this._buffer = undefined;
@@ -128,7 +124,7 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 
 	/** Applies a server-ordered remote update and rebases every unsent local change. */
 	receiveRemote(envelope: DocumentCollaborationRemoteEnvelope): DocumentCollaborationSynchronizationChange {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
 		if (envelope.clientId === this.clientId) throw new DocumentCollaborationError("A local update must be acknowledged, not received as remote");
 		const remote = applySynchronizerTransaction(this._canonicalDocument, this.schema, envelope.transaction);
@@ -144,7 +140,7 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 
 	/** Commits the exact server-accepted in-flight transaction while retaining later local input. */
 	acknowledge(envelope: DocumentCollaborationAcknowledgement): DocumentCollaborationSynchronizationChange {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.validateRemoteEnvelope(envelope);
 		if (envelope.clientId !== this.clientId) throw new DocumentCollaborationError("Only the local client can acknowledge its own update");
 		if (!this._inFlight || envelope.sequence !== this._inFlight.sequence) throw new DocumentCollaborationError("The acknowledgement does not match the current in-flight update");
@@ -158,7 +154,7 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 
 	/** Replaces the canonical snapshot only when no local intent would be lost. */
 	replaceSnapshot(document: DocumentNode, version: number): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.pending) throw new DocumentCollaborationError("Cannot replace a collaboration snapshot while local updates are pending");
 		if (!Number.isSafeInteger(version) || version < 0) throw new RangeError("A collaboration document version must be a non-negative safe integer");
 		const normalized = freezeDocumentNode(document);
@@ -190,9 +186,6 @@ export class DocumentCollaborationSynchronizer extends DisposableOwner {
 		return change;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("Document collaboration synchronizer is already disposed");
-	}
 }
 
 export class DocumentCollaborationError extends Error {

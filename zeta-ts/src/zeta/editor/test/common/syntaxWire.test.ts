@@ -239,7 +239,6 @@ class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClie
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
 	private readonly failureEmitter = this.own(new Emitter<unknown>());
 	private peer: MemorySyntaxPort | undefined;
-	private disposed = false;
 
 	readonly sentMessages: unknown[] = [];
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
@@ -248,7 +247,6 @@ class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClie
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.peer = undefined;
 		});
 	}
@@ -258,14 +256,14 @@ class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClie
 	}
 
 	send(message: unknown): void {
-		if (this.disposed || !this.peer) {
+		if (this.isDisposed || !this.peer) {
 			throw new ReferenceError("Memory syntax port is unavailable");
 		}
 		const peer = this.peer;
 		const cloned = structuredClone(message);
 		this.sentMessages.push(cloned);
 		queueMicrotask(() => {
-			if (!peer.disposed) peer.messageEmitter.fire(cloned);
+			if (!peer.isDisposed) peer.messageEmitter.fire(cloned);
 		});
 	}
 }

@@ -28,7 +28,6 @@ export class LanguageCompletionCatalogWorkerClient extends DisposableOwner imple
 	private catalogReady = false;
 	private modulesReady = false;
 	private failure: Error | undefined;
-	private disposed = false;
 
 	readonly onDidChangeProviderCatalog: Event<LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
 	readonly onDidChangeModuleCatalog: Event<LanguageCompletionProviderModuleCatalog>;
@@ -49,7 +48,6 @@ export class LanguageCompletionCatalogWorkerClient extends DisposableOwner imple
 		this.moduleReadiness = this.activateRequiredModules(requiredProviderModules);
 		void this.moduleReadiness.catch(() => undefined);
 		this.defer(() => {
-			this.disposed = true;
 			this.clearCatalog();
 			this.failWaiters(new ReferenceError("LanguageCompletionCatalogWorkerClient is already disposed"));
 		});
@@ -174,9 +172,7 @@ export class LanguageCompletionCatalogWorkerClient extends DisposableOwner imple
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionCatalogWorkerClient is already disposed");
-		}
+		this.assertNotDisposed();
 		if (this.failure) throw this.failure;
 	}
 }

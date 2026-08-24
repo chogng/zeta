@@ -84,14 +84,12 @@ export class StatusbarService extends DisposableOwner
 	private readonly _onDidChangeEntries = this.own(new Emitter<void>());
 	private readonly entries = new Map<string, IStoredStatusbarEntry>();
 	private nextOrder = 0;
-	private disposed = false;
 
 	readonly onDidChangeEntries = this._onDidChangeEntries.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.entries.clear();
 		});
 	}
@@ -100,7 +98,7 @@ export class StatusbarService extends DisposableOwner
 		entry: IStatusbarEntry,
 		options: IStatusbarEntryOptions,
 	): IStatusbarEntryAccessor {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			throw new ReferenceError("StatusbarService is already disposed");
 		}
 		if (!options.id) {
@@ -128,7 +126,7 @@ export class StatusbarService extends DisposableOwner
 
 		return new StatusbarEntryAccessor(
 			(nextEntry) => {
-				if (this.disposed || this.entries.get(stored.id) !== stored) return;
+				if (this.isDisposed || this.entries.get(stored.id) !== stored) return;
 				stored = {
 					...stored,
 					entry: { ...nextEntry },
@@ -137,7 +135,7 @@ export class StatusbarService extends DisposableOwner
 				this._onDidChangeEntries.fire();
 			},
 			() => {
-				if (this.disposed || this.entries.get(stored.id) !== stored) return;
+				if (this.isDisposed || this.entries.get(stored.id) !== stored) return;
 				this.entries.delete(stored.id);
 				this._onDidChangeEntries.fire();
 			},

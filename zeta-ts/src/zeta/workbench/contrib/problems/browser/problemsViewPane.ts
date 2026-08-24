@@ -37,7 +37,6 @@ export class ProblemsViewPane extends ViewPane {
 	private readonly resultsElement: HTMLUListElement;
 	private renderedProblems: readonly ProblemEntry[] = [];
 	private navigationError: string | undefined;
-	private disposed = false;
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorService: IEditorService) {
 		super(container, options);
@@ -93,7 +92,6 @@ export class ProblemsViewPane extends ViewPane {
 			if (problem) void this.openProblem(problem);
 		}));
 		this.own(diagnosticsService.onDidChangeDiagnostics(() => this.render()));
-		this.defer(() => { this.disposed = true; });
 		this.render();
 	}
 
@@ -175,7 +173,7 @@ export class ProblemsViewPane extends ViewPane {
 		try {
 			await this.editorService.openEditor({ resource: entry.resource, label: resourceName(entry.resource) }, { selection: entry.diagnostic.range });
 		} catch (error) {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.navigationError = error instanceof Error ? error.message : "Could not open problem location.";
 			this.render();
 		}

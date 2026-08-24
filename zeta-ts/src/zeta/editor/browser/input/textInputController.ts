@@ -145,7 +145,6 @@ export class TextInputController extends DisposableOwner {
 	private overtype = false;
 	private accessibleInputSyncScheduled = false;
 	private accessibleInputStartOffset = 0;
-	private disposed = false;
 
 	constructor(
 		private readonly viewport: EditorViewport,
@@ -232,7 +231,6 @@ export class TextInputController extends DisposableOwner {
 		}
 		viewport.element.append(this.element);
 		this.defer(() => {
-			this.disposed = true;
 			this.cancelCompletionRequest();
 			viewport.element.classList.remove("input-focused");
 			viewport.element.classList.remove("overtype");
@@ -508,7 +506,7 @@ export class TextInputController extends DisposableOwner {
 	}
 
 	private synchronizeAccessibleInput(): void {
-		if (this.disposed || this.compositionController.composing || this.element.ownerDocument.activeElement !== this.element) return;
+		if (this.isDisposed || this.compositionController.composing || this.element.ownerDocument.activeElement !== this.element) return;
 		const model = this.viewport.textModel;
 		const selection = this.selectionController.selections.primary;
 		this.updateAccessibleSelectionDescription();

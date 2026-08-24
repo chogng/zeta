@@ -1,15 +1,29 @@
+export interface SettingsNavigationTargetDescriptor {
+	readonly id: string;
+	readonly label: string;
+	readonly targetId: string;
+	readonly keywords?: readonly string[];
+}
+
 export interface SettingsSectionDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
+	readonly navigationTargets?: readonly SettingsNavigationTargetDescriptor[];
 }
 
-/** Product-owned top-level navigation for the Settings surface. */
+/** Product-owned navigation entries and hierarchy for the Settings surface. */
 export const SettingsSections = [
 	{
 		id: "general",
 		label: "General",
 		description: "Configure core application behavior and defaults.",
+		navigationTargets: [
+			{ id: "mode", label: "Workbench Mode", targetId: "general.group.mode" },
+			{ id: "keyboard", label: "Keyboard", targetId: "general.group.keyboard" },
+			{ id: "accessibility", label: "Accessibility", targetId: "general.group.accessibility" },
+			{ id: "interaction", label: "Interaction", targetId: "general.group.interaction" },
+		],
 	},
 	{
 		id: "chat",
@@ -35,6 +49,23 @@ export const SettingsSections = [
 		id: "editor",
 		label: "Editor",
 		description: "Configure text editing, fonts, and editor behavior.",
+		navigationTargets: [
+			{ id: "selection", label: "Editor selection", targetId: "editor.group.selection" },
+			{ id: "typography", label: "Typography", targetId: "editor.group.typography", keywords: ["font"] },
+			{ id: "display", label: "Display", targetId: "editor.group.display" },
+			{ id: "minimap", label: "Minimap", targetId: "editor.group.minimap" },
+			{ id: "editing", label: "Editing", targetId: "editor.group.editing" },
+			{
+				id: "code-intelligence",
+				label: "Code intelligence",
+				targetId: "editor.group.code-intelligence",
+				keywords: ["suggestions", "inlay hints", "code lens"],
+			},
+			{ id: "find-and-replace", label: "Find and replace", targetId: "editor.group.find-and-replace" },
+			{ id: "workspace-search", label: "Workspace search", targetId: "editor.group.workspace-search" },
+			{ id: "diff-editor", label: "Diff editor", targetId: "editor.group.diff-editor" },
+			{ id: "files", label: "Files", targetId: "editor.group.files" },
+		],
 	},
 	{
 		id: "languages",

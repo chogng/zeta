@@ -39,6 +39,7 @@ export interface AsyncTreeDataSource<TInput, T> {
 export type IndexTreeLocation = readonly number[];
 
 export type TreeIndentGuides = "none" | "onHover" | "always";
+export type TreeSelectionPresentation = "active" | "subtle";
 
 export interface TreeTwistieState {
 	readonly collapsible: boolean;

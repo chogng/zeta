@@ -46,14 +46,12 @@ export class LanguageRegistry extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<LanguageDescriptionChangeEvent>());
 	private readonly descriptions = new Map<string, RegisteredLanguageDescription[]>();
 	private nextOrder = 1;
-	private disposed = false;
 
 	readonly onDidChange: Event<LanguageDescriptionChangeEvent> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.descriptions.clear();
 		});
 	}
@@ -63,7 +61,7 @@ export class LanguageRegistry extends DisposableOwner {
 	}
 
 	registerMany(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replace(owner, contributions);
 		let disposed = false;
@@ -74,20 +72,20 @@ export class LanguageRegistry extends DisposableOwner {
 		}) as LanguageDescriptionRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Language description registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
 		return registration;
 	}
 
 	get(languageId: string): LanguageDescription | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		return selectDescription(this.descriptions.get(languageId))?.description;
 	}
 
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!input || typeof input !== "object") throw new TypeError("Language resolution input is required");
 		const path = normalizePath(input.resource.path);
 		const fileName = path.slice(path.lastIndexOf("/") + 1);
@@ -103,9 +101,6 @@ export class LanguageRegistry extends DisposableOwner {
 		return best?.languageId;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageRegistry is already disposed");
-	}
 
 	private replace(owner: object, contributions: readonly LanguageDescriptionContribution[]): void {
 		if (!Array.isArray(contributions)) throw new TypeError("Language description contributions must be an array");
@@ -128,7 +123,7 @@ export class LanguageRegistry extends DisposableOwner {
 	private removeOwner(owner: object): void {
 		const affected = this.ownerLanguageIds(owner);
 		this.deleteOwner(owner);
-		if (!this.disposed) for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
+		if (!this.isDisposed) for (const languageId of [...affected].sort()) this.changeEmitter.fire(Object.freeze({ languageId }));
 	}
 
 	private deleteOwner(owner: object): void {

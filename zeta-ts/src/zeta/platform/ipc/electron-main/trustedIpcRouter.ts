@@ -1,4 +1,4 @@
-import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { AbstractDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 
 export interface IpcMainInvokeEventLike {
 	readonly sender: {
@@ -39,13 +39,16 @@ interface RegisteredRoute {
  * registration belonging to its sender before validation and invocation, so
  * each window can expose the same capability through a window-local service.
  */
-export class TrustedIpcRouter implements IDisposable {
+export class TrustedIpcRouter extends AbstractDisposable {
 	private readonly routesByChannel = new Map<string, Set<RegisteredRoute>>();
 
-	constructor(private readonly ipcMain: IpcMainLike) {}
+	constructor(private readonly ipcMain: IpcMainLike) {
+		super();
+	}
 
 	/** Registers routes for one renderer target and returns its scoped cleanup. */
 	register(target: TrustedIpcTarget, routes: readonly IpcRoute<unknown, unknown>[]): IDisposable {
+		this.assertNotDisposed();
 		const channels = new Set<string>();
 		for (const route of routes) {
 			if (channels.has(route.channel)) {
@@ -82,15 +85,11 @@ export class TrustedIpcRouter implements IDisposable {
 		return toDisposable(() => this.remove(registered));
 	}
 
-	dispose(): void {
+	protected override disposeCore(): void {
 		for (const channel of this.routesByChannel.keys()) {
 			this.ipcMain.removeHandler(channel);
 		}
 		this.routesByChannel.clear();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
 	}
 
 	private invoke(channel: string, event: IpcMainInvokeEventLike, rawParams: unknown): unknown {

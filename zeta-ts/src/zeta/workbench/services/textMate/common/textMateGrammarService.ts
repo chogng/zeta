@@ -32,7 +32,6 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 	private materializationController: AbortController | undefined;
 	private preparedCatalog: TextMateGrammarCatalog | undefined;
 	private preparedBaseRevision: number | undefined;
-	private disposed = false;
 
 	readonly onDidChangeCatalog = this.catalogs.onDidChangeCatalog;
 	readonly onDidFailCatalog = this.failureEmitter.event;
@@ -41,29 +40,28 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 		super();
 		this.own(this.registry.onDidChange(snapshot => this.scheduleMaterialization(snapshot)));
 		this.defer(() => {
-			this.disposed = true;
 			this.materializationController?.abort(new Error("TextMate grammar service disposed"));
 			this.materializationController = undefined;
 		});
 	}
 
 	get currentCatalog(): TextMateGrammarCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalogs.currentCatalog;
 	}
 
 	registerGrammar(definition: TextMateGrammarDefinition): IDisposable {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.registrations.add(this.registry.register(definition));
 	}
 
 	registerGrammars(definitions: readonly TextMateGrammarDefinition[]): TextMateGrammarRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.registrations.add(this.registry.registerMany(definitions));
 	}
 
 	async prepareGrammars(registration: TextMateGrammarRegistration, definitions: readonly TextMateGrammarDefinition[]): Promise<PreparedTextMateGrammars> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!registration || typeof registration.prepare !== "function" || typeof registration.owns !== "function" || !registration.owns(this.registry.currentSnapshot)) throw new TypeError("TextMate grammar preparation requires a registration owned by this service");
 		const baseRegistrySnapshot = registration.currentSnapshot;
 		const baseCatalogRevision = this.catalogs.currentCatalog.revision;
@@ -75,7 +73,7 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 		return Object.freeze({
 			commit: () => {
 				if (committed) throw new ReferenceError("Prepared TextMate grammars are already committed");
-				this.ensureAlive();
+				this.assertNotDisposed();
 				committed = true;
 				if (!registration.owns(baseRegistrySnapshot)) throw new Error("TextMate grammar registry changed after preparation");
 				if (this.catalogs.currentCatalog.revision !== baseCatalogRevision) throw new Error("TextMate grammar catalog changed after preparation");
@@ -94,7 +92,7 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 	}
 
 	whenReady(): Promise<TextMateGrammarCatalog> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.materialization;
 	}
 
@@ -115,18 +113,15 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 		this.preparedBaseRevision = undefined;
 		this.materializationController = controller;
 		const operation = materializeTextMateGrammarCatalog(snapshot, snapshot.revision, controller.signal).then(catalog => {
-			if (this.disposed || this.materializationController !== controller) return catalog;
+			if (this.isDisposed || this.materializationController !== controller) return catalog;
 			this.catalogs.replace(catalog);
 			return this.catalogs.currentCatalog;
 		});
 		operation.catch(error => {
-			if (this.disposed || this.materializationController !== controller || isCancellationError(error)) return;
+			if (this.isDisposed || this.materializationController !== controller || isCancellationError(error)) return;
 			this.failureEmitter.fire(Object.freeze({ revision: snapshot.revision, error }));
 		});
 		this.materialization = operation;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateGrammarService is already disposed");
-	}
 }

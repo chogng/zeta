@@ -334,7 +334,6 @@ class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClient
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
 	private readonly failureEmitter = this.own(new Emitter<unknown>());
 	private peer: MemoryWirePort | undefined;
-	private disposed = false;
 
 	readonly sentMessages: unknown[] = [];
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
@@ -343,7 +342,6 @@ class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClient
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.peer = undefined;
 		});
 	}
@@ -353,14 +351,14 @@ class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClient
 	}
 
 	send(message: unknown): void {
-		if (this.disposed || !this.peer) {
+		if (this.isDisposed || !this.peer) {
 			throw new ReferenceError("Memory wire port is unavailable");
 		}
 		const peer = this.peer;
 		const cloned = structuredClone(message);
 		this.sentMessages.push(cloned);
 		queueMicrotask(() => {
-			if (!peer.disposed) peer.messageEmitter.fire(cloned);
+			if (!peer.isDisposed) peer.messageEmitter.fire(cloned);
 		});
 	}
 

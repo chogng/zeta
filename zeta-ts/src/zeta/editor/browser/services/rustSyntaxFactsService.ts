@@ -23,18 +23,16 @@ interface CachedSyntaxFacts {
  */
 export class RustSyntaxFactsService extends DisposableOwner {
 	private cached: CachedSyntaxFacts | undefined;
-	private disposed = false;
 
 	constructor(private readonly syntax: ISyntaxApi) {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.cached = undefined;
 		});
 	}
 
 	async analyze(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const language = syntaxLanguageForStanzaLanguage(languageId);
 		if (!language) return undefined;
 		const text = snapshot.getText();
@@ -57,7 +55,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
 	}
 
 	async selectionRanges(languageId: string, snapshot: TextSnapshot, ranges: readonly TextRange[], signal: AbortSignal): Promise<readonly TextRange[]> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const language = syntaxLanguageForStanzaLanguage(languageId);
 		if (!language || ranges.length === 0) return Object.freeze([]);
 		const text = snapshot.getText();
@@ -71,9 +69,6 @@ export class RustSyntaxFactsService extends DisposableOwner {
 		return projectRustSyntaxSelectionRanges(result, snapshot);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("Rust syntax facts service is already disposed");
-	}
 }
 
 /** Runs parser facts through Stanza's existing token and diagnostic result gates. */

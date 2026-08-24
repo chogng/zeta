@@ -31,7 +31,7 @@ interface PendingRequest {
 export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 	private readonly pending = new Map<number, PendingRequest>();
 	private nextRequestId = 1;
-	private disposed = false;
+	private closed = false;
 
 	constructor(
 		private readonly port: LanguageWorkerWireClientPort,
@@ -50,7 +50,7 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 	}
 
 	replaceCatalog(catalog: TextMateGrammarCatalog): Promise<void> {
-		this.ensureAlive();
+		this.assertOpen();
 		const normalized = normalizeTextMateGrammarCatalog(catalog);
 		if (normalized.revision === 0) return Promise.resolve();
 		const requestId = this.nextRequestId++;
@@ -76,8 +76,8 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 	}
 
 	private close(error: Error, invalidateWorker: boolean): void {
-		if (this.disposed) return;
-		this.disposed = true;
+		if (this.closed) return;
+		this.closed = true;
 		for (const pending of this.pending.values()) pending.reject(error);
 		this.pending.clear();
 		if (invalidateWorker) {
@@ -87,6 +87,11 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 				// The transport error remains authoritative.
 			}
 		}
+	}
+
+	private assertOpen(): void {
+		this.assertNotDisposed();
+		if (this.closed) throw new ReferenceError("TextMateGrammarCatalogWireClient is already disposed");
 	}
 
 	private acceptMessage(value: unknown): void {
@@ -108,9 +113,6 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateGrammarCatalogWireClient is already disposed");
-	}
 }
 
 /** Worker-side atomic catalog receiver sharing the Syntax Worker port. */

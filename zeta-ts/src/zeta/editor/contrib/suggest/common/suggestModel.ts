@@ -67,7 +67,6 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 	private resolveController: AbortController | undefined;
 	private snippetSession: LanguageCompletionSnippetSession | undefined;
 	private accepting = false;
-	private disposed = false;
 
 	readonly onDidChange: Event<LanguageCompletionSessionChange> = this.changeEmitter.event;
 
@@ -109,7 +108,6 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 				const hadState = this.currentState !== undefined;
 				this.currentState = undefined;
 				if (hadState) this.fire(LanguageCompletionSessionChangeReason.Cancelled);
-				this.disposed = true;
 			});
 			this.startResolution();
 		} catch (error) {
@@ -119,17 +117,17 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 	}
 
 	get textModel(): TextModel {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.store.textModel;
 	}
 
 	get resultStore(): VersionedLanguageResultStore<LanguageCompletionResult> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.store;
 	}
 
 	get state(): LanguageCompletionSessionState | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.currentState;
 	}
 
@@ -142,7 +140,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 	}
 
 	selectIndex(index: number): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const state = this.currentState;
 		if (!state) return false;
 		if (!Number.isSafeInteger(index) || index < 0 || index >= state.items.length) {
@@ -157,7 +155,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 	}
 
 	cancel(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.close(LanguageCompletionSessionChangeReason.Cancelled);
 	}
 
@@ -167,7 +165,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 
 	/** Accepts the focused item and writes its declared commit character in the same undo step. */
 	acceptSelectedWithCommitCharacter(commitCharacter?: string): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const state = this.currentState;
 		if (!state || !this.selectionMatches(state.position)) return false;
 		if (commitCharacter !== undefined) {
@@ -208,7 +206,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 
 	/** Advances an active accepted-snippet tabstop sequence, if any. */
 	selectNextSnippetPlaceholder(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const session = this.snippetSession;
 		if (!session) return false;
 		const handled = session.selectNext();
@@ -218,7 +216,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 
 	/** Moves backwards through an active accepted-snippet tabstop sequence. */
 	selectPreviousSnippetPlaceholder(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const session = this.snippetSession;
 		if (!session) return false;
 		return session.selectPrevious();
@@ -226,19 +224,19 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 
 	/** Selects the next value of the active accepted-snippet choice tabstop. */
 	selectNextSnippetChoice(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.snippetSession?.selectNextChoice() ?? false;
 	}
 
 	/** Selects the previous value of the active accepted-snippet choice tabstop. */
 	selectPreviousSnippetChoice(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.snippetSession?.selectPreviousChoice() ?? false;
 	}
 
 	/** Stops tabstop navigation while preserving the expanded snippet text. */
 	cancelSnippetPlaceholderNavigation(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!this.snippetSession) return false;
 		this.snippetSession.dispose();
 		this.snippetSession = undefined;
@@ -246,7 +244,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 	}
 
 	private selectRelative(delta: number): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const state = this.currentState;
 		if (!state) return false;
 		return this.selectIndex((state.selectedIndex + delta + state.items.length) % state.items.length);
@@ -310,11 +308,6 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionSessionController is already disposed");
-		}
-	}
 
 	private startResolution(): void {
 		const state = this.currentState;

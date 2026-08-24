@@ -34,25 +34,21 @@ export interface TextMateGrammarCatalogSource {
 export class TextMateGrammarCatalogModel extends DisposableOwner implements TextMateGrammarCatalogSource {
 	private readonly changeEmitter = this.own(new Emitter<TextMateGrammarCatalog>());
 	private catalog: TextMateGrammarCatalog;
-	private disposed = false;
 
 	readonly onDidChangeCatalog: Event<TextMateGrammarCatalog> = this.changeEmitter.event;
 
 	constructor(initialCatalog: TextMateGrammarCatalog = EMPTY_TEXTMATE_GRAMMAR_CATALOG) {
 		super();
 		this.catalog = normalizeTextMateGrammarCatalog(initialCatalog);
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	get currentCatalog(): TextMateGrammarCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
 	replace(catalog: TextMateGrammarCatalog): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const normalized = normalizeTextMateGrammarCatalog(catalog);
 		if (normalized.revision <= this.catalog.revision) {
 			throw new RangeError("TextMate grammar catalog revision must increase");
@@ -61,9 +57,6 @@ export class TextMateGrammarCatalogModel extends DisposableOwner implements Text
 		this.changeEmitter.fire(normalized);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateGrammarCatalogModel is already disposed");
-	}
 }
 
 export function normalizeTextMateGrammarCatalog(value: TextMateGrammarCatalog): TextMateGrammarCatalog {

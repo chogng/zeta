@@ -89,6 +89,13 @@ export class DisposableTracker implements IDisposableTracker {
 		this.records.get(owner)?.children.add(disposable);
 	}
 
+	clearDisposableOwner(disposable: TrackableDisposable): void {
+		const record = this.records.get(disposable);
+		if (!record?.owner) return;
+		this.records.get(record.owner)?.children.delete(disposable);
+		record.owner = undefined;
+	}
+
 	markAsDisposed(disposable: TrackableDisposable): void {
 		const record = this.records.get(disposable);
 		if (record) {

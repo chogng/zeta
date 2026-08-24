@@ -22,7 +22,6 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 	private refreshGeneration = 0;
 	private activeRequest: AbortController | undefined;
 	private refreshHandle: ReturnType<typeof globalThis.setTimeout> | undefined;
-	private disposed = false;
 
 	readonly onDidChange: Event<void>;
 
@@ -36,7 +35,6 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 		this.own(gitService.onDidChangeStatus(() => this.scheduleRefresh(0)));
 		this.own(gitService.onDidBecomeReady(() => this.scheduleRefresh(0)));
 		this.defer(() => {
-			this.disposed = true;
 			this.refreshGeneration += 1;
 			this.activeRequest?.abort("dirtyDiffDisposed");
 			this.activeRequest = undefined;
@@ -58,7 +56,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 	}
 
 	private scheduleRefresh(delayMs: number): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (this.refreshHandle !== undefined) globalThis.clearTimeout(this.refreshHandle);
 		this.refreshHandle = globalThis.setTimeout(() => {
 			this.refreshHandle = undefined;
@@ -67,7 +65,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 	}
 
 	private async runRefresh(): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const generation = ++this.refreshGeneration;
 		this.activeRequest?.abort("dirtyDiffSuperseded");
 		const controller = new AbortController();
@@ -98,7 +96,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 			}, controller.signal);
 			this.accept(generation, modelVersion, decorationsForDiff(this.model, diff));
 		} catch (error) {
-			if (controller.signal.aborted || this.disposed) return;
+			if (controller.signal.aborted || this.isDisposed) return;
 			// Git can be unavailable during workspace startup; retain the last valid projection.
 			void error;
 		} finally {
@@ -107,7 +105,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 	}
 
 	private accept(generation: number, modelVersion: number, specs: ReturnType<typeof decorationsForDiff>): void {
-		if (this.disposed || generation !== this.refreshGeneration || modelVersion !== this.model.version) return;
+		if (this.isDisposed || generation !== this.refreshGeneration || modelVersion !== this.model.version) return;
 		this.collection.replaceAll(specs);
 	}
 }

@@ -59,7 +59,6 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 	private readonly changeEmitter = this.own(new Emitter<TextMateGrammarRegistrySnapshot>());
 	private readonly groups = new Map<object, readonly RegisteredTextMateGrammarDefinition[]>();
 	private snapshot: TextMateGrammarRegistrySnapshot = createSnapshot(0, []);
-	private disposed = false;
 
 	readonly onDidChange: Event<TextMateGrammarRegistrySnapshot> = this.changeEmitter.event;
 
@@ -69,12 +68,11 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 			const changed = this.groups.size > 0;
 			this.groups.clear();
 			if (changed) this.publish();
-			this.disposed = true;
 		});
 	}
 
 	get currentSnapshot(): TextMateGrammarRegistrySnapshot {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.snapshot;
 	}
 
@@ -84,7 +82,7 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 
 	/** Registers a group that can later be replaced without colliding with its previous definitions. */
 	registerMany(definitions: readonly TextMateGrammarDefinition[]): TextMateGrammarRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const key = Object.freeze({});
 		const registered = normalizeDefinitions(definitions);
 		this.validateReplacement(key, registered);
@@ -96,14 +94,14 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 		const dispose = (): void => {
 			if (disposed) return;
 			disposed = true;
-			if (this.groups.delete(key) && !this.disposed) this.publish();
+			if (this.groups.delete(key) && !this.isDisposed) this.publish();
 		};
 		const registration = toDisposable(dispose) as TextMateGrammarRegistration;
 		Object.defineProperty(registration, "currentSnapshot", { enumerable: true, get: () => this.snapshot });
 		registration.owns = snapshot => snapshot === this.snapshot;
 		registration.prepare = (nextDefinitions): PreparedTextMateGrammarReplacement => {
 			if (disposed) throw new ReferenceError("TextMate grammar registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			const next = normalizeDefinitions(nextDefinitions);
 			this.validateReplacement(key, next);
 			const baseRevision = this.snapshot.revision;
@@ -114,7 +112,7 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 				commit: (): void => {
 					if (committed) throw new ReferenceError("Prepared TextMate grammar replacement is already committed");
 					if (disposed) throw new ReferenceError("TextMate grammar registration is already disposed");
-					this.ensureAlive();
+					this.assertNotDisposed();
 					if (this.snapshot.revision !== baseRevision) throw new Error("TextMate grammar registry changed after replacement preparation");
 					this.validateReplacement(key, next);
 					committed = true;
@@ -161,9 +159,6 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 		return definitions;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateGrammarRegistry is already disposed");
-	}
 }
 
 function normalizeDefinitions(definitions: readonly TextMateGrammarDefinition[]): readonly RegisteredTextMateGrammarDefinition[] {

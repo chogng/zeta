@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableMap, DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 
 export interface LanguageProviderModule<TProvider> {
 	readonly id: string;
@@ -51,7 +51,6 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 	private readonly catalogEmitter = this.own(new Emitter<LanguageProviderModuleCatalog>());
 	private readonly modules = new Map<string, RegisteredProviderModule<TProvider>>();
 	private catalog: LanguageProviderModuleCatalog = EMPTY_MODULE_CATALOG;
-	private disposed = false;
 
 	readonly onDidChangeModuleCatalog: Event<LanguageProviderModuleCatalog> = this.catalogEmitter.event;
 
@@ -61,17 +60,16 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 			const changed = this.modules.size > 0;
 			this.modules.clear();
 			if (changed) this.updateCatalog();
-			this.disposed = true;
 		});
 	}
 
 	get moduleCatalog(): LanguageProviderModuleCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
 	register(module: LanguageProviderModule<TProvider>): IDisposable {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const registered = normalizeModule(module);
 		if (this.modules.has(registered.id)) {
 			throw new RangeError(`Language provider module '${registered.id}' is already registered`);
@@ -87,7 +85,7 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 	}
 
 	getModule(moduleId: string): LanguageProviderModule<TProvider> | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageProviderModuleId(moduleId);
 		return this.modules.get(moduleId);
 	}
@@ -100,16 +98,12 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 		this.catalogEmitter.fire(this.catalog);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageProviderModuleRegistry is already disposed");
-	}
 }
 
 /** Owns serialized module activation and atomic provider-registration batches. */
 export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
-	private readonly active = new Map<string, IDisposable>();
+	private readonly active = this.own(new DisposableMap<string, IDisposable>());
 	private readonly operationTails = new Map<string, Promise<void>>();
-	private disposed = false;
 
 	constructor(
 		private readonly modules: LanguageProviderModuleRegistry<TProvider>,
@@ -118,23 +112,16 @@ export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
 		super();
 		this.own(modules.onDidChangeModuleCatalog(catalog => {
 			const available = new Set(catalog.modules.map(module => module.id));
-			for (const [moduleId, registration] of this.active) {
+			for (const [moduleId] of this.active) {
 				if (!available.has(moduleId)) {
-					this.active.delete(moduleId);
-					registration.dispose();
+					this.active.deleteAndDispose(moduleId);
 				}
 			}
 		}));
-		this.defer(() => {
-			this.disposed = true;
-			const registrations = [...this.active.values()];
-			this.active.clear();
-			for (let index = registrations.length - 1; index >= 0; index -= 1) registrations[index]!.dispose();
-		});
 	}
 
 	setActivation(moduleId: string, state: LanguageProviderModuleState): Promise<LanguageProviderModuleStateChange> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageProviderModuleId(moduleId);
 		assertLanguageProviderModuleState(state);
 		const previous = this.operationTails.get(moduleId) ?? Promise.resolve();
@@ -148,19 +135,16 @@ export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
 	}
 
 	private async applyActivation(moduleId: string, state: LanguageProviderModuleState): Promise<LanguageProviderModuleStateChange> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (state === LanguageProviderModuleState.Inactive) {
-			const registration = this.active.get(moduleId);
-			if (!registration) return moduleStateChange(moduleId, state, false);
-			this.active.delete(moduleId);
-			registration.dispose();
+			if (!this.active.deleteAndDispose(moduleId)) return moduleStateChange(moduleId, state, false);
 			return moduleStateChange(moduleId, state, true);
 		}
 		if (this.active.has(moduleId)) return moduleStateChange(moduleId, state, false);
 		const module = this.modules.getModule(moduleId);
 		if (!module) throw new ReferenceError(`Language provider module '${moduleId}' is unavailable`);
 		const providers = await module.load();
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.modules.getModule(moduleId) !== module) {
 			throw new ReferenceError(`Language provider module '${moduleId}' was removed while loading`);
 		}
@@ -172,9 +156,6 @@ export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
 		return moduleStateChange(moduleId, state, true);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageProviderModuleHost is already disposed");
-	}
 }
 
 export function normalizeLanguageProviderModuleCatalog(value: unknown): LanguageProviderModuleCatalog {

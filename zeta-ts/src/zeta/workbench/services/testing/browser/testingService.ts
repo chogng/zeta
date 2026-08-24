@@ -22,7 +22,6 @@ export class TestingService extends DisposableOwner implements ITestingService {
 	private providerRefreshGeneration = 0;
 	private refreshingTasks = 0;
 	private loaded = false;
-	private disposed = false;
 
 	readonly onDidChangeProfiles: Event<readonly ITestProfile[]> = this.profilesEmitter.event;
 	readonly onDidStartRun: Event<ITestRun> = this.startRunEmitter.event;
@@ -35,7 +34,6 @@ export class TestingService extends DisposableOwner implements ITestingService {
 			if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
 		}));
 		this.defer(() => {
-			this.disposed = true;
 			this.activeProviderRefresh?.abort();
 			this.activeProviderRefresh = undefined;
 			this.providers.clear();
@@ -53,7 +51,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 	}
 
 	registerTestProfileProviders(providers: readonly TestProfileProvider[]): TestProfileProviderRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replaceProviders(owner, providers);
 		let disposed = false;
@@ -65,14 +63,14 @@ export class TestingService extends DisposableOwner implements ITestingService {
 		}) as TestProfileProviderRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Test Profile provider registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replaceProviders(owner, replacement);
 		};
 		return registration;
 	}
 
 	async refresh(): Promise<readonly ITestProfile[]> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.refreshingTasks += 1;
 		try { await this.taskService.refresh(); }
 		finally { this.refreshingTasks -= 1; }
@@ -140,7 +138,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 	}
 
 	private providersChanged(providerIds: ReadonlySet<string> | readonly string[]): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const changedProviders = new Set(providerIds);
 		const refresh = this.loaded || this.activeProviderRefresh !== undefined;
 		this.providerProfiles = Object.freeze(this.providerProfiles.filter(profile => !changedProviders.has(profile.source)));
@@ -151,7 +149,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 	}
 
 	private async refreshProviderProfiles(): Promise<readonly ITestProfile[]> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.activeProviderRefresh?.abort();
 		const controller = new AbortController();
 		this.activeProviderRefresh = controller;
@@ -159,7 +157,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 		const providers = [...this.providers.values()].map(entry => entry.provider);
 		try {
 			const providerProfiles = (await Promise.all(providers.map(provider => this.provideProfiles(provider, controller.signal)))).flat();
-			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.disposed) return this.currentProfiles;
+			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed) return this.currentProfiles;
 			const ids = new Set(this.taskService.tasks.filter(task => task.group === "test").map(task => task.id));
 			for (const profile of providerProfiles) {
 				if (ids.has(profile.id)) throw new Error(`Test Profile '${profile.id}' is already registered`);
@@ -170,7 +168,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 			this.projectProfiles();
 			return this.currentProfiles;
 		} catch (error) {
-			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.disposed) return this.currentProfiles;
+			if (controller.signal.aborted || generation !== this.providerRefreshGeneration || this.isDisposed) return this.currentProfiles;
 			throw error;
 		} finally {
 			if (this.activeProviderRefresh === controller) this.activeProviderRefresh = undefined;
@@ -190,9 +188,6 @@ export class TestingService extends DisposableOwner implements ITestingService {
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TestingService is already disposed");
-	}
 
 	private reportError(error: unknown): void {
 		this.logService?.error("testing.profiles", "Could not refresh Test Profiles", error);

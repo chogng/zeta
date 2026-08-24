@@ -1,5 +1,7 @@
 import type { DragAndDropData } from "../dnd/dnd.js";
 
+export type ListScrolling = "internal" | "external";
+
 export interface ListAccessibilityProvider<T> {
 	readonly getRole?: (item: T) => "option" | "treeitem";
 	readonly getAriaLabel?: (item: T) => string | undefined;

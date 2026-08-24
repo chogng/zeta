@@ -67,7 +67,6 @@ export class DialogsModel
 	private readonly _onDidCloseDialog =
 		this.own(new Emitter<IDialogCloseEvent>());
 	private readonly _dialogs: IDialogViewItem[] = [];
-	private disposed = false;
 
 	readonly onWillShowDialog = this._onWillShowDialog.event;
 	readonly onDidCloseDialog = this._onDidCloseDialog.event;
@@ -75,7 +74,6 @@ export class DialogsModel
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			for (const item of [...this._dialogs]) item.cancel();
 		});
 	}
@@ -85,7 +83,7 @@ export class DialogsModel
 	}
 
 	show(request: DialogRequest): IDialogHandle {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			throw new ReferenceError("DialogsModel is already disposed");
 		}
 

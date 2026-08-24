@@ -77,7 +77,6 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 	private mapper: IKeyboardMapper;
 	private refreshing: Promise<void> | undefined;
 	private refreshPending = false;
-	private disposed = false;
 
 	public readonly onDidChangeKeyboardLayout = this._onDidChangeKeyboardLayout.event;
 
@@ -100,7 +99,6 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 		this.layout = options.layout?.layout ?? this.fallbackLayout();
 		this.mapper = this.createMapper();
 		this.defer(() => {
-			this.disposed = true;
 			this.mapping = undefined;
 		});
 		this.listenForLayoutChanges();
@@ -168,7 +166,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 	}
 
 	public refreshKeyboardLayout(): Promise<void> {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			return Promise.resolve();
 		}
 		if (this.refreshing) {
@@ -188,7 +186,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 		do {
 			this.refreshPending = false;
 			await this.refreshLayout();
-		} while (this.refreshPending && !this.disposed);
+		} while (this.refreshPending && !this.isDisposed);
 	}
 
 	private async refreshLayout(): Promise<void> {
@@ -209,7 +207,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 			this.readLayoutProvider(this.layoutProvider),
 			this.readLayoutProvider(this.userLayoutProvider),
 		]);
-		if (!this.disposed) {
+		if (!this.isDisposed) {
 			this.nativeLayout = nativeLayout;
 			this.userLayout = userLayout;
 		}
@@ -230,7 +228,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 
 	private async loadBuiltinLayouts(): Promise<void> {
 		const layouts = await loadBuiltinKeyboardLayouts(this.operatingSystem);
-		if (this.disposed || layouts === this.builtinLayouts) {
+		if (this.isDisposed || layouts === this.builtinLayouts) {
 			return;
 		}
 		this.builtinLayouts = layouts;
@@ -292,7 +290,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 				return;
 			}
 			const layoutMap = await keyboard.getLayoutMap();
-			if (this.disposed) {
+			if (this.isDisposed) {
 				return;
 			}
 			const labels = new Map<string, string>();

@@ -4,3 +4,8 @@
   flex-direction: column;
   gap: 30px;
 }
+
+.zeta-settings-tree.has-navigation-target .zeta-settings-tree-group-title,
+.zeta-settings-tree.has-navigation-target .zeta-settings-tree-group-description {
+  display: none;
+}

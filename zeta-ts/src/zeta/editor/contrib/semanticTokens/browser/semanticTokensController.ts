@@ -6,7 +6,6 @@ import { type SemanticTokensService } from "../common/semanticTokens.js";
 /** Refreshes full semantic tokens while the document and provider set remain current. */
 export class SemanticTokensController extends DisposableOwner {
 	private generation = 0;
-	private disposed = false;
 
 	constructor(private readonly service: SemanticTokensService, private readonly languageId: string, whenLanguageSupportReady: () => Promise<unknown>, onDidChangeLanguageSupport: Event<void> | undefined, private readonly onLanguageError: (error: unknown) => void) {
 		super();
@@ -17,7 +16,6 @@ export class SemanticTokensController extends DisposableOwner {
 		this.own(service.tokens.textModel.onDidChange(schedule));
 		if (onDidChangeLanguageSupport) this.own(onDidChangeLanguageSupport(schedule));
 		this.defer(() => {
-			this.disposed = true;
 			this.generation += 1;
 		});
 		schedule();
@@ -26,10 +24,10 @@ export class SemanticTokensController extends DisposableOwner {
 	private async run(generation: number, whenLanguageSupportReady: () => Promise<unknown>): Promise<void> {
 		try {
 			await whenLanguageSupportReady();
-			if (this.disposed || generation !== this.generation) return;
+			if (this.isDisposed || generation !== this.generation) return;
 			await this.service.requestTokens(this.languageId);
 		} catch (error) {
-			if (this.disposed || generation !== this.generation || isCancellationError(error) || isAbortError(error)) return;
+			if (this.isDisposed || generation !== this.generation || isCancellationError(error) || isAbortError(error)) return;
 			this.onLanguageError(error);
 		}
 	}

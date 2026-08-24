@@ -21,7 +21,6 @@ export class EmptyView extends ViewPane {
 	private readonly openButton: Button;
 	private readonly statusElement: HTMLParagraphElement;
 	private readonly workspaceOpenService: IWorkspaceOpenService;
-	private disposed = false;
 
 	constructor(
 		container: HTMLElement,
@@ -31,9 +30,6 @@ export class EmptyView extends ViewPane {
 		super(container, options);
 		this.workspaceOpenService = workspaceOpenService;
 		this.contentElement.classList.add("zeta-empty-explorer");
-		this.defer(() => {
-			this.disposed = true;
-		});
 
 		const message = h(container.ownerDocument, "p");
 		message.className = "zeta-empty-explorer-message";
@@ -67,12 +63,12 @@ export class EmptyView extends ViewPane {
 		try {
 			await this.workspaceOpenService.openFolder();
 		} catch (error) {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.statusElement.textContent = error instanceof Error
 				? error.message
 				: "Unable to open a folder.";
 		} finally {
-			if (!this.disposed) {
+			if (!this.isDisposed) {
 				this.openButton.enabled =
 					this.workspaceOpenService.canOpenFolder;
 			}

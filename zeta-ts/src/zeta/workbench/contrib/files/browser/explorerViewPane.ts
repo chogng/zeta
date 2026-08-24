@@ -1,8 +1,5 @@
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
-import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import type { TreeTwistieState } from "../../../../base/browser/ui/tree/tree.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -34,7 +31,6 @@ export class ExplorerViewPane extends ViewPane {
 		this.own(new ResettableDisposableGroup());
 	private root: ExplorerNode | undefined;
 	private error: string | undefined;
-	private disposed = false;
 	private workspaceGeneration = 0;
 
 	constructor(
@@ -69,6 +65,7 @@ export class ExplorerViewPane extends ViewPane {
 			},
 		}, {
 			ariaLabel: "Workspace files",
+			scrolling: "external",
 			configurationService,
 			indentGuides: "always",
 			expandOnlyOnTwistieClick: false,
@@ -76,8 +73,6 @@ export class ExplorerViewPane extends ViewPane {
 			openOnSingleClick: true,
 			onWillRender: () => this.renderedLabels.clear(),
 			renderElement: (node) => this.renderTreeElement(node),
-			renderTwistie: (node, state, container) =>
-				this.renderTreeTwistie(node, state, container),
 		}));
 		this.own(this.tree.onDidError(({ error }) => {
 			this.error = error instanceof Error ? error.message : "Unable to read workspace files.";
@@ -92,9 +87,6 @@ export class ExplorerViewPane extends ViewPane {
 		this.own(workspaceContextService.onDidChangeWorkspace(() => {
 			void this.initialize();
 		}));
-		this.defer(() => {
-			this.disposed = true;
-		});
 		this.render();
 		void this.initialize();
 	}
@@ -117,7 +109,7 @@ export class ExplorerViewPane extends ViewPane {
 			if (metadata.kind !== FileKind.Directory) {
 				throw new Error("Workspace root is not a directory");
 			}
-			if (this.disposed || generation !== this.workspaceGeneration) return;
+			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.root = {
 				resource: folder.uri,
 				name: folder.name,
@@ -126,7 +118,7 @@ export class ExplorerViewPane extends ViewPane {
 			this.render();
 			await this.tree.setInput(this.root);
 		} catch (error) {
-			if (this.disposed || generation !== this.workspaceGeneration) return;
+			if (this.isDisposed || generation !== this.workspaceGeneration) return;
 			this.error = error instanceof Error
 				? error.message
 				: "Unable to load workspace files.";
@@ -142,7 +134,7 @@ export class ExplorerViewPane extends ViewPane {
 				label: node.name,
 			}, event.editorOptions, event.sideBySide ? "sideGroup" : "activeGroup");
 		} catch (error) {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.error = error instanceof Error
 				? error.message
 				: `Unable to open ${node.name}.`;
@@ -199,16 +191,6 @@ export class ExplorerViewPane extends ViewPane {
 			groupId: "explorer.items",
 		}));
 		return content;
-	}
-
-	private renderTreeTwistie(node: ExplorerNode, state: TreeTwistieState, container: HTMLSpanElement): void {
-		if (!state.collapsible) return;
-		appendIcon(
-			state.expanded
-				? lxiconsLibrary.dropdownIndicator
-				: lxiconsLibrary.submenuIndicator,
-			container,
-		);
 	}
 }
 

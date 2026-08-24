@@ -1,4 +1,5 @@
 import type { IContextViewProvider } from "../../../../base/browser/ui/contextview/contextview.js";
+import { noEvent } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
@@ -229,7 +230,7 @@ const unavailableWorkbenchModeService: IWorkbenchModeService = {
 };
 
 const unavailableModelCatalog: ModelSettingsCatalog = {
-	onDidChangeModels: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChangeModels: noEvent,
 	listModelCatalog: () => Promise.reject(new Error("Model settings are unavailable.")),
 	refreshModels: () => Promise.reject(new Error("Model settings are unavailable.")),
 	isModelVisible: () => true,
@@ -237,8 +238,8 @@ const unavailableModelCatalog: ModelSettingsCatalog = {
 };
 
 const unavailableAccountService: IAccountService = {
-	onDidChangeAccounts: () => ({ dispose() {}, [Symbol.dispose]() {} }),
-	onDidCompleteLogin: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChangeAccounts: noEvent,
+	onDidCompleteLogin: noEvent,
 	read: () => Promise.reject(new Error("Account settings are unavailable.")),
 	startLogin: () => Promise.reject(new Error("Account sign-in is unavailable.")),
 	cancelLogin: () => Promise.reject(new Error("Kimi sign-in is unavailable.")),
@@ -266,7 +267,7 @@ const unavailableWorkspaceOpenService: IWorkspaceOpenService = {
 };
 
 const unavailableConnectorService: IConnectorService = {
-	onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChange: noEvent,
 	list: () => Promise.reject(new Error("Connectors are unavailable.")),
 	connectApiToken: () => Promise.reject(new Error("Connectors are unavailable.")),
 	connectOAuth: () => Promise.reject(new Error("Connectors are unavailable.")),
@@ -276,7 +277,7 @@ const unavailableConnectorService: IConnectorService = {
 };
 
 const unavailablePluginService: IPluginService = {
-	onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChange: noEvent,
 	list: () => Promise.reject(new Error("Plugins are unavailable.")),
 	enable: () => Promise.reject(new Error("Plugins are unavailable.")),
 	disable: () => Promise.reject(new Error("Plugins are unavailable.")),
@@ -286,7 +287,7 @@ const unavailablePluginService: IPluginService = {
 };
 
 const unavailableMarketplaceService: IMarketplaceService = {
-	onDidChangeInstalled: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChangeInstalled: noEvent,
 	cachedBrowse: () => undefined,
 	browse: () => Promise.reject(new Error("Marketplace is unavailable.")),
 	refreshBrowse: () => Promise.reject(new Error("Marketplace is unavailable.")),
@@ -303,20 +304,20 @@ const unavailableMarketplaceService: IMarketplaceService = {
 };
 
 const unavailableLocalizationService: ILocalizationService = {
-	onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChange: noEvent,
 	whenReady: Promise.resolve(),
 	translate: (_bundle, _key, fallback) => fallback,
 };
 
 const unavailableLocaleService: ILocaleService = {
 	locale: "en",
-	onDidChangeLocale: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChangeLocale: noEvent,
 	whenReady: Promise.resolve(),
 	setLocale: () => Promise.reject(new Error("Locale selection is unavailable.")),
 };
 
 const unavailableLanguagePackService: ILanguagePackService = {
-	onDidChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
+	onDidChange: noEvent,
 	whenReady: Promise.resolve(),
 	catalogs: [],
 	availableLocales: [],

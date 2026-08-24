@@ -17,7 +17,6 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 	private nextRequestId = 1;
 	private catalogReady = false;
 	private failure: Error | undefined;
-	private disposed = false;
 
 	readonly onDidChangeModuleCatalog: Event<LanguageProviderModuleCatalog> = this.catalogEmitter.event;
 
@@ -32,7 +31,6 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 		if (typeof invalidateWorker !== "function") throw new TypeError("Provider module wire client requires an invalidation callback");
 		this.own(port.onMessage(message => this.receive(message)));
 		this.defer(() => {
-			this.disposed = true;
 			this.catalog = EMPTY_MODULE_CATALOG;
 			this.catalogReady = false;
 			this.failPending(new ReferenceError("LanguageProviderModuleWireClient is already disposed"));
@@ -156,14 +154,13 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 	}
 
 	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageProviderModuleWireClient is already disposed");
+		this.assertNotDisposed();
 		if (this.failure) throw this.failure;
 	}
 }
 
 /** Worker-side activation dispatcher and module-catalog publisher. */
 export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner {
-	private disposed = false;
 
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
@@ -179,9 +176,6 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 		}
 		this.own(port.onMessage(message => this.receive(message)));
 		this.own(modules.onDidChangeModuleCatalog(catalog => this.publishCatalog(catalog)));
-		this.defer(() => {
-			this.disposed = true;
-		});
 		try {
 			this.publishCatalog(modules.moduleCatalog);
 		} catch (error) {
@@ -191,7 +185,7 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 	}
 
 	private receive(value: unknown): void {
-		if (!isModuleMessage(value, this.descriptor) || this.disposed) return;
+		if (!isModuleMessage(value, this.descriptor) || this.isDisposed) return;
 		let request: ActivationRequestMessage;
 		try {
 			assertEnvelope(value, this.descriptor);
@@ -208,7 +202,7 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 	private async apply(request: ActivationRequestMessage): Promise<void> {
 		try {
 			const result = await this.host.setActivation(request.moduleId, request.state);
-			if (!this.disposed) {
+			if (!this.isDisposed) {
 				this.port.send(Object.freeze({
 					protocol: this.descriptor.protocol,
 					version: this.descriptor.version,
@@ -218,12 +212,12 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 				}));
 			}
 		} catch (error) {
-			if (!this.disposed) this.sendFailure(request.requestId, error);
+			if (!this.isDisposed) this.sendFailure(request.requestId, error);
 		}
 	}
 
 	private publishCatalog(catalog: LanguageProviderModuleCatalog): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.port.send(Object.freeze({
 			protocol: this.descriptor.protocol,
 			version: this.descriptor.version,

@@ -64,13 +64,10 @@
   height: 100%;
 }
 
-.zeta-settings-navigation-list {
-  display: flex;
-  margin: 0;
+.zeta-settings-navigation-tree {
+  width: 100%;
+  box-sizing: border-box;
   padding: 18px 12px;
-  flex-direction: column;
-  gap: 2px;
-  list-style: none;
 }
 
 .zeta-settings-navigation-empty {
@@ -80,32 +77,11 @@
   line-height: 1.5;
 }
 
-.zeta-settings-navigation-item {
-  width: 100%;
-  min-height: 34px;
-  justify-content: flex-start;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 5px;
-  color: var(--zeta-foreground);
-  background: transparent;
-  line-height: 20px;
-  text-align: left;
-  --zeta-icon-label-text-overflow: clip;
-}
-
-.zeta-settings-navigation-item:hover {
-  background: var(--zeta-list-hover-background);
-}
-
-.zeta-settings-navigation-item:active {
-  background: var(--zeta-button-active-background);
-}
-
-.zeta-settings-navigation-item.is-active {
-  color: var(--zeta-list-active-selection-foreground);
-  background: var(--zeta-list-active-selection-background);
-  font-weight: 500;
+.zeta-settings-navigation-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .zeta-settings-page {
@@ -123,6 +99,13 @@
   color: var(--zeta-foreground);
   font-size: 22px;
   font-weight: 600;
+}
+
+.zeta-settings-page.has-navigation-target h3 {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  background: var(--zeta-editor-background);
 }
 
 .zeta-settings-description {
@@ -434,7 +417,7 @@
     border-bottom: 1px solid var(--zeta-widget-border);
   }
 
-  .zeta-settings-navigation-list {
+  .zeta-settings-navigation-tree {
     padding: 10px;
   }
 

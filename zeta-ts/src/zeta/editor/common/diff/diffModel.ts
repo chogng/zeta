@@ -45,7 +45,6 @@ export class DiffModel extends DisposableOwner {
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
 	private _state: DiffModelState;
-	private disposed = false;
 
 	readonly onDidChange: Event<DiffModelState> = this.changeEmitter.event;
 
@@ -60,7 +59,6 @@ export class DiffModel extends DisposableOwner {
 		this.own(options.original.onDidChange(() => this.refresh()));
 		this.own(options.modified.onDidChange(() => this.refresh()));
 		this.defer(() => {
-			this.disposed = true;
 			this.activeRequest?.abort("diffModelDisposed");
 			this.activeRequest = undefined;
 		});
@@ -85,7 +83,7 @@ export class DiffModel extends DisposableOwner {
 
 	/** Starts a fresh computation for the current source-model versions. */
 	refresh(): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const original = snapshot(this.original);
 		const modified = snapshot(this.modified);
 		this.activeRequest?.abort("supersededDiffModelRequest");
@@ -127,7 +125,7 @@ export class DiffModel extends DisposableOwner {
 	}
 
 	private isCurrentRequest(generation: number, controller: AbortController, original: DiffComputationDocument, modified: DiffComputationDocument): boolean {
-		return !this.disposed &&
+		return !this.isDisposed &&
 			this.requestGeneration === generation &&
 			this.activeRequest === controller &&
 			this.original.version === original.version &&

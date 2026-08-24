@@ -51,7 +51,6 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 	private currentResult: VersionedLanguageResult<TResult> | undefined;
 	private latestAcceptedRequestId = 0;
 	private normalizing = false;
-	private disposed = false;
 
 	readonly onDidChange: Event<LanguageResultStoreChange<TResult>> = this.changeEmitter.event;
 
@@ -66,18 +65,17 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 		}
 		this.own(model.onDidChange(() => this.acceptModelChange()));
 		this.defer(() => {
-			this.disposed = true;
 			this.currentResult = undefined;
 		});
 	}
 
 	get textModel(): TextModel {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.model;
 	}
 
 	get result(): VersionedLanguageResult<TResult> | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (this.readModelVersion() === undefined) {
 			this.currentResult = undefined;
 			return undefined;
@@ -86,7 +84,7 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 	}
 
 	accept(result: VersionedLanguageResult<TResult>): LanguageResultAcceptance {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertResultEnvelope(result);
 		if (result.textModel !== this.model) {
 			throw new TypeError("Language result store and result must share one text model");
@@ -140,7 +138,7 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 	}
 
 	clear(): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!this.currentResult) return;
 		const modelVersion = this.readModelVersion() ?? this.currentResult.modelVersion;
 		this.currentResult = undefined;
@@ -181,11 +179,6 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("VersionedLanguageResultStore is already disposed");
-		}
-	}
 }
 
 function assertResultEnvelope<TResult>(result: VersionedLanguageResult<TResult>): void {

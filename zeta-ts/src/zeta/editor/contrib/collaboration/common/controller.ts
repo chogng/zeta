@@ -36,7 +36,6 @@ export class DocumentCollaborationController extends DisposableOwner {
 	private readonly synchronizer: DocumentCollaborationSynchronizer;
 	private submitting = false;
 	private synchronizingModel = false;
-	private disposed = false;
 	private _presences: readonly DocumentCollaborationPresence[] = [];
 
 	readonly onDidChangeState: Event<DocumentCollaborationStateChange> = this.stateEmitter.event;
@@ -68,9 +67,6 @@ export class DocumentCollaborationController extends DisposableOwner {
 		this.synchronizeModel();
 		this.setState("connected");
 		this.publishPresence(model.selection);
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	get roomId(): string {
@@ -98,25 +94,25 @@ export class DocumentCollaborationController extends DisposableOwner {
 	}
 
 	createInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
 		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot create room invitations"));
 		return this.connection.createInvite(displayName, role, new AbortController().signal);
 	}
 
 	listMembers(): Promise<readonly DocumentCollaborationMember[]> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
 		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot inspect room members"));
 		return this.connection.listMembers(new AbortController().signal);
 	}
 
 	rotateMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
 		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
 		return this.connection.rotateMemberAccessToken(principalId, new AbortController().signal);
 	}
 
 	revokeMember(principalId: string): Promise<void> {
-		if (this.disposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
+		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
 		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
 		return this.connection.revokeMember(principalId, new AbortController().signal);
 	}
@@ -124,7 +120,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 	private _state: DocumentCollaborationState = "connected";
 
 	private submit(envelope: DocumentCollaborationEnvelope): void {
-		if (this.disposed || this.submitting || this._state !== "connected") return;
+		if (this.isDisposed || this.submitting || this._state !== "connected") return;
 		const document = this.synchronizer.inFlightDocument;
 		if (!document || this.synchronizer.inFlight?.sequence !== envelope.sequence) {
 			this.setState("error", "The collaboration submission no longer matches the local document state");
@@ -141,14 +137,14 @@ export class DocumentCollaborationController extends DisposableOwner {
 	}
 
 	private publishPresence(selection: TextModel["selection"]): void {
-		if (this.disposed || this._state !== "connected") return;
+		if (this.isDisposed || this._state !== "connected") return;
 		void this.connection.updatePresence(selection, new AbortController().signal).catch(error => {
-			if (!this.disposed) this.setState("error", error instanceof Error ? error.message : "Publishing collaboration presence failed");
+			if (!this.isDisposed) this.setState("error", error instanceof Error ? error.message : "Publishing collaboration presence failed");
 		});
 	}
 
 	private acceptSubmitOutcome(outcome: DocumentCollaborationSubmitOutcome): void {
-		if (this.disposed || this._state !== "connected") return;
+		if (this.isDisposed || this._state !== "connected") return;
 		switch (outcome.kind) {
 			case "accepted":
 				this.acceptUpdate(outcome.update);
@@ -163,7 +159,7 @@ export class DocumentCollaborationController extends DisposableOwner {
 	}
 
 	private acceptUpdate(update: DocumentCollaborationRemoteEnvelope): void {
-		if (this.disposed || this._state !== "connected" || update.version <= this.synchronizer.version) return;
+		if (this.isDisposed || this._state !== "connected" || update.version <= this.synchronizer.version) return;
 		try {
 			if (update.clientId === this.connection.clientId) {
 				if (this.synchronizer.inFlight?.sequence !== update.sequence) return;

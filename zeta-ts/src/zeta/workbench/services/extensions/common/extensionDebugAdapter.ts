@@ -17,31 +17,26 @@ export interface ExtensionDebugAdapterSource {
 export class ExtensionDebugAdapterRegistry extends DisposableOwner implements ExtensionDebugAdapterSource {
 	private readonly changeEmitter = this.own(new Emitter<readonly ExtensionDebugAdapterDefinition[]>());
 	private definitionsValue: readonly ExtensionDebugAdapterDefinition[] = Object.freeze([]);
-	private disposed = false;
 	readonly onDidChange: Event<readonly ExtensionDebugAdapterDefinition[]> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.definitionsValue = Object.freeze([]);
 		});
 	}
 
 	get definitions(): readonly ExtensionDebugAdapterDefinition[] { return this.definitionsValue; }
-	get(type: string): ExtensionDebugAdapterDefinition | undefined { return this.disposed ? undefined : this.definitionsValue.find(definition => definition.type === type); }
+	get(type: string): ExtensionDebugAdapterDefinition | undefined { return this.isDisposed ? undefined : this.definitionsValue.find(definition => definition.type === type); }
 
 	replace(definitions: readonly ExtensionDebugAdapterDefinition[]): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const next = validateExtensionDebugAdapterDefinitions(definitions);
 		if (JSON.stringify(next) === JSON.stringify(this.definitionsValue)) return;
 		this.definitionsValue = next;
 		this.changeEmitter.fire(next);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("ExtensionDebugAdapterRegistry is already disposed");
-	}
 }
 
 /** Validates one complete extension generation without mutating the live registry. */

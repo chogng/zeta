@@ -1,7 +1,11 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { Emitter, runWithBufferedEvents } from "../../common/event.js";
-import type { IDisposable } from "../../common/lifecycle.js";
+import { Emitter, noEvent, runWithBufferedEvents } from "../../common/event.js";
+import { type IDisposable, noneDisposable } from "../../common/lifecycle.js";
+
+test("noEvent returns the reusable empty disposable", () => {
+	assert.equal(noEvent(() => undefined), noneDisposable);
+});
 
 test("Emitter delivers synchronously and subscriptions are disposable", () => {
 	const emitter = new Emitter<number>();

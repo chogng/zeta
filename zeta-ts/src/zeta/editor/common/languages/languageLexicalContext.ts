@@ -38,7 +38,6 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 	private scanner: LanguageLexicalLineScanner | undefined;
 	private bracketTokens: readonly string[] = Object.freeze([]);
 	private lineResults: LanguageLexicalLineResult[] = [];
-	private disposed = false;
 
 	constructor(readonly textModel: TextModel, readonly languageId: string, private readonly configurations: LanguageConfigurationSource) {
 		super();
@@ -49,7 +48,6 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 		}
 		this.own(textModel.onDidChange(change => this.acceptModelChange(change)));
 		this.defer(() => {
-			this.disposed = true;
 			this.configuration = undefined;
 			this.scanner = undefined;
 			this.bracketTokens = Object.freeze([]);
@@ -58,7 +56,7 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 	}
 
 	getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLineIndex(this.textModel, lineIndex);
 		const line = this.textModel.getLineContent(lineIndex);
 		const resolvedEnd = endColumn ?? line.length;
@@ -82,7 +80,7 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 	}
 
 	getTokenTypeAt(position: TextPosition): string | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLineIndex(this.textModel, position.lineIndex);
 		const line = this.textModel.getLineContent(position.lineIndex);
 		assertColumnRange(line, position.columnIndex, position.columnIndex);
@@ -113,7 +111,7 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 	}
 
 	getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLineIndex(this.textModel, lineIndex);
 		return Object.freeze(this.ensureLine(lineIndex).events.flatMap(event => event.kind === "bracket" ? [event] : []));
 	}
@@ -141,9 +139,6 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 		this.lineResults.length = Math.min(this.lineResults.length, firstChangedLine);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageLexicalContextIndex is already disposed");
-	}
 }
 
 /** Uses grammar tokens when current and falls back to the deterministic lexical index. */

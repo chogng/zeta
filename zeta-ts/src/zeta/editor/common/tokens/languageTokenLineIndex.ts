@@ -91,7 +91,6 @@ export class LanguageTokenLineIndex extends DisposableOwner {
 	private invalidatedBase: LanguageTokenIndexBase | undefined;
 	private indexedModelVersion: number;
 	private indexedRequestId: number | undefined;
-	private disposed = false;
 
 	readonly onDidChange: Event<LanguageTokenLineIndexChange> = this.changeEmitter.event;
 
@@ -104,39 +103,38 @@ export class LanguageTokenLineIndex extends DisposableOwner {
 		this.state = initialResult ? buildState(initialResult.value.tokens) : EMPTY_STATE;
 		this.own(store.onDidChange(change => this.acceptStoreChange(change.reason, change.modelVersion, change.result)));
 		this.defer(() => {
-			this.disposed = true;
 			this.state = EMPTY_STATE;
 			this.invalidatedBase = undefined;
 		});
 	}
 
 	get textModel(): TextModel {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.model;
 	}
 
 	get modelVersion(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.indexedModelVersion;
 	}
 
 	get requestId(): number | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.indexedRequestId;
 	}
 
 	get tokenCount(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.state.tokenCount;
 	}
 
 	get lines(): readonly LanguageTokenLine[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.state.lines;
 	}
 
 	getLineTokens(lineIndex: number): readonly LanguageToken[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLineIndex(lineIndex);
 		this.model.getLineContent(lineIndex);
 		return this.state.statesByLine.get(lineIndex)?.line.tokens ?? EMPTY_TOKENS;
@@ -185,9 +183,6 @@ export class LanguageTokenLineIndex extends DisposableOwner {
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageTokenLineIndex is already disposed");
-	}
 }
 
 function fullUpdate(tokens: readonly LanguageToken[]): LanguageTokenIndexUpdate {

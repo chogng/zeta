@@ -1,6 +1,6 @@
 import type { Event } from "./event.js";
 import { Emitter } from "./event.js";
-import { ResettableDisposableGroup, type IDisposable, toDisposable } from "./lifecycle.js";
+import { DisposableMap, DisposableOwner, ResettableDisposableGroup, type IDisposable, toDisposable } from "./lifecycle.js";
 
 /** Reads an observable while recording it as a dependency of the current computation. */
 export interface IReader {
@@ -241,15 +241,16 @@ class DerivedObservable<T> extends ConvenientObservable<T> {
 	}
 }
 
-class ObservableReaction implements IReaderWithStore, IDisposable {
-	readonly store = new ResettableDisposableGroup();
-	private readonly dependencies = new Map<IObservable<unknown>, IDisposable>();
+class ObservableReaction extends DisposableOwner implements IReaderWithStore {
+	readonly store = this.own(new ResettableDisposableGroup());
+	private readonly dependencies = this.own(new DisposableMap<IObservable<unknown>, IDisposable>());
 	private readonly nextDependencies = new Set<IObservable<unknown>>();
 	private running = false;
 	private rerunRequested = false;
-	private disposed = false;
 
 	constructor(private readonly compute: ObservableComputation) {
+		super();
+		this.defer(() => this.nextDependencies.clear());
 		try {
 			this.run();
 		} catch (error) {
@@ -273,23 +274,8 @@ class ObservableReaction implements IReaderWithStore, IDisposable {
 		return observable.get();
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		this.store.dispose();
-		for (const registration of this.dependencies.values()) {
-			registration.dispose();
-		}
-		this.dependencies.clear();
-		this.nextDependencies.clear();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-
 	private invalidate(): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		if (this.running) {
 			this.rerunRequested = true;
 			return;
@@ -307,13 +293,12 @@ class ObservableReaction implements IReaderWithStore, IDisposable {
 				this.compute(this);
 			} finally {
 				this.running = false;
-				for (const [dependency, registration] of this.dependencies) {
+				for (const [dependency] of this.dependencies) {
 					if (this.nextDependencies.has(dependency)) continue;
-					registration.dispose();
-					this.dependencies.delete(dependency);
+					this.dependencies.deleteAndDispose(dependency);
 				}
 			}
-		} while (this.rerunRequested && !this.disposed);
+		} while (this.rerunRequested && !this.isDisposed);
 	}
 
 	private runSafely(): void {

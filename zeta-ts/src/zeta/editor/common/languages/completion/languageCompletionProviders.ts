@@ -108,7 +108,6 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	private readonly catalogEmitter = this.own(new Emitter<LanguageCompletionProviderCatalog>());
 	private readonly providers = new Map<string, OwnedLanguageCompletionProvider>();
 	private catalog: LanguageCompletionProviderCatalog = EMPTY_PROVIDER_CATALOG;
-	private disposed = false;
 
 	readonly onDidChangeProviderCatalog: Event<LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
 	readonly providerCatalogReady = true;
@@ -116,7 +115,6 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.providers.clear();
 		});
 	}
@@ -126,7 +124,7 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	}
 
 	registerMany(providers: readonly LanguageCompletionProvider[]): IDisposable {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Array.isArray(providers) || providers.length === 0) {
 			throw new TypeError("Language completion provider batch must not be empty");
 		}
@@ -134,25 +132,25 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	}
 
 	registerGroup(providers: readonly LanguageCompletionProvider[]): LanguageCompletionProviderRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replace(owner, providers);
 		let disposed = false;
 		const registration = toDisposable(() => {
 			if (disposed) return;
 			disposed = true;
-			if (this.deleteOwner(owner) && !this.disposed) this.updateCatalog();
+			if (this.deleteOwner(owner) && !this.isDisposed) this.updateCatalog();
 		}) as LanguageCompletionProviderRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Language completion provider registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
 		return registration;
 	}
 
 	get providerCatalog(): LanguageCompletionProviderCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
@@ -161,7 +159,7 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	}
 
 	getProviders(languageId: string, context: LanguageCompletionContext): readonly RegisteredLanguageCompletionProvider[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		assertCompletionContext(context);
 		const result = [...this.providers.values()].map(entry => entry.provider).filter(provider => languageCompletionProviderMatches(provider, languageId, context));
@@ -169,7 +167,7 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 	}
 
 	getProvider(providerId: string): RegisteredLanguageCompletionProvider | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertIdentifier(providerId, "Language completion provider ID");
 		return this.providers.get(providerId)?.provider;
 	}
@@ -187,11 +185,6 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 		this.catalogEmitter.fire(this.catalog);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionProviderRegistry is already disposed");
-		}
-	}
 
 	private replace(owner: object, providers: readonly LanguageCompletionProvider[]): void {
 		if (!Array.isArray(providers)) throw new TypeError("Language completion providers must be an array");

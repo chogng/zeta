@@ -27,7 +27,7 @@ interface PendingRequest {
 export class TextMateScopeThemeWireClient extends DisposableOwner {
 	private readonly pending = new Map<number, PendingRequest>();
 	private nextRequestId = 1;
-	private disposed = false;
+	private closed = false;
 
 	constructor(private readonly port: LanguageWorkerWireClientPort, private readonly invalidateWorker: (error: Error) => void) {
 		super();
@@ -41,7 +41,7 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
 	}
 
 	replaceTheme(theme: TextMateScopeTheme): Promise<void> {
-		this.ensureAlive();
+		this.assertOpen();
 		const normalized = normalizeTextMateScopeTheme(theme);
 		if (normalized.revision === 0) return Promise.resolve();
 		const requestId = this.nextRequestId++;
@@ -61,12 +61,17 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
 	}
 
 	private close(error: Error, invalidateWorker: boolean): void {
-		if (this.disposed) return;
-		this.disposed = true;
+		if (this.closed) return;
+		this.closed = true;
 		for (const pending of this.pending.values()) pending.reject(error);
 		this.pending.clear();
 		if (!invalidateWorker) return;
 		try { this.invalidateWorker(error); } catch { /* Transport failure remains authoritative. */ }
+	}
+
+	private assertOpen(): void {
+		this.assertNotDisposed();
+		if (this.closed) throw new ReferenceError("TextMateScopeThemeWireClient is already disposed");
 	}
 
 	private acceptMessage(value: unknown): void {
@@ -88,9 +93,6 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TextMateScopeThemeWireClient is already disposed");
-	}
 }
 
 /** Worker-side atomic scope-theme receiver sharing an Syntax Worker port. */

@@ -1,11 +1,13 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import type { ListScrolling } from "../list/list.js";
 import { AbstractTree } from "./abstractTree.js";
 import { IndexTreeModel, type IndexTreeModelOptions, type IndexTreeNode } from "./indexTreeModel.js";
 import { flattenTreeNodes, mapTreeDragData, type IndexTreeLocation, type TreeDragAndDrop, type TreeElement, type TreeFindMatchType, type TreeFindMode, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
 
 export interface IndexTreeOptions<T> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: T) => boolean);
@@ -79,6 +81,7 @@ export class IndexTree<T> extends DisposableOwner {
 		this.model = this.own(new IndexTreeModel(rootElement, options.modelOptions));
 		this.tree = this.own(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,

@@ -17,7 +17,6 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
 	private revision = 0;
 	private connectionRevision = 0;
-	private disposed = false;
 	private readonly remoteApi: IRemoteAgentApi | undefined;
 	private _connectionState: RemoteConnectionState | undefined;
 	private _connection: RemoteAgentConnection | undefined;
@@ -29,7 +28,7 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 		super();
 		this.remoteApi = options.remoteApi;
 		const subscription = options.api.onConnectionState(state => {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.revision += 1;
 			this.acceptState(state);
 		});
@@ -37,15 +36,14 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 		if (options.remoteApi) this.observeConnection(options.remoteApi);
 		const readRevision = this.revision;
 		void Promise.resolve()
-			.then(() => this.disposed ? undefined : options.api.getConnectionState())
+			.then(() => this.isDisposed ? undefined : options.api.getConnectionState())
 			.then(state => {
-				if (!this.disposed && state !== undefined && this.revision === readRevision) this.acceptState(state);
+				if (!this.isDisposed && state !== undefined && this.revision === readRevision) this.acceptState(state);
 			}, error => {
-				if (this.disposed || this.revision !== readRevision) return;
+				if (this.isDisposed || this.revision !== readRevision) return;
 				(options.onReadError ?? defaultReadErrorHandler)(error);
 				this.setConnectionState("disconnected");
 			});
-		this.defer(() => { this.disposed = true; });
 	}
 
 	get connectionState(): RemoteConnectionState | undefined {
@@ -80,16 +78,16 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 
 	private observeConnection(api: IRemoteAgentApi): void {
 		const subscription = api.onDidChangeConnection(connection => {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.connectionRevision += 1;
 			this.setConnection(connection);
 		});
 		this.defer(() => subscription.dispose());
 		const readRevision = this.connectionRevision;
-		void Promise.resolve().then(() => this.disposed ? undefined : api.getConnection()).then(connection => {
-			if (!this.disposed && connection !== undefined && this.connectionRevision === readRevision) this.setConnection(connection);
+		void Promise.resolve().then(() => this.isDisposed ? undefined : api.getConnection()).then(connection => {
+			if (!this.isDisposed && connection !== undefined && this.connectionRevision === readRevision) this.setConnection(connection);
 		}, error => {
-			if (!this.disposed && this.connectionRevision === readRevision) defaultConnectionReadErrorHandler(error);
+			if (!this.isDisposed && this.connectionRevision === readRevision) defaultConnectionReadErrorHandler(error);
 		});
 	}
 

@@ -37,14 +37,12 @@ export class DialogHandlerContribution extends DisposableOwner
 	private readonly model: IDialogsModel;
 	private readonly handler: IDialogHandler;
 	private active: IActiveDialog | undefined;
-	private disposed = false;
 
 	constructor(model: IDialogsModel, handler: IDialogHandler) {
 		super();
 		this.model = model;
 		this.handler = handler;
 		this.defer(() => {
-			this.disposed = true;
 			const active = this.active;
 			this.active = undefined;
 			active?.controller.abort();
@@ -60,7 +58,7 @@ export class DialogHandlerContribution extends DisposableOwner
 	}
 
 	private processDialogs(): void {
-		if (this.disposed || this.active) return;
+		if (this.isDisposed || this.active) return;
 		const item = this.model.dialogs[0];
 		if (!item) return;
 

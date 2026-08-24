@@ -35,7 +35,6 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 	private readonly reportError: (message: string, error: unknown) => void;
 	private readonly terminals = new Map<string, TerminalRecord>();
 	private previousState: AppServerConnectionState;
-	private disposed = false;
 
 	constructor(options: ReconnectableTerminalMainServiceOptions) {
 		super();
@@ -46,7 +45,6 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		this.previousState = this.supervisor.state;
 		this.own(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
 		this.defer(() => {
-			this.disposed = true;
 			this.terminals.clear();
 		});
 	}
@@ -175,7 +173,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		record.recoveryDeadline = deadline;
 		let delay = INITIAL_RECONNECT_DELAY_MILLIS;
 		let lastError: unknown;
-		while (!this.disposed && this.terminals.get(record.terminalId) === record) {
+		while (!this.isDisposed && this.terminals.get(record.terminalId) === record) {
 			if (this.supervisor.state !== "ready" || this.supervisor.generation !== generation) {
 				throw new RecoverySupersededError();
 			}

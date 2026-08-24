@@ -21,7 +21,6 @@ export class OutputService extends DisposableOwner implements IOutputService {
 	private readonly storageService: IStorageService | undefined;
 	private preferredChannelId: string | undefined;
 	private activeChannelId: string | undefined;
-	private disposed = false;
 
 	readonly onDidChangeChannels = this.changeChannelsEmitter.event;
 	readonly onDidChangeActiveChannel = this.changeActiveChannelEmitter.event;
@@ -32,7 +31,6 @@ export class OutputService extends DisposableOwner implements IOutputService {
 		this.storageService = options.storageService;
 		this.preferredChannelId = options.storageService?.get(ActiveChannelStorageKey, StorageScope.WORKSPACE);
 		this.defer(() => {
-			this.disposed = true;
 			this.channelsById.clear();
 			this.activeChannelId = undefined;
 		});
@@ -99,12 +97,11 @@ export class OutputService extends DisposableOwner implements IOutputService {
 	}
 
 	private assertAvailable(): void {
-		if (this.disposed) throw new ReferenceError("OutputService is already disposed");
+		if (this.isDisposed) throw new ReferenceError("OutputService is already disposed");
 	}
 }
 
 class OutputChannel extends DisposableOwner implements IOutputChannel {
-	private disposed = false;
 	readonly onDidChange;
 
 	constructor(readonly descriptor: IOutputChannelDescriptor, private readonly model: InMemoryOutputChannelModel, unregister: () => void, private readonly reveal: (options?: IOutputChannelRevealOptions) => void) {
@@ -112,7 +109,6 @@ class OutputChannel extends DisposableOwner implements IOutputChannel {
 		this.onDidChange = model.onDidChange;
 		this.own(model);
 		this.defer(() => {
-			this.disposed = true;
 			unregister();
 		});
 	}
@@ -130,7 +126,7 @@ class OutputChannel extends DisposableOwner implements IOutputChannel {
 	show(options?: IOutputChannelRevealOptions): void { this.assertAvailable(); this.reveal(options); }
 
 	private assertAvailable(): void {
-		if (this.disposed) throw new ReferenceError(`Output channel is already disposed: ${this.id}`);
+		if (this.isDisposed) throw new ReferenceError(`Output channel is already disposed: ${this.id}`);
 	}
 }
 

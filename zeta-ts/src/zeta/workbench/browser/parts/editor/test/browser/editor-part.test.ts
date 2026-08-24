@@ -702,14 +702,11 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 	dimension: IDimension | undefined;
 	focusCount = 0;
 	saveCount = 0;
-	disposed = false;
 	readonly revealedRanges: TextRange[] = [];
+	get disposed(): boolean { return this.isDisposed; }
 
 	constructor(readonly id: string) {
 		super();
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	create(parent: HTMLElement): void {

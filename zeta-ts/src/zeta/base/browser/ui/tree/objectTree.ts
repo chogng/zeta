@@ -1,12 +1,14 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import type { ListScrolling } from "../list/list.js";
 import { AbstractTree } from "./abstractTree.js";
 import { CompressibleObjectTreeModel, type CompressibleObjectTreeModelOptions, type CompressibleTreeElement, type CompressedTreeNode } from "./compressedObjectTreeModel.js";
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeModelOptions, type ObjectTreeNode } from "./objectTreeModel.js";
-import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeTwistieState } from "./tree.js";
+import { flattenTreeNodes, mapTreeDragData, type TreeDragAndDrop, type TreeFindMatchType, type TreeFindMode, type TreeFindResult, type TreeIndentGuides, type TreeKeyboardNavigationLabelProvider, type TreePointerTarget, type TreeSelectionPresentation, type TreeTwistieState } from "./tree.js";
 
 export interface ObjectTreeOptions<TNode> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnlyOnTwistieClick?: boolean | ((element: TNode) => boolean);
@@ -15,6 +17,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly keyboardNavigationLabelProvider?: TreeKeyboardNavigationLabelProvider<TNode>;
 	readonly findMode?: TreeFindMode;
 	readonly findMatchType?: TreeFindMatchType;
+	readonly selectionPresentation?: TreeSelectionPresentation;
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly modelOptions: ObjectTreeModelOptions<TNode>;
@@ -100,6 +103,7 @@ export class ObjectTree<TNode> extends DisposableOwner {
 		this.model = this.own(new ObjectTreeModel(options.modelOptions));
 		this.tree = this.own(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element) : expandOnlyOnTwistieClick,
@@ -108,6 +112,7 @@ export class ObjectTree<TNode> extends DisposableOwner {
 			keyboardNavigationLabelProvider: options.keyboardNavigationLabelProvider ? { getKeyboardNavigationLabel: (element) => options.keyboardNavigationLabelProvider!.getKeyboardNavigationLabel(element) } : undefined,
 			findMode: options.findMode,
 			findMatchType: options.findMatchType,
+			selectionPresentation: options.selectionPresentation,
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 			renderElement: (node) => options.renderElement(node.element, node),
@@ -193,6 +198,9 @@ export class ObjectTree<TNode> extends DisposableOwner {
 		return this.tree.selection.map((node) => node.element);
 	}
 
+	domFocus(): void { this.tree.domFocus(); }
+	rerender(id?: string): void { this.model.rerender(id); }
+
 	setFocus(id: string, browserEvent?: UIEvent): void {
 		this.tree.setFocus(id, browserEvent);
 	}
@@ -236,6 +244,7 @@ export interface CompressibleKeyboardNavigationLabelProvider<T> {
 
 export interface CompressibleObjectTreeOptions<T> {
 	readonly ariaLabel?: string;
+	readonly scrolling?: ListScrolling;
 	readonly indent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly expandOnlyOnTwistieClick?: boolean | ((elements: readonly T[]) => boolean);
@@ -303,6 +312,7 @@ export class CompressibleObjectTree<T> extends DisposableOwner {
 		this.model = this.own(new CompressibleObjectTreeModel(options.modelOptions));
 		this.tree = this.own(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
+			scrolling: options.scrolling,
 			indent: options.indent,
 			indentGuides: options.indentGuides,
 			expandOnlyOnTwistieClick: typeof expandOnlyOnTwistieClick === "function" ? (node) => expandOnlyOnTwistieClick(node.element.elements) : expandOnlyOnTwistieClick,
@@ -345,6 +355,8 @@ export class CompressibleObjectTree<T> extends DisposableOwner {
 	clearFind(): void { this.tree.clearFind(); }
 	get focus(): T | undefined { return this.tree.focus ? lastCompressedElement(this.tree.focus.element.elements) : undefined; }
 	get selection(): readonly T[] { return this.tree.selection.map((node) => lastCompressedElement(node.element.elements)); }
+	domFocus(): void { this.tree.domFocus(); }
+	rerender(element?: T): void { this.model.rerender(element); }
 	setFocus(element: T, browserEvent?: UIEvent): void {
 		const node = this.model.getNode(element);
 		if (node) this.tree.setFocus(node.id, browserEvent);

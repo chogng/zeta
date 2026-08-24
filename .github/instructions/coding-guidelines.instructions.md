@@ -45,10 +45,15 @@ private visible = false;
 ## Disposable Ownership
 
 - Treat `IDisposable` as a cleanup capability and `DisposableOwner` as a composite ownership mechanism. Choose from the object's ownership role, not to avoid writing `dispose()`.
-- A stateful leaf adapter or handle extends `AbstractDisposable` and implements `disposeCore`; callback-only cleanup uses `toDisposable`. These primitives provide idempotency, `[Symbol.dispose]()`, and disposable tracking without allocating a `DisposableStore`.
+- A stateful leaf adapter or handle extends `AbstractDisposable` and implements `disposeCore`; callback-only cleanup uses `toDisposable`. These primitives provide idempotency, explicit resource-management symbols, and disposable tracking without allocating a resource collection.
 - A component that aggregates independently created listeners, child components, timers, or replaceable resources normally extends `DisposableOwner` and registers each resource immediately with `own`, `adopt`, or `defer`.
 - Owning one implementation resource does not by itself make a leaf adapter a composite owner. Do not allocate a `DisposableStore` or extend `DisposableOwner` only to delegate disposal to that resource.
-- Subclasses of `AbstractDisposable` and `DisposableOwner` implement or register cleanup through their protected APIs; they do not override `dispose()` or `[Symbol.dispose]()`.
+- Use `DisposableSlot` for one replaceable resource and `DisposableMap` for resources whose ownership follows stable keys. Do not pair a plain `Map` with hand-written replacement and disposal loops.
+- Use `noneDisposable` and `noEvent` for intentionally inert boundaries instead of repeating empty disposal objects.
+- Subclasses use the inherited `isDisposed` and `assertNotDisposed()` state instead of shadowing disposal with another field or guard method.
+- A separate `failed`, `closed`, or protocol-terminal state is valid only when the object can become unusable before lifecycle disposal. Name and guard that domain state explicitly while leaving disposal idempotency to the lifecycle base.
+- Subclasses of `AbstractDisposable` and `DisposableOwner` implement or register cleanup through their protected APIs; they do not override the public disposal entry points.
+- A resource with semantically distinct graceful async `close()` and forced synchronous `dispose()` paths owns that terminal-state protocol in its domain. Do not collapse the two paths into a generic base abstraction merely because both end tracking.
 - When inheritance is unavailable, use a component-owned `DisposableStore`; do not hand-maintain an array of cleanup callbacks.
 
 ## Functions

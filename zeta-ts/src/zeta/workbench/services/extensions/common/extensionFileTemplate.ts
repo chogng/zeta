@@ -25,25 +25,23 @@ export interface ExtensionFileTemplateSource {
 export class ExtensionFileTemplateRegistry extends DisposableOwner implements ExtensionFileTemplateSource {
 	private readonly changeEmitter = this.own(new Emitter<ExtensionFileTemplateCatalog>());
 	private catalog: ExtensionFileTemplateCatalog = Object.freeze({ revision: 0, templates: Object.freeze([]) });
-	private disposed = false;
 
 	readonly onDidChange: Event<ExtensionFileTemplateCatalog> = this.changeEmitter.event;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
 		});
 	}
 
 	get currentCatalog(): ExtensionFileTemplateCatalog {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.catalog;
 	}
 
 	replace(templates: readonly ExtensionFileTemplateDefinition[]): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Array.isArray(templates)) throw new TypeError("Extension file-template replacement must be an array");
 		const normalized = templates.map(normalizeTemplate);
 		const ids = new Set<string>();
@@ -55,9 +53,6 @@ export class ExtensionFileTemplateRegistry extends DisposableOwner implements Ex
 		this.changeEmitter.fire(this.catalog);
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("ExtensionFileTemplateRegistry is already disposed");
-	}
 }
 
 function normalizeTemplate(template: ExtensionFileTemplateDefinition): ExtensionFileTemplateDefinition {

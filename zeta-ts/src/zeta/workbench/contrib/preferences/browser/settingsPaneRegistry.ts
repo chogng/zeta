@@ -1,10 +1,16 @@
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 
+export interface SettingsPaneNavigationTarget {
+	readonly title: string;
+	readonly description: string;
+}
+
 export interface SettingsPane extends IDisposable {
 	readonly element: HTMLElement;
 
 	activate?(): void;
 	cancelPendingChanges?(): void;
+	setNavigationTarget?(targetId: string | undefined): SettingsPaneNavigationTarget | undefined;
 	setQuery?(query: string): void;
 }
 

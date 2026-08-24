@@ -12,16 +12,8 @@ export class NativeKeyboardLayoutMainService extends DisposableOwner {
 	private readonly _onDidChangeKeyboardLayout = this.own(new Emitter<IKeyboardLayoutDefinition | undefined>());
 	private initialization: Promise<void> | undefined;
 	private layout: IKeyboardLayoutDefinition | undefined;
-	private disposed = false;
 
 	public readonly onDidChangeKeyboardLayout = this._onDidChangeKeyboardLayout.event;
-
-	constructor() {
-		super();
-		this.defer(() => {
-			this.disposed = true;
-		});
-	}
 
 	public async readKeyboardLayout(): Promise<IKeyboardLayoutDefinition | undefined> {
 		this.initialization ??= this.initialize();
@@ -34,7 +26,7 @@ export class NativeKeyboardLayoutMainService extends DisposableOwner {
 			const nativeKeymap = await import('native-keymap');
 			this.layout = readNativeKeyboardLayout(nativeKeymap);
 			nativeKeymap.onDidChangeKeyboardLayout(() => {
-				if (this.disposed) {
+				if (this.isDisposed) {
 					return;
 				}
 				this.layout = readNativeKeyboardLayout(nativeKeymap);

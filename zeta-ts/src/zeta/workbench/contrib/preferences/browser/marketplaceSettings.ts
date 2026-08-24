@@ -30,7 +30,6 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 	private query = "";
 	private selectedPackageType: string | undefined;
 	private reloadGeneration = 0;
-	private isDisposed = false;
 	private readonly localization: ILocalizationService | undefined;
 	private readonly rendered = this.own(new ResettableDisposableGroup());
 
@@ -87,7 +86,6 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 		this.element.append(toolbar);
 		if (!fixedPackageType) this.element.append(filters);
 		this.element.append(this.status, this.results);
-		this.defer(() => { this.isDisposed = true; });
 		void this.reload();
 	}
 

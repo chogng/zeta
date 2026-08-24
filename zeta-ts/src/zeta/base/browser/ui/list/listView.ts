@@ -5,11 +5,12 @@ import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../comm
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from "../dnd/dnd.js";
-import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListDragTargetSector as DragTargetSector } from "./list.js";
+import { ListDragOverPosition, ListDragTargetSector, type ListAccessibilityProvider, type ListDragAndDrop, type ListDragOverReaction, type ListDragOverPosition as DragOverPosition, type ListScrolling, type ListDragTargetSector as DragTargetSector } from "./list.js";
 
 export interface ListViewOptions<T> {
 	readonly ariaLabel?: string;
 	readonly role?: "listbox" | "tree";
+	readonly scrolling?: ListScrolling;
 	readonly domFocusable?: boolean;
 	readonly getId?: (item: T) => string;
 	readonly getHeight?: (item: T) => number;
@@ -37,7 +38,7 @@ export class ListView<T> extends DisposableOwner {
 		setRole(this.element, options.role ?? "listbox");
 		if (options.ariaLabel) setAriaAttribute(this.element, "label", options.ariaLabel);
 		if (options.domFocusable === true) this.element.tabIndex = 0;
-		this.element.style.overflow = "auto";
+		this.element.style.overflow = options.scrolling === "external" ? "visible" : "auto";
 		container.append(this.element);
 		this.defer(() => this.element.remove());
 		this.own(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));

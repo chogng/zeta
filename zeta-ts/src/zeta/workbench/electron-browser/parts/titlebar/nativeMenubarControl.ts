@@ -34,7 +34,6 @@ export class NativeMenubarControl extends DisposableOwner
 	>();
 	private revision = 0;
 	private updateTail = Promise.resolve();
-	private disposed = false;
 
 	readonly element = undefined;
 
@@ -52,7 +51,6 @@ export class NativeMenubarControl extends DisposableOwner
 		});
 		this.own(toDisposable(() => selection.dispose()));
 		this.defer(() => {
-			this.disposed = true;
 			this.actionsByRevision.clear();
 		});
 		this.synchronize();
@@ -67,7 +65,7 @@ export class NativeMenubarControl extends DisposableOwner
 
 		this.updateTail = this.updateTail
 			.then(async () => {
-				if (this.disposed) return;
+				if (this.isDisposed) return;
 				this.actionsByRevision.set(revision, serialized.actions);
 				try {
 					await this.api.update(serialized.data);

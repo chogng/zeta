@@ -90,7 +90,6 @@ export class EditorSelectionController extends DisposableOwner {
 	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
-	private disposed = false;
 
 	readonly onDidChange: Event<EditorSelectionChange> =
 		this.changeEmitter.event;
@@ -111,7 +110,6 @@ export class EditorSelectionController extends DisposableOwner {
 			this.installSelections(initialSelections);
 			this.own(model.onDidChange(change => this.acceptModelChange(change)));
 			this.defer(() => {
-				this.disposed = true;
 				this.trackedSelections = [];
 				this.selectionHistory.clear();
 				this.selectionHistoryOrder.length = 0;
@@ -128,23 +126,23 @@ export class EditorSelectionController extends DisposableOwner {
 	}
 
 	get selections(): TextSelectionSet {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.currentSelections;
 	}
 
 	get textModel(): TextModel {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.model;
 	}
 
 	/** Whether this editor instance may submit document-changing commands. */
 	get readOnly(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.readOnlyMode;
 	}
 
 	setSelections(selections: TextSelectionSet): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("set selections");
 		this.breakHistoryGroup();
 		this.cursorHistory.length = 0;
@@ -156,7 +154,7 @@ export class EditorSelectionController extends DisposableOwner {
 
 	/** Records one cursor-only selection transition that `undoCursorOperation` may restore. */
 	setCursorSelections(selections: TextSelectionSet): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("set cursor selections");
 		this.breakHistoryGroup();
 		if (selectionSetsEqual(this.currentSelections, selections)) return;
@@ -166,7 +164,7 @@ export class EditorSelectionController extends DisposableOwner {
 
 	/** Restores the preceding cursor-only selection state without changing document undo history. */
 	undoCursorOperation(): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("undo cursor operation");
 		this.breakHistoryGroup();
 		const previous = this.cursorHistory.pop();
@@ -177,13 +175,13 @@ export class EditorSelectionController extends DisposableOwner {
 
 	/** Ends command coalescing without creating an empty history entry. */
 	pushUndoStop(): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("push an undo stop");
 		this.breakHistoryGroup();
 	}
 
 	execute(command: EditorEditCommand): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("execute a command");
 		if (this.readOnlyMode) return undefined;
 		this.cursorHistory.length = 0;
@@ -196,7 +194,7 @@ export class EditorSelectionController extends DisposableOwner {
 	}
 
 	beginComposition(): EditorCompositionSession {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("begin another composition");
 		if (this.readOnlyMode) throw new Error("Cannot begin composition in a read-only editor");
 		if (!IME.enabled) {
@@ -342,7 +340,7 @@ export class EditorSelectionController extends DisposableOwner {
 	}
 
 	undo(): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("undo");
 		if (this.readOnlyMode) return undefined;
 		this.cursorHistory.length = 0;
@@ -351,7 +349,7 @@ export class EditorSelectionController extends DisposableOwner {
 	}
 
 	redo(): TextModelChange | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertNoActiveComposition("redo");
 		if (this.readOnlyMode) return undefined;
 		this.cursorHistory.length = 0;
@@ -534,7 +532,7 @@ export class EditorSelectionController extends DisposableOwner {
 	}
 
 	private assertActiveComposition(state: ActiveComposition): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!state.valid || this.activeComposition !== state) {
 			throw new Error("Editor composition is no longer active");
 		}
@@ -546,11 +544,4 @@ export class EditorSelectionController extends DisposableOwner {
 		this.activeComposition = undefined;
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError(
-				"EditorSelectionController is already disposed",
-			);
-		}
-	}
 }

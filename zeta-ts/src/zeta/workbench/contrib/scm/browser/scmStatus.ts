@@ -22,11 +22,9 @@ export class ScmStatusContribution extends DisposableOwner implements IWorkbench
 	private readonly retiredGitStreams = new Set<string>();
 	private gitStatus: GitStatus | undefined;
 	private refreshRevision = 0;
-	private disposed = false;
 
 	constructor(private readonly options: ScmStatusContributionOptions) {
 		super();
-		this.defer(() => { this.disposed = true; });
 		this.own(options.gitService.onDidChangeStatus(status => {
 			this.refreshRevision += 1;
 			this.acceptStatus(status);
@@ -38,7 +36,7 @@ export class ScmStatusContribution extends DisposableOwner implements IWorkbench
 	private refresh(): void {
 		const revision = ++this.refreshRevision;
 		void this.options.gitService.status().then(status => {
-			if (!this.disposed && revision === this.refreshRevision) this.acceptStatus(status);
+			if (!this.isDisposed && revision === this.refreshRevision) this.acceptStatus(status);
 		}).catch(() => undefined);
 	}
 

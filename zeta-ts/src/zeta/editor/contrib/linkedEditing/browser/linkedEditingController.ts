@@ -19,7 +19,6 @@ export class LinkedEditingController extends DisposableOwner {
 	private activationScheduled = false;
 	private request: AbortController | undefined;
 	private wordPattern: RegExp | undefined;
-	private disposed = false;
 
 	constructor(private readonly inputController: TextInputController, private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
 		super();
@@ -28,19 +27,18 @@ export class LinkedEditingController extends DisposableOwner {
 		this.own(addDisposableListener(input, "keydown", event => { if (event.key !== "Escape" || !this.active) return; stopEvent(event); this.clear(); }, true));
 		this.own(inputController.registerCommandTransformer(command => this.extendCommand(command)));
 		this.own(selections.onDidChange(() => this.scheduleActivation()));
-		this.defer(() => { this.disposed = true; this.request?.abort(); });
 		this.scheduleActivation();
 	}
 
 	private async activate(): Promise<void> {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		const primary = this.selections.selections.primary;
 		if (!primary.collapsed) { this.clear(); return; }
 		try {
 			const result = await this.service.provideLinkedEditingRanges(this.languageId, primary.active, request.signal);
-			if (request.signal.aborted || this.disposed) return;
+			if (request.signal.aborted || this.isDisposed) return;
 			if (!result || result.ranges.length < 2) { this.clear(); return; }
 			const expectedText = this.viewport.textModel.getTextInRange(result.ranges[0]!);
 			if (result.ranges.some(range => this.viewport.textModel.getTextInRange(range) !== expectedText)) { this.clear(); return; }
@@ -84,11 +82,11 @@ export class LinkedEditingController extends DisposableOwner {
 	}
 
 	private scheduleActivation(): void {
-		if (this.activationScheduled || this.disposed) return;
+		if (this.activationScheduled || this.isDisposed) return;
 		this.activationScheduled = true;
 		queueMicrotask(() => {
 			this.activationScheduled = false;
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			void this.activate();
 		});
 	}

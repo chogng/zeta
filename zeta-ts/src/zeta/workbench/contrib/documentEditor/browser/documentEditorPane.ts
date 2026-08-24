@@ -37,6 +37,10 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 		const modelService = this.own(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
 		const collaborationService = options.documentCollaborationService ? this.own(options.documentCollaborationService) : undefined;
 		this.editor = this.own(new EditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
+		this.defer(() => {
+			this.container?.remove();
+			this.container = undefined;
+		});
 	}
 
 	create(parent: HTMLElement): void {
@@ -102,16 +106,6 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 
 	getOutline(): DocumentOutline {
 		return this.editor.getOutline();
-	}
-
-	override dispose(): void {
-		this.container?.remove();
-		this.container = undefined;
-		super.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
 	}
 
 	private requireContainer(): HTMLDivElement {

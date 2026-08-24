@@ -35,7 +35,6 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 	private catalogSource: LanguageCompletionProviderCatalogSource;
 	private catalog: LanguageCompletionProviderCatalog;
 	private currentResolver: LanguageCompletionItemResolver | undefined;
-	private disposed = false;
 
 	readonly onDidChangeProviderCatalog: Event<LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
 
@@ -95,7 +94,6 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 			}
 		}
 		this.defer(() => {
-			this.disposed = true;
 			this.currentResolver = undefined;
 		});
 	}
@@ -153,7 +151,7 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 	}
 
 	async resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		signal.throwIfAborted();
 		const normalized = normalizeLanguageCompletionResolveRequest(request);
 		this.assertCurrentResolveRequest(normalized);
@@ -164,13 +162,13 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 		}
 		const details = await resolver.resolveCompletionItem(normalized, signal);
 		signal.throwIfAborted();
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.assertCurrentResolveRequest(normalized);
 		return normalizeLanguageCompletionItemDetails(details);
 	}
 
 	async executeCompletionCommand(languageId: string, item: LanguageCompletionItem, signal: AbortSignal): Promise<void> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		signal.throwIfAborted();
 		if (!item.command) return;
@@ -178,7 +176,7 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 		if (!provider?.executeCompletionCommand) throw new ReferenceError(`Language completion provider '${item.providerId}' cannot execute completion commands`);
 		await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createSnapshot(), command: item.command }), signal);
 		signal.throwIfAborted();
-		this.ensureAlive();
+		this.assertNotDisposed();
 	}
 
 	private bindCatalogSource(source: LanguageCompletionProviderCatalogSource): void {
@@ -210,11 +208,6 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 		}
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionService is already disposed");
-		}
-	}
 }
 
 /** Coordinator-compatible host that runs matching providers concurrently. */

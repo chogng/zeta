@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
-import type { Event } from "../../../../../base/common/event.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { noEvent } from "../../../../../base/common/event.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ITerminalInstance } from "../../../../../workbench/services/terminal/common/terminal.js";
 
@@ -45,7 +44,6 @@ test.after(() => {
 	}
 });
 
-const noEvent = (() => toDisposable(() => {})) as Event<never>;
 let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
 

@@ -1,12 +1,14 @@
 import './media/settingsEditor.css';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { h, stopEvent } from '../../../../base/browser/dom.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
+import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISettingsService } from '../../../services/preferences/common/settings.js';
-import { getSettingsSection, SettingsSections, type SettingsSectionDescriptor } from '../common/settingsSections.js';
+import { getSettingsSection, SettingsSections, type SettingsNavigationTargetDescriptor, type SettingsSectionDescriptor } from '../common/settingsSections.js';
 import type { SettingsPane, SettingsPaneRegistry } from './settingsPaneRegistry.js';
 
 export interface SettingsEditorOptions {
@@ -17,6 +19,10 @@ export interface SettingsEditorOptions {
 
 let nextSettingsEditorId = 1;
 
+type SettingsNavigationEntry =
+	| { readonly kind: 'section'; readonly id: string; readonly section: SettingsSectionDescriptor }
+	| { readonly kind: 'target'; readonly id: string; readonly section: SettingsSectionDescriptor; readonly target: SettingsNavigationTargetDescriptor };
+
 /** Search, navigation, and active-pane lifecycle hosted by the Workbench modal editor. */
 export class SettingsEditor extends DisposableOwner {
 	public readonly element: HTMLDivElement;
@@ -26,8 +32,10 @@ export class SettingsEditor extends DisposableOwner {
 	private readonly contentHeading: HTMLHeadingElement;
 	private readonly contentScrollable: ScrollableElement;
 	private readonly navigationEmpty: HTMLParagraphElement;
-	private readonly navigationItems = new Map<string, Button>();
 	private readonly navigationScrollable: ScrollableElement;
+	private readonly navigationTree: ObjectTree<SettingsNavigationEntry>;
+	private activeNavigationTarget: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined;
+	private pendingNavigationTarget: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined;
 	private readonly searchInput: InputBox;
 	private readonly sectionContent: HTMLDivElement;
 
@@ -68,28 +76,42 @@ export class SettingsEditor extends DisposableOwner {
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('zeta-settings-sidebar-scrollable');
-		const navigationList = h(ownerDocument, 'ul');
-		navigationList.className = 'zeta-settings-navigation-list';
-		navigationList.id = `${editorId}-navigation`;
-		for (const section of SettingsSections) {
-			const item = h(ownerDocument, 'li');
-			const button = this.own(new Button(item, {
-				label: this.localizedSectionLabel(section),
-				onClick: () => this.options.settingsService.open(section.id),
-			}));
-			button.toggleClassName('zeta-settings-navigation-item', true);
-			button.domNode.dataset.settingsSectionId = section.id;
-			this.navigationItems.set(section.id, button);
-			this.own(addDisposableListener(button.domNode, 'keydown', (event: KeyboardEvent) => this.handleNavigationKeydown(event, section.id)));
-			navigationList.append(item);
-		}
+		this.navigationTree = this.own(new ObjectTree(this.navigationScrollable.contentElement, {
+			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
+			scrolling: 'external',
+			expandOnlyOnTwistieClick: false,
+			findMatchType: TreeFindMatchType.Contiguous,
+			findMode: TreeFindMode.Filter,
+			getHeight: () => 26,
+			indent: 12,
+			keyboardNavigationLabelProvider: {
+				getKeyboardNavigationLabel: entry => entry.kind === 'section'
+					? `${this.localizedSectionLabel(entry.section)} ${this.localizedSectionDescription(entry.section)}`
+					: [entry.target.label, ...(entry.target.keywords ?? [])].join(' '),
+			},
+			modelOptions: {
+				defaultCollapseState: 'collapsed',
+				identityProvider: { getId: entry => entry.id },
+			},
+			selectionPresentation: 'subtle',
+			renderElement: entry => {
+				const label = h(ownerDocument, 'span');
+				label.className = 'zeta-settings-navigation-label';
+				if (entry.kind === 'section') label.dataset.settingsSectionId = entry.section.id;
+				else label.dataset.settingsTargetId = entry.target.targetId;
+				label.textContent = entry.kind === 'section' ? this.localizedSectionLabel(entry.section) : entry.target.label;
+				return label;
+			},
+		}));
+		this.navigationTree.element.classList.add('zeta-settings-navigation-tree');
+		this.navigationTree.element.id = `${editorId}-navigation`;
+		this.navigationTree.setChildren(settingsNavigationElements());
 		this.navigationEmpty = h(ownerDocument, 'p');
 		this.navigationEmpty.className = 'zeta-settings-navigation-empty';
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.navigationEmpty.setAttribute('role', 'status');
 		this.navigationEmpty.hidden = true;
-		this.navigationScrollable.append(navigationList, this.navigationEmpty);
-		navigation.append(this.navigationScrollable.element);
+		this.navigationScrollable.append(this.navigationEmpty);
 
 		this.content = h(ownerDocument, 'main');
 		this.content.className = 'zeta-settings-page';
@@ -122,6 +144,17 @@ export class SettingsEditor extends DisposableOwner {
 
 		this.own(this.options.localizationService.onDidChange(() => this.updateLocalizedChrome()));
 		this.own(this.options.settingsService.onDidChangeActiveSection(sectionId => this.renderSection(getSettingsSection(sectionId))));
+		this.own(this.navigationTree.onDidChangeSelection(({ elements, browserEvent }) => {
+			const entry = elements[0];
+			if (entry && browserEvent) this.openNavigationEntry(entry);
+		}));
+		this.own(this.navigationTree.onDidAccept(({ element, node }) => {
+			if (node.collapsible) this.navigationTree.toggleCollapsed(element.id);
+			this.openNavigationEntry(element);
+		}));
+		this.own(this.navigationTree.onDidChangeFind(({ pattern, matches }) => {
+			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
+		}));
 		this.own(this.searchInput.onDidChange(value => {
 			this.filterNavigation(value);
 			this.activePane.value?.setQuery?.(value);
@@ -144,12 +177,10 @@ export class SettingsEditor extends DisposableOwner {
 	}
 
 	private renderSection(section: SettingsSectionDescriptor): void {
-		for (const [sectionId, item] of this.navigationItems) {
-			const active = sectionId === section.id;
-			item.toggleClassName('is-active', active);
-			if (active) item.domNode.setAttribute('aria-current', 'page');
-			else item.domNode.removeAttribute('aria-current');
-		}
+		const pendingTarget = this.pendingNavigationTarget?.section.id === section.id ? this.pendingNavigationTarget : undefined;
+		const navigationId = pendingTarget?.id ?? section.id;
+		this.navigationTree.expandTo(navigationId);
+		this.navigationTree.setSelection([navigationId]);
 		this.content.dataset.activeSettingsSection = section.id;
 		this.contentHeading.textContent = this.localizedSectionLabel(section);
 		this.contentDescription.textContent = this.localizedSectionDescription(section);
@@ -160,6 +191,44 @@ export class SettingsEditor extends DisposableOwner {
 		if (pane.element.parentElement !== this.sectionContent) this.sectionContent.replaceChildren(pane.element);
 		pane.setQuery?.(this.searchInput.value);
 		pane.activate?.();
+		this.showNavigationTarget(section, pendingTarget);
+		this.pendingNavigationTarget = undefined;
+	}
+
+	private openNavigationEntry(entry: SettingsNavigationEntry): void {
+		if (entry.kind === 'section') {
+			this.pendingNavigationTarget = undefined;
+			if (this.options.settingsService.activeSectionId === entry.section.id) {
+				this.navigationTree.setSelection([entry.id]);
+				this.showNavigationTarget(entry.section, undefined);
+				return;
+			}
+			this.options.settingsService.open(entry.section.id);
+			return;
+		}
+		this.pendingNavigationTarget = entry;
+		if (this.options.settingsService.activeSectionId === entry.section.id) {
+			this.navigationTree.expandTo(entry.id);
+			this.navigationTree.setSelection([entry.id]);
+			this.showNavigationTarget(entry.section, entry);
+			this.pendingNavigationTarget = undefined;
+			return;
+		}
+		this.options.settingsService.open(entry.section.id);
+	}
+
+	private showNavigationTarget(
+		section: SettingsSectionDescriptor,
+		entry: Extract<SettingsNavigationEntry, { readonly kind: 'target' }> | undefined,
+	): void {
+		const target = this.activePane.value?.setNavigationTarget?.(entry?.target.targetId);
+		if (entry && !target) throw new RangeError(`Settings pane '${section.id}' does not expose navigation target '${entry.target.targetId}'`);
+		this.activeNavigationTarget = entry;
+		this.content.classList.toggle('has-navigation-target', entry !== undefined);
+		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;
+		else delete this.content.dataset.activeSettingsTarget;
+		this.contentHeading.textContent = target?.title ?? this.localizedSectionLabel(section);
+		this.contentDescription.textContent = target?.description ?? this.localizedSectionDescription(section);
 		this.contentScrollable.scrollTo(0, 0);
 		this.contentScrollable.layout();
 	}
@@ -171,35 +240,14 @@ export class SettingsEditor extends DisposableOwner {
 			return;
 		}
 		if (event.key !== 'ArrowDown') return;
-		const firstVisible = this.visibleNavigationSections()[0];
-		if (!firstVisible) return;
+		if (!this.navigationTree.focus) return;
 		stopEvent(event);
-		this.navigationItems.get(firstVisible.id)?.focus();
-	}
-
-	private handleNavigationKeydown(event: KeyboardEvent, sectionId: string): void {
-		const visibleSections = this.visibleNavigationSections();
-		const currentIndex = visibleSections.findIndex(section => section.id === sectionId);
-		let targetIndex: number | undefined;
-		if (event.key === 'ArrowUp') targetIndex = Math.max(0, currentIndex - 1);
-		else if (event.key === 'ArrowDown') targetIndex = Math.min(visibleSections.length - 1, currentIndex + 1);
-		else if (event.key === 'Home') targetIndex = 0;
-		else if (event.key === 'End') targetIndex = visibleSections.length - 1;
-		if (targetIndex === undefined || targetIndex === currentIndex) return;
-		stopEvent(event);
-		this.navigationItems.get(visibleSections[targetIndex].id)?.focus();
+		this.navigationTree.domFocus();
 	}
 
 	private filterNavigation(value: string): void {
 		const query = value.trim().toLocaleLowerCase();
-		let matches = 0;
-		for (const section of SettingsSections) {
-			const visible = !query || `${this.localizedSectionLabel(section)} ${this.localizedSectionDescription(section)}`.toLocaleLowerCase().includes(query);
-			const item = this.navigationItems.get(section.id)?.domNode.parentElement;
-			if (item) item.hidden = !visible;
-			if (visible) matches += 1;
-		}
-		this.navigationEmpty.hidden = matches !== 0;
+		this.navigationTree.setFindPattern(query);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
 	}
@@ -209,13 +257,14 @@ export class SettingsEditor extends DisposableOwner {
 		this.searchInput.placeholder = searchLabel;
 		this.searchInput.inputElement.setAttribute('aria-label', searchLabel);
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
-		for (const section of SettingsSections) {
-			const button = this.navigationItems.get(section.id);
-			if (button) button.label = this.localizedSectionLabel(section);
-		}
+		this.navigationTree.rerender();
 		const section = getSettingsSection(this.options.settingsService.activeSectionId);
-		this.contentHeading.textContent = this.localizedSectionLabel(section);
-		this.contentDescription.textContent = this.localizedSectionDescription(section);
+		if (this.activeNavigationTarget) {
+			this.contentHeading.textContent = this.activeNavigationTarget.target.label;
+		} else {
+			this.contentHeading.textContent = this.localizedSectionLabel(section);
+			this.contentDescription.textContent = this.localizedSectionDescription(section);
+		}
 	}
 
 	private localized(key: string, fallback: string): string {
@@ -229,11 +278,19 @@ export class SettingsEditor extends DisposableOwner {
 	private localizedSectionDescription(section: SettingsSectionDescriptor): string {
 		return this.localized(`sections.${section.id}.description`, section.description);
 	}
+}
 
-	private visibleNavigationSections(): readonly SettingsSectionDescriptor[] {
-		return SettingsSections.filter(section => {
-			const item = this.navigationItems.get(section.id)?.domNode.parentElement;
-			return item ? !item.hidden : false;
-		});
-	}
+function settingsNavigationElements(): readonly ObjectTreeElement<SettingsNavigationEntry>[] {
+	return SettingsSections.map(section => {
+		const targets: readonly SettingsNavigationTargetDescriptor[] = 'navigationTargets' in section ? section.navigationTargets : [];
+		const targetChildren = targets.map((target): ObjectTreeElement<SettingsNavigationEntry> => ({
+			element: { kind: 'target', id: `${section.id}.target.${target.id}`, section, target },
+		}));
+		return {
+			element: { kind: 'section', id: section.id, section },
+			children: targetChildren,
+			collapsible: targetChildren.length > 0,
+			collapsed: targetChildren.length > 0,
+		};
+	});
 }

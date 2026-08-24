@@ -11,7 +11,6 @@ interface DedicatedWorkerScope {
 /** Adapts the current dedicated Worker global scope without owning it. */
 export class DedicatedWorkerLanguagePort extends DisposableOwner implements LanguageWorkerWirePort {
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private disposed = false;
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
 
@@ -20,13 +19,12 @@ export class DedicatedWorkerLanguagePort extends DisposableOwner implements Lang
 		const onMessage = (event: { readonly data: unknown }): void => this.messageEmitter.fire(event.data);
 		scope.addEventListener("message", onMessage);
 		this.defer(() => {
-			this.disposed = true;
 			scope.removeEventListener("message", onMessage);
 		});
 	}
 
 	send(message: unknown): void {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			throw new ReferenceError("DedicatedWorkerLanguagePort is already disposed");
 		}
 		this.scope.postMessage(message);

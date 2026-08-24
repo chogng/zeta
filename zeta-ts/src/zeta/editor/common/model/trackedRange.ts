@@ -1,4 +1,4 @@
-import { markAsDisposed, setDisposableOwner, trackDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { AbstractDisposable, DisposableMap, DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
 import { TextPosition, TextRange, type TextModelContentChange } from "../core/text.js";
 
 export enum TrackedRangeStickiness {
@@ -17,7 +17,6 @@ interface TrackedRangeRecord {
 	startOffset: number;
 	endOffset: number;
 	readonly stickiness: TrackedRangeStickiness;
-	disposed: boolean;
 }
 
 enum OffsetAffinity {
@@ -25,15 +24,13 @@ enum OffsetAffinity {
 	After,
 }
 
-export class TrackedRangeCollection implements IDisposable {
-	private readonly handles =
-		new Map<TrackedRangeRecord, TrackedRangeHandle>();
-	private disposed = false;
+export class TrackedRangeCollection extends DisposableOwner {
+	private readonly handles = this.own(new DisposableMap<TrackedRangeRecord, TrackedRangeHandle>());
 
 	constructor(
 		private readonly positionAt: (offset: number) => TextPosition,
 	) {
-		trackDisposable(this);
+		super();
 	}
 
 	add(
@@ -41,11 +38,7 @@ export class TrackedRangeCollection implements IDisposable {
 		endOffset: number,
 		stickiness: TrackedRangeStickiness,
 	): TrackedRange {
-		if (this.disposed) {
-			throw new ReferenceError(
-				"TrackedRangeCollection is already disposed",
-			);
-		}
+		this.assertNotDisposed();
 		if (!isTrackedRangeStickiness(stickiness)) {
 			throw new TypeError("Unknown tracked range stickiness");
 		}
@@ -53,16 +46,13 @@ export class TrackedRangeCollection implements IDisposable {
 			startOffset,
 			endOffset,
 			stickiness,
-			disposed: false,
 		};
 		const trackedRange = new TrackedRangeHandle(
 			record,
 			this.positionAt,
-			() => this.handles.delete(record),
+			() => this.handles.deleteAndLeak(record),
 		);
-		this.handles.set(record, trackedRange);
-		setDisposableOwner(trackedRange, this);
-		return trackedRange;
+		return this.handles.set(record, trackedRange);
 	}
 
 	acceptChanges(
@@ -81,36 +71,19 @@ export class TrackedRangeCollection implements IDisposable {
 		}
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		try {
-			for (const handle of [...this.handles.values()]) {
-				handle.dispose();
-			}
-		} finally {
-			markAsDisposed(this);
-		}
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
 }
 
-class TrackedRangeHandle implements TrackedRange {
-	private disposed = false;
-
+class TrackedRangeHandle extends AbstractDisposable implements TrackedRange {
 	constructor(
 		private readonly record: TrackedRangeRecord,
 		private readonly positionAt: (offset: number) => TextPosition,
 		private readonly remove: () => void,
 	) {
-		trackDisposable(this);
+		super();
 	}
 
 	get range(): TextRange {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return TextRange.from(
 			this.positionAt(this.record.startOffset),
 			this.positionAt(this.record.endOffset),
@@ -118,30 +91,14 @@ class TrackedRangeHandle implements TrackedRange {
 	}
 
 	get stickiness(): TrackedRangeStickiness {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.record.stickiness;
 	}
 
-	dispose(): void {
-		if (this.disposed) return;
-		this.disposed = true;
-		this.record.disposed = true;
-		try {
-			this.remove();
-		} finally {
-			markAsDisposed(this);
-		}
+	protected override disposeCore(): void {
+		this.remove();
 	}
 
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
-
-	private ensureAlive(): void {
-		if (this.disposed || this.record.disposed) {
-			throw new ReferenceError("TrackedRange is already disposed");
-		}
-	}
 }
 
 function mapTrackedRange(

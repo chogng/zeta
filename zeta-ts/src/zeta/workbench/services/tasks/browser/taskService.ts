@@ -27,7 +27,6 @@ export class TaskService extends DisposableOwner implements ITaskService {
 	private activeRefresh: AbortController | undefined;
 	private refreshGeneration = 0;
 	private loaded = false;
-	private disposed = false;
 	private _lastRun: TaskRun | undefined;
 	private readonly output: IOutputChannel | undefined;
 
@@ -50,7 +49,6 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		this.defer(() => {
 			for (const run of this.runs) run.dispose();
 			this.runs.clear();
-			this.disposed = true;
 			this.activeRefresh?.abort();
 			this.activeRefresh = undefined;
 			this.providers.clear();
@@ -66,7 +64,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
 	}
 
 	registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const owner = Object.freeze({});
 		this.replaceProviders(owner, providers);
 		let disposed = false;
@@ -78,14 +76,14 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		}) as TaskProviderRegistration;
 		registration.replace = replacement => {
 			if (disposed) throw new ReferenceError("Task provider registration is already disposed");
-			this.ensureAlive();
+			this.assertNotDisposed();
 			this.replaceProviders(owner, replacement);
 		};
 		return registration;
 	}
 
 	async refresh(): Promise<readonly IWorkspaceTask[]> {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.activeRefresh?.abort();
 		const controller = new AbortController();
 		this.activeRefresh = controller;
@@ -96,13 +94,13 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		try {
 			const [discovered, providerGroups] = await Promise.all([root ? this.discoverWorkspaceTasks(root) : Promise.resolve(Object.freeze([])), Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal)))]);
 			const providerTasks = providerGroups.flat();
-			if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
+			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.loaded = true;
 			this.setTasks(mergeTasks(discovered, providerTasks));
 			this.log("information", "discovery", `Discovered ${this.currentTasks.length} workspace task(s).`);
 			return this.currentTasks;
 		} catch (error) {
-			if (controller.signal.aborted || generation !== this.refreshGeneration || this.disposed) return this.currentTasks;
+			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.log("error", "discovery", `Task discovery failed: ${errorMessage(error)}`);
 			throw error;
 		} finally {
@@ -170,7 +168,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
 	}
 
 	private providersChanged(providerIds: ReadonlySet<string> | readonly string[]): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const changedProviders = new Set(providerIds);
 		const refresh = this.loaded || this.activeRefresh !== undefined;
 		if (this.loaded) this.setTasks(Object.freeze(this.currentTasks.filter(task => {
@@ -197,9 +195,6 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("TaskService is already disposed");
-	}
 
 	private log(severity: OutputEntrySeverity, category: string, text: string): void {
 		this.output?.appendLine({ severity, category, text });

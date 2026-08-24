@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { Emitter } from "../../../../../base/common/event.js";
 import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
 import { type ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
@@ -90,5 +90,3 @@ class FakeTaskRun extends DisposableOwner implements ITaskRun {
 	constructor(readonly task: IWorkspaceTask) { super(); }
 	finish(status: TaskRunStatus): void { this.status = status; this.exitCode = status === "failed" ? 1 : status === "succeeded" ? 0 : undefined; this.emitter.fire(status); }
 }
-
-const _noEvent = (() => toDisposable(() => undefined)) as Event<never>;

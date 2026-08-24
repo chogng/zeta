@@ -12,7 +12,13 @@ export class BrowserWorkingCopyService extends DisposableOwner implements IWorki
 	readonly onDidRegister = this._onDidRegister.event;
 	readonly onDidUnregister = this._onDidUnregister.event;
 
+	constructor() {
+		super();
+		this.defer(() => this.copies.clear());
+	}
+
 	register(workingCopy: IWorkingCopy): ReturnType<typeof toDisposable> {
+		this.assertNotDisposed();
 		validateWorkingCopy(workingCopy);
 		const key = workingCopy.resource.toString();
 		let copies = this.copies.get(key);
@@ -41,10 +47,6 @@ export class BrowserWorkingCopyService extends DisposableOwner implements IWorki
 		return [...this.copies.values()].flatMap(copies => [...copies]);
 	}
 
-	override dispose(): void {
-		this.copies.clear();
-		super.dispose();
-	}
 }
 
 function validateWorkingCopy(workingCopy: IWorkingCopy): void {

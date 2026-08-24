@@ -34,12 +34,10 @@ export interface RegisteredSyntaxProvider {
 /** Caller-owned registry for snapshot tokenization and diagnostic providers. */
 export class SyntaxProviderRegistry extends DisposableOwner {
 	private readonly providers = new Map<string, RegisteredSyntaxProvider>();
-	private disposed = false;
 
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.providers.clear();
 		});
 	}
@@ -49,7 +47,7 @@ export class SyntaxProviderRegistry extends DisposableOwner {
 	}
 
 	registerMany(providers: readonly SyntaxProvider[]): IDisposable {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Array.isArray(providers) || providers.length === 0) {
 			throw new TypeError("Syntax provider batch must not be empty");
 		}
@@ -74,7 +72,7 @@ export class SyntaxProviderRegistry extends DisposableOwner {
 	}
 
 	getTokenProviders(languageId: string): readonly RegisteredSyntaxProvider[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		const selected: RegisteredSyntaxProvider[] = [];
 		for (const provider of this.providers.values()) {
@@ -87,21 +85,16 @@ export class SyntaxProviderRegistry extends DisposableOwner {
 	}
 
 	getDiagnosticProviders(languageId: string): readonly RegisteredSyntaxProvider[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		return Object.freeze([...this.providers.values()].filter(provider => provider.provideDiagnostics && matchesLanguage(provider, languageId)));
 	}
 
 	getDocumentSynchronizers(): readonly RegisteredSyntaxProvider[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return Object.freeze([...this.providers.values()].filter(provider => provider.synchronizeDocument));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError("SyntaxProviderRegistry is already disposed");
-		}
-	}
 }
 
 export function assertSyntaxRequest(request: SyntaxRequest): void {

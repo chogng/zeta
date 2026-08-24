@@ -5,7 +5,6 @@ import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffHunk, type Li
 
 /** Adapts the Rust diff projection to the editor's zero-based UTF-16 line model. */
 export class RustDiffComputationService extends DisposableOwner implements IDiffComputationService {
-	private disposed = false;
 
 	constructor(private readonly api: IDiffApi) {
 		super();
@@ -13,13 +12,10 @@ export class RustDiffComputationService extends DisposableOwner implements IDiff
 			this.dispose();
 			throw new TypeError("Rust diff computation service requires a diff API");
 		}
-		this.defer(() => {
-			this.disposed = true;
-		});
 	}
 
 	async compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		if (this.disposed) throw new ReferenceError("Rust diff computation service is already disposed");
+		if (this.isDisposed) throw new ReferenceError("Rust diff computation service is already disposed");
 		signal.throwIfAborted();
 		const original = request.original.text;
 		const modified = request.modified.text;

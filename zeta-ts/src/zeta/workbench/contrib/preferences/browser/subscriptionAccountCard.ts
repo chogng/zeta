@@ -19,7 +19,6 @@ export class SubscriptionAccountCard extends DisposableOwner {
 	private readonly challenge: HTMLParagraphElement;
 	private account: Account | undefined;
 	private activeLoginId: string | undefined;
-	private disposed = false;
 
 	constructor(container: HTMLElement, private readonly accounts: IAccountService, private readonly options: SubscriptionAccountCardOptions) {
 		super();
@@ -49,7 +48,6 @@ export class SubscriptionAccountCard extends DisposableOwner {
 		this.own(accounts.onDidCompleteLogin(completion => this.completeLogin(completion)));
 		void this.load();
 		this.defer(() => {
-			this.disposed = true;
 			this.element.remove();
 		});
 	}
@@ -58,7 +56,7 @@ export class SubscriptionAccountCard extends DisposableOwner {
 		try {
 			this.acceptState(await this.accounts.read());
 		} catch (error) {
-			if (this.disposed) return;
+			if (this.isDisposed) return;
 			this.summary.textContent = error instanceof Error
 				? `${this.options.productName} account unavailable: ${error.message}`
 				: `${this.options.productName} account is unavailable.`;
@@ -66,7 +64,7 @@ export class SubscriptionAccountCard extends DisposableOwner {
 	}
 
 	private acceptState(state: AccountState): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		this.account = state.accounts.find(account => account.provider === this.options.providerId);
 		if (!this.activeLoginId) this.render();
 	}

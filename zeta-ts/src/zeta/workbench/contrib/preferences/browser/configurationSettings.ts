@@ -6,6 +6,7 @@ import type { IClipboardService } from '../../../../platform/clipboard/common/cl
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { ConfigurationSettingDescriptor, ConfigurationSettingsGroupDescriptor } from '../common/settingsDescriptors.js';
 import { SettingsLayout } from './settingsLayout.js';
+import type { SettingsPaneNavigationTarget } from './settingsPaneRegistry.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel } from './settingsTreeModels.js';
 import { SettingsWidgets, type SettingsWidgetsPresentation } from './settingsWidgets.js';
@@ -69,6 +70,14 @@ export class ConfigurationSettingsPane extends DisposableOwner {
 
 	public setQuery(query: string): void {
 		this.tree.setQuery(query);
+	}
+
+	public setNavigationTarget(targetId: string | undefined): SettingsPaneNavigationTarget | undefined {
+		const target = targetId === undefined ? undefined : this.tree.model.getElement(targetId);
+		if (targetId !== undefined && !target) throw new RangeError(`Unknown Settings navigation target '${targetId}'`);
+		this.tree.setNavigationTarget(targetId);
+		this.element.classList.toggle('has-navigation-target', target !== undefined);
+		return target && { title: target.title, description: target.description };
 	}
 
 	private showStatus(message: string, isError: boolean): void {

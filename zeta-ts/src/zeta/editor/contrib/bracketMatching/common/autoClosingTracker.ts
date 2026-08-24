@@ -22,7 +22,6 @@ interface AutoClosingEntry {
  */
 export class LanguageAutoClosingTracker extends DisposableOwner implements LanguageAutoClosingTrust {
 	private entries: AutoClosingEntry[] = [];
-	private disposed = false;
 
 	constructor(private readonly model: TextModel, private readonly selections: EditorSelectionController) {
 		super();
@@ -33,14 +32,13 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 		this.own(model.onDidChange(() => this.pruneInvalidEntries()));
 		this.own(selections.onDidChange(() => this.pruneInvalidEntries()));
 		this.defer(() => {
-			this.disposed = true;
 			for (const entry of this.entries) this.disposeEntry(entry);
 			this.entries = [];
 		});
 	}
 
 	record(actions: readonly LanguageAutoClosingAction[], committedModelVersion: number): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (!Array.isArray(actions)) throw new TypeError("Auto-closing actions must be an array");
 		if (!Number.isSafeInteger(committedModelVersion) || committedModelVersion < 1) {
 			throw new RangeError("Committed model version must be a positive safe integer");
@@ -59,7 +57,7 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 	}
 
 	canOvertype(position: TextPosition, close: string): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		if (typeof close !== "string" || close.length === 0) return false;
 		this.pruneInvalidEntries();
 		return this.entries.some(entry => {
@@ -70,7 +68,7 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 	}
 
 	canDeletePair(position: TextPosition, pair: LanguageCharacterPair): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.pruneInvalidEntries();
 		return this.entries.some(entry => {
 			if (entry.open !== pair.open || entry.close !== pair.close) return false;
@@ -99,7 +97,7 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 	}
 
 	private pruneInvalidEntries(): void {
-		if (this.disposed) return;
+		if (this.isDisposed) return;
 		const retained: AutoClosingEntry[] = [];
 		for (const entry of this.entries) {
 			if (this.isEntryValid(entry)) retained.push(entry);
@@ -131,9 +129,6 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 		entry.enclosingRange.dispose();
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) throw new ReferenceError("LanguageAutoClosingTracker is already disposed");
-	}
 }
 
 function assertAction(model: TextModel, action: LanguageAutoClosingAction): void {

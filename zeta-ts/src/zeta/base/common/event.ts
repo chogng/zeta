@@ -1,12 +1,18 @@
 import {
 	AbstractDisposable,
 	type IDisposable,
+	noneDisposable,
 	toDisposable,
 } from "./lifecycle.js";
 
 /** A function that subscribes a listener and returns its registration. */
 export interface Event<T> {
 	(listener: (event: T) => void): IDisposable;
+}
+
+/** Event source for boundaries that intentionally never publish. */
+export function noEvent<T>(_listener: (event: T) => void): IDisposable {
+	return noneDisposable;
 }
 
 /** Error reporting policy for one event source. */
@@ -89,9 +95,7 @@ export class Emitter<T> extends AbstractDisposable {
 	private delivering = false;
 
 	readonly event: Event<T> = (listener) => {
-		if (this.isLifecycleDisposed) {
-			throw new ReferenceError("Emitter is already disposed");
-		}
+		this.assertNotDisposed();
 		if (this.listeners.size === 0) {
 			this.onWillAddFirstListener?.();
 		}
@@ -119,7 +123,7 @@ export class Emitter<T> extends AbstractDisposable {
 	}
 
 	fire(event: T): void {
-		if (this.isLifecycleDisposed) return;
+		if (this.isDisposed) return;
 		const deliveries = [...this.listeners].map(registration => ({ registration, event }));
 		if (activeEventBuffer) {
 			activeEventBuffer.push({ deliver: () => this.enqueue(deliveries) });

@@ -3,12 +3,39 @@ import test from "node:test";
 import {
 	AbstractDisposable,
 	AsyncDisposableStore,
+	DisposableMap,
 	DisposableSlot,
 	DisposableStore,
 	ResettableDisposableGroup,
 	DisposableOwner,
+	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
+
+test("noneDisposable is a reusable no-op", () => {
+	noneDisposable.dispose();
+	noneDisposable[Symbol.dispose]();
+	assert.equal(Object.isFrozen(noneDisposable), true);
+});
+
+test("AsyncDisposableStore shares one cleanup operation", async () => {
+	let release!: () => void;
+	const gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
+	let cleanupCalls = 0;
+	const store = new AsyncDisposableStore();
+	store.defer(async () => {
+		cleanupCalls += 1;
+		await gate;
+	});
+	const first = store.disposeAsync();
+	const second = store[Symbol.asyncDispose]();
+	assert.equal(first, second);
+	release();
+	await first;
+	assert.equal(cleanupCalls, 1);
+});
 
 test("AbstractDisposable runs leaf cleanup once", () => {
 	class Resource extends AbstractDisposable {
@@ -75,6 +102,30 @@ test("DisposableStore supports adopted values and deferred cleanup", () => {
 	assert.equal(value, "value");
 	store.dispose();
 	assert.deepEqual(released, ["deferred", "value"]);
+});
+
+test("DisposableMap replaces, removes, leaks, and disposes keyed resources", () => {
+	const released: string[] = [];
+	const resources = new DisposableMap<string>();
+	resources.set("first", toDisposable(() => released.push("first:old")));
+	resources.set("first", toDisposable(() => released.push("first:new")));
+	resources.set("second", toDisposable(() => released.push("second")));
+	resources.set("third", toDisposable(() => released.push("third")));
+
+	assert.deepEqual(released, ["first:old"]);
+	assert.equal(resources.deleteAndDispose("first"), true);
+	assert.equal(resources.deleteAndDispose("missing"), false);
+	const leaked = resources.set("leaked", toDisposable(() => released.push("leaked")));
+	assert.equal(resources.deleteAndLeak("leaked"), leaked);
+	resources.dispose();
+	resources.dispose();
+	assert.deepEqual(released, ["first:old", "first:new", "third", "second"]);
+	leaked[Symbol.dispose]();
+	assert.deepEqual(released, ["first:old", "first:new", "third", "second", "leaked"]);
+
+	const rejected = toDisposable(() => released.push("rejected"));
+	assert.throws(() => resources.set("rejected", rejected), ReferenceError);
+	rejected.dispose();
 });
 
 test("DisposableStore attempts every cleanup and preserves suppressed errors", () => {
@@ -168,4 +219,15 @@ test("AsyncDisposableStore owns sync and async resources in LIFO order", async (
 	})();
 
 	assert.deepEqual(released, [2, 1]);
+});
+
+test("AsyncDisposableStore closes registration when disposal starts", async () => {
+	const store = new AsyncDisposableStore();
+	const disposal = store.disposeAsync();
+	const rejected = toDisposable(() => undefined);
+
+	assert.equal(store.disposed, true);
+	assert.throws(() => store.add(rejected), ReferenceError);
+	rejected.dispose();
+	await disposal;
 });

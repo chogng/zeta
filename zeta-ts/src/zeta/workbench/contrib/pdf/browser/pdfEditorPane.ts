@@ -78,6 +78,19 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 	) {
 		super();
 		this.own(this.annotationModel.onDidChange(() => this.onAnnotationsChanged()));
+		this.defer(() => {
+			this.clearInput();
+			this.container?.remove();
+			this.container = undefined;
+			this.toolbar = undefined;
+			this.pages = undefined;
+			this.sidebar = undefined;
+			this.annotationList = undefined;
+			this.annotationText = undefined;
+			this.annotationTextLabel = undefined;
+			this.colorInput = undefined;
+			this.statusElement = undefined;
+		});
 	}
 
 	create(parent: HTMLElement): void {
@@ -233,25 +246,6 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 			this.renderSidebar();
 		});
 		return this.saveOperation;
-	}
-
-	override dispose(): void {
-		this.clearInput();
-		this.container?.remove();
-		this.container = undefined;
-		this.toolbar = undefined;
-		this.pages = undefined;
-		this.sidebar = undefined;
-		this.annotationList = undefined;
-		this.annotationText = undefined;
-		this.annotationTextLabel = undefined;
-		this.colorInput = undefined;
-		this.statusElement = undefined;
-		super.dispose();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
 	}
 
 	private async persistAnnotations(input: EditorInput): Promise<void> {

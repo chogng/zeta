@@ -12,7 +12,6 @@ import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "./textFile
 /** Routes external plain-text drops into one insertion at the viewport hit target. */
 export class TextDropController extends DisposableOwner {
 	private fileDropRequest = 0;
-	private disposed = false;
 
 	constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
 		super();
@@ -23,7 +22,6 @@ export class TextDropController extends DisposableOwner {
 		this.own(addDisposableListener<DragEvent>(viewport.element, "dragover", event => this.handleDragOver(event)));
 		this.own(addDisposableListener<DragEvent>(viewport.element, "drop", event => this.handleDrop(event)));
 		this.defer(() => {
-			this.disposed = true;
 			this.fileDropRequest += 1;
 		});
 	}
@@ -64,7 +62,7 @@ export class TextDropController extends DisposableOwner {
 		this.viewport.element.focus({ preventScroll: true });
 		void file.text().then(text => {
 			if (
-				this.disposed ||
+				this.isDisposed ||
 				request !== this.fileDropRequest ||
 				text.length > TEXT_FILE_TRANSFER_MAX_BYTES ||
 				model.version !== expectedVersion

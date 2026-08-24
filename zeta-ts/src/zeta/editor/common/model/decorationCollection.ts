@@ -54,7 +54,6 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 		this.own(new Emitter<TextDecorationChange<TMetadata>>());
 	private readonly entries =
 		new Map<TextDecorationId, DecorationEntry<TMetadata>>();
-	private disposed = false;
 
 	readonly onDidChange: Event<TextDecorationChange<TMetadata>> =
 		this.changeEmitter.event;
@@ -63,7 +62,6 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 		super();
 		this.own(model.onDidChange(() => this.acceptModelChange()));
 		this.defer(() => {
-			this.disposed = true;
 			for (const entry of this.entries.values()) {
 				entry.trackedRange.dispose();
 			}
@@ -72,30 +70,30 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 	}
 
 	get size(): number {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.entries.size;
 	}
 
 	get textModel(): TextModel {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.model;
 	}
 
 	get decorations(): readonly TextDecorationSnapshot<TMetadata>[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		return this.createSnapshot();
 	}
 
 	get(
 		id: TextDecorationId,
 	): TextDecorationSnapshot<TMetadata> | undefined {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const entry = this.entries.get(id);
 		return entry ? snapshotEntry(entry) : undefined;
 	}
 
 	add(spec: TextDecorationSpec<TMetadata>): TextDecorationId {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		this.validateSpec(spec);
 		const entry = this.createEntry(spec);
 		this.entries.set(entry.id, entry);
@@ -107,7 +105,7 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 		id: TextDecorationId,
 		spec: TextDecorationSpec<TMetadata>,
 	): void {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const previous = this.entries.get(id);
 		if (!previous) {
 			throw new RangeError(`Unknown text decoration ${id}`);
@@ -129,7 +127,7 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 	}
 
 	delete(id: TextDecorationId): boolean {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		const entry = this.entries.get(id);
 		if (!entry) return false;
 		this.entries.delete(id);
@@ -141,7 +139,7 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 	replaceAll(
 		specs: readonly TextDecorationSpec<TMetadata>[],
 	): readonly TextDecorationId[] {
-		this.ensureAlive();
+		this.assertNotDisposed();
 		for (const spec of specs) this.validateSpec(spec);
 		if (specs.length === 0 && this.entries.size === 0) {
 			return Object.freeze([]);
@@ -215,13 +213,6 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 		}));
 	}
 
-	private ensureAlive(): void {
-		if (this.disposed) {
-			throw new ReferenceError(
-				"TextDecorationCollection is already disposed",
-			);
-		}
-	}
 }
 
 function snapshotEntry<TMetadata>(

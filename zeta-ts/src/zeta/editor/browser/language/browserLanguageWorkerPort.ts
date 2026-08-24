@@ -6,7 +6,6 @@ import { type LanguageWorkerWireClientPort } from "../../common/languages/langua
 export class BrowserLanguageWorkerPort extends DisposableOwner implements LanguageWorkerWireClientPort {
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
 	private readonly failureEmitter = this.own(new Emitter<unknown>());
-	private disposed = false;
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
 	readonly onFailure: Event<unknown> = this.failureEmitter.event;
@@ -20,7 +19,6 @@ export class BrowserLanguageWorkerPort extends DisposableOwner implements Langua
 		worker.addEventListener("error", onError);
 		worker.addEventListener("messageerror", onMessageError);
 		this.defer(() => {
-			this.disposed = true;
 			worker.removeEventListener("message", onMessage);
 			worker.removeEventListener("error", onError);
 			worker.removeEventListener("messageerror", onMessageError);
@@ -29,7 +27,7 @@ export class BrowserLanguageWorkerPort extends DisposableOwner implements Langua
 	}
 
 	send(message: unknown): void {
-		if (this.disposed) {
+		if (this.isDisposed) {
 			throw new ReferenceError("BrowserLanguageWorkerPort is already disposed");
 		}
 		this.worker.postMessage(message);

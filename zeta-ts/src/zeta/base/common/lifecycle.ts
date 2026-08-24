@@ -16,8 +16,18 @@ export interface IAsyncDisposable extends AsyncDisposable {
 	disposeAsync(): Promise<void>;
 }
 
+/** Reusable cleanup handle for contracts that intentionally own no resource. */
+export const noneDisposable: IDisposable = Object.freeze({
+	dispose(): void {},
+	[Symbol.dispose](): void {},
+});
+
 /** @internal */
 export type TrackableDisposable = Disposable | AsyncDisposable;
+
+function isNoneDisposable(disposable: TrackableDisposable): boolean {
+	return Object.is(disposable, noneDisposable);
+}
 
 /**
  * Internal observation contract used by development-time disposable tracking.
@@ -40,6 +50,7 @@ export interface IDisposableTracker {
 		disposable: TrackableDisposable,
 		owner: TrackableDisposable,
 	): void;
+	clearDisposableOwner(disposable: TrackableDisposable): void;
 	markAsDisposed(disposable: TrackableDisposable): void;
 }
 
@@ -71,7 +82,7 @@ export function trackDisposable<T extends TrackableDisposable>(
 	disposable: T,
 	label?: string,
 ): T {
-	disposableTracker?.trackDisposable(disposable, label);
+	if (!isNoneDisposable(disposable)) disposableTracker?.trackDisposable(disposable, label);
 	return disposable;
 }
 
@@ -80,7 +91,7 @@ export function validateDisposableOwner(
 	disposable: TrackableDisposable,
 	owner: TrackableDisposable,
 ): void {
-	disposableTracker?.validateDisposableOwner(disposable, owner);
+	if (!isNoneDisposable(disposable)) disposableTracker?.validateDisposableOwner(disposable, owner);
 }
 
 /** @internal */
@@ -88,12 +99,16 @@ export function setDisposableOwner(
 	disposable: TrackableDisposable,
 	owner: TrackableDisposable,
 ): void {
-	disposableTracker?.setDisposableOwner(disposable, owner);
+	if (!isNoneDisposable(disposable)) disposableTracker?.setDisposableOwner(disposable, owner);
+}
+
+function clearDisposableOwner(disposable: TrackableDisposable): void {
+	if (!isNoneDisposable(disposable)) disposableTracker?.clearDisposableOwner(disposable);
 }
 
 /** @internal */
 export function markAsDisposed(disposable: TrackableDisposable): void {
-	disposableTracker?.markAsDisposed(disposable);
+	if (!isNoneDisposable(disposable)) disposableTracker?.markAsDisposed(disposable);
 }
 
 /**
@@ -101,19 +116,23 @@ export function markAsDisposed(disposable: TrackableDisposable): void {
  * collection. Subclasses implement cleanup in `disposeCore`.
  */
 export abstract class AbstractDisposable implements IDisposable {
-	private lifecycleDisposed = false;
+	private disposedState = false;
 
 	constructor() {
 		trackDisposable(this);
 	}
 
-	protected get isLifecycleDisposed(): boolean {
-		return this.lifecycleDisposed;
+	protected get isDisposed(): boolean {
+		return this.disposedState;
+	}
+
+	protected assertNotDisposed(): void {
+		if (this.disposedState) throw new ReferenceError(`${this.constructor.name} is already disposed`);
 	}
 
 	public dispose(): void {
-		if (this.lifecycleDisposed) return;
-		this.lifecycleDisposed = true;
+		if (this.disposedState) return;
+		this.disposedState = true;
 		try {
 			this.disposeCore();
 		} finally {
@@ -156,12 +175,8 @@ export function toDisposable(fn: () => void): IDisposable {
  * Resources are released in reverse registration order. Once disposed, new
  * registrations throw `ReferenceError`, matching the standard stack.
  */
-export class DisposableStore implements IDisposable {
+export class DisposableStore extends AbstractDisposable {
 	private readonly stack = new DisposableStack();
-
-	constructor() {
-		trackDisposable(this);
-	}
 
 	get disposed(): boolean {
 		return this.stack.disposed;
@@ -182,16 +197,8 @@ export class DisposableStore implements IDisposable {
 		this.stack.defer(onDispose);
 	}
 
-	dispose(): void {
-		try {
-			this.stack.dispose();
-		} finally {
-			markAsDisposed(this);
-		}
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
+	protected override disposeCore(): void {
+		this.stack.dispose();
 	}
 }
 
@@ -201,6 +208,7 @@ export class DisposableStore implements IDisposable {
  */
 export class AsyncDisposableStore implements IAsyncDisposable {
 	private readonly stack = new AsyncDisposableStack();
+	private disposePromise: Promise<void> | undefined;
 
 	constructor() {
 		trackDisposable(this);
@@ -230,15 +238,14 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 		this.stack.defer(onDisposeAsync);
 	}
 
-	async disposeAsync(): Promise<void> {
-		try {
-			await this.stack.disposeAsync();
-		} finally {
-			markAsDisposed(this);
+	public disposeAsync(): Promise<void> {
+		if (!this.disposePromise) {
+			this.disposePromise = this.stack.disposeAsync().finally(() => markAsDisposed(this));
 		}
+		return this.disposePromise;
 	}
 
-	[Symbol.asyncDispose](): Promise<void> {
+	public [Symbol.asyncDispose](): Promise<void> {
 		return this.disposeAsync();
 	}
 }
@@ -278,26 +285,19 @@ export abstract class DisposableOwner extends AbstractDisposable {
 /**
  * Owns one replaceable synchronous resource.
  */
-export class DisposableSlot<T extends Disposable> implements IDisposable {
+export class DisposableSlot<T extends Disposable> extends AbstractDisposable {
 	private _value: T | undefined;
-	private _disposed = false;
-
-	constructor() {
-		trackDisposable(this);
-	}
 
 	get value(): T | undefined {
 		return this._value;
 	}
 
 	get disposed(): boolean {
-		return this._disposed;
+		return this.isDisposed;
 	}
 
 	replace(next: T | undefined): void {
-		if (this._disposed) {
-			throw new ReferenceError("DisposableSlot is already disposed");
-		}
+		this.assertNotDisposed();
 		if (next === this._value) return;
 		if (next) validateDisposableOwner(next, this);
 		const previous = this._value;
@@ -316,21 +316,82 @@ export class DisposableSlot<T extends Disposable> implements IDisposable {
 		this.replace(undefined);
 	}
 
-	dispose(): void {
-		if (this._disposed) return;
-		this._disposed = true;
+	protected override disposeCore(): void {
 		const current = this._value;
 		this._value = undefined;
 		try {
 			current?.[Symbol.dispose]();
 		} finally {
 			if (current) markAsDisposed(current);
-			markAsDisposed(this);
+		}
+	}
+}
+
+/** Owns disposable resources whose lifetime follows stable keys. */
+export class DisposableMap<K, V extends Disposable = Disposable> extends AbstractDisposable implements Iterable<[K, V]> {
+	private readonly resources = new Map<K, V>();
+
+	public has(key: K): boolean {
+		return this.resources.has(key);
+	}
+
+	public set(key: K, resource: V): V {
+		this.assertNotDisposed();
+		const previous = this.resources.get(key);
+		if (previous === resource) return resource;
+		validateDisposableOwner(resource, this);
+		if (previous) {
+			this.resources.delete(key);
+			this.disposeResource(previous);
+		}
+		setDisposableOwner(resource, this);
+		this.resources.set(key, resource);
+		return resource;
+	}
+
+	public deleteAndDispose(key: K): boolean {
+		const resource = this.resources.get(key);
+		if (!resource) return false;
+		this.resources.delete(key);
+		this.disposeResource(resource);
+		return true;
+	}
+
+	public deleteAndLeak(key: K): V | undefined {
+		const resource = this.resources.get(key);
+		if (!resource) return undefined;
+		this.resources.delete(key);
+		clearDisposableOwner(resource);
+		return resource;
+	}
+
+	public keys(): IterableIterator<K> {
+		return this.resources.keys();
+	}
+
+	public [Symbol.iterator](): IterableIterator<[K, V]> {
+		return this.resources[Symbol.iterator]();
+	}
+
+	protected override disposeCore(): void {
+		if (this.resources.size === 0) return;
+		const resources = [...this.resources.values()];
+		this.resources.clear();
+		const stack = new DisposableStack();
+		for (const resource of resources) stack.use(resource);
+		try {
+			stack.dispose();
+		} finally {
+			for (const resource of resources) markAsDisposed(resource);
 		}
 	}
 
-	[Symbol.dispose](): void {
-		this.dispose();
+	private disposeResource(resource: V): void {
+		try {
+			resource[Symbol.dispose]();
+		} finally {
+			markAsDisposed(resource);
+		}
 	}
 }
 
@@ -340,16 +401,12 @@ export class DisposableSlot<T extends Disposable> implements IDisposable {
  * Prefer `DisposableStore`. Use this type only when one owner must repeatedly
  * discard and rebuild a complete group during its lifetime.
  */
-export class ResettableDisposableGroup implements IDisposable {
-	private stack: DisposableStack | undefined = new DisposableStack();
+export class ResettableDisposableGroup extends AbstractDisposable {
+	private stack = new DisposableStack();
 	private readonly resources = new Set<Disposable>();
 
-	constructor() {
-		trackDisposable(this);
-	}
-
 	get disposed(): boolean {
-		return this.stack === undefined;
+		return this.isDisposed;
 	}
 
 	add<T extends Disposable | null | undefined>(resource: T): T {
@@ -383,10 +440,8 @@ export class ResettableDisposableGroup implements IDisposable {
 		}
 	}
 
-	dispose(): void {
+	protected override disposeCore(): void {
 		const current = this.stack;
-		if (!current) return;
-		this.stack = undefined;
 		try {
 			current.dispose();
 		} finally {
@@ -394,18 +449,11 @@ export class ResettableDisposableGroup implements IDisposable {
 				markAsDisposed(resource);
 			}
 			this.resources.clear();
-			markAsDisposed(this);
 		}
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
 	}
 
 	private current(): DisposableStack {
-		if (!this.stack) {
-			throw new ReferenceError("ResettableDisposableGroup is already disposed");
-		}
+		this.assertNotDisposed();
 		return this.stack;
 	}
 }

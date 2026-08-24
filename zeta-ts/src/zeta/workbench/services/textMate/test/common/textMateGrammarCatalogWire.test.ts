@@ -209,7 +209,6 @@ class TestWirePort extends DisposableOwner implements MemoryWirePort {
 	private readonly messageEmitter = this.own(new Emitter<unknown>());
 	private readonly failureEmitter = this.own(new Emitter<unknown>());
 	private peer: TestWirePort | undefined;
-	private disposed = false;
 
 	readonly sentMessages: unknown[] = [];
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
@@ -218,7 +217,6 @@ class TestWirePort extends DisposableOwner implements MemoryWirePort {
 	constructor() {
 		super();
 		this.defer(() => {
-			this.disposed = true;
 			this.peer = undefined;
 		});
 	}
@@ -228,12 +226,12 @@ class TestWirePort extends DisposableOwner implements MemoryWirePort {
 	}
 
 	send(message: unknown): void {
-		if (this.disposed || !this.peer) throw new ReferenceError("Test wire port is unavailable");
+		if (this.isDisposed || !this.peer) throw new ReferenceError("Test wire port is unavailable");
 		const cloned = structuredClone(message);
 		const peer = this.peer;
 		this.sentMessages.push(cloned);
 		queueMicrotask(() => {
-			if (!peer.disposed) peer.messageEmitter.fire(cloned);
+			if (!peer.isDisposed) peer.messageEmitter.fire(cloned);
 		});
 	}
 }
