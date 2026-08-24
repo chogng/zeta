@@ -32,7 +32,7 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
 			options,
 			new ElectronMenubarControl(container, options, nativeMenubar),
 		);
-		this.element.classList.add("zeta-electron-titlebar");
+		this.domNode.classList.add("zeta-electron-titlebar");
 	}
 }
 
@@ -42,7 +42,7 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
  */
 class ElectronMenubarControl extends DisposableOwner
 	implements IMenubarControl {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 
 	constructor(
 		container: HTMLElement,
@@ -56,7 +56,7 @@ class ElectronMenubarControl extends DisposableOwner
 			options.contextMenuService,
 			options.localizationService,
 		));
-		this.element = browserMenubar.element;
+		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
 			this.own(new NativeMenubarControl(
 				options.menuService,

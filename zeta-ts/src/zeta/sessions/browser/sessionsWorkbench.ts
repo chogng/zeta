@@ -30,7 +30,7 @@ export interface SessionsWorkbenchOptions {
 
 /** Standalone mode-owned Sessions host that intentionally does not construct WorkbenchLayout. */
 export class SessionsWorkbench extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 
 	constructor(options: SessionsWorkbenchOptions) {
 		super();
@@ -55,6 +55,7 @@ export class SessionsWorkbench extends DisposableOwner {
 			profileId: options.profile.id,
 		}));
 		runtime.services.set(IStorageService, storage);
+		container.replaceChildren();
 		const sessions = this.createCodeSessions(container, {
 			profile: options.profile,
 			runtime,
@@ -64,10 +65,8 @@ export class SessionsWorkbench extends DisposableOwner {
 			createContextMenuService: options.createContextMenuService,
 			storageService: storage,
 		});
-		this.element = sessions.element;
-		container.replaceChildren(this.element);
+		this.domNode = sessions.domNode;
 		sessions.layout();
-		this.defer(() => this.element.remove());
 	}
 
 	private createCodeSessions(container: HTMLElement, options: CodeSessionsWorkbenchOptions): CodeSessionsWorkbench {

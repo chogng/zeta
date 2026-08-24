@@ -306,7 +306,7 @@ export class PreferencesEditor extends DisposableOwner {
 			content: this.editor.element,
 			focusContent: () => this.editor.focus(),
 		}));
-		this.modalEditor.element.classList.add('zeta-settings-modal');
+		this.modalEditor.domNode.classList.add('zeta-settings-modal');
 
 		this.own(this.modalEditor.onDidRequestClose(() => options.preferencesService.closeSettings()));
 		this.own(options.preferencesService.onDidChangeSettingsVisibility(visible => {

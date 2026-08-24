@@ -21,7 +21,7 @@ export interface EditorTitleActions {
 export class EditorTitleControl extends DisposableOwner {
 	static readonly HEIGHT = 35;
 
-	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	private readonly tabs: EditorTabsControl;
 	private readonly toolbar: WorkbenchToolBar;
 
@@ -32,19 +32,19 @@ export class EditorTitleControl extends DisposableOwner {
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "zeta-editor-title-control";
-		container.append(this.element);
-		const tabsAndActions = h(ownerDocument, "div");
-		tabsAndActions.className = "zeta-editor-tabs-and-actions";
-		this.element.append(tabsAndActions);
-		this.tabs = this.own(new MultiEditorTabsControl(tabsAndActions, delegate));
-		const actions = h(ownerDocument, "div");
-		actions.className = "zeta-editor-title-actions";
-		tabsAndActions.append(actions);
+		this.domNode = h(ownerDocument, "div");
+		this.domNode.className = "zeta-editor-title-control";
+		container.append(this.domNode);
+		const tabsAndActionsDomNode = h(ownerDocument, "div");
+		tabsAndActionsDomNode.className = "zeta-editor-tabs-and-actions";
+		this.domNode.append(tabsAndActionsDomNode);
+		this.tabs = this.own(new MultiEditorTabsControl(tabsAndActionsDomNode, delegate));
+		const actionsDomNode = h(ownerDocument, "div");
+		actionsDomNode.className = "zeta-editor-title-actions";
+		tabsAndActionsDomNode.append(actionsDomNode);
 		this.toolbar = this.own(titleActions
 			? new MenuWorkbenchToolBar(
-				actions,
+				actionsDomNode,
 				titleActions.menuService,
 				titleActions.contextMenuProvider,
 				MenuId.EditorTitle,
@@ -54,14 +54,14 @@ export class EditorTitleControl extends DisposableOwner {
 				},
 			)
 			: new WorkbenchToolBar(
-				actions,
+				actionsDomNode,
 				emptyEditorToolbarContextMenuProvider,
 				{
 					ariaLabel: "Editor actions",
 					highlightToggledItems: true,
 				},
 			));
-		this.defer(() => this.element.remove());
+		this.defer(() => this.domNode.remove());
 	}
 
 	setEditors(

@@ -14,8 +14,8 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 
 	constructor(container: HTMLElement, delegate: EditorTabsDelegate) {
 		super(container);
-		this.element.classList.add("zeta-multi-editor-tabs-control");
-		this.tabList = this.own(new TabList(this.element, {
+		this.domNode.classList.add("zeta-multi-editor-tabs-control");
+		this.tabList = this.own(new TabList(this.domNode, {
 			ariaLabel: "Open editors",
 			presentation: "inset",
 			draggable: true,

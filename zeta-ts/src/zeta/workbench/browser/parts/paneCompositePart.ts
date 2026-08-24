@@ -12,6 +12,7 @@ import { CompositePart } from "./compositePart.js";
 import { CompositeBar, type CompositeBarPresentation, type CompositeBarSelectionEvent } from "./compositebar/compositeBar.js";
 import type { PartTitleProjection } from "./views/viewPane.js";
 import { h } from "../../../base/browser/dom.js";
+import { type IStorageService, StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
 
 /** Menu-backed actions rendered at the right edge of a Pane Composite title. */
 export interface PaneCompositeTitleActions {
@@ -23,6 +24,7 @@ export interface PaneCompositeTitleActions {
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id: string;
 	readonly location: ViewContainerLocation;
@@ -48,23 +50,29 @@ export interface PaneCompositePartOptions {
 export class PaneCompositePart extends CompositePart {
 	readonly compositeBar: CompositeBar;
 	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
-	private readonly titleContentElement: HTMLDivElement;
-	protected readonly titleActionsSlotElement: HTMLDivElement;
-	private readonly viewTitleActionsElement: HTMLDivElement;
-	private readonly partTitleActionsElement: HTMLDivElement;
+	private readonly viewDescriptorService: IViewDescriptorService;
+	private readonly storageService: IStorageService | undefined;
+	private readonly location: ViewContainerLocation;
+	private readonly titleContentDomNode: HTMLDivElement;
+	protected readonly titleActionsSlotDomNode: HTMLDivElement;
+	private readonly viewTitleActionsDomNode: HTMLDivElement;
+	private readonly partTitleActionsDomNode: HTMLDivElement;
 	private compositeBarVisible = true;
 	private hasCustomTitleContent = false;
 
 	constructor(container: HTMLElement, options: PaneCompositePartOptions) {
 		super(container, options.id);
+		this.viewDescriptorService = options.viewDescriptorService;
+		this.storageService = options.storageService;
+		this.location = options.location;
 		const ownerDocument = container.ownerDocument;
 		const ariaLabel = localize(options.localizationService, options.ariaLabelKey, options.ariaLabel);
 		const viewsAriaLabel = localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel);
-		this.element.setAttribute("aria-label", ariaLabel);
-		this.titleElement.classList.add("zeta-pane-composite-title");
-		this.titleContentElement = h(ownerDocument, "div");
-		this.titleContentElement.className = "zeta-pane-composite-title-content";
-		this.compositeBar = this.own(new CompositeBar(this.titleContentElement, {
+		this.domNode.setAttribute("aria-label", ariaLabel);
+		this.titleDomNode.classList.add("zeta-pane-composite-title");
+		this.titleContentDomNode = h(ownerDocument, "div");
+		this.titleContentDomNode.className = "zeta-pane-composite-title-content";
+		this.compositeBar = this.own(new CompositeBar(this.titleContentDomNode, {
 			viewDescriptorService: options.viewDescriptorService,
 			localizationService: options.localizationService,
 			location: options.location,
@@ -74,22 +82,22 @@ export class PaneCompositePart extends CompositePart {
 			containerFilter: options.compositeBarContainerFilter,
 		}));
 		if (options.localizationService) this.own(options.localizationService.onDidChange(() => {
-			this.element.setAttribute("aria-label", localize(options.localizationService, options.ariaLabelKey, options.ariaLabel));
+			this.domNode.setAttribute("aria-label", localize(options.localizationService, options.ariaLabelKey, options.ariaLabel));
 			this.compositeBar.setAriaLabel(localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel));
 		}));
 		this.onDidSelectComposite = this.compositeBar.onDidSelectComposite;
-		this.titleActionsSlotElement = h(ownerDocument, "div");
-		this.titleActionsSlotElement.className = "zeta-pane-composite-title-actions";
-		this.viewTitleActionsElement = h(ownerDocument, "div");
-		this.viewTitleActionsElement.className = "zeta-pane-composite-title-view-actions";
-		this.partTitleActionsElement = h(ownerDocument, "div");
-		this.partTitleActionsElement.className = "zeta-pane-composite-title-part-actions";
-		this.titleActionsSlotElement.append(this.viewTitleActionsElement, this.partTitleActionsElement);
-		this.titleElement.append(this.titleContentElement, this.titleActionsSlotElement);
+		this.titleActionsSlotDomNode = h(ownerDocument, "div");
+		this.titleActionsSlotDomNode.className = "zeta-pane-composite-title-actions";
+		this.viewTitleActionsDomNode = h(ownerDocument, "div");
+		this.viewTitleActionsDomNode.className = "zeta-pane-composite-title-view-actions";
+		this.partTitleActionsDomNode = h(ownerDocument, "div");
+		this.partTitleActionsDomNode.className = "zeta-pane-composite-title-part-actions";
+		this.titleActionsSlotDomNode.append(this.viewTitleActionsDomNode, this.partTitleActionsDomNode);
+		this.titleDomNode.append(this.titleContentDomNode, this.titleActionsSlotDomNode);
 
 		if (options.titleActions) {
 			const actions = this.own(new MenuWorkbenchToolBar(
-				this.partTitleActionsElement,
+				this.partTitleActionsDomNode,
 				options.titleActions.menuService,
 				options.titleActions.contextMenuProvider,
 				options.titleActions.menuId,
@@ -101,23 +109,39 @@ export class PaneCompositePart extends CompositePart {
 		this.setCompositeBarVisible(options.compositeBarVisible ?? true);
 	}
 
-	setActiveComposite(compositeId: string): void {
+	/** Resolves the last valid workspace selection, then falls back to the Registry default. */
+	getCompositeIdToRestore(): string | undefined {
+		const stored = this.storageService?.get(
+			activeCompositeStorageKeys[this.location],
+			StorageScope.WORKSPACE,
+		);
+		if (stored && this.viewDescriptorService
+			.getViewContainers(this.location)
+			.some((container) => container.id === stored)) {
+			return stored;
+		}
+		return this.viewDescriptorService.getDefaultViewContainer(this.location)?.id;
+	}
+
+	override showComposite(compositeId: string): void {
+		super.showComposite(compositeId);
 		this.compositeBar.setActiveComposite(compositeId);
+		this.storeActiveComposite(compositeId);
 	}
 
 	setCompositeBarVisible(visible: boolean): void {
 		this.compositeBarVisible = visible;
-		this.compositeBar.element.hidden = !visible;
+		this.compositeBar.domNode.hidden = !visible;
 		this.updateTitleVisibility();
 	}
 
 	/** Projects one View's title content and actions into the Part's fixed slots. */
 	protected setTitleProjection(projection: PartTitleProjection | undefined): void {
 		this.hasCustomTitleContent = projection?.content !== undefined;
-		this.titleContentElement.replaceChildren(
-			...(projection?.content ? [projection.content] : [this.compositeBar.element]),
+		this.titleContentDomNode.replaceChildren(
+			...(projection?.content ? [projection.content] : [this.compositeBar.domNode]),
 		);
-		this.viewTitleActionsElement.replaceChildren(...(projection?.actions ? [projection.actions] : []));
+		this.viewTitleActionsDomNode.replaceChildren(...(projection?.actions ? [projection.actions] : []));
 		this.updateTitleVisibility();
 	}
 
@@ -126,6 +150,24 @@ export class PaneCompositePart extends CompositePart {
 	}
 
 	private updateTitleVisibility(): void {
-		this.titleElement.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsElement.childElementCount === 0 && this.partTitleActionsElement.childElementCount === 0;
+		this.titleDomNode.hidden = !this.compositeBarVisible && !this.hasCustomTitleContent && this.viewTitleActionsDomNode.childElementCount === 0 && this.partTitleActionsDomNode.childElementCount === 0;
+	}
+
+	private storeActiveComposite(compositeId: string): void {
+		const storage = this.storageService;
+		if (!storage) return;
+		const key = activeCompositeStorageKeys[this.location];
+		if (compositeId === this.viewDescriptorService.getDefaultViewContainer(this.location)?.id) {
+			storage.remove(key, StorageScope.WORKSPACE);
+			return;
+		}
+		storage.store(key, compositeId, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	}
 }
+
+const activeCompositeStorageKeys = {
+	[ViewContainerLocation.Sidebar]: "workbench.sidebar.activeViewContainer",
+	[ViewContainerLocation.Panel]: "workbench.panel.activeViewContainer",
+	[ViewContainerLocation.AuxiliaryBar]: "workbench.auxiliarybar.activeViewContainer",
+	[ViewContainerLocation.AgentSidebar]: "workbench.agentSidebar.activeViewContainer",
+} as const satisfies Record<ViewContainerLocation, string>;

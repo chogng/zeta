@@ -7,7 +7,7 @@ import type { ISessionsManagementService } from "../../services/sessions/common/
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly newSessionButton: HTMLButtonElement;
 	private readonly list: HTMLDivElement;
@@ -20,8 +20,8 @@ export class SessionsList extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		this.sessionService = sessionService;
 		this.viewService = viewService;
-		this.element = h(ownerDocument, "section");
-		this.element.className = "zeta-sessions-list";
+		this.domNode = h(ownerDocument, "section");
+		this.domNode.className = "zeta-sessions-list";
 		this.heading = h(ownerDocument, "h2");
 		this.heading.textContent = title;
 		this.newSessionButton = h(ownerDocument, "button");
@@ -30,8 +30,9 @@ export class SessionsList extends DisposableOwner {
 		this.newSessionButton.textContent = newSessionLabel;
 		this.list = h(ownerDocument, "div");
 		this.list.className = "zeta-sessions-list-items";
-		this.element.append(this.heading, this.newSessionButton, this.list);
-		container.append(this.element);
+		this.domNode.append(this.heading, this.newSessionButton, this.list);
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 		this.own(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
 		this.own(viewService.onDidChange(() => this.render()));
 		this.render();
@@ -45,7 +46,7 @@ export class SessionsList extends DisposableOwner {
 
 	private render(): void {
 		this.itemListeners.clear();
-		const ownerDocument = this.element.ownerDocument;
+		const ownerDocument = this.domNode.ownerDocument;
 		const items: HTMLElement[] = [];
 		const activeSelection = this.viewService.activeSelection;
 		for (const session of this.sessionService.untitledSessions) {

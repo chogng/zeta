@@ -17,6 +17,9 @@ test("Browser storage persists scoped values and target metadata", () => {
 		backend: dom.window.localStorage,
 		flushInterval: 0,
 	});
+	assert.equal(first.isNew(StorageScope.APPLICATION), true);
+	assert.equal(first.isNew(StorageScope.PROFILE), true);
+	assert.equal(first.isNew(StorageScope.WORKSPACE), true);
 	first.store("shared", "application", StorageScope.APPLICATION, StorageTarget.USER);
 	first.store("shared", 42, StorageScope.PROFILE, StorageTarget.MACHINE);
 	first.store("shared", true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -26,6 +29,7 @@ test("Browser storage persists scoped values and target metadata", () => {
 	assert.equal(first.getBoolean("shared", StorageScope.WORKSPACE), true);
 	assert.deepEqual(first.keys(StorageScope.APPLICATION, StorageTarget.USER), ["shared"]);
 	assert.deepEqual(first.keys(StorageScope.PROFILE, StorageTarget.MACHINE), ["shared"]);
+	assert.equal(first.isNew(StorageScope.WORKSPACE), true);
 	first.dispose();
 
 	const restored = new BrowserStorageService({
@@ -38,6 +42,9 @@ test("Browser storage persists scoped values and target metadata", () => {
 	assert.equal(restored.get("shared", StorageScope.APPLICATION), "application");
 	assert.equal(restored.getNumber("shared", StorageScope.PROFILE), 42);
 	assert.equal(restored.getBoolean("shared", StorageScope.WORKSPACE), true);
+	assert.equal(restored.isNew(StorageScope.APPLICATION), false);
+	assert.equal(restored.isNew(StorageScope.PROFILE), false);
+	assert.equal(restored.isNew(StorageScope.WORKSPACE), false);
 	restored.dispose();
 	dom.window.close();
 });
@@ -56,10 +63,12 @@ test("Browser storage isolates workspaces while retaining profile state", () => 
 	first.store("size", 260, StorageScope.PROFILE, StorageTarget.MACHINE);
 	first.store("visible", false, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	first.switchWorkspace("workspace-b");
+	assert.equal(first.isNew(StorageScope.WORKSPACE), true);
 	assert.equal(first.getNumber("size", StorageScope.PROFILE), 260);
 	assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), undefined);
 	first.store("visible", true, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	first.switchWorkspace("workspace-a");
+	assert.equal(first.isNew(StorageScope.WORKSPACE), true);
 	assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), false);
 	first.switchWorkspace("workspace-b");
 	assert.equal(first.getBoolean("visible", StorageScope.WORKSPACE), true);
@@ -74,6 +83,7 @@ test("Browser storage isolates workspaces while retaining profile state", () => 
 	});
 	assert.equal(second.getNumber("size", StorageScope.PROFILE), 260);
 	assert.equal(second.getBoolean("visible", StorageScope.WORKSPACE), true);
+	assert.equal(second.isNew(StorageScope.WORKSPACE), false);
 	second.dispose();
 	dom.window.close();
 });
@@ -211,6 +221,7 @@ test("Browser storage reports malformed persisted documents and falls back", () 
 	});
 
 	assert.equal(storage.get("missing", StorageScope.PROFILE), undefined);
+	assert.equal(storage.isNew(StorageScope.PROFILE), false);
 	assert.equal(errors.length, 1);
 
 	storage.dispose();

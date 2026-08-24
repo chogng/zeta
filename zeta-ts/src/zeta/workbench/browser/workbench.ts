@@ -291,6 +291,7 @@ export class Workbench extends DisposableOwner {
 	private readonly logService: ILogService;
 	private readonly lifecycleService: ILifecycleService;
 	private readonly ownerWindow: Window;
+	private restoreActiveViewContainers: (() => void) | undefined;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
 
 	constructor(
@@ -561,12 +562,14 @@ export class Workbench extends DisposableOwner {
 		}));
 		const sidebar = this.own(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			storageService: storage,
 			localizationService,
 			ariaLabelKey: { bundle: "zeta.regions", key: "primarySidebar" },
 			viewsAriaLabelKey: { bundle: "zeta.regions", key: "primarySidebarViews" },
 		}));
 		const agentSidebar = this.own(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			storageService: storage,
 			localizationService,
 			id: "agentSidebar",
 			location: ViewContainerLocation.AgentSidebar,
@@ -633,10 +636,6 @@ export class Workbench extends DisposableOwner {
 		}));
 		services.set(IEditorPart, editor);
 		services.set(IEditorService, new BrowserEditorService(editor));
-		const sidebarCompositeDescriptor = requiredDefaultViewContainer(
-			viewDescriptors,
-			ViewContainerLocation.Sidebar,
-		);
 		const openSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -649,7 +648,7 @@ export class Workbench extends DisposableOwner {
 				);
 			}
 			if (!sidebar.getComposite(viewContainer.id)) {
-				sidebar.addComposite(new PaneComposite(sidebar.element, {
+				sidebar.addComposite(new PaneComposite(sidebar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -658,12 +657,10 @@ export class Workbench extends DisposableOwner {
 				}));
 			}
 			sidebar.showComposite(viewContainer.id);
-			sidebar.setActiveComposite(viewContainer.id);
 			const composite = sidebar.getComposite(viewContainer.id);
 			assertDefined(composite, `Sidebar Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
-		openSidebarComposite(sidebarCompositeDescriptor.id);
 		const openAgentSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -676,7 +673,7 @@ export class Workbench extends DisposableOwner {
 				);
 			}
 			if (!agentSidebar.getComposite(viewContainer.id)) {
-				agentSidebar.addComposite(new PaneComposite(agentSidebar.element, {
+				agentSidebar.addComposite(new PaneComposite(agentSidebar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -685,13 +682,13 @@ export class Workbench extends DisposableOwner {
 				}));
 			}
 			agentSidebar.showComposite(viewContainer.id);
-			agentSidebar.setActiveComposite(viewContainer.id);
 			const composite = agentSidebar.getComposite(viewContainer.id);
 			assertDefined(composite, `Agent Sidebar Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
 		const panel = this.own(new PanelPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			storageService: storage,
 			localizationService,
 			contextMenuProvider: contextMenus,
 			titleActions: {
@@ -704,10 +701,6 @@ export class Workbench extends DisposableOwner {
 		this.own(recentWorkspaces.onDidChange(() => {
 			editor.setWelcomeRecentProjects(welcomeRecentProjects());
 		}));
-		const panelCompositeDescriptor = requiredDefaultViewContainer(
-			viewDescriptors,
-			ViewContainerLocation.Panel,
-		);
 		const openPanelComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -720,7 +713,7 @@ export class Workbench extends DisposableOwner {
 				);
 			}
 			if (!panel.getComposite(viewContainer.id)) {
-				panel.addComposite(new PaneComposite(panel.element, {
+				panel.addComposite(new PaneComposite(panel.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -731,19 +724,15 @@ export class Workbench extends DisposableOwner {
 				}));
 			}
 			panel.showComposite(viewContainer.id);
-			panel.setActiveComposite(viewContainer.id);
 			const composite = panel.getComposite(viewContainer.id);
 			assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
 		const auxiliarybar = this.own(new AuxiliarybarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			storageService: storage,
 			localizationService,
 		}));
-		const auxiliaryViewContainer = requiredDefaultViewContainer(
-			viewDescriptors,
-			ViewContainerLocation.AuxiliaryBar,
-		);
 		const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
 
 		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
@@ -757,20 +746,14 @@ export class Workbench extends DisposableOwner {
 		]);
 		const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
-			defaultLayout: {
-				parts: {
-					...DEFAULT_WORKBENCH_LAYOUT.parts,
-					...defaultLayout?.parts,
-				},
-			},
+			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
+			defaultLayout,
 			storageService: storage,
 		}));
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
 		services.set(IWorkbenchLayoutService, layout);
 		this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
-		// Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
-		openPanelComposite(panelCompositeDescriptor.id);
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors
 				.getViewContainers(ViewContainerLocation.AuxiliaryBar)
@@ -781,7 +764,7 @@ export class Workbench extends DisposableOwner {
 				);
 			}
 			if (!auxiliarybar.getComposite(viewContainer.id)) {
-				auxiliarybar.addComposite(new PaneComposite(auxiliarybar.element, {
+				auxiliarybar.addComposite(new PaneComposite(auxiliarybar.domNode, {
 					viewContainer,
 					model: viewDescriptors.getViewContainerModel(viewContainer.id),
 					instantiationService,
@@ -792,18 +775,36 @@ export class Workbench extends DisposableOwner {
 				}));
 			}
 			auxiliarybar.showComposite(viewContainer.id);
-			auxiliarybar.setActiveComposite(viewContainer.id);
 			const composite = auxiliarybar.getComposite(viewContainer.id);
 			assertDefined(composite, `Auxiliary Bar Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
-		openAuxiliaryComposite(auxiliaryViewContainer.id);
-		if (layout.isPartVisible("agentSidebar")) {
-			openAgentSidebarComposite(requiredDefaultViewContainer(
+		this.restoreActiveViewContainers = () => {
+			openSidebarComposite(requiredViewContainerToRestore(
 				viewDescriptors,
-				ViewContainerLocation.AgentSidebar,
+				ViewContainerLocation.Sidebar,
+				sidebar.getCompositeIdToRestore(),
 			).id);
-		}
+			// Fixed Panel and Auxiliary Bar views may depend on the host layout during construction.
+			openPanelComposite(requiredViewContainerToRestore(
+				viewDescriptors,
+				ViewContainerLocation.Panel,
+				panel.getCompositeIdToRestore(),
+			).id);
+			openAuxiliaryComposite(requiredViewContainerToRestore(
+				viewDescriptors,
+				ViewContainerLocation.AuxiliaryBar,
+				auxiliarybar.getCompositeIdToRestore(),
+			).id);
+			if (layout.isPartVisible("agentSidebar")) {
+				openAgentSidebarComposite(requiredViewContainerToRestore(
+					viewDescriptors,
+					ViewContainerLocation.AgentSidebar,
+					agentSidebar.getCompositeIdToRestore(),
+				).id);
+			}
+		};
+		this.restoreActiveViewContainers();
 		const viewsService = new ViewsService({
 			viewDescriptorService: viewDescriptors,
 			openViewContainer: (container) => {
@@ -909,18 +910,22 @@ export class Workbench extends DisposableOwner {
 		this.workspaceContext.updateWorkspace(workspace);
 		this.editor.setWelcomeVisible(nextWorkbenchState === WorkbenchState.EMPTY);
 		this.workbenchLayout.restoreWorkspaceState();
+		this.restoreActiveViewContainers?.();
 		await this.restoreWorkingCopyBackups(this.workingCopyBackups, this.editor);
 	}
 }
 
-function requiredDefaultViewContainer(
+function requiredViewContainerToRestore(
 	service: IViewDescriptorService,
 	location: ViewContainerLocation,
+	containerId: string | undefined,
 ) {
-	const container = service.getDefaultViewContainer(location);
+	const container = service
+		.getViewContainers(location)
+		.find((candidate) => candidate.id === containerId);
 	if (!container) {
 		throw new Error(
-			`Workbench has no default ${location} view container`,
+			`Workbench has no ${location} view container to restore`,
 		);
 	}
 	return container;

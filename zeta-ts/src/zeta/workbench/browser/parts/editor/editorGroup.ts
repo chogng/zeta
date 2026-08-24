@@ -39,7 +39,7 @@ import { ActiveEditorContext } from "../../../common/contextkeys.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	readonly inputs: readonly EditorInput[];
 	readonly activeInput: EditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
@@ -105,8 +105,8 @@ interface EditorGroupEntry extends EditorTabDescriptor {
  * independent when the Part later contains multiple split groups.
  */
 export class EditorGroup extends DisposableOwner implements IEditorGroup {
-	readonly element: HTMLElement;
-	private readonly contentElement: HTMLDivElement;
+	readonly domNode: HTMLElement;
+	private readonly contentDomNode: HTMLDivElement;
 	private readonly registry: EditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
 	private readonly contextKeyService: IContextKeyService | undefined;
@@ -136,7 +136,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly titleActions: EditorTitleActions | undefined;
 	private readonly titleControl: EditorTitleControl;
 	private readonly welcome: EditorWelcome;
-	private readonly welcomeElement: HTMLElement;
+	private readonly welcomeDomNode: HTMLElement;
 	private readonly entries: EditorGroupEntry[] = [];
 	private welcomeVisible: boolean;
 	private activeEntry: EditorGroupEntry | undefined;
@@ -173,39 +173,39 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.createLineGutterDecorations = options.createLineGutterDecorations;
 		this.createDecorationSources = options.createDecorationSources;
 		this.titleActions = options.titleActions;
-		this.element = h(ownerDocument, "section");
-		this.element.className = "zeta-editor-group";
-		this.element.setAttribute("aria-label", "Editor group");
-		container.append(this.element);
+		this.domNode = h(ownerDocument, "section");
+		this.domNode.className = "zeta-editor-group";
+		this.domNode.setAttribute("aria-label", "Editor group");
+		container.append(this.domNode);
 		this.scopedContextKeyService = this.contextKeyService
-			? this.own(this.contextKeyService.createScoped(this.element))
+			? this.own(this.contextKeyService.createScoped(this.domNode))
 			: undefined;
 		this.activeEditorContext = this.scopedContextKeyService
 			? ActiveEditorContext.bindTo(this.scopedContextKeyService)
 			: undefined;
-		this.own(new DragAndDropObserver(this.element, {
+		this.own(new DragAndDropObserver(this.domNode, {
 			onDragOver: (event) => {
 				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
 				if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-				this.element.classList.add(DndCssClasses.DropTarget);
+				this.domNode.classList.add(DndCssClasses.DropTarget);
 			},
-			onDragLeave: () => this.element.classList.remove(DndCssClasses.DropTarget),
+			onDragLeave: () => this.domNode.classList.remove(DndCssClasses.DropTarget),
 			onDrop: (event) => {
 				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
 				event.stopPropagation();
-				this.element.classList.remove(DndCssClasses.DropTarget);
+				this.domNode.classList.remove(DndCssClasses.DropTarget);
 				options.dragAndDrop.drop(this, undefined, "after");
 				options.dragAndDrop.end();
 			},
-			onDragEnd: () => this.element.classList.remove(DndCssClasses.DropTarget),
+			onDragEnd: () => this.domNode.classList.remove(DndCssClasses.DropTarget),
 		}));
 		if (options.onDidActivate) {
-			this.own(addDisposableListener(this.element, "focusin", () => {
+			this.own(addDisposableListener(this.domNode, "focusin", () => {
 				options.onDidActivate?.();
 			}));
 		}
 		this.titleControl = this.own(new EditorTitleControl(
-			this.element,
+			this.domNode,
 			{
 				activate: (input) => {
 					this.activateEntry(this.requireEntry(input), true);
@@ -227,35 +227,35 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 				contextKeyService: this.scopedContextKeyService,
 			} : undefined,
 		));
-		this.contentElement = h(ownerDocument, "div");
-		this.contentElement.className = "zeta-editor-group-content";
+		this.contentDomNode = h(ownerDocument, "div");
+		this.contentDomNode.className = "zeta-editor-group-content";
 		const shortcuts = options.keybindingService
 			? this.own(new EditorGroupWatermark(
-				this.contentElement,
+				this.contentDomNode,
 				options.keybindingService,
 			))
 			: undefined;
 		const welcomeOptions: EditorWelcomeOptions = {
 			...options.welcome,
-			...(shortcuts ? { shortcuts: shortcuts.element } : {}),
+			...(shortcuts ? { shortcuts: shortcuts.domNode } : {}),
 		};
 		this.welcome = this.own(new EditorWelcome(
-			this.contentElement,
+			this.contentDomNode,
 			welcomeOptions,
 		));
-		this.welcomeElement = this.welcome.element;
+		this.welcomeDomNode = this.welcome.element;
 		this.welcomeVisible = options.welcomeVisible ?? true;
-		this.welcomeElement.hidden = !this.welcomeVisible;
-		this.element.append(
-			this.titleControl.element,
-			this.contentElement,
+		this.welcomeDomNode.hidden = !this.welcomeVisible;
+		this.domNode.append(
+			this.titleControl.domNode,
+			this.contentDomNode,
 		);
 		this.defer(() => {
 			this.cancelPendingOpen();
 			for (const entry of this.entries) entry.paneInstance.dispose();
 			this.entries.length = 0;
 		});
-		this.defer(() => this.element.remove());
+		this.defer(() => this.domNode.remove());
 		this.renderChrome();
 	}
 
@@ -340,13 +340,13 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			);
 		}
 		const paneInstance = new EditorPaneInstance(
-			this.contentElement,
+			this.contentDomNode,
 			pane,
 		);
 		setDisposableOwner(paneInstance, this);
 		this.pendingPane = paneInstance;
 		try {
-			pane.create(paneInstance.element);
+			pane.create(paneInstance.domNode);
 			paneInstance.setVisible(EditorPaneVisibility.Hidden);
 			await pane.setInput(input, paneInstance.signal);
 		} catch (error) {
@@ -545,14 +545,14 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		if (this.ordinaryContent) {
 			children.push(this.ordinaryContent);
 		} else {
-			this.welcomeElement.hidden = !this.welcomeVisible || this.entries.length > 0;
+			this.welcomeDomNode.hidden = !this.welcomeVisible || this.entries.length > 0;
 			children.push(
-				this.welcomeElement,
-				...this.entries.map(({ paneInstance }) => paneInstance.element),
+				this.welcomeDomNode,
+				...this.entries.map(({ paneInstance }) => paneInstance.domNode),
 			);
 		}
-		if (this.pendingPane) children.push(this.pendingPane.element);
-		this.contentElement.replaceChildren(...children);
+		if (this.pendingPane) children.push(this.pendingPane.domNode);
+		this.contentDomNode.replaceChildren(...children);
 	}
 
 	private renderChrome(): void {
@@ -561,7 +561,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 
 	private dragIsOverTitle(event: DragEvent): boolean {
 		const target = event.target as Node | null;
-		return target ? this.titleControl.element.contains(target) : false;
+		return target ? this.titleControl.domNode.contains(target) : false;
 	}
 
 	private insertEntry(entry: EditorGroupEntry, index: number | undefined): void {
@@ -611,7 +611,7 @@ function applyEditorOpenOptions(pane: IEditorPane, options: EditorOpenOptions): 
 let editorPaneId = 0;
 
 class EditorPaneInstance extends DisposableOwner {
-	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 	readonly signal: AbortSignal;
 	readonly panelId: string;
 	readonly tabId: string;
@@ -629,13 +629,13 @@ class EditorPaneInstance extends DisposableOwner {
 			ownerDocument.defaultView?.AbortController ?? AbortController;
 		const abortController = new AbortControllerConstructor();
 		this.signal = abortController.signal;
-		this.element = h(ownerDocument, "div");
-		this.element.id = this.panelId;
-		this.element.className = "zeta-editor-pane-host";
-		this.element.setAttribute("role", "tabpanel");
-		this.element.setAttribute("aria-labelledby", this.tabId);
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode = h(ownerDocument, "div");
+		this.domNode.id = this.panelId;
+		this.domNode.className = "zeta-editor-pane-host";
+		this.domNode.setAttribute("role", "tabpanel");
+		this.domNode.setAttribute("aria-labelledby", this.tabId);
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 		this.own(pane);
 		this.defer(() => pane.clearInput());
 		this.defer(() => pane.setVisible(EditorPaneVisibility.Hidden));
@@ -643,7 +643,7 @@ class EditorPaneInstance extends DisposableOwner {
 	}
 
 	setVisible(visibility: EditorPaneVisibility): void {
-		this.element.hidden = visibility === EditorPaneVisibility.Hidden;
+		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
 		this.pane.setVisible(visibility);
 	}
 }

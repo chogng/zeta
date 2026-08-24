@@ -13,7 +13,7 @@ export abstract class CompositePart extends WorkbenchPart {
 
 	protected constructor(container: HTMLElement, id: string) {
 		super(container, id);
-		this.contentElement.classList.add("zeta-composite-content");
+		this.contentDomNode.classList.add("zeta-composite-content");
 		this.defer(() => this.composites.clear());
 	}
 
@@ -40,7 +40,7 @@ export abstract class CompositePart extends WorkbenchPart {
 			this.activeComposite.element.remove();
 		}
 		this.activeComposite = composite;
-		this.contentElement.append(composite.element);
+		this.contentDomNode.append(composite.element);
 		composite.setVisible(true);
 	}
 

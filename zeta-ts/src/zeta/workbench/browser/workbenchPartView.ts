@@ -34,10 +34,10 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 		readonly part: WorkbenchPart,
 		options: WorkbenchPartViewOptions = {},
 	) {
-		const frame = h(part.element.ownerDocument, "div");
+		const frame = h(part.domNode.ownerDocument, "div");
 		this.frame = frame;
 		frame.className = "zeta-workbench-part-frame";
-		frame.append(part.element);
+		frame.append(part.domNode);
 		this.snap = options.snap === true;
 	}
 

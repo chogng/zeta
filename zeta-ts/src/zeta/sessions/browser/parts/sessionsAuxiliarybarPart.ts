@@ -22,7 +22,7 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
 	}
 
 	private render(): void {
-		const content = this.contentElement;
+		const content = this.contentDomNode;
 		const heading = h(content.ownerDocument, "h2");
 		heading.textContent = "Session context";
 		const selection = this.viewService.activeSelection;

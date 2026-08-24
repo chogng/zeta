@@ -35,7 +35,7 @@ export class NativeMenubarControl extends DisposableOwner
 	private revision = 0;
 	private updateTail = Promise.resolve();
 
-	readonly element = undefined;
+	readonly domNode = undefined;
 
 	constructor(
 		menuService: IMenuService,

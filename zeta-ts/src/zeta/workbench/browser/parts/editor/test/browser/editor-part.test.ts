@@ -185,15 +185,15 @@ test("EditorPart shows command shortcuts until an editor opens", async () => {
 		keybindingService: keybindings,
 		registry,
 	});
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 
 	assert.match(
-		editor.element.textContent ?? "",
+		editor.domNode.textContent ?? "",
 		/Open Editor.*(?:Ctrl\+|⌘)O/,
 	);
 	await editor.openEditor(input("C:\\project\\main.ts"));
 	assert.equal(
-		editor.element.querySelector<HTMLElement>(
+		editor.domNode.querySelector<HTMLElement>(
 			".zeta-editor-group-watermark",
 		)?.hidden,
 		true,
@@ -220,9 +220,9 @@ test("EditorPart renders the project welcome page and dispatches available cards
 			recentProjects: [{ name: "zeta", path: "~/Desktop" }],
 		},
 	});
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 
-	const welcome = editor.element.querySelector<HTMLElement>(
+	const welcome = editor.domNode.querySelector<HTMLElement>(
 		".zeta-editor-group-welcome",
 	);
 	assert.ok(welcome);
@@ -261,9 +261,9 @@ test("EditorPart updates Recent projects and expands the complete list", () => {
 			})),
 		},
 	});
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 
-	const welcome = editor.element.querySelector<HTMLElement>(".zeta-editor-group-welcome");
+	const welcome = editor.domNode.querySelector<HTMLElement>(".zeta-editor-group-welcome");
 	assert.ok(welcome);
 	assert.equal(welcome.querySelectorAll(".zeta-editor-group-welcome-recent-item").length, 5);
 	const viewAll = welcome.querySelector<HTMLButtonElement>(".zeta-editor-group-welcome-view-all");
@@ -344,7 +344,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		() => trackPane(panes, "zeta.editor.codeBlockEditorWidget"),
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 
 	const typescript = input("C:\\project\\main.ts");
 	const alphaPane = await editor.openEditor(typescript);
@@ -354,7 +354,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(editor.activeInput, typescript);
 	assert.deepEqual(editor.activeGroup.inputs, [typescript]);
 	assert.equal(
-		editor.element.querySelector(
+		editor.domNode.querySelector(
 			".zeta-editor-pane-host:not([hidden])",
 		)?.textContent,
 		"stanza.editor.code",
@@ -363,7 +363,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		EditorPaneVisibility.Hidden,
 		EditorPaneVisibility.Visible,
 	]);
-	const titleControl = editor.element.querySelector(
+	const titleControl = editor.domNode.querySelector(
 		".zeta-editor-title-control",
 	);
 	const tablist = titleControl?.querySelector(
@@ -397,7 +397,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	const firstPanelId = firstTab?.getAttribute("aria-controls");
 	assert.ok(firstPanelId);
 	assert.equal(
-		editor.element.querySelector(`#${firstPanelId}`)?.getAttribute("role"),
+		editor.domNode.querySelector(`#${firstPanelId}`)?.getAttribute("role"),
 		"tabpanel",
 	);
 
@@ -412,7 +412,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(editor.activeInput, markdown);
 	assert.deepEqual(editor.activeGroup.inputs, [typescript, markdown]);
 	assert.equal(
-		editor.element.querySelector(
+		editor.domNode.querySelector(
 			".zeta-editor-pane-host:not([hidden])",
 		)?.textContent,
 		"zeta.editor.codeBlockEditorWidget",
@@ -422,7 +422,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		EditorPaneVisibility.Hidden,
 	]);
 	assert.deepEqual(panes[1]?.dimension, { width: 800, height: 565 });
-	const tabs = editor.element.querySelectorAll<HTMLElement>("[role='tab']");
+	const tabs = editor.domNode.querySelectorAll<HTMLElement>("[role='tab']");
 	assert.equal(tabs.length, 2);
 	assert.deepEqual(
 		[...tabs].map((tab) => tab.getAttribute("aria-selected")),
@@ -434,11 +434,11 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(editor.activePane, alphaPane);
 	assert.equal(panes[0]?.focusCount, 2);
 	assert.deepEqual(
-		[...editor.element.querySelectorAll<HTMLElement>("[role='tab']")]
+		[...editor.domNode.querySelectorAll<HTMLElement>("[role='tab']")]
 			.map((tab) => tab.getAttribute("aria-selected")),
 		["true", "false"],
 	);
-	editor.element.querySelector<HTMLButtonElement>(
+	editor.domNode.querySelector<HTMLButtonElement>(
 		".zeta-editor-tabs-control .zeta-tab-actions button",
 	)?.click();
 	assert.equal(panes[0]?.disposed, true);
@@ -446,7 +446,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(editor.activePane, codeBlockEditorWidgetPane);
 	assert.deepEqual(editor.activeGroup.inputs, [markdown]);
 	assert.equal(
-		editor.element.querySelectorAll("[role='tab']").length,
+		editor.domNode.querySelectorAll("[role='tab']").length,
 		1,
 	);
 
@@ -456,7 +456,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.equal(editor.activePane, undefined);
 	assert.equal(editor.activeInput, undefined);
 	assert.equal(panes[1]?.disposed, true);
-	assert.equal(editor.element.textContent, "Welcome");
+	assert.equal(editor.domNode.textContent, "Welcome");
 
 	editor.dispose();
 	dom.window.close();
@@ -472,28 +472,28 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 		() => trackPane(panes, "stanza.editor.code"),
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
 	const third = input("C:\\project\\third.ts");
 
 	await editor.openEditor(first, { pinned: false });
 	assert.deepEqual(editor.activeGroup.inputs, [first]);
-	assert.equal(editor.element.querySelectorAll(".zeta-tab.preview").length, 1);
+	assert.equal(editor.domNode.querySelectorAll(".zeta-tab.preview").length, 1);
 
 	await editor.openEditor(second, { pinned: false });
 	assert.deepEqual(editor.activeGroup.inputs, [second]);
 	assert.equal(panes[0]?.disposed, true);
-	assert.equal(editor.element.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "second.ts");
+	assert.equal(editor.domNode.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "second.ts");
 
 	await editor.openEditor(second, { pinned: true });
 	assert.deepEqual(editor.activeGroup.inputs, [second]);
-	assert.equal(editor.element.querySelector(".zeta-tab.preview"), null);
+	assert.equal(editor.domNode.querySelector(".zeta-tab.preview"), null);
 
 	await editor.openEditor(third, { pinned: false });
 	assert.deepEqual(editor.activeGroup.inputs, [second, third]);
-	assert.equal(editor.element.querySelectorAll(".zeta-tab.preview").length, 1);
-	assert.equal(editor.element.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "third.ts");
+	assert.equal(editor.domNode.querySelectorAll(".zeta-tab.preview").length, 1);
+	assert.equal(editor.domNode.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "third.ts");
 
 	editor.dispose();
 	dom.window.close();
@@ -505,7 +505,7 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const panes: TestEditorPane[] = [];
 	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	const sourceInput = input("C:\\project\\source.ts");
 	const previewInput = input("C:\\project\\preview.ts");
 	const pinnedInput = input("C:\\project\\pinned.ts");
@@ -537,7 +537,7 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	const panes: TestEditorPane[] = [];
 	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	editor.layout({ width: 900, height: 600 });
 	const first = input("C:\\project\\first.ts");
 	const second = input("C:\\project\\second.ts");
@@ -555,7 +555,7 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	await editor.applyWorkingSet("empty", { preserveFocus: true });
 	assert.equal(editor.groups.length, 1);
 	assert.deepEqual(editor.groups[0]?.inputs, []);
-	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 0);
+	assert.equal(editor.domNode.querySelectorAll(".zeta-editor-pane-host").length, 0);
 	assert.equal(originalPanes.every(pane => pane.disposed), true);
 
 	await editor.applyWorkingSet(saved, { preserveFocus: true });
@@ -567,10 +567,10 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	assert.equal(editor.groups[0]?.isPreview(editor.groups[0]!.inputs[1]!), true);
 	assert.equal(editor.groups[1]?.activeInput?.resource.fsPath, third.resource.fsPath);
 	assert.equal(editor.activeGroup, editor.groups[1]);
-	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 4);
+	assert.equal(editor.domNode.querySelectorAll(".zeta-editor-pane-host").length, 4);
 
 	editor.dispose();
-	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 0);
+	assert.equal(editor.domNode.querySelectorAll(".zeta-editor-pane-host").length, 0);
 	dom.window.close();
 });
 
@@ -609,13 +609,13 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		},
 	});
 	services.set(IEditorPart, editor);
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
 	assert.equal(contextKeys.getValue(ActiveEditorContext.key), "stanza.editor.code");
 	editor.layout({ width: 800, height: 600 });
 
-	const toolbar = editor.element.querySelector(
+	const toolbar = editor.domNode.querySelector(
 		".zeta-editor-title-actions > .zeta-toolbar",
 	);
 	assert.deepEqual(
@@ -644,13 +644,13 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		[[activeInput], [activeInput]],
 	);
 	assert.equal(
-		editor.element.querySelectorAll(
+		editor.domNode.querySelectorAll(
 			":scope .zeta-split-view > .zeta-split-view-pane",
 		).length,
 		2,
 	);
 	assert.equal(
-		editor.element.querySelectorAll(
+		editor.domNode.querySelectorAll(
 			":scope .zeta-split-view > .zeta-sash",
 		).length,
 		1,
@@ -686,7 +686,7 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
 		},
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	const workingInput = input("C:\\project\\document.ok");
 	const workingPane = await editor.openEditor(workingInput);
 
@@ -718,7 +718,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 		},
 	));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	dom.window.document.body.append(editor.element);
+	dom.window.document.body.append(editor.domNode);
 	const opening = editor.openEditor(input("C:\\project\\document.slow"));
 	const content = h(dom.window.document, "div");
 	content.textContent = "Replacement";
@@ -731,7 +731,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 		EditorOpenSupersededError,
 	);
 	assert.equal(editor.activePane, undefined);
-	assert.equal(editor.element.textContent, "Replacement");
+	assert.equal(editor.domNode.textContent, "Replacement");
 
 	editor.dispose();
 	dom.window.close();

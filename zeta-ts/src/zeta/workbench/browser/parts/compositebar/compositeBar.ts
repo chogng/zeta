@@ -44,7 +44,7 @@ const OVERFLOW_ACTION_ID = "zeta.compositeBar.overflow";
  * persisted state for the selected Composite.
  */
 export class CompositeBar extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly localizationService: ILocalizationService | undefined;
 	private readonly location: ViewContainerLocation;
@@ -75,13 +75,13 @@ export class CompositeBar extends DisposableOwner {
 		this.contextMenuProvider = options.contextMenuProvider;
 		this.overflowEnabled = presentation === "label" && this.contextMenuProvider !== undefined;
 		this.containerFilter = options.containerFilter ?? (() => true);
-		this.element = h(container.ownerDocument, "section");
-		this.element.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
-		this.element.setAttribute("aria-label", options.ariaLabel);
-		this.element.dataset.viewContainerLocation = options.location;
-		container.append(this.element);
-		this.defer(() => this.element.remove());
-		this.actionBar = this.own(new ActionBar(this.element, {
+		this.domNode = h(container.ownerDocument, "section");
+		this.domNode.className = `zeta-composite-bar zeta-composite-bar-${presentation}`;
+		this.domNode.setAttribute("aria-label", options.ariaLabel);
+		this.domNode.dataset.viewContainerLocation = options.location;
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
+		this.actionBar = this.own(new ActionBar(this.domNode, {
 			ariaLabel: options.ariaLabel,
 			ariaRole: "tablist",
 			actionViewItemProvider: (action): ActionViewItem => {
@@ -115,7 +115,7 @@ export class CompositeBar extends DisposableOwner {
 			if (location === this.location) this.render();
 		}));
 		if (this.localizationService) this.own(this.localizationService.onDidChange(() => this.render()));
-		if (this.overflowEnabled) this.own(observeResize(this.element, () => this.layout()));
+		if (this.overflowEnabled) this.own(observeResize(this.domNode, () => this.layout()));
 		this.render();
 	}
 
@@ -124,7 +124,7 @@ export class CompositeBar extends DisposableOwner {
 	}
 
 	setAriaLabel(label: string): void {
-		this.element.setAttribute("aria-label", label);
+		this.domNode.setAttribute("aria-label", label);
 		this.actionBar.element.setAttribute("aria-label", label);
 	}
 
@@ -143,7 +143,7 @@ export class CompositeBar extends DisposableOwner {
 	/** Reconciles visible label tabs with the width assigned by the hosting Part. */
 	layout(): void {
 		if (!this.overflowEnabled || !this.measureTabWidths()) return;
-		const availableWidth = this.element.clientWidth;
+		const availableWidth = this.domNode.clientWidth;
 		if (availableWidth <= 0) return;
 
 		const visibleContainers = this.visibleContainersForWidth(availableWidth, OVERFLOW_BUTTON_WIDTH + this.actionBarItemGap);

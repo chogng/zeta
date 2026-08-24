@@ -45,7 +45,7 @@ export const EditorGroupWatermarkEntries =
 
 /** Renders command shortcuts when an editor group has no active editor. */
 export class EditorGroupWatermark extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	private readonly rendered = this.own(new ResettableDisposableGroup());
 	private readonly keybindingService: IKeybindingService;
 
@@ -56,11 +56,11 @@ export class EditorGroupWatermark extends DisposableOwner {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.keybindingService = keybindingService;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "zeta-editor-group-watermark-shortcuts";
-		this.element.setAttribute("aria-label", "Editor shortcuts");
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode = h(ownerDocument, "div");
+		this.domNode.className = "zeta-editor-group-watermark-shortcuts";
+		this.domNode.setAttribute("aria-label", "Editor shortcuts");
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 		this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
 		this.own(
 			this.keybindingService.onDidUpdateKeybindings(() => this.render()),
@@ -70,7 +70,7 @@ export class EditorGroupWatermark extends DisposableOwner {
 
 	private render(): void {
 		this.rendered.clear();
-		const ownerDocument = this.element.ownerDocument;
+		const ownerDocument = this.domNode.ownerDocument;
 		const rows = EditorGroupWatermarkEntries.getEntries()
 			.flatMap((entry) => {
 				const keybinding =
@@ -89,6 +89,6 @@ export class EditorGroupWatermark extends DisposableOwner {
 				row.append(label, shortcut.element);
 				return [row];
 			});
-		this.element.replaceChildren(...rows);
+		this.domNode.replaceChildren(...rows);
 	}
 }

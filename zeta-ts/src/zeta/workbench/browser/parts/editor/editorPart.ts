@@ -42,7 +42,7 @@ export { EditorOpenSupersededError } from "./editorGroup.js";
 
 /** Editor-region operations available to Workbench contributions. */
 export interface IEditorPart {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	readonly groups: readonly IEditorGroup[];
 	readonly activeGroup: IEditorGroup;
 	readonly activeInput: EditorInput | undefined;
@@ -120,8 +120,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	) {
 		super(container, "editor");
 		const ownerDocument = container.ownerDocument;
-		this.titleElement.remove();
-		this.element.setAttribute("aria-label", "Editor");
+		this.titleDomNode.remove();
+		this.domNode.setAttribute("aria-label", "Editor");
 		this.groupOptions = {
 			registry: options.registry ?? EditorPanes,
 			configurationService: options.configurationService,
@@ -163,7 +163,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			this.dropEditor(event);
 		});
 		this.splitView = this.own(new SplitView(
-			this.contentElement,
+			this.contentDomNode,
 			"horizontal",
 		));
 		const initial = this.createGroup();
@@ -171,7 +171,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this._activeGroup = initial.group;
 		this.updateActiveEditorContext();
 		this.splitView.addView(initial.view);
-		this.own(observeElementSize(this.contentElement, size => this.layout(size)));
+		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
 	}
 
 	get groups(): readonly IEditorGroup[] {
@@ -280,7 +280,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 
 	private createGroup(): EditorGroupHost {
 		let group: EditorGroup;
-		group = this.own(new EditorGroup(this.contentElement, {
+		group = this.own(new EditorGroup(this.contentDomNode, {
 			...this.groupOptions,
 			...(this.groupOptions.welcome ? {
 				welcome: { ...this.groupOptions.welcome, recentProjects: this.welcomeRecentProjects },
@@ -379,7 +379,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			...group,
 			inputs: group.editors.map(editor => this.inputSerializers.deserialize(editor.input)),
 		}));
-		const hadEditorFocus = this.element.contains(this.element.ownerDocument.activeElement);
+		const hadEditorFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
 		for (const host of [...this._groups]) {
 			for (const input of [...host.group.inputs]) host.group.closeEditor(input);
 		}
@@ -463,7 +463,7 @@ class EditorGroupSplitView implements ISplitViewView {
 	constructor(readonly group: EditorGroup) {}
 
 	get element(): HTMLElement {
-		return this.group.element;
+		return this.group.domNode;
 	}
 
 	layout(size: number, _offset: number, orthogonalSize: number): void {

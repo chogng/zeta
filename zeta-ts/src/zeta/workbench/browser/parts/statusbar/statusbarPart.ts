@@ -24,12 +24,12 @@ export class StatusbarPart extends WorkbenchPart {
 		super(container, "statusbar");
 		const ownerDocument = container.ownerDocument;
 		this.statusbarService = statusbarService;
-		this.titleElement.remove();
-		this.contentElement.remove();
-		this.element.setAttribute("role", "status");
-		this.element.setAttribute("aria-live", "polite");
-		this.element.tabIndex = 0;
-		this.own(addDisposableListener(this.element, "keydown", (event) => {
+		this.titleDomNode.remove();
+		this.contentDomNode.remove();
+		this.domNode.setAttribute("role", "status");
+		this.domNode.setAttribute("aria-live", "polite");
+		this.domNode.tabIndex = 0;
+		this.own(addDisposableListener(this.domNode, "keydown", (event) => {
 			if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 			if (event.key === "ArrowRight") {
 				this.focusNextEntry();
@@ -42,12 +42,12 @@ export class StatusbarPart extends WorkbenchPart {
 			event.preventDefault();
 			event.stopPropagation();
 		}));
-		this.own(addDisposableListener(this.element, "mouseover", (event) => this.updateCompactHover(event.target)));
-		this.own(addDisposableListener(this.element, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
+		this.own(addDisposableListener(this.domNode, "mouseover", (event) => this.updateCompactHover(event.target)));
+		this.own(addDisposableListener(this.domNode, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
 
 		this.leftItems = createItemsContainer(ownerDocument, "left");
 		this.rightItems = createItemsContainer(ownerDocument, "right");
-		this.element.append(this.leftItems, this.rightItems);
+		this.domNode.append(this.leftItems, this.rightItems);
 
 		this.defer(() => this.disposeItems());
 		this.own(this.statusbarService.onDidChangeEntries(() => this.render()));
@@ -75,7 +75,7 @@ export class StatusbarPart extends WorkbenchPart {
 		entries: readonly IStatusbarEntryItem[],
 	): void {
 		container.replaceChildren();
-		let compactGroupElement: HTMLDivElement | undefined;
+		let compactGroupDomNode: HTMLDivElement | undefined;
 		let compactGroupId: string | undefined;
 		for (let index = 0; index < entries.length; index += 1) {
 			const entry = entries[index];
@@ -99,18 +99,18 @@ export class StatusbarPart extends WorkbenchPart {
 			}
 			const belongsToCompactRun = entry.compactGroup !== undefined && (entries[index - 1]?.compactGroup === entry.compactGroup || entries[index + 1]?.compactGroup === entry.compactGroup);
 			if (belongsToCompactRun) {
-				if (!compactGroupElement || compactGroupId !== entry.compactGroup) {
-					compactGroupElement = h(container.ownerDocument, "div");
-					compactGroupElement.className = "zeta-statusbar-compact-group";
-					compactGroupElement.dataset.compactGroup = entry.compactGroup;
+				if (!compactGroupDomNode || compactGroupId !== entry.compactGroup) {
+					compactGroupDomNode = h(container.ownerDocument, "div");
+					compactGroupDomNode.className = "zeta-statusbar-compact-group";
+					compactGroupDomNode.dataset.compactGroup = entry.compactGroup;
 					compactGroupId = entry.compactGroup;
-					container.append(compactGroupElement);
+					container.append(compactGroupDomNode);
 				}
-				compactGroupElement.append(item.element);
+				compactGroupDomNode.append(item.domNode);
 			} else {
-				compactGroupElement = undefined;
+				compactGroupDomNode = undefined;
 				compactGroupId = undefined;
-				container.append(item.element);
+				container.append(item.domNode);
 			}
 		}
 	}
@@ -151,7 +151,7 @@ export class StatusbarPart extends WorkbenchPart {
 
 	private itemForTarget(target: EventTarget | null): StatusbarEntryItem | undefined {
 		if (!isNode(target)) return undefined;
-		return [...this.items.values()].find((item) => item.element.contains(target));
+		return [...this.items.values()].find((item) => item.domNode.contains(target));
 	}
 
 	private updateCompactHover(target: EventTarget | null): void {

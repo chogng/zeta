@@ -31,7 +31,7 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 		newSession.type = "button";
 		newSession.className = "zeta-sessions-button zeta-sessions-titlebar-new-session";
 		newSession.textContent = "New session";
-		this.contentElement.append(returnButton, backButton, forwardButton, title, newSession);
+		this.contentDomNode.append(returnButton, backButton, forwardButton, title, newSession);
 		this.own(addDisposableListener(returnButton, "click", () => delegate.returnToWorkbench()));
 		this.own(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
 		this.own(addDisposableListener(forwardButton, "click", () => viewService.navigateForward()));

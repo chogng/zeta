@@ -1,5 +1,6 @@
 import "./panelpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
+import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
@@ -8,6 +9,7 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly contextMenuProvider?: IContextMenuProvider;
 	readonly titleActions?: PaneCompositeTitleActions;
@@ -20,6 +22,7 @@ export class PanelPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: PanelPartOptions) {
 		super(container, {
 			viewDescriptorService: options.viewDescriptorService,
+			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: "panel",
 			location: ViewContainerLocation.Panel,
@@ -31,8 +34,8 @@ export class PanelPart extends PaneCompositePart {
 			compositeBarContextMenuProvider: options.contextMenuProvider,
 			titleActions: options.titleActions,
 		});
-		this.titleElement.classList.add("zeta-panel-title-control");
-		this.titleActionsSlotElement.classList.add("zeta-panel-title-actions");
+		this.titleDomNode.classList.add("zeta-panel-title-control");
+		this.titleActionsSlotDomNode.classList.add("zeta-panel-title-actions");
 	}
 
 	override showComposite(compositeId: string): void {

@@ -11,9 +11,9 @@ import { h } from "../../base/browser/dom.js";
  * delegates the resulting pixel dimensions through `layout`.
  */
 export abstract class WorkbenchPart extends DisposableOwner {
-	readonly element: HTMLElement;
-	protected readonly titleElement: HTMLDivElement;
-	protected readonly contentElement: HTMLDivElement;
+	readonly domNode: HTMLElement;
+	protected readonly titleDomNode: HTMLDivElement;
+	protected readonly contentDomNode: HTMLDivElement;
 	private readonly _onDidChangeConstraints = this.own(new Emitter<void>());
 
 	readonly onDidChangeConstraints: Event<void> =
@@ -22,17 +22,17 @@ export abstract class WorkbenchPart extends DisposableOwner {
 	protected constructor(container: HTMLElement, id: string) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "section");
-		this.element = element;
-		this.defer(() => element.remove());
-		element.className = `zeta-workbench-part zeta-workbench-${id}`;
-		element.dataset.part = id;
-		this.titleElement = h(ownerDocument, "div");
-		this.titleElement.className = "zeta-workbench-part-title";
-		this.contentElement = h(ownerDocument, "div");
-		this.contentElement.className = "zeta-workbench-part-content";
-		element.append(this.titleElement, this.contentElement);
-		container.append(element);
+		const domNode = h(ownerDocument, "section");
+		this.domNode = domNode;
+		this.defer(() => domNode.remove());
+		domNode.className = `zeta-workbench-part zeta-workbench-${id}`;
+		domNode.dataset.part = id;
+		this.titleDomNode = h(ownerDocument, "div");
+		this.titleDomNode.className = "zeta-workbench-part-title";
+		this.contentDomNode = h(ownerDocument, "div");
+		this.contentDomNode.className = "zeta-workbench-part-content";
+		domNode.append(this.titleDomNode, this.contentDomNode);
+		container.append(domNode);
 	}
 
 	get minimumWidth(): number { return 0; }
@@ -43,7 +43,7 @@ export abstract class WorkbenchPart extends DisposableOwner {
 	layout(_dimension: IDimension): void {}
 
 	setVisible(visible: boolean): void {
-		this.element.hidden = !visible;
+		this.domNode.hidden = !visible;
 	}
 
 	/** Notifies the runtime layout after a subclass changes its constraints. */

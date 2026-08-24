@@ -142,6 +142,7 @@ class TestStorageService implements IStorageService {
 	store(key: string, value: StorageValue, scope: StorageScope, target: StorageTarget): void { if (value === undefined || value === null) this.remove(key, scope); else this.values.set(`${scope}:${key}`, String(value)); this.changeEmitter.fire({ key, scope, target, external: false }); }
 	remove(key: string, scope: StorageScope): void { this.values.delete(`${scope}:${key}`); }
 	keys(scope: StorageScope): readonly string[] { return [...this.values.keys()].filter(key => key.startsWith(`${scope}:`)).map(key => key.slice(scope.length + 1)); }
+	isNew(_scope: StorageScope): boolean { return false; }
 	async flush(reason: WillSaveStateReason = WillSaveStateReason.PERIODIC): Promise<void> { this.saveEmitter.fire({ reason }); }
 }
 

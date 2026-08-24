@@ -13,7 +13,7 @@ export class SessionsSidebarPart extends WorkbenchPart {
 
 	constructor(container: HTMLElement, sessionService: ISessionsManagementService, viewService: ISessionsViewService) {
 		super(container, "sidebar");
-		this.list = this.own(new SessionsList(this.contentElement, sessionService, viewService, "Sessions", "New session"));
+		this.list = this.own(new SessionsList(this.contentDomNode, sessionService, viewService, "Sessions", "New session"));
 	}
 
 	focus(): void { this.list.focus(); }

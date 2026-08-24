@@ -22,7 +22,7 @@ const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
 const DEFAULT_PANEL_HEIGHT = 200;
 const EDITOR_LAYOUT_PRIORITY = "high" as const;
 
-/** Host defaults used only when a layout value has not already been persisted. */
+/** Host initial layout for a new workspace, or explicit visibility overrides when forced. */
 export interface WorkbenchDefaultLayout {
 	readonly parts?: {
 		readonly sidebar?: boolean;
@@ -30,6 +30,8 @@ export interface WorkbenchDefaultLayout {
 		readonly agentSidebar?: boolean;
 		readonly panel?: boolean;
 	};
+	/** Applies explicitly supplied Part visibility even when workspace state exists. */
+	readonly force?: boolean;
 }
 
 /** The durable, mutable portion of Workbench layout state. */
@@ -55,6 +57,8 @@ export interface WorkbenchLayoutState {
 
 export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
+	/** Product fallback used whenever no persisted or host-supplied value applies. */
+	readonly fallbackPartVisibility?: WorkbenchDefaultLayout["parts"];
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly storageService?: IStorageService;
 }
@@ -77,7 +81,7 @@ export class WorkbenchLayout
 	);
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
-	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 
 	constructor(
 		container: Element,
@@ -86,10 +90,10 @@ export class WorkbenchLayout
 	) {
 		super();
 		validateParts(parts);
-		this.element = h(container.ownerDocument, "div");
-		this.element.className = "zeta-workbench-layout";
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode = h(container.ownerDocument, "div");
+		this.domNode.className = "zeta-workbench-layout";
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 
 		for (const partId of workbenchPartIds) {
 			this.views.set(
@@ -100,12 +104,21 @@ export class WorkbenchLayout
 			);
 		}
 		const initialDimension = resolveInitialDimension(
-			this.element,
+			this.domNode,
 			options.initialDimension,
+		);
+		validateWorkbenchDefaultLayout(options.defaultLayout);
+		const fallbackDefaults = createDefaultWorkbenchLayoutState(
+			options.fallbackPartVisibility,
 		);
 		this.stateModel = new WorkbenchLayoutStateModel(
 			options.storageService,
-			createDefaultWorkbenchLayoutState(options.defaultLayout),
+			fallbackDefaults,
+			createDefaultWorkbenchLayoutState({
+				...options.fallbackPartVisibility,
+				...options.defaultLayout?.parts,
+			}),
+			options.defaultLayout,
 		);
 		const initialState = this.stateModel.state;
 		this.projectPartFrameInsets(
@@ -115,7 +128,7 @@ export class WorkbenchLayout
 			initialState.panel.visible,
 		);
 		this.grid = this.own(SerializableGrid.deserialize(
-			this.element,
+			this.domNode,
 			createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
 			{ fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
 			{
@@ -143,7 +156,7 @@ export class WorkbenchLayout
 		};
 	}
 
-	layout(dimension: IDimension = getClientArea(this.element)): void {
+	layout(dimension: IDimension = getClientArea(this.domNode)): void {
 		assertDimension(dimension);
 		this.projectPartFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);
@@ -470,12 +483,8 @@ function assertDimension(dimension: IDimension): void {
 }
 
 function createDefaultWorkbenchLayoutState(
-	defaultLayout: WorkbenchDefaultLayout | undefined,
+	parts: WorkbenchDefaultLayout["parts"] | undefined,
 ): WorkbenchLayoutState {
-	if (defaultLayout !== undefined && !isRecord(defaultLayout)) {
-		throw new TypeError("Workbench default layout must be an object");
-	}
-	const parts = defaultLayout?.parts;
 	if (parts !== undefined && !isRecord(parts)) {
 		throw new TypeError("Workbench default layout Parts must be an object");
 	}
@@ -498,6 +507,21 @@ function createDefaultWorkbenchLayoutState(
 			visible: defaultPartVisibility(parts, "panel", true),
 		},
 	};
+}
+
+function validateWorkbenchDefaultLayout(
+	defaultLayout: WorkbenchDefaultLayout | undefined,
+): void {
+	if (defaultLayout === undefined) return;
+	if (!isRecord(defaultLayout)) {
+		throw new TypeError("Workbench default layout must be an object");
+	}
+	if (defaultLayout.parts !== undefined && !isRecord(defaultLayout.parts)) {
+		throw new TypeError("Workbench default layout Parts must be an object");
+	}
+	if (defaultLayout.force !== undefined && typeof defaultLayout.force !== "boolean") {
+		throw new TypeError("Workbench default layout force must be boolean");
+	}
 }
 
 function defaultPartVisibility(
@@ -561,12 +585,17 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 class WorkbenchLayoutStateModel {
 	constructor(
 		private readonly storageService: IStorageService | undefined,
-		private readonly defaults: WorkbenchLayoutState,
+		private readonly fallbackDefaults: WorkbenchLayoutState,
+		private readonly initialDefaults: WorkbenchLayoutState,
+		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
 	) {}
 
 	get state(): WorkbenchLayoutState {
 		const storage = this.storageService;
-		if (!storage) return this.defaults;
+		const defaults = this.shouldApplyDefaultLayout(storage)
+			? this.initialDefaults
+			: this.fallbackDefaults;
+		if (!storage) return defaults;
 		return {
 			version: 3,
 			sidebar: {
@@ -575,12 +604,14 @@ class WorkbenchLayoutStateModel {
 						WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.key,
 						WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH.scope,
 					),
-					this.defaults.sidebar.width,
+					defaults.sidebar.width,
 				),
-				visible: storage.getBoolean(
+				visible: this.storedVisibility(
+					storage,
 					WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.key,
 					WorkbenchLayoutStorageKeys.SIDEBAR_VISIBLE.scope,
-					this.defaults.sidebar.visible,
+					defaults.sidebar.visible,
+					"sidebar",
 				),
 			},
 			auxiliarybar: {
@@ -589,12 +620,14 @@ class WorkbenchLayoutStateModel {
 						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.key,
 						WorkbenchLayoutStorageKeys.AUXILIARYBAR_WIDTH.scope,
 					),
-					this.defaults.auxiliarybar.width,
+					defaults.auxiliarybar.width,
 				),
-				visible: storage.getBoolean(
+				visible: this.storedVisibility(
+					storage,
 					WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.key,
 					WorkbenchLayoutStorageKeys.AUXILIARYBAR_VISIBLE.scope,
-					this.defaults.auxiliarybar.visible,
+					defaults.auxiliarybar.visible,
+					"auxiliarybar",
 				),
 			},
 			agentSidebar: {
@@ -603,12 +636,14 @@ class WorkbenchLayoutStateModel {
 						WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.key,
 						WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_WIDTH.scope,
 					),
-					this.defaults.agentSidebar.width,
+					defaults.agentSidebar.width,
 				),
-				visible: storage.getBoolean(
+				visible: this.storedVisibility(
+					storage,
 					WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_VISIBLE.key,
 					WorkbenchLayoutStorageKeys.AGENT_SIDEBAR_VISIBLE.scope,
-					this.defaults.agentSidebar.visible,
+					defaults.agentSidebar.visible,
+					"agentSidebar",
 				),
 			},
 			panel: {
@@ -617,15 +652,36 @@ class WorkbenchLayoutStateModel {
 						WorkbenchLayoutStorageKeys.PANEL_HEIGHT.key,
 						WorkbenchLayoutStorageKeys.PANEL_HEIGHT.scope,
 					),
-					this.defaults.panel.height,
+					defaults.panel.height,
 				),
-				visible: storage.getBoolean(
+				visible: this.storedVisibility(
+					storage,
 					WorkbenchLayoutStorageKeys.PANEL_VISIBLE.key,
 					WorkbenchLayoutStorageKeys.PANEL_VISIBLE.scope,
-					this.defaults.panel.visible,
+					defaults.panel.visible,
+					"panel",
 				),
 			},
 		};
+	}
+
+	private shouldApplyDefaultLayout(storage: IStorageService | undefined): boolean {
+		return this.defaultLayout !== undefined &&
+			(this.defaultLayout.force === true || storage === undefined || storage.isNew(StorageScope.WORKSPACE));
+	}
+
+	private storedVisibility(
+		storage: IStorageService,
+		key: string,
+		scope: StorageScope,
+		fallback: boolean,
+		partId: keyof NonNullable<WorkbenchDefaultLayout["parts"]>,
+	): boolean {
+		if (this.defaultLayout?.force === true) {
+			const forced = this.defaultLayout.parts?.[partId];
+			if (forced !== undefined) return forced;
+		}
+		return storage.getBoolean(key, scope, fallback);
 	}
 
 	save(state: WorkbenchLayoutState): void {

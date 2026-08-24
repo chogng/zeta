@@ -51,18 +51,18 @@ export class CompositeBarAction implements IAction {
 
 /** DOM representation of one CompositeBar action inside its ActionBar tablist. */
 export class CompositeBarActionViewItem extends ActionViewItem {
-	private containerElement: HTMLElement | undefined;
+	private renderedContainer: HTMLElement | undefined;
 
 	constructor(private readonly compositeAction: CompositeBarAction) {
 		super(compositeAction, { draggable: true });
 	}
 
 	override render(container: HTMLElement): void {
-		if (this.containerElement) {
+		if (this.renderedContainer) {
 			throw new Error(`CompositeBar action is already rendered: ${this.action.id}`);
 		}
 		const options = this.compositeAction.options;
-		this.containerElement = container;
+		this.renderedContainer = container;
 		container.classList.add("zeta-composite-bar-item");
 		container.classList.add("zeta-composite-bar-destination");
 		container.classList.toggle("checked", options.checked);
@@ -101,14 +101,14 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 	}
 
 	private get container(): HTMLElement {
-		assertDefined(this.containerElement, `CompositeBar action is not rendered: ${this.action.id}`);
-		return this.containerElement;
+		assertDefined(this.renderedContainer, `CompositeBar action is not rendered: ${this.action.id}`);
+		return this.renderedContainer;
 	}
 }
 
 /** Overflow selector that remains a Composite tab while opening a menu of hidden destinations. */
 export class CompositeBarOverflowViewItem extends ActionViewItem {
-	private containerElement: HTMLElement | undefined;
+	private renderedContainer: HTMLElement | undefined;
 
 	constructor(
 		action: IAction,
@@ -119,10 +119,10 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 	}
 
 	override render(container: HTMLElement): void {
-		if (this.containerElement) {
+		if (this.renderedContainer) {
 			throw new Error(`CompositeBar overflow action is already rendered: ${this.action.id}`);
 		}
-		this.containerElement = container;
+		this.renderedContainer = container;
 		container.classList.add("zeta-composite-bar-item");
 		container.classList.add("zeta-composite-bar-overflow");
 		container.setAttribute("role", "tab");
@@ -176,7 +176,7 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 	}
 
 	private get container(): HTMLElement {
-		assertDefined(this.containerElement, `CompositeBar overflow action is not rendered: ${this.action.id}`);
-		return this.containerElement;
+		assertDefined(this.renderedContainer, `CompositeBar overflow action is not rendered: ${this.action.id}`);
+		return this.renderedContainer;
 	}
 }

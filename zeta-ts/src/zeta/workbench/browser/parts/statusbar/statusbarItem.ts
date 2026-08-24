@@ -11,12 +11,12 @@ type CompactHoverState = "none" | "group" | "entry";
 /** Owns the DOM and interaction presentation for one status bar entry. */
 export class StatusbarEntryItem extends DisposableOwner {
 	readonly id: string;
-	readonly element: HTMLDivElement;
-	private readonly labelElement: HTMLAnchorElement;
+	readonly domNode: HTMLDivElement;
+	private readonly labelDomNode: HTMLAnchorElement;
 	private readonly hover = this.own(new DisposableSlot<IManagedHover>());
-	private iconElement: SVGElement | undefined;
+	private iconDomNode: SVGElement | undefined;
 	private textNode: Text | undefined;
-	private segmentElements: HTMLElement[] = [];
+	private segmentDomNodes: HTMLElement[] = [];
 	private entry: IStatusbarEntry | undefined;
 
 	constructor(
@@ -27,20 +27,21 @@ export class StatusbarEntryItem extends DisposableOwner {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.id = id;
-		const element = h(ownerDocument, "div");
-		element.className = "zeta-statusbar-item";
-		element.dataset.statusbarItemId = id;
-		this.element = element;
-		container.append(element);
+		const domNode = h(ownerDocument, "div");
+		domNode.className = "zeta-statusbar-item";
+		domNode.dataset.statusbarItemId = id;
+		this.domNode = domNode;
+		container.append(domNode);
+		this.defer(() => domNode.remove());
 
-		const labelElement = h(ownerDocument, "a");
-		labelElement.className = "zeta-statusbar-item-label";
-		labelElement.setAttribute("role", "button");
-		labelElement.tabIndex = -1;
-		this.labelElement = labelElement;
-		element.append(labelElement);
+		const labelDomNode = h(ownerDocument, "a");
+		labelDomNode.className = "zeta-statusbar-item-label";
+		labelDomNode.setAttribute("role", "button");
+		labelDomNode.tabIndex = -1;
+		this.labelDomNode = labelDomNode;
+		domNode.append(labelDomNode);
 
-		this.own(addDisposableListener(labelElement, "click", (event) => {
+		this.own(addDisposableListener(labelDomNode, "click", (event) => {
 			if (!this.isFocusable()) {
 				event.preventDefault();
 				return;
@@ -48,7 +49,7 @@ export class StatusbarEntryItem extends DisposableOwner {
 			event.preventDefault();
 			this.entry?.run?.();
 		}));
-		this.own(addDisposableListener(labelElement, "keydown", (event) => {
+		this.own(addDisposableListener(labelDomNode, "keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			if (!this.isFocusable()) {
 				event.preventDefault();
@@ -69,29 +70,29 @@ export class StatusbarEntryItem extends DisposableOwner {
 		const accessibleLabel = entry.ariaLabel || entry.text;
 		const previousAccessibleLabel = previousEntry?.ariaLabel || previousEntry?.text;
 		if (!previousEntry || previousAccessibleLabel !== accessibleLabel) {
-			setOptionalAttribute(this.element, "aria-label", accessibleLabel);
-			setOptionalAttribute(this.labelElement, "aria-label", accessibleLabel);
+			setOptionalAttribute(this.domNode, "aria-label", accessibleLabel);
+			setOptionalAttribute(this.labelDomNode, "aria-label", accessibleLabel);
 		}
 		const focusable = this.isFocusable();
 		const previouslyFocusable = previousEntry?.run !== undefined;
 		if (!previousEntry || previouslyFocusable !== focusable) {
-			this.labelElement.classList.toggle("disabled", !focusable);
-			if (focusable) this.labelElement.removeAttribute("aria-disabled");
-			else this.labelElement.setAttribute("aria-disabled", "true");
+			this.labelDomNode.classList.toggle("disabled", !focusable);
+			if (focusable) this.labelDomNode.removeAttribute("aria-disabled");
+			else this.labelDomNode.setAttribute("aria-disabled", "true");
 		}
 		if (!previousEntry || previousEntry.kind !== entry.kind) {
-			this.element.classList.toggle("remote-kind", entry.kind === "remote");
+			this.domNode.classList.toggle("remote-kind", entry.kind === "remote");
 		}
 		// The part is the single Tab stop. Items are focused by the part's
 		// navigation commands, matching VS Code's composite statusbar behavior.
-		this.labelElement.tabIndex = -1;
+		this.labelDomNode.tabIndex = -1;
 
 		this.updateContent(previousEntry, entry);
 
 		if (!previousEntry || previousEntry.tooltip !== entry.tooltip) {
 			this.hover.replace(entry.tooltip
 				? getHoverDelegate().setupHover({
-					target: this.labelElement,
+					target: this.labelDomNode,
 					content: entry.tooltip,
 					groupId: StatusbarHoverGroupId,
 				})
@@ -104,12 +105,12 @@ export class StatusbarEntryItem extends DisposableOwner {
 	}
 
 	isFocused(): boolean {
-		const activeElement = this.element.ownerDocument.activeElement;
-		return activeElement !== null && this.element.contains(activeElement);
+		const activeElement = this.domNode.ownerDocument.activeElement;
+		return activeElement !== null && this.domNode.contains(activeElement);
 	}
 
 	focus(): void {
-		if (this.isFocusable()) this.labelElement.focus();
+		if (this.isFocusable()) this.labelDomNode.focus();
 	}
 
 	hideHover(): void {
@@ -117,21 +118,21 @@ export class StatusbarEntryItem extends DisposableOwner {
 	}
 
 	setCompactNeighbors(neighbors: { readonly left: boolean; readonly right: boolean }): void {
-		this.element.classList.toggle("compact-left", neighbors.left);
-		this.element.classList.toggle("compact-right", neighbors.right);
+		this.domNode.classList.toggle("compact-left", neighbors.left);
+		this.domNode.classList.toggle("compact-right", neighbors.right);
 	}
 
 	setCompactHoverState(state: CompactHoverState): void {
-		this.element.classList.toggle("compact-group-hover", state !== "none");
-		this.element.classList.toggle("compact-entry-hover", state === "entry");
+		this.domNode.classList.toggle("compact-group-hover", state !== "none");
+		this.domNode.classList.toggle("compact-entry-hover", state === "entry");
 	}
 
 	private updateContent(previousEntry: IStatusbarEntry | undefined, entry: IStatusbarEntry): void {
-		this.element.classList.toggle("icon-only", entry.icon !== undefined && !entry.text && entry.segments === undefined);
-		this.labelElement.classList.toggle("has-segments", entry.segments !== undefined);
+		this.domNode.classList.toggle("icon-only", entry.icon !== undefined && !entry.text && entry.segments === undefined);
+		this.labelDomNode.classList.toggle("has-segments", entry.segments !== undefined);
 		if (entry.segments) {
-			this.iconElement?.remove();
-			this.iconElement = undefined;
+			this.iconDomNode?.remove();
+			this.iconDomNode = undefined;
 			this.textNode?.remove();
 			this.textNode = undefined;
 			this.updateSegments(previousEntry?.segments, entry.segments);
@@ -147,29 +148,29 @@ export class StatusbarEntryItem extends DisposableOwner {
 		if (segmentsEqual(previousSegments, segments)) return;
 		this.clearSegments();
 		for (const segment of segments) {
-			const segmentElement = h(this.labelElement.ownerDocument, "span");
+			const segmentElement = h(this.labelDomNode.ownerDocument, "span");
 			segmentElement.className = "zeta-statusbar-item-segment";
 			if (segment.icon) appendIcon(segment.icon, segmentElement);
 			if (segment.text) segmentElement.append(segment.text);
-			this.labelElement.append(segmentElement);
-			this.segmentElements.push(segmentElement);
+			this.labelDomNode.append(segmentElement);
+			this.segmentDomNodes.push(segmentElement);
 		}
 	}
 
 	private clearSegments(): void {
-		for (const element of this.segmentElements) element.remove();
-		this.segmentElements = [];
+		for (const element of this.segmentDomNodes) element.remove();
+		this.segmentDomNodes = [];
 	}
 
 	private updateIcon(previousIconId: string | undefined, icon: IStatusbarEntry["icon"]): void {
 		if (previousIconId === icon?.id) return;
-		this.iconElement?.remove();
-		this.iconElement = undefined;
+		this.iconDomNode?.remove();
+		this.iconDomNode = undefined;
 		if (!icon) return;
 
-		const iconElement = appendIcon(icon, this.labelElement);
-		if (this.textNode) this.labelElement.insertBefore(iconElement, this.textNode);
-		this.iconElement = iconElement;
+		const iconDomNode = appendIcon(icon, this.labelDomNode);
+		if (this.textNode) this.labelDomNode.insertBefore(iconDomNode, this.textNode);
+		this.iconDomNode = iconDomNode;
 	}
 
 	private updateText(previousText: string | undefined, text: string): void {
@@ -183,8 +184,8 @@ export class StatusbarEntryItem extends DisposableOwner {
 			this.textNode.data = text;
 			return;
 		}
-		this.textNode = createText(this.labelElement.ownerDocument, text);
-		this.labelElement.append(this.textNode);
+		this.textNode = createText(this.labelDomNode.ownerDocument, text);
+		this.labelDomNode.append(this.textNode);
 	}
 }
 

@@ -22,7 +22,7 @@ let nextModalEditorId = 1;
  * presentation, its compact header, close requests, and focus containment.
  */
 export class ModalEditorPart extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	readonly onDidRequestClose: Event<void>;
 	private readonly host: HTMLDivElement;
 	private readonly focusContent: () => void;
@@ -38,11 +38,11 @@ export class ModalEditorPart extends DisposableOwner {
 		this.host.className = "zeta-modal-editor-host";
 		this.host.hidden = true;
 
-		this.element = h(ownerDocument, "section");
-		this.element.className = "zeta-modal-editor";
-		this.element.tabIndex = -1;
-		this.element.setAttribute("role", "dialog");
-		this.element.setAttribute("aria-modal", "true");
+		this.domNode = h(ownerDocument, "section");
+		this.domNode.className = "zeta-modal-editor";
+		this.domNode.tabIndex = -1;
+		this.domNode.setAttribute("role", "dialog");
+		this.domNode.setAttribute("aria-modal", "true");
 
 		const header = h(ownerDocument, "header");
 		header.className = "zeta-modal-editor-header";
@@ -50,7 +50,7 @@ export class ModalEditorPart extends DisposableOwner {
 		heading.className = "zeta-modal-editor-title";
 		heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
 		heading.textContent = options.title;
-		this.element.setAttribute("aria-labelledby", heading.id);
+		this.domNode.setAttribute("aria-labelledby", heading.id);
 		const closeButton = this.own(new Button(header, {
 			label: `Close ${options.title}`,
 			title: `Close ${options.title}`,
@@ -63,18 +63,18 @@ export class ModalEditorPart extends DisposableOwner {
 		const content = h(ownerDocument, "div");
 		content.className = "zeta-modal-editor-content";
 		content.append(options.content);
-		this.element.append(header, content);
-		this.host.append(this.element);
+		this.domNode.append(header, content);
+		this.host.append(this.domNode);
 		options.container.append(this.host);
 
 		this.onDidRequestClose = this._onDidRequestClose.event;
-		this.own(trapTabFocus(this.element));
+		this.own(trapTabFocus(this.domNode));
 		this.own(addDisposableListener(this.host, "mousedown", (event: MouseEvent) => {
 			if (event.target !== this.host) return;
 			stopEvent(event);
 			this.requestClose();
 		}));
-		this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => {
+		this.own(addDisposableListener(this.domNode, "keydown", (event: KeyboardEvent) => {
 			if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
 			stopEvent(event);
 			this.requestClose();
@@ -94,7 +94,7 @@ export class ModalEditorPart extends DisposableOwner {
 			this.focusEditorContent();
 			return;
 		}
-		const activeElement = this.element.ownerDocument.activeElement;
+		const activeElement = this.domNode.ownerDocument.activeElement;
 		this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
 		this.visible = true;
 		this.host.hidden = false;
@@ -112,8 +112,8 @@ export class ModalEditorPart extends DisposableOwner {
 
 	private focusEditorContent(): void {
 		this.focusContent();
-		if (!this.element.contains(this.element.ownerDocument.activeElement)) {
-			if (!focusFirst(this.element)) this.element.focus();
+		if (!this.domNode.contains(this.domNode.ownerDocument.activeElement)) {
+			if (!focusFirst(this.domNode)) this.domNode.focus();
 		}
 	}
 

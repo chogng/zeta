@@ -143,17 +143,17 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	const partListener = viewService.onDidChange(updatePart);
 	updatePart();
 
-	assert.equal(part.element.dataset.part, "sessions");
-	assert.equal(part.element.querySelector(".zeta-sessions-surface-header h1")?.textContent, "New code session");
-	assert.ok(part.element.querySelector(".zeta-sessions-chat-view"));
-	assert.equal(part.element.querySelectorAll(".zeta-sessions-chat-slot").length, 2);
-	assert.equal(part.element.querySelectorAll(".zeta-chat-input-part").length, 2);
+	assert.equal(part.domNode.dataset.part, "sessions");
+	assert.equal(part.domNode.querySelector(".zeta-sessions-surface-header h1")?.textContent, "New code session");
+	assert.ok(part.domNode.querySelector(".zeta-sessions-chat-view"));
+	assert.equal(part.domNode.querySelectorAll(".zeta-sessions-chat-slot").length, 2);
+	assert.equal(part.domNode.querySelectorAll(".zeta-chat-input-part").length, 2);
 
-	(part.element.querySelector(".zeta-sessions-chat-slot-title") as HTMLButtonElement).click();
-	assert.ok(part.element.querySelector(".zeta-sessions-chat-slot.active:first-of-type"));
+	(part.domNode.querySelector(".zeta-sessions-chat-slot-title") as HTMLButtonElement).click();
+	assert.ok(part.domNode.querySelector(".zeta-sessions-chat-slot.active:first-of-type"));
 
-	(part.element.querySelector(".zeta-sessions-chat-slot-close") as HTMLButtonElement).click();
-	assert.equal(part.element.querySelectorAll(".zeta-sessions-chat-slot").length, 1);
+	(part.domNode.querySelector(".zeta-sessions-chat-slot-close") as HTMLButtonElement).click();
+	assert.equal(part.domNode.querySelectorAll(".zeta-sessions-chat-slot").length, 1);
 
 	partListener.dispose();
 	part.dispose();

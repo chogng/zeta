@@ -29,22 +29,22 @@ export class SessionsWorkbenchLayout extends DisposableOwner implements IResizab
 	private readonly _onDidChangePartVisibility = this.own(new Emitter<SessionsPartVisibilityChangeEvent>());
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
-	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 
 	constructor(container: Element, parts: ReadonlyMap<SessionsPartId, WorkbenchPart>, options: SessionsWorkbenchLayoutOptions = {}) {
 		super();
 		validateParts(parts);
-		this.element = h(container.ownerDocument, "div");
-		this.element.className = "zeta-sessions-workbench-layout";
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode = h(container.ownerDocument, "div");
+		this.domNode.className = "zeta-sessions-workbench-layout";
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 		for (const partId of sessionsPartIds) this.views.set(partId, new WorkbenchPartView(partId, requiredPart(parts, partId)));
-		const initialDimension = resolveSessionsInitialDimension(this.element, options.initialDimension);
+		const initialDimension = resolveSessionsInitialDimension(this.domNode, options.initialDimension);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(options.storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
 		this.projectFrameInsets(state.auxiliarybar.visible);
 		this.grid = this.own(SerializableGrid.deserialize(
-			this.element,
+			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 			{ sashPresentation: { type: "inset", gap: PART_GUTTER } },
@@ -69,7 +69,7 @@ export class SessionsWorkbenchLayout extends DisposableOwner implements IResizab
 		};
 	}
 
-	layout(dimension: IDimension = getClientArea(this.element)): void {
+	layout(dimension: IDimension = getClientArea(this.domNode)): void {
 		assertDimension(dimension);
 		this.projectFrameInsets();
 		this.grid.layout(dimension.width, dimension.height);

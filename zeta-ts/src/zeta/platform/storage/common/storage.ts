@@ -49,6 +49,8 @@ export interface IStorageService {
 	store(key: string, value: StorageValue, scope: StorageScope, target: StorageTarget): void;
 	remove(key: string, scope: StorageScope): void;
 	keys(scope: StorageScope, target: StorageTarget): readonly string[];
+	/** Whether the current scope did not exist before this service session. */
+	isNew(scope: StorageScope): boolean;
 	flush(reason?: WillSaveStateReason): Promise<void>;
 }
 

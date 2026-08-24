@@ -11,7 +11,7 @@ import { localize, type ILocalizationService } from "../../../services/localizat
 
 /** Host-selected menubar presentation owned by the titlebar. */
 export interface IMenubarControl extends IDisposable {
-	readonly element: HTMLElement | undefined;
+	readonly domNode: HTMLElement | undefined;
 }
 
 /** Compact application-menu trigger used by web, Windows, and Linux. */
@@ -22,7 +22,7 @@ export class BrowserMenubarControl extends DisposableOwner
 	private readonly button: Button;
 	private active = false;
 
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 
 	constructor(
 		container: HTMLElement,
@@ -33,15 +33,15 @@ export class BrowserMenubarControl extends DisposableOwner
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.contextMenuService = contextMenuService;
-		this.element = h(ownerDocument, "nav");
-		this.element.className = "zeta-menubar";
+		this.domNode = h(ownerDocument, "nav");
+		this.domNode.className = "zeta-menubar";
 		const applicationMenuLabel = () => localize(localizationService, { bundle: "zeta.regions", key: "applicationMenu" }, "Application menu");
-		this.element.setAttribute("aria-label", applicationMenuLabel());
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode.setAttribute("aria-label", applicationMenuLabel());
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 
 		this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-		this.button = this.own(new Button(this.element, {
+		this.button = this.own(new Button(this.domNode, {
 			label: applicationMenuLabel(),
 			title: applicationMenuLabel(),
 			icon: lxiconsLibrary.menu,
@@ -50,7 +50,7 @@ export class BrowserMenubarControl extends DisposableOwner
 		this.button.domNode.setAttribute("aria-label", applicationMenuLabel());
 		if (localizationService) this.own(localizationService.onDidChange(() => {
 			const label = applicationMenuLabel();
-			this.element.setAttribute("aria-label", label);
+			this.domNode.setAttribute("aria-label", label);
 			this.button.domNode.setAttribute("aria-label", label);
 			this.button.label = label;
 			this.button.setTitle(label);

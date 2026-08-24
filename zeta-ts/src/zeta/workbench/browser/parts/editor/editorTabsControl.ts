@@ -25,14 +25,14 @@ export interface EditorTabsDelegate {
 
 /** Common lifecycle contract implemented by each Editor tab presentation mode. */
 export abstract class EditorTabsControl extends DisposableOwner {
-	readonly element: HTMLDivElement;
+	readonly domNode: HTMLDivElement;
 
 	protected constructor(container: HTMLElement) {
 		super();
-		this.element = h(container.ownerDocument, "div");
-		this.element.className = "zeta-editor-tabs-control";
-		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this.domNode = h(container.ownerDocument, "div");
+		this.domNode.className = "zeta-editor-tabs-control";
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
 	}
 
 	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void;

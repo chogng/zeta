@@ -40,7 +40,7 @@ export class SessionsPart extends WorkbenchPart {
 		this.heading = h(ownerDocument, "h1");
 		this.description = h(ownerDocument, "p");
 		header.append(this.heading, this.description);
-		this.chat = this.own(new SessionsChatView(this.contentElement, {
+		this.chat = this.own(new SessionsChatView(this.contentDomNode, {
 			chatService: options.chatService,
 			sessionService: options.sessionService,
 			contextMenuService: options.contextMenuService,
@@ -51,7 +51,7 @@ export class SessionsPart extends WorkbenchPart {
 			activateSelection: options.activateSelection,
 			closeSelection: options.closeSelection,
 		}));
-		this.contentElement.prepend(header);
+		this.contentDomNode.prepend(header);
 		this.updateVisibleSelections([], undefined);
 	}
 
@@ -72,7 +72,7 @@ export class SessionsPart extends WorkbenchPart {
 	}
 
 	override layout(dimension: Dimension): void {
-		const bounds = this.chat.element.getBoundingClientRect();
+		const bounds = this.chat.domNode.getBoundingClientRect();
 		this.chat.layout(new Dimension(bounds.width || dimension.width, bounds.height || dimension.height));
 	}
 }

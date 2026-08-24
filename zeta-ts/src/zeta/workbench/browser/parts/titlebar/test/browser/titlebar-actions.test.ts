@@ -86,7 +86,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	const menubarElement = h(ownerDocument, "nav");
 	let menubarDisposed = false;
 	const menubar: IMenubarControl = {
-		element: menubarElement,
+		domNode: menubarElement,
 		dispose() {
 			menubarDisposed = true;
 			menubarElement.remove();
@@ -100,7 +100,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 		contextMenuService,
 	}, menubar));
 
-	const actionsContainer = titlebar.element.querySelector(
+	const actionsContainer = titlebar.domNode.querySelector(
 		".zeta-workbench-part-content > .zeta-titlebar-actions",
 	);
 	assert.ok(actionsContainer);
@@ -146,7 +146,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 
 	secondMenuRegistration.dispose();
 	titlebar.dispose();
-	assert.equal(titlebar.element.isConnected, false);
+	assert.equal(titlebar.domNode.isConnected, false);
 	assert.equal(menubarDisposed, true);
 });
 
@@ -171,7 +171,7 @@ test("titlebar renders left actions before the application menu", () => {
 		menuService,
 		contextMenuService,
 	}, {
-		element: menubarElement,
+		domNode: menubarElement,
 		dispose() {
 			menubarElement.remove();
 		},
@@ -180,7 +180,7 @@ test("titlebar renders left actions before the application menu", () => {
 		},
 	}));
 
-	const titleChildren = [...titlebar.element.querySelector(
+	const titleChildren = [...titlebar.domNode.querySelector(
 		".zeta-workbench-part-title",
 	)?.children ?? []];
 	assert.equal(
@@ -193,7 +193,7 @@ test("titlebar renders left actions before the application menu", () => {
 		"Left title action",
 	);
 	assert.equal(titleChildren.length, 2);
-	assert.equal(titlebar.element.querySelector(".zeta-titlebar-label"), null);
+	assert.equal(titlebar.domNode.querySelector(".zeta-titlebar-label"), null);
 });
 
 test("browser titlebar uses one icon trigger for the application menus", () => {
@@ -237,11 +237,11 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 		menuContextService,
 	));
 
-	const button = menubar.element.querySelector("button");
+	const button = menubar.domNode.querySelector("button");
 	assert.ok(button);
 	assert.equal(button.title, "Application menu");
 	assert.ok(button.querySelector(".zeta-icon"));
-	assert.equal(menubar.element.querySelectorAll("button").length, 1);
+	assert.equal(menubar.domNode.querySelectorAll("button").length, 1);
 
 	button.click();
 	assert.deepEqual(menuLabels, ["File", "Edit"]);

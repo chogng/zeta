@@ -316,6 +316,8 @@ class TestStorageService implements IStorageService {
 			.map((key) => key.slice(prefix.length));
 	}
 
+	isNew(_scope: StorageScope): boolean { return false; }
+
 	async flush(
 		reason: WillSaveStateReason = WillSaveStateReason.PERIODIC,
 	): Promise<void> {

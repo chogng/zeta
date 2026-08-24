@@ -32,7 +32,7 @@ for (const [name, value] of Object.entries({
 const { Dimension } = await import("../../../base/browser/geometry.js");
 const { bindResizableLayout } = await import("../../../base/browser/ui/resizable/resizable.js");
 const { lxiconsLibrary } = await import("../../../base/common/lxiconsLibrary.js");
-const { WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { StorageScope, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
 const { MenuId } = await import(
 	"../../../platform/actions/common/actions.js"
 );
@@ -323,7 +323,7 @@ test("platform layout service drives Workbench Part geometry", () => {
 	assert.deepEqual(layoutService.mainContainerDimension, new Dimension(1_200, 800));
 	assert.equal(harness.layout.getPartSize("titlebar").height, 35);
 	assert.equal(harness.layout.getPartSize("statusbar").height, 35);
-	assert.ok(harness.editor.element.isConnected);
+	assert.ok(harness.editor.domNode.isConnected);
 
 	harness.disposables.dispose();
 	dom.window.close();
@@ -443,6 +443,59 @@ test("Workbench layout applies host defaults without exposing persisted state", 
 	assert.equal(harness.layout.isPartVisible("panel"), false);
 
 	harness.disposables.dispose();
+	dom.window.close();
+});
+
+test("Workbench default layout applies to new workspaces unless forced", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>", {
+		url: "https://zeta.test",
+	});
+	const createStorage = (workspaceId: string) => new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		applicationId: "code",
+		workspaceId,
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const initialDimension = new Dimension(1_000, 700);
+	const seedStorage = createStorage("workspace-a");
+	const seed = createLayoutHarness(dom.window.document, {
+		initialDimension,
+		storageService: seedStorage,
+	});
+	assert.equal(seed.layout.isPartVisible("sidebar"), true);
+	await seedStorage.flush(WillSaveStateReason.SHUTDOWN);
+	seed.disposables.dispose();
+	seedStorage.dispose();
+
+	const storage = createStorage("workspace-a");
+	const restored = createLayoutHarness(dom.window.document, {
+		initialDimension,
+		defaultLayout: { parts: { sidebar: false } },
+		storageService: storage,
+	});
+	assert.equal(storage.isNew(StorageScope.WORKSPACE), false);
+	assert.equal(restored.layout.isPartVisible("sidebar"), true);
+	storage.switchWorkspace("workspace-b");
+	restored.layout.restoreWorkspaceState();
+	assert.equal(storage.isNew(StorageScope.WORKSPACE), true);
+	assert.equal(restored.layout.isPartVisible("sidebar"), false);
+	storage.switchWorkspace("workspace-a");
+	restored.layout.restoreWorkspaceState();
+	assert.equal(restored.layout.isPartVisible("sidebar"), true);
+	restored.disposables.dispose();
+	storage.dispose();
+
+	const forcedStorage = createStorage("workspace-a");
+	const forced = createLayoutHarness(dom.window.document, {
+		initialDimension,
+		defaultLayout: { parts: { sidebar: false }, force: true },
+		storageService: forcedStorage,
+	});
+	assert.equal(forced.layout.isPartVisible("sidebar"), false);
+	assert.equal(forced.layout.isPartVisible("panel"), true);
+	forced.disposables.dispose();
+	forcedStorage.dispose();
 	dom.window.close();
 });
 
@@ -622,7 +675,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	const sidebar = disposables.add(new SidebarPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
 	}));
-	dom.window.document.body.append(sidebar.element);
+	dom.window.document.body.append(sidebar.domNode);
 	const compositeBar = sidebar.compositeBar;
 	const selections: string[] = [];
 	disposables.add(sidebar.onDidSelectComposite(
@@ -630,31 +683,31 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	));
 
 	assert.equal(
-		compositeBar.element.querySelectorAll(".zeta-action-view-item").length,
+		compositeBar.domNode.querySelectorAll(".zeta-action-view-item").length,
 		3,
 	);
 	assert.deepEqual(
-		[...compositeBar.element.querySelectorAll<HTMLElement>(
+		[...compositeBar.domNode.querySelectorAll<HTMLElement>(
 			".zeta-action-view-item",
 		)].map((item) => item.dataset.actionId),
 		["zeta.explorer", "zeta.search", "zeta.git"],
 	);
-	const title = sidebar.element.querySelector(
+	const title = sidebar.domNode.querySelector(
 		":scope > .zeta-workbench-part-title.zeta-pane-composite-title",
 	);
 	assert.ok(title);
-	assert.equal(compositeBar.element.parentElement?.parentElement, title);
-	assert.equal(sidebar.element.firstElementChild, title);
+	assert.equal(compositeBar.domNode.parentElement?.parentElement, title);
+	assert.equal(sidebar.domNode.firstElementChild, title);
 	assert.equal(
-		compositeBar.element.className,
+		compositeBar.domNode.className,
 		"zeta-composite-bar zeta-composite-bar-icon",
 	);
-	const content = sidebar.element.querySelector(
+	const content = sidebar.domNode.querySelector(
 		":scope > .zeta-composite-content",
 	);
 	assert.ok(content);
 	assert.equal(title.nextElementSibling, content);
-	const actionbar = compositeBar.element.querySelector(
+	const actionbar = compositeBar.domNode.querySelector(
 		":scope > .zeta-action-bar",
 	);
 	assert.equal(actionbar?.classList.contains("zeta-action-bar"), true);
@@ -682,29 +735,29 @@ test("Sidebar hosts its Composite Bar before content", () => {
 		[null, null, null],
 	);
 	assert.equal(
-		compositeBar.element.querySelectorAll(
+		compositeBar.domNode.querySelectorAll(
 			".zeta-action-bar > .zeta-action-view-item",
 		).length,
 		3,
 	);
 	assert.equal(
-		compositeBar.element.querySelectorAll(
+		compositeBar.domNode.querySelectorAll(
 			".zeta-action-view-item > .zeta-composite-bar-action",
 		).length,
 		3,
 	);
-	assert.equal(compositeBar.element.querySelectorAll("button").length, 0);
-	assert.equal(compositeBar.element.querySelector(".zeta-tab-list"), null);
-	assert.equal(compositeBar.element.hasAttribute("data-part"), false);
+	assert.equal(compositeBar.domNode.querySelectorAll("button").length, 0);
+	assert.equal(compositeBar.domNode.querySelector(".zeta-tab-list"), null);
+	assert.equal(compositeBar.domNode.hasAttribute("data-part"), false);
 	assert.equal(
-		compositeBar.element.querySelector(".zeta-workbench-part-content"),
+		compositeBar.domNode.querySelector(".zeta-workbench-part-content"),
 		null,
 	);
-	sidebar.setActiveComposite("zeta.explorer");
-	const explorerTab = compositeBar.element.querySelector<HTMLElement>(
+	compositeBar.setActiveComposite("zeta.explorer");
+	const explorerTab = compositeBar.domNode.querySelector<HTMLElement>(
 		"[data-action-id='zeta.explorer'][role='tab']",
 	);
-	const searchTab = compositeBar.element.querySelector<HTMLElement>(
+	const searchTab = compositeBar.domNode.querySelector<HTMLElement>(
 		"[data-action-id='zeta.search'][role='tab']",
 	);
 	assert.ok(explorerTab);
@@ -767,6 +820,88 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	dom.window.close();
 });
 
+test("Pane Composite Parts restore workspace selections with Registry fallback", () => {
+	const dom = new JSDOM("<!doctype html><body></body>", {
+		url: "https://zeta.test",
+	});
+	const disposables = new DisposableStore();
+	const registry = new WorkbenchViewRegistry();
+	disposables.add(registry.registerViewContainer({
+		id: "zeta.explorer",
+		title: "Explorer",
+		location: ViewContainerLocation.Sidebar,
+		isDefault: true,
+	}));
+	disposables.add(registry.registerViewContainer({
+		id: "zeta.search",
+		title: "Search",
+		location: ViewContainerLocation.Sidebar,
+	}));
+	const contextKeys = disposables.add(new ContextKeyService());
+	const viewDescriptors = disposables.add(new ViewDescriptorService({
+		contextKeyService: contextKeys,
+		registry,
+	}));
+	const createStorage = (workspaceId: string) => new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		applicationId: "code",
+		workspaceId,
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
+	const createComposite = (containerId: string) => {
+		const descriptor = viewDescriptors
+			.getViewContainers(ViewContainerLocation.Sidebar)
+			.find((candidate) => candidate.id === containerId);
+		assert.ok(descriptor);
+		return new PaneComposite(dom.window.document.body, {
+			viewContainer: descriptor,
+			model: viewDescriptors.getViewContainerModel(descriptor.id),
+			instantiationService: new InstantiationService(),
+			contextKeyService: contextKeys,
+		});
+	};
+
+	const firstStorage = createStorage("workspace-a");
+	const first = new SidebarPart(dom.window.document.body, {
+		viewDescriptorService: viewDescriptors,
+		storageService: firstStorage,
+	});
+	assert.equal(first.getCompositeIdToRestore(), "zeta.explorer");
+	const search = createComposite("zeta.search");
+	first.addComposite(search);
+	first.showComposite(search.id);
+	first.dispose();
+	firstStorage.dispose();
+
+	const restoredStorage = createStorage("workspace-a");
+	const restored = new SidebarPart(dom.window.document.body, {
+		viewDescriptorService: viewDescriptors,
+		storageService: restoredStorage,
+	});
+	assert.equal(restored.getCompositeIdToRestore(), "zeta.search");
+	restoredStorage.switchWorkspace("workspace-b");
+	assert.equal(restored.getCompositeIdToRestore(), "zeta.explorer");
+	restoredStorage.switchWorkspace("workspace-a");
+	assert.equal(restored.getCompositeIdToRestore(), "zeta.search");
+	const explorer = createComposite("zeta.explorer");
+	restored.addComposite(explorer);
+	restored.showComposite(explorer.id);
+	restored.dispose();
+	restoredStorage.dispose();
+
+	const defaultStorage = createStorage("workspace-a");
+	const fallback = new SidebarPart(dom.window.document.body, {
+		viewDescriptorService: viewDescriptors,
+		storageService: defaultStorage,
+	});
+	assert.equal(fallback.getCompositeIdToRestore(), "zeta.explorer");
+	fallback.dispose();
+	defaultStorage.dispose();
+	disposables.dispose();
+	dom.window.close();
+});
+
 test("Sidebar can host Agent Sidebar composites", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
@@ -791,11 +926,11 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		compositeBarContainerFilter: () => false,
 	}));
 
-	assert.equal(agentSidebar.element.dataset.part, "agentSidebar");
-	assert.equal(agentSidebar.element.getAttribute("aria-label"), "Agent sidebar");
-	assert.equal(agentSidebar.compositeBar.element.hidden, false);
+	assert.equal(agentSidebar.domNode.dataset.part, "agentSidebar");
+	assert.equal(agentSidebar.domNode.getAttribute("aria-label"), "Agent sidebar");
+	assert.equal(agentSidebar.compositeBar.domNode.hidden, false);
 	assert.equal(
-		agentSidebar.compositeBar.element.querySelector(
+		agentSidebar.compositeBar.domNode.querySelector(
 			"[data-action-id='zeta.chat']",
 		),
 		null,
@@ -845,16 +980,16 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 			menuId: MenuId.PanelTitle,
 		},
 	}));
-	dom.window.document.body.append(panel.element);
+	dom.window.document.body.append(panel.domNode);
 
-	const tablist = panel.element.querySelector(".zeta-panel-title-control [role='tablist']");
-	assert.equal(panel.compositeBar.element.className, "zeta-composite-bar zeta-composite-bar-label");
+	const tablist = panel.domNode.querySelector(".zeta-panel-title-control [role='tablist']");
+	assert.equal(panel.compositeBar.domNode.className, "zeta-composite-bar zeta-composite-bar-label");
 	assert.equal(tablist?.getAttribute("aria-label"), "Panel views");
 	assert.deepEqual(
 		[...(tablist?.querySelectorAll("[role='tab']") ?? [])].map((tab) => tab.textContent),
 		["Problems", "Output", "Terminal", "Ports"],
 	);
-	const panelToolbar = panel.element.querySelector(".zeta-pane-composite-title-part-actions [role='toolbar']");
+	const panelToolbar = panel.domNode.querySelector(".zeta-pane-composite-title-part-actions [role='toolbar']");
 	assert.ok(panelToolbar);
 	const maximizePanel = [...panelToolbar.querySelectorAll("button")].find((button) => button.textContent === "Maximize Panel");
 	const closePanel = [...panelToolbar.querySelectorAll("button")].find((button) => button.textContent === "Close Panel");
@@ -876,13 +1011,12 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	});
 	panel.addComposite(terminal);
 	panel.showComposite(terminal.id);
-	panel.setActiveComposite(terminal.id);
 
-	const toolbar = panel.element.querySelector(".zeta-pane-composite-title-view-actions [role='toolbar']");
-	const terminalTab = panel.element.querySelector("[role='tab'][aria-selected='true']");
+	const toolbar = panel.domNode.querySelector(".zeta-pane-composite-title-view-actions [role='toolbar']");
+	const terminalTab = panel.domNode.querySelector("[role='tab'][aria-selected='true']");
 	assert.equal(toolbar?.getAttribute("aria-label"), "Test panel actions");
 	assert.equal(toolbar?.querySelector("button")?.textContent, "Run");
-	assert.equal(panel.element.querySelectorAll(".zeta-panel-title-control [role='tablist']").length, 1);
+	assert.equal(panel.domNode.querySelectorAll(".zeta-panel-title-control [role='tablist']").length, 1);
 	assert.equal(terminal.element.getAttribute("role"), "tabpanel");
 	assert.equal(terminal.element.classList.contains("zeta-pane-composite-pane-headers-hidden"), true);
 	assert.equal(terminal.element.classList.contains("zeta-pane-composite-pane-layout-fill"), true);
@@ -902,8 +1036,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		});
 		panel.addComposite(composite);
 		panel.showComposite(composite.id);
-		panel.setActiveComposite(composite.id);
-		assert.equal(panel.element.querySelector(".zeta-pane-composite-title-view-actions [aria-label='Test panel actions']"), null);
+		assert.equal(panel.domNode.querySelector(".zeta-pane-composite-title-view-actions [aria-label='Test panel actions']"), null);
 		assert.equal(panelToolbar.isConnected, true);
 		assert.ok([...panelToolbar.querySelectorAll("button")].some((button) => button.textContent === "Maximize Panel"));
 		assert.ok([...panelToolbar.querySelectorAll("button")].some((button) => button.textContent === "Close Panel"));
@@ -953,30 +1086,30 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	disposables.add(compositeBar.onDidSelectComposite(
 		({ compositeId }) => selections.push(compositeId),
 	));
-	dom.window.document.body.append(compositeBar.element);
-	Object.defineProperty(compositeBar.element, "clientWidth", {
+	dom.window.document.body.append(compositeBar.domNode);
+	Object.defineProperty(compositeBar.domNode, "clientWidth", {
 		configurable: true,
 		value: 110,
 	});
 	compositeBar.setActiveComposite("zeta.panel.terminal");
-	const tabs = [...compositeBar.element.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination")];
+	const tabs = [...compositeBar.domNode.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination")];
 	for (const [index, tab] of tabs.entries()) {
 		tab.getBoundingClientRect = () => ({ left: index * 50, right: (index + 1) * 50, width: 50 } as DOMRect);
 	}
 	compositeBar.layout();
 
 	assert.deepEqual(
-		[...compositeBar.element.querySelectorAll("[role='tab']")]
+		[...compositeBar.domNode.querySelectorAll("[role='tab']")]
 			.map((tab) => tab.textContent),
 		["Terminal", "Additional views"],
 	);
-	const overflowItem = compositeBar.element.querySelector<HTMLElement>(
+	const overflowItem = compositeBar.domNode.querySelector<HTMLElement>(
 		".zeta-composite-bar-overflow",
 	);
 	assert.ok(overflowItem);
 	assert.equal(overflowItem.getAttribute("role"), "tab");
 	assert.equal(
-		compositeBar.element.querySelector(".zeta-composite-bar-item")?.nextElementSibling,
+		compositeBar.domNode.querySelector(".zeta-composite-bar-item")?.nextElementSibling,
 		overflowItem,
 	);
 	overflowItem.click();
@@ -1023,10 +1156,10 @@ test("CompositeBar refreshes localized View Container labels", () => {
 		ariaLabel: "Panel views",
 	}));
 
-	assert.equal(compositeBar.element.querySelector("[role='tab']")?.textContent, "Terminal");
+	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "Terminal");
 	locale = "zh-CN";
 	localeChanges.fire(locale);
-	assert.equal(compositeBar.element.querySelector("[role='tab']")?.textContent, "终端");
+	assert.equal(compositeBar.domNode.querySelector("[role='tab']")?.textContent, "终端");
 
 	localeChanges.dispose();
 	disposables.dispose();
@@ -1070,15 +1203,14 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	);
 	auxiliarybar.addComposite(composite);
 	auxiliarybar.showComposite(descriptor.id);
-	auxiliarybar.setActiveComposite(descriptor.id);
-	const content = auxiliarybar.element.querySelector(
+	const content = auxiliarybar.domNode.querySelector(
 		":scope > .zeta-auxiliarybar-content",
 	);
 
 	assert.ok(content);
 	assert.equal(content.firstElementChild, composite.element);
 	assert.equal(auxiliarybar.activeCompositeId, descriptor.id);
-	const compositeBar = auxiliarybar.element.querySelector<HTMLElement>(".zeta-composite-bar");
+	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>(".zeta-composite-bar");
 	assert.ok(compositeBar);
 	assert.equal(compositeBar.hidden, true);
 
@@ -1189,8 +1321,8 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 		ariaLabel: "Panel views",
 		presentation: "label",
 	}));
-	dom.window.document.body.append(compositeBar.element);
-	const [problems, output] = compositeBar.element.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination");
+	dom.window.document.body.append(compositeBar.domNode);
+	const [problems, output] = compositeBar.domNode.querySelectorAll<HTMLElement>(".zeta-composite-bar-destination");
 	assert.ok(problems);
 	assert.ok(output);
 	output.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
@@ -1200,7 +1332,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 	output.dispatchEvent(compositeBarDragEvent(dom.window, "drop", 175));
 
 	assert.deepEqual(
-		[...compositeBar.element.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => tab.textContent),
+		[...compositeBar.domNode.querySelectorAll<HTMLElement>("[role='tab']")].map((tab) => tab.textContent),
 		["Output", "Problems", "Terminal"],
 	);
 	disposables.dispose();

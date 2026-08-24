@@ -11,7 +11,7 @@ test("status bar entries render an icon before their text", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ icon: lxiconsLibrary.gitBranch, text: "main", ariaLabel: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
-	const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
+	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
 	assert.ok(element);
@@ -22,8 +22,8 @@ test("status bar entries render an icon before their text", () => {
 	assert.equal(label.getAttribute("role"), "button");
 	assert.equal(part.minimumHeight, 32);
 	assert.equal(part.maximumHeight, 32);
-	assert.equal(part.element.getAttribute("role"), "status");
-	assert.deepEqual([...part.element.children].map(element => element.className), [
+	assert.equal(part.domNode.getAttribute("role"), "status");
+	assert.deepEqual([...part.domNode.children].map(element => element.className), [
 		"zeta-statusbar-items zeta-statusbar-items-left",
 		"zeta-statusbar-items zeta-statusbar-items-right",
 	]);
@@ -41,7 +41,7 @@ test("status bar entries support accessible icon-only presentation", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ icon: lxiconsLibrary.remote, text: "", ariaLabel: "App Server ready", tooltip: "Connected" }, { id: "test.remote", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
-	const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
+	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.remote"]');
 	const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
 	assert.ok(element);
@@ -65,7 +65,7 @@ test("status bar entries render grouped segments inside one action", () => {
 		ariaLabel: "Errors: 2, Warnings: 1",
 	}, { id: "test.problems", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
-	const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
+	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
 	const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 	const segments = label?.querySelectorAll<HTMLElement>(".zeta-statusbar-item-segment");
 
@@ -89,18 +89,18 @@ test("status bar entries compact adjacent members of the same group", () => {
 	using sync = service.addEntry({ icon: lxiconsLibrary.sync, text: "2↓ 1↑", run() {} }, { id: "test.sync", alignment: StatusbarAlignment.Left, priority: 1, compactGroup: "git" });
 	using problems = service.addEntry({ text: "0" }, { id: "test.problems", alignment: StatusbarAlignment.Left, priority: 0 });
 	using part = new StatusbarPart(document.body, service);
-	const branchElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
-	const syncElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.sync"]');
-	const problemsElement = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
+	const branchElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
+	const syncElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.sync"]');
+	const problemsElement = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.problems"]');
 
 	assert.ok(branchElement);
 	assert.ok(syncElement);
 	assert.ok(problemsElement);
-	const compactGroup = part.element.querySelector<HTMLElement>('[data-compact-group="git"]');
+	const compactGroup = part.domNode.querySelector<HTMLElement>('[data-compact-group="git"]');
 	assert.ok(compactGroup);
 	assert.deepEqual([...compactGroup.children], [branchElement, syncElement]);
 	assert.deepEqual([...compactGroup.parentElement?.children ?? []], [
-		part.element.querySelector('[data-statusbar-item-id="test.remote"]'),
+		part.domNode.querySelector('[data-statusbar-item-id="test.remote"]'),
 		compactGroup,
 		problemsElement,
 	]);
@@ -132,7 +132,7 @@ test("status bar entry updates retain the item shell and activate commands", () 
 	using service = new StatusbarService();
 	using entry = service.addEntry({ text: "main", run: () => activations += 1 }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(document.body, service);
-	const element = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
+	const element = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.branch"]');
 	const label = element?.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 	const textNode = label?.firstChild;
 
@@ -143,7 +143,7 @@ test("status bar entry updates retain the item shell and activate commands", () 
 	assert.equal(activations, 1);
 
 	entry.update({ text: "detached", run: () => activations += 1 });
-	assert.equal(part.element.querySelector('[data-statusbar-item-id="test.branch"]'), element);
+	assert.equal(part.domNode.querySelector('[data-statusbar-item-id="test.branch"]'), element);
 	assert.equal(element?.querySelector(".zeta-statusbar-item-label"), label);
 	assert.equal(label?.firstChild, textNode);
 	assert.equal(element.textContent, "detached");
@@ -158,9 +158,9 @@ test("status bar items are focused through the part and activate from the keyboa
 	using first = service.addEntry({ text: "first", run: () => activations += 1 }, { id: "test.first", alignment: StatusbarAlignment.Left, priority: 2 });
 	using second = service.addEntry({ text: "second", run: () => activations += 1 }, { id: "test.second", alignment: StatusbarAlignment.Left, priority: 1 });
 	using part = new StatusbarPart(document.body, service);
-	document.body.append(part.element);
-	const content = part.element;
-	const labels = part.element.querySelectorAll<HTMLElement>(".zeta-statusbar-item-label");
+	document.body.append(part.domNode);
+	const content = part.domNode;
+	const labels = part.domNode.querySelectorAll<HTMLElement>(".zeta-statusbar-item-label");
 
 	assert.equal(content.tabIndex, 0);
 	assert.equal(labels[0]?.tabIndex, -1);
@@ -179,7 +179,7 @@ test("status bar items are focused through the part and activate from the keyboa
 	assert.equal(activations, 1);
 
 	first.update({ text: "read-only" });
-	const disabledLabel = part.element.querySelector<HTMLElement>('[data-statusbar-item-id="test.first"] .zeta-statusbar-item-label');
+	const disabledLabel = part.domNode.querySelector<HTMLElement>('[data-statusbar-item-id="test.first"] .zeta-statusbar-item-label');
 	assert.ok(disabledLabel);
 	assert.equal(disabledLabel.tabIndex, -1);
 	assert.equal(disabledLabel.getAttribute("aria-disabled"), "true");
@@ -202,7 +202,7 @@ test("status bar item tooltips use the managed statusbar hover group", () => {
 	using service = new StatusbarService();
 	using entry = service.addEntry({ text: "main", tooltip: "Git branch main" }, { id: "test.branch", alignment: StatusbarAlignment.Left });
 	using part = new StatusbarPart(dom.window.document.body, service);
-	const label = part.element.querySelector<HTMLElement>(".zeta-statusbar-item-label");
+	const label = part.domNode.querySelector<HTMLElement>(".zeta-statusbar-item-label");
 
 	assert.ok(label);
 	assert.equal(setups.length, 1);

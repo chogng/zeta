@@ -1,5 +1,6 @@
 import "./sidebarpart.css";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
+import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
@@ -7,6 +8,7 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id?: string;
 	readonly location?: ViewContainerLocation;
@@ -28,6 +30,7 @@ export class SidebarPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: SidebarPartOptions) {
 		super(container, {
 			viewDescriptorService: options.viewDescriptorService,
+			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: options.id ?? "sidebar",
 			location: options.location ?? ViewContainerLocation.Sidebar,
@@ -39,6 +42,6 @@ export class SidebarPart extends PaneCompositePart {
 			compositeBarVisible: options.compositeBarVisible,
 			titleActions: options.titleActions,
 		});
-		this.element.classList.add("zeta-sidebar-part");
+		this.domNode.classList.add("zeta-sidebar-part");
 	}
 }

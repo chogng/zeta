@@ -31,7 +31,7 @@ export interface SessionsChatViewOptions {
 
 /** Owns the resizable grid of retained Chat panes in the Sessions Part. */
 export class SessionsChatView extends DisposableOwner {
-	readonly element: HTMLElement;
+	readonly domNode: HTMLElement;
 	private readonly grid: Grid<SessionsChatGridView>;
 	private readonly empty: SessionsChatEmptyView;
 	private readonly entries = new Map<string, SessionsChatGridEntry>();
@@ -60,16 +60,16 @@ export class SessionsChatView extends DisposableOwner {
 		this.quickInputService = options.quickInputService;
 		this.activateSelection = options.activateSelection;
 		this.closeSelection = options.closeSelection;
-		this.element = h(ownerDocument, "section");
-		this.element.className = "zeta-sessions-chat-view";
-		container.append(this.element);
-		this.empty = new SessionsChatEmptyView(this.element);
-		this.grid = this.own(new Grid<SessionsChatGridView>(this.element, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
+		this.domNode = h(ownerDocument, "section");
+		this.domNode.className = "zeta-sessions-chat-view";
+		container.append(this.domNode);
+		this.empty = new SessionsChatEmptyView(this.domNode);
+		this.grid = this.own(new Grid<SessionsChatGridView>(this.domNode, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
 		this.grid.element.classList.add("zeta-sessions-chat-grid");
 		this.defer(() => {
 			for (const entry of this.entries.values()) entry.dispose();
 			this.entries.clear();
-			this.element.remove();
+			this.domNode.remove();
 		});
 	}
 
@@ -97,7 +97,7 @@ export class SessionsChatView extends DisposableOwner {
 			const key = selectionKey(selection);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = new SessionsChatGridEntry(this.element, {
+				entry = new SessionsChatGridEntry(this.domNode, {
 					selection,
 					chatService: this.chatService,
 					sessionService: this.sessionService,

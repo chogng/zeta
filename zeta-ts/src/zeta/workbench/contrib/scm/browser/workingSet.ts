@@ -93,7 +93,7 @@ export class ScmWorkingSetController extends DisposableOwner {
 	}
 
 	private hasEditorFocus(): boolean {
-		return this.options.editorPart.element.contains(this.options.editorPart.element.ownerDocument.activeElement);
+		return this.options.editorPart.domNode.contains(this.options.editorPart.domNode.ownerDocument.activeElement);
 	}
 
 	private load(): void {

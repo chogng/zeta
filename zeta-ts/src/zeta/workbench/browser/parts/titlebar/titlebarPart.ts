@@ -39,33 +39,33 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		super(container, "titlebar");
 		const ownerDocument = container.ownerDocument;
 		this.menubar = this.own(menubar);
-		const leftActionsElement = h(ownerDocument, "div");
-		leftActionsElement.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
-		this.titleElement.append(leftActionsElement);
+		const leftActionsDomNode = h(ownerDocument, "div");
+		leftActionsDomNode.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
+		this.titleDomNode.append(leftActionsDomNode);
 		this.leftActions = this.own(
 			new MenuWorkbenchToolBar(
-				leftActionsElement,
+				leftActionsDomNode,
 				options.menuService,
 				options.contextMenuService,
 				MenuId.TitleBarLeft,
 				{ presentation: "inherit-foreground" },
 			),
 		);
-		const actionsElement = h(ownerDocument, "div");
-		actionsElement.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
-		this.contentElement.append(actionsElement);
+		const actionsDomNode = h(ownerDocument, "div");
+		actionsDomNode.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
+		this.contentDomNode.append(actionsDomNode);
 		this.actions = this.own(
 			new MenuWorkbenchToolBar(
-				actionsElement,
+				actionsDomNode,
 				options.menuService,
 				options.contextMenuService,
 				MenuId.TitleBar,
 				{ presentation: "inherit-foreground" },
 			),
 		);
-		if (this.menubar.element) {
-			this.menubar.element.classList.add("zeta-titlebar-interactive-region");
-			this.titleElement.append(this.menubar.element);
+		if (this.menubar.domNode) {
+			this.menubar.domNode.classList.add("zeta-titlebar-interactive-region");
+			this.titleDomNode.append(this.menubar.domNode);
 		}
 	}
 }

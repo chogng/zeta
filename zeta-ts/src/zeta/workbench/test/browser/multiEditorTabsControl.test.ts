@@ -29,7 +29,7 @@ test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion 
 	const first = input("first");
 	const second = input("second");
 	control.setEditors([descriptor(first), descriptor(second)], first);
-	const tabs = control.element.querySelectorAll<HTMLElement>(".zeta-tab");
+	const tabs = control.domNode.querySelectorAll<HTMLElement>(".zeta-tab");
 	const firstTab = tabs[0];
 	const secondTab = tabs[1];
 	assert.ok(firstTab);
@@ -66,7 +66,7 @@ test("MultiEditorTabsControl forwards external resource drops to the target tab"
 	});
 	const target = input("target");
 	control.setEditors([descriptor(target)], target);
-	const tab = control.element.querySelector<HTMLElement>(".zeta-tab");
+	const tab = control.domNode.querySelector<HTMLElement>(".zeta-tab");
 	assert.ok(tab);
 	tab.getBoundingClientRect = () => ({ left: 100, width: 100 } as DOMRect);
 	const dataTransfer = externalDataTransfer();

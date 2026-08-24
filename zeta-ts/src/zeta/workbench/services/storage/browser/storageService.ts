@@ -41,6 +41,7 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
 	private readonly profileStorageKey: string;
 	private workspaceStorageKey: string;
 	private readonly entries = new Map<StorageScope, Map<string, StoredEntry>>();
+	private readonly newStorageKeys = new Map<string, boolean>();
 
 	readonly onDidChangeValue = this._onDidChangeValue.event;
 	readonly onWillSaveState = this._onWillSaveState.event;
@@ -140,6 +141,10 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
 			.sort();
 	}
 
+	isNew(scope: StorageScope): boolean {
+		return this.newStorageKeys.get(this.storageKey(scope)) ?? true;
+	}
+
 	async flush(reason: WillSaveStateReason = WillSaveStateReason.PERIODIC): Promise<void> {
 		this._onWillSaveState.fire({ reason });
 	}
@@ -167,13 +172,25 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
 	}
 
 	private load(scope: StorageScope): Map<string, StoredEntry> {
-		if (!this.backend) return new Map();
+		const storageKey = this.storageKey(scope);
+		if (!this.backend) {
+			this.recordStorageNewness(storageKey, true);
+			return new Map();
+		}
 		try {
-			const value = this.backend.getItem(this.storageKey(scope));
+			const value = this.backend.getItem(storageKey);
+			this.recordStorageNewness(storageKey, value === null);
 			return value === null ? new Map() : parseStoredDocument(value);
 		} catch (error) {
+			this.recordStorageNewness(storageKey, true);
 			this.onError(error);
 			return new Map();
+		}
+	}
+
+	private recordStorageNewness(storageKey: string, isNew: boolean): void {
+		if (!this.newStorageKeys.has(storageKey)) {
+			this.newStorageKeys.set(storageKey, isNew);
 		}
 	}
 
