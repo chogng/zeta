@@ -55,7 +55,8 @@ use zeta_app_server_protocol::protocol::fs::{
 };
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::git::{
-    GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitTextDiffResult,
+    GitBranchListResult, GitBranchSwitchParams, GitOperationResult, GitRepositoriesResult,
+    GitRepositoryParams, GitTextDiffResult,
 };
 use zeta_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
@@ -117,7 +118,10 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
-use zeta_app_server_protocol::protocol::workspace::{WorkspaceSwitchParams, WorkspaceSwitchResult};
+use zeta_app_server_protocol::protocol::workspace::{
+    WorkspaceFoldersSetParams, WorkspaceFoldersSetResult, WorkspaceSwitchParams,
+    WorkspaceSwitchResult,
+};
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
 pub use in_process::InProcessAppServer;
@@ -317,6 +321,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         self.call(ClientMethod::WorkspaceSwitch, params)
     }
 
+    pub fn set_workspace_folders(
+        &mut self,
+        params: WorkspaceFoldersSetParams,
+    ) -> Result<WorkspaceFoldersSetResult, ClientError> {
+        self.call(ClientMethod::WorkspaceFoldersSet, params)
+    }
+
     /// Synchronizes one authoritative editor snapshot with the App Server language runtime.
     pub fn synchronize_language_document(
         &mut self,
@@ -434,11 +445,15 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     }
 
     pub fn git_text_diff(&mut self) -> Result<GitTextDiffResult, ClientError> {
-        self.call(ClientMethod::GitTextDiff, EmptyParams {})
+        self.call(ClientMethod::GitTextDiff, GitRepositoryParams::default())
     }
 
     pub fn git_status(&mut self) -> Result<GitStatusResult, ClientError> {
-        self.call(ClientMethod::GitStatus, EmptyParams {})
+        self.call(ClientMethod::GitStatus, GitRepositoryParams::default())
+    }
+
+    pub fn git_repositories(&mut self) -> Result<GitRepositoriesResult, ClientError> {
+        self.call(ClientMethod::GitRepositories, EmptyParams {})
     }
 
     pub fn compute_diff(
@@ -456,7 +471,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     }
 
     pub fn list_git_branches(&mut self) -> Result<GitBranchListResult, ClientError> {
-        self.call(ClientMethod::GitBranchList, EmptyParams {})
+        self.call(ClientMethod::GitBranchList, GitRepositoryParams::default())
     }
 
     pub fn switch_git_branch(

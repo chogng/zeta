@@ -47,8 +47,8 @@ function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
 }
 
 function fsGetMetadataParams(value: unknown): FsGetMetadataParams {
-	const params = record(value, ["path"]);
-	return { path: relativeWorkspacePath(params.path) };
+	const params = record(value, ["path"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), path: relativeWorkspacePath(params.path) };
 }
 
 function fsReadDirectoryParams(value: unknown): FsReadDirectoryParams {
@@ -64,8 +64,9 @@ function fsReadBinaryFileParams(value: unknown): FsReadBinaryFileParams {
 }
 
 function fsWriteFileParams(value: unknown): FsWriteFileParams {
-	const params = record(value, ["path", "content"], ["expectedRevision"]);
+	const params = record(value, ["path", "content"], ["expectedRevision", "workspaceFolderId"]);
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		path: relativeWorkspacePath(params.path),
 		content: string(params.content, "content"),
 		...(params.expectedRevision === undefined ? {} : { expectedRevision: string(params.expectedRevision, "expectedRevision") }),
@@ -73,16 +74,23 @@ function fsWriteFileParams(value: unknown): FsWriteFileParams {
 }
 
 function fsCreateFileParams(value: unknown): FsCreateFileParams {
-	const params = record(value, ["path", "existing"]);
-	return { path: relativeWorkspacePath(params.path), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+	const params = record(value, ["path", "existing"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), path: relativeWorkspacePath(params.path), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
 }
 
 function fsRenameParams(value: unknown): FsRenameParams {
-	const params = record(value, ["source", "target", "existing"]);
-	return { source: relativeWorkspacePath(params.source), target: relativeWorkspacePath(params.target), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
+	const params = record(value, ["source", "target", "existing"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), source: relativeWorkspacePath(params.source), target: relativeWorkspacePath(params.target), existing: stringEnum(params.existing, "existing", ["error", "overwrite", "ignore"] as const) };
 }
 
 function fsDeleteParams(value: unknown): FsDeleteParams {
-	const params = record(value, ["path", "missing", "mode"]);
-	return { path: relativeWorkspacePath(params.path), missing: stringEnum(params.missing, "missing", ["error", "ignore"] as const), mode: stringEnum(params.mode, "mode", ["fileOrEmptyDirectory", "recursive"] as const) };
+	const params = record(value, ["path", "missing", "mode"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), path: relativeWorkspacePath(params.path), missing: stringEnum(params.missing, "missing", ["error", "ignore"] as const), mode: stringEnum(params.mode, "mode", ["fileOrEmptyDirectory", "recursive"] as const) };
+}
+
+function workspaceFolder(value: unknown): { readonly workspaceFolderId?: string } {
+	if (value === undefined) return {};
+	const workspaceFolderId = string(value, "workspaceFolderId");
+	if (!workspaceFolderId.trim()) throw new Error("workspaceFolderId must be non-empty");
+	return { workspaceFolderId };
 }

@@ -9,6 +9,8 @@ export interface WorkspaceSearchMatchRange {
 }
 
 export interface WorkspaceSearchMatch {
+	readonly workspaceFolderId?: string;
+	readonly workspaceFolderName?: string;
 	readonly path: string;
 	readonly lineNumber: number;
 	readonly preview: string;

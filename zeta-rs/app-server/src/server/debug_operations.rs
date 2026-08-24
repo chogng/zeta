@@ -25,10 +25,11 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: DebugAdapterStartParams = decode(params)?;
+        let workspace_folder_id = params.workspace_folder_id.clone();
         let command = DebugAdapterCommand::new(params.program, params.arguments)
             .map_err(debug_runtime_error)?;
         let session_id = self
-            .debug_adapter_service()?
+            .debug_adapter_service_for(workspace_folder_id.as_deref())?
             .start(connection.connection_id, command)
             .map_err(debug_runtime_error)?;
         result(&DebugAdapterStartResult { session_id })
@@ -40,7 +41,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: DebugAdapterSendParams = decode(params)?;
-        self.debug_adapter_service()?
+        self.debug_adapter_service_for(params.workspace_folder_id.as_deref())?
             .send(
                 connection.connection_id,
                 &params.session_id,
@@ -57,7 +58,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: DebugAdapterReadParams = decode(params)?;
         let read = self
-            .debug_adapter_service()?
+            .debug_adapter_service_for(params.workspace_folder_id.as_deref())?
             .read(
                 connection.connection_id,
                 &params.session_id,
@@ -89,7 +90,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: DebugAdapterCloseParams = decode(params)?;
-        self.debug_adapter_service()?
+        self.debug_adapter_service_for(params.workspace_folder_id.as_deref())?
             .close(connection.connection_id, &params.session_id)
             .map_err(debug_service_error)?;
         result(&())

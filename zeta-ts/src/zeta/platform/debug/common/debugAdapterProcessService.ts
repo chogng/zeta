@@ -3,6 +3,7 @@ import { type AppServerConnectionState } from "../../app-server/common/appServer
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export interface IDebugAdapterProcessStartOptions {
+	readonly workspaceFolderId?: string;
 	readonly program: string;
 	readonly arguments: readonly string[];
 }

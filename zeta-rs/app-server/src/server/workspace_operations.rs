@@ -8,6 +8,9 @@ use super::result;
 use super::workspace_runtime::WorkspaceRuntimeError;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceFolderDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceFoldersSetParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceFoldersSetResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceSwitchTrust;
@@ -165,7 +168,71 @@ impl AppServer {
         if !params.root.is_absolute() || params.root.as_os_str().is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let decision = match params.trust {
+        let decision =
+            self.resolve_workspace_switch_trust(connection, &params.root, params.trust)?;
+        let root = match decision {
+            Some(decision) => self
+                .switch_local_workspace_root_with_decision(params.root, decision)
+                .map_err(workspace_runtime_error)?,
+            None => self
+                .switch_local_workspace_root(params.root)
+                .map_err(workspace_runtime_error)?,
+        };
+        let trust = if self.active_workspace_is_trusted() {
+            WorkspaceTrustStateDto::Trusted
+        } else {
+            WorkspaceTrustStateDto::Restricted
+        };
+        result(&WorkspaceSwitchResult { root, trust })
+    }
+
+    pub(super) fn workspace_folders_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: WorkspaceFoldersSetParams = decode(params)?;
+        if params.folders.is_empty() || params.folders.len() > 256 {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let mut ids = std::collections::BTreeSet::new();
+        let mut folders = Vec::with_capacity(params.folders.len());
+        for folder in params.folders {
+            if folder.id.trim().is_empty()
+                || folder.id.len() > 256
+                || !ids.insert(folder.id.clone())
+                || !folder.root.is_absolute()
+                || folder.root.as_os_str().is_empty()
+            {
+                return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+            }
+            let decision =
+                self.resolve_workspace_switch_trust(connection, &folder.root, folder.trust)?;
+            let authorization = self
+                .authorize_local_workspace_root(folder.root, decision)
+                .map_err(workspace_runtime_error)?;
+            folders.push((folder.id, authorization));
+        }
+        let folders = self
+            .activate_local_workspace_folders(folders)
+            .map_err(workspace_runtime_error)?
+            .into_iter()
+            .map(|(id, root, decision)| WorkspaceFolderDto {
+                id,
+                root,
+                trust: workspace_trust_state(decision),
+            })
+            .collect();
+        result(&WorkspaceFoldersSetResult { folders })
+    }
+
+    fn resolve_workspace_switch_trust(
+        &self,
+        connection: &ConnectionState,
+        root: &std::path::Path,
+        trust: WorkspaceSwitchTrust,
+    ) -> Result<Option<WorkspaceTrustDecision>, RpcError> {
+        Ok(match trust {
             WorkspaceSwitchTrust::UserConfig => None,
             WorkspaceSwitchTrust::HostSession => {
                 require_workspace_trust_host(connection)?;
@@ -179,7 +246,7 @@ impl AppServer {
                 setting,
             } => {
                 require_workspace_trust_host(connection)?;
-                let workspace = WorkspaceRoot::open(params.root.clone())
+                let workspace = WorkspaceRoot::open(root.to_path_buf())
                     .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
                 let setting = match setting {
                     WorkspaceTrustSettingDto::Restricted => WorkspaceTrustSetting::Restricted,
@@ -211,21 +278,7 @@ impl AppServer {
                     })?;
                 Some(setting.into_decision())
             }
-        };
-        let root = match decision {
-            Some(decision) => self
-                .switch_local_workspace_root_with_decision(params.root, decision)
-                .map_err(workspace_runtime_error)?,
-            None => self
-                .switch_local_workspace_root(params.root)
-                .map_err(workspace_runtime_error)?,
-        };
-        let trust = if self.active_workspace_is_trusted() {
-            WorkspaceTrustStateDto::Trusted
-        } else {
-            WorkspaceTrustStateDto::Restricted
-        };
-        result(&WorkspaceSwitchResult { root, trust })
+        })
     }
 }
 
@@ -278,6 +331,14 @@ fn workspace_trust_setting(setting: WorkspaceTrustSettingDto) -> WorkspaceTrustS
     match setting {
         WorkspaceTrustSettingDto::Restricted => WorkspaceTrustSetting::Restricted,
         WorkspaceTrustSettingDto::Trusted => WorkspaceTrustSetting::Trusted,
+    }
+}
+
+fn workspace_trust_state(decision: WorkspaceTrustDecision) -> WorkspaceTrustStateDto {
+    if decision == WorkspaceTrustDecision::Restricted {
+        WorkspaceTrustStateDto::Restricted
+    } else {
+        WorkspaceTrustStateDto::Trusted
     }
 }
 

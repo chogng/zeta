@@ -2,6 +2,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
+import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { chatListItem, chatPlanListItem, chatTurnErrorListItem, type IChatListItem } from "../list/chatListItems.js";
@@ -174,7 +175,7 @@ export class ChatPaneModel extends DisposableOwner {
 		await this.sessionService.setModel(this.selection.active.session.sessionId, model);
 	}
 
-	async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
+	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
 		const input = text.trim();
 		if (!input) return;
 		try {
@@ -201,6 +202,7 @@ export class ChatPaneModel extends DisposableOwner {
 					turnId: turn.turnId,
 					expectedSequence: thread.sequence,
 					text: input,
+					contexts,
 				});
 			} else {
 				await this.chatService.startTurn({
@@ -208,6 +210,7 @@ export class ChatPaneModel extends DisposableOwner {
 					threadId: active.threadId,
 					expectedSequence: thread.sequence,
 					text: input,
+					contexts,
 					skills,
 				});
 			}

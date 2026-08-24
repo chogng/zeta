@@ -3,7 +3,8 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
-import { registerAction2 } from "../../../../../platform/actions/common/actions.js";
+import { URI } from "../../../../../base/common/uri.js";
+import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ServiceCollection } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -17,6 +18,7 @@ import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/bro
 
 test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
 	const status: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-input-stream",
 		revision: 1,
 		workspacePath: "/workspace",
@@ -72,8 +74,12 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+	const services = new ServiceCollection();
+	const menuService = new MenuService(new CommandService(services), contextKeyService);
 	const hoverOptions: HoverSetupOptions[] = [];
+	const graphRepositoryIds: Array<string | undefined> = [];
+	const remoteRepositoryIds: Array<string | undefined> = [];
+	let readySubscriptions = 0;
 	const hoverService: IHoverService = {
 		setupHover: (options) => {
 			hoverOptions.push(options);
@@ -83,6 +89,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		hideHover() {},
 	};
 	const status: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		revision: 1,
 		workspacePath: ".",
@@ -90,9 +97,18 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		changes: [],
 	};
 	const gitService = {
-			status: async () => status,
-			graph: async (query: GraphQuery) => {
+		activeRepository: { id: "repo-1", label: "workspace", path: "", root: URI.file("/workspace") },
+		onDidBecomeReady: () => {
+			readySubscriptions += 1;
+			return noEvent();
+		},
+		status: async (repositoryId?: string) => {
+			assert.equal(repositoryId, "repo-1");
+			return status;
+		},
+		graph: async (query: GraphQuery, repositoryId?: string) => {
 				graphRequests.push(query);
+				graphRepositoryIds.push(repositoryId);
 				return {
 					commits: [
 						{ objectId: "1234567890abcdef", parentObjectIds: ["abcdef1234567890", "side-parent"], timestampSeconds: 1_753_000_000, subject: "Wire SCM panes" },
@@ -107,13 +123,19 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 					nextCursor: undefined,
 				};
 			},
+		fetch: async (repositoryId?: string) => {
+			remoteRepositoryIds.push(repositoryId);
+			return status;
+		},
 	} as unknown as IGitService;
+	services.set(IGitService, gitService);
 
 	try {
 		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
 		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, testEditorService(), testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelectorAll(".zeta-scm-graph-commit").length === 2);
+		assert.equal(readySubscriptions, 1);
 
 		const remoteActionItems = [...pane.element.querySelectorAll<HTMLElement>(".zeta-pane-view-header-actions .zeta-action-view-item")];
 		assert.deepEqual(remoteActionItems.map((item) => item.dataset.actionId), ["zeta.git.fetch", "zeta.git.pull", "zeta.git.push", "zeta.git.graph.refresh"]);
@@ -128,6 +150,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		refresh.click();
 		await waitFor(() => graphRequests.length === 2 && pane.element.querySelectorAll(".zeta-scm-graph-subject").length === 2);
 		assert.deepEqual(graphRequests, [{ limit: 50 }, { limit: 50 }]);
+		assert.deepEqual(graphRepositoryIds, ["repo-1", "repo-1"]);
 
 		assert.deepEqual([...pane.element.querySelectorAll(".zeta-scm-graph-subject")].map((element) => element.textContent), ["Wire SCM panes", "Prepare graph data"]);
 		assert.equal(pane.element.querySelector(".zeta-scm-graph-commit.current")?.getAttribute("aria-current"), "true");
@@ -152,6 +175,13 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		assert.equal(pane.element.querySelector<SVGSVGElement>(".zeta-scm-graph-graph.merge")?.style.width, "44px");
 		assert.ok((pane.element.querySelector(".zeta-scm-graph-graph.merge")?.querySelectorAll(".zeta-scm-graph-path").length ?? 0) > 1);
 		assert.match(pane.element.querySelector(".zeta-scm-graph-metadata")?.textContent ?? "", /^1234567 · /);
+
+		const fetch = pane.element.querySelector<HTMLButtonElement>('[data-action-id="zeta.git.fetch"] > button');
+		assert.ok(fetch);
+		fetch.click();
+		await waitFor(() => remoteRepositoryIds.length === 1 && graphRequests.length === 3);
+		assert.deepEqual(remoteRepositoryIds, ["repo-1"]);
+		assert.equal(readySubscriptions, 1);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -181,6 +211,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 		hideHover() {},
 	};
 	const status: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		revision: 1,
 		workspacePath: ".",
@@ -188,6 +219,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 		changes: [],
 	};
 	const gitService = {
+		onDidBecomeReady: noEvent,
 		status: async () => status,
 		graph: async (query: GraphQuery) => {
 			graphRequests.push(query);
@@ -252,6 +284,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 	using contextKeyService = new ContextKeyService();
 	const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
 	const status: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
 		revision: 1,
 		workspacePath: ".",
@@ -265,6 +298,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 		subject: `Commit ${index}`,
 	}));
 	const gitService = {
+		onDidBecomeReady: noEvent,
 		status: async () => status,
 		graph: async (_query: GraphQuery) => ({ commits, references: [], remotes: [], hasMore: false, nextCursor: undefined }),
 	} as unknown as IGitService;
@@ -325,7 +359,9 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 	let changeRequests = 0;
 	let fileRequests = 0;
 	const gitService = {
+		onDidBecomeReady: noEvent,
 		status: async (): Promise<GitStatus> => ({
+			repositoryId: "repo-1",
 			streamInstanceId: "git-graph-stream",
 			revision: 1,
 			workspacePath: ".",
@@ -355,15 +391,25 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		showHover: () => testManagedHover(),
 		hideHover() {},
 	};
+	const contextMenus: Array<{
+		readonly menuId: MenuId;
+		readonly menuActionOptions?: { readonly arg?: unknown; readonly args?: readonly unknown[] };
+	}> = [];
+	const contextMenuService = {
+		showContextMenu: (options: { readonly menuId: MenuId; readonly menuActionOptions?: { readonly arg?: unknown; readonly args?: readonly unknown[] } }) => contextMenus.push(options),
+	} as unknown as IContextMenuService;
 
 	try {
 		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
-		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.changes.test", title: "Graph" }, gitService, menuService, {} as IContextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
+		using pane = new ScmGraphViewPane(browser.window.document.body, { id: "zeta.gitGraph.changes.test", title: "Graph" }, gitService, menuService, contextMenuService, contextKeyService, hoverService, editorService, testFileIconThemeService());
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".zeta-scm-graph-commit") !== null);
 
 		const commit = pane.element.querySelector<HTMLElement>(".zeta-scm-graph-commit");
 		assert.ok(commit);
+		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
+		assert.equal(contextMenus[0]?.menuId, MenuId.SCMHistoryItemContext);
+		assert.equal((contextMenus[0]?.menuActionOptions?.arg as { readonly objectId: string }).objectId, objectId);
 		commit.click();
 		await waitFor(() => pane.element.querySelector(".zeta-scm-graph-change") !== null);
 		assert.equal(changeRequests, 1);
@@ -378,6 +424,12 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		assert.ok(commit.querySelector(":scope > .zeta-scm-graph-row > .zeta-scm-graph-graph"));
 
 		const change = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-graph-change");
+		change?.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
+		assert.equal(contextMenus[1]?.menuId, MenuId.SCMHistoryItemChangeContext);
+		assert.deepEqual(
+			contextMenus[1]?.menuActionOptions?.args?.map(value => (value as { readonly path?: string; readonly objectId?: string }).path ?? (value as { readonly objectId?: string }).objectId),
+			[objectId, "src/editor.ts"],
+		);
 		change?.click();
 		await waitFor(() => opened.length === 1);
 		assert.equal(fileRequests, 1);
@@ -389,6 +441,10 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 		await waitFor(() => opened.length === 2);
 		assert.equal(fileRequests, 2);
 		assert.equal(opened[1].options?.pinned, true);
+		pane.dispose();
+		commit.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
+		change?.dispatchEvent(new browser.window.MouseEvent("contextmenu", { bubbles: true }));
+		assert.equal(contextMenus.length, 2);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -420,12 +476,15 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const installedGlobals = installDomGlobals(browser);
 	let requestCount = 0;
 	let stagedPaths: readonly string[] | undefined;
+	let stagedRepositoryId: string | undefined;
 	let completeStage: (() => void) | undefined;
 	let committedMessage: string | undefined;
+	let committedRepositoryId: string | undefined;
 	let statusListener: ((status: GitStatus) => void) | undefined;
-	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged" }> = [];
+	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged"; readonly repositoryId: string | undefined }> = [];
 	const opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = [];
 	const first: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-1",
 		revision: 1,
 		workspacePath: ".",
@@ -443,6 +502,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		],
 	};
 	const committedClean: GitStatus = {
+		repositoryId: first.repositoryId,
 		streamInstanceId: first.streamInstanceId,
 		revision: 2,
 		workspacePath: first.workspacePath,
@@ -453,26 +513,51 @@ test("ScmViewPane groups App Server Git status", async () => {
 		...first,
 		revision: 3,
 	};
+	const nestedStatus: GitStatus = {
+		repositoryId: "repo-2",
+		streamInstanceId: "git-stream-2",
+		revision: 1,
+		workspacePath: "/workspace/nested",
+		head: { type: "branch", name: "nested", objectId: "2345678901", upstream: undefined },
+		changes: [],
+	};
+	const repositories = [
+		{ id: first.repositoryId, label: "workspace", path: "", root: URI.file("/workspace") },
+		{ id: nestedStatus.repositoryId, label: "nested", path: "nested", root: URI.file("/workspace/nested") },
+	];
+	let activeRepository = repositories[0];
+	const selectedRepositories: string[] = [];
 	const gitService = {
+		repositories,
+		get activeRepository() { return activeRepository; },
+		onDidChangeRepositories: noEvent,
+		onDidChangeActiveRepository: noEvent,
+		selectRepository: async (repositoryId: string) => {
+			selectedRepositories.push(repositoryId);
+			activeRepository = repositories.find(repository => repository.id === repositoryId)!;
+			return nestedStatus;
+		},
 		status: async () => {
 			requestCount += 1;
 			return first;
 		},
-		stage: (paths: readonly string[]) => new Promise<GitStatus>((resolve) => {
+		stage: (paths: readonly string[], repositoryId?: string) => new Promise<GitStatus>((resolve) => {
 			stagedPaths = paths;
+			stagedRepositoryId = repositoryId;
 			completeStage = () => resolve(first);
 		}),
 		unstage: async () => first,
 		discardWorktree: async () => first,
-		commit: async (message: string) => {
+		commit: async (message: string, repositoryId?: string) => {
 			committedMessage = message;
+			committedRepositoryId = repositoryId;
 			return { objectId: "abcdef123456", status: committedClean };
 		},
 		fetch: async () => first,
 		pull: async () => first,
 		push: async () => first,
-		changeFile: async (path: string, comparison: "staged" | "unstaged") => {
-			changeFileRequests.push({ path, comparison });
+		changeFile: async (path: string, comparison: "staged" | "unstaged", repositoryId?: string) => {
+			changeFileRequests.push({ path, comparison, repositoryId });
 			return comparison === "staged"
 				? { original: { kind: "text" as const, text: "head\n" }, modified: { kind: "text" as const, text: "index\n" } }
 				: { original: { kind: "text" as const, text: "index\n" }, modified: { kind: "text" as const, text: "worktree\n" } };
@@ -525,7 +610,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.ok(stagedOpen);
 		stagedOpen.click();
 		await waitFor(() => opened.length === 1);
-		assert.deepEqual(changeFileRequests[0], { path: "staged.ts", comparison: "staged" });
+		assert.deepEqual(changeFileRequests[0], { path: "staged.ts", comparison: "staged", repositoryId: first.repositoryId });
 		assert.equal(opened[0].input.contentType, "application/vnd.stanza.editor-diff");
 		assert.equal(opened[0].input.label, "staged.ts (HEAD) ↔ staged.ts (Index)");
 		assert.equal(opened[0].options?.pinned, false);
@@ -534,7 +619,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		assert.ok(workingOpen);
 		workingOpen.click();
 		await waitFor(() => opened.length === 2);
-		assert.deepEqual(changeFileRequests[1], { path: "src/working.ts", comparison: "unstaged" });
+		assert.deepEqual(changeFileRequests[1], { path: "src/working.ts", comparison: "unstaged", repositoryId: first.repositoryId });
 		assert.equal(opened[1].input.contentType, "application/vnd.stanza.editor-diff");
 		assert.equal(opened[1].input.label, "working.ts (Index) ↔ working.ts (Working Tree)");
 		assert.equal(opened[1].options?.pinned, false);
@@ -574,6 +659,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		stage.click();
 		await waitFor(() => stagedPaths !== undefined);
 		assert.deepEqual(stagedPaths, ["src/working.ts"]);
+		assert.equal(stagedRepositoryId, first.repositoryId);
 		assert.equal(stage.disabled, true);
 		assert.equal(viewAllChanges.disabled, true);
 		assert.ok(completeStage);
@@ -593,11 +679,22 @@ test("ScmViewPane groups App Server Git status", async () => {
 		commit.click();
 		await waitFor(() => committedMessage !== undefined);
 		assert.equal(committedMessage, "ship scm");
+		assert.equal(committedRepositoryId, first.repositoryId);
 		await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent?.startsWith("Created commit abcdef1.") === true);
 
 		assert.ok(statusListener);
 		statusListener(external);
 		await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
+
+		const repositorySelector = pane.element.querySelector<HTMLSelectElement>('[aria-label="Active source control repository"]');
+		assert.ok(repositorySelector);
+		assert.equal(repositorySelector.closest("label")?.hidden, false);
+		assert.deepEqual([...repositorySelector.options].map(option => option.textContent), ["workspace", "nested — nested"]);
+		repositorySelector.value = nestedStatus.repositoryId;
+		repositorySelector.dispatchEvent(new browser.window.Event("change", { bubbles: true }));
+		await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "No changes.");
+		assert.deepEqual(selectedRepositories, [nestedStatus.repositoryId]);
+		assert.equal(repositorySelector.value, nestedStatus.repositoryId);
 
 		assert.equal(requestCount, 2);
 	} finally {
@@ -613,6 +710,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 	let statusListener: ((status: GitStatus) => void) | undefined;
 	let readyListener: (() => void) | undefined;
 	const previous: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-before-restart",
 		revision: 20,
 		workspacePath: ".",
@@ -620,6 +718,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		changes: [change("before.ts", "unmodified", "modified")],
 	};
 	const restarted: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-stream-after-restart",
 		revision: 1,
 		workspacePath: ".",
@@ -632,6 +731,10 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		head: { type: "branch", name: "late-before", objectId: "3333333", upstream: undefined },
 	};
 	const gitService = {
+		repositories: [],
+		activeRepository: undefined,
+		onDidChangeRepositories: noEvent,
+		onDidChangeActiveRepository: noEvent,
 			status: async () => statusRequest++ === 0 ? previous : restarted,
 			onDidChangeStatus: (listener: (status: GitStatus) => void) => {
 				statusListener = listener;
@@ -726,6 +829,11 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 		if (Date.now() >= deadline) throw new Error("Timed out waiting for ScmViewPane");
 		await new Promise((resolve) => setTimeout(resolve, 0));
 	}
+}
+
+function noEvent(): { dispose(): void; [Symbol.dispose](): void } {
+	const dispose = (): void => undefined;
+	return { dispose, [Symbol.dispose]: dispose };
 }
 
 function installDomGlobals(browser: JSDOM): readonly string[] {

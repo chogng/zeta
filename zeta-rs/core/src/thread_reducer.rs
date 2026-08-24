@@ -782,6 +782,7 @@ pub fn reduce_thread_event(
                     }
                 }
                 ThreadItem::UserMessage { .. }
+                | ThreadItem::UserContext { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
                 | ThreadItem::AgentMessage { .. }
@@ -1520,6 +1521,7 @@ fn turn_skill_activations_match(
     let selected = input.iter().filter_map(|input| match input {
         zeta_protocol::UserInput::Skill { skill } => Some(skill),
         zeta_protocol::UserInput::Text { .. }
+        | zeta_protocol::UserInput::Context { .. }
         | zeta_protocol::UserInput::ImageAttachment { .. }
         | zeta_protocol::UserInput::Image { .. }
         | zeta_protocol::UserInput::LocalImage { .. }
@@ -1695,6 +1697,7 @@ fn import_history(
                     }
                 }
                 ThreadItem::UserMessage { .. }
+                | ThreadItem::UserContext { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
                 | ThreadItem::AgentMessage { .. }

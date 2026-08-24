@@ -16,6 +16,7 @@ interface ExplorerNode {
 	readonly resource: URI;
 	readonly name: string;
 	readonly kind: FileKind;
+	readonly children?: readonly ExplorerNode[];
 }
 
 /** Workspace file tree backed by `IFileService` and the Workbench editor. */
@@ -60,6 +61,7 @@ export class ExplorerViewPane extends ViewPane {
 		this.tree = this.own(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>(this.scrollable.contentElement, {
 			hasChildren: (node) => node.kind === FileKind.Directory,
 			getChildren: async (node) => {
+				if (node.children) return node.children;
 				const entries = await this.fileService.readDirectory(node.resource);
 				return entries.map(explorerNode).sort(compareExplorerNodes);
 			},
@@ -97,24 +99,35 @@ export class ExplorerViewPane extends ViewPane {
 		this.error = undefined;
 		void this.tree.setInput(undefined);
 		this.render();
-		const folder = this.workspaceContextService.getWorkspace().folders[0];
-		if (!folder) {
+		const workspace = this.workspaceContextService.getWorkspace();
+		if (workspace.folders.length === 0) {
 			this.error = "Open a folder to browse files.";
 			this.render();
 			return;
 		}
 		try {
-			this.setTitle(folder.name);
-			const metadata = await this.fileService.stat(folder.uri);
-			if (metadata.kind !== FileKind.Directory) {
-				throw new Error("Workspace root is not a directory");
-			}
+			const roots = await Promise.all(workspace.folders.map(async folder => {
+				const metadata = await this.fileService.stat(folder.uri);
+				if (metadata.kind !== FileKind.Directory) throw new Error(`${folder.name} is not a directory`);
+				return {
+					resource: folder.uri,
+					name: folder.name,
+					kind: FileKind.Directory,
+				} satisfies ExplorerNode;
+			}));
 			if (this.isDisposed || generation !== this.workspaceGeneration) return;
-			this.root = {
-				resource: folder.uri,
-				name: folder.name,
-				kind: FileKind.Directory,
-			};
+			if (roots.length === 1) {
+				this.setTitle(roots[0]!.name);
+				this.root = roots[0];
+			} else {
+				this.setTitle(workspace.name ?? "Explorer");
+				this.root = {
+					resource: URI.parse(`zeta-workspace:/${encodeURIComponent(workspace.id)}`),
+					name: workspace.name ?? "Workspace",
+					kind: FileKind.Directory,
+					children: Object.freeze(roots),
+				};
+			}
 			this.render();
 			await this.tree.setInput(this.root);
 		} catch (error) {

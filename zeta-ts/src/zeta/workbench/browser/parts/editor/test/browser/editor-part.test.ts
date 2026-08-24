@@ -531,6 +531,49 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	dom.window.close();
 });
 
+test("EditorPart saves and restores groups, tabs, previews, active state, and pane ownership", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const panes: TestEditorPane[] = [];
+	registry.register(descriptor("stanza.editor.code", ".ts", () => trackPane(panes, "stanza.editor.code")));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	dom.window.document.body.append(editor.element);
+	editor.layout({ width: 900, height: 600 });
+	const first = input("C:\\project\\first.ts");
+	const second = input("C:\\project\\second.ts");
+	const third = input("C:\\project\\third.ts");
+
+	await editor.openEditor(first, { pinned: true });
+	await editor.openEditor(second, { pinned: false });
+	await editor.splitActiveGroupHorizontal();
+	await editor.openEditor(third, { pinned: true });
+	editor.groups[0]!.activateEditor(first);
+	editor.groups[1]!.activateEditor(third);
+	const saved = editor.saveWorkingSet("main");
+	const originalPanes = [...panes];
+
+	await editor.applyWorkingSet("empty", { preserveFocus: true });
+	assert.equal(editor.groups.length, 1);
+	assert.deepEqual(editor.groups[0]?.inputs, []);
+	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 0);
+	assert.equal(originalPanes.every(pane => pane.disposed), true);
+
+	await editor.applyWorkingSet(saved, { preserveFocus: true });
+	assert.deepEqual(
+		editor.groups.map(group => group.inputs.map(candidate => candidate.resource.fsPath)),
+		[[first.resource.fsPath, second.resource.fsPath], [second.resource.fsPath, third.resource.fsPath]],
+	);
+	assert.equal(editor.groups[0]?.activeInput?.resource.fsPath, first.resource.fsPath);
+	assert.equal(editor.groups[0]?.isPreview(editor.groups[0]!.inputs[1]!), true);
+	assert.equal(editor.groups[1]?.activeInput?.resource.fsPath, third.resource.fsPath);
+	assert.equal(editor.activeGroup, editor.groups[1]);
+	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 4);
+
+	editor.dispose();
+	assert.equal(editor.element.querySelectorAll(".zeta-editor-pane-host").length, 0);
+	dom.window.close();
+});
+
 test("Editor title toolbar splits the active group and owns More Actions", async () => {
 	const [
 		{ MenuService },

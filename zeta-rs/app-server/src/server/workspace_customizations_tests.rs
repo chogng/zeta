@@ -58,6 +58,7 @@ fn projected_changes_refresh_instruction_and_agent_snapshots() {
         "Review carefully.",
     );
     customizations.files_changed(&FsChanged::PathsChanged {
+        workspace_folder_id: None,
         paths: vec![
             PathBuf::from(".zeta/instructions/global.md"),
             PathBuf::from(".zeta/agents/reviewer.md"),

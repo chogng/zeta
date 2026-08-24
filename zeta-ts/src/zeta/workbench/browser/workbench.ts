@@ -23,7 +23,6 @@ import { IRemoteConnectionService } from "../../platform/remote/common/remoteCon
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
 import { UnavailableRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
-import { getRemoteWorkspacePath, isRemoteResource } from "../../platform/remote/common/remote.js";
 import type {
 	INativeHostApi,
 } from "../../platform/native/common/nativeHost.js";
@@ -65,7 +64,7 @@ import {
 	IThemeService,
 	ThemeService,
 } from "../../platform/theme/common/themeService.js";
-import { type IAnyWorkspaceIdentifier, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspaceIdentifier } from "../../platform/workspace/common/workspace.js";
+import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
 import {
 	type WorkbenchContributionHost,
@@ -150,6 +149,8 @@ import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
+import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
+import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexService.js";
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
@@ -222,7 +223,7 @@ export interface IStartWorkbenchOptions {
 	readonly profile: WorkbenchProfile;
 	readonly api: IRendererHost;
 	readonly container: HTMLElement;
-	readonly workspace: IAnyWorkspaceIdentifier;
+	readonly workspace: IWorkspace;
 	readonly configurationApi?: IConfigurationApi;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
@@ -291,7 +292,7 @@ export class Workbench extends DisposableOwner {
 		profile: WorkbenchProfile,
 		api: IRendererHost,
 		workbenchRoot: HTMLElement,
-		workspace: IAnyWorkspaceIdentifier,
+		workspace: IWorkspace,
 		configurationApi: IConfigurationApi | undefined,
 		keybindingsResourceApi: IKeybindingsResourceApi | undefined,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
@@ -375,7 +376,7 @@ export class Workbench extends DisposableOwner {
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
 		services.set(
 			IWorkspaceSearchService,
-			new BrowserWorkspaceSearchService(api.workspaceSearch),
+			new BrowserWorkspaceSearchService(api.workspaceSearch, workspaceContext),
 		);
 		const terminalService = this.own(new TerminalService(api.terminal, workspaceContext));
 		services.set(ITerminalService, terminalService);
@@ -413,6 +414,7 @@ export class Workbench extends DisposableOwner {
 		services.set(IConfigurationService, configuration);
 		const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.set(IChatService, chatService);
+		services.set(IChatContextPickService, new ChatContextPickService());
 		const languagePackService = this.own(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.set(ILanguagePackService, languagePackService);
 		const localeService = this.own(new WorkbenchLocaleService(configuration, languagePackService));
@@ -491,7 +493,7 @@ export class Workbench extends DisposableOwner {
 		const dialogService = this.own(new DialogService());
 		services.set(IDialogService, dialogService);
 		services.set(IDialogsModel, dialogService.model);
-		const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService));
+		const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
 		services.set(ILanguageServerStatusService, languageServerStatusService);
 		services.set(
 			IWorkbenchDialogHandler,
@@ -536,11 +538,7 @@ export class Workbench extends DisposableOwner {
 			events: api.events,
 			...(nativeHostApi ? {
 				workspaceRouter: {
-					currentWorkspaceRoot: () => {
-						const resource = workspaceContext.getWorkspace().folders[0]?.uri;
-						if (!resource) return undefined;
-						return isRemoteResource(resource) ? getRemoteWorkspacePath(resource) : resource.fsPath;
-					},
+					currentWorkspaceRoot: () => workspaceOpenTarget(workspaceContext.getWorkspace()),
 					reopenWorkspace: (root: string) => nativeHostApi.openWorkspace(root),
 				},
 			} : {}),
@@ -881,13 +879,13 @@ export class Workbench extends DisposableOwner {
 	}
 
 	/** Applies a host-authoritative workspace replacement without rebuilding the Workbench. */
-	updateWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<void> {
+	updateWorkspace(workspace: IWorkspace): Promise<void> {
 		const switching = this.workspaceSwitchQueue.then(() => this.doUpdateWorkspace(workspace));
 		this.workspaceSwitchQueue = switching.then(() => undefined, () => undefined);
 		return switching;
 	}
 
-	private async doUpdateWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<void> {
+	private async doUpdateWorkspace(workspace: IWorkspace): Promise<void> {
 		if (this.workspaceContext.getWorkspace().id === workspace.id) return;
 		await this.workingCopyBackupTracker.flush();
 		for (const group of this.editor.groups) {
@@ -897,7 +895,7 @@ export class Workbench extends DisposableOwner {
 		this.workingCopyBackups.switchWorkspace(workspace.id);
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
 		this.storage.switchWorkspace(workspace.id);
-		const nextWorkbenchState = workbenchStateFromWorkspaceIdentifier(workspace);
+		const nextWorkbenchState = workbenchStateFromWorkspace(workspace);
 		this.workbenchWindow.setWorkbenchState(nextWorkbenchState);
 		this.workspaceContext.updateWorkspace(workspace);
 		this.editor.setWelcomeVisible(nextWorkbenchState === WorkbenchState.EMPTY);

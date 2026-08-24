@@ -374,8 +374,10 @@ impl AppServer {
     /// Long-lived process hosts use this signal to avoid stopping while a detached terminal can
     /// still be recovered. A poisoned terminal registry is conservatively treated as non-empty.
     pub fn active_terminal_count(&self) -> usize {
-        self.configured_terminal_service()
-            .map_or(0, |terminals| terminals.active_count())
+        self.configured_terminal_services()
+            .into_iter()
+            .map(|terminals| terminals.active_count())
+            .sum()
     }
 
     pub fn new(sessions: Arc<SessionCoordinator>, model: Arc<dyn ModelService>) -> Self {
@@ -626,10 +628,10 @@ impl AppServer {
         if let Ok(mut uploads) = self.attachment_uploads.lock() {
             uploads.release_owner(connection.connection_id);
         }
-        if let Some(terminals) = self.configured_terminal_service() {
+        for terminals in self.configured_terminal_services() {
             terminals.close_owner(connection.connection_id);
         }
-        if let Some(debug_adapters) = self.configured_debug_adapter_service() {
+        for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
         }
         if let Some(extension_hosts) = &self.extension_hosts {
@@ -1507,6 +1509,9 @@ impl AppServer {
             Some(ClientMethod::WorkspaceSwitch) => {
                 self.workspace_switch(connection, &request.params)
             }
+            Some(ClientMethod::WorkspaceFoldersSet) => {
+                self.workspace_folders_set(connection, &request.params)
+            }
             Some(ClientMethod::WorkspaceTrustRead) => {
                 self.workspace_trust_read(connection, &request.params)
             }
@@ -1785,10 +1790,11 @@ impl AppServer {
             Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
             Some(ClientMethod::FsRename) => self.fs_rename(&request.params),
             Some(ClientMethod::FsDelete) => self.fs_delete(&request.params),
-            Some(ClientMethod::GitStatus) => self.git_status(),
-            Some(ClientMethod::GitTextDiff) => self.git_text_diff(),
-            Some(ClientMethod::GitBranchList) => self.git_branch_list(),
-            Some(ClientMethod::GitHistory) => self.git_history(),
+            Some(ClientMethod::GitRepositories) => self.git_repositories(),
+            Some(ClientMethod::GitStatus) => self.git_status(&request.params),
+            Some(ClientMethod::GitTextDiff) => self.git_text_diff(&request.params),
+            Some(ClientMethod::GitBranchList) => self.git_branch_list(&request.params),
+            Some(ClientMethod::GitHistory) => self.git_history(&request.params),
             Some(ClientMethod::GitGraph) => {
                 self.git_graph(connection.connection_id, &request.params)
             }
@@ -1800,9 +1806,9 @@ impl AppServer {
             Some(ClientMethod::GitUnstage) => self.git_unstage(&request.params),
             Some(ClientMethod::GitDiscardWorktree) => self.git_discard_worktree(&request.params),
             Some(ClientMethod::GitCommit) => self.git_commit(&request.params),
-            Some(ClientMethod::GitFetch) => self.git_fetch(),
-            Some(ClientMethod::GitPull) => self.git_pull(),
-            Some(ClientMethod::GitPush) => self.git_push(),
+            Some(ClientMethod::GitFetch) => self.git_fetch(&request.params),
+            Some(ClientMethod::GitPull) => self.git_pull(&request.params),
+            Some(ClientMethod::GitPush) => self.git_push(&request.params),
             Some(ClientMethod::WorkspaceSearchStart) => {
                 self.workspace_search_start(connection, &request.params)
             }

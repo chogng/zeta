@@ -37,6 +37,10 @@ pub struct LanguageRangeDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageDocumentDto {
+    /// Workspace folder that owns this document in a multi-root workspace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
     pub language_id: String,
     #[ts(type = "number")]
@@ -56,6 +60,9 @@ pub struct LanguageSynchronizeParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageCloseParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
 }
 
@@ -217,6 +224,9 @@ pub struct LanguageDocumentDiagnosticsResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageWorkspaceDiagnosticsParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub language_id: String,
 }
 
@@ -323,6 +333,9 @@ pub struct LanguageHierarchyResultDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageWorkspaceSymbolsParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub language_id: String,
     #[schemars(length(max = 1024))]
     pub query: String,
@@ -771,6 +784,9 @@ pub struct LanguageCodeActionDiagnosticDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageDiagnosticsNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
     #[ts(type = "number")]
     pub revision: u64,
@@ -800,6 +816,9 @@ pub enum LanguageServerMessageSourceDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageServerMessageNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub server: String,
     pub severity: LanguageServerMessageSeverityDto,
     pub source: LanguageServerMessageSourceDto,
@@ -811,6 +830,9 @@ pub struct LanguageServerMessageNotification {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageServerProgressNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub server: String,
     pub token: String,
     pub title: Option<String>,
@@ -846,6 +868,9 @@ pub enum LanguageServerStateDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageServerStateNotification {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub server: String,
     pub state: LanguageServerStateDto,
 }

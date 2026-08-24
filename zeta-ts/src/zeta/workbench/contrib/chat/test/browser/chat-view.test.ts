@@ -22,6 +22,7 @@ import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
+import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
 import type { TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
@@ -35,6 +36,10 @@ import { WorkbenchQuickInputService } from "../../../../../workbench/services/qu
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const emptyChatContextPickService = new ChatContextPickService();
+const unavailableQuickInputService = {
+	createQuickPick: () => { throw new Error("Quick input is unavailable in this test"); },
+} as IQuickInputService;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -185,6 +190,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		contextViewService,
 		commands,
 		layout,
+		emptyChatContextPickService,
+		unavailableQuickInputService,
 	);
 	const title = h(dom.window.document, "div");
 	title.className = "zeta-pane-composite-title";
@@ -330,7 +337,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.mode'] button")?.textContent, "Agent");
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.model'] button .zeta-button-label")?.textContent, "GPT-5.6 Sol");
 		assert.equal(inputToolbar?.querySelector(".zeta-chat-input-model-access-badge")?.textContent, "ChatGPT subscription");
-		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, true);
+		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.attachment'] button")?.disabled, false);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='zeta.chat.input.send'] button")?.disabled, true);
 	}
 	const firstChatPane = chatPanes[0]!;
@@ -501,6 +508,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		contextViewService,
 		commands,
 		layout,
+		emptyChatContextPickService,
+		unavailableQuickInputService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -528,6 +537,17 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	const input = untitledPane.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains("empty"), true);
+	let contextResolutions = 0;
+	pane.addContext({
+		id: "commit-1",
+		kind: "scmHistoryItem",
+		name: "abc1234 · Explain context transport",
+		resolve: async () => {
+			contextResolutions += 1;
+			return { name: "Git commit abc1234", content: "diff --git a/file b/file" };
+		},
+	});
+	assert.equal(untitledPane.querySelector(".zeta-chat-input-attachment-label")?.textContent, "abc1234 · Explain context transport");
 	typeStanzaText(dom.window, input, "Hello from an untitled session");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -543,6 +563,12 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(fake.createThreadRequests.length, 1);
 	assert.equal(fake.turnStartRequests.length, 1);
+	assert.equal(contextResolutions, 1);
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: "context", name: "Git commit abc1234", content: "diff --git a/file b/file" },
+		{ type: "text", text: "Hello from an untitled session" },
+	]);
+	assert.equal(untitledPane.querySelector(".zeta-chat-input-attachment-item"), null);
 	assert.equal(sessions.untitledSessions.length, 0);
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.equal(sessions.active?.threadId, "thread-1");
@@ -601,6 +627,8 @@ test("the New Chat slash command opens an untitled session", async () => {
 		contextViewService,
 		commands,
 		layout,
+		emptyChatContextPickService,
+		unavailableQuickInputService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -674,6 +702,8 @@ test("failed first send keeps the untitled session and its input draft", async (
 		contextViewService,
 		commands,
 		layout,
+		emptyChatContextPickService,
+		unavailableQuickInputService,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -682,6 +712,12 @@ test("failed first send keeps the untitled session and its input draft", async (
 
 	const input = pane.element.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
 	assert.ok(input);
+	pane.addContext({
+		id: "failed-commit",
+		kind: "scmHistoryItem",
+		name: "failed commit",
+		resolve: async () => ({ name: "Git commit failed", content: "change" }),
+	});
 	typeStanzaText(dom.window, input, "Keep this draft");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -693,6 +729,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
+	assert.equal(pane.element.querySelector(".zeta-chat-input-attachment-label")?.textContent, "failed commit");
 	assert.equal(pane.element.querySelector(".stanza-editor-line-text")?.textContent, "Keep this draft");
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
@@ -746,6 +783,8 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		contextViewService,
 		commands,
 		layout,
+		emptyChatContextPickService,
+		unavailableQuickInputService,
 	);
 	dom.window.document.body.append(pane.element);
 

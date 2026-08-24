@@ -12,7 +12,9 @@ import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
+import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
+import type { ChatContextAttachment, IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import { modelAccessLabel } from "../../../../services/chat/common/modelCatalog.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
@@ -43,8 +45,11 @@ export class ChatInputPart extends DisposableOwner {
 	readonly element: HTMLElement;
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this.own(new ResettableDisposableGroup());
+	private readonly attachmentListeners = this.own(new ResettableDisposableGroup());
+	private readonly attachments = new Map<string, ChatContextAttachment>();
 	private readonly status: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
+	private readonly attachmentList: HTMLDivElement;
 	private readonly inputContainer: HTMLFormElement;
 	private readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
@@ -55,7 +60,7 @@ export class ChatInputPart extends DisposableOwner {
 	private skillCommands: ChatInputState["skillCommands"] = [];
 	private mode: ChatInputMode = "agent";
 
-	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService) {
+	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly contextPickService: IChatContextPickService, private readonly quickInputService: IQuickInputService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
@@ -70,6 +75,9 @@ export class ChatInputPart extends DisposableOwner {
 		this.interaction.setAttribute("aria-live", "polite");
 		this.inputContainer = h(ownerDocument, "form");
 		this.inputContainer.className = "zeta-chat-input-container";
+		this.attachmentList = h(ownerDocument, "div");
+		this.attachmentList.className = "zeta-chat-input-attachments";
+		this.attachmentList.setAttribute("aria-label", "Attached context");
 		const editorHost = h(ownerDocument, "div");
 		editorHost.className = "zeta-chat-input-editor-host";
 		this.input = this.own(ChatInputEditors.create({
@@ -83,7 +91,7 @@ export class ChatInputPart extends DisposableOwner {
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("zeta-chat-input-toolbars");
-		this.inputContainer.append(editorHost, this.inputToolbar.element);
+		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.element.append(this.status, this.interaction, this.inputContainer);
 		this.own(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
 		this.own(addDisposableListener(this.inputContainer, "focusout", event => {
@@ -92,19 +100,7 @@ export class ChatInputPart extends DisposableOwner {
 		}));
 		this.own(addDisposableListener(this.inputContainer, "submit", (event) => {
 			event.preventDefault();
-			const value = this.input.value;
-			if (!value.trim()) return;
-			const input = parseSlashCommandInput(value, this.slashCommands);
-			if (input.kind === "command" && input.binding.origin === "local") {
-				this.submit(value, this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
-				return;
-			}
-			if (input.kind === "command" && input.binding.origin === "server") {
-				this.submit(value, this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
-				return;
-			}
-			const skills = input.kind === "command" && input.binding.origin === "skill" ? [input.binding.skill] : undefined;
-			this.submit(value, this.delegate.send(value, skills));
+			void this.acceptInput().catch(() => undefined);
 		}));
 		this.own(this.input.onDidChange(() => {
 			this.status.textContent = this.statusText(this.state);
@@ -112,22 +108,55 @@ export class ChatInputPart extends DisposableOwner {
 		}));
 		this.own(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this.renderToolbarActions();
+		this.renderAttachments();
 		this.defer(() => this.element.remove());
 	}
 
-	private submit(value: string, operation: Promise<void>): void {
+	private async submit(value: string, contexts: readonly ChatContextAttachment[], operation: Promise<void>): Promise<void> {
 		this.input.value = "";
 		this.renderToolbar();
-		void operation.catch(() => {
+		try {
+			await operation;
+			for (const context of contexts) {
+				const key = attachmentKey(context);
+				if (this.attachments.get(key) === context) this.attachments.delete(key);
+			}
+			this.renderAttachments();
+		} catch (error) {
 			if (!this.input.value) {
 				this.input.value = value;
 				this.renderToolbar();
 			}
-		});
+			throw error;
+		}
 	}
 
 	focus(): void {
 		this.input.focus();
+	}
+
+	addContext(attachment: ChatContextAttachment): void {
+		if (!attachment.id.trim() || !attachment.kind.trim() || !attachment.name.trim()) throw new TypeError("Chat context attachment requires an ID, kind, and name");
+		this.attachments.set(attachmentKey(attachment), attachment);
+		this.renderAttachments();
+	}
+
+	async acceptInput(value?: string): Promise<void> {
+		if (value !== undefined) this.input.value = value;
+		const inputValue = this.input.value;
+		if (!inputValue.trim()) return;
+		const input = parseSlashCommandInput(inputValue, this.slashCommands);
+		if (input.kind === "command" && input.binding.origin === "local") {
+			await this.submit(inputValue, [], this.delegate.executeCommand({ commandId: input.binding.actionId, argumentsText: input.argumentsText }));
+			return;
+		}
+		if (input.kind === "command" && input.binding.origin === "server") {
+			await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
+			return;
+		}
+		const skills = input.kind === "command" && input.binding.origin === "skill" ? [input.binding.skill] : undefined;
+		const contexts = [...this.attachments.values()];
+		await this.submit(inputValue, contexts, this.delegate.send(inputValue, skills, contexts));
 	}
 
 	openModelSelector(): void {
@@ -227,11 +256,11 @@ export class ChatInputPart extends DisposableOwner {
 		const attachmentAction = new ChatInputAction(
 			"zeta.chat.input.attachment",
 			"Attach",
-			"Attachments are not available yet",
+			"Attach context",
 			lxiconsLibrary.paperclip,
-			false,
+			true,
 			"attachment",
-			() => {},
+			() => void this.pickContext(),
 		);
 		const sendAction = new ChatInputAction(
 			"zeta.chat.input.send",
@@ -250,6 +279,38 @@ export class ChatInputPart extends DisposableOwner {
 			: [sendAction];
 		const inputActions = this.toolbarState.inputKind === "command" ? [modeAction] : [modeAction, modelAction, attachmentAction];
 		this.inputToolbar.setActions([...inputActions, ...trailingActions]);
+	}
+
+	private async pickContext(): Promise<void> {
+		const attachment = await this.contextPickService.pickContext(this.quickInputService);
+		if (!attachment) return;
+		this.addContext(attachment);
+		this.focus();
+	}
+
+	private renderAttachments(): void {
+		this.attachmentListeners.clear();
+		const children: HTMLElement[] = [];
+		for (const attachment of this.attachments.values()) {
+			const item = h(this.element.ownerDocument, "div");
+			item.className = "zeta-chat-input-attachment-item";
+			const label = h(this.element.ownerDocument, "span");
+			label.className = "zeta-chat-input-attachment-label";
+			label.textContent = attachment.name;
+			const remove = h(this.element.ownerDocument, "button");
+			remove.type = "button";
+			remove.className = "zeta-chat-input-attachment-remove";
+			remove.setAttribute("aria-label", `Remove ${attachment.name}`);
+			appendIcon(lxiconsLibrary.close, remove);
+			this.attachmentListeners.add(addDisposableListener(remove, "click", () => {
+				this.attachments.delete(attachmentKey(attachment));
+				this.renderAttachments();
+			}));
+			item.append(label, remove);
+			children.push(item);
+		}
+		this.attachmentList.replaceChildren(...children);
+		this.attachmentList.hidden = children.length === 0;
 	}
 
 	private createToolbarViewItem(action: IAction, contextMenuService: IContextMenuService, contextViewService: IContextViewService): ActionViewItem | undefined {
@@ -359,6 +420,10 @@ export class ChatInputPart extends DisposableOwner {
 				return state.canInterrupt ? "Zeta is working..." : "";
 		}
 	}
+}
+
+function attachmentKey(attachment: ChatContextAttachment): string {
+	return `${attachment.kind}\0${attachment.id}`;
 }
 
 class ChatInputAction implements IAction {

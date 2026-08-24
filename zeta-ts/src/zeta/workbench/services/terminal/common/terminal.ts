@@ -35,6 +35,7 @@ export type ITerminalProfileSelection =
 
 /** Complete caller-facing input for creating one terminal. */
 export interface ITerminalCreateOptions {
+	readonly workspaceFolderId?: string;
 	readonly dimensions: ITerminalDimensions;
 	readonly profile: ITerminalProfileSelection;
 	readonly title?: string;
@@ -43,6 +44,7 @@ export interface ITerminalCreateOptions {
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
 	readonly id: string;
+	readonly workspaceFolderId: string;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
 	readonly state: TerminalInstanceState;

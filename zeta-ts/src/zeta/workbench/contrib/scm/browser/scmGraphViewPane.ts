@@ -6,8 +6,10 @@ import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
+import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
@@ -17,7 +19,7 @@ import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js"
 import { ViewPane } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
 import { createRows, GraphRowHeight, renderRow, type GraphNodeKind, type GraphRow, type GraphState } from "./scmGraphRenderer.js";
-import { ScmGraphTitleActions } from "./scmGraphTitleActions.js";
+import { GitGraphBusyContext } from "./scmGraphTitleActions.js";
 import { gitErrorMessage } from "./scmError.js";
 
 const PageSize = 50;
@@ -32,7 +34,7 @@ type ExpandedCommit =
 /** Paged repository history rendered as a compact commit graph. */
 export class ScmGraphViewPane extends ViewPane {
 	private readonly gitService: IGitService;
-	private readonly actions: ScmGraphTitleActions;
+	private readonly busyContext: IContextKey<boolean>;
 	private readonly graphElement: HTMLDivElement;
 	private readonly hovers = this.own(new ResettableDisposableGroup());
 	private readonly more = this.own(new ResettableDisposableGroup());
@@ -47,8 +49,10 @@ export class ScmGraphViewPane extends ViewPane {
 	private list: HTMLOListElement | undefined;
 	private readonly refs = new Map<string, readonly GitReference[]>();
 	private readonly expanded = new Map<string, ExpandedCommit>();
+	private graphRepositoryId: string | undefined;
+	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, menuService: IMenuService, private readonly contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly hoverService: IHoverService, private readonly editorService: IEditorService, private readonly fileIconThemeService: IFileIconThemeService) {
 		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
 		this.gitService = gitService;
 		this.contentElement.classList.add("zeta-scm-secondary-pane");
@@ -63,18 +67,34 @@ export class ScmGraphViewPane extends ViewPane {
 		this.contentElement.append(this.graphElement);
 		this.own(observeElementSize(this.graphElement, () => this.renderRows()));
 		this.own(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
-		this.actions = this.own(new ScmGraphTitleActions(this.headerActionsElement, {
-			gitService,
+		this.busyContext = GitGraphBusyContext.bindTo(contextKeyService);
+		this.defer(() => this.busyContext.reset());
+		const toolbar = this.own(new MenuWorkbenchToolBar(
+			this.headerActionsElement,
 			menuService,
 			contextMenuService,
-			contextKeyService,
-			refreshGraph: () => this.refresh(),
-		}));
+			MenuId.GitGraphTitle,
+			{ ariaLabel: "Git graph actions", menuOptions: { arg: this } },
+		));
+		toolbar.element.classList.add("zeta-scm-remote-actions");
+		this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
 		void this.refresh();
+	}
+
+	public async runTitleOperation(operation?: () => Promise<unknown>): Promise<void> {
+		this.busyContext.set(true);
+		try {
+			await operation?.();
+			await this.refresh();
+		} finally {
+			this.busyContext.set(false);
+		}
 	}
 
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
+		const repositoryId = this.gitService.activeRepository?.id;
+		this.graphRepositoryId = repositoryId;
 		this.page = undefined;
 		this.head = undefined;
 		this.cursor = undefined;
@@ -91,10 +111,11 @@ export class ScmGraphViewPane extends ViewPane {
 		this.graphElement.setAttribute("aria-busy", "true");
 		try {
 			const [graph, status] = await Promise.all([
-				this.gitService.graph({ limit: PageSize }),
-				this.gitService.status(),
+				this.gitService.graph({ limit: PageSize }, repositoryId),
+				this.gitService.status(repositoryId),
 			]);
 			if (this.isDisposed || generation !== this.generation) return;
+			this.graphRepositoryId = status.repositoryId;
 			this.page = graph;
 			this.head = status.head;
 			this.cursor = graph.nextCursor;
@@ -111,7 +132,7 @@ export class ScmGraphViewPane extends ViewPane {
 			retry.type = "button";
 			retry.textContent = "Retry";
 			retry.setAttribute("aria-label", "Retry loading commit graph");
-			this.own(addDisposableListener(retry, "click", () => void this.refresh()));
+			this.more.add(addDisposableListener(retry, "click", () => void this.refresh()));
 			this.graphElement.replaceChildren(message, retry);
 			this.graphElement.setAttribute("aria-busy", "false");
 		}
@@ -245,7 +266,7 @@ export class ScmGraphViewPane extends ViewPane {
 		try {
 			while (this.page?.hasMore) {
 				const current = this.page;
-				const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) });
+				const next = await this.gitService.graph({ limit: PageSize, ...(this.cursor ? { cursor: this.cursor } : {}) }, this.graphRepositoryId);
 				if (this.isDisposed || generation !== this.generation) return;
 				const commits = [...current.commits];
 				const knownObjectIds = new Set(commits.map((commit) => commit.objectId));
@@ -326,6 +347,15 @@ export class ScmGraphViewPane extends ViewPane {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			event.preventDefault();
 			void this.toggleCommit(commit);
+		}));
+		this.hovers.add(addDisposableListener(item, "contextmenu", event => {
+			event.preventDefault();
+			event.stopPropagation();
+			this.contextMenuService.showContextMenu({
+				anchor: event,
+				menuId: MenuId.SCMHistoryItemContext,
+				menuActionOptions: { arg: commit },
+			});
 		}));
 		return item;
 	}
@@ -410,6 +440,15 @@ export class ScmGraphViewPane extends ViewPane {
 				event.stopPropagation();
 				void this.openCommitChange(commit, change, expanded.result, true);
 			}));
+			this.hovers.add(addDisposableListener(button, "contextmenu", event => {
+				event.preventDefault();
+				event.stopPropagation();
+				this.contextMenuService.showContextMenu({
+					anchor: event,
+					menuId: MenuId.SCMHistoryItemChangeContext,
+					menuActionOptions: { args: [commit, change] },
+				});
+			}));
 			row.append(button);
 			list.append(row);
 		}
@@ -425,7 +464,7 @@ export class ScmGraphViewPane extends ViewPane {
 		this.expanded.set(commit.objectId, { state: "loading" });
 		this.renderRows();
 		try {
-			const result = await this.gitService.commitChanges(commit.objectId);
+			const result = await this.gitService.commitChanges(commit.objectId, commit.repositoryId);
 			if (this.isDisposed || generation !== this.generation || !this.expanded.has(commit.objectId)) return;
 			this.expanded.set(commit.objectId, { state: "ready", result });
 		} catch (error) {
@@ -436,7 +475,7 @@ export class ScmGraphViewPane extends ViewPane {
 	}
 
 	private async openCommitChange(commit: GitCommitSummary, change: GitCommitChange, expanded: GitCommitChanges, pinned: boolean): Promise<void> {
-		const file = await this.gitService.commitFile(commit.objectId, change.path);
+		const file = await this.gitService.commitFile(commit.objectId, change.path, commit.repositoryId);
 		const name = change.path.split("/").at(-1) ?? change.path;
 		const original = file.original.kind === "text" ? {
 			resource: commitFileUri(expanded.parentObjectId ?? "root", change.originalPath ?? change.path, "original"),

@@ -7,6 +7,7 @@ fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
     let root = WorkspaceRoot::open(directory.path()).unwrap();
     let projected = project_event(
         &root,
+        None,
         FileWatcherEvent::PathsChanged {
             paths: vec![
                 root.requested_path().join("src/main.rs"),
@@ -24,6 +25,7 @@ fn changed_paths_are_projected_to_sorted_workspace_relative_paths() {
     assert_eq!(
         projected,
         Some(FsChanged::PathsChanged {
+            workspace_folder_id: None,
             paths: vec![PathBuf::from("README.md"), PathBuf::from("src/main.rs")],
         }),
     );
@@ -35,12 +37,18 @@ fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
     let root = WorkspaceRoot::open(directory.path()).unwrap();
     let projected = project_event(
         &root,
+        None,
         FileWatcherEvent::RescanRequired {
             watched_paths: vec![root.requested_path().to_path_buf()],
         },
     );
 
-    assert_eq!(projected, Some(FsChanged::RescanRequired));
+    assert_eq!(
+        projected,
+        Some(FsChanged::RescanRequired {
+            workspace_folder_id: None,
+        })
+    );
 }
 
 #[test]

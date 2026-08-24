@@ -104,7 +104,7 @@ export class TerminalViewPane extends ViewPane {
 			}
 		}));
 		this.own(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
-			if (workspace.folders.length === 1 && this.terminalService.instances.length === 0) void this.initialize();
+			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
 		}));
 
 		this.own(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
@@ -262,7 +262,7 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private hasWorkspaceFolder(): boolean {
-		return this.workspaceContext.getWorkspace().folders.length === 1;
+		return this.workspaceContext.getWorkspace().folders.length > 0;
 	}
 
 }

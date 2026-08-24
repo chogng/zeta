@@ -33,12 +33,13 @@ function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
 }
 
 function workspaceSearchStartParams(value: unknown): WorkspaceSearchStartParams {
-	const params = record(value, ["query", "patternKind", "caseSensitivity", "includePatterns", "excludePatterns", "maxResults"]);
+	const params = record(value, ["query", "patternKind", "caseSensitivity", "includePatterns", "excludePatterns", "maxResults"], ["workspaceFolderId"]);
 	const query = nonEmptyString(params.query, "query");
 	if (new TextEncoder().encode(query).byteLength > 16_384) {
 		throw new Error("query must not exceed 16384 UTF-8 bytes");
 	}
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		query,
 		patternKind: stringEnum(params.patternKind, "patternKind", ["literal", "regex"] as const),
 		caseSensitivity: stringEnum(params.caseSensitivity, "caseSensitivity", ["smart", "sensitive", "insensitive"] as const),
@@ -49,8 +50,9 @@ function workspaceSearchStartParams(value: unknown): WorkspaceSearchStartParams 
 }
 
 function workspaceSearchReadParams(value: unknown): WorkspaceSearchReadParams {
-	const params = record(value, ["searchId", "afterMatch", "maxMatches"]);
+	const params = record(value, ["searchId", "afterMatch", "maxMatches"], ["workspaceFolderId"]);
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		searchId: nonEmptyString(params.searchId, "searchId"),
 		afterMatch: nonNegativeInteger(params.afterMatch, "afterMatch"),
 		maxMatches: boundedPositiveInteger(params.maxMatches, "maxMatches", 200),
@@ -58,8 +60,12 @@ function workspaceSearchReadParams(value: unknown): WorkspaceSearchReadParams {
 }
 
 function workspaceSearchCancelParams(value: unknown): WorkspaceSearchCancelParams {
-	const params = record(value, ["searchId"]);
-	return { searchId: nonEmptyString(params.searchId, "searchId") };
+	const params = record(value, ["searchId"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), searchId: nonEmptyString(params.searchId, "searchId") };
+}
+
+function workspaceFolder(value: unknown): { readonly workspaceFolderId?: string } {
+	return value === undefined ? {} : { workspaceFolderId: nonEmptyString(value, "workspaceFolderId") };
 }
 
 function searchPatterns(value: unknown, field: string): string[] {

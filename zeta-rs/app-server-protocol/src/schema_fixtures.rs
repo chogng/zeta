@@ -72,6 +72,7 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("fs/readBinaryFile"));
     assert!(methods.contains("fs/writeFile"));
     assert!(methods.contains("git/status"));
+    assert!(methods.contains("git/repositories"));
     assert!(methods.contains("git/textDiff"));
     assert!(methods.contains("git/branch/list"));
     assert!(methods.contains("git/branch/switch"));
@@ -116,10 +117,14 @@ fn registry_method_and_notification_names_are_unique() {
 }
 
 #[test]
-fn turn_input_items_preserve_ordered_text_image_and_skill_shapes() {
+fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
     let input = vec![
         InputItem::Text {
             text: "describe".into(),
+        },
+        InputItem::Context {
+            name: "Git commit abc1234".into(),
+            content: "diff --git a/file b/file".into(),
         },
         InputItem::Image {
             url: "https://example.test/image.png".into(),
@@ -139,6 +144,11 @@ fn turn_input_items_preserve_ordered_text_image_and_skill_shapes() {
         serde_json::to_value(input).unwrap(),
         serde_json::json!([
             {"type": "text", "text": "describe"},
+            {
+                "type": "context",
+                "name": "Git commit abc1234",
+                "content": "diff --git a/file b/file"
+            },
             {"type": "image", "url": "https://example.test/image.png"},
             {
                 "type": "skill",
@@ -161,13 +171,17 @@ fn turn_input_items_preserve_ordered_text_image_and_skill_shapes() {
 fn filesystem_change_hints_are_relative_or_request_a_rescan() {
     assert_eq!(
         serde_json::to_value(FsChanged::PathsChanged {
+            workspace_folder_id: None,
             paths: vec!["src/lib.rs".into()],
         })
         .unwrap(),
         serde_json::json!({"type":"pathsChanged","paths":["src/lib.rs"]}),
     );
     assert_eq!(
-        serde_json::to_value(FsChanged::RescanRequired).unwrap(),
+        serde_json::to_value(FsChanged::RescanRequired {
+            workspace_folder_id: None
+        })
+        .unwrap(),
         serde_json::json!({"type":"rescanRequired"}),
     );
 }
@@ -333,7 +347,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "text", text: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));

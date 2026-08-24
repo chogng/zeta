@@ -40,6 +40,7 @@ export type IAnyWorkspaceIdentifier =
 
 /** A folder belonging to the current resolved workspace. */
 export interface IWorkspaceFolder {
+	readonly id: string;
 	readonly uri: URI;
 	readonly name: string;
 	readonly index: number;
@@ -58,6 +59,25 @@ export interface IWorkspace {
 	readonly name?: string;
 }
 
+/** Converts a persisted workspace identity into its minimal resolved projection. */
+export function workspaceFromIdentifier(identifier: IAnyWorkspaceIdentifier): IWorkspace {
+	if (isWorkspaceIdentifier(identifier)) {
+		return freezeWorkspace({
+			id: identifier.id,
+			folders: [],
+			configuration: identifier.configPath,
+			name: workspaceName(identifier.configPath),
+		});
+	}
+	if (isSingleFolderWorkspaceIdentifier(identifier)) {
+		return freezeWorkspace({
+			id: identifier.id,
+			folders: [{ id: identifier.id, uri: identifier.uri, name: resourceName(identifier.uri), index: 0 }],
+		});
+	}
+	return freezeWorkspace({ id: identifier.id, folders: [] });
+}
+
 /** One atomic replacement of the workspace hosted by a window. */
 export interface IWorkspaceChangeEvent {
 	readonly previous: IWorkspace;
@@ -69,6 +89,13 @@ export interface IWorkspaceContextService {
 	readonly onDidChangeWorkspace: Event<IWorkspaceChangeEvent>;
 	getWorkspace(): IWorkspace;
 	getWorkbenchState(): WorkbenchState;
+}
+
+/** Returns the durable path that reopens the current folder or workspace file. */
+export function workspaceOpenTarget(workspace: IWorkspace): string | undefined {
+	const resource = workspace.configuration ?? (workspace.folders.length === 1 ? workspace.folders[0]?.uri : undefined);
+	if (!resource) return undefined;
+	return isRemoteResource(resource) ? getRemoteWorkspacePath(resource) : resource.fsPath;
 }
 
 export const IWorkspaceContextService =
@@ -170,6 +197,52 @@ export function parseWorkspaceIdentifier(
 		: Object.freeze({ id });
 }
 
+/** Derives workbench state from an already resolved workspace projection. */
+export function workbenchStateFromWorkspace(workspace: IWorkspace): WorkbenchState {
+	if (workspace.configuration) return WorkbenchState.WORKSPACE;
+	if (workspace.folders.length === 1) return WorkbenchState.FOLDER;
+	return WorkbenchState.EMPTY;
+}
+
+/** Converts a resolved workspace projection into an IPC-safe plain object. */
+export function serializeWorkspace(workspace: IWorkspace): unknown {
+	return {
+		id: workspace.id,
+		folders: workspace.folders.map(folder => ({
+			id: folder.id,
+			uri: folder.uri.toString(),
+			name: folder.name,
+			index: folder.index,
+		})),
+		...(workspace.configuration ? { configuration: workspace.configuration.toString() } : {}),
+		...(workspace.name ? { name: workspace.name } : {}),
+	};
+}
+
+/** Validates and revives a resolved workspace projection received over IPC. */
+export function parseWorkspace(value: unknown): IWorkspace {
+	const record = exactRecord(value);
+	const expected = ['folders', 'id'];
+	if ('configuration' in record) expected.push('configuration');
+	if ('name' in record) expected.push('name');
+	requireExactKeys(record, expected.sort());
+	const id = nonEmptyString(record.id, 'workspace id');
+	if (!Array.isArray(record.folders)) throw new Error('workspace folders must be an array');
+	const folders = record.folders.map((value, index) => parseWorkspaceFolder(value, index));
+	if (folders.length > 256) throw new Error('workspace folders must contain at most 256 entries');
+	const identities = new Set<string>();
+	for (const folder of folders) {
+		const identity = folder.uri.toString();
+		if (identities.has(identity)) throw new Error(`workspace folder URI is duplicated: ${identity}`);
+		identities.add(identity);
+	}
+	const configuration = record.configuration === undefined
+		? undefined
+		: fileWorkspaceConfigUri(record.configuration, 'workspace configuration');
+	const name = record.name === undefined ? undefined : nonEmptyString(record.name, 'workspace name');
+	return freezeWorkspace({ id, folders, ...(configuration ? { configuration } : {}), ...(name ? { name } : {}) });
+}
+
 function exactRecord(value: unknown): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		throw new Error("workspace identifier must be an object");
@@ -219,6 +292,39 @@ function nonEmptyString(value: unknown, field: string): string {
 		throw new Error(`${field} must be a non-empty string`);
 	}
 	return value;
+}
+
+function parseWorkspaceFolder(value: unknown, expectedIndex: number): IWorkspaceFolder {
+	const record = exactRecord(value);
+	requireExactKeys(record, ['id', 'index', 'name', 'uri']);
+	if (record.index !== expectedIndex) throw new Error('workspace folder indices must be contiguous and ordered');
+	return Object.freeze({
+		id: nonEmptyString(record.id, 'workspace folder id'),
+		uri: workspaceResourceUri(record.uri, 'workspace folder URI'),
+		name: nonEmptyString(record.name, 'workspace folder name'),
+		index: expectedIndex,
+	});
+}
+
+function freezeWorkspace(workspace: IWorkspace): IWorkspace {
+	return Object.freeze({
+		...workspace,
+		folders: Object.freeze(workspace.folders.map(folder => Object.freeze({ ...folder }))),
+	});
+}
+
+function workspaceName(configPath: URI): string {
+	const name = resourceName(configPath);
+	for (const extension of ['.zeta-workspace', '.code-workspace']) {
+		if (name.toLowerCase().endsWith(extension)) return name.slice(0, -extension.length) || name;
+	}
+	return name;
+}
+
+function resourceName(resource: URI): string {
+	const path = decodeURIComponent(resource.path).replace(/\/+$/, '');
+	const name = path.slice(path.lastIndexOf('/') + 1);
+	return name || resource.authority || resource.toString();
 }
 
 function isNonEmptyString(value: unknown): value is string {

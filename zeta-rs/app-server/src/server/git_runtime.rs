@@ -1,5 +1,7 @@
 use super::update_broker::UpdateBroker;
 use crate::git_service::{GitService, GitServiceCommit, GitServiceError};
+use ignore::WalkBuilder;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,9 +12,9 @@ use zeta_app_server_protocol::protocol::git::{
     GitBranchDto, GitChangeFileComparisonDto, GitChangeFileResult, GitChangeStatusDto,
     GitCommitChangeDto, GitCommitChangesResult, GitCommitFileContentDto, GitCommitFileResult,
     GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult, GitHeadDto, GitReferenceDto,
-    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoryChangeDto,
-    GitRepositoryIdentityDto, GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto,
-    GitTextDiffResult, GitUpstreamDto,
+    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoriesResult,
+    GitRepositoryChangeDto, GitRepositoryDto, GitRepositoryIdentityDto, GitStatusResult,
+    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
 use zeta_git::{
@@ -26,6 +28,12 @@ const GIT_WATCH_DEBOUNCE: Duration = Duration::from_millis(100);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 pub(crate) struct GitRuntime {
+    repositories: Vec<Arc<GitRepositoryRuntime>>,
+    repositories_by_id: HashMap<String, Arc<GitRepositoryRuntime>>,
+}
+
+struct GitRepositoryRuntime {
+    descriptor: GitRepositoryDto,
     service: GitService,
     stream_instance_id: StreamInstanceId,
     operation: Mutex<()>,
@@ -39,6 +47,7 @@ pub(crate) struct GitRuntime {
 pub(super) struct GitWatcher {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
+    children: Vec<GitWatcher>,
 }
 
 struct GitRuntimeState {
@@ -61,16 +70,373 @@ pub(super) struct GitRuntimeCommit {
 pub(crate) enum GitRuntimeError {
     Boundary,
     InvalidGraphCursor,
+    RepositoryNotFound,
     Service(GitServiceError),
 }
 
+// Unscoped delegates keep the in-process API backward compatible for tests and embedders; RPC
+// dispatch uses the explicit `*_for` methods so concurrent clients never share active state.
+#[allow(dead_code)]
 impl GitRuntime {
     pub(super) fn new(
         workspace: TrustedWorkspace,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
+        Self::new_workspace_folders(vec![(None, workspace)], HashMap::new(), updates)
+    }
+
+    pub(super) fn new_for_workspace_folders(
+        workspaces: Vec<(String, TrustedWorkspace)>,
+        updates: Arc<UpdateBroker>,
+    ) -> Result<Arc<Self>, GitRuntimeError> {
+        let workspace_order = workspaces
+            .iter()
+            .enumerate()
+            .map(|(index, (id, _))| (id.clone(), index))
+            .collect();
+        let mut workspaces = workspaces
+            .into_iter()
+            .map(|(id, workspace)| (Some(id), workspace))
+            .collect::<Vec<_>>();
+        workspaces.sort_by_key(|(_, workspace)| {
+            std::cmp::Reverse(workspace.root().canonical_path().components().count())
+        });
+        Self::new_workspace_folders(workspaces, workspace_order, updates)
+    }
+
+    fn new_workspace_folders(
+        workspaces: Vec<(Option<String>, TrustedWorkspace)>,
+        workspace_order: HashMap<String, usize>,
+        updates: Arc<UpdateBroker>,
+    ) -> Result<Arc<Self>, GitRuntimeError> {
+        let mut repositories = Vec::new();
+        let mut repositories_by_id = HashMap::new();
+        let mut worktrees = Vec::<PathBuf>::new();
+        for (workspace_folder_id, workspace) in workspaces {
+            for projection_root in discover_repository_roots(&workspace) {
+                let descriptor = repository_descriptor(
+                    workspace_folder_id.clone(),
+                    &workspace,
+                    &projection_root,
+                )?;
+                let runtime = Arc::new(GitRepositoryRuntime::new(
+                    workspace.clone(),
+                    projection_root,
+                    descriptor,
+                    Arc::clone(&updates),
+                )?);
+                let Ok((repository, _)) = runtime.service.snapshot() else {
+                    continue;
+                };
+                if worktrees
+                    .iter()
+                    .any(|root| root == repository.worktree_root())
+                {
+                    continue;
+                }
+                worktrees.push(repository.worktree_root().to_path_buf());
+                repositories_by_id.insert(runtime.descriptor.id.clone(), Arc::clone(&runtime));
+                repositories.push(runtime);
+            }
+        }
+        repositories.sort_by(|left, right| {
+            let left_order = left
+                .descriptor
+                .workspace_folder_id
+                .as_ref()
+                .and_then(|id| workspace_order.get(id))
+                .copied()
+                .unwrap_or(usize::MAX);
+            let right_order = right
+                .descriptor
+                .workspace_folder_id
+                .as_ref()
+                .and_then(|id| workspace_order.get(id))
+                .copied()
+                .unwrap_or(usize::MAX);
+            left_order
+                .cmp(&right_order)
+                .then(left.descriptor.path.cmp(&right.descriptor.path))
+        });
         Ok(Arc::new(Self {
-            service: GitService::new(workspace).map_err(GitRuntimeError::Service)?,
+            repositories,
+            repositories_by_id,
+        }))
+    }
+
+    pub(super) fn repositories(&self) -> GitRepositoriesResult {
+        GitRepositoriesResult {
+            repositories: self
+                .repositories
+                .iter()
+                .map(|runtime| runtime.descriptor.clone())
+                .collect(),
+        }
+    }
+
+    pub(super) fn status_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.status()
+    }
+
+    pub(super) fn status(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        self.status_for(None)
+    }
+
+    pub(super) fn local_branches_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        self.repository(repository_id)?.local_branches()
+    }
+
+    pub(super) fn local_branches(&self) -> Result<Vec<GitBranchDto>, GitRuntimeError> {
+        self.local_branches_for(None)
+    }
+
+    pub(super) fn recent_commits_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<Vec<GitCommitSummaryDto>, GitRuntimeError> {
+        self.repository(repository_id)?.recent_commits()
+    }
+
+    pub(super) fn recent_commits(&self) -> Result<Vec<GitCommitSummaryDto>, GitRuntimeError> {
+        self.recent_commits_for(None)
+    }
+
+    pub(super) fn graph_for(
+        &self,
+        repository_id: Option<&str>,
+        connection_id: u64,
+        limit: std::num::NonZeroUsize,
+        cursor: Option<&str>,
+    ) -> Result<GitGraphResult, GitRuntimeError> {
+        self.repository(repository_id)?
+            .graph(connection_id, limit, cursor)
+    }
+
+    pub(super) fn graph(
+        &self,
+        connection_id: u64,
+        limit: std::num::NonZeroUsize,
+        cursor: Option<&str>,
+    ) -> Result<GitGraphResult, GitRuntimeError> {
+        self.graph_for(None, connection_id, limit, cursor)
+    }
+
+    pub(super) fn text_diff_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitTextDiffResult, GitRuntimeError> {
+        self.repository(repository_id)?.text_diff()
+    }
+
+    pub(super) fn text_diff(&self) -> Result<GitTextDiffResult, GitRuntimeError> {
+        self.text_diff_for(None)
+    }
+
+    pub(super) fn commit_changes_for(
+        &self,
+        repository_id: Option<&str>,
+        object_id: &str,
+    ) -> Result<GitCommitChangesResult, GitRuntimeError> {
+        self.repository(repository_id)?.commit_changes(object_id)
+    }
+
+    pub(super) fn commit_changes(
+        &self,
+        object_id: &str,
+    ) -> Result<GitCommitChangesResult, GitRuntimeError> {
+        self.commit_changes_for(None, object_id)
+    }
+
+    pub(super) fn commit_file_for(
+        &self,
+        repository_id: Option<&str>,
+        object_id: &str,
+        path: &Path,
+    ) -> Result<GitCommitFileResult, GitRuntimeError> {
+        self.repository(repository_id)?.commit_file(object_id, path)
+    }
+
+    pub(super) fn commit_file(
+        &self,
+        object_id: &str,
+        path: &Path,
+    ) -> Result<GitCommitFileResult, GitRuntimeError> {
+        self.commit_file_for(None, object_id, path)
+    }
+
+    pub(super) fn change_file_for(
+        &self,
+        repository_id: Option<&str>,
+        path: &Path,
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<GitChangeFileResult, GitRuntimeError> {
+        self.repository(repository_id)?
+            .change_file(path, comparison)
+    }
+
+    pub(super) fn change_file(
+        &self,
+        path: &Path,
+        comparison: GitChangeFileComparisonDto,
+    ) -> Result<GitChangeFileResult, GitRuntimeError> {
+        self.change_file_for(None, path, comparison)
+    }
+
+    pub(super) fn switch_branch_for(
+        &self,
+        repository_id: Option<&str>,
+        name: &str,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.switch_branch(name)
+    }
+
+    pub(super) fn switch_branch(&self, name: &str) -> Result<GitStatusResult, GitRuntimeError> {
+        self.switch_branch_for(None, name)
+    }
+
+    pub(super) fn stage_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: Vec<PathBuf>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.stage(paths)
+    }
+
+    pub(super) fn stage(&self, paths: Vec<PathBuf>) -> Result<GitStatusResult, GitRuntimeError> {
+        self.stage_for(None, paths)
+    }
+
+    pub(super) fn unstage_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: Vec<PathBuf>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.unstage(paths)
+    }
+
+    pub(super) fn unstage(&self, paths: Vec<PathBuf>) -> Result<GitStatusResult, GitRuntimeError> {
+        self.unstage_for(None, paths)
+    }
+
+    pub(super) fn discard_worktree_for(
+        &self,
+        repository_id: Option<&str>,
+        paths: Vec<PathBuf>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.discard_worktree(paths)
+    }
+
+    pub(super) fn discard_worktree(
+        &self,
+        paths: Vec<PathBuf>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.discard_worktree_for(None, paths)
+    }
+
+    pub(super) fn commit_for(
+        &self,
+        repository_id: Option<&str>,
+        message: String,
+    ) -> Result<GitRuntimeCommit, GitRuntimeError> {
+        self.repository(repository_id)?.commit(message)
+    }
+
+    pub(super) fn commit(&self, message: String) -> Result<GitRuntimeCommit, GitRuntimeError> {
+        self.commit_for(None, message)
+    }
+
+    pub(super) fn fetch_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.fetch()
+    }
+
+    pub(super) fn fetch(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        self.fetch_for(None)
+    }
+
+    pub(super) fn pull_fast_forward_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.pull_fast_forward()
+    }
+
+    pub(super) fn pull_fast_forward(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        self.pull_fast_forward_for(None)
+    }
+
+    pub(super) fn push_for(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<GitStatusResult, GitRuntimeError> {
+        self.repository(repository_id)?.push()
+    }
+
+    pub(super) fn push(&self) -> Result<GitStatusResult, GitRuntimeError> {
+        self.push_for(None)
+    }
+
+    pub(super) fn close_connection(&self, connection_id: u64) {
+        for repository in &self.repositories {
+            repository.close_connection(connection_id);
+        }
+    }
+
+    pub(super) fn start_watching(self: &Arc<Self>) -> GitWatcher {
+        GitWatcher {
+            shutdown: None,
+            thread: None,
+            children: self
+                .repositories
+                .iter()
+                .map(GitRepositoryRuntime::start_watching)
+                .collect(),
+        }
+    }
+
+    fn watched_paths(&self) -> Vec<WatchPath> {
+        self.repositories
+            .first()
+            .map(|repository| repository.watched_paths())
+            .unwrap_or_default()
+    }
+
+    fn repository(
+        &self,
+        repository_id: Option<&str>,
+    ) -> Result<&Arc<GitRepositoryRuntime>, GitRuntimeError> {
+        match repository_id {
+            Some(id) => self
+                .repositories_by_id
+                .get(id)
+                .ok_or(GitRuntimeError::RepositoryNotFound),
+            None => self
+                .repositories
+                .first()
+                .ok_or(GitRuntimeError::RepositoryNotFound),
+        }
+    }
+}
+
+impl GitRepositoryRuntime {
+    fn new(
+        workspace: TrustedWorkspace,
+        projection_root: PathBuf,
+        descriptor: GitRepositoryDto,
+        updates: Arc<UpdateBroker>,
+    ) -> Result<Self, GitRuntimeError> {
+        Ok(Self {
+            service: GitService::new(workspace, projection_root)
+                .map_err(GitRuntimeError::Service)?,
+            descriptor,
             stream_instance_id: new_stream_instance_id()?,
             operation: Mutex::new(()),
             state: Mutex::new(GitRuntimeState {
@@ -81,10 +447,10 @@ impl GitRuntime {
             graph_sessions: Mutex::new(HashMap::new()),
             next_graph_token: AtomicU64::new(1),
             updates,
-        }))
+        })
     }
 
-    pub(super) fn status(&self) -> Result<GitStatusResult, GitRuntimeError> {
+    fn status(&self) -> Result<GitStatusResult, GitRuntimeError> {
         let _operation = self
             .operation
             .lock()
@@ -384,6 +750,7 @@ impl GitRuntime {
         GitWatcher {
             shutdown: Some(shutdown),
             thread,
+            children: Vec::new(),
         }
     }
 
@@ -418,6 +785,7 @@ impl GitRuntime {
         snapshot: GitRepositorySnapshot,
     ) -> Result<GitStatusResult, GitRuntimeError> {
         let mut projected = project_status(
+            self.descriptor.id.clone(),
             self.stream_instance_id.clone(),
             self.service.workspace_root(),
             &repository,
@@ -533,13 +901,20 @@ impl Drop for GitWatcher {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
+        self.children.clear();
     }
 }
 
 fn watch_git(
-    runtime: std::sync::Weak<GitRuntime>,
+    runtime: std::sync::Weak<GitRepositoryRuntime>,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
 ) {
+    // Keep the final strong reference on the watcher thread stack. `GitService` owns a Tokio
+    // runtime, which must not be dropped from inside the async block when the parent runtime is
+    // retired concurrently.
+    let Some(_runtime_lifetime) = runtime.upgrade() else {
+        return;
+    };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()
@@ -601,6 +976,84 @@ fn watch_git(
     });
 }
 
+fn discover_repository_roots(workspace: &TrustedWorkspace) -> Vec<PathBuf> {
+    const MAX_REPOSITORIES: usize = 128;
+    let workspace_root = workspace.root().canonical_path();
+    let mut roots = vec![workspace_root.to_path_buf()];
+    let mut builder = WalkBuilder::new(workspace_root);
+    builder
+        .hidden(false)
+        .follow_links(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .parents(false)
+        .max_depth(Some(16))
+        .filter_entry(|entry| {
+            let name = entry.file_name().to_string_lossy();
+            entry.depth() == 0
+                || !matches!(
+                    name.as_ref(),
+                    ".git" | "node_modules" | "target" | ".build" | "out" | "dist" | ".cache"
+                )
+        });
+    for entry in builder.build().filter_map(Result::ok) {
+        if !entry.file_type().is_some_and(|kind| kind.is_dir())
+            || !entry.path().join(".git").exists()
+        {
+            continue;
+        }
+        let Ok(parent) = dunce::canonicalize(entry.path()) else {
+            continue;
+        };
+        if parent.starts_with(workspace_root) && !roots.iter().any(|root| root == &parent) {
+            roots.push(parent);
+            if roots.len() >= MAX_REPOSITORIES {
+                break;
+            }
+        }
+    }
+    roots.sort();
+    roots
+}
+
+fn repository_descriptor(
+    workspace_folder_id: Option<String>,
+    workspace: &TrustedWorkspace,
+    projection_root: &Path,
+) -> Result<GitRepositoryDto, GitRuntimeError> {
+    let relative = projection_root
+        .strip_prefix(workspace.root().canonical_path())
+        .map_err(|_| GitRuntimeError::Boundary)?;
+    let path = wire_path(relative)?;
+    let label = projection_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Repository")
+        .to_string();
+    let mut identity = workspace
+        .root()
+        .canonical_path()
+        .as_os_str()
+        .as_encoded_bytes()
+        .to_vec();
+    identity.push(0);
+    identity.extend_from_slice(if path.is_empty() {
+        b"."
+    } else {
+        path.as_bytes()
+    });
+    let digest = Sha256::digest(identity);
+    let id = format!("repo_{:x}", digest);
+    Ok(GitRepositoryDto {
+        id,
+        label,
+        path,
+        workspace_folder_id,
+    })
+}
+
 fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult {
     GitGraphResult {
         commits: graph
@@ -651,6 +1104,7 @@ fn project_graph(graph: GitGraph, next_cursor: Option<String>) -> GitGraphResult
 }
 
 fn project_status(
+    repository_id: String,
     stream_instance_id: StreamInstanceId,
     workspace_root: &Path,
     repository: &GitRepository,
@@ -660,6 +1114,7 @@ fn project_status(
         .strip_prefix(repository.worktree_root())
         .map_err(|_| GitRuntimeError::Boundary)?;
     Ok(GitStatusResult {
+        repository_id,
         stream_instance_id,
         revision: 0,
         workspace_path: wire_path(workspace_prefix)?,

@@ -32,6 +32,8 @@ import { IPreferencesService } from "../services/preferences/common/preferences.
 import { PreferencesService } from "../services/preferences/common/preferencesService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { WorkbenchQuickInputService } from "../services/quickinput/browser/quickInputService.js";
+import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
+import { IChatContextPickService, type IChatContextPickService as IChatContextPickServiceContract } from "../services/chat/common/chatContextService.js";
 import type { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 
 export interface WorkbenchInteractionServicesOptions {
@@ -58,6 +60,8 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 	readonly contextViewService: BrowserContextViewService;
 	readonly contextMenuService: IContextMenuService;
 	readonly keybindingService: WorkbenchKeybindingService;
+	readonly quickInputService: WorkbenchQuickInputService;
+	readonly chatContextPickService: IChatContextPickServiceContract;
 
 	constructor(options: WorkbenchInteractionServicesOptions) {
 		super();
@@ -105,7 +109,10 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 			contextKeyService: this.contextKeyService,
 			layoutService: options.layoutService,
 		}));
+		this.quickInputService = quickInputService;
 		services.set(IQuickInputService, quickInputService);
+		this.chatContextPickService = services.getOptional(IChatContextPickService) ?? new ChatContextPickService();
+		services.set(IChatContextPickService, this.chatContextPickService);
 		const settingsService = this.own(new SettingsService());
 		services.set(ISettingsService, settingsService);
 		services.set(IPreferencesService, new PreferencesService(

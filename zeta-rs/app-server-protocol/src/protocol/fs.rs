@@ -18,6 +18,9 @@ pub enum FsFileType {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsGetMetadataParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
 }
 
@@ -37,6 +40,9 @@ pub struct FsGetMetadataResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadDirectoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
 }
 
@@ -59,6 +65,9 @@ pub struct FsReadDirectoryResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
 }
 
@@ -75,6 +84,9 @@ pub struct FsReadFileResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsReadBinaryFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
 }
 
@@ -91,6 +103,9 @@ pub struct FsReadBinaryFileResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsWriteFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
     pub content: String,
     /// When supplied, rejects the write if the file no longer has this exact revision.
@@ -137,6 +152,9 @@ pub enum FsDeleteMode {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsCreateFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
     pub existing: FsExistingTargetBehavior,
 }
@@ -145,6 +163,9 @@ pub struct FsCreateFileParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsRenameParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub source: PathBuf,
     pub target: PathBuf,
     pub existing: FsExistingTargetBehavior,
@@ -154,6 +175,9 @@ pub struct FsRenameParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct FsDeleteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     pub path: PathBuf,
     pub missing: FsMissingTargetBehavior,
     pub mode: FsDeleteMode,
@@ -165,7 +189,20 @@ pub struct FsDeleteParams {
 #[ts(tag = "type")]
 pub enum FsChanged {
     /// The backend observed changes near these sorted workspace-relative paths.
-    PathsChanged { paths: Vec<PathBuf> },
+    PathsChanged {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "workspaceFolderId")]
+        #[ts(optional)]
+        #[ts(rename = "workspaceFolderId")]
+        workspace_folder_id: Option<String>,
+        paths: Vec<PathBuf>,
+    },
     /// The watcher may have lost events and consumers must rescan their visible scope.
-    RescanRequired,
+    RescanRequired {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "workspaceFolderId")]
+        #[ts(optional)]
+        #[ts(rename = "workspaceFolderId")]
+        workspace_folder_id: Option<String>,
+    },
 }

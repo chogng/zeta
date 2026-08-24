@@ -48,7 +48,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 
 	async stat(resource: URI): Promise<IFileStat> {
 		let result;
-		try { result = await this.api.getMetadata({ path: this.relativePath(resource) }); }
+		try { result = await this.api.getMetadata(this.fileTarget(resource)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return {
 			resource,
@@ -60,9 +60,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 	}
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
-		const result = await this.api.readDirectory({
-			path: this.relativePath(resource),
-		});
+		const result = await this.api.readDirectory(this.fileTarget(resource));
 		return result.entries.map((entry) => ({
 			resource: childResource(resource, entry.name),
 			name: entry.name,
@@ -71,16 +69,12 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 	}
 
 	async readFile(resource: URI): Promise<IFileContent> {
-		const result = await this.api.readFile({
-			path: this.relativePath(resource),
-		});
+		const result = await this.api.readFile(this.fileTarget(resource));
 		return Object.freeze({ resource, content: result.content, revision: result.revision });
 	}
 
 	async readFileBytes(resource: URI): Promise<IFileBytes> {
-		const result = await this.api.readBinaryFile({
-			path: this.relativePath(resource),
-		});
+		const result = await this.api.readBinaryFile(this.fileTarget(resource));
 		try {
 			const bytes = await this.readResourceBytes(result.resource);
 			return Object.freeze({ resource, bytes, revision: result.revision });
@@ -92,7 +86,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 	async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
 		try {
 			const result = await this.api.writeFile({
-				path: this.relativePath(request.resource),
+				...this.fileTarget(request.resource),
 				content: request.content,
 				...(request.expectedRevision === undefined ? {} : { expectedRevision: request.expectedRevision }),
 			});
@@ -113,26 +107,43 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 	}
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
-		const result = await this.api.createFile({ path: this.relativePath(resource), existing });
+		const result = await this.api.createFile({ ...this.fileTarget(resource), existing });
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
-		return this.api.rename({ source: this.relativePath(source), target: this.relativePath(target), existing });
+		const sourceTarget = this.fileTarget(source);
+		const targetTarget = this.fileTarget(target);
+		if (sourceTarget.workspaceFolderId !== targetTarget.workspaceFolderId) {
+			throw new Error("Renaming across workspace folders is not supported");
+		}
+		return this.api.rename({
+			workspaceFolderId: sourceTarget.workspaceFolderId,
+			source: sourceTarget.path,
+			target: targetTarget.path,
+			existing,
+		});
 	}
 
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
-		return this.api.delete({ path: this.relativePath(resource), missing, mode });
+		return this.api.delete({ ...this.fileTarget(resource), missing, mode });
 	}
 
-	private relativePath(resource: URI): string {
+	private fileTarget(resource: URI): { readonly workspaceFolderId: string; readonly path: string } {
 		const folders = this.workspaceContextService.getWorkspace().folders;
-		if (folders.length !== 1) {
-			throw new Error(
-				"The current filesystem protocol requires one workspace folder",
-			);
+		let match: { readonly workspaceFolderId: string; readonly path: string; readonly rootLength: number } | undefined;
+		for (const folder of folders) {
+			try {
+				const path = workspaceRelativePath(folder.uri, resource);
+				if (!match || folder.uri.path.length > match.rootLength) {
+					match = { workspaceFolderId: folder.id, path, rootLength: folder.uri.path.length };
+				}
+			} catch {
+				// A resource may only belong to one of the workspace's independent roots.
+			}
 		}
-		return workspaceRelativePath(folders[0].uri, resource);
+		if (!match) throw new Error("Resource must belong to a current workspace folder");
+		return { workspaceFolderId: match.workspaceFolderId, path: match.path };
 	}
 
 	private async readResourceBytes(resource: ResourceMetadataResult): Promise<Uint8Array> {
@@ -160,11 +171,14 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 			return;
 		}
 		const folders = this.workspaceContextService.getWorkspace().folders;
-		if (folders.length !== 1) {
+		const folder = change.workspaceFolderId
+			? folders.find(folder => folder.id === change.workspaceFolderId)
+			: folders.length === 1 ? folders[0] : undefined;
+		if (!folder) {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
 			return;
 		}
-		const resources = change.paths.map(path => workspaceResourceFromPath(folders[0].uri, path));
+		const resources = change.paths.map(path => workspaceResourceFromPath(folder.uri, path));
 		if (resources.some(resource => resource === undefined)) {
 			this.fileChanges.fire(Object.freeze({ resources: undefined }));
 			return;

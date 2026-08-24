@@ -15,6 +15,10 @@ pub enum InputItem {
     Text {
         text: String,
     },
+    Context {
+        name: String,
+        content: String,
+    },
     ImageAttachment {
         attachment: ImageAttachmentRef,
     },

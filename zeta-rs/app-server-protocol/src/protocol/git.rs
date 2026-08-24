@@ -3,6 +3,33 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zeta_protocol::StreamInstanceId;
 
+/// Selects one repository discovered inside the active workspace.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+}
+
+/// Stable, workspace-relative identity for one discovered Git repository projection.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositoryDto {
+    pub id: String,
+    pub label: String,
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositoriesResult {
+    pub repositories: Vec<GitRepositoryDto>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum GitChangeStatusDto {
@@ -69,6 +96,7 @@ pub struct GitRepositoryChangeDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitStatusResult {
+    pub repository_id: String,
     pub stream_instance_id: StreamInstanceId,
     #[ts(type = "number")]
     pub revision: u64,
@@ -184,6 +212,9 @@ pub struct GitReferenceDto {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitGraphParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(range(min = 1, max = 1000))]
     pub limit: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -210,6 +241,9 @@ pub struct GitGraphResult {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitCommitChangesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 40, max = 64))]
     pub object_id: String,
 }
@@ -238,6 +272,9 @@ pub struct GitCommitChangesResult {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitCommitFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 40, max = 64))]
     pub object_id: String,
     #[schemars(length(min = 1, max = 32768))]
@@ -277,6 +314,9 @@ pub enum GitChangeFileComparisonDto {
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct GitChangeFileParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 32768))]
     pub path: String,
     pub comparison: GitChangeFileComparisonDto,
@@ -294,6 +334,9 @@ pub struct GitChangeFileResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitBranchSwitchParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 1024))]
     pub name: String,
 }
@@ -329,6 +372,9 @@ pub struct GitTextDiffResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitPathsParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 5000))]
     pub paths: Vec<String>,
 }
@@ -336,6 +382,9 @@ pub struct GitPathsParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitCommitParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
     #[schemars(length(min = 1, max = 65536))]
     pub message: String,
 }

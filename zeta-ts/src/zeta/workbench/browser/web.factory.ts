@@ -10,6 +10,7 @@ import {
 } from "../../platform/app-server/browser/rendererApi.js";
 import {
 	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+	workspaceFromIdentifier,
 } from "../../platform/workspace/common/workspace.js";
 import {
 	createBrowserWorkbenchContextMenuService,
@@ -36,7 +37,7 @@ export function createWebWorkbench(
 		profile: options.profile,
 		api: options.api,
 		container: options.container,
-		workspace: options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+		workspace: workspaceFromIdentifier(options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE),
 		createContextMenuService: createBrowserWorkbenchContextMenuService,
 		createTitlebarPart: createBrowserTitlebarPart,
 		switchWorkbenchMode: options.switchWorkbenchMode ?? (targetModeId => switchBrowserWorkbenchMode(window, targetModeId)),

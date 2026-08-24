@@ -185,6 +185,8 @@ test("capability IPC validators reject malformed input", () => {
 		(route) => route.channel === "zeta:terminal:close",
 	)!;
 	const gitStage = routes.find((route) => route.channel === "zeta:git:stage")!;
+	const gitRepositories = routes.find((route) => route.channel === "zeta:git:repositories")!;
+	const gitStatus = routes.find((route) => route.channel === "zeta:git:status")!;
 	const gitCommit = routes.find((route) => route.channel === "zeta:git:commit")!;
 	const gitCommitChanges = routes.find((route) => route.channel === "zeta:git:commit-changes")!;
 	const gitCommitFile = routes.find((route) => route.channel === "zeta:git:commit-file")!;
@@ -465,6 +467,14 @@ test("capability IPC validators reject malformed input", () => {
 	assert.deepEqual(gitStage.validate({ paths: ["src/main.ts", "README.md"] }), {
 		paths: ["src/main.ts", "README.md"],
 	});
+	const repositoryId = `repo_${"a".repeat(64)}`;
+	assert.deepEqual(gitRepositories.validate(undefined), {});
+	assert.deepEqual(gitStatus.validate({ repositoryId }), { repositoryId });
+	assert.deepEqual(gitStage.validate({ repositoryId, paths: ["src/main.ts"] }), {
+		repositoryId,
+		paths: ["src/main.ts"],
+	});
+	assert.throws(() => gitStatus.validate({ repositoryId: "repo_untrusted" }), /repositoryId/);
 	for (const paths of [[], ["../outside"], ["/absolute"], ["C:\\absolute"], ["src\0file"]]) {
 		assert.throws(() => gitStage.validate({ paths }), /paths|workspace root/);
 	}

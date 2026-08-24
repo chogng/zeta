@@ -24,6 +24,9 @@ pub enum WorkspaceSearchCaseSensitivity {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchStartParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1, max = 16384))]
     pub query: String,
     pub pattern_kind: WorkspaceSearchPatternKind,
@@ -47,6 +50,9 @@ pub struct WorkspaceSearchStartResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchReadParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub search_id: String,
     pub after_match: usize,
@@ -88,6 +94,9 @@ pub struct WorkspaceSearchReadResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchCancelParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub search_id: String,
 }

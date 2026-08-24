@@ -2051,6 +2051,22 @@
         {
           "properties": {
             "method": {
+              "const": "workspace/folders/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceFoldersSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "workspace/trust/read",
               "type": "string"
             },
@@ -4291,11 +4307,27 @@
         {
           "properties": {
             "method": {
-              "const": "git/status",
+              "const": "git/repositories",
               "type": "string"
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "git/status",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4311,7 +4343,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4327,7 +4359,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4343,7 +4375,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4503,7 +4535,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4519,7 +4551,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -4535,7 +4567,7 @@
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/EmptyParams"
+              "$ref": "#/$defs/GitRepositoryParams"
             }
           },
           "required": [
@@ -5036,6 +5068,22 @@
             },
             "result": {
               "$ref": "#/$defs/WorkspaceSwitchResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/folders/set",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceFoldersSetResult"
             }
           },
           "required": [
@@ -7287,6 +7335,22 @@
         {
           "properties": {
             "method": {
+              "const": "git/repositories",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/GitRepositoriesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "git/status",
               "type": "string"
             },
@@ -9500,6 +9564,12 @@
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -9540,6 +9610,12 @@
         },
         "sessionId": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -9602,6 +9678,12 @@
         "message": true,
         "sessionId": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -9625,6 +9707,12 @@
           "maxLength": 4096,
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11781,6 +11869,12 @@
             "type": {
               "const": "pathsChanged",
               "type": "string"
+            },
+            "workspaceFolderId": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -11795,6 +11889,12 @@
             "type": {
               "const": "rescanRequired",
               "type": "string"
+            },
+            "workspaceFolderId": {
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -11812,6 +11912,12 @@
         },
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11839,6 +11945,12 @@
         },
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11872,6 +11984,12 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11922,6 +12040,12 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11967,6 +12091,12 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -11994,6 +12124,12 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12029,6 +12165,12 @@
         },
         "target": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12053,6 +12195,12 @@
         },
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12124,6 +12272,12 @@
           "maxLength": 1024,
           "minLength": 1,
           "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12149,6 +12303,12 @@
           "maxLength": 32768,
           "minLength": 1,
           "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12217,6 +12377,12 @@
           "maxLength": 64,
           "minLength": 40,
           "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12302,6 +12468,12 @@
           "maxLength": 32768,
           "minLength": 1,
           "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12332,6 +12504,12 @@
           "maxLength": 65536,
           "minLength": 1,
           "type": "string"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12421,6 +12599,12 @@
           "maximum": 1000,
           "minimum": 1,
           "type": "integer"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12568,6 +12752,12 @@
           "maxItems": 5000,
           "minItems": 1,
           "type": "array"
+        },
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -12645,6 +12835,20 @@
       ],
       "type": "string"
     },
+    "GitRepositoriesResult": {
+      "properties": {
+        "repositories": {
+          "items": {
+            "$ref": "#/$defs/GitRepositoryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "repositories"
+      ],
+      "type": "object"
+    },
     "GitRepositoryChangeDto": {
       "properties": {
         "conflicted": {
@@ -12678,6 +12882,32 @@
       ],
       "type": "object"
     },
+    "GitRepositoryDto": {
+      "description": "Stable, workspace-relative identity for one discovered Git repository projection.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "path"
+      ],
+      "type": "object"
+    },
     "GitRepositoryIdentityDto": {
       "description": "Credential-free repository identity parsed from a configured Git remote.",
       "properties": {
@@ -12702,6 +12932,18 @@
       ],
       "type": "object"
     },
+    "GitRepositoryParams": {
+      "description": "Selects one repository discovered inside the active workspace.",
+      "properties": {
+        "repositoryId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
     "GitStatusChanged": {
       "properties": {
         "status": {
@@ -12724,6 +12966,9 @@
         "head": {
           "$ref": "#/$defs/GitHeadDto"
         },
+        "repositoryId": {
+          "type": "string"
+        },
         "revision": {
           "format": "uint64",
           "minimum": 0,
@@ -12737,6 +12982,7 @@
         }
       },
       "required": [
+        "repositoryId",
         "streamInstanceId",
         "revision",
         "workspacePath",
@@ -13262,6 +13508,26 @@
         },
         {
           "properties": {
+            "content": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "type": {
+              "const": "context",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "content"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "attachment": {
               "$ref": "#/$defs/ImageAttachmentRef"
             },
@@ -13617,6 +13883,12 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -14138,6 +14410,12 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -14236,6 +14514,13 @@
         "text": {
           "maxLength": 10485760,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "description": "Workspace folder that owns this document in a multi-root workspace.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15200,6 +15485,12 @@
         },
         "source": {
           "$ref": "#/$defs/LanguageServerMessageSourceDto"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15270,6 +15561,12 @@
         },
         "token": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15413,6 +15710,12 @@
         },
         "state": {
           "$ref": "#/$defs/LanguageServerStateDto"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15593,6 +15896,12 @@
       "properties": {
         "languageId": {
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15764,6 +16073,12 @@
         "query": {
           "maxLength": 1024,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -20715,6 +21030,12 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -20748,6 +21069,12 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -20822,6 +21149,12 @@
           "maximum": 512,
           "minimum": 1,
           "type": "integer"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -21000,6 +21333,12 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -21107,6 +21446,12 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -21128,6 +21473,12 @@
         "terminalId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -22095,6 +22446,34 @@
             "itemId",
             "turnId",
             "text"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "name": {
+              "type": "string"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "userContext",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "name",
+            "content"
           ],
           "type": "object"
         },
@@ -23584,12 +23963,87 @@
       ],
       "type": "object"
     },
+    "WorkspaceFolderDto": {
+      "description": "One canonical folder accepted into the active Workspace.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/WorkspaceTrustStateDto"
+        }
+      },
+      "required": [
+        "id",
+        "root",
+        "trust"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFolderSetEntry": {
+      "description": "One folder requested by a product-hosted multi-root Workspace.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/WorkspaceSwitchTrust"
+        }
+      },
+      "required": [
+        "id",
+        "root",
+        "trust"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFoldersSetParams": {
+      "description": "Atomically replaces the ordered folders hosted by one App Server session.",
+      "properties": {
+        "folders": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceFolderSetEntry"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "folders"
+      ],
+      "type": "object"
+    },
+    "WorkspaceFoldersSetResult": {
+      "properties": {
+        "folders": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceFolderDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "folders"
+      ],
+      "type": "object"
+    },
     "WorkspaceSearchCancelParams": {
       "description": "Cancels and releases one connection-owned workspace search.",
       "properties": {
         "searchId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -23680,6 +24134,12 @@
         "searchId": {
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -23761,6 +24221,12 @@
           "maxLength": 16384,
           "minLength": 1,
           "type": "string"
+        },
+        "workspaceFolderId": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

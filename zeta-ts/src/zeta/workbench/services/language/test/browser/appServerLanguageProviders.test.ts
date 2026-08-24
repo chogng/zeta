@@ -32,6 +32,28 @@ test("App Server language providers map cross-resource locations without double-
 	assert.equal(locations[0]!.selectionRange?.end.columnIndex, 5);
 });
 
+test("App Server language providers route resources through their owning Workspace folder", async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({
+		id: "multi-root",
+		folders: [
+			{ id: "frontend", uri: URI.file("C:\\frontend"), name: "frontend", index: 0 },
+			{ id: "backend", uri: URI.file("C:\\backend"), name: "backend", index: 1 },
+		],
+		configuration: URI.file("C:\\project.code-workspace"),
+	});
+	const api = new FakeLanguageApi();
+	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	using model = new TextModel("value");
+	using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\backend\\main.ts"));
+
+	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 2));
+
+	assert.equal(api.locationRequests[0]!.document.workspaceFolderId, "backend");
+	assert.equal(api.locationRequests[0]!.document.path, "main.ts");
+	assert.equal(locations[0]!.resource.toString(), "file:///C:/backend/src/with%20space.ts");
+});
+
 test("App Server workspace symbols query every supported Code language and deduplicate results", async () => {
 	using languages = new LanguageFeaturesService();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });

@@ -87,6 +87,7 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
         {
             self.diagnostics.updates.publish_language_server_message(
                 LanguageServerMessageNotification {
+                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
                     server: server.clone(),
                     severity: match severity {
                         LanguageServerMessageSeverity::Error => {
@@ -120,6 +121,7 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
         if let LanguageServiceEvent::ServerProgress(progress) = &event {
             self.diagnostics.updates.publish_language_server_progress(
                 LanguageServerProgressNotification {
+                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
                     server: progress.server.clone(),
                     token: progress.token.clone(),
                     title: progress.title.clone(),
@@ -133,6 +135,7 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
         if let LanguageServiceEvent::ServerStateChanged { server, state } = &event {
             self.diagnostics.updates.publish_language_server_state(
                 LanguageServerStateNotification {
+                    workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
                     server: server.clone(),
                     state: language_server_state_to_dto(state),
                 },
@@ -177,6 +180,7 @@ struct AppServerLanguageDocumentSnapshot {
 struct LanguageDiagnosticPublisher {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     updates: Arc<UpdateBroker>,
+    workspace_folder_id: Option<String>,
 }
 
 impl LanguageDiagnosticPublisher {
@@ -199,6 +203,7 @@ impl LanguageDiagnosticPublisher {
             .collect();
         self.updates
             .publish_language_diagnostics(LanguageDiagnosticsNotification {
+                workspace_folder_id: self.workspace_folder_id.clone(),
                 path: snapshot.relative_path,
                 revision: snapshot.revision.value(),
                 diagnostics,
@@ -216,6 +221,9 @@ pub(super) struct AppServerLanguageRuntime {
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
     providers: LanguageServerProviderRegistry,
+    workspace_folder_id: Option<String>,
+    workspace_runtimes: BTreeMap<PathBuf, Box<AppServerLanguageRuntime>>,
+    active_workspace_root: Option<PathBuf>,
 }
 
 impl AppServerLanguageRuntime {
@@ -230,6 +238,9 @@ impl AppServerLanguageRuntime {
             language_servers: BTreeMap::new(),
             server_states: BTreeMap::new(),
             providers: LanguageServerProviderRegistry::new(),
+            workspace_folder_id: None,
+            workspace_runtimes: BTreeMap::new(),
+            active_workspace_root: None,
         }
     }
 
@@ -238,13 +249,38 @@ impl AppServerLanguageRuntime {
         self.providers = providers;
     }
 
+    pub(super) fn reset_workspace(&mut self) {
+        self.shutdown();
+    }
+
     pub(super) fn ensure(
         &mut self,
         workspace_root: &Path,
+        workspace_folder_id: Option<&str>,
         config_generation: u64,
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<&LanguageService, String> {
+        if self.workspace_root.is_some() && self.workspace_root.as_deref() != Some(workspace_root) {
+            self.active_workspace_root = Some(workspace_root.to_path_buf());
+            let runtime = self
+                .workspace_runtimes
+                .entry(workspace_root.to_path_buf())
+                .or_insert_with(|| {
+                    let mut runtime = AppServerLanguageRuntime::new(Arc::clone(&self.updates));
+                    runtime.providers = self.providers.clone();
+                    Box::new(runtime)
+                });
+            return runtime.ensure(
+                workspace_root,
+                workspace_folder_id,
+                config_generation,
+                configuration,
+                language_id,
+            );
+        }
+        self.active_workspace_root = None;
+        self.workspace_folder_id = workspace_folder_id.map(str::to_owned);
         if self.workspace_root.as_deref() != Some(workspace_root)
             || self.config_generation != Some(config_generation)
         {
@@ -256,10 +292,27 @@ impl AppServerLanguageRuntime {
             .ok_or_else(|| "language service is unavailable".into())
     }
 
+    pub(super) fn service(&self) -> Option<&LanguageService> {
+        match &self.active_workspace_root {
+            Some(root) => self
+                .workspace_runtimes
+                .get(root)
+                .and_then(|runtime| runtime.service()),
+            None => self.service.as_ref(),
+        }
+    }
+
     pub(super) fn wait_for_request(
         &mut self,
         request_id: LanguageRequestId,
     ) -> Result<LanguageServiceEvent, String> {
+        if let Some(root) = self.active_workspace_root.clone() {
+            return self
+                .workspace_runtimes
+                .get_mut(&root)
+                .ok_or_else(|| String::from("language workspace runtime is unavailable"))?
+                .wait_for_request(request_id);
+        }
         let deadline = Instant::now() + REQUEST_TIMEOUT;
         loop {
             let event = self.recv_until(deadline)?;
@@ -306,6 +359,7 @@ impl AppServerLanguageRuntime {
     pub(super) fn synchronize_document(
         &mut self,
         workspace_root: &Path,
+        workspace_folder_id: Option<&str>,
         config_generation: u64,
         configuration: &LanguageServersConfig,
         relative_path: &Path,
@@ -314,10 +368,26 @@ impl AppServerLanguageRuntime {
         let language_id = document.language_id().to_owned();
         self.ensure(
             workspace_root,
+            workspace_folder_id,
             config_generation,
             configuration,
             &language_id,
         )?;
+        if let Some(root) = self.active_workspace_root.clone() {
+            return self
+                .workspace_runtimes
+                .get_mut(&root)
+                .ok_or_else(|| String::from("language workspace runtime is unavailable"))?
+                .synchronize_selected_document(relative_path, document);
+        }
+        self.synchronize_selected_document(relative_path, document)
+    }
+
+    fn synchronize_selected_document(
+        &mut self,
+        relative_path: &Path,
+        document: LanguageServiceDocument,
+    ) -> Result<(), String> {
         self.documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
@@ -336,7 +406,21 @@ impl AppServerLanguageRuntime {
             .map_err(|error| error.to_string())
     }
 
-    pub(super) fn close_document(&mut self, path: &Path) -> Result<(), String> {
+    pub(super) fn close_document(
+        &mut self,
+        workspace_root: &Path,
+        path: &Path,
+    ) -> Result<(), String> {
+        if self.workspace_root.as_deref() != Some(workspace_root) {
+            return self
+                .workspace_runtimes
+                .get_mut(workspace_root)
+                .map_or(Ok(()), |runtime| runtime.close_selected_document(path));
+        }
+        self.close_selected_document(path)
+    }
+
+    fn close_selected_document(&mut self, path: &Path) -> Result<(), String> {
         self.documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
@@ -355,7 +439,7 @@ impl AppServerLanguageRuntime {
         config_generation: u64,
         configuration: &LanguageServersConfig,
     ) -> Result<(), String> {
-        self.shutdown();
+        self.shutdown_selected();
         let catalog =
             LanguageServerCatalog::new(preference(configuration, RUST_ANALYZER_SERVER_ID))
                 .with_json_language_server(preference(configuration, JSON_LANGUAGE_SERVER_ID))
@@ -398,6 +482,7 @@ impl AppServerLanguageRuntime {
                 diagnostics: Arc::new(LanguageDiagnosticPublisher {
                     documents: Arc::clone(&self.documents),
                     updates: Arc::clone(&self.updates),
+                    workspace_folder_id: self.workspace_folder_id.clone(),
                 }),
             }),
             Arc::new(AppServerLanguageMetrics),
@@ -454,6 +539,12 @@ impl AppServerLanguageRuntime {
     }
 
     fn shutdown(&mut self) {
+        self.workspace_runtimes.clear();
+        self.active_workspace_root = None;
+        self.shutdown_selected();
+    }
+
+    fn shutdown_selected(&mut self) {
         if let Ok(mut documents) = self.documents.lock() {
             documents.clear();
         }

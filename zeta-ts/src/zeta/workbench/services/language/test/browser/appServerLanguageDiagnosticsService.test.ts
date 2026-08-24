@@ -56,6 +56,28 @@ test("App Server diagnostics service synchronizes, filters revisions, and closes
 	assert.equal(service.getAllDiagnostics().length, 0);
 });
 
+test("App Server diagnostics keep equal relative paths isolated by Workspace folder", async () => {
+	const events = new FakeServerEvents();
+	const api = new FakeLanguageApi();
+	using workspace = new WorkspaceContextService({
+		id: "multi-root",
+		folders: [
+			{ id: "one", uri: URI.file("C:\\one"), name: "one", index: 0 },
+			{ id: "two", uri: URI.file("C:\\two"), name: "two", index: 1 },
+		],
+		configuration: URI.file("C:\\project.code-workspace"),
+	});
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using model = new TextModel("fn second() {}\n");
+	const resource = URI.file("C:\\two\\main.rs");
+	using acquisition = service.acquire(resource, "rust", model);
+	await tick();
+
+	assert.equal(api.synchronized[0]!.document.workspaceFolderId, "two");
+	events.fire({ method: "language/diagnostics", params: { workspaceFolderId: "two", path: "main.rs", revision: 1, diagnostics: [{ range: { start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 9 } }, severity: "warning", message: "second root", code: null, source: "fixture" }] } });
+	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "second root");
+});
+
 class FakeServerEvents implements IServerEventApi {
 	private listener: ((event: ServerNotification) => void) | undefined;
 	subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }

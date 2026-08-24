@@ -145,5 +145,5 @@ class TestStorageService implements IStorageService {
 	async flush(reason: WillSaveStateReason = WillSaveStateReason.PERIODIC): Promise<void> { this.saveEmitter.fire({ reason }); }
 }
 
-function workspaceService(root: URI): IWorkspaceContextService { return { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 }; }
+function workspaceService(root: URI): IWorkspaceContextService { return { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 }; }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }

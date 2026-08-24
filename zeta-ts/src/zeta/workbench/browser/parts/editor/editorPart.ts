@@ -34,6 +34,8 @@ import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { ActiveEditorContext } from "../../../common/contextkeys.js";
+import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
+import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -53,6 +55,8 @@ export interface IEditorPart {
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): void;
 	splitActiveGroupHorizontal(): Promise<void>;
+	saveWorkingSet(id: string): EditorWorkingSet;
+	applyWorkingSet(workingSet: EditorWorkingSetTarget, options?: ApplyEditorWorkingSetOptions): Promise<void>;
 	layout(dimension: IDimension): void;
 	focus(): void;
 }
@@ -89,6 +93,7 @@ export interface IEditorPartOptions {
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly saveAsResource?: (defaultName: string) => Promise<URI | undefined>;
+	readonly inputSerializers?: EditorInputSerializerRegistry;
 }
 
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
@@ -102,6 +107,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
 	private readonly activeEditorContext: IContextKey<string> | undefined;
+	private readonly inputSerializers: EditorInputSerializerRegistry;
 
 	override get minimumWidth(): number { return 120; }
 	override get minimumHeight(): number { return 119; }
@@ -145,6 +151,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		};
 		this.welcomeRecentProjects = options.welcome?.recentProjects ?? [];
 		this.saveAsResource = options.saveAsResource;
+		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.activeEditorContext = options.contextKeyService
 			? ActiveEditorContext.bindTo(options.contextKeyService)
 			: undefined;
@@ -346,9 +353,92 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			});
 	}
 
+	saveWorkingSet(id: string): EditorWorkingSet {
+		if (!id.trim()) throw new TypeError("Editor working set requires a non-empty ID");
+		const totalSize = this._groups.reduce((sum, _host, index) => sum + this.splitView.getViewSize(index), 0);
+		return Object.freeze({
+			id,
+			activeGroupIndex: this._groups.findIndex(({ group }) => group === this._activeGroup),
+			groups: Object.freeze(this._groups.map(({ group }, index) => Object.freeze({
+				editors: Object.freeze(group.inputs.map(input => Object.freeze({
+					input: this.inputSerializers.serialize(input),
+					preview: group.isPreview(input),
+				}))),
+				activeEditorIndex: group.activeInput ? group.inputs.indexOf(group.activeInput) : -1,
+				size: totalSize > 0 ? this.splitView.getViewSize(index) / totalSize : 1 / this._groups.length,
+			}))),
+		});
+	}
+
+	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
+		const target = workingSet === "empty" ? emptyWorkingSet() : validateWorkingSet(workingSet);
+		const groups = target.groups.map(group => ({
+			...group,
+			inputs: group.editors.map(editor => this.inputSerializers.deserialize(editor.input)),
+		}));
+		const hadEditorFocus = this.element.contains(this.element.ownerDocument.activeElement);
+		for (const host of [...this._groups]) {
+			for (const input of [...host.group.inputs]) host.group.closeEditor(input);
+		}
+		while (this._groups.length > 1) this.removeGroup(this._groups[this._groups.length - 1]!);
+		while (this._groups.length < groups.length) this.insertGroupAfter(this._groups[this._groups.length - 1]!.group);
+		for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+			const state = groups[groupIndex]!;
+			const group = this._groups[groupIndex]!.group;
+			for (let inputIndex = 0; inputIndex < state.inputs.length; inputIndex += 1) {
+				await group.openEditor(state.inputs[inputIndex]!, {
+					index: inputIndex,
+					pinned: !state.editors[inputIndex]!.preview,
+					preserveFocus: true,
+				});
+			}
+			const activeInput = state.inputs[state.activeEditorIndex];
+			if (activeInput) group.activateEditor(activeInput);
+		}
+		const activeGroup = this._groups[target.activeGroupIndex] ?? this._groups[0]!;
+		this._activeGroup = activeGroup.group;
+		this.updateActiveEditorContext();
+		const availableSize = Math.max(0, this.dimension.width - Math.max(0, groups.length - 1));
+		for (let index = 0; index < groups.length; index += 1) {
+			this.splitView.resizeView(index, availableSize * groups[index]!.size);
+		}
+		if (!options.preserveFocus && hadEditorFocus) this._activeGroup.focus();
+	}
+
 	private updateActiveEditorContext(): void {
 		this.activeEditorContext?.set(this.activePane?.id ?? "");
 	}
+}
+
+function emptyWorkingSet(): EditorWorkingSet {
+	return Object.freeze({
+		id: "empty",
+		activeGroupIndex: 0,
+		groups: Object.freeze([Object.freeze({ editors: Object.freeze([]), activeEditorIndex: -1, size: 1 })]),
+	});
+}
+
+function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
+	if (!value || typeof value !== "object" || typeof value.id !== "string" || !value.id.trim()) {
+		throw new TypeError("Invalid editor working set");
+	}
+	if (!Array.isArray(value.groups) || value.groups.length === 0 || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
+		throw new TypeError("Invalid editor working set groups");
+	}
+	let sizeTotal = 0;
+	for (const group of value.groups) {
+		if (!group || typeof group !== "object" || !Array.isArray(group.editors) || !Number.isInteger(group.activeEditorIndex) || group.activeEditorIndex < -1 || group.activeEditorIndex >= group.editors.length || !Number.isFinite(group.size) || group.size < 0) {
+			throw new TypeError("Invalid editor group working set");
+		}
+		for (const editor of group.editors) {
+			if (!editor || typeof editor !== "object" || typeof editor.preview !== "boolean" || !isSerializedEditorInput(editor.input)) {
+				throw new TypeError("Invalid editor working set entry");
+			}
+		}
+		sizeTotal += group.size;
+	}
+	if (sizeTotal <= 0) throw new TypeError("Invalid editor working set layout");
+	return value;
 }
 
 function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): string {

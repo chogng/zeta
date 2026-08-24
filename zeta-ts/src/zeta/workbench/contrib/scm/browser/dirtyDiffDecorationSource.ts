@@ -32,7 +32,10 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 		this.diffService = this.own(new RustDiffComputationService(diffApi));
 		this.onDidChange = this.source.onDidChange;
 		this.own(model.onDidChange(() => this.scheduleRefresh(MODEL_REFRESH_DELAY_MS)));
-		this.own(gitService.onDidChangeStatus(() => this.scheduleRefresh(0)));
+		this.own(gitService.onDidChangeRepositoryStatus(status => {
+			if (gitService.repositoryForResource(this.resource)?.id === status.repositoryId) this.scheduleRefresh(0);
+		}));
+		this.own(gitService.onDidChangeRepositories(() => this.scheduleRefresh(0)));
 		this.own(gitService.onDidBecomeReady(() => this.scheduleRefresh(0)));
 		this.defer(() => {
 			this.refreshGeneration += 1;
@@ -72,7 +75,16 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 		this.activeRequest = controller;
 		const modelVersion = this.model.version;
 		try {
-			const status = await this.gitService.status();
+			let repository = this.gitService.repositoryForResource(this.resource);
+			if (!repository) {
+				await this.gitService.listRepositories();
+				repository = this.gitService.repositoryForResource(this.resource);
+			}
+			if (!repository) {
+				this.accept(generation, modelVersion, Object.freeze([]));
+				return;
+			}
+			const status = await this.gitService.status(repository.id);
 			const path = workspaceRelativePath(this.resource, status.workspacePath);
 			if (!path) {
 				this.accept(generation, modelVersion, Object.freeze([]));
@@ -84,7 +96,7 @@ export class DirtyDiffDecorationSource extends DisposableOwner implements OwnedD
 				return;
 			}
 			const comparison = change.worktreeStatus !== "unmodified" ? "unstaged" : "staged";
-			const file = await this.gitService.changeFile(path, comparison);
+			const file = await this.gitService.changeFile(path, comparison, repository.id);
 			if (file.original.kind === "binary" || file.modified.kind === "binary") {
 				this.accept(generation, modelVersion, Object.freeze([]));
 				return;

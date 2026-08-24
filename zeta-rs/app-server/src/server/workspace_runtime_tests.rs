@@ -207,6 +207,73 @@ fn workspace_switch_rpc_requires_a_local_workspace_host() {
 }
 
 #[test]
+fn workspace_folders_set_routes_services_by_stable_folder_id() {
+    let first = TestWorkspace::new("multi-root-first", "first.txt");
+    let second = TestWorkspace::new("multi-root-second", "second.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "desktop", "version": "1"},
+                "capabilities": {"workspaceTrustHost": {"version": 1}}
+            }
+        })
+        .to_string(),
+    );
+
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/folders/set",
+                "params": {"folders": [
+                    {"id": "first", "root": first.path, "trust": {"type": "hostSession"}},
+                    {"id": "second", "root": second.path, "trust": {"type": "hostSession"}}
+                ]}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(response["result"]["folders"][0]["id"], "first");
+    assert_eq!(response["result"]["folders"][1]["id"], "second");
+    let Ok(first_files) = server.file_system_service_for(Some("first")) else {
+        panic!("first folder file service should be available");
+    };
+    let Ok(second_files) = server.file_system_service_for(Some("second")) else {
+        panic!("second folder file service should be available");
+    };
+    assert_eq!(
+        first_files.read_file(Path::new("first.txt"), 1024).unwrap(),
+        b"multi-root-first"
+    );
+    assert_eq!(
+        second_files
+            .read_file(Path::new("second.txt"), 1024)
+            .unwrap(),
+        b"multi-root-second"
+    );
+    assert!(server.file_system_service_for(Some("missing")).is_err());
+    let Ok(first_terminal) = server.terminal_service_for(Some("first")) else {
+        panic!("first folder terminal service should be available");
+    };
+    let Ok(second_terminal) = server.terminal_service_for(Some("second")) else {
+        panic!("second folder terminal service should be available");
+    };
+    assert!(!Arc::ptr_eq(&first_terminal, &second_terminal));
+}
+
+#[test]
 fn workspace_switch_rpc_requires_host_capability_for_session_trust() {
     let workspace = TestWorkspace::new("rpc-session-trust", "readable.txt");
     let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());

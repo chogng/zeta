@@ -18,28 +18,32 @@ export function debugAdapterIpcRoutes(supervisor: AppServerSupervisor): readonly
 }
 
 function startParams(value: unknown): DebugAdapterStartParams {
-	const params = record(value, ["program", "arguments"]);
+	const params = record(value, ["program", "arguments"], ["workspaceFolderId"]);
 	if (!Array.isArray(params.arguments) || params.arguments.length > MAX_ARGUMENTS) throw new Error("arguments must be a bounded array");
 	const argumentsList = params.arguments.map((argument, index) => string(argument, `arguments[${index}]`));
 	if (argumentsList.reduce((bytes, argument) => bytes + new TextEncoder().encode(argument).byteLength, 0) > MAX_ARGUMENT_BYTES) throw new Error("arguments exceed the supported size");
-	return { program: nonEmptyString(params.program, "program"), arguments: argumentsList };
+	return { ...workspaceFolder(params.workspaceFolderId), program: nonEmptyString(params.program, "program"), arguments: argumentsList };
 }
 
 function sendParams(value: unknown): DebugAdapterSendParams {
-	const params = record(value, ["sessionId", "message"]);
+	const params = record(value, ["sessionId", "message"], ["workspaceFolderId"]);
 	const message = jsonValue(params.message, "message");
 	if (new TextEncoder().encode(JSON.stringify(message)).byteLength > MAX_MESSAGE_BYTES) throw new Error("message exceeds the supported size");
-	return { sessionId: nonEmptyString(params.sessionId, "sessionId"), message };
+	return { ...workspaceFolder(params.workspaceFolderId), sessionId: nonEmptyString(params.sessionId, "sessionId"), message };
 }
 
 function readParams(value: unknown): DebugAdapterReadParams {
-	const params = record(value, ["sessionId", "afterSequence", "maxMessages"]);
-	return { sessionId: nonEmptyString(params.sessionId, "sessionId"), afterSequence: nonNegativeInteger(params.afterSequence, "afterSequence"), maxMessages: boundedPositiveInteger(params.maxMessages, "maxMessages", 128) };
+	const params = record(value, ["sessionId", "afterSequence", "maxMessages"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), sessionId: nonEmptyString(params.sessionId, "sessionId"), afterSequence: nonNegativeInteger(params.afterSequence, "afterSequence"), maxMessages: boundedPositiveInteger(params.maxMessages, "maxMessages", 128) };
 }
 
 function closeParams(value: unknown): DebugAdapterCloseParams {
-	const params = record(value, ["sessionId"]);
-	return { sessionId: nonEmptyString(params.sessionId, "sessionId") };
+	const params = record(value, ["sessionId"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), sessionId: nonEmptyString(params.sessionId, "sessionId") };
+}
+
+function workspaceFolder(value: unknown): { readonly workspaceFolderId?: string } {
+	return value === undefined ? {} : { workspaceFolderId: nonEmptyString(value, "workspaceFolderId") };
 }
 
 function jsonValue(value: unknown, field: string, depth = 0): unknown {

@@ -253,7 +253,7 @@ export class DebugViewPane extends ViewPane {
 	private render(): void {
 		if (this.exceptionControls.disposed) return;
 		const selectedConfiguration = this.configurationsElement.value;
-		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, `${compound.name} (compound)`)));
+		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""} (compound)`)));
 		if ([...this.debug.configurations, ...this.debug.compounds].some(candidate => candidate.id === selectedConfiguration)) this.configurationsElement.value = selectedConfiguration;
 		const session = this.debug.session;
 		this.sessionsElement.replaceChildren(...this.debug.sessions.map(candidate => option(this.element.ownerDocument, candidate.id, `${candidate.configuration.name} — ${candidate.state}`)));

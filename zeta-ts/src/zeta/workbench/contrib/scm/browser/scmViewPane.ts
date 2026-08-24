@@ -23,6 +23,8 @@ type GitPathAction = "stage" | "unstage" | "discard";
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
 	private readonly gitService: IGitService;
+	private readonly repositorySelectorContainer: HTMLLabelElement;
+	private readonly repositorySelector: HTMLSelectElement;
 	private readonly commitInput: HTMLTextAreaElement;
 	private readonly commitButton: HTMLButtonElement;
 	private readonly statusElement: HTMLDivElement;
@@ -40,6 +42,13 @@ export class ScmViewPane extends ViewPane {
 		this.gitService = gitService;
 		this.contentElement.classList.add("zeta-scm");
 		const document = container.ownerDocument;
+		this.repositorySelectorContainer = h(document, "label");
+		this.repositorySelectorContainer.className = "zeta-scm-repository-selector";
+		const repositorySelectorLabel = h(document, "span");
+		repositorySelectorLabel.textContent = "Repository";
+		this.repositorySelector = h(document, "select");
+		this.repositorySelector.setAttribute("aria-label", "Active source control repository");
+		this.repositorySelectorContainer.append(repositorySelectorLabel, this.repositorySelector);
 		const commitForm = h(document, "form");
 		commitForm.className = "zeta-scm-commit-form";
 		this.commitInput = h(document, "textarea");
@@ -65,7 +74,8 @@ export class ScmViewPane extends ViewPane {
 		this.statusElement.textContent = "Reading Git status…";
 		this.changesElement = h(document, "div");
 		this.changesElement.className = "zeta-scm-changes";
-		this.contentElement.append(commitForm, this.statusElement, this.changesElement);
+		this.contentElement.append(this.repositorySelectorContainer, commitForm, this.statusElement, this.changesElement);
+		this.own(addDisposableListener(this.repositorySelector, "change", () => void this.selectRepository(this.repositorySelector.value)));
 		this.own(addDisposableListener(commitForm, "submit", (event) => {
 			event.preventDefault();
 			void this.commit();
@@ -78,6 +88,8 @@ export class ScmViewPane extends ViewPane {
 			}
 		}));
 		this.own(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
+		this.own(this.gitService.onDidChangeRepositories(() => this.renderRepositorySelector()));
+		this.own(this.gitService.onDidChangeActiveRepository(() => this.renderRepositorySelector()));
 		this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
 		this.own(this.fileIconThemeService.onDidFileIconThemeChange(() => {
 			if (this.status) this.renderStatus(this.status);
@@ -86,7 +98,25 @@ export class ScmViewPane extends ViewPane {
 			this.revision += 1;
 		});
 		this.setBusy(true);
+		this.renderRepositorySelector();
 		void this.refresh();
+	}
+
+	private async selectRepository(repositoryId: string): Promise<void> {
+		if (!repositoryId || repositoryId === this.gitService.activeRepository?.id) return;
+		const revision = ++this.revision;
+		this.setBusy(true);
+		this.statusElement.textContent = "Switching repository…";
+		try {
+			const status = await this.gitService.selectRepository(repositoryId);
+			if (this.isDisposed || revision !== this.revision) return;
+			this.renderStatus(status);
+		} catch (error) {
+			this.renderError(error, revision);
+		} finally {
+			if (!this.isDisposed && revision === this.revision) this.setBusy(false);
+			this.renderRepositorySelector();
+		}
 	}
 
 	async refresh(): Promise<void> {
@@ -112,10 +142,11 @@ export class ScmViewPane extends ViewPane {
 			return;
 		}
 		const revision = ++this.revision;
+		const repositoryId = this.status?.repositoryId;
 		this.setBusy(true);
 		this.statusElement.textContent = "Committing staged changes…";
 		try {
-			const result = await this.gitService.commit(message);
+			const result = await this.gitService.commit(message, repositoryId);
 			if (this.isDisposed || revision !== this.revision) return;
 			this.commitInput.value = "";
 			this.renderStatus(result.status, `Created commit ${result.objectId.slice(0, 7)}.`);
@@ -140,14 +171,15 @@ export class ScmViewPane extends ViewPane {
 
 	private async runPathAction(action: GitPathAction, paths: readonly string[]): Promise<void> {
 		const revision = ++this.revision;
+		const repositoryId = this.status?.repositoryId;
 		this.setBusy(true);
 		this.statusElement.textContent = `${pathActionLabel(action)} ${paths.length === 1 ? paths[0] : `${paths.length} paths`}…`;
 		try {
 			const result = action === "stage"
-				? await this.gitService.stage(paths)
+				? await this.gitService.stage(paths, repositoryId)
 				: action === "unstage"
-				? await this.gitService.unstage(paths)
-				: await this.gitService.discardWorktree(paths);
+				? await this.gitService.unstage(paths, repositoryId)
+				: await this.gitService.discardWorktree(paths, repositoryId);
 			if (this.isDisposed || revision !== this.revision) return;
 			this.renderStatus(result);
 		} catch (error) {
@@ -370,10 +402,25 @@ export class ScmViewPane extends ViewPane {
 		this.updateCommandState();
 	}
 
+	private renderRepositorySelector(): void {
+		const repositories = this.gitService.repositories;
+		const activeId = this.gitService.activeRepository?.id;
+		this.repositorySelector.replaceChildren(...repositories.map(repository => {
+			const option = h(this.element.ownerDocument, "option");
+			option.value = repository.id;
+			option.textContent = repository.path ? `${repository.label} — ${repository.path}` : repository.label;
+			option.selected = repository.id === activeId;
+			return option;
+		}));
+		this.repositorySelectorContainer.hidden = repositories.length <= 1;
+		this.repositorySelector.disabled = this.busy || repositories.length <= 1;
+	}
+
 	private updateCommandState(): void {
 		const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
 		this.commitButton.disabled = this.busy || !hasStagedChanges;
 		this.commitInput.disabled = this.busy || this.unavailable;
+		this.repositorySelector.disabled = this.busy || this.gitService.repositories.length <= 1;
 		for (const item of this.actionViewItems) item.setBusy(this.busy);
 	}
 }

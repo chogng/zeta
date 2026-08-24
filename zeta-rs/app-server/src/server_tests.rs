@@ -3732,6 +3732,7 @@ fn jsonl_transport_writes_notifications_without_another_request() {
     wait_for_captured(&output, "\"id\":1");
     server.publish_fs_changed_for_test(
         zeta_app_server_protocol::protocol::fs::FsChanged::PathsChanged {
+            workspace_folder_id: None,
             paths: vec![std::path::PathBuf::from("src/lib.rs")],
         },
     );
@@ -4049,16 +4050,32 @@ fn git_status_rpc_projects_workspace_repository_state() {
         .unwrap();
     let mut connection = server.connection();
     initialize(&server, &mut connection);
-    let response = call(
+    let repositories = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":2,
-            "method":"git/status",
+            "method":"git/repositories",
             "params":{}
         }),
     );
+    let repository_id = repositories["result"]["repositories"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(repositories["result"]["repositories"][0]["path"], "");
+    let response = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":3,
+            "method":"git/status",
+            "params":{"repositoryId":repository_id}
+        }),
+    );
+    assert_eq!(response["result"]["repositoryId"], repository_id);
     assert_eq!(response["result"]["head"]["type"], "branch");
     assert_eq!(response["result"]["changes"].as_array().unwrap().len(), 2);
     assert!(
@@ -4085,9 +4102,9 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":3,
+            "id":4,
             "method":"git/stage",
-            "params":{"paths":["new.txt"]}
+            "params":{"repositoryId":repository_id,"paths":["new.txt"]}
         }),
     );
     assert!(
@@ -4102,10 +4119,14 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":4,
+            "id":5,
             "method":"git/unstage",
-            "params":{"paths":["new.txt"]}
+            "params":{"repositoryId":repository_id,"paths":["new.txt"]}
         }),
+    );
+    assert!(
+        unstaged["result"]["status"]["changes"].is_array(),
+        "unexpected unstage response: {unstaged}"
     );
     assert!(
         unstaged["result"]["status"]["changes"]
@@ -4121,9 +4142,9 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":5,
+            "id":6,
             "method":"git/stage",
-            "params":{"paths":["../outside.txt"]}
+            "params":{"repositoryId":repository_id,"paths":["../outside.txt"]}
         }),
     );
     assert_eq!(invalid["error"]["message"], "InvalidParams");
@@ -4132,9 +4153,9 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":6,
+            "id":7,
             "method":"git/stage",
-            "params":{"paths":["new.txt"]}
+            "params":{"repositoryId":repository_id,"paths":["new.txt"]}
         }),
     );
     let committed = call(
@@ -4142,9 +4163,9 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":7,
+            "id":8,
             "method":"git/commit",
-            "params":{"message":"add workspace file"}
+            "params":{"repositoryId":repository_id,"message":"add workspace file"}
         }),
     );
     assert!(!committed["result"]["objectId"].as_str().unwrap().is_empty());
@@ -4153,9 +4174,9 @@ fn git_status_rpc_projects_workspace_repository_state() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":8,
+            "id":9,
             "method":"git/discardWorktree",
-            "params":{"paths":["tracked.txt"]}
+            "params":{"repositoryId":repository_id,"paths":["tracked.txt"]}
         }),
     );
     assert!(
@@ -4192,7 +4213,7 @@ fn restricted_workspace_exposes_git_status_but_rejects_mutations() {
         .unwrap();
     assert_eq!(
         server.switch_local_workspace_root(root.clone()),
-        Ok(root.canonicalize().unwrap())
+        Ok(dunce::canonicalize(&root).unwrap())
     );
     let mut connection = server.connection();
     let initialized = call(

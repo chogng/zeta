@@ -122,6 +122,74 @@ fn runtime_incarnations_use_distinct_revision_scopes() {
 }
 
 #[test]
+fn runtime_discovers_nested_repositories_and_routes_operations_by_repository_id() {
+    let repository = TestRepository::init();
+    repository.write(".gitignore", "nested/\n");
+    repository.write("root.txt", "root before\n");
+    repository.git(&["add", ".gitignore", "root.txt"]);
+    repository.git(&["commit", "-m", "root initial"]);
+
+    std::fs::create_dir_all(repository.root().join("nested")).unwrap();
+    repository.git_at("nested", &["init", "--initial-branch=main"]);
+    repository.git_at("nested", &["config", "user.name", "Zeta Test"]);
+    repository.git_at("nested", &["config", "user.email", "zeta@example.invalid"]);
+    repository.write("nested/nested.txt", "nested before\n");
+    repository.git_at("nested", &["add", "nested.txt"]);
+    repository.git_at("nested", &["commit", "-m", "nested initial"]);
+
+    repository.write("root.txt", "root after\n");
+    repository.write("nested/nested.txt", "nested after\n");
+    let runtime = GitRuntime::new(
+        trusted_workspace(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let descriptors = runtime.repositories().repositories;
+
+    assert_eq!(
+        descriptors
+            .iter()
+            .map(|descriptor| descriptor.path.as_str())
+            .collect::<Vec<_>>(),
+        vec!["", "nested"]
+    );
+    let root_id = descriptors
+        .iter()
+        .find(|descriptor| descriptor.path.is_empty())
+        .unwrap()
+        .id
+        .clone();
+    let nested_id = descriptors
+        .iter()
+        .find(|descriptor| descriptor.path == "nested")
+        .unwrap()
+        .id
+        .clone();
+
+    let root_status = runtime.status_for(Some(&root_id)).unwrap();
+    let nested_status = runtime.status_for(Some(&nested_id)).unwrap();
+    assert_eq!(root_status.repository_id, root_id);
+    assert_eq!(nested_status.repository_id, nested_id);
+    assert_eq!(root_status.changes.len(), 1);
+    assert_eq!(root_status.changes[0].path, "root.txt");
+    assert_eq!(nested_status.changes.len(), 1);
+    assert_eq!(nested_status.changes[0].path, "nested.txt");
+
+    let staged = runtime
+        .stage_for(Some(&nested_id), vec![PathBuf::from("nested.txt")])
+        .unwrap();
+    assert_eq!(staged.repository_id, nested_id);
+    assert_ne!(
+        staged.changes[0].index_status,
+        staged.changes[0].worktree_status
+    );
+    assert!(matches!(
+        runtime.status_for(Some("repo_missing")),
+        Err(super::GitRuntimeError::RepositoryNotFound)
+    ));
+}
+
+#[test]
 fn runtime_projects_text_diffs_and_switches_only_existing_local_branches() {
     let repository = TestRepository::init();
     repository.write("tracked.txt", "before\n");
@@ -227,6 +295,23 @@ impl TestRepository {
 
     fn git(&self, arguments: &[&str]) {
         self.git_output(arguments);
+    }
+
+    fn git_at(&self, relative: &str, arguments: &[&str]) {
+        let output = Command::new("git")
+            .args(arguments)
+            .current_dir(self.root.join(relative))
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git -C {} {} failed: {}",
+            relative,
+            arguments.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     fn git_output(&self, arguments: &[&str]) -> String {

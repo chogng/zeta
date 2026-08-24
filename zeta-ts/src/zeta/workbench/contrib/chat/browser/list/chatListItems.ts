@@ -115,6 +115,13 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				text: item.text,
 				transient,
 			};
+		case "userContext":
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: item.name,
+				transient,
+			};
 		case "userImage":
 		case "userImageAttachment":
 			return {

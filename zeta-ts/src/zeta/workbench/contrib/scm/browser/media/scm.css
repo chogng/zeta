@@ -398,6 +398,33 @@
   padding: 0 8px 8px;
 }
 
+.zeta-scm-repository-selector {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px 0;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+}
+
+.zeta-scm-repository-selector[hidden] {
+  display: none;
+}
+
+.zeta-scm-repository-selector > select {
+  min-width: 0;
+  height: 26px;
+  padding: 0 24px 0 7px;
+  color: var(--zeta-input-foreground);
+  background: var(--zeta-input-background);
+  border: 1px solid var(--zeta-input-border, transparent);
+  border-radius: 2px;
+}
+
+.zeta-scm-repository-selector > select:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
 .zeta-scm-commit-input {
   min-width: 0;
   resize: vertical;

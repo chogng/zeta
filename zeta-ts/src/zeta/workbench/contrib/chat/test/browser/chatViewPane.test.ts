@@ -10,6 +10,8 @@ import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashComm
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
+import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
+import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -45,6 +47,8 @@ test("opens a local Chat tab before the backend session request settles", () => 
 		contextViewService,
 		{} as ICommandService,
 		layoutService,
+		{} as IChatContextPickService,
+		{} as IQuickInputService,
 	);
 
 	assert.equal(sessionService.untitledSessions.length, 1);

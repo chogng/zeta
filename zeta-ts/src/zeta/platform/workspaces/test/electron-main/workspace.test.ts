@@ -7,10 +7,13 @@ import {
 	isSingleFolderWorkspaceIdentifier,
 	isRemoteWorkspaceIdentifier,
 	isWorkspaceIdentifier,
+	parseWorkspace,
 	parseWorkspaceIdentifier,
+	serializeWorkspace,
 	serializeWorkspaceIdentifier,
 	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	workbenchStateFromWorkspaceIdentifier,
+	workspaceFromIdentifier,
 	WorkbenchState,
 } from "../../../../platform/workspace/common/workspace.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
@@ -150,6 +153,44 @@ test("workspaces service recognizes explicit workspace files", async () => {
 	assert.equal(context.getWorkspace().name, "team");
 });
 
+test("workspaces service resolves ordered folders from VS Code workspace files", async () => {
+	const configPath = resolve("canonical", "team.code-workspace");
+	const pathService: IWorkspacePathService = {
+		async resolvePath(path) {
+			return {
+				kind: path === configPath ? WorkspacePathKind.File : WorkspacePathKind.Directory,
+				path,
+			};
+		},
+		async readFile(path) {
+			assert.equal(path, configPath);
+			return `{
+				// VS Code-compatible JSONC workspace folders.
+				"folders": [
+					{ "path": "apps/web", "name": "Web Client" },
+					{ "path": "../api" },
+				],
+			}`;
+		},
+	};
+	const service = new WorkspacesMainService(pathService);
+	const identity = await service.resolveStartupWorkspace({
+		arguments: ["--workspace", configPath],
+		cwd: resolve("launch-root"),
+	});
+	assert.ok(isWorkspaceIdentifier(identity));
+
+	const workspace = await service.resolveWorkspace(identity);
+	assert.equal(workspace.name, "team");
+	assert.equal(workspace.configuration?.fsPath, configPath);
+	assert.deepEqual(workspace.folders.map(folder => ({ name: folder.name, index: folder.index, path: folder.uri.fsPath })), [
+		{ name: "Web Client", index: 0, path: resolve("canonical", "apps", "web") },
+		{ name: "api", index: 1, path: resolve("api") },
+	]);
+	assert.notEqual(workspace.folders[0]?.id, workspace.folders[1]?.id);
+	assert.equal(new WorkspaceContextService(workspace).getWorkbenchState(), WorkbenchState.WORKSPACE);
+});
+
 test("non-empty workspace identifiers are stable for canonical URIs", () => {
 	const folderUri = URI.file(resolve("canonical", "project"));
 	const configPath = URI.file(resolve("canonical", "team.zeta-workspace"));
@@ -253,6 +294,22 @@ test("workspace identifier IPC validation revives URIs", () => {
 	assert.throws(() => parseWorkspaceIdentifier({ id: "remote-folder-id", uri: "zeta-remote://ssh+work-server/home/zeta/project/" }), /canonical/);
 });
 
+test("resolved workspace IPC preserves ordered folder identities", () => {
+	const serialized = {
+		id: "workspace-id",
+		folders: [
+			{ id: "web-id", uri: URI.file(resolve("web")).toString(), name: "Web", index: 0 },
+			{ id: "api-id", uri: URI.file(resolve("api")).toString(), name: "API", index: 1 },
+		],
+		configuration: URI.file(resolve("team.code-workspace")).toString(),
+		name: "team",
+	};
+	const workspace = parseWorkspace(serialized);
+	assert.deepEqual(serializeWorkspace(workspace), serialized);
+	assert.equal(workspace.folders[1]?.id, "api-id");
+	assert.throws(() => parseWorkspace({ ...serialized, folders: [serialized.folders[1], serialized.folders[0]] }), /indices/);
+});
+
 test("workspaces main service exposes a window-owned identity through IPC", async () => {
 	const workspace = await new WorkspacesMainService()
 		.resolveStartupWorkspace({
@@ -271,7 +328,7 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
 	assert.throws(() => route.validate({}), /does not accept parameters/);
 	assert.deepEqual(
 		await route.invoke(undefined),
-		serializeWorkspaceIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE),
+		serializeWorkspace(workspaceFromIdentifier(UNKNOWN_EMPTY_WINDOW_WORKSPACE)),
 	);
 
 	const folder = await new WorkspacesMainService({
@@ -283,7 +340,7 @@ test("workspaces main service exposes a window-owned identity through IPC", asyn
 	context.updateWorkspace(folder);
 	assert.deepEqual(
 		await route.invoke(undefined),
-		serializeWorkspaceIdentifier(folder),
+		serializeWorkspace(workspaceFromIdentifier(folder)),
 	);
 	assert.deepEqual(changes, [folder.id]);
 	changeSubscription.dispose();

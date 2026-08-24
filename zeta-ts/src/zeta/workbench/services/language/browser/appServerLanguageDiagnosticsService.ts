@@ -22,6 +22,8 @@ const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new 
 
 interface LanguageDocumentEntry {
 	readonly resource: URI;
+	readonly workspaceFolderId: string;
+	readonly wireWorkspaceFolderId?: string;
 	readonly path: string;
 	readonly languageId: string;
 	readonly model: TextModel;
@@ -71,7 +73,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 				entry.codeIntelligenceSynchronized = false;
 			}
 			this.clearServerDiagnostics();
-			if (nextWorkspace.folders.length === 1) this.queueTrustRefresh();
+			if (nextWorkspace.folders.length > 0) this.queueTrustRefresh();
 		}));
 		this.defer(() => {
 			this.alive = false;
@@ -89,8 +91,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 
 	acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
 		if (!isAppServerLanguageId(languageId)) return toDisposable(() => undefined);
-		const path = this.relativePath(resource);
-		if (path === undefined || model.largeFile.tooLargeForSynchronization) return toDisposable(() => undefined);
+		const target = this.workspaceTarget(resource);
+		if (!target || model.largeFile.tooLargeForSynchronization) return toDisposable(() => undefined);
 		const key = resource.toString();
 		const existing = this.entries.get(key);
 		if (existing) {
@@ -103,7 +105,9 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		}
 		const entry: LanguageDocumentEntry = {
 			resource,
-			path,
+			workspaceFolderId: target.workspaceFolderId,
+			...(this.workspace.getWorkspace().folders.length > 1 ? { wireWorkspaceFolderId: target.workspaceFolderId } : {}),
+			path: target.path,
 			languageId,
 			model,
 			modelListener: toDisposable(() => undefined),
@@ -159,7 +163,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 	}
 
 	private schedule(entry: LanguageDocumentEntry, immediate: boolean): void {
-		if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || this.relativePath(entry.resource) !== entry.path) return;
+		const target = this.workspaceTarget(entry.resource);
+		if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || target?.workspaceFolderId !== entry.workspaceFolderId || target.path !== entry.path) return;
 		if (entry.timer !== undefined) clearTimeout(entry.timer);
 		if (immediate) {
 			entry.timer = undefined;
@@ -179,18 +184,20 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		if (new TextEncoder().encode(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
 			if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			const document = { path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
+			const document = { ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
 			let codeIntelligenceSynchronized = false;
 			await Promise.all([
 				this.api.synchronize({ document }),
-				this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError),
+				this.canSynchronizeCodeIntelligence(entry)
+					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
+					: undefined,
 			]);
 			if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			entry.languageSynchronized = true;
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
 			try {
 				const report = await this.api.documentDiagnostics({ document });
-				if (report.kind === "full") this.acceptDiagnostics({ path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
+				if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
 			} catch (error) {
 				if (!isUnsupportedDiagnosticPull(error)) throw error;
 			}
@@ -211,22 +218,24 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		if (!this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
 		const next = new Map<string, LanguageDiagnosticSnapshot>();
 		let supported = false;
-		for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
-			if (!this.alive || !this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
-			try {
-				const report = await this.api.workspaceDiagnostics({ languageId });
-				if (!report.supported) continue;
-				supported = true;
-				for (const snapshot of report.snapshots) {
-					const resource = workspaceResourceFromPath(this.workspaceRoot(), snapshot.path);
-					if (!resource) continue;
-					const key = resource.toString();
-					const diagnostics = snapshot.diagnostics.flatMap(diagnostic => projectWorkspaceDiagnostic(diagnostic));
-					const combined = deduplicateDiagnostics([...(next.get(key)?.diagnostics ?? []), ...diagnostics]);
-					next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
+		for (const folder of this.workspace.getWorkspace().folders) {
+			for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
+				if (!this.alive || !this.workspaceTrusted || !this.hasWorkspaceFolder()) return;
+				try {
+					const report = await this.api.workspaceDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { workspaceFolderId: folder.id } : {}), languageId });
+					if (!report.supported) continue;
+					supported = true;
+					for (const snapshot of report.snapshots) {
+						const resource = workspaceResourceFromPath(folder.uri, snapshot.path);
+						if (!resource) continue;
+						const key = resource.toString();
+						const diagnostics = snapshot.diagnostics.flatMap(diagnostic => projectWorkspaceDiagnostic(diagnostic));
+						const combined = deduplicateDiagnostics([...(next.get(key)?.diagnostics ?? []), ...diagnostics]);
+						next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
+					}
+				} catch (error) {
+					if (!isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
 				}
-			} catch (error) {
-				if (!isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
 			}
 		}
 		if (!this.alive) return;
@@ -286,7 +295,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 	}
 
 	private hasWorkspaceFolder(): boolean {
-		return this.workspace.getWorkspace().folders.length === 1;
+		return this.workspace.getWorkspace().folders.length > 0;
 	}
 
 	private release(key: string, entry: LanguageDocumentEntry): void {
@@ -301,8 +310,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
 			if (entry.references > 0) return;
-			const closeLanguage = entry.languageSynchronized ? this.api.close({ path: entry.path }) : Promise.resolve();
-			const closeCodeIntelligence = entry.codeIntelligenceSynchronized ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
+			const closeLanguage = entry.languageSynchronized ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path }) : Promise.resolve();
+			const closeCodeIntelligence = entry.codeIntelligenceSynchronized && this.canSynchronizeCodeIntelligence(entry) ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
 			entry.languageSynchronized = false;
 			entry.codeIntelligenceSynchronized = false;
 			await Promise.all([closeLanguage, closeCodeIntelligence]);
@@ -312,7 +321,12 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 	}
 
 	private acceptDiagnostics(notification: LanguageDiagnosticsNotification): void {
-		const resource = workspaceResourceFromPath(this.workspaceRoot(), notification.path);
+		const folders = this.workspace.getWorkspace().folders;
+		const folder = notification.workspaceFolderId
+			? folders.find(folder => folder.id === notification.workspaceFolderId)
+			: folders.length === 1 ? folders[0] : undefined;
+		if (!folder) return;
+		const resource = workspaceResourceFromPath(folder.uri, notification.path);
 		if (!resource) return;
 		const key = resource.toString();
 		const entry = this.entries.get(key);
@@ -337,18 +351,21 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		return Object.freeze({ resource, revision, diagnostics: Object.freeze(diagnostics) });
 	}
 
-	private relativePath(resource: URI): string | undefined {
-		try {
-			return workspaceRelativePath(this.workspaceRoot(), resource);
-		} catch {
-			return undefined;
+	private workspaceTarget(resource: URI): { readonly workspaceFolderId: string; readonly path: string } | undefined {
+		let match: { readonly workspaceFolderId: string; readonly path: string; readonly rootLength: number } | undefined;
+		for (const folder of this.workspace.getWorkspace().folders) {
+			try {
+				const path = workspaceRelativePath(folder.uri, resource);
+				if (!match || folder.uri.path.length > match.rootLength) match = { workspaceFolderId: folder.id, path, rootLength: folder.uri.path.length };
+			} catch {
+				// Resource belongs to a different Workspace folder.
+			}
 		}
+		return match && { workspaceFolderId: match.workspaceFolderId, path: match.path };
 	}
 
-	private workspaceRoot(): URI {
-		const folders = this.workspace.getWorkspace().folders;
-		if (folders.length !== 1) throw new Error("Language diagnostics require one workspace folder");
-		return folders[0]!.uri;
+	private canSynchronizeCodeIntelligence(entry: LanguageDocumentEntry): boolean {
+		return this.workspace.getWorkspace().folders[0]?.id === entry.workspaceFolderId;
 	}
 }
 

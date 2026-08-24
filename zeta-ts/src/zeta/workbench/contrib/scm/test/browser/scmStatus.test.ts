@@ -64,6 +64,7 @@ test("Git status events supersede an older in-flight status request", async () =
 
 function branchStatus(ahead: number, behind: number, name = "main"): GitStatus {
 	return {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-stream",
 		revision: 1,
 		workspacePath: ".",
@@ -74,6 +75,7 @@ function branchStatus(ahead: number, behind: number, name = "main"): GitStatus {
 
 function detachedStatus(): GitStatus {
 	return {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-stream",
 		revision: 2,
 		workspacePath: ".",

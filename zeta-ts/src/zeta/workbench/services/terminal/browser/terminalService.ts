@@ -66,8 +66,12 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 	}
 
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-		this.requireWorkspaceFolder();
+		const workspaceFolder = this.requireWorkspaceFolder(options.workspaceFolderId);
+		const processWorkspaceFolderId = this.workspaceContext.getWorkspace().folders.length > 1
+			? workspaceFolder.id
+			: undefined;
 		const created = await this.processService.create({
+			...processWorkspaceFolder(processWorkspaceFolderId),
 			rows: options.dimensions.rows,
 			cols: options.dimensions.cols,
 			profile: options.profile,
@@ -75,6 +79,8 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 		const instanceNumber = this.nextInstanceId++;
 		const instance = this.own(new TerminalInstance(
 			`terminal-instance-${instanceNumber}`,
+			workspaceFolder.id,
+			processWorkspaceFolderId,
 			created.terminalId,
 			options.title ?? terminalProfileTitle(created.profile),
 			created.profile,
@@ -167,10 +173,11 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 		}
 	}
 
-	private requireWorkspaceFolder(): void {
-		if (this.workspaceContext.getWorkspace().folders.length !== 1) {
-			throw new Error("TerminalUnavailable: Terminal requires one workspace folder");
-		}
+	private requireWorkspaceFolder(workspaceFolderId?: string) {
+		const folders = this.workspaceContext.getWorkspace().folders;
+		const folder = workspaceFolderId ? folders.find(folder => folder.id === workspaceFolderId) : folders[0];
+		if (!folder) throw new Error("TerminalUnavailable: Terminal requires an open workspace folder");
+		return folder;
 	}
 }
 
@@ -203,6 +210,8 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 
 	constructor(
 		readonly id: string,
+		readonly workspaceFolderId: string,
+		private readonly processWorkspaceFolderId: string | undefined,
 		serverTerminalId: string,
 		title: string,
 		profile: ITerminalProfile,
@@ -273,6 +282,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 			if (!pending || this.closed || this._state !== "running") return;
 			const generation = this.pollGeneration;
 			void this.processService.resize({
+				...processWorkspaceFolder(this.processWorkspaceFolderId),
 				terminalId: this.serverTerminalId,
 				rows: pending.rows,
 				cols: pending.cols,
@@ -294,7 +304,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		this.pendingInput = "";
 		this.pollGeneration += 1;
 		try {
-			await this.processService.close({ terminalId: this.serverTerminalId });
+			await this.processService.close({ ...processWorkspaceFolder(this.processWorkspaceFolderId), terminalId: this.serverTerminalId });
 		} finally {
 			this.onClosed();
 			this.dispose();
@@ -324,9 +334,10 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 
 	async relaunch(dimensions: ITerminalDimensions): Promise<void> {
 		if (this.closed || this._state === "running" || this._state === "reconnecting") return;
-		await this.processService.close({ terminalId: this.serverTerminalId }).catch(() => {});
+		await this.processService.close({ ...processWorkspaceFolder(this.processWorkspaceFolderId), terminalId: this.serverTerminalId }).catch(() => {});
 		try {
 			const created = await this.processService.create({
+				...processWorkspaceFolder(this.processWorkspaceFolderId),
 				rows: dimensions.rows,
 				cols: dimensions.cols,
 				profile: {
@@ -360,7 +371,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		this.writeChain = this.writeChain
 			.then(() => {
 				if (generation !== this.pollGeneration || this._state !== "running") return;
-				return this.processService.write({ terminalId: this.serverTerminalId, data });
+				return this.processService.write({ ...processWorkspaceFolder(this.processWorkspaceFolderId), terminalId: this.serverTerminalId, data });
 			})
 			.catch(() => {
 				if (generation === this.pollGeneration && this._state === "running") {
@@ -379,6 +390,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		while (!this.closed && generation === this.pollGeneration && (this._state === "running" || (recoveryPending && this._state === "reconnecting"))) {
 			try {
 				const result = await this.processService.read({
+					...processWorkspaceFolder(this.processWorkspaceFolderId),
 					terminalId: this.serverTerminalId,
 					afterSequence: this.nextSequence,
 					afterCommandSequence: this.nextCommandSequence,
@@ -490,6 +502,10 @@ function takeUtf8Prefix(value: string, maximumBytes: number): string {
 
 function isHighSurrogate(codeUnit: number): boolean {
 	return codeUnit >= 0xd800 && codeUnit <= 0xdbff;
+}
+
+function processWorkspaceFolder(workspaceFolderId: string | undefined): { readonly workspaceFolderId?: string } {
+	return workspaceFolderId === undefined ? {} : { workspaceFolderId };
 }
 
 function terminalProfileTitle(profile: ITerminalProfile): string {

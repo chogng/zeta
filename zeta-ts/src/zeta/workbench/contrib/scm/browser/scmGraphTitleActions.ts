@@ -1,91 +1,72 @@
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import type { Icon } from "../../../../base/common/icon.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { MenuId, MenusRegistry } from "../../../../platform/actions/common/actions.js";
-import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
-import { type IContextKey, type IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
-import type { GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import type { Icon } from '../../../../base/common/icon.js';
+import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IGitService, type GitStatus } from '../../../services/git/common/gitService.js';
 
-const GitFetchCommandId = "zeta.git.fetch";
-const GitPullCommandId = "zeta.git.pull";
-const GitPushCommandId = "zeta.git.push";
-const GitGraphRefreshCommandId = "zeta.git.graph.refresh";
-const GitGraphBusyContext = new RawContextKey<boolean>("gitGraphBusy", false);
+export const GIT_GRAPH_VIEW_ID = 'zeta.gitGraph';
+export const GitGraphBusyContext = new RawContextKey<boolean>('gitGraphBusy', false);
 
-export interface ScmGraphTitleActionsOptions {
-	readonly gitService: IGitService;
-	readonly menuService: IMenuService;
-	readonly contextMenuService: IContextMenuService;
-	readonly contextKeyService: IContextKeyService;
-	readonly refreshGraph: () => Promise<void>;
+const GitFetchCommandId = 'zeta.git.fetch';
+const GitPullCommandId = 'zeta.git.pull';
+const GitPushCommandId = 'zeta.git.push';
+const GitGraphRefreshCommandId = 'zeta.git.graph.refresh';
+
+interface GitGraphActionTarget {
+	readonly repositoryId: string | undefined;
+	runTitleOperation(operation?: () => Promise<unknown>): Promise<void>;
 }
 
-/** Owns the menu-backed Fetch, Pull, Push, and Refresh actions in the Graph pane title. */
-export class ScmGraphTitleActions extends DisposableOwner {
-	readonly element: HTMLElement;
-	private readonly toolbar: MenuWorkbenchToolBar;
-	private readonly busyContext: IContextKey<boolean>;
-
-	constructor(container: HTMLElement, private readonly options: ScmGraphTitleActionsOptions) {
-		super();
-		this.busyContext = GitGraphBusyContext.bindTo(options.contextKeyService);
-		this.defer(() => this.busyContext.reset());
-		this.registerCommandsAndMenu();
-		this.toolbar = this.own(new MenuWorkbenchToolBar(
-			container,
-			options.menuService,
-			options.contextMenuService,
-			MenuId.GitGraphTitle,
-			{ ariaLabel: "Git graph actions" },
-		));
-		this.element = this.toolbar.element;
-		this.element.classList.add("zeta-scm-remote-actions");
+abstract class GitGraphAction extends Action2 {
+	protected constructor(id: string, title: string, tooltip: string, icon: Icon, order: number) {
+		super({
+			id,
+			title,
+			tooltip,
+			icon,
+			precondition: GitGraphBusyContext.isEqualTo(false),
+			menu: { id: MenuId.GitGraphTitle, group: 'navigation', order },
+		});
 	}
 
-	private registerCommandsAndMenu(): void {
-		this.own(CommandsRegistry.register(GitFetchCommandId, () => this.runRemote(() => this.options.gitService.fetch())));
-		this.own(CommandsRegistry.register(GitPullCommandId, () => this.runRemote(() => this.options.gitService.pull())));
-		this.own(CommandsRegistry.register(GitPushCommandId, () => this.runRemote(() => this.options.gitService.push())));
-		this.own(CommandsRegistry.register(GitGraphRefreshCommandId, () => this.refreshGraph()));
-		this.appendMenuItem(GitFetchCommandId, "Fetch", "Fetch Git remotes", lxiconsLibrary.repoFetch, 1);
-		this.appendMenuItem(GitPullCommandId, "Pull", "Pull current branch (fast-forward only)", lxiconsLibrary.repoPull, 2);
-		this.appendMenuItem(GitPushCommandId, "Push", "Push current branch", lxiconsLibrary.repoPush, 3);
-		this.appendMenuItem(GitGraphRefreshCommandId, "Refresh", "Refresh Git graph", lxiconsLibrary.refresh, 4);
+	protected runRemote(accessor: ServicesAccessor, target: unknown, operation: (gitService: IGitService, repositoryId?: string) => Promise<GitStatus>): Promise<void> {
+		const gitService = accessor.get(IGitService);
+		const repositoryId = isGitGraphActionTarget(target) ? target.repositoryId : undefined;
+		return runInGraph(target, () => operation(gitService, repositoryId));
 	}
+}
 
-	private appendMenuItem(id: string, title: string, tooltip: string, icon: Icon, order: number): void {
-		this.own(MenusRegistry.appendMenuItem(MenuId.GitGraphTitle, {
-			command: {
-				id,
-				title,
-				tooltip,
-				icon,
-				precondition: GitGraphBusyContext.isEqualTo(false),
-			},
-			group: "navigation",
-			order,
-		}));
-	}
+registerAction2(class GitFetchAction extends GitGraphAction {
+	constructor() { super(GitFetchCommandId, 'Fetch', 'Fetch Git remotes', lxiconsLibrary.repoFetch, 1); }
+	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.fetch(repositoryId)); }
+});
 
-	private async runRemote(operation: () => Promise<GitStatus>): Promise<void> {
-		this.busyContext.set(true);
-		try {
-			await operation();
-			await this.options.refreshGraph();
-		} finally {
-			this.busyContext.set(false);
-		}
-	}
+registerAction2(class GitPullAction extends GitGraphAction {
+	constructor() { super(GitPullCommandId, 'Pull', 'Pull current branch (fast-forward only)', lxiconsLibrary.repoPull, 2); }
+	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.pull(repositoryId)); }
+});
 
-	private async refreshGraph(): Promise<void> {
-		this.busyContext.set(true);
-		try {
-			await this.options.refreshGraph();
-		} finally {
-			this.busyContext.set(false);
-		}
+registerAction2(class GitPushAction extends GitGraphAction {
+	constructor() { super(GitPushCommandId, 'Push', 'Push current branch', lxiconsLibrary.repoPush, 3); }
+	override run(accessor: ServicesAccessor, target: unknown): Promise<void> { return this.runRemote(accessor, target, (gitService, repositoryId) => gitService.push(repositoryId)); }
+});
+
+registerAction2(class GitGraphRefreshAction extends GitGraphAction {
+	constructor() { super(GitGraphRefreshCommandId, 'Refresh', 'Refresh Git graph', lxiconsLibrary.refresh, 4); }
+	override run(_accessor: ServicesAccessor, target: unknown): Promise<void> { return runInGraph(target); }
+});
+
+async function runInGraph(target: unknown, operation?: () => Promise<unknown>): Promise<void> {
+	if (isGitGraphActionTarget(target)) {
+		await target.runTitleOperation(operation);
+		return;
 	}
+	await operation?.();
+}
+
+function isGitGraphActionTarget(value: unknown): value is GitGraphActionTarget {
+	return typeof value === 'object' && value !== null &&
+		(typeof (value as GitGraphActionTarget).repositoryId === 'string' || (value as GitGraphActionTarget).repositoryId === undefined) &&
+		typeof (value as GitGraphActionTarget).runTitleOperation === 'function';
 }

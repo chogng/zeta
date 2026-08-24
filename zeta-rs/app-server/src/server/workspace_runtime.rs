@@ -61,6 +61,7 @@ use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
 use zeta_protocol::{CommandId, TurnStatus};
 use zeta_search::SearchService;
+use zeta_shell_command::RipgrepExecutable;
 use zeta_symbol_index::SymbolIndexStorage;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::{
@@ -70,10 +71,15 @@ use zeta_workspace::{
 pub(super) struct WorkspaceRuntime {
     pub(super) authorization: Option<WorkspaceAuthorization>,
     pub(super) file_system: Option<Arc<dyn WorkspaceFileSystem>>,
+    pub(super) workspace_folders: BTreeMap<String, WorkspaceAuthorization>,
+    pub(super) folder_file_systems: BTreeMap<String, Arc<dyn WorkspaceFileSystem>>,
     pub(super) _file_system_watcher: Option<FileSystemWatcher>,
+    pub(super) _folder_file_system_watchers: Vec<FileSystemWatcher>,
     pub(super) _git_watcher: Option<GitWatcher>,
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
+    pub(super) folder_workspace_search: BTreeMap<String, Arc<SearchService>>,
+    pub(super) ripgrep: Option<RipgrepExecutable>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) code_index_semantic: Option<Arc<CodeIndexSemanticService>>,
@@ -81,7 +87,10 @@ pub(super) struct WorkspaceRuntime {
     pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
     pub(super) _customizations: Option<Arc<WorkspaceCustomizations>>,
     pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
+    pub(super) folder_terminals: BTreeMap<String, Arc<crate::terminal_service::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
+    pub(super) folder_debug_adapters:
+        BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) turn_executor: TurnExecutor,
 }
 
@@ -90,10 +99,15 @@ impl WorkspaceRuntime {
         Self {
             authorization: None,
             file_system: None,
+            workspace_folders: BTreeMap::new(),
+            folder_file_systems: BTreeMap::new(),
             _file_system_watcher: None,
+            _folder_file_system_watchers: Vec::new(),
             _git_watcher: None,
             git: None,
             workspace_search: None,
+            folder_workspace_search: BTreeMap::new(),
+            ripgrep: None,
             code_index: None,
             symbol_index: None,
             code_index_semantic: None,
@@ -101,7 +115,9 @@ impl WorkspaceRuntime {
             cloud_code_index: None,
             _customizations: None,
             terminals: None,
+            folder_terminals: BTreeMap::new(),
             debug_adapters: None,
+            folder_debug_adapters: BTreeMap::new(),
             turn_executor,
         }
     }
@@ -443,8 +459,15 @@ impl WorkspaceRuntimeControl {
         }
         authorization.revoke();
         self.hooks.unbind_workspace();
+        let folder_authorizations = std::mem::take(&mut runtime.workspace_folders);
+        runtime.folder_file_systems.clear();
+        let folder_workspace_search = std::mem::take(&mut runtime.folder_workspace_search);
+        let folder_terminals = std::mem::take(&mut runtime.folder_terminals);
+        let folder_debug_adapters = std::mem::take(&mut runtime.folder_debug_adapters);
         let cloud_code_index = runtime.cloud_code_index.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
+        let old_folder_file_system_watchers =
+            std::mem::take(&mut runtime._folder_file_system_watchers);
         let code_index = runtime.code_index.clone();
         let symbol_index = runtime.symbol_index.clone();
         let customizations = runtime._customizations.clone();
@@ -460,7 +483,20 @@ impl WorkspaceRuntimeControl {
         runtime.git = Some(Arc::clone(&restricted_git));
         drop(runtime);
 
+        for (_, authorization) in folder_authorizations {
+            authorization.revoke();
+        }
+        for (_, search) in folder_workspace_search {
+            search.cancel_all();
+        }
+        for (_, terminals) in folder_terminals {
+            terminals.terminate_all();
+        }
+        for (_, debug_adapters) in folder_debug_adapters {
+            debug_adapters.terminate_all();
+        }
         drop(old_file_system_watcher);
+        drop(old_folder_file_system_watchers);
         let (restricted_watcher, watcher_error) = match (code_index, symbol_index, customizations) {
             (Some(code_index), Some(symbol_index), Some(customizations)) => {
                 match FileSystemWatcher::start_with_observers(
@@ -1122,6 +1158,204 @@ impl AppServer {
         self.activate_local_workspace(WorkspaceAuthorization::new(workspace, decision), host)
     }
 
+    pub(crate) fn authorize_local_workspace_root(
+        &self,
+        root: PathBuf,
+        decision: Option<WorkspaceTrustDecision>,
+    ) -> Result<WorkspaceAuthorization, WorkspaceRuntimeError> {
+        let host = self
+            .local_workspace_host
+            .as_ref()
+            .ok_or(WorkspaceRuntimeError::Unavailable)?;
+        let workspace = WorkspaceRoot::open(root)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        match decision {
+            Some(decision) => Ok(WorkspaceAuthorization::new(workspace, decision)),
+            None => host.trust.authorize(workspace),
+        }
+    }
+
+    pub(crate) fn activate_local_workspace_folders(
+        &self,
+        folders: Vec<(String, WorkspaceAuthorization)>,
+    ) -> Result<Vec<(String, PathBuf, WorkspaceTrustDecision)>, WorkspaceRuntimeError> {
+        let host = self
+            .local_workspace_host
+            .as_ref()
+            .ok_or(WorkspaceRuntimeError::Unavailable)?;
+        let _workspace_authority = self.workspace_authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        self.ensure_workspace_switch_is_idle()?;
+        let Some((_, primary)) = folders.first() else {
+            return Err(WorkspaceRuntimeError::Failed(
+                "Workspace must contain at least one folder".into(),
+            ));
+        };
+        let workspaces = folders
+            .iter()
+            .map(|(id, authorization)| {
+                let capability = if authorization.decision() == WorkspaceTrustDecision::Restricted {
+                    WorkspaceCapability::InspectRepository
+                } else {
+                    WorkspaceCapability::MutateRepository
+                };
+                authorization
+                    .require(capability)
+                    .map(|workspace| (id.clone(), workspace))
+                    .map_err(|_| WorkspaceRuntimeError::TrustRequired)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let git = GitRuntime::new_for_workspace_folders(workspaces, Arc::clone(&self.updates))
+            .map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!(
+                    "failed to initialize multi-root Git runtime: {error:?}"
+                ))
+            })?;
+        let watcher = git.start_watching();
+        let workspace_folders = folders.iter().cloned().collect::<BTreeMap<_, _>>();
+        let folder_file_systems = folders
+            .iter()
+            .map(|(id, authorization)| {
+                let file_system: Arc<dyn WorkspaceFileSystem> =
+                    Arc::new(LocalFileSystem::new(authorization.root().clone()));
+                (id.clone(), file_system)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let folder_file_system_watchers = folders
+            .iter()
+            .skip(1)
+            .map(|(id, authorization)| {
+                FileSystemWatcher::start_for_workspace_folder(
+                    authorization.root().clone(),
+                    Arc::clone(&self.updates),
+                    id.clone(),
+                )
+                .map_err(|error| {
+                    WorkspaceRuntimeError::Failed(format!(
+                        "failed to initialize workspace folder watcher: {error}"
+                    ))
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.activate_local_workspace(primary.clone(), host)?;
+        let (ripgrep, primary_search, primary_terminals, primary_debug_adapters) = {
+            let runtime = self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (
+                runtime.ripgrep.clone(),
+                runtime.workspace_search.clone(),
+                runtime.terminals.clone(),
+                runtime.debug_adapters.clone(),
+            )
+        };
+        let folder_workspace_search = folders
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (id, authorization))| {
+                if authorization.decision() == WorkspaceTrustDecision::Restricted {
+                    return None;
+                }
+                let service = if index == 0 {
+                    primary_search.clone()
+                } else {
+                    ripgrep.as_ref().map(|ripgrep| {
+                        Arc::new(SearchService::new(
+                            authorization.root().clone(),
+                            ripgrep.clone(),
+                        ))
+                    })
+                }?;
+                Some((id.clone(), service))
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut folder_terminals = BTreeMap::new();
+        for (index, (id, authorization)) in folders.iter().enumerate() {
+            if authorization.decision() == WorkspaceTrustDecision::Restricted {
+                continue;
+            }
+            let terminals = if index == 0 {
+                primary_terminals.clone()
+            } else {
+                let capability = authorization
+                    .require(WorkspaceCapability::ExecuteProcess)
+                    .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+                Some(Arc::new(
+                    crate::terminal_service::TerminalService::new(capability).map_err(|_| {
+                        WorkspaceRuntimeError::Failed(
+                            "failed to initialize workspace folder terminal runtime".into(),
+                        )
+                    })?,
+                ))
+            };
+            if let Some(terminals) = terminals {
+                folder_terminals.insert(id.clone(), terminals);
+            }
+        }
+        let mut folder_debug_adapters = BTreeMap::new();
+        for (index, (id, authorization)) in folders.iter().enumerate() {
+            if authorization.decision() == WorkspaceTrustDecision::Restricted {
+                continue;
+            }
+            let debug_adapters = if index == 0 {
+                primary_debug_adapters.clone()
+            } else {
+                Some(Arc::new(
+                    crate::debug_service::DebugAdapterService::new(
+                        authorization
+                            .require(WorkspaceCapability::LoadExecutableConfiguration)
+                            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?,
+                        authorization
+                            .require(WorkspaceCapability::ExecuteProcess)
+                            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?,
+                        crate::terminal_environment::safe_process_environment(),
+                    )
+                    .map_err(|_| {
+                        WorkspaceRuntimeError::Failed(
+                            "failed to initialize workspace folder debug adapter runtime".into(),
+                        )
+                    })?,
+                ))
+            };
+            if let Some(debug_adapters) = debug_adapters {
+                folder_debug_adapters.insert(id.clone(), debug_adapters);
+            }
+        }
+        let (previous_watcher, previous_folder_watchers) = {
+            let mut runtime = self
+                .workspace_runtime
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let previous_watcher = runtime._git_watcher.take();
+            let previous_folder_watchers =
+                std::mem::take(&mut runtime._folder_file_system_watchers);
+            runtime.workspace_folders = workspace_folders;
+            runtime.folder_file_systems = folder_file_systems;
+            runtime._folder_file_system_watchers = folder_file_system_watchers;
+            runtime.folder_workspace_search = folder_workspace_search;
+            runtime.folder_terminals = folder_terminals;
+            runtime.folder_debug_adapters = folder_debug_adapters;
+            runtime.git = Some(git);
+            runtime._git_watcher = Some(watcher);
+            (previous_watcher, previous_folder_watchers)
+        };
+        drop(previous_watcher);
+        drop(previous_folder_watchers);
+        self.reset_language_workspace_runtimes();
+        Ok(folders
+            .into_iter()
+            .map(|(id, authorization)| {
+                (
+                    id,
+                    authorization.root().canonical_path().to_path_buf(),
+                    authorization.decision(),
+                )
+            })
+            .collect())
+    }
+
     pub(crate) fn active_workspace_is_trusted(&self) -> bool {
         self.workspace_runtime
             .read()
@@ -1141,20 +1375,31 @@ impl AppServer {
         if self.workspace_authority_is_current(&authorization) {
             return Ok(authorization.root().canonical_path().to_path_buf());
         }
-        if authorization.decision() == WorkspaceTrustDecision::Restricted {
-            return self.commit_restricted_workspace_runtime(authorization, host);
+        let result = if authorization.decision() == WorkspaceTrustDecision::Restricted {
+            self.commit_restricted_workspace_runtime(authorization, host)
+        } else {
+            let execution = authorization
+                .require(WorkspaceCapability::ExecuteProcess)
+                .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+            let policy_config = self
+                .local_exec_policy_config
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            let local = compose_local_tools_with_config(execution, &policy_config)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+            self.commit_trusted_workspace_runtime(authorization, local, host)
+        };
+        if result.is_ok() {
+            self.reset_language_workspace_runtimes();
         }
-        let execution = authorization
-            .require(WorkspaceCapability::ExecuteProcess)
-            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-        let policy_config = self
-            .local_exec_policy_config
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
-        let local = compose_local_tools_with_config(execution, &policy_config)
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
-        self.commit_trusted_workspace_runtime(authorization, local, host)
+        result
+    }
+
+    fn reset_language_workspace_runtimes(&self) {
+        if let Ok(mut language) = self.language.lock() {
+            language.reset_workspace();
+        }
     }
 
     fn commit_restricted_workspace_runtime(
@@ -1207,10 +1452,15 @@ impl AppServer {
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
+            workspace_folders: BTreeMap::new(),
+            folder_file_systems: BTreeMap::new(),
             _file_system_watcher: Some(file_system_watcher),
+            _folder_file_system_watchers: Vec::new(),
             _git_watcher: None,
             git: Some(Arc::clone(&git)),
             workspace_search: None,
+            folder_workspace_search: BTreeMap::new(),
+            ripgrep: None,
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
             code_index_semantic: None,
@@ -1218,7 +1468,9 @@ impl AppServer {
             cloud_code_index: None,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: None,
+            folder_terminals: BTreeMap::new(),
             debug_adapters: None,
+            folder_debug_adapters: BTreeMap::new(),
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -1314,6 +1566,7 @@ impl AppServer {
         let workspace_search = existing_search.unwrap_or_else(|| {
             Arc::new(SearchService::new(workspace.clone(), local.ripgrep.clone()))
         });
+        let ripgrep = local.ripgrep.clone();
         workspace_search.cancel_all();
         workspace_search.switch_workspace(workspace.clone());
         let terminal_capability = authorization
@@ -1379,10 +1632,15 @@ impl AppServer {
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
+            workspace_folders: BTreeMap::new(),
+            folder_file_systems: BTreeMap::new(),
             _file_system_watcher: Some(file_system_watcher),
+            _folder_file_system_watchers: Vec::new(),
             _git_watcher: None,
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
+            folder_workspace_search: BTreeMap::new(),
+            ripgrep: Some(ripgrep),
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
             code_index_semantic,
@@ -1390,7 +1648,9 @@ impl AppServer {
             cloud_code_index,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: Some(Arc::clone(&terminals)),
+            folder_terminals: BTreeMap::new(),
             debug_adapters: Some(Arc::clone(&debug_adapters)),
+            folder_debug_adapters: BTreeMap::new(),
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -1667,23 +1927,47 @@ impl AppServer {
     }
 
     pub(super) fn file_system_service(&self) -> Result<Arc<dyn WorkspaceFileSystem>, RpcError> {
-        self.workspace_runtime
+        self.file_system_service_for(None)
+    }
+
+    pub(super) fn file_system_service_for(
+        &self,
+        workspace_folder_id: Option<&str>,
+    ) -> Result<Arc<dyn WorkspaceFileSystem>, RpcError> {
+        let runtime = self
+            .workspace_runtime
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(workspace_folder_id) = workspace_folder_id {
+            return runtime
+                .folder_file_systems
+                .get(workspace_folder_id)
+                .cloned()
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        runtime
             .file_system
             .clone()
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::FileSystemUnavailable))
     }
 
-    pub(super) fn language_workspace_root(&self) -> Result<WorkspaceRoot, RpcError> {
+    pub(super) fn language_workspace_root_for(
+        &self,
+        workspace_folder_id: Option<&str>,
+    ) -> Result<WorkspaceRoot, RpcError> {
         let runtime = self
             .workspace_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let authorization = runtime
-            .authorization
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::LanguageServiceUnavailable))?;
+        let authorization = match workspace_folder_id {
+            Some(id) => runtime
+                .workspace_folders
+                .get(id)
+                .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?,
+            None => runtime.authorization.as_ref().ok_or_else(|| {
+                RpcError::new(-32040, AppServerErrorName::LanguageServiceUnavailable)
+            })?,
+        };
         authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| RpcError::new(-32043, AppServerErrorName::WorkspaceTrustRequired))?;
@@ -1700,9 +1984,25 @@ impl AppServer {
     }
 
     pub(super) fn workspace_search_service(&self) -> Result<Arc<SearchService>, RpcError> {
-        self.workspace_runtime
+        self.workspace_search_service_for(None)
+    }
+
+    pub(super) fn workspace_search_service_for(
+        &self,
+        workspace_folder_id: Option<&str>,
+    ) -> Result<Arc<SearchService>, RpcError> {
+        let runtime = self
+            .workspace_runtime
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(workspace_folder_id) = workspace_folder_id {
+            return runtime
+                .folder_workspace_search
+                .get(workspace_folder_id)
+                .cloned()
+                .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable));
+        }
+        runtime
             .workspace_search
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))
@@ -1711,9 +2011,25 @@ impl AppServer {
     pub(super) fn terminal_service(
         &self,
     ) -> Result<Arc<crate::terminal_service::TerminalService>, RpcError> {
-        self.workspace_runtime
+        self.terminal_service_for(None)
+    }
+
+    pub(super) fn terminal_service_for(
+        &self,
+        workspace_folder_id: Option<&str>,
+    ) -> Result<Arc<crate::terminal_service::TerminalService>, RpcError> {
+        let runtime = self
+            .workspace_runtime
             .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(workspace_folder_id) = workspace_folder_id {
+            return runtime
+                .folder_terminals
+                .get(workspace_folder_id)
+                .cloned()
+                .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable));
+        }
+        runtime
             .terminals
             .clone()
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))
@@ -1729,10 +2045,52 @@ impl AppServer {
             .clone()
     }
 
+    pub(super) fn configured_terminal_services(
+        &self,
+    ) -> Vec<Arc<crate::terminal_service::TerminalService>> {
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut services = Vec::new();
+        if let Some(primary) = &runtime.terminals {
+            services.push(Arc::clone(primary));
+        }
+        for service in runtime.folder_terminals.values() {
+            if !services
+                .iter()
+                .any(|existing| Arc::ptr_eq(existing, service))
+            {
+                services.push(Arc::clone(service));
+            }
+        }
+        services
+    }
+
     pub(super) fn debug_adapter_service(
         &self,
     ) -> Result<Arc<crate::debug_service::DebugAdapterService>, RpcError> {
-        self.configured_debug_adapter_service()
+        self.debug_adapter_service_for(None)
+    }
+
+    pub(super) fn debug_adapter_service_for(
+        &self,
+        workspace_folder_id: Option<&str>,
+    ) -> Result<Arc<crate::debug_service::DebugAdapterService>, RpcError> {
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(workspace_folder_id) = workspace_folder_id {
+            return runtime
+                .folder_debug_adapters
+                .get(workspace_folder_id)
+                .cloned()
+                .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable));
+        }
+        runtime
+            .debug_adapters
+            .clone()
             .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable))
     }
 
@@ -1744,6 +2102,28 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .debug_adapters
             .clone()
+    }
+
+    pub(super) fn configured_debug_adapter_services(
+        &self,
+    ) -> Vec<Arc<crate::debug_service::DebugAdapterService>> {
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut services = Vec::new();
+        if let Some(primary) = &runtime.debug_adapters {
+            services.push(Arc::clone(primary));
+        }
+        for service in runtime.folder_debug_adapters.values() {
+            if !services
+                .iter()
+                .any(|existing| Arc::ptr_eq(existing, service))
+            {
+                services.push(Arc::clone(service));
+            }
+        }
+        services
     }
 
     pub(super) fn turn_executor_snapshot(&self) -> TurnExecutor {
@@ -2016,6 +2396,24 @@ fn retire_workspace_runtime(
     retained_terminals: Option<&Arc<crate::terminal_service::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
+    for (_, search) in std::mem::take(&mut runtime.folder_workspace_search) {
+        if !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search)) {
+            search.cancel_all();
+        }
+    }
+    for (_, terminals) in std::mem::take(&mut runtime.folder_terminals) {
+        if !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals)) {
+            terminals.terminate_all();
+        }
+    }
+    for (_, debug_adapters) in std::mem::take(&mut runtime.folder_debug_adapters) {
+        if !retained_debug_adapters.is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters)) {
+            debug_adapters.terminate_all();
+        }
+    }
+    for (_, authorization) in std::mem::take(&mut runtime.workspace_folders) {
+        authorization.revoke();
+    }
     if let Some(authorization) = runtime.authorization.take() {
         authorization.revoke();
     }

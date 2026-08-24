@@ -131,6 +131,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input: InputItem[] = [
 			...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
+			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
 			{ type: "text", text: options.text },
 		];
 		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", resourceBudget: options.resourceBudget, input });
@@ -153,7 +154,10 @@ export class ChatService extends DisposableOwner implements IChatService {
 			threadId: options.threadId,
 			turnId: options.turnId,
 			expectedSequence: options.expectedSequence,
-			input: [{ type: "text", text: options.text }],
+			input: [
+				...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
+				{ type: "text", text: options.text },
+			],
 		});
 	}
 

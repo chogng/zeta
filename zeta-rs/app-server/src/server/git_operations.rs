@@ -8,33 +8,51 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::git::{
     GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitCommitChangesParams,
     GitCommitFileParams, GitCommitParams, GitCommitResult as GitCommitResultDto, GitGraphParams,
-    GitHistoryResult, GitOperationResult, GitPathsParams,
+    GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoryParams,
 };
 use zeta_git::GitError;
 
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 
 impl AppServer {
-    pub(super) fn git_status(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime_service()?.status().map_err(git_error)?)
+    pub(super) fn git_repositories(&self) -> Result<Value, RpcError> {
+        result(&self.git_runtime_service()?.repositories())
     }
 
-    pub(super) fn git_text_diff(&self) -> Result<Value, RpcError> {
-        result(&self.git_runtime_service()?.text_diff().map_err(git_error)?)
+    pub(super) fn git_status(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        result(
+            &self
+                .git_runtime_service()?
+                .status_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        )
     }
 
-    pub(super) fn git_branch_list(&self) -> Result<Value, RpcError> {
+    pub(super) fn git_text_diff(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        result(
+            &self
+                .git_runtime_service()?
+                .text_diff_for(params.repository_id.as_deref())
+                .map_err(git_error)?,
+        )
+    }
+
+    pub(super) fn git_branch_list(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
         let branches = self
             .git_runtime_service()?
-            .local_branches()
+            .local_branches_for(params.repository_id.as_deref())
             .map_err(git_error)?;
         result(&GitBranchListResult { branches })
     }
 
-    pub(super) fn git_history(&self) -> Result<Value, RpcError> {
+    pub(super) fn git_history(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
         let commits = self
             .git_runtime_service()?
-            .recent_commits()
+            .recent_commits_for(params.repository_id.as_deref())
             .map_err(git_error)?;
         result(&GitHistoryResult { commits })
     }
@@ -48,7 +66,12 @@ impl AppServer {
         result(
             &self
                 .git_runtime_service()?
-                .graph(connection_id, limit, params.cursor.as_deref())
+                .graph_for(
+                    params.repository_id.as_deref(),
+                    connection_id,
+                    limit,
+                    params.cursor.as_deref(),
+                )
                 .map_err(git_error)?,
         )
     }
@@ -59,7 +82,7 @@ impl AppServer {
         result(
             &self
                 .git_runtime_service()?
-                .commit_changes(&params.object_id)
+                .commit_changes_for(params.repository_id.as_deref(), &params.object_id)
                 .map_err(git_error)?,
         )
     }
@@ -73,7 +96,7 @@ impl AppServer {
         result(
             &self
                 .git_runtime_service()?
-                .commit_file(&params.object_id, &path)
+                .commit_file_for(params.repository_id.as_deref(), &params.object_id, &path)
                 .map_err(git_error)?,
         )
     }
@@ -86,7 +109,7 @@ impl AppServer {
         result(
             &self
                 .git_runtime_service()?
-                .change_file(&path, params.comparison)
+                .change_file_for(params.repository_id.as_deref(), &path, params.comparison)
                 .map_err(git_error)?,
         )
     }
@@ -98,7 +121,7 @@ impl AppServer {
         }
         let status = self
             .git_runtime_service()?
-            .switch_branch(&params.name)
+            .switch_branch_for(params.repository_id.as_deref(), &params.name)
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -107,7 +130,10 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .stage(workspace_paths(params.paths)?)
+            .stage_for(
+                params.repository_id.as_deref(),
+                workspace_paths(params.paths)?,
+            )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -116,7 +142,10 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .unstage(workspace_paths(params.paths)?)
+            .unstage_for(
+                params.repository_id.as_deref(),
+                workspace_paths(params.paths)?,
+            )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -125,7 +154,10 @@ impl AppServer {
         let params: GitPathsParams = decode(params)?;
         let status = self
             .git_runtime_service()?
-            .discard_worktree(workspace_paths(params.paths)?)
+            .discard_worktree_for(
+                params.repository_id.as_deref(),
+                workspace_paths(params.paths)?,
+            )
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
@@ -140,7 +172,7 @@ impl AppServer {
         }
         let committed = self
             .git_runtime_service()?
-            .commit(params.message)
+            .commit_for(params.repository_id.as_deref(), params.message)
             .map_err(git_error)?;
         result(&GitCommitResultDto {
             object_id: committed.object_id,
@@ -148,21 +180,30 @@ impl AppServer {
         })
     }
 
-    pub(super) fn git_fetch(&self) -> Result<Value, RpcError> {
-        let status = self.git_runtime_service()?.fetch().map_err(git_error)?;
-        result(&GitOperationResult { status })
-    }
-
-    pub(super) fn git_pull(&self) -> Result<Value, RpcError> {
+    pub(super) fn git_fetch(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
         let status = self
             .git_runtime_service()?
-            .pull_fast_forward()
+            .fetch_for(params.repository_id.as_deref())
             .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 
-    pub(super) fn git_push(&self) -> Result<Value, RpcError> {
-        let status = self.git_runtime_service()?.push().map_err(git_error)?;
+    pub(super) fn git_pull(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        let status = self
+            .git_runtime_service()?
+            .pull_fast_forward_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
+        result(&GitOperationResult { status })
+    }
+
+    pub(super) fn git_push(&self, value: &Value) -> Result<Value, RpcError> {
+        let params: GitRepositoryParams = decode(value)?;
+        let status = self
+            .git_runtime_service()?
+            .push_for(params.repository_id.as_deref())
+            .map_err(git_error)?;
         result(&GitOperationResult { status })
     }
 }
@@ -197,6 +238,9 @@ fn validate_object_id(object_id: &str) -> Result<(), RpcError> {
 fn git_error(error: GitRuntimeError) -> RpcError {
     match error {
         GitRuntimeError::InvalidGraphCursor => {
+            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+        }
+        GitRuntimeError::RepositoryNotFound => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
         GitRuntimeError::Boundary

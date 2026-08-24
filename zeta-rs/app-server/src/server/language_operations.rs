@@ -136,7 +136,8 @@ fn diagnostic_severity_to_dto(
 impl AppServer {
     pub(super) fn language_synchronize(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageSynchronizeParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -146,21 +147,22 @@ impl AppServer {
 
     pub(super) fn language_close(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageCloseParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_for_write(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         self.language
             .lock()
             .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?
-            .close_document(&source_path)
+            .close_document(workspace.canonical_path(), &source_path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         result(&())
     }
 
     pub(super) fn language_document_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageDocumentDiagnosticsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -168,8 +170,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_document_diagnostics(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -202,7 +203,7 @@ impl AppServer {
 
     pub(super) fn language_workspace_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceDiagnosticsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let snapshot = self
             .config
             .as_ref()
@@ -217,6 +218,7 @@ impl AppServer {
         let service = runtime
             .ensure(
                 workspace.canonical_path(),
+                params.workspace_folder_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 language_id,
@@ -238,7 +240,7 @@ impl AppServer {
                 snapshots: Vec::new(),
             });
         }
-        let file_system = self.file_system_service()?;
+        let file_system = self.file_system_service_for(params.workspace_folder_id.as_deref())?;
         let mut grouped = std::collections::BTreeMap::new();
         for diagnostic in response.diagnostics {
             let Some(relative) = diagnostic
@@ -296,7 +298,8 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -337,6 +340,7 @@ impl AppServer {
         runtime
             .synchronize_document(
                 workspace.canonical_path(),
+                document.workspace_folder_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &document.path,
@@ -351,8 +355,7 @@ impl AppServer {
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_hover(&source_path, revision, position)
@@ -379,7 +382,8 @@ impl AppServer {
 
     pub(super) fn language_resolve_completion(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageResolveCompletionParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -387,8 +391,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_resolve_completion(&source_path, revision, params.provider_data)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -408,7 +411,8 @@ impl AppServer {
 
     pub(super) fn language_execute_command(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageExecuteCommandParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -416,8 +420,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_execute_command(
                 &source_path,
@@ -444,8 +447,7 @@ impl AppServer {
             self.prepare_position_request(&params.document, params.position)?;
         let trigger = completion_trigger(params.trigger_kind, params.trigger_character.as_deref())?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_completions(&source_path, revision, position, trigger)
@@ -497,15 +499,15 @@ impl AppServer {
         range: Option<LanguageTextRange>,
         options: LanguageFormattingOptionsDto,
     ) -> Result<Value, RpcError> {
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
         let mut runtime = self.prepare_document_runtime(&workspace, &source_path, document)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let options = LanguageFormattingOptions {
             tab_size: options.tab_size,
@@ -560,8 +562,7 @@ impl AppServer {
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_signature_help(&source_path, revision, position, trigger)
@@ -606,7 +607,8 @@ impl AppServer {
 
     pub(super) fn language_inlay_hints(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageInlayHintsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -617,8 +619,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_inlay_hints(&source_path, revision, range)
@@ -669,8 +670,7 @@ impl AppServer {
         let (_, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_linked_editing_ranges(&source_path, revision, position)
@@ -703,7 +703,8 @@ impl AppServer {
 
     pub(super) fn language_semantic_tokens(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageSemanticTokensParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -711,8 +712,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_semantic_tokens(&source_path, revision)
@@ -745,7 +745,8 @@ impl AppServer {
 
     pub(super) fn language_locations(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageLocationsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -772,6 +773,7 @@ impl AppServer {
         runtime
             .synchronize_document(
                 workspace.canonical_path(),
+                params.document.workspace_folder_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &params.document.path,
@@ -779,8 +781,7 @@ impl AppServer {
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match params.kind {
             LanguageLocationKindDto::Declaration => {
@@ -813,7 +814,8 @@ impl AppServer {
             }
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system = self.file_system_service()?;
+        let file_system =
+            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
         let projected = locations
             .targets
             .into_iter()
@@ -844,7 +846,8 @@ impl AppServer {
 
     pub(super) fn language_hierarchy(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageHierarchyParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -880,6 +883,7 @@ impl AppServer {
         runtime
             .synchronize_document(
                 workspace.canonical_path(),
+                params.document.workspace_folder_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 &params.document.path,
@@ -887,8 +891,7 @@ impl AppServer {
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match (params.kind, position, item) {
             (LanguageHierarchyKindDto::PrepareCall, Some(position), None) => {
@@ -919,7 +922,8 @@ impl AppServer {
             LanguageServiceEvent::Hierarchy(hierarchy) => hierarchy,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system = self.file_system_service()?;
+        let file_system =
+            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
         let entries = hierarchy
             .entries
             .into_iter()
@@ -941,7 +945,7 @@ impl AppServer {
 
     pub(super) fn language_workspace_symbols(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceSymbolsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let snapshot = self
             .config
             .as_ref()
@@ -956,6 +960,7 @@ impl AppServer {
         let service = runtime
             .ensure(
                 workspace.canonical_path(),
+                params.workspace_folder_id.as_deref(),
                 snapshot.generation.get(),
                 &snapshot.values.language_servers,
                 language_id,
@@ -971,7 +976,7 @@ impl AppServer {
             LanguageServiceEvent::WorkspaceSymbols(response) => response,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system = self.file_system_service()?;
+        let file_system = self.file_system_service_for(params.workspace_folder_id.as_deref())?;
         let symbols = response
             .symbols
             .into_iter()
@@ -1004,8 +1009,7 @@ impl AppServer {
         let (workspace, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_prepare_rename(&source_path, revision, position)
@@ -1038,8 +1042,7 @@ impl AppServer {
         let (workspace, source_path, revision, position, mut runtime) =
             self.prepare_position_request(&params.document, params.position)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_rename(&source_path, revision, position, params.new_name)
@@ -1055,14 +1058,16 @@ impl AppServer {
             &workspace,
             &source_path,
             &params.document.text,
-            self.file_system_service()?.as_ref(),
+            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?
+                .as_ref(),
             edit,
         )?)
     }
 
     pub(super) fn language_code_actions(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageCodeActionsParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1100,8 +1105,7 @@ impl AppServer {
             .collect();
         let range = service_range(params.range);
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_code_actions(&source_path, revision, range, diagnostics, params.only)
@@ -1113,7 +1117,8 @@ impl AppServer {
             LanguageServiceEvent::CodeActions(actions) => actions.actions,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
-        let file_system = self.file_system_service()?;
+        let file_system =
+            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?;
         result(&LanguageCodeActionsResult {
             actions: actions
                 .into_iter()
@@ -1133,7 +1138,8 @@ impl AppServer {
 
     pub(super) fn language_resolve_code_action(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageResolveCodeActionParams = decode(params)?;
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1141,8 +1147,7 @@ impl AppServer {
         let mut runtime =
             self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
         let service = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_resolve_code_action(&source_path, revision, params.provider_data)
@@ -1162,7 +1167,8 @@ impl AppServer {
             &workspace,
             &source_path,
             &params.document.text,
-            self.file_system_service()?.as_ref(),
+            self.file_system_service_for(params.document.workspace_folder_id.as_deref())?
+                .as_ref(),
             action,
         )?)
     }

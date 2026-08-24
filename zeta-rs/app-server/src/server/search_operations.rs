@@ -17,8 +17,9 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchStartParams = decode(params)?;
+        let workspace_folder_id = params.workspace_folder_id.clone();
         let search_id = self
-            .workspace_search_service()?
+            .workspace_search_service_for(workspace_folder_id.as_deref())?
             .start(search_owner(connection), search_query(params))
             .map_err(search_error)?;
         result(&WorkspaceSearchStartResult { search_id })
@@ -30,9 +31,10 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchReadParams = decode(params)?;
+        let workspace_folder_id = params.workspace_folder_id;
         let search_id = params.search_id;
         let page = self
-            .workspace_search_service()?
+            .workspace_search_service_for(workspace_folder_id.as_deref())?
             .read(
                 search_owner(connection),
                 &search_id,
@@ -49,7 +51,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchCancelParams = decode(params)?;
-        self.workspace_search_service()?
+        self.workspace_search_service_for(params.workspace_folder_id.as_deref())?
             .cancel(search_owner(connection), &params.search_id)
             .map_err(search_error)?;
         result(&())

@@ -1,9 +1,46 @@
-import { type URI } from '../../../../base/common/uri.js';
+import { URI } from '../../../../base/common/uri.js';
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
+import { EditorInputSerializers, requireRecord, requireSerializedEditorInput, requireString } from '../../../services/editor/common/editorInputSerializer.js';
 
 export const MULTI_DIFF_EDITOR_ID = 'stanza.editor.multiDiff';
 export const MULTI_DIFF_EDITOR_CONTENT_TYPE = 'application/vnd.stanza.editor-multi-diff';
+
+EditorInputSerializers.registerStatic({
+	typeId: 'workbench.editorInput.multiDiff',
+	canSerialize: isMultiDiffEditorInput,
+	serialize: (input, registry) => {
+		if (!isMultiDiffEditorInput(input)) throw new TypeError('Multi-diff serializer requires a multi-diff input');
+		return Object.freeze({
+			resource: input.resource.toString(),
+			label: input.label,
+			items: Object.freeze(input.items.map(item => Object.freeze({
+				label: item.label,
+				original: registry.serialize(item.original),
+				modified: registry.serialize(item.modified),
+				...(item.goToFile === undefined ? {} : { goToFile: registry.serialize(item.goToFile) }),
+			}))),
+		});
+	},
+	deserialize: (value, registry) => {
+		const record = requireRecord(value, 'serialized multi-diff editor input');
+		if (!Array.isArray(record.items) || record.items.length === 0) throw new TypeError('Serialized multi-diff editor requires items');
+		const items = record.items.map(item => {
+			const entry = requireRecord(item, 'serialized multi-diff item');
+			return {
+				label: requireString(entry.label, 'serialized multi-diff item label'),
+				original: registry.deserialize(requireSerializedEditorInput(entry.original, 'serialized multi-diff original input')),
+				modified: registry.deserialize(requireSerializedEditorInput(entry.modified, 'serialized multi-diff modified input')),
+				...(entry.goToFile === undefined ? {} : { goToFile: registry.deserialize(requireSerializedEditorInput(entry.goToFile, 'serialized multi-diff Open File input')) }),
+			};
+		});
+		return createMultiDiffEditorInput(
+			URI.parse(requireString(record.resource, 'serialized multi-diff resource')),
+			items,
+			requireString(record.label, 'serialized multi-diff label'),
+		);
+	},
+});
 
 export interface MultiDiffEditorInputItem {
 	readonly label: string;

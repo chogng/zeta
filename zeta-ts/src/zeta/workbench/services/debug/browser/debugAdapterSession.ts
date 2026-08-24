@@ -58,7 +58,10 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 	static async start(options: DebugAdapterSessionStartOptions): Promise<DebugAdapterSession> {
 		const workspaceFolder = workspaceFolderPath(options.workspace);
 		const adapter = replaceWorkspaceVariables(options.configuration.adapter, workspaceFolder) as IDebugConfiguration["adapter"];
-		const sessionId = await options.processService.start(adapter);
+		const sessionId = await options.processService.start({
+			...adapter,
+			...(options.configuration.workspaceFolderId ? { workspaceFolderId: options.configuration.workspaceFolderId } : {}),
+		});
 		const session = new DebugAdapterSession(options.configuration, options.processService, sessionId, options.breakpoints, options.workspace, options.runInTerminal, options.updateBreakpoints, options.exceptionBreakpoints);
 		try {
 			session.polling = true;

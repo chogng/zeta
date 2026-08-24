@@ -197,7 +197,8 @@ export class SearchViewPane extends ViewPane {
 	private appendMatches(matches: readonly WorkspaceSearchMatch[]): void {
 		const document = this.element.ownerDocument;
 		for (const match of matches) {
-			let group = this.groups.get(match.path);
+			const groupId = `${match.workspaceFolderId ?? ""}\0${match.path}`;
+			let group = this.groups.get(groupId);
 			if (!group) {
 				const item = h(document, "li");
 				item.className = "zeta-search-file";
@@ -207,7 +208,9 @@ export class SearchViewPane extends ViewPane {
 				heading.className = "zeta-search-file-heading";
 				const path = h(document, "span");
 				path.className = "zeta-search-file-path";
-				path.textContent = match.path;
+				path.textContent = match.workspaceFolderName
+					? `${match.workspaceFolderName} • ${match.path}`
+					: match.path;
 				const count = h(document, "span");
 				count.className = "zeta-search-file-count";
 				const resultList = h(document, "ul");
@@ -221,7 +224,7 @@ export class SearchViewPane extends ViewPane {
 					count,
 					resultCount: 0,
 				};
-				this.groups.set(match.path, group);
+				this.groups.set(groupId, group);
 			}
 			group.resultCount += 1;
 			group.count.textContent = String(group.resultCount);

@@ -12,7 +12,9 @@ path = "src/lib.rs"
 
 [dependencies]
 base64 = { workspace = true }
+dunce = { workspace = true }
 getrandom = { workspace = true }
+ignore = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
 semver = { workspace = true }

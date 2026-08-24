@@ -35,6 +35,12 @@ import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorks
 type LocationKind = "declaration" | "definition" | "implementation" | "typeDefinition" | "references";
 const APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES = 10 * 1024 * 1024;
 
+interface LanguageWorkspaceRoot {
+	readonly id: string;
+	readonly uri: URI;
+	readonly wireId?: string;
+}
+
 /** Registers App Server-backed cross-resource providers for Code languages. */
 export class AppServerLanguageProviders extends DisposableOwner {
 	private readonly registrations = this.own(new DisposableSlot<DisposableStore>());
@@ -54,7 +60,7 @@ export class AppServerLanguageProviders extends DisposableOwner {
 		}
 		this.own(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
 		this.defer(() => { this.alive = false; });
-		if (!options.workspaceTrust && workspace.getWorkspace().folders.length === 1) this.registrations.replace(this.install());
+		if (!options.workspaceTrust && workspace.getWorkspace().folders.length > 0) this.registrations.replace(this.install());
 		else this.queueRefresh();
 	}
 
@@ -126,7 +132,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService) {}
 
 	async provideHover(request: LanguageHoverRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageSnapshotDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.hover({ document, position: dtoPosition(request.position) });
@@ -135,7 +141,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	async provideCompletions(request: LanguageCompletionProviderRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageCompletionDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.completions({
@@ -174,7 +180,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	async executeCompletionCommand(request: LanguageCompletionProviderCommandRequest): Promise<void> {
-		const document = languageSnapshotDocument(singleWorkspaceRoot(this.workspace), request);
+		const document = languageSnapshotDocument(workspaceRootForResource(this.workspace, request.resource), request);
 		if (!document) return;
 		await this.api.executeCommand({ document, command: { id: request.command.id, title: request.command.title, arguments: [...request.command.arguments] } });
 	}
@@ -191,7 +197,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	provideSupertypes(request: LanguageHierarchyFollowupRequest): Promise<readonly LanguageHierarchyItem[]> { return this.followTypeHierarchy("supertypes", request); }
 	provideSubtypes(request: LanguageHierarchyFollowupRequest): Promise<readonly LanguageHierarchyItem[]> { return this.followTypeHierarchy("subtypes", request); }
 	async prepareRename(request: LanguageRenameRequest): Promise<{ readonly range: TextRange; readonly placeholder: string } | undefined> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.prepareRename({ document, position: dtoPosition(request.position) });
@@ -199,13 +205,13 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 	async provideRenameEdits(request: LanguageRenameRequest) {
 		if (!request.newName) throw new Error("Rename request requires a new name");
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) throw new Error("Rename is unavailable because this file is too large for App Server language synchronization");
 		return workspaceEdit(root, await this.api.rename({ document, position: dtoPosition(request.position), newName: request.newName }));
 	}
 	async provideCodeActions(request: LanguageCodeActionRequest): Promise<readonly LanguageCodeAction[]> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.codeActions({
@@ -217,12 +223,12 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		return Object.freeze(result.actions.map(action => codeAction(root, action)));
 	}
 	async resolveCodeAction(action: LanguageCodeAction, request: LanguageCodeActionRequest): Promise<LanguageCodeAction> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		return document ? codeAction(root, await this.api.resolveCodeAction({ document, providerData: action.data })) : action;
 	}
 	async provideDocumentFormattingEdits(request: LanguageFormattingRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageFormattingDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.formatDocument({ document, options: formattingOptions(request) });
@@ -230,14 +236,14 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 	async provideRangeFormattingEdits(request: LanguageFormattingRequest) {
 		if (!request.range) return Object.freeze([]);
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageFormattingDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.formatRange({ document, range: dtoRange(request.range), options: formattingOptions(request) });
 		return result.revision === request.snapshot.version ? formattingEdits(result.edits) : Object.freeze([]);
 	}
 	async provideParameterHints(request: LanguageParameterHintsRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageParameterHintsDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.signatureHelp({
@@ -258,7 +264,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		});
 	}
 	async provideInlayHints(request: LanguageInlayHintsRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageInlayHintsDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.inlayHints({ document, range: dtoRange(request.range) });
@@ -273,7 +279,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		})));
 	}
 	async provideLinkedEditingRanges(request: LanguageLinkedEditingRequest) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageLinkedEditingDocument(root, request);
 		if (!document) return undefined;
 		const result = await this.api.linkedEditingRanges({ document, position: dtoPosition(request.position) });
@@ -286,7 +292,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	async provideSemanticTokens(request: LanguageSemanticTokensRequest, signal: AbortSignal) {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageSemanticTokensDocument(root, request);
 		if (!document) return undefined;
 		signal.throwIfAborted();
@@ -366,7 +372,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 
 	private documentForRequest(request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string }; readonly model: { readonly largeFile: { readonly tooLargeForSynchronization: boolean } } }) {
 		if (request.model.largeFile.tooLargeForSynchronization) return undefined;
-		return languageSnapshotDocument(singleWorkspaceRoot(this.workspace), request);
+		return languageSnapshotDocument(workspaceRootForResource(this.workspace, request.resource), request);
 	}
 
 	private async resolveDocumentLink(document: NonNullable<ReturnType<AppServerLanguageProvider["documentForRequest"]>>, link: LanguageDocumentLinkDto, signal: AbortSignal): Promise<LanguageDocumentLinkDto> {
@@ -377,7 +383,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	private async request(kind: LocationKind, request: LanguageLocationRequest, includeDeclaration: boolean): Promise<readonly LanguageLocation[]> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.locations({
@@ -401,7 +407,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	private async prepareHierarchy(kind: "prepareCall" | "prepareType", request: LanguageHierarchyRequest): Promise<readonly LanguageHierarchyItem[]> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.hierarchy({ document, kind, position: dtoPosition(request.position), item: null });
@@ -410,7 +416,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	private async followCallHierarchy(kind: "incomingCalls" | "outgoingCalls", request: LanguageHierarchyFollowupRequest): Promise<readonly LanguageCallHierarchyEntry[]> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.hierarchy({ document, kind, position: null, item: hierarchyItemDto(root, request.item) });
@@ -419,7 +425,7 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 	}
 
 	private async followTypeHierarchy(kind: "supertypes" | "subtypes", request: LanguageHierarchyFollowupRequest): Promise<readonly LanguageHierarchyItem[]> {
-		const root = singleWorkspaceRoot(this.workspace);
+		const root = workspaceRootForResource(this.workspace, request.resource);
 		const document = languageDocument(root, request);
 		if (!document) return Object.freeze([]);
 		const result = await this.api.hierarchy({ document, kind, position: null, item: hierarchyItemDto(root, request.item) });
@@ -435,14 +441,15 @@ class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvide
 	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService) {}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {
-		const root = singleWorkspaceRoot(this.workspace);
-		const responses = await Promise.all(APP_SERVER_LANGUAGE_IDS.map(async languageId => {
+		const folders = this.workspace.getWorkspace().folders;
+		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) }));
+		const responses = await Promise.all(roots.flatMap(root => APP_SERVER_LANGUAGE_IDS.map(async languageId => {
 			if (signal.aborted) return [];
-			try { return (await this.api.workspaceSymbols({ languageId, query })).symbols; } catch { return []; }
-		}));
+			try { return (await this.api.workspaceSymbols({ ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), languageId, query })).symbols.map(symbol => ({ root, symbol })); } catch { return []; }
+		})));
 		if (signal.aborted) return Object.freeze([]);
 		const seen = new Set<string>();
-		return Object.freeze(responses.flat().flatMap(symbol => {
+		return Object.freeze(responses.flat().flatMap(({ root, symbol }) => {
 			const resource = workspaceResource(root, symbol.path);
 			const symbolRange = range(symbol.range);
 			const key = `${resource.toString()}\0${symbol.name}\0${symbolRange.start.lineIndex}:${symbolRange.start.columnIndex}`;
@@ -453,41 +460,41 @@ class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvide
 	}
 }
 
-function languageDocument(root: URI, request: LanguageLocationRequest | LanguageHierarchyRequest | LanguageHierarchyFollowupRequest | LanguageRenameRequest | LanguageCodeActionRequest) {
+function languageDocument(root: LanguageWorkspaceRoot, request: LanguageLocationRequest | LanguageHierarchyRequest | LanguageHierarchyFollowupRequest | LanguageRenameRequest | LanguageCodeActionRequest) {
 	if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 	const text = request.snapshot.getText();
 	if (new TextEncoder().encode(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
-	return { path: workspaceRelativePath(root, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
+	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 
-function languageCompletionDocument(root: URI, request: LanguageCompletionProviderRequest) {
+function languageCompletionDocument(root: LanguageWorkspaceRoot, request: LanguageCompletionProviderRequest) {
 	if (!request.resource) return undefined;
 	return languageSnapshotDocument(root, { resource: request.resource, languageId: request.languageId, snapshot: request.snapshot });
 }
 
-function languageSnapshotDocument(root: URI, request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string } }) {
+function languageSnapshotDocument(root: LanguageWorkspaceRoot, request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string } }) {
 	if (!request.resource) return undefined;
 	const text = request.snapshot.getText();
 	if (new TextEncoder().encode(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
-	return { path: workspaceRelativePath(root, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
+	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 
-function languageFormattingDocument(root: URI, request: LanguageFormattingRequest) {
+function languageFormattingDocument(root: LanguageWorkspaceRoot, request: LanguageFormattingRequest) {
 	if (!request.resource || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
 
-function languageParameterHintsDocument(root: URI, request: LanguageParameterHintsRequest) {
+function languageParameterHintsDocument(root: LanguageWorkspaceRoot, request: LanguageParameterHintsRequest) {
 	if (!request.resource || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
 
-function languageInlayHintsDocument(root: URI, request: LanguageInlayHintsRequest) {
+function languageInlayHintsDocument(root: LanguageWorkspaceRoot, request: LanguageInlayHintsRequest) {
 	if (!request.resource || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
 
-function languageLinkedEditingDocument(root: URI, request: LanguageLinkedEditingRequest) {
+function languageLinkedEditingDocument(root: LanguageWorkspaceRoot, request: LanguageLinkedEditingRequest) {
 	if (!request.resource || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
@@ -499,7 +506,7 @@ function appServerCompletionResolveData(value: unknown): { readonly document: No
 	return data as { readonly document: NonNullable<ReturnType<typeof languageCompletionDocument>>; readonly providerData: unknown };
 }
 
-function languageSemanticTokensDocument(root: URI, request: LanguageSemanticTokensRequest) {
+function languageSemanticTokensDocument(root: LanguageWorkspaceRoot, request: LanguageSemanticTokensRequest) {
 	if (!request.resource || request.model.largeFile.tooLargeForTokenization || request.model.largeFile.tooLargeForSynchronization) return undefined;
 	return languageSnapshotDocument(root, request);
 }
@@ -538,17 +545,17 @@ function completionKind(kind: LanguageCompletionItemKindDto): LanguageCompletion
 
 function dtoPosition(position: TextPosition): { readonly lineIndex: number; readonly columnIndex: number } { return { lineIndex: position.lineIndex, columnIndex: position.columnIndex }; }
 
-function hierarchyItem(root: URI, item: LanguageHierarchyItemDto): LanguageHierarchyItem {
+function hierarchyItem(root: LanguageWorkspaceRoot, item: LanguageHierarchyItemDto): LanguageHierarchyItem {
 	return Object.freeze({ name: item.name, symbolKind: item.symbolKind, ...(item.detail ? { detail: item.detail } : {}), resource: workspaceResource(root, item.path), range: range(item.range), selectionRange: range(item.selectionRange), ...(item.data === undefined ? {} : { data: item.data }) });
 }
 
-function hierarchyItemDto(root: URI, item: LanguageHierarchyItem): LanguageHierarchyItemDto {
-	return { name: item.name, symbolKind: item.symbolKind, detail: item.detail ?? null, path: workspaceRelativePath(root, item.resource), range: dtoRange(item.range), selectionRange: dtoRange(item.selectionRange), data: item.data };
+function hierarchyItemDto(root: LanguageWorkspaceRoot, item: LanguageHierarchyItem): LanguageHierarchyItemDto {
+	return { name: item.name, symbolKind: item.symbolKind, detail: item.detail ?? null, path: workspaceRelativePath(root.uri, item.resource), range: dtoRange(item.range), selectionRange: dtoRange(item.selectionRange), data: item.data };
 }
 
 function dtoRange(value: TextRange) { return { start: dtoPosition(value.start), end: dtoPosition(value.end) }; }
 
-function workspaceEdit(root: URI, edit: LanguageWorkspaceEditDto) {
+function workspaceEdit(root: LanguageWorkspaceRoot, edit: LanguageWorkspaceEditDto) {
 	return Object.freeze({ entries: Object.freeze(edit.entries.map(entry => {
 		switch (entry.kind) {
 			case "textDocument": return Object.freeze({ kind: entry.kind, resource: workspaceResource(root, entry.document.path), expectedText: entry.document.expectedText, edits: Object.freeze(entry.document.edits.map(edit => Object.freeze({ range: range(edit.range), text: edit.newText }))) });
@@ -559,7 +566,7 @@ function workspaceEdit(root: URI, edit: LanguageWorkspaceEditDto) {
 	})) });
 }
 
-function codeAction(root: URI, action: LanguageCodeActionDto): LanguageCodeAction {
+function codeAction(root: LanguageWorkspaceRoot, action: LanguageCodeActionDto): LanguageCodeAction {
 	return Object.freeze({ title: action.title, ...(action.kind ? { kind: action.kind } : {}), isPreferred: action.isPreferred, ...(action.disabledReason ? { disabledReason: action.disabledReason } : {}), ...(action.edit ? { edit: workspaceEdit(root, action.edit) } : {}), data: action.providerData });
 }
 
@@ -579,14 +586,25 @@ function diagnosticSeverity(severity: LanguageDiagnosticSeverity): "error" | "wa
 	return severity;
 }
 
-function singleWorkspaceRoot(workspace: IWorkspaceContextService): URI {
+function workspaceRootForResource(workspace: IWorkspaceContextService, resource: URI | undefined): LanguageWorkspaceRoot {
 	const folders = workspace.getWorkspace().folders;
-	if (folders.length !== 1) throw new Error("Language service requires one workspace folder");
-	return folders[0]!.uri;
+	if (!resource && folders.length === 1) return { id: folders[0]!.id, uri: folders[0]!.uri };
+	let match: LanguageWorkspaceRoot | undefined;
+	for (const folder of folders) {
+		if (!resource) continue;
+		try {
+			workspaceRelativePath(folder.uri, resource);
+			if (!match || folder.uri.path.length > match.uri.path.length) match = { id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) };
+		} catch {
+			// Resource belongs to a different Workspace folder.
+		}
+	}
+	if (!match) throw new Error("Language service resource is outside the current workspace");
+	return match;
 }
 
-function workspaceResource(root: URI, relativePath: string): URI {
-	const resource = workspaceResourceFromPath(root, relativePath);
+function workspaceResource(root: LanguageWorkspaceRoot, relativePath: string): URI {
+	const resource = workspaceResourceFromPath(root.uri, relativePath);
 	if (!resource) throw new Error("Language service returned an invalid workspace path");
 	return resource;
 }

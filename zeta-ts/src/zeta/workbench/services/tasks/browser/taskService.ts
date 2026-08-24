@@ -88,11 +88,23 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		const controller = new AbortController();
 		this.activeRefresh = controller;
 		const generation = ++this.refreshGeneration;
-		const root = this.workspace.getWorkspace().folders[0]?.uri;
+		const folders = this.workspace.getWorkspace().folders;
+		const multiRoot = folders.length > 1;
 		const providerSnapshot = [...this.providers.values()].map(entry => entry.provider);
 		this.log("debug", "discovery", `Refreshing workspace tasks from configuration and ${providerSnapshot.length} provider(s).`);
 		try {
-			const [discovered, providerGroups] = await Promise.all([root ? this.discoverWorkspaceTasks(root) : Promise.resolve(Object.freeze([])), Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal)))]);
+			const [folderGroups, providerGroups] = await Promise.all([
+				Promise.all(folders.map(async folder => {
+					const tasks = await this.discoverWorkspaceTasks(folder.uri);
+					return tasks.map(task => Object.freeze({
+						...task,
+						id: multiRoot ? `${folder.id}:${task.id}` : task.id,
+						workspaceFolderId: folder.id,
+					}));
+				})),
+				Promise.all(providerSnapshot.map(provider => this.provideTasks(provider, controller.signal))),
+			]);
+			const discovered = folderGroups.flat();
 			const providerTasks = providerGroups.flat();
 			if (controller.signal.aborted || generation !== this.refreshGeneration || this.isDisposed) return this.currentTasks;
 			this.loaded = true;
@@ -110,9 +122,13 @@ export class TaskService extends DisposableOwner implements ITaskService {
 
 	async run(task: IWorkspaceTask): Promise<ITaskRun> {
 		const currentTask = resolveKnownTask(task, this.currentTasks);
+		const workspaceFolder = currentTask.workspaceFolderId
+			? this.workspace.getWorkspace().folders.find(folder => folder.id === currentTask.workspaceFolderId)
+			: this.workspace.getWorkspace().folders[0];
+		if (!workspaceFolder) throw new Error(`Task '${currentTask.label}' has no available workspace folder`);
 		this.log("information", "execution", `Starting task '${currentTask.label}' (${currentTask.id}).`);
 		let terminal: ITerminalInstance;
-		try { terminal = await this.terminalService.createTerminal({ dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
+		try { terminal = await this.terminalService.createTerminal({ workspaceFolderId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
 		catch (error) { this.log("error", "execution", `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`); throw error; }
 		const run = this.own(new TaskRun(currentTask, terminal, current => {
 			const exit = current.exitCode === undefined ? "" : ` (exit code ${current.exitCode})`;
@@ -123,7 +139,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		this.runs.add(run);
 		this._lastRun = run;
 		this.startTaskEmitter.fire(run);
-		const command = substituteWorkspaceVariables(currentTask.command, this.workspace.getWorkspace().folders[0]?.uri);
+		const command = substituteWorkspaceVariables(currentTask.command, workspaceFolder.uri);
 		terminal.write(`${taskTerminalCommand(command, terminal.profile.profileId)}\r`);
 		this.log("debug", "execution", `Task '${currentTask.label}' is running in terminal '${terminal.id}'.`);
 		return run;

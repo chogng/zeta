@@ -14,16 +14,24 @@ import { IStatusbarService } from "../../../services/statusbar/browser/statusbar
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ScmAgentReviewViewPane } from "./scmAgentReviewViewPane.js";
 import { ScmGraphViewPane } from "./scmGraphViewPane.js";
+import { GIT_GRAPH_VIEW_ID } from "./scmGraphTitleActions.js";
 import { ScmStatusContribution } from "./scmStatus.js";
 import { ScmViewPane } from "./scmViewPane.js";
 import "./media/scm.css";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import { registerEditorDecorationSourceFactory } from "../../../browser/parts/editor/editorDecorations.js";
 import { DirtyDiffDecorationSource } from "./dirtyDiffDecorationSource.js";
+import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
+import { ScmWorkingSetController } from "./workingSet.js";
+import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
+import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
+import "../common/scmConfiguration.js";
 
 export const GIT_VIEW_ID = "zeta.gitView";
 export const GIT_AGENT_REVIEW_VIEW_ID = "zeta.gitAgentReview";
-export const GIT_GRAPH_VIEW_ID = "zeta.gitGraph";
+export { GIT_GRAPH_VIEW_ID };
 
 registerEditorDecorationSourceFactory(({ accessor, diffApi, model, resource }) => {
 	if (!diffApi || (resource.scheme !== "file" && !isRemoteResource(resource))) return undefined;
@@ -81,3 +89,15 @@ registerWorkbenchContribution("workbench.contrib.scmStatus", WorkbenchPhase.Bloc
 	gitService: accessor.get(IGitService),
 	viewsService: accessor.get(IViewsService),
 }));
+
+registerWorkbenchContribution("workbench.contrib.scmWorkingSets", WorkbenchPhase.BlockRestore, accessor => new ScmWorkingSetController({
+	configurationService: accessor.get(IConfigurationService),
+	editorPart: accessor.get(IEditorPart),
+	gitService: accessor.get(IGitService),
+	storageService: accessor.get(IStorageService),
+}));
+
+registerWorkbenchContribution("workbench.contrib.scmHistoryChatContext", WorkbenchPhase.BlockRestore, accessor => new ScmHistoryChatContextContribution(
+	accessor.get(IChatContextPickService),
+	accessor.get(IGitService),
+));

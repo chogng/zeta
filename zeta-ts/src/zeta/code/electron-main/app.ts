@@ -68,7 +68,7 @@ import { typstIpcRoutes } from "../../platform/typst/electron-main/typstIpcRoute
 import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
 import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
-import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE } from "../../platform/workspace/common/workspace.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 import { ServerHostRemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../platform/remote/electron-main/serverHostRemoteRuntimeInstaller.js";
 import { ServerHostRemoteRuntimeProvisioner } from "../../platform/remote/electron-main/serverHostRemoteRuntimeProvisioner.js";
@@ -85,7 +85,7 @@ import { ElectronRemoteRuntimeInstallWindow } from "../../platform/remote/electr
 import { electronRemoteWindowMainHost } from "../../platform/remote/electron-main/electronRemoteWindowMainHost.js";
 import { RemoteWindowMainContext } from "../../platform/remote/electron-main/remoteWindowMainContext.js";
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from "../../platform/workspace/common/workspaceIpc.js";
-import { createAppServerWorkspaceTransitionAdapter, readAppServerWorkspaceTrust, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
+import { createAppServerWorkspaceTransitionAdapter, readAppServerWorkspaceTrust, setAppServerWorkspaceFolders, switchAppServerWorkspace } from "../../platform/workspaces/electron-main/appServerWorkspaceTransition.js";
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus, WorkspaceTrustChoice } from "../../platform/workspaces/electron-main/workspaceTransitionMainService.js";
 import { WorkspaceContextMainService, WorkspacesMainService, parseWorkspaceLaunchArguments, workspaceContextIpcRoutes } from "../../platform/workspaces/electron-main/workspacesMainService.js";
 import type { IWorkbenchWindowRecord } from "./workbenchWindowRegistry.js";
@@ -342,7 +342,8 @@ export class ZetaApplication extends DisposableOwner {
 	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
 		const resources = this.own(new DisposableStore());
 		try {
-			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace));
+			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
 			const supervisor = resources.add(this.createAppServerSupervisor(workspace, resources));
 			const browserAutomation = new BrowserAutomationMainService();
 			resources.add(registerBrowserAutomationHost(supervisor, browserAutomation));
@@ -353,13 +354,17 @@ export class ZetaApplication extends DisposableOwner {
 				resources.dispose();
 				return undefined;
 			}
-			if (this.appServerStartupMode === "required" && isSingleFolderWorkspaceIdentifier(workspace) && !isRemoteResource(workspace.uri)) {
-				const trust = await this.resolveLocalWorkspaceTrust(supervisor, workspace.uri.fsPath);
-				if (trust === undefined) {
-					resources.dispose();
-					return undefined;
+			if (this.appServerStartupMode === "required" && resolvedWorkspace.folders.length > 0 && resolvedWorkspace.folders.every(folder => !isRemoteResource(folder.uri))) {
+				const folders = [];
+				for (const folder of resolvedWorkspace.folders) {
+					const trust = await this.resolveLocalWorkspaceTrust(supervisor, folder.uri.fsPath);
+					if (trust === undefined) {
+						resources.dispose();
+						return undefined;
+					}
+					folders.push({ id: folder.id, root: folder.uri.fsPath, trust });
 				}
-				await switchAppServerWorkspace(supervisor, workspace.uri.fsPath, trust);
+				await setAppServerWorkspaceFolders(supervisor, folders);
 			}
 			const existing = this.workbenchWindows.findWorkspace(workspace.id);
 			if (existing) {
@@ -604,9 +609,9 @@ export class ZetaApplication extends DisposableOwner {
 			record.windowStateTracking = windowDisposables.add(nextWindowsStateHandler.trackWindow(window));
 			this.workbenchWindows.updateWorkspace(record.id, nextWorkspace.id);
 		}));
-		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!window.isDestroyed()) {
-				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspaceIdentifier(nextWorkspace));
+				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
 		const { configuration, keybindings } = this.services;
@@ -845,9 +850,9 @@ export class ZetaApplication extends DisposableOwner {
 				window.webContents.send("zeta:event", notification);
 			}
 		}));
-		windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+		windowDisposables.add(record.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!window.isDestroyed()) {
-				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspaceIdentifier(workspace));
+				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
 		windowDisposables.add(record.supervisor.onStateChange((state) => {

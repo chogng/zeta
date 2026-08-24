@@ -58,12 +58,13 @@ function emptyParams(value: unknown): Record<string, never> {
 }
 
 function terminalCreateParams(value: unknown): TerminalCreateParams {
-	const params = record(value, ["rows", "cols", "profile", "lifecycle"]);
+	const params = record(value, ["rows", "cols", "profile", "lifecycle"], ["workspaceFolderId"]);
 	const lifecycle = record(params.lifecycle, ["type"]);
 	if (lifecycle.type !== "connectionOwned") {
 		throw new Error("Desktop renderer terminals must be connectionOwned");
 	}
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		rows: boundedPositiveInteger(params.rows, "rows", 512),
 		cols: boundedPositiveInteger(params.cols, "cols", 512),
 		profile: terminalProfileSelection(params.profile),
@@ -91,21 +92,23 @@ function terminalProfileSelection(value: unknown): TerminalCreateParams["profile
 }
 
 function terminalWriteParams(value: unknown): TerminalWriteParams {
-	const params = record(value, ["terminalId", "data"]);
+	const params = record(value, ["terminalId", "data"], ["workspaceFolderId"]);
 	const data = string(params.data, "data");
 	if (data.length === 0) throw new Error("data must not be empty");
 	if (new TextEncoder().encode(data).byteLength > 65_536) {
 		throw new Error("data must not exceed 65536 UTF-8 bytes");
 	}
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		terminalId: nonEmptyString(params.terminalId, "terminalId"),
 		data,
 	};
 }
 
 function terminalResizeParams(value: unknown): TerminalResizeParams {
-	const params = record(value, ["terminalId", "rows", "cols"]);
+	const params = record(value, ["terminalId", "rows", "cols"], ["workspaceFolderId"]);
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		terminalId: nonEmptyString(params.terminalId, "terminalId"),
 		rows: boundedPositiveInteger(params.rows, "rows", 512),
 		cols: boundedPositiveInteger(params.cols, "cols", 512),
@@ -113,8 +116,9 @@ function terminalResizeParams(value: unknown): TerminalResizeParams {
 }
 
 function terminalReadParams(value: unknown): TerminalReadParams {
-	const params = record(value, ["terminalId", "afterSequence", "afterCommandSequence", "maxChunks"]);
+	const params = record(value, ["terminalId", "afterSequence", "afterCommandSequence", "maxChunks"], ["workspaceFolderId"]);
 	return {
+		...workspaceFolder(params.workspaceFolderId),
 		terminalId: nonEmptyString(params.terminalId, "terminalId"),
 		afterSequence: nonNegativeInteger(params.afterSequence, "afterSequence"),
 		afterCommandSequence: nonNegativeInteger(params.afterCommandSequence, "afterCommandSequence"),
@@ -123,6 +127,10 @@ function terminalReadParams(value: unknown): TerminalReadParams {
 }
 
 function terminalCloseParams(value: unknown): TerminalCloseParams {
-	const params = record(value, ["terminalId"]);
-	return { terminalId: nonEmptyString(params.terminalId, "terminalId") };
+	const params = record(value, ["terminalId"], ["workspaceFolderId"]);
+	return { ...workspaceFolder(params.workspaceFolderId), terminalId: nonEmptyString(params.terminalId, "terminalId") };
+}
+
+function workspaceFolder(value: unknown): { readonly workspaceFolderId?: string } {
+	return value === undefined ? {} : { workspaceFolderId: nonEmptyString(value, "workspaceFolderId") };
 }

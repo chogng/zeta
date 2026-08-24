@@ -47,6 +47,7 @@ fn broker_fans_out_filesystem_invalidation_without_a_subscription() {
     broker.register(1, &queue);
 
     broker.publish_fs_changed(FsChanged::PathsChanged {
+        workspace_folder_id: None,
         paths: vec!["src/lib.rs".into()],
     });
 
@@ -72,6 +73,7 @@ fn profile_broker_shares_sessions_but_isolates_workspace_notifications() {
 
     first_scope.publish_session(&session_id, &[update(&session_id, 1)]);
     first_scope.publish_fs_changed(FsChanged::PathsChanged {
+        workspace_folder_id: None,
         paths: vec!["first/src/lib.rs".into()],
     });
 
@@ -146,6 +148,7 @@ fn broker_fans_out_language_server_lifecycle_without_a_subscription() {
     broker.register(1, &queue);
 
     broker.publish_language_server_state(LanguageServerStateNotification {
+        workspace_folder_id: None,
         server: "rust-analyzer".into(),
         state: LanguageServerStateDto::BackingOff {
             attempt: 2,

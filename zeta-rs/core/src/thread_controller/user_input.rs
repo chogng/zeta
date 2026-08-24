@@ -12,6 +12,7 @@ use zeta_protocol::UserInput;
 use crate::CoreError;
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
+    Context { name: &'a str, content: &'a str },
     Image(&'a ImageAttachmentRef),
 }
 
@@ -40,6 +41,7 @@ pub(super) fn normalize_images(
                 "image input must be a data URL, an HTTP(S) URL, or a durable attachment".into(),
             )),
             UserInput::Text { .. }
+            | UserInput::Context { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Skill { .. }
             | UserInput::Mention { .. } => Ok(input.clone()),
@@ -65,6 +67,14 @@ pub(super) fn validate<'a>(
             }
             UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
+            ))),
+            UserInput::Context { name, content }
+                if !name.trim().is_empty() && !content.trim().is_empty() =>
+            {
+                Some(Ok(ValidatedUserInput::Context { name, content }))
+            }
+            UserInput::Context { .. } => Some(Err(CoreError::InvalidInput(
+                "Turn context input must have a non-empty name and content".into(),
             ))),
             UserInput::ImageAttachment { attachment } => {
                 Some(Ok(ValidatedUserInput::Image(attachment)))
@@ -99,6 +109,7 @@ fn validate_skill_activations(
         .filter_map(|input| match input {
             UserInput::Skill { skill } => Some(skill),
             UserInput::Text { .. }
+            | UserInput::Context { .. }
             | UserInput::ImageAttachment { .. }
             | UserInput::Image { .. }
             | UserInput::LocalImage { .. }
@@ -143,6 +154,12 @@ pub(super) fn thread_items(
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 text: (*text).to_owned(),
+            },
+            ValidatedUserInput::Context { name, content } => ThreadItem::UserContext {
+                item_id: next_item_id(),
+                turn_id: turn_id.clone(),
+                name: (*name).to_owned(),
+                content: (*content).to_owned(),
             },
             ValidatedUserInput::Image(attachment) => ThreadItem::UserImageAttachment {
                 item_id: next_item_id(),

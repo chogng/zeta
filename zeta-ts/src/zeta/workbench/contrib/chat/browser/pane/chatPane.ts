@@ -12,6 +12,9 @@ import type { ChatTurnErrorAction } from "../list/chatListItems.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
+import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends DisposableOwner {
@@ -22,7 +25,7 @@ export class ChatPane extends DisposableOwner {
 	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
 
-	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService) {
+	constructor(container: HTMLElement, panelId: string, chatService: IChatService, selection: ChatPaneSelection, sessionService: ISessionsManagementService, contextMenuService: IContextMenuService, contextViewService: IContextViewService, commandService: ICommandService, contextPickService: IChatContextPickService, quickInputService: IQuickInputService) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
@@ -37,14 +40,14 @@ export class ChatPane extends DisposableOwner {
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
 		const inputDelegate: ChatInputDelegate = {
-			send: (text, skills) => this.send(text, skills),
+			send: (text, skills, contexts) => this.send(text, skills, contexts),
 			executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
 			executeServerCommand: (invocation) => this.model.executeServerCommand(invocation.name, invocation.argumentsText),
 			interrupt: () => this.model.interrupt(),
 			selectModel: (model) => this.model.selectModel(model),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService));
+		this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));
 		this.element.append(this.listWidget.element, this.inputPart.element);
 		this.own(this.model.onDidChange(() => this.render()));
 		this.defer(() => this.element.remove());
@@ -98,11 +101,20 @@ export class ChatPane extends DisposableOwner {
 		this.inputPart.focus();
 	}
 
-	private async send(text: string, skills?: readonly SkillReference[]): Promise<void> {
+	addContext(attachment: ChatContextAttachment): void {
+		this.inputPart.addContext(attachment);
+	}
+
+	acceptInput(value?: string): Promise<void> {
+		return this.inputPart.acceptInput(value);
+	}
+
+	private async send(text: string, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
-			await this.model.send(text, skills);
+			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
+			await this.model.send(text, skills, resolvedContexts);
 		} catch (error) {
 			if (this.model.items.length === 0) {
 				this.submittedMessage = false;

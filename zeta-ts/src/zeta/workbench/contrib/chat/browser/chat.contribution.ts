@@ -15,6 +15,8 @@ import { ChatInputEditor } from "./input/stanzaChatInputEditor.js";
 import { ChatInputEditors } from "./input/chatInputEditor.js";
 import { ChatAgentSidebarViewPane } from "./view/chatAgentSidebarViewPane.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
+import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
+import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
 
 ChatInputEditors.registerStatic({
 	id: "stanza",
@@ -47,6 +49,8 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 				IContextViewService,
 				ICommandService,
 				IWorkbenchLayoutService,
+				IChatContextPickService,
+				IQuickInputService,
 			],
 		}),
 	}]);

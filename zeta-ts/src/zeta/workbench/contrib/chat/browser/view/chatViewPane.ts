@@ -12,6 +12,8 @@ import type { ISessionsManagementService } from "../../../../../sessions/service
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 import { h } from "../../../../../base/browser/dom.js";
+import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -53,6 +55,8 @@ export class ChatViewPane extends ViewPane {
 		private readonly contextViewService: IContextViewService,
 		commandService: ICommandService,
 		private readonly layoutService: IWorkbenchLayoutService,
+		private readonly contextPickService: IChatContextPickService,
+		private readonly quickInputService: IQuickInputService,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -105,6 +109,16 @@ export class ChatViewPane extends ViewPane {
 		this.activePane?.focus();
 	}
 
+	addContext(attachment: ChatContextAttachment): void {
+		this.ensureTabForVisibleChat();
+		this.activePane?.addContext(attachment);
+	}
+
+	acceptInput(value?: string): Promise<void> {
+		this.ensureTabForVisibleChat();
+		return this.activePane?.acceptInput(value) ?? Promise.resolve();
+	}
+
 	override get partTitleProjection(): PartTitleProjection {
 		return this.titleControl.partTitleProjection;
 	}
@@ -127,6 +141,8 @@ export class ChatViewPane extends ViewPane {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
+					this.contextPickService,
+					this.quickInputService,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
@@ -152,6 +168,8 @@ export class ChatViewPane extends ViewPane {
 					this.contextMenuService,
 					this.contextViewService,
 					this.commandService,
+					this.contextPickService,
+					this.quickInputService,
 				);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);

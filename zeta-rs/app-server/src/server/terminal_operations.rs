@@ -25,7 +25,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalCreateParams = decode(params)?;
         let created = self
-            .terminal_service()?
+            .terminal_service_for(params.workspace_folder_id.as_deref())?
             .create(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&created)
@@ -37,7 +37,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalWriteParams = decode(params)?;
-        self.terminal_service()?
+        self.terminal_service_for(params.workspace_folder_id.as_deref())?
             .write(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&())
@@ -50,7 +50,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalAttachParams = decode(params)?;
         let attached = self
-            .terminal_service()?
+            .terminal_service_for(params.workspace_folder_id.as_deref())?
             .attach(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&attached)
@@ -62,7 +62,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalResizeParams = decode(params)?;
-        self.terminal_service()?
+        self.terminal_service_for(params.workspace_folder_id.as_deref())?
             .resize(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&())
@@ -75,7 +75,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: TerminalReadParams = decode(params)?;
         let output = self
-            .terminal_service()?
+            .terminal_service_for(params.workspace_folder_id.as_deref())?
             .read(connection.connection_id, params)
             .map_err(terminal_error)?;
         result(&output)
@@ -87,7 +87,7 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalCloseParams = decode(params)?;
-        self.terminal_service()?
+        self.terminal_service_for(params.workspace_folder_id.as_deref())?
             .close(connection.connection_id, &params.terminal_id)
             .map_err(terminal_error)?;
         result(&())

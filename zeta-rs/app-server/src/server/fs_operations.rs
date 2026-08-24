@@ -27,7 +27,7 @@ impl AppServer {
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsGetMetadataParams = decode(params)?;
         let metadata = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .get_metadata(&params.path)
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
@@ -36,7 +36,7 @@ impl AppServer {
     pub(super) fn fs_read_directory(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadDirectoryParams = decode(params)?;
         let entries = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .read_directory(&params.path)
             .map_err(file_system_error)?
             .into_iter()
@@ -51,7 +51,7 @@ impl AppServer {
     pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
         let content = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let text = String::from_utf8(content.bytes).map_err(|_| {
@@ -70,7 +70,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: FsReadBinaryFileParams = decode(params)?;
         let content = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
             .map_err(file_system_error)?;
         let metadata = self
@@ -102,7 +102,7 @@ impl AppServer {
             None => FileWriteCondition::Unconditional,
         };
         let metadata = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .write_file_with_condition(
                 &params.path,
                 params.content.as_bytes(),
@@ -119,7 +119,7 @@ impl AppServer {
     pub(super) fn fs_create_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsCreateFileParams = decode(params)?;
         let metadata = self
-            .file_system_service()?
+            .file_system_service_for(params.workspace_folder_id.as_deref())?
             .create_file(&params.path, existing_behavior(params.existing))
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
@@ -127,7 +127,7 @@ impl AppServer {
 
     pub(super) fn fs_rename(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsRenameParams = decode(params)?;
-        self.file_system_service()?
+        self.file_system_service_for(params.workspace_folder_id.as_deref())?
             .rename(
                 &params.source,
                 &params.target,
@@ -147,7 +147,7 @@ impl AppServer {
             FsDeleteMode::FileOrEmptyDirectory => FileDeleteMode::FileOrEmptyDirectory,
             FsDeleteMode::Recursive => FileDeleteMode::Recursive,
         };
-        self.file_system_service()?
+        self.file_system_service_for(params.workspace_folder_id.as_deref())?
             .delete(&params.path, missing, mode)
             .map_err(file_system_error)?;
         result(&())

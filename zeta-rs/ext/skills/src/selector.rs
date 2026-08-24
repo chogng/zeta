@@ -87,7 +87,8 @@ fn selector_text(input: &[UserInput]) -> String {
     let mut result = String::new();
     for text in input.iter().filter_map(|item| match item {
         UserInput::Text { text } => Some(text.as_str()),
-        UserInput::ImageAttachment { .. }
+        UserInput::Context { .. }
+        | UserInput::ImageAttachment { .. }
         | UserInput::Image { .. }
         | UserInput::LocalImage { .. }
         | UserInput::Skill { .. }

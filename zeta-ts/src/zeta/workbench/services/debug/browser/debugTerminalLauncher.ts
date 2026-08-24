@@ -10,12 +10,12 @@ interface RunInTerminalArguments {
 }
 
 /** Launches a DAP-requested debuggee through the existing integrated terminal boundary. */
-export async function runDebuggeeInTerminal(terminalService: ITerminalService, value: unknown): Promise<Readonly<Record<string, never>>> {
+export async function runDebuggeeInTerminal(terminalService: ITerminalService, value: unknown, workspaceFolderId?: string): Promise<Readonly<Record<string, never>>> {
 	const request = parseRunInTerminalArguments(value);
 	if (request.kind === "external") throw new Error("External debug terminals are not supported; use an integrated terminal");
 	const profiles = await terminalService.getProfiles();
 	const profile = preferredProfile(profiles);
-	const terminal = await terminalService.createTerminal({ dimensions: { rows: 30, cols: 120 }, profile: { type: "profile", profileId: profile.profileId }, title: request.title ?? "Debug" });
+	const terminal = await terminalService.createTerminal({ workspaceFolderId, dimensions: { rows: 30, cols: 120 }, profile: { type: "profile", profileId: profile.profileId }, title: request.title ?? "Debug" });
 	terminal.write(`${terminalCommand(request, profile)}\r`);
 	return Object.freeze({});
 }

@@ -44,17 +44,26 @@ enum GitRemoteMutation {
 /// Workspace-scoped owner of the async Git runtime used by synchronous RPC dispatch.
 pub(crate) struct GitService {
     workspace: TrustedWorkspace,
+    projection_root: PathBuf,
     client: GitClient,
     runtime: Mutex<Runtime>,
 }
 
 impl GitService {
-    pub(crate) fn new(workspace: TrustedWorkspace) -> Result<Self, GitServiceError> {
+    pub(crate) fn new(
+        workspace: TrustedWorkspace,
+        projection_root: PathBuf,
+    ) -> Result<Self, GitServiceError> {
         if !matches!(
             workspace.capability(),
             WorkspaceCapability::InspectRepository | WorkspaceCapability::MutateRepository
         ) {
             return Err(GitServiceError::Trust);
+        }
+        if !projection_root.starts_with(workspace.root().canonical_path())
+            || !projection_root.is_dir()
+        {
+            return Err(GitServiceError::Boundary);
         }
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -62,6 +71,7 @@ impl GitService {
             .map_err(|_| GitServiceError::Runtime)?;
         Ok(Self {
             workspace,
+            projection_root,
             client: GitClient::system(),
             runtime: Mutex::new(runtime),
         })
@@ -75,7 +85,7 @@ impl GitService {
         runtime.block_on(async {
             let repository = self
                 .client
-                .open_repository(self.workspace.root().canonical_path())
+                .open_repository(&self.projection_root)
                 .await
                 .map_err(GitServiceError::Git)?;
             let snapshot = self
@@ -88,7 +98,7 @@ impl GitService {
     }
 
     pub(crate) fn workspace_root(&self) -> &Path {
-        self.workspace.root().canonical_path()
+        &self.projection_root
     }
 
     pub(crate) fn workspace(&self) -> &WorkspaceRoot {
@@ -180,11 +190,7 @@ impl GitService {
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self
-                .workspace
-                .root()
-                .relative_to_existing_ancestor(repository.worktree_root())
-                .map_err(|_| GitServiceError::Boundary)?;
+            let workspace_prefix = self.repository_prefix(&repository)?;
             let repository_path = workspace_prefix.join(workspace_path);
             let (parent_object_id, changes) = self
                 .client
@@ -221,11 +227,7 @@ impl GitService {
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self
-                .workspace
-                .root()
-                .relative_to_existing_ancestor(repository.worktree_root())
-                .map_err(|_| GitServiceError::Boundary)?;
+            let workspace_prefix = self.repository_prefix(&repository)?;
             let repository_path = workspace_prefix.join(workspace_path);
             let snapshot = self
                 .client
@@ -274,11 +276,7 @@ impl GitService {
         let runtime = self.runtime.lock().map_err(|_| GitServiceError::Runtime)?;
         runtime.block_on(async {
             let repository = self.open_repository().await?;
-            let workspace_prefix = self
-                .workspace
-                .root()
-                .relative_to_existing_ancestor(repository.worktree_root())
-                .map_err(|_| GitServiceError::Boundary)?;
+            let workspace_prefix = self.repository_prefix(&repository)?;
             let snapshot = self
                 .client
                 .text_diff_snapshot_under(&repository, &workspace_prefix, limits)
@@ -424,7 +422,7 @@ impl GitService {
 
     async fn open_repository(&self) -> Result<GitRepository, GitServiceError> {
         self.client
-            .open_repository(self.workspace.root().canonical_path())
+            .open_repository(&self.projection_root)
             .await
             .map_err(GitServiceError::Git)
     }
@@ -434,11 +432,7 @@ impl GitService {
         repository: &GitRepository,
         paths: Vec<PathBuf>,
     ) -> Result<GitPathspecSet, GitServiceError> {
-        let workspace_prefix = self
-            .workspace
-            .root()
-            .relative_to_existing_ancestor(repository.worktree_root())
-            .map_err(|_| GitServiceError::Boundary)?;
+        let workspace_prefix = self.repository_prefix(repository)?;
         GitPathspecSet::new(
             paths
                 .into_iter()
@@ -446,6 +440,13 @@ impl GitService {
                 .collect(),
         )
         .map_err(GitServiceError::Git)
+    }
+
+    fn repository_prefix(&self, repository: &GitRepository) -> Result<PathBuf, GitServiceError> {
+        self.projection_root
+            .strip_prefix(repository.worktree_root())
+            .map(Path::to_path_buf)
+            .map_err(|_| GitServiceError::Boundary)
     }
 
     fn ensure_readable(&self) -> Result<(), GitServiceError> {

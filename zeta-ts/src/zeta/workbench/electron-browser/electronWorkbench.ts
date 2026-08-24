@@ -10,7 +10,7 @@ import {
 	createElectronRendererApi,
 } from "../../platform/native/electron-browser/rendererApi.js";
 import {
-	parseWorkspaceIdentifier,
+	parseWorkspace,
 } from "../../platform/workspace/common/workspace.js";
 import { type Workbench, startWorkbench } from "../browser/workbench.js";
 import {
@@ -45,7 +45,7 @@ export async function startElectronWorkbench(
 		profile,
 		api,
 		container: document.querySelector<HTMLElement>("#app") ?? document.body,
-		workspace: parseWorkspaceIdentifier(await api.workspace.getWorkspace()),
+		workspace: parseWorkspace(await api.workspace.getWorkspace()),
 		configurationApi: api.configuration,
 		keybindingsResourceApi: api.keybindings,
 		keyboardLayoutProvider: api.keyboardLayout,
@@ -83,7 +83,7 @@ export async function startElectronWorkbench(
 
 async function applyWorkspaceChange(workbench: Workbench, workspace: unknown): Promise<void> {
 	try {
-		await workbench.updateWorkspace(parseWorkspaceIdentifier(workspace));
+		await workbench.updateWorkspace(parseWorkspace(workspace));
 	} catch (error) {
 		console.error("Failed to switch Workbench workspace", error);
 		window.location.reload();

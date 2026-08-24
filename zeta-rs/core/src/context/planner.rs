@@ -582,6 +582,7 @@ fn validate_items(items: &[ThreadItem]) -> Result<(), ContextPreparationError> {
                 }
             }
             ThreadItem::UserMessage { .. }
+            | ThreadItem::UserContext { .. }
             | ThreadItem::UserImage { .. }
             | ThreadItem::UserImageAttachment { .. }
             | ThreadItem::AgentMessage { .. }
@@ -789,6 +790,9 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
     match item {
         ThreadItem::UserMessage { text, .. } | ThreadItem::AgentMessage { text, .. } => {
             estimate_bytes(text.len(), TEXT_ITEM_OVERHEAD)
+        }
+        ThreadItem::UserContext { name, content, .. } => {
+            estimate_bytes(name.len().saturating_add(content.len()), TEXT_ITEM_OVERHEAD)
         }
         ThreadItem::UserImage { url, .. } => ContextTokenCount::new(
             IMAGE_TOKEN_ESTIMATE.saturating_add(estimate_bytes(url.len(), 0).get()),

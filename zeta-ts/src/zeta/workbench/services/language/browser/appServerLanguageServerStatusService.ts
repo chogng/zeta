@@ -2,6 +2,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
+import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../../../generated/app-server/types.js";
 import type { IOutputChannel, IOutputService } from "../../output/common/outputService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
@@ -16,7 +17,7 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 	private readonly status = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(events: IServerEventApi, private readonly dialogs: IDialogService, private readonly outputService: IOutputService, private readonly statusbar: IStatusbarService) {
+	constructor(events: IServerEventApi, private readonly dialogs: IDialogService, private readonly outputService: IOutputService, private readonly statusbar: IStatusbarService, private readonly workspace?: IWorkspaceContextService) {
 		super();
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/serverMessage") this.acceptMessage(event.params);
@@ -37,28 +38,31 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 	private acceptMessage(message: LanguageServerMessageNotification): void {
 		const text = message.message.trim();
 		if (!text) return;
-		this.ensureChannel(message.server).appendLine({ severity: message.severity, category: message.source, text });
-		if (message.show) void this.dialogs.showMessage({ title: message.server, severity: dialogSeverity(message.severity), message: text });
+		const server = this.serverLabel(message.server, message.workspaceFolderId);
+		this.ensureChannel(server).appendLine({ severity: message.severity, category: message.source, text });
+		if (message.show) void this.dialogs.showMessage({ title: server, severity: dialogSeverity(message.severity), message: text });
 	}
 
 	private acceptState(update: LanguageServerStateNotification): void {
-		const state = lifecycleState(update.server, update.state);
-		this.states.set(update.server, state);
+		const server = this.serverLabel(update.server, update.workspaceFolderId);
+		const state = lifecycleState(server, update.state);
+		this.states.set(server, state);
 		const presentation = lifecyclePresentation(state);
-		this.ensureChannel(update.server).appendLine({ severity: presentation.severity, category: "lifecycle", text: presentation.text });
+		this.ensureChannel(server).appendLine({ severity: presentation.severity, category: "lifecycle", text: presentation.text });
 		this.updateStatus();
 		this.changeEmitter.fire();
 	}
 
 	private acceptProgress(update: LanguageServerProgressNotification): void {
-		this.ensureChannel(update.server);
-		const key = `${update.server}\0${update.token}`;
+		const server = this.serverLabel(update.server, update.workspaceFolderId);
+		this.ensureChannel(server);
+		const key = `${server}\0${update.token}`;
 		const current = this.progress.get(key);
 		if (update.done) {
 			this.progress.delete(key);
 		} else {
 			const title = update.title?.trim() || current?.title || "Language server operation";
-			this.progress.set(key, Object.freeze({ server: update.server, token: update.token, title, ...(update.message?.trim() ? { message: update.message.trim() } : current?.message ? { message: current.message } : {}), ...(update.percentage === null ? current?.percentage === undefined ? {} : { percentage: current.percentage } : { percentage: update.percentage }) }));
+			this.progress.set(key, Object.freeze({ server, token: update.token, title, ...(update.message?.trim() ? { message: update.message.trim() } : current?.message ? { message: current.message } : {}), ...(update.percentage === null ? current?.percentage === undefined ? {} : { percentage: current.percentage } : { percentage: update.percentage }) }));
 		}
 		this.updateStatus();
 		this.changeEmitter.fire();
@@ -81,6 +85,12 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 		const channel = this.own(this.outputService.createChannel({ id, label, kind: "log", source: "core" }));
 		this.channels.set(id, channel);
 		return channel;
+	}
+
+	private serverLabel(server: string, workspaceFolderId: string | undefined): string {
+		if (!workspaceFolderId) return server;
+		const folder = this.workspace?.getWorkspace().folders.find(folder => folder.id === workspaceFolderId);
+		return `${server} — ${folder?.name || workspaceFolderId}`;
 	}
 }
 

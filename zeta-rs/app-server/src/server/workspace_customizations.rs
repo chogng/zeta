@@ -102,11 +102,11 @@ impl HarnessInstructionsProvider for WorkspaceCustomizations {
 impl WorkspaceFileChangeSink for WorkspaceCustomizations {
     fn files_changed(&self, changed: &FsChanged) {
         match changed {
-            FsChanged::RescanRequired => {
+            FsChanged::RescanRequired { .. } => {
                 self.refresh_instructions();
                 self.refresh_agents();
             }
-            FsChanged::PathsChanged { paths } => {
+            FsChanged::PathsChanged { paths, .. } => {
                 if paths.iter().any(|path| affects(path, ".zeta/instructions")) {
                     self.refresh_instructions();
                 }

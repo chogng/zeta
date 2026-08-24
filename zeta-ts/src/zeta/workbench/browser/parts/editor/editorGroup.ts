@@ -42,6 +42,7 @@ export interface IEditorGroup {
 	readonly inputs: readonly EditorInput[];
 	readonly activeInput: EditorInput | undefined;
 	readonly activePane: IEditorPane | undefined;
+	isPreview(input: EditorInput): boolean;
 
 	openEditor(
 		input: EditorInput,
@@ -264,6 +265,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 
 	get activePane(): IEditorPane | undefined {
 		return this.activeEntry?.paneInstance.pane;
+	}
+
+	isPreview(input: EditorInput): boolean {
+		return this.entry(input)?.preview ?? false;
 	}
 
 	async openEditor(

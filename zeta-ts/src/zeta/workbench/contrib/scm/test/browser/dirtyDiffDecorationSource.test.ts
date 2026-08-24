@@ -13,6 +13,7 @@ test("Dirty Diff projects Git index changes onto live editor lines", async () =>
 	const becameReady = new Emitter<void>();
 	const requests: Array<{ readonly path: string; readonly comparison: string }> = [];
 	const status: GitStatus = {
+		repositoryId: "repo-1",
 		streamInstanceId: "git-1",
 		revision: 7,
 		workspacePath: "/workspace",
@@ -28,7 +29,10 @@ test("Dirty Diff projects Git index changes onto live editor lines", async () =>
 	};
 	const gitService = {
 		onDidChangeStatus: statusChanged.event,
+		onDidChangeRepositoryStatus: statusChanged.event,
+		onDidChangeRepositories: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 		onDidBecomeReady: becameReady.event,
+		repositoryForResource: () => ({ id: status.repositoryId, label: "workspace", path: "", root: URI.file("/workspace") }),
 		status: async () => status,
 		changeFile: async (path: string, comparison: string) => {
 			requests.push({ path, comparison });

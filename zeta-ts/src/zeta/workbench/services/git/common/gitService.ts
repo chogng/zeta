@@ -1,4 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
+import type { URI } from "../../../../base/common/uri.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 export type GitChangeStatus = "unmodified" | "modified" | "added" | "deleted" | "renamed" | "copied" | "typeChanged" | "unmerged" | "untracked" | "ignored";
@@ -31,6 +32,7 @@ export interface GitRepositoryChange {
 }
 
 export interface GitStatus {
+	readonly repositoryId: string;
 	readonly streamInstanceId: string;
 	readonly revision: number;
 	readonly workspacePath: string;
@@ -39,10 +41,25 @@ export interface GitStatus {
 }
 
 export interface GitCommitSummary {
+	readonly repositoryId: string;
 	readonly objectId: string;
 	readonly parentObjectIds: readonly string[];
 	readonly timestampSeconds: number;
 	readonly subject: string;
+}
+
+export interface GitRepository {
+	readonly id: string;
+	readonly label: string;
+	readonly path: string;
+	readonly root: URI;
+}
+
+export interface GitBranch {
+	readonly name: string;
+	readonly objectId: string;
+	readonly current: boolean;
+	readonly upstream: string | undefined;
 }
 
 export type GitRemoteProvider = "github" | "gitlab" | "bitbucket" | "other";
@@ -119,20 +136,30 @@ export interface GitCommitResult {
 /** Frontend Git operations and repository updates for the active workspace. */
 export interface IGitService {
 	readonly onDidChangeStatus: Event<GitStatus>;
+	readonly onDidChangeRepositoryStatus: Event<GitStatus>;
+	readonly onDidChangeRepositories: Event<readonly GitRepository[]>;
+	readonly onDidChangeActiveRepository: Event<GitRepository | undefined>;
 	readonly onDidBecomeReady: Event<void>;
-	status(): Promise<GitStatus>;
-	history(): Promise<readonly GitCommitSummary[]>;
-	graph(query: GraphQuery): Promise<GraphPage>;
-	commitChanges(objectId: string): Promise<GitCommitChanges>;
-	commitFile(objectId: string, path: string): Promise<GitCommitFile>;
-	changeFile(path: string, comparison: GitChangeFileComparison): Promise<GitChangeFile>;
-	stage(paths: readonly string[]): Promise<GitStatus>;
-	unstage(paths: readonly string[]): Promise<GitStatus>;
-	discardWorktree(paths: readonly string[]): Promise<GitStatus>;
-	commit(message: string): Promise<GitCommitResult>;
-	fetch(): Promise<GitStatus>;
-	pull(): Promise<GitStatus>;
-	push(): Promise<GitStatus>;
+	readonly repositories: readonly GitRepository[];
+	readonly activeRepository: GitRepository | undefined;
+	listRepositories(): Promise<readonly GitRepository[]>;
+	selectRepository(repositoryId: string): Promise<GitStatus>;
+	repositoryForResource(resource: URI): GitRepository | undefined;
+	status(repositoryId?: string): Promise<GitStatus>;
+	history(repositoryId?: string): Promise<readonly GitCommitSummary[]>;
+	branches(repositoryId?: string): Promise<readonly GitBranch[]>;
+	switchBranch(name: string, repositoryId?: string): Promise<GitStatus>;
+	graph(query: GraphQuery, repositoryId?: string): Promise<GraphPage>;
+	commitChanges(objectId: string, repositoryId?: string): Promise<GitCommitChanges>;
+	commitFile(objectId: string, path: string, repositoryId?: string): Promise<GitCommitFile>;
+	changeFile(path: string, comparison: GitChangeFileComparison, repositoryId?: string): Promise<GitChangeFile>;
+	stage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
+	unstage(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
+	discardWorktree(paths: readonly string[], repositoryId?: string): Promise<GitStatus>;
+	commit(message: string, repositoryId?: string): Promise<GitCommitResult>;
+	fetch(repositoryId?: string): Promise<GitStatus>;
+	pull(repositoryId?: string): Promise<GitStatus>;
+	push(repositoryId?: string): Promise<GitStatus>;
 }
 
 export const IGitService = createServiceIdentifier<IGitService>("gitService");

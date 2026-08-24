@@ -50,8 +50,7 @@ impl AppServer {
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_document_symbols(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -78,8 +77,7 @@ impl AppServer {
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_code_lenses(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -107,8 +105,7 @@ impl AppServer {
             self.prepare_document_feature_request(&params.document)?;
         let lens = code_lens_from_dto(&params.document.text, params.lens)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .resolve_code_lens(&source_path, revision, lens)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -136,8 +133,7 @@ impl AppServer {
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_document_links(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -165,8 +161,7 @@ impl AppServer {
             self.prepare_document_feature_request(&params.document)?;
         let link = document_link_from_dto(&params.document.text, params.link)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .resolve_document_link(&source_path, revision, link)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -194,8 +189,7 @@ impl AppServer {
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_document_colors(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -231,8 +225,7 @@ impl AppServer {
                 .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?,
         );
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_color_presentations(
                 &source_path,
@@ -274,8 +267,7 @@ impl AppServer {
         let (source_path, revision, mut runtime) =
             self.prepare_document_feature_request(&params.document)?;
         let request_id = runtime
-            .service
-            .as_ref()
+            .service()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_folding_ranges(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -317,7 +309,8 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace = self.language_workspace_root()?;
+        let workspace =
+            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;

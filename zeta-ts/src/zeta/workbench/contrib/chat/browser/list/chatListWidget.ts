@@ -105,6 +105,7 @@ function itemLabel(item: IChatListItem): string {
 	if (item.label) return item.label;
 	switch (item.type) {
 		case "userMessage":
+		case "userContext":
 		case "userImage":
 		case "userImageAttachment":
 			return "You";

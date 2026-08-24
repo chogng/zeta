@@ -10,7 +10,7 @@ export interface ResolvedGitChangeInputs {
 
 /** Resolves one Git change into the ordinary text-resource inputs used by diff panes. */
 export async function resolveGitChangeInputs(gitService: IGitService, status: GitStatus, change: GitRepositoryChange, comparison: GitChangeFileComparison): Promise<ResolvedGitChangeInputs> {
-	const file = await gitService.changeFile(change.path, comparison);
+	const file = await gitService.changeFile(change.path, comparison, status.repositoryId);
 	const originalPath = changeOriginalPath(change, comparison);
 	const [originalState, modifiedState] = comparison === 'staged'
 		? ['HEAD', 'Index'] as const

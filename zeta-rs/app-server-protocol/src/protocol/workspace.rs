@@ -127,3 +127,34 @@ pub struct WorkspaceSwitchResult {
     pub root: PathBuf,
     pub trust: WorkspaceTrustStateDto,
 }
+
+/// One folder requested by a product-hosted multi-root Workspace.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFolderSetEntry {
+    pub id: String,
+    pub root: PathBuf,
+    pub trust: WorkspaceSwitchTrust,
+}
+
+/// Atomically replaces the ordered folders hosted by one App Server session.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFoldersSetParams {
+    pub folders: Vec<WorkspaceFolderSetEntry>,
+}
+
+/// One canonical folder accepted into the active Workspace.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFolderDto {
+    pub id: String,
+    pub root: PathBuf,
+    pub trust: WorkspaceTrustStateDto,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceFoldersSetResult {
+    pub folders: Vec<WorkspaceFolderDto>,
+}

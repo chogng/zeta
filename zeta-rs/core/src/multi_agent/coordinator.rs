@@ -920,6 +920,13 @@ fn materialize_item(
         zeta_protocol::ThreadItem::UserMessage { text, .. } => {
             AgentContextContent::UserText { text: text.clone() }
         }
+        zeta_protocol::ThreadItem::UserContext { name, content, .. } => {
+            AgentContextContent::UserText {
+                text:
+                    serde_json::json!({ "attachedContext": { "name": name, "content": content } })
+                        .to_string(),
+            }
+        }
         zeta_protocol::ThreadItem::UserImage { url, .. } => {
             AgentContextContent::UserImage { url: url.clone() }
         }

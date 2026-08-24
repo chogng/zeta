@@ -49,20 +49,30 @@ export class RecentWorkspacesService extends DisposableOwner implements IRecentW
 
 	private recordCurrentWorkspace(): void {
 		const workspace = this.workspaceContextService.getWorkspace();
-		if (workspace.configuration || workspace.folders.length !== 1) return;
+		if (workspace.configuration?.scheme === "file") {
+			this.record({
+				name: workspace.name || resourceName(workspace.configuration.fsPath),
+				root: workspace.configuration.fsPath,
+				lastOpened: Date.now(),
+			});
+			return;
+		}
+		if (workspace.folders.length !== 1) return;
 		const folder = workspace.folders[0];
 		if (!folder || folder.uri.scheme !== "file") return;
 		const root = folder.uri.fsPath;
 		if (!root) return;
-
-		const nextEntry: PersistedRecentWorkspace = {
+		this.record({
 			name: folder.name || resourceName(root),
 			root,
 			lastOpened: Date.now(),
-		};
+		});
+	}
+
+	private record(nextEntry: PersistedRecentWorkspace): void {
 		this.entries = Object.freeze([
 			nextEntry,
-			...this.entries.filter(entry => entry.root !== root),
+			...this.entries.filter(entry => entry.root !== nextEntry.root),
 		].slice(0, MAX_RECENT_WORKSPACES));
 		this.storageService.store(
 			RECENT_WORKSPACES_STORAGE_KEY,

@@ -68,6 +68,8 @@ export class CodeSessionsWorkbench extends DisposableOwner {
 			contextMenuService: interactionServices.contextMenuService,
 			contextViewService: interactionServices.contextViewService,
 			commandService: interactionServices.commandService,
+			contextPickService: interactionServices.chatContextPickService,
+			quickInputService: interactionServices.quickInputService,
 			activateSelection: selection => runtime.view.activateSelection(selection),
 			closeSelection: selection => runtime.view.closeVisibleSelection(selection),
 		}));

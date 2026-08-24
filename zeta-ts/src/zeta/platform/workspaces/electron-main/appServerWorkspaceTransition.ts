@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { APP_SERVER_METHODS, type WorkspaceSwitchTrust } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type WorkspaceFolderSetEntry, type WorkspaceSwitchTrust } from "../../../../../generated/app-server/types.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
@@ -117,6 +117,25 @@ export async function readAppServerWorkspaceTrust(supervisor: AppServerSuperviso
 export async function switchAppServerWorkspace(supervisor: AppServerSupervisor, root: string, trust: WorkspaceTrustChoice): Promise<void> {
 	const authority = await workspaceSwitchTrust(supervisor, trust);
 	await supervisor.request(APP_SERVER_METHODS["workspace/switch"], { root, trust: authority });
+}
+
+export interface IAppServerWorkspaceFolder {
+	readonly id: string;
+	readonly root: string;
+	readonly trust: WorkspaceTrustChoice;
+}
+
+/** Atomically replaces the App Server's ordered workspace-folder collection. */
+export async function setAppServerWorkspaceFolders(supervisor: AppServerSupervisor, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
+	const entries: WorkspaceFolderSetEntry[] = [];
+	for (const folder of folders) {
+		entries.push({
+			id: folder.id,
+			root: folder.root,
+			trust: await workspaceSwitchTrust(supervisor, folder.trust),
+		});
+	}
+	await supervisor.request(APP_SERVER_METHODS["workspace/folders/set"], { folders: entries });
 }
 
 async function workspaceSwitchTrust(supervisor: AppServerSupervisor, trust: WorkspaceTrustChoice): Promise<WorkspaceSwitchTrust> {

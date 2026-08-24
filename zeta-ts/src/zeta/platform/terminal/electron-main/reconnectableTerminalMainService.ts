@@ -17,6 +17,7 @@ export interface ReconnectableTerminalMainServiceOptions {
 
 interface TerminalRecord {
 	readonly terminalId: string;
+	readonly workspaceFolderId: string | undefined;
 	reconnectToken: string;
 	reconnectGracePeriodMillis: number;
 	rows: number;
@@ -59,7 +60,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 			lease = requireReconnectLease(result.reconnect);
 		} catch (error) {
 			if (result.terminalId) {
-				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { terminalId: result.terminalId }).catch(() => {});
+				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(params.workspaceFolderId), terminalId: result.terminalId }).catch(() => {});
 			}
 			throw error;
 		}
@@ -68,6 +69,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		}
 		this.terminals.set(result.terminalId, {
 			terminalId: result.terminalId,
+			workspaceFolderId: params.workspaceFolderId,
 			reconnectToken: lease.reconnectToken,
 			reconnectGracePeriodMillis: lease.reconnectGracePeriodMillis,
 			rows: params.rows,
@@ -124,7 +126,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		for (const record of records) record.closing = true;
 		if (this.supervisor.state !== "ready") return;
 		for (const record of records) {
-			void this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { terminalId: record.terminalId }).catch(() => {
+			void this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(record.workspaceFolderId), terminalId: record.terminalId }).catch(() => {
 				// The old connection is about to stop; its broker expires any unclosed lease.
 			});
 		}
@@ -179,6 +181,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 			}
 			try {
 				const attached = await this.supervisor.request(APP_SERVER_METHODS["terminal/attach"], {
+					...workspaceFolder(record.workspaceFolderId),
 					terminalId: record.terminalId,
 					reconnectToken: record.reconnectToken,
 					rows: record.rows,
@@ -220,6 +223,10 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		if (!record) throw new Error("Remote terminal is no longer recoverable");
 		return record;
 	}
+}
+
+function workspaceFolder(workspaceFolderId: string | undefined): { readonly workspaceFolderId?: string } {
+	return workspaceFolderId === undefined ? {} : { workspaceFolderId };
 }
 
 function requireReconnectLease(value: TerminalReconnectLease | null): TerminalReconnectLease {

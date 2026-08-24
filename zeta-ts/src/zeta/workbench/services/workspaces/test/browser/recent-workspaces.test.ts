@@ -35,6 +35,17 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 	workspace.updateWorkspace({ id: "alpha", uri: URI.file("/workspaces/alpha") });
 	assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
 	assert.equal(recent.recentWorkspaces.length, 2);
+	workspace.updateWorkspace({
+		id: "team",
+		folders: [
+			{ id: "frontend", uri: URI.file("/workspaces/frontend"), name: "frontend", index: 0 },
+			{ id: "backend", uri: URI.file("/workspaces/backend"), name: "backend", index: 1 },
+		],
+		configuration: URI.file("/workspaces/team.code-workspace"),
+		name: "Team",
+	});
+	assert.deepEqual(recent.recentWorkspaces.map(project => project.name), ["Team", "alpha", "beta"]);
+	assert.equal(recent.recentWorkspaces[0]?.root, URI.file("/workspaces/team.code-workspace").fsPath);
 
 	await recent.openWorkspace("/workspaces/beta");
 	assert.deepEqual(openedRoots, ["/workspaces/beta"]);
@@ -48,7 +59,7 @@ test("RecentWorkspacesService records, persists, deduplicates, and reopens folde
 	});
 	using restoredWorkspace = new WorkspaceContextService({ id: "empty-window" });
 	using restored = new RecentWorkspacesService(restoredStorage, restoredWorkspace, workspaceOpenService);
-	assert.deepEqual(restored.recentWorkspaces.map(project => project.name), ["alpha", "beta"]);
+	assert.deepEqual(restored.recentWorkspaces.map(project => project.name), ["Team", "alpha", "beta"]);
 	assert.equal(restoredStorage.get("workbench.recentWorkspaces", StorageScope.PROFILE) !== undefined, true);
 	browser.window.close();
 });

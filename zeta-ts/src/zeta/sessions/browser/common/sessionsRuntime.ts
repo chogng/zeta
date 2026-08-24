@@ -3,8 +3,7 @@ import { ServiceCollection } from "../../../platform/instantiation/common/instan
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IWorkspaceContextApi } from "../../../platform/workspace/common/workspaceIpc.js";
 import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
-import { isSingleFolderWorkspaceIdentifier, parseWorkspaceIdentifier } from "../../../platform/workspace/common/workspace.js";
-import { getRemoteWorkspacePath, isRemoteResource } from "../../../platform/remote/common/remote.js";
+import { parseWorkspace, workspaceOpenTarget } from "../../../platform/workspace/common/workspace.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
 import { IChatService } from "../../../workbench/services/chat/common/chatService.js";
 import { AppServerSessionsManagementService } from "../../services/sessions/browser/appServerSessionsManagementService.js";
@@ -70,9 +69,7 @@ export class SessionsRuntime extends DisposableOwner {
 	}
 
 	private updateWorkspaceRoot(value: unknown): void {
-		const workspace = parseWorkspaceIdentifier(value);
-		this.currentWorkspaceRoot = isSingleFolderWorkspaceIdentifier(workspace)
-			? isRemoteResource(workspace.uri) ? getRemoteWorkspacePath(workspace.uri) : workspace.uri.fsPath
-			: undefined;
+		const workspace = parseWorkspace(value);
+		this.currentWorkspaceRoot = workspaceOpenTarget(workspace);
 	}
 }

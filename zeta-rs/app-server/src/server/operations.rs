@@ -823,6 +823,7 @@ impl AppServer {
             .into_iter()
             .map(|item| match item {
                 InputItem::Text { text } => UserInput::Text { text },
+                InputItem::Context { name, content } => UserInput::Context { name, content },
                 InputItem::ImageAttachment { attachment } => {
                     UserInput::ImageAttachment { attachment }
                 }
@@ -1116,7 +1117,7 @@ impl AppServer {
         if subscription
             && input
                 .iter()
-                .any(|item| !matches!(item, InputItem::Text { .. }))
+                .any(|item| !matches!(item, InputItem::Text { .. } | InputItem::Context { .. }))
         {
             return Err(RpcError::new(
                 -32010,
@@ -1127,6 +1128,7 @@ impl AppServer {
             .into_iter()
             .map(|item| match item {
                 InputItem::Text { text } => UserInput::Text { text },
+                InputItem::Context { name, content } => UserInput::Context { name, content },
                 InputItem::ImageAttachment { attachment } => {
                     UserInput::ImageAttachment { attachment }
                 }

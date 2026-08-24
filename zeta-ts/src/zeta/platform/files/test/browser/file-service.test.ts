@@ -228,6 +228,38 @@ test("BrowserFileService maps App Server invalidations to workspace resources", 
 	assert.deepEqual(observed, [[URI.file("C:\\project\\src\\main.ts"), URI.file("C:\\project\\README.md")], undefined]);
 });
 
+test("BrowserFileService routes nested multi-root resources by Workspace folder id", async () => {
+	using workspaceContextService: IWorkspaceContextService = new WorkspaceContextService({
+		id: "multi-root",
+		folders: [
+			{ id: "parent", uri: URI.file("C:\\project"), name: "parent", index: 0 },
+			{ id: "nested", uri: URI.file("C:\\project\\packages\\nested"), name: "nested", index: 1 },
+		],
+		configuration: URI.file("C:\\project.code-workspace"),
+	});
+	const requests: { readonly workspaceFolderId?: string; readonly path: string }[] = [];
+	const service = new BrowserFileService({
+		workspaceContextService,
+		resourceApi: unavailableResourceApi(),
+		api: {
+			...unavailableFileApi(),
+			readFile: async params => {
+				requests.push(params);
+				return { content: params.path, revision: "revision" };
+			},
+		},
+	});
+
+	await service.readFile(URI.file("C:\\project\\README.md"));
+	await service.readFile(URI.file("C:\\project\\packages\\nested\\src\\main.ts"));
+
+	assert.deepEqual(requests, [
+		{ workspaceFolderId: "parent", path: "README.md" },
+		{ workspaceFolderId: "nested", path: "src/main.ts" },
+	]);
+	assert.throws(() => service.rename(URI.file("C:\\project\\README.md"), URI.file("C:\\project\\packages\\nested\\README.md"), "error"), /across workspace folders/i);
+});
+
 function unavailableFileApi() {
 	return {
 		getMetadata: async () => { throw new Error("unavailable"); },

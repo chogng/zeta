@@ -171,7 +171,20 @@ impl FileSystemWatcher {
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
     ) -> Result<Self, FileSystemWatcherError> {
-        Self::start_inner(workspace, updates, FileSystemWatcherObservers::None)
+        Self::start_inner(workspace, updates, None, FileSystemWatcherObservers::None)
+    }
+
+    pub(super) fn start_for_workspace_folder(
+        workspace: WorkspaceRoot,
+        updates: Arc<UpdateBroker>,
+        workspace_folder_id: String,
+    ) -> Result<Self, FileSystemWatcherError> {
+        Self::start_inner(
+            workspace,
+            updates,
+            Some(workspace_folder_id),
+            FileSystemWatcherObservers::None,
+        )
     }
 
     pub(super) fn start_with_observers(
@@ -185,6 +198,7 @@ impl FileSystemWatcher {
         Self::start_inner(
             workspace,
             updates,
+            None,
             FileSystemWatcherObservers::WorkspaceRuntime {
                 code_index,
                 symbol_index,
@@ -197,13 +211,23 @@ impl FileSystemWatcher {
     fn start_inner(
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
+        workspace_folder_id: Option<String>,
         observers: FileSystemWatcherObservers,
     ) -> Result<Self, FileSystemWatcherError> {
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let (startup, startup_rx) = std::sync::mpsc::sync_channel(1);
         let thread = std::thread::Builder::new()
             .name("zeta-file-system-watcher".into())
-            .spawn(move || watch_workspace(workspace, updates, observers, shutdown_rx, startup))
+            .spawn(move || {
+                watch_workspace(
+                    workspace,
+                    updates,
+                    workspace_folder_id,
+                    observers,
+                    shutdown_rx,
+                    startup,
+                )
+            })
             .map_err(|error| FileSystemWatcherError(error.to_string()))?;
         match startup_rx.recv_timeout(FILE_SYSTEM_WATCH_STARTUP_TIMEOUT) {
             Ok(Ok(())) => {}
@@ -252,6 +276,7 @@ impl Drop for FileSystemWatcher {
 fn watch_workspace(
     workspace: WorkspaceRoot,
     updates: Arc<UpdateBroker>,
+    workspace_folder_id: Option<String>,
     observers: FileSystemWatcherObservers,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
@@ -331,7 +356,9 @@ fn watch_workspace(
             return;
         }
         if let Some(changes) = &changes {
-            changes.files_changed(&FsChanged::RescanRequired);
+            changes.files_changed(&FsChanged::RescanRequired {
+                workspace_folder_id: workspace_folder_id.clone(),
+            });
         }
         if let Some(code_index_worker) = &code_index_worker {
             code_index_worker.schedule(FileWatcherEvent::RescanRequired {
@@ -349,7 +376,7 @@ fn watch_workspace(
                     if let Some(code_index_worker) = &code_index_worker {
                         code_index_worker.schedule(event.clone());
                     }
-                    if let Some(changed) = project_event(&workspace, event) {
+                    if let Some(changed) = project_event(&workspace, workspace_folder_id.as_deref(), event) {
                         if let Some(changes) = &changes {
                             changes.files_changed(&changed);
                         }
@@ -371,7 +398,11 @@ fn watcher_backend(workspace: &WorkspaceRoot) -> FileWatcherBackend {
     }
 }
 
-fn project_event(workspace: &WorkspaceRoot, event: FileWatcherEvent) -> Option<FsChanged> {
+fn project_event(
+    workspace: &WorkspaceRoot,
+    workspace_folder_id: Option<&str>,
+    event: FileWatcherEvent,
+) -> Option<FsChanged> {
     match event {
         FileWatcherEvent::PathsChanged { paths } => {
             let mut paths = paths
@@ -380,9 +411,14 @@ fn project_event(workspace: &WorkspaceRoot, event: FileWatcherEvent) -> Option<F
                 .collect::<Vec<_>>();
             paths.sort();
             paths.dedup();
-            (!paths.is_empty()).then_some(FsChanged::PathsChanged { paths })
+            (!paths.is_empty()).then_some(FsChanged::PathsChanged {
+                workspace_folder_id: workspace_folder_id.map(str::to_owned),
+                paths,
+            })
         }
-        FileWatcherEvent::RescanRequired { .. } => Some(FsChanged::RescanRequired),
+        FileWatcherEvent::RescanRequired { .. } => Some(FsChanged::RescanRequired {
+            workspace_folder_id: workspace_folder_id.map(str::to_owned),
+        }),
     }
 }
 

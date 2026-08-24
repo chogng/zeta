@@ -185,8 +185,9 @@ use crate::protocol::git::{
     GitCommitFileResult, GitCommitParams, GitCommitResult, GitCommitSummaryDto,
     GitDiffStatisticsDto, GitGraphParams, GitGraphResult, GitHeadDto, GitHistoryResult,
     GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto, GitRemoteDto,
-    GitRemoteProviderDto, GitRepositoryChangeDto, GitRepositoryIdentityDto, GitStatusChanged,
-    GitStatusResult, GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+    GitRemoteProviderDto, GitRepositoriesResult, GitRepositoryChangeDto, GitRepositoryDto,
+    GitRepositoryIdentityDto, GitRepositoryParams, GitStatusChanged, GitStatusResult,
+    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
 use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
 use crate::protocol::language::{
@@ -352,6 +353,10 @@ use crate::protocol::terminal::TerminalWriteParams;
 use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
+use crate::protocol::workspace::WorkspaceFolderDto;
+use crate::protocol::workspace::WorkspaceFolderSetEntry;
+use crate::protocol::workspace::WorkspaceFoldersSetParams;
+use crate::protocol::workspace::WorkspaceFoldersSetResult;
 use crate::protocol::workspace::WorkspaceSwitchParams;
 use crate::protocol::workspace::WorkspaceSwitchResult;
 use crate::protocol::workspace::WorkspaceSwitchTrust;
@@ -665,6 +670,11 @@ client_methods! {
     WorkspaceSwitch => "workspace/switch" {
         params: WorkspaceSwitchParams,
         response: WorkspaceSwitchResult,
+        serialization: GlobalExclusive,
+    },
+    WorkspaceFoldersSet => "workspace/folders/set" {
+        params: WorkspaceFoldersSetParams,
+        response: WorkspaceFoldersSetResult,
         serialization: GlobalExclusive,
     },
     WorkspaceTrustRead => "workspace/trust/read" {
@@ -1367,23 +1377,28 @@ client_methods! {
         response: (),
         serialization: GlobalExclusive,
     },
-    GitStatus => "git/status" {
+    GitRepositories => "git/repositories" {
         params: EmptyParams,
+        response: GitRepositoriesResult,
+        serialization: GlobalSharedRead,
+    },
+    GitStatus => "git/status" {
+        params: GitRepositoryParams,
         response: GitStatusResult,
         serialization: GlobalSharedRead,
     },
     GitTextDiff => "git/textDiff" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitTextDiffResult,
         serialization: GlobalSharedRead,
     },
     GitBranchList => "git/branch/list" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitBranchListResult,
         serialization: GlobalSharedRead,
     },
     GitHistory => "git/history" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitHistoryResult,
         serialization: GlobalSharedRead,
     },
@@ -1433,17 +1448,17 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     GitFetch => "git/fetch" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
     GitPull => "git/pull" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
     GitPush => "git/push" {
-        params: EmptyParams,
+        params: GitRepositoryParams,
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
@@ -2150,6 +2165,10 @@ typescript_bindings! {
     WorkspaceSwitchParams,
     WorkspaceSwitchResult,
     WorkspaceSwitchTrust,
+    WorkspaceFolderDto,
+    WorkspaceFolderSetEntry,
+    WorkspaceFoldersSetParams,
+    WorkspaceFoldersSetResult,
     WorkspaceTrustReadParams,
     WorkspaceTrustReadResult,
     WorkspaceTrustEntryDto,
@@ -2415,6 +2434,9 @@ typescript_bindings! {
     GitUpstreamDto,
     GitHeadDto,
     GitSubmoduleStateDto,
+    GitRepositoryParams,
+    GitRepositoryDto,
+    GitRepositoriesResult,
     GitRepositoryChangeDto,
     GitStatusResult,
     GitStatusChanged,

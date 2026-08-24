@@ -19,7 +19,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 	});
 	const workspace: IWorkspaceContextService = {
 		onDidChangeWorkspace: noEvent,
-		getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }),
+		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 	};
 	using terminals = new FakeTerminalService();
@@ -52,7 +52,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
 	const root = URI.file("C:\\project");
 	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(files, workspace, terminals);
 	const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
@@ -77,7 +77,7 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 
 test("TaskService retains the last good task set when a provider refresh fails", async () => {
 	const root = URI.file("C:\\project");
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(new FakeFileService(root, {}), workspace, terminals);
 	let fail = false;
@@ -115,7 +115,7 @@ class FakeTerminalService extends DisposableOwner implements ITerminalService {
 	readonly onDidChangeInstances = noEvent;
 	readonly onDidChangeActiveInstance = noEvent;
 	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
-	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this.own(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
+	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this.own(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.workspaceFolderId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() {}
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
 	moveTerminal() {}
@@ -132,7 +132,7 @@ class FakeTerminalInstance extends DisposableOwner implements ITerminalInstance 
 	readonly onDidChangeCommandStatus = this.commandEmitter.event;
 	readonly onDidExit = noEvent;
 	readonly onDidChangeState = noEvent;
-	constructor(readonly id: string, readonly title: string) { super(); }
+	constructor(readonly id: string, readonly workspaceFolderId: string, readonly title: string) { super(); }
 	write(data: string): void { this.writes.push(data); }
 	resize(_dimensions: ITerminalDimensions): void {}
 	async close(): Promise<void> { this.state = "exited"; }

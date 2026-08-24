@@ -1,10 +1,10 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
-import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspace, workspaceFromIdentifier } from "../../workspace/common/workspace.js";
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from "../../workspace/common/workspaceIpc.js";
 import { type ILocalWorkspaceOpenTarget, type IWorkspaceOpenTarget, WorkspaceOpenTargetKind } from "../common/workspaces.js";
-import { type IWorkspacePathService, nodeWorkspacePathService, resolveWorkspaceOpenTarget } from "../node/workspaces.js";
+import { type IWorkspacePathService, nodeWorkspacePathService, resolveWorkspace, resolveWorkspaceOpenTarget } from "../node/workspaces.js";
 
 export interface IResolveStartupWorkspaceOptions {
 	readonly arguments: readonly string[];
@@ -49,34 +49,46 @@ export class WorkspacesMainService {
 		}
 		return workspace;
 	}
+
+	resolveWorkspace(workspace: IAnyWorkspaceIdentifier): Promise<IWorkspace> {
+		return resolveWorkspace(workspace, this.pathService);
+	}
 }
 
 export interface IWorkspaceContextMainChangeEvent {
 	readonly previous: IAnyWorkspaceIdentifier;
 	readonly workspace: IAnyWorkspaceIdentifier;
+	readonly resolvedWorkspace: IWorkspace;
 }
 
 /** Mutable main-process owner of the workspace currently hosted by one window. */
 export class WorkspaceContextMainService extends DisposableOwner {
 	private workspace: IAnyWorkspaceIdentifier;
+	private resolvedWorkspace: IWorkspace;
 	private readonly _onDidChangeWorkspace = this.own(new Emitter<IWorkspaceContextMainChangeEvent>());
 
 	readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent> = this._onDidChangeWorkspace.event;
 
-	constructor(workspace: IAnyWorkspaceIdentifier) {
+	constructor(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)) {
 		super();
 		this.workspace = workspace;
+		this.resolvedWorkspace = resolvedWorkspace;
 	}
 
 	getWorkspace(): IAnyWorkspaceIdentifier {
 		return this.workspace;
 	}
 
-	updateWorkspace(workspace: IAnyWorkspaceIdentifier): void {
+	getResolvedWorkspace(): IWorkspace {
+		return this.resolvedWorkspace;
+	}
+
+	updateWorkspace(workspace: IAnyWorkspaceIdentifier, resolvedWorkspace: IWorkspace = workspaceFromIdentifier(workspace)): void {
 		if (workspace.id === this.workspace.id) return;
 		const previous = this.workspace;
 		this.workspace = workspace;
-		this._onDidChangeWorkspace.fire({ previous, workspace });
+		this.resolvedWorkspace = resolvedWorkspace;
+		this._onDidChangeWorkspace.fire({ previous, workspace, resolvedWorkspace });
 	}
 }
 
@@ -87,7 +99,7 @@ export function workspaceContextIpcRoutes(
 	return [{
 		channel: WORKSPACE_CONTEXT_READ_CHANNEL,
 		validate: validateWorkspaceContextRead,
-		invoke: () => serializeWorkspaceIdentifier(service.getWorkspace()),
+		invoke: () => serializeWorkspace(service.getResolvedWorkspace()),
 	}];
 }
 

@@ -80,6 +80,48 @@
   flex: 1 1 auto;
 }
 
+.zeta-chat-input-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px 0;
+}
+
+.zeta-chat-input-attachment-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  height: 24px;
+  padding-left: 8px;
+  color: var(--zeta-foreground);
+  background: var(--zeta-button-secondary-background);
+  border-radius: 4px;
+}
+
+.zeta-chat-input-attachment-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-chat-input-attachment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.zeta-chat-input-attachment-remove:hover {
+  background: var(--zeta-toolbar-hover-background);
+}
+
 .zeta-chat-textarea-input {
   box-sizing: border-box;
   width: 100%;

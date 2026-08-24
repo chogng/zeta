@@ -1,9 +1,32 @@
 import { URI } from "../../../../base/common/uri.js";
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
+import { EditorInputSerializers, requireRecord, requireSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 
 export const DIFF_EDITOR_ID = "stanza.editor.diff";
 export const DIFF_EDITOR_CONTENT_TYPE = "application/vnd.stanza.editor-diff";
+
+EditorInputSerializers.registerStatic({
+	typeId: "workbench.editorInput.diff",
+	canSerialize: isDiffEditorInput,
+	serialize: (input, registry) => {
+		if (!isDiffEditorInput(input)) throw new TypeError("Diff editor serializer requires a diff input");
+		return Object.freeze({
+			original: registry.serialize(input.original),
+			modified: registry.serialize(input.modified),
+			...(input.label === undefined ? {} : { label: input.label }),
+		});
+	},
+	deserialize: (value, registry) => {
+		const record = requireRecord(value, "serialized diff editor input");
+		if (record.label !== undefined && typeof record.label !== "string") throw new TypeError("Serialized diff editor label must be a string");
+		return createDiffEditorInput(
+			registry.deserialize(requireSerializedEditorInput(record.original, "serialized diff original input")),
+			registry.deserialize(requireSerializedEditorInput(record.modified, "serialized diff modified input")),
+			record.label as string | undefined,
+		);
+	},
+});
 
 /** One Workbench input that compares two ordinary text-resource editor inputs. */
 export interface DiffEditorInput extends EditorInput {

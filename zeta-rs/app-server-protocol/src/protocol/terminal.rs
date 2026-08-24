@@ -45,6 +45,9 @@ pub enum TerminalLifecycle {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
     #[schemars(range(min = 1, max = 512))]
@@ -89,6 +92,9 @@ pub struct TerminalCreateResult {
 #[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalAttachParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(length(min = 64, max = 64))]
@@ -123,6 +129,9 @@ pub struct TerminalAttachResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalWriteParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(length(min = 1, max = 65536))]
@@ -133,6 +142,9 @@ pub struct TerminalWriteParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalResizeParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[schemars(range(min = 1, max = 512))]
@@ -145,6 +157,9 @@ pub struct TerminalResizeParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalReadParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     #[ts(type = "number")]
@@ -209,6 +224,9 @@ pub struct TerminalReadResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCloseParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_folder_id: Option<String>,
     #[schemars(length(min = 1))]
     pub terminal_id: String,
 }
