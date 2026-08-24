@@ -152,11 +152,11 @@
   grid-column: 1 / -1;
 }
 
-.zeta-connector-connect-form .zeta-theme-action {
+.zeta-connector-connect-form > .zeta-button {
   justify-self: start;
 }
 
-.zeta-integration-card > .zeta-theme-action {
+.zeta-integration-card > .zeta-button {
   margin-top: 12px;
 }
 

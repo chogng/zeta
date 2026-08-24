@@ -83,24 +83,23 @@
 .zeta-settings-navigation-item {
   width: 100%;
   min-height: 34px;
+  justify-content: flex-start;
   padding: 6px 12px;
   border: 0;
   border-radius: 5px;
   color: var(--zeta-foreground);
   background: transparent;
-  cursor: pointer;
-  font: inherit;
   line-height: 20px;
   text-align: left;
+  --zeta-icon-label-text-overflow: clip;
 }
 
 .zeta-settings-navigation-item:hover {
   background: var(--zeta-list-hover-background);
 }
 
-.zeta-settings-navigation-item:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
+.zeta-settings-navigation-item:active {
+  background: var(--zeta-button-active-background);
 }
 
 .zeta-settings-navigation-item.is-active {
@@ -329,41 +328,6 @@
   display: flex;
   margin-top: 4px;
   gap: 8px;
-}
-
-.zeta-theme-action {
-  height: 24px;
-  padding: 3px 6px;
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 6px;
-  color: var(--zeta-button-foreground);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-}
-
-.zeta-theme-action:hover {
-  border-color: color-mix(in srgb, var(--zeta-widget-border) 80%, black 20%);
-}
-
-.zeta-theme-action.is-danger {
-  border-color: var(--zeta-error-foreground);
-  color: var(--zeta-error-foreground);
-  background: transparent;
-}
-
-.zeta-theme-action.is-danger:hover {
-  border-color: color-mix(in srgb, var(--zeta-error-foreground) 80%, black 20%);
-}
-
-.zeta-theme-action:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: 2px;
-}
-
-.zeta-theme-action:disabled {
-  cursor: default;
-  opacity: 0.55;
 }
 
 .zeta-theme-json {

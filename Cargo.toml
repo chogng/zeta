@@ -49,6 +49,7 @@ members = [
     "zeta-rs/history",
     "zeta-rs/hooks",
     "zeta-rs/http-client",
+    "zeta-rs/websocket-client",
     "zeta-rs/install-context",
     "zeta-rs/input-classifier",
     "zeta-rs/instructions",
@@ -203,6 +204,8 @@ typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
 tokio = { version = "1", features = ["net", "rt", "time"] }
+tokio-rustls = "0.26.4"
+tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 thiserror = "2"
 tempfile = "3"
 tar = "0.4"
@@ -281,6 +284,7 @@ zeta-git = { path = "zeta-rs/git" }
 zeta-history = { path = "zeta-rs/history" }
 zeta-hooks = { path = "zeta-rs/hooks" }
 zeta-http-client = { path = "zeta-rs/http-client" }
+zeta-websocket-client = { path = "zeta-rs/websocket-client" }
 zeta-install-context = { path = "zeta-rs/install-context" }
 zeta-input-classifier = { path = "zeta-rs/input-classifier" }
 zeta-instructions = { path = "zeta-rs/instructions" }

@@ -100,17 +100,6 @@
   gap: 4px;
 }
 
-.zeta-keybindings-save {
-  color: var(--zeta-button-foreground);
-  background: var(--zeta-button-background);
-}
-
-.zeta-keybindings-cancel,
-.zeta-keybindings-row-action {
-  border-color: var(--zeta-widget-border);
-  color: var(--zeta-foreground);
-}
-
 .zeta-keybindings-status {
   min-height: 18px;
   margin-top: -7px;
@@ -219,16 +208,6 @@
   font-family: var(--zeta-editor-font-family, monospace);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.zeta-keybindings-row-action {
-  min-height: 24px;
-  padding: 2px 7px;
-  font-size: 11px;
-}
-
-.zeta-keybindings-row-action.is-secondary {
-  color: var(--zeta-description-foreground);
 }
 
 .zeta-keybindings-empty {

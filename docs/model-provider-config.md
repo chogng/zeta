@@ -4,7 +4,8 @@
 > - Rust crate：`zeta_model_provider_config`
 > - 层次：声明配置层
 > - 当前状态：基础实现已包含声明式默认 `ApiProfile` 和独立 input-token count binding；invocation
->   多 profile allow-list 与用户 override 仍待实现
+>   WebSocket profile 也已使用独立的 fail-closed capability；多 profile allow-list 与用户 override
+>   仍待实现
 > - Crate 实现与修改路径：[`zeta-rs/model-provider-config/README.md`](../zeta-rs/model-provider-config/README.md)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - API 协议层：[`zeta-api.md`](zeta-api.md)
@@ -20,7 +21,7 @@
 | 用户覆盖如何生效？ | 按字段规则合并后进行确定性规范化，相同输入必须得到相同结果 | [合并与规范化](#5-合并与规范化) |
 | 可以在这里读取 API key 吗？ | 不可以；配置只能保存不敏感的凭据引用 | [拥有与不拥有](#2-拥有与不拥有) |
 | 可以探测端点是否可用吗？ | 不可以；网络、凭据和运行时状态不能参与静态配置校验 | [Base URL 边界](#6-base-url-与端点的边界) |
-| 当前完成到哪里？ | 已有基础声明和默认 `ApiProfile`，多档案允许列表与用户覆盖仍待实现 | [当前实现审计](#3-当前实现审计) |
+| 当前完成到哪里？ | 已有基础声明、默认 HTTP `ApiProfile` 和独立 WebSocket profile，多档案允许列表与用户覆盖仍待实现 | [当前实现审计](#3-当前实现审计) |
 
 ## 1. 结论
 
@@ -53,6 +54,7 @@ zeta-http-client      负责底层网络传输
 - 默认 base URL 或“必须由用户配置”的 endpoint policy；
 - runtime adapter identity；
 - 允许选择的 API profile 及默认 profile；
+- exact WebSocket API profile；未声明时必须保持 unavailable；
 - input-token count profile、独立 target 与 model eligibility policy；
 - base URL normalization 规则；
 - 唯一 `STATIC_MODEL_CATALOG`、由它投影的 seed models 和 model catalog policy；
@@ -83,6 +85,7 @@ zeta-http-client      负责底层网络传输
 - `NormalizedModelProviderConfig`；
 - `ProviderDefinition`；
 - `ApiProfile`（definition 的显式默认 API profile）；
+- `WebSocketApiProfile`（与 HTTP compatibility 分离的 exact WebSocket wire profile）；
 - `InputTokenCountDefinition` 与 normalized count target/model policy；
 - `ProviderConfigRegistry`；
 - `ProviderAdapter`；
@@ -100,6 +103,7 @@ zeta-http-client      负责底层网络传输
 | `EndpointPolicy` 只描述 base URL | 名称容易被理解为 `/messages` 等协议 endpoint | 改称或文档化为 `BaseUrlPolicy` 语义 |
 | definition 目前只有一个 `api_profile` | 无法表达 Google、xAI、Ollama 等多个正式 API profile | 扩展为 typed default/allowed API profile policy |
 | count binding 已独立声明 profile/target/models | invocation 与 count 可能不共享 base path | 保持 definition 显式，禁止 runtime 剥 URL 或猜 model 前缀 |
+| WebSocket profile 已独立声明 | compatible HTTP schema 不足以证明 WebSocket lifecycle | 保持 fail closed；runtime target、codec 与 session client 还要分别验证 |
 | 静态 models 同时参与运行时可用性判断 | 容易与 models manager catalog 重复 | 仅作为 seed metadata 和 fallback evidence |
 
 迁移期间可以保留现有类型名，但新代码不能继续扩大这些歧义。
@@ -115,6 +119,7 @@ pub struct ProviderDefinition {
     pub runtime_adapter: RuntimeAdapterKind,
     pub base_url: BaseUrlPolicy,
     pub api_profiles: ApiProfilePolicy,
+    pub websocket_api_profile: WebSocketApiProfile,
     pub input_token_count: Option<InputTokenCountDefinition>,
     pub model_catalog_policy: ModelCatalogPolicy,
     pub seed_models: Vec<Model>,
@@ -139,6 +144,11 @@ pub enum ApiProfileConfig {
 
 `ApiProfileConfig` 是可序列化的配置值，不是 `zeta-api` runtime object。`zeta-model-provider`
 负责把它映射为具体 endpoint implementation，配置 crate 不依赖 `zeta-api`。
+
+当前 `WebSocketApiProfile::{Unavailable, OpenAiResponses}` 只表达 exact wire eligibility。OpenAI
+definition 声明 `OpenAiResponses`；xAI 虽然上游另有 Responses WebSocket，但当前 definition 仍绑定
+Chat Completions，因此保持 `Unavailable`。Generic OpenAI-compatible 也始终默认 unavailable，不能从
+HTTP compatibility 推导 WebSocket。
 
 ChatGPT subscription rows 复用 typed `OpenAiResponses` codec，但不复用 Platform target 或 API key。`runtime = chatgpt_subscription` 使 `zeta-model-provider` 从 `zeta-chatgpt` 获取固定 target 与 fresh OAuth headers；用户配置不得覆盖为任意 URL。
 
@@ -195,6 +205,7 @@ Normalization 不得：
 - 探测 endpoint 是否在线；
 - 将配置缺失静默替换为另一个 Provider；
 - 根据 model ID 字符串猜 capability。
+- 根据 HTTP `ApiProfile` 或 compatible 标签自动开启 WebSocket。
 
 ## 6. Base URL 与端点的边界
 

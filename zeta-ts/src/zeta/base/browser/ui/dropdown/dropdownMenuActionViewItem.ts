@@ -53,13 +53,13 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		});
 		this.button = button;
 		container.classList.add("zeta-dropdown-menu-action-view-item");
-		button.element.setAttribute("aria-haspopup", "menu");
-		button.element.setAttribute("aria-expanded", "false");
+		button.domNode.setAttribute("aria-haspopup", "menu");
+		button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(container.ownerDocument, "span");
 		indicator.className = "zeta-dropdown-menu-indicator";
 		appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
-		button.element.append(indicator);
-		this.own(addDisposableListener(button.element, "keydown", (event) => {
+		button.domNode.append(indicator);
+		this.own(addDisposableListener(button.domNode, "keydown", (event) => {
 			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 			stopEvent(event);
 			this.show();
@@ -67,11 +67,11 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	}
 
 	override focus(): void {
-		this.button?.element.focus();
+		this.button?.focus();
 	}
 
 	override setTabbable(tabbable: boolean): void {
-		if (this.button) this.button.element.tabIndex = tabbable ? 0 : -1;
+		if (this.button) this.button.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 
 	show(): void {
@@ -84,7 +84,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 
 		this.setVisible(true);
 		const options: IActionContextMenuOptions = {
-			anchor: button.element,
+			anchor: button.domNode,
 			actions,
 			onHide: () => this.setVisible(false),
 		};
@@ -99,7 +99,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 	private setVisible(visible: boolean): void {
 		if (this.visible === visible) return;
 		this.visible = visible;
-		this.button?.element.setAttribute("aria-expanded", String(visible));
+		this.button?.domNode.setAttribute("aria-expanded", String(visible));
 		this._onDidChangeVisibility.fire(visible);
 	}
 }

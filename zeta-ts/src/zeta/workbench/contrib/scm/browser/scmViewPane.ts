@@ -54,11 +54,11 @@ export class ScmViewPane extends ViewPane {
 			label: "Commit",
 			icon: lxiconsLibrary.check,
 			contentAlignment: "labelCentered",
+			type: "submit",
 			title: "Commit staged changes",
 		}));
-		this.commitButton = commitButton.element;
-		this.commitButton.classList.add("zeta-scm-commit");
-		this.commitButton.type = "submit";
+		commitButton.toggleClassName("zeta-scm-commit", true);
+		this.commitButton = commitButton.domNode;
 		commitForm.append(this.commitInput, this.commitButton);
 		this.statusElement = h(document, "div");
 		this.statusElement.className = "zeta-scm-status zeta-aria-live";

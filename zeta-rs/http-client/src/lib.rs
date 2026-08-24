@@ -6,6 +6,7 @@
 mod config;
 mod error;
 mod header;
+mod outbound_network;
 mod request;
 mod telemetry;
 mod ureq_client;
@@ -17,6 +18,9 @@ pub use config::{
 };
 pub use error::HttpClientError;
 pub use header::HttpHeader;
+pub use outbound_network::{
+    OutboundNetworkSnapshot, OutboundProxyRoute, OutboundProxyTarget, OutboundTlsStream,
+};
 pub use request::{HttpMethod, HttpRequest, HttpResponse};
 pub use telemetry::{
     HttpClientTelemetry, HttpClientTelemetryEvent, HttpStatusClass, HttpTransportOutcome,

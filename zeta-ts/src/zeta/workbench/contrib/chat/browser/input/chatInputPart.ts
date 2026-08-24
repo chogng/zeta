@@ -436,13 +436,14 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 		this.onDidSelect = onDidSelect;
 	}
 
-	override render(container: HTMLElement): void {
+		override render(container: HTMLElement): void {
 		super.render(container);
 		container.classList.add("zeta-chat-input-selector", "zeta-chat-input-mode-selector", "zeta-dropdown-menu-action-view-item");
 		container.classList.toggle("disabled", !this.action.enabled);
-		const button = this.button.element;
-		button.classList.add("zeta-chat-input-action", "zeta-chat-input-mode-action");
-		button.classList.toggle("disabled", !this.action.enabled);
+		const button = this.button.domNode;
+		this.button.toggleClassName("zeta-chat-input-action", true);
+		this.button.toggleClassName("zeta-chat-input-mode-action", true);
+		this.button.toggleClassName("disabled", !this.action.enabled);
 		button.querySelector(".zeta-button-label")?.classList.add("zeta-chat-input-mode-action-label");
 		button.setAttribute("aria-haspopup", "menu");
 		button.setAttribute("aria-expanded", "false");
@@ -483,7 +484,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 		menu.element.classList.add("zeta-chat-input-mode-menu");
 		this.menu.replace(menu);
 		const shown = contextView.show({
-			anchor: this.button.element,
+			anchor: this.button.domNode,
 			content: menu.element,
 			anchorPosition: AnchorPosition.Below,
 			gap: 2,
@@ -493,7 +494,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 			isTargetWithin: target => menu.contains(target),
 			onHide: () => {
 				this.visible = false;
-				this.button.element.setAttribute("aria-expanded", "false");
+				this.button.domNode.setAttribute("aria-expanded", "false");
 				this.menu.clear();
 			},
 		});
@@ -502,7 +503,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 			return;
 		}
 		this.visible = true;
-		this.button.element.setAttribute("aria-expanded", "true");
+		this.button.domNode.setAttribute("aria-expanded", "true");
 		menu.focusFirst();
 	}
 }
@@ -519,7 +520,8 @@ class ChatInputButtonViewItem extends ButtonActionViewItem {
 		super.render(container);
 		container.classList.add(`zeta-chat-input-${this.presentation}`);
 		container.classList.toggle("disabled", !this.action.enabled);
-		this.button.element.classList.add("zeta-chat-input-action", `zeta-chat-input-${this.presentation}-action`);
-		this.button.element.classList.toggle("disabled", !this.action.enabled);
+		this.button.toggleClassName("zeta-chat-input-action", true);
+		this.button.toggleClassName(`zeta-chat-input-${this.presentation}-action`, true);
+		this.button.toggleClassName("disabled", !this.action.enabled);
 	}
 }

@@ -212,7 +212,9 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 }
 
 /**
- * Optional base class for long-lived objects that own synchronous resources.
+ * Optional base class for composite objects that own independently created
+ * synchronous resources. Leaf cleanup adapters implement `IDisposable`
+ * directly.
  *
  * Subclasses register cleanup through `own`, `adopt`, or `defer` and must not
  * override the two disposal entry points.

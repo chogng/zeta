@@ -57,8 +57,8 @@ export class ModalEditorPart extends DisposableOwner {
 			icon: lxiconsLibrary.close,
 			onClick: () => this.requestClose(),
 		}));
-		closeButton.element.classList.add("zeta-modal-editor-close");
-		header.append(heading, closeButton.element);
+		closeButton.toggleClassName("zeta-modal-editor-close", true);
+		header.append(heading, closeButton.domNode);
 
 		const content = h(ownerDocument, "div");
 		content.className = "zeta-modal-editor-content";

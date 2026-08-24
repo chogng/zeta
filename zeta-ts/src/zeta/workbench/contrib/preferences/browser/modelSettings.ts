@@ -1,5 +1,6 @@
 import './media/modelSettings.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { Event } from '../../../../base/common/event.js';
 import { combinedDisposable, DisposableOwner, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -38,7 +39,7 @@ export class ModelSettingsPane extends DisposableOwner {
 	public readonly element: HTMLDivElement;
 	private readonly document: Document;
 	private readonly searchInput: HTMLInputElement;
-	private readonly refreshButton: HTMLButtonElement;
+	private readonly refreshButton: Button;
 	private readonly list: HTMLDivElement;
 	private readonly empty: HTMLParagraphElement;
 	private readonly status: HTMLParagraphElement;
@@ -79,11 +80,13 @@ export class ModelSettingsPane extends DisposableOwner {
 		this.searchInput.type = 'search';
 		this.searchInput.placeholder = 'Search models or providers';
 		searchLabel.append(searchTitle, this.searchInput);
-		this.refreshButton = h(this.document, 'button');
-		this.refreshButton.type = 'button';
-		this.refreshButton.className = 'zeta-model-settings-refresh';
-		this.refreshButton.textContent = 'Refresh';
-		toolbar.append(searchLabel, this.refreshButton);
+		toolbar.append(searchLabel);
+		this.refreshButton = this.own(new Button(toolbar, {
+			label: 'Refresh',
+			presentation: 'secondary',
+			onClick: () => void this.reload(true),
+		}));
+		this.refreshButton.toggleClassName('zeta-model-settings-refresh', true);
 		this.list = h(this.document, 'div');
 		this.list.className = 'zeta-model-settings-list';
 		this.empty = h(this.document, 'p');
@@ -100,7 +103,6 @@ export class ModelSettingsPane extends DisposableOwner {
 			this.query = this.searchInput.value.trim().toLocaleLowerCase();
 			this.applyFilter();
 		}));
-		this.own(addDisposableListener(this.refreshButton, 'click', () => void this.reload(true)));
 		this.own(options.models.onDidChangeModels(() => void this.reload(false)));
 		void this.reload(false);
 		this.defer(() => {
@@ -113,9 +115,9 @@ export class ModelSettingsPane extends DisposableOwner {
 	private async reload(refresh: boolean): Promise<void> {
 		if (this.disposed) return;
 		const generation = ++this.loadGeneration;
-		const showProgress = refresh || !this.hasAcceptedCatalog || this.refreshButton.disabled;
+		const showProgress = refresh || !this.hasAcceptedCatalog || !this.refreshButton.enabled;
 		if (showProgress) {
-			this.refreshButton.disabled = true;
+			this.refreshButton.enabled = false;
 			if (this.catalog.length === 0) this.showStatus('Loading models…', false);
 		}
 		try {
@@ -128,7 +130,7 @@ export class ModelSettingsPane extends DisposableOwner {
 			if (!this.hasAcceptedCatalog) this.acceptCatalog([]);
 			this.showStatus(error instanceof Error ? `Unable to refresh models: ${error.message}` : 'Unable to refresh models.', true);
 		} finally {
-			if (generation === this.loadGeneration) this.refreshButton.disabled = false;
+			if (generation === this.loadGeneration) this.refreshButton.enabled = true;
 		}
 	}
 

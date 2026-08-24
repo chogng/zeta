@@ -1,5 +1,6 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { Button, type ButtonPresentation } from '../../../../base/browser/ui/button/button.js';
 import { DisposableOwner, ResettableDisposableGroup } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
@@ -130,13 +131,12 @@ export class AppearanceSettingsPane extends DisposableOwner {
 		if (this.themeMessage) status.classList.add('is-success');
 		const customization = h(document, 'div');
 		customization.className = 'zeta-theme-customization';
-		const customize = h(document, 'button');
-		customize.className = 'zeta-theme-action';
-		customize.type = 'button';
-		customize.disabled = !this.options.userThemeService.available;
-		customize.textContent = this.activeUserThemeId() ? 'Edit user theme JSON' : 'Create from current theme';
-		this.renderBindings.add(addDisposableListener(customize, 'click', () => this.startThemeEditing()));
-		customization.append(customize);
+		this.renderBindings.add(new Button(customization, {
+			label: this.activeUserThemeId() ? 'Edit user theme JSON' : 'Create from current theme',
+			presentation: 'secondary',
+			enabled: this.options.userThemeService.available,
+			onClick: () => this.startThemeEditing(),
+		}));
 		group.append(legend, hint, themeOptionsDomNode, status, customization);
 		const draft = this.themeDraft;
 		if (draft) group.append(this.renderThemeEditor(document, group, status, draft));
@@ -232,27 +232,19 @@ export class AppearanceSettingsPane extends DisposableOwner {
 		};
 		this.renderBindings.add(addDisposableListener(textarea, 'input', () => preview()));
 		if (draft.kind === 'update') {
-			const save = themeAction(document, 'Save');
-			this.renderBindings.add(addDisposableListener(save, 'click', () => {
+			this.renderBindings.add(themeAction(actions, 'Save', 'primary', () => {
 				if (preview()) void this.saveThemeDraft('save', group, status);
 			}));
-			actions.append(save);
 		}
-		const saveAs = themeAction(document, 'Save As');
-		this.renderBindings.add(addDisposableListener(saveAs, 'click', () => {
+		this.renderBindings.add(themeAction(actions, 'Save As', draft.kind === 'create' ? 'primary' : 'secondary', () => {
 			if (preview()) void this.saveThemeDraft('saveAs', group, status);
 		}));
 		if (draft.kind === 'update') {
-			const remove = themeAction(document, 'Delete');
-			remove.classList.add('is-danger');
-			this.renderBindings.add(addDisposableListener(remove, 'click', () => {
+			this.renderBindings.add(themeAction(actions, 'Delete', 'danger', () => {
 				void this.deleteThemeDraft(group, status);
 			}));
-			actions.append(remove);
 		}
-		const cancel = themeAction(document, 'Cancel');
-		this.renderBindings.add(addDisposableListener(cancel, 'click', () => this.cancelPendingChanges()));
-		actions.append(saveAs, cancel);
+		this.renderBindings.add(themeAction(actions, 'Cancel', 'secondary', () => this.cancelPendingChanges()));
 		editor.append(heading, hint, textarea, actions);
 		return editor;
 	}
@@ -365,12 +357,8 @@ function renderUserThemeStatus(document: Document, userThemeService: IUserThemeS
 	return container;
 }
 
-function themeAction(document: Document, label: string): HTMLButtonElement {
-	const button = h(document, 'button');
-	button.className = 'zeta-theme-action';
-	button.type = 'button';
-	button.textContent = label;
-	return button;
+function themeAction(container: HTMLElement, label: string, presentation: ButtonPresentation, onClick: () => void): Button {
+	return new Button(container, { label, presentation, onClick });
 }
 
 function applyThemePreview(preview: HTMLElement, themes: readonly IColorTheme[]): void {

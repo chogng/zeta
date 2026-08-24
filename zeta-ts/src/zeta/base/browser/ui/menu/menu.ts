@@ -51,25 +51,25 @@ class MenuActionViewItem extends ButtonActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		prependMenuLeadingSlot(this.button.element, this.action.checked);
+		prependMenuLeadingSlot(this.button.domNode, this.action.checked);
 		if (this.action.checked === undefined) {
-			this.button.element.setAttribute("role", "menuitem");
+			this.button.domNode.setAttribute("role", "menuitem");
 		} else {
-			this.button.element.setAttribute("role", "menuitemcheckbox");
-			this.button.element.setAttribute(
+			this.button.domNode.setAttribute("role", "menuitemcheckbox");
+			this.button.domNode.setAttribute(
 				"aria-checked",
 				String(this.action.checked),
 			);
-			this.button.element.removeAttribute("aria-pressed");
+			this.button.domNode.removeAttribute("aria-pressed");
 		}
 		if (this.action.badge) {
 			const badge = h(container.ownerDocument, "span");
 			badge.className = "zeta-menu-badge";
 			badge.textContent = this.action.badge;
-			this.button.element.append(badge);
+			this.button.domNode.append(badge);
 		}
 		if (!this.keybinding) return;
-		const label = this.own(new KeybindingLabel(this.button.element, {
+		const label = this.own(new KeybindingLabel(this.button.domNode, {
 			keybinding: this.keybinding,
 		}));
 		label.element.classList.add("zeta-menu-keybinding");
@@ -111,7 +111,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		prependMenuLeadingSlot(this.button.element, undefined);
+		prependMenuLeadingSlot(this.button.domNode, undefined);
 		const ownerDocument = container.ownerDocument;
 		if (
 			this.contextViewContainer &&
@@ -133,20 +133,20 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 			},
 			onDidRequestClose: () => {
 				this.hide();
-				this.button.element.focus();
+				this.button.focus();
 			},
 		}));
 		this.own(this.contextView.onDidHide(() => {
 			this.open = false;
-			this.button.element.setAttribute("aria-expanded", "false");
+			this.button.domNode.setAttribute("aria-expanded", "false");
 		}));
-		this.button.element.setAttribute("role", "menuitem");
-		this.button.element.setAttribute("aria-haspopup", "menu");
-		this.button.element.setAttribute("aria-expanded", "false");
+		this.button.domNode.setAttribute("role", "menuitem");
+		this.button.domNode.setAttribute("aria-haspopup", "menu");
+		this.button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "zeta-submenu-indicator";
 		appendIcon(lxiconsLibrary.submenuIndicator, indicator);
-		this.button.element.append(indicator);
+		this.button.domNode.append(indicator);
 	}
 
 	protected override runAction(): void {
@@ -156,7 +156,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		}
 		if (!this.contextView || !this.menu) return;
 		this.contextView.show({
-			anchor: this.button.element,
+			anchor: this.button.domNode,
 			content: this.menu.element,
 			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 			anchorPosition: AnchorPosition.Below,
@@ -167,7 +167,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 			isTargetWithin: (target) => this.menu?.contains(target) ?? false,
 		});
 		this.open = true;
-		this.button.element.setAttribute("aria-expanded", "true");
+		this.button.domNode.setAttribute("aria-expanded", "true");
 		this.menu.focusFirst();
 	}
 
@@ -183,7 +183,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 	}
 
 	ownsTrigger(target: Element | null): boolean {
-		return target === this.button.element;
+		return target === this.button.domNode;
 	}
 
 	openFromKeyboard(): void {

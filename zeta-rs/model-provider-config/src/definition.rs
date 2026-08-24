@@ -43,6 +43,21 @@ pub enum ApiProfile {
     AnthropicMessages,
 }
 
+/// An exact WebSocket model-invocation protocol enabled for one provider.
+///
+/// This capability is deliberately independent from [`ApiProfile`]: sharing
+/// an HTTP request shape does not prove that an endpoint implements the same
+/// WebSocket handshake, event lifecycle, or session semantics.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WebSocketApiProfile {
+    /// Do not attempt a WebSocket model invocation for this provider.
+    #[default]
+    Unavailable,
+    /// Use the OpenAI Responses WebSocket event contract.
+    OpenAiResponses,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EndpointPolicy {
@@ -102,6 +117,8 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub output_transport: ModelOutputTransport,
     #[serde(default)]
+    pub websocket_api_profile: WebSocketApiProfile,
+    #[serde(default)]
     pub models: Vec<Model>,
     #[serde(default)]
     pub defaults: ProviderDefaults,
@@ -128,6 +145,7 @@ impl ProviderDefinition {
             endpoint,
             model_catalog_policy,
             output_transport: ModelOutputTransport::Unary,
+            websocket_api_profile: WebSocketApiProfile::Unavailable,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
             input_token_count: None,
@@ -142,6 +160,11 @@ impl ProviderDefinition {
 
     pub fn with_native_streaming(mut self) -> Self {
         self.output_transport = ModelOutputTransport::NativeStreaming;
+        self
+    }
+
+    pub fn with_websocket_api_profile(mut self, profile: WebSocketApiProfile) -> Self {
+        self.websocket_api_profile = profile;
         self
     }
 
@@ -182,6 +205,13 @@ impl ProviderDefinition {
         }
         if self.defaults.max_output_tokens == Some(0) {
             return Err(ProviderConfigError::InvalidMaxOutputTokens(self.id.clone()));
+        }
+        if self.websocket_api_profile == WebSocketApiProfile::OpenAiResponses
+            && self.api_profile != ApiProfile::OpenAiResponses
+        {
+            return Err(self.invalid(
+                "OpenAI Responses WebSocket requires the OpenAI Responses HTTP API profile",
+            ));
         }
         if let Some(input_token_count) = &self.input_token_count {
             input_token_count.validate(&self.id)?;

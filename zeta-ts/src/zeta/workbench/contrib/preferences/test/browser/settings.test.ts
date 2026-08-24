@@ -236,6 +236,7 @@ test("Settings overlay opens, closes, and restores focus", () => {
 	assert.equal(search.placeholder, "Search settings");
 	assert.equal(ownerDocument.activeElement, search);
 	const navigationItems = [...root.querySelectorAll<HTMLButtonElement>("[data-settings-section-id]")];
+	assert.equal(navigationItems.every(item => item.classList.contains("zeta-button")), true);
 	assert.deepEqual(
 		navigationItems.map((item) => item.textContent),
 		[
@@ -926,7 +927,7 @@ test("Connector settings project catalog state and invoke typed connect and disc
 	root.querySelector<HTMLFormElement>(".zeta-connector-connect-form")?.dispatchEvent(new browserEnvironment.window.SubmitEvent("submit", { bubbles: true, cancelable: true }));
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.equal(inputs[2]!.value, "");
-	root.querySelector<HTMLButtonElement>(".zeta-integration-card > .is-danger")?.click();
+	root.querySelector<HTMLButtonElement>(".zeta-integration-card > .zeta-button-danger")?.click();
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual(mutations, [
 		"connect:github:7:octocat:Octocat:secret-token",
@@ -1048,8 +1049,9 @@ test("Plugin settings project layered authority and send exact-package commands"
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.equal(root.querySelector(".zeta-integration-heading h4")?.textContent, "acme/github · 1.0.0");
 	assert.ok(root.querySelector('[data-settings-item-id="plugins.acme/github@1.0.0"][data-settings-item-kind="resource"]'));
-	const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-theme-action")];
+	const buttons = [...root.querySelectorAll<HTMLButtonElement>(".zeta-integration-card > .zeta-button")];
 	assert.deepEqual(buttons.map(button => button.textContent), ["Grant", "Enable", "Remove legacy installation"]);
+	assert.equal(buttons[2]?.classList.contains("zeta-button-danger"), true);
 	buttons[0]!.click();
 	await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
 	assert.deepEqual(mutations, [`grant:acme/github:${plugin.digest}:7`]);

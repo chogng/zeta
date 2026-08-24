@@ -4,12 +4,14 @@
 > - Rust crate：`zeta_api`
 > - 层次：模型 API 协议层
 > - 当前状态：OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已具备
->   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly
+>   unary codec、原生 HTTP/SSE invocation、canonical delta 与 terminal response assembly；独立
+>   WebSocket transport 已存在，Responses WebSocket codec 尚未实现
 > - Crate codec 与 decoder 实现：[`zeta-rs/zeta-api/README.md`](../zeta-rs/zeta-api/README.md)
 > - Canonical contract：[`protocol.md`](protocol.md#6-provider-independent-model-contract)
 > - Provider runtime：[`model-provider.md`](model-provider.md)
 > - Operation client：[`zeta-client.md`](zeta-client.md)
 > - 底层网络：[`zeta-http-client` README](../zeta-rs/http-client/README.md)
+> - WebSocket transport：[`zeta-websocket-client` README](../zeta-rs/websocket-client/README.md)
 > - Provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
 > - Secret persistence：[`secrets.md`](secrets.md)
 > - Model catalog control plane：[`models-manager.md`](models-manager.md)
@@ -43,8 +45,9 @@ endpoint/    requests/    sse/
 - `requests/` 描述 request/unary response/error JSON；
 - `sse/` 描述具体 API 的 SSE event schema、lifecycle 和 canonical assembly。
 
-通用 HTTP/WebSocket backend、proxy/TLS/pool 与 transport diagnostics 属于 `zeta-http-client`；
-operation retry、SSE/NDJSON framing 和 operation telemetry 属于 `zeta-client`。
+HTTP backend 与共享 proxy/TLS policy 属于 `zeta-http-client`；WebSocket handshake/message backend
+属于 `zeta-websocket-client`；operation retry、SSE/NDJSON framing 和 operation telemetry 属于
+`zeta-client`。
 
 | 需要处理的内容 | 本层是否负责 | 交给谁 |
 | --- | --- | --- |
@@ -75,7 +78,10 @@ zeta-client
                 │
                 ▼
 zeta-http-client
-  HTTP/WebSocket execution + network policy
+  HTTP execution + shared network policy
+                │
+                └──── zeta-websocket-client
+                      WebSocket execution
 ```
 
 依赖与控制流不是同一个方向。Rust 依赖建议为：
@@ -128,8 +134,9 @@ zeta-client      zeta-protocol
 | transport 直接返回 `serde_json::Value` | client 已返回 status/headers/body bytes，API 负责 JSON |
 | provider facade 与 wire codec 两套目录 | Provider facade 已只留在 model-provider；API dispatch 只按 endpoint/profile |
 
-三种已支持 endpoint 的 streaming 与 unary 都是当前实现；尚未实现的是 NDJSON、WebSocket 和更多
-provider-specific stream profile，不能把这些候选能力描述成现状。
+三种已支持 endpoint 的 streaming 与 unary 都是当前实现。WebSocket transport 已独立实现，但本
+crate 尚无 Responses WebSocket codec；NDJSON codec 和更多 provider-specific stream profile 也未完成，
+不能把 transport 可用描述成模型协议已接通。
 
 ## 4. `endpoint / requests / sse`
 
@@ -244,8 +251,9 @@ Ollama native API 使用 NDJSON，不能塞进名为 `sse/` 的模块。主架�
 endpoint/    requests/    sse/    websocket/    ndjson/
 ```
 
-`ndjson/` 只解释由 `zeta-client::NdjsonRecord` 完成 framing 的 API object。未来若接入 WebSocket
-或 gRPC，也按真实协议增加同级 codec，不能伪装成 SSE。
+`ndjson/` 只解释由 `zeta-client::NdjsonRecord` 完成 framing 的 API object。WebSocket transport 已在
+独立 crate 中存在；本 crate 只有在验证真实 client/server event contract 后才增加同级
+`websocket/` codec。gRPC 等其他协议也不能伪装成 SSE。
 
 ### 4.5 OpenAI Platform 与 ChatGPT 订阅服务端点清单
 
@@ -369,8 +377,9 @@ Model-provider 选择最终 typed policy。API 不 sleep、不创建 attempt loo
 
 ### 6.5 遥测
 
-`zeta-http-client` 拥有 HTTP/WebSocket diagnostics 与 redaction；`zeta-client` 拥有
-operation/attempt/stream telemetry。API 只提供低基数 protocol classification：
+`zeta-http-client` 拥有 HTTP 与共享 outbound policy diagnostics；`zeta-websocket-client` 拥有
+WebSocket transport failure/redaction；`zeta-client` 拥有 operation/attempt/stream telemetry。API
+只提供低基数 protocol classification：
 
 ```text
 api.profile
@@ -763,7 +772,8 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 10. Inference retry safety 由 runtime policy 显式选择，client 执行。
 11. Provider error 不以 raw JSON/String 穿透产品 API。
 12. OpenAI Responses、OpenAI-compatible Chat Completions 与 Anthropic Messages 已接通 live HTTP/SSE
-    execution；NDJSON、WebSocket 和未验证 provider profile 仍须按真实协议另行实现。
+    execution；WebSocket transport 已实现，但 Responses codec/session 尚未实现；NDJSON 和未验证
+    provider profile 仍须按真实协议另行实现。
 13. ChatGPT subscription 不共享 Platform base URL、credential 或 custom endpoint override；只复用经过验证的 Responses codec。
 14. ChatGPT subscription OAuth wire、token/header value 与固定 backend target 属于 `zeta-chatgpt`，不进入本 crate 的公共 value。
 
@@ -772,6 +782,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 ### OpenAI
 
 - [Responses streaming](https://developers.openai.com/api/docs/guides/streaming-responses)
+- [Responses WebSocket client/server events](https://developers.openai.com/api/reference/cli/resources/beta/subresources/responses)
 - [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
 - [Models](https://developers.openai.com/api/docs/models)
 - [Codex Memories](https://developers.openai.com/codex/memories)

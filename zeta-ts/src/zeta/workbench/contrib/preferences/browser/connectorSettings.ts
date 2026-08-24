@@ -1,5 +1,6 @@
 import "./media/connectorSettings.css";
 import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 import { setSettingsItemIdentity } from "./settingsItem.js";
@@ -71,10 +72,10 @@ export class ConnectorSettingsPane extends DisposableOwner {
 		feedback.setAttribute("role", "status");
 		card.append(heading, description);
 		if (connector.canConnectApiToken) card.append(this.connectForm(catalogGeneration, connector, feedback));
-		if (connector.canConnectOAuth) card.append(this.oauthButton(catalogGeneration, connector, feedback));
-		if (connector.canRefreshOAuth) card.append(this.refreshOAuthButton(connector, feedback));
-		if (connector.canRevokeOAuth) card.append(this.revokeOAuthButton(catalogGeneration, connector, feedback));
-		if (connector.canDisconnect) card.append(this.disconnectButton(catalogGeneration, connector, feedback));
+		if (connector.canConnectOAuth) this.oauthButton(card, catalogGeneration, connector, feedback);
+		if (connector.canRefreshOAuth) this.refreshOAuthButton(card, connector, feedback);
+		if (connector.canRevokeOAuth) this.revokeOAuthButton(card, catalogGeneration, connector, feedback);
+		if (connector.canDisconnect) this.disconnectButton(card, catalogGeneration, connector, feedback);
 		card.append(feedback);
 		return card;
 	}
@@ -86,11 +87,12 @@ export class ConnectorSettingsPane extends DisposableOwner {
 		const accountName = input(this.document, "Account name", "Account display name");
 		const token = input(this.document, "API token", "API token", "password");
 		token.autocomplete = "off";
-		const submit = h(this.document, "button");
-		submit.type = "submit";
-		submit.className = "zeta-theme-action";
-		submit.textContent = connector.state.status === "reauthorizationRequired" ? "Reconnect" : "Connect";
-		form.append(accountId, accountName, token, submit);
+		form.append(accountId, accountName, token);
+		const submit = this.rows.add(new Button(form, {
+			label: connector.state.status === "reauthorizationRequired" ? "Reconnect" : "Connect",
+			presentation: "primary",
+			type: "submit",
+		}));
 		this.rows.add(addDisposableListener(form, "submit", (event: SubmitEvent) => {
 			event.preventDefault();
 			const values = {
@@ -102,7 +104,7 @@ export class ConnectorSettingsPane extends DisposableOwner {
 				feedback.textContent = "Account ID, account name, and API token are required.";
 				return;
 			}
-			submit.disabled = true;
+			submit.enabled = false;
 			feedback.textContent = "Connecting…";
 			void this.connectors.connectApiToken(connector, catalogGeneration, values).then(() => {
 				token.value = "";
@@ -110,87 +112,83 @@ export class ConnectorSettingsPane extends DisposableOwner {
 				return this.reload();
 			}).catch((error: unknown) => {
 				token.value = "";
-				submit.disabled = false;
+				submit.enabled = true;
 				feedback.textContent = error instanceof Error ? `Connection failed: ${error.message}` : "Connection failed.";
 			});
 		}));
 		return form;
 	}
 
-	private disconnectButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-		const button = h(this.document, "button");
-		button.type = "button";
-		button.className = "zeta-theme-action is-danger";
-		button.textContent = "Disconnect";
-		this.rows.add(addDisposableListener(button, "click", () => {
-			button.disabled = true;
-			feedback.textContent = "Disconnecting…";
-			void this.connectors.disconnect(connector, catalogGeneration).then(() => {
-				feedback.textContent = "Disconnected.";
-				return this.reload();
-			}).catch((error: unknown) => {
-				button.disabled = false;
-				feedback.textContent = error instanceof Error ? `Disconnect failed: ${error.message}` : "Disconnect failed.";
-			});
+	private disconnectButton(container: HTMLElement, catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): void {
+		const button = this.rows.add(new Button(container, {
+			label: "Disconnect",
+			presentation: "danger",
+			onClick: () => {
+				button.enabled = false;
+				feedback.textContent = "Disconnecting…";
+				void this.connectors.disconnect(connector, catalogGeneration).then(() => {
+					feedback.textContent = "Disconnected.";
+					return this.reload();
+				}).catch((error: unknown) => {
+					button.enabled = true;
+					feedback.textContent = error instanceof Error ? `Disconnect failed: ${error.message}` : "Disconnect failed.";
+				});
+			},
 		}));
-		return button;
 	}
 
-	private oauthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-		const button = h(this.document, "button");
-		button.type = "button";
-		button.className = "zeta-theme-action";
-		button.textContent = connector.state.status === "reauthorizationRequired" ? "Reconnect with OAuth" : "Connect with OAuth";
-		this.rows.add(addDisposableListener(button, "click", () => {
-			button.disabled = true;
-			feedback.textContent = "Waiting for browser authorization…";
-			void this.connectors.connectOAuth(connector, catalogGeneration).then(() => {
-				feedback.textContent = "Connected.";
-				return this.reload();
-			}).catch((error: unknown) => {
-				button.disabled = false;
-				feedback.textContent = error instanceof Error ? `OAuth connection failed: ${error.message}` : "OAuth connection failed.";
-			});
+	private oauthButton(container: HTMLElement, catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): void {
+		const button = this.rows.add(new Button(container, {
+			label: connector.state.status === "reauthorizationRequired" ? "Reconnect with OAuth" : "Connect with OAuth",
+			presentation: "primary",
+			onClick: () => {
+				button.enabled = false;
+				feedback.textContent = "Waiting for browser authorization…";
+				void this.connectors.connectOAuth(connector, catalogGeneration).then(() => {
+					feedback.textContent = "Connected.";
+					return this.reload();
+				}).catch((error: unknown) => {
+					button.enabled = true;
+					feedback.textContent = error instanceof Error ? `OAuth connection failed: ${error.message}` : "OAuth connection failed.";
+				});
+			},
 		}));
-		return button;
 	}
 
-	private refreshOAuthButton(connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-		const button = h(this.document, "button");
-		button.type = "button";
-		button.className = "zeta-theme-action";
-		button.textContent = "Refresh authorization";
-		this.rows.add(addDisposableListener(button, "click", () => {
-			button.disabled = true;
-			feedback.textContent = "Refreshing authorization…";
-			void this.connectors.refreshOAuth(connector).then(() => {
-				feedback.textContent = "Authorization refreshed.";
-				return this.reload();
-			}).catch((error: unknown) => {
-				button.disabled = false;
-				feedback.textContent = error instanceof Error ? `Refresh failed: ${error.message}` : "Refresh failed.";
-			});
+	private refreshOAuthButton(container: HTMLElement, connector: ConnectorView, feedback: HTMLElement): void {
+		const button = this.rows.add(new Button(container, {
+			label: "Refresh authorization",
+			presentation: "secondary",
+			onClick: () => {
+				button.enabled = false;
+				feedback.textContent = "Refreshing authorization…";
+				void this.connectors.refreshOAuth(connector).then(() => {
+					feedback.textContent = "Authorization refreshed.";
+					return this.reload();
+				}).catch((error: unknown) => {
+					button.enabled = true;
+					feedback.textContent = error instanceof Error ? `Refresh failed: ${error.message}` : "Refresh failed.";
+				});
+			},
 		}));
-		return button;
 	}
 
-	private revokeOAuthButton(catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): HTMLButtonElement {
-		const button = h(this.document, "button");
-		button.type = "button";
-		button.className = "zeta-theme-action is-danger";
-		button.textContent = "Revoke access";
-		this.rows.add(addDisposableListener(button, "click", () => {
-			button.disabled = true;
-			feedback.textContent = "Revoking provider access…";
-			void this.connectors.revokeOAuth(connector, catalogGeneration).then(() => {
-				feedback.textContent = "Provider access revoked.";
-				return this.reload();
-			}).catch((error: unknown) => {
-				button.disabled = false;
-				feedback.textContent = error instanceof Error ? `Revoke failed: ${error.message}` : "Revoke failed.";
-			});
+	private revokeOAuthButton(container: HTMLElement, catalogGeneration: number, connector: ConnectorView, feedback: HTMLElement): void {
+		const button = this.rows.add(new Button(container, {
+			label: "Revoke access",
+			presentation: "danger",
+			onClick: () => {
+				button.enabled = false;
+				feedback.textContent = "Revoking provider access…";
+				void this.connectors.revokeOAuth(connector, catalogGeneration).then(() => {
+					feedback.textContent = "Provider access revoked.";
+					return this.reload();
+				}).catch((error: unknown) => {
+					button.enabled = true;
+					feedback.textContent = error instanceof Error ? `Revoke failed: ${error.message}` : "Revoke failed.";
+				});
+			},
 		}));
-		return button;
 	}
 }
 

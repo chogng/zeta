@@ -47,22 +47,22 @@ export class BrowserMenubarControl extends DisposableOwner
 			icon: lxiconsLibrary.menu,
 			onClick: () => this.toggleMenu(),
 		}));
-		this.button.element.setAttribute("aria-label", applicationMenuLabel());
+		this.button.domNode.setAttribute("aria-label", applicationMenuLabel());
 		if (localizationService) this.own(localizationService.onDidChange(() => {
 			const label = applicationMenuLabel();
 			this.element.setAttribute("aria-label", label);
-			this.button.element.setAttribute("aria-label", label);
-			this.button.element.querySelector<HTMLElement>(".zeta-button-label")!.textContent = label;
+			this.button.domNode.setAttribute("aria-label", label);
+			this.button.label = label;
 			this.button.setTitle(label);
 		}));
-		this.button.element.classList.add("zeta-menubar-item");
-		this.button.element.setAttribute("aria-haspopup", "menu");
-		this.button.element.setAttribute("aria-expanded", "false");
+		this.button.toggleClassName("zeta-menubar-item", true);
+		this.button.domNode.setAttribute("aria-haspopup", "menu");
+		this.button.domNode.setAttribute("aria-expanded", "false");
 		this.own(this.menu.onDidChange(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
 		this.own(addDisposableListener(
-			this.button.element,
+			this.button.domNode,
 			"keydown",
 			(event: KeyboardEvent) => {
 				if (
@@ -108,15 +108,15 @@ export class BrowserMenubarControl extends DisposableOwner
 		if (actions.length === 0) return;
 
 		this.active = true;
-		this.button.element.classList.add("active");
-		this.button.element.setAttribute("aria-expanded", "true");
+		this.button.toggleClassName("active", true);
+		this.button.domNode.setAttribute("aria-expanded", "true");
 		this.contextMenuService.showContextMenu({
-			anchor: this.button.element,
+			anchor: this.button.domNode,
 			actions,
 			onHide: () => {
 				this.active = false;
-				this.button.element.classList.remove("active");
-				this.button.element.setAttribute("aria-expanded", "false");
+				this.button.toggleClassName("active", false);
+				this.button.domNode.setAttribute("aria-expanded", "false");
 			},
 		});
 	}

@@ -20,6 +20,7 @@ pub use definition::ModelCatalogPolicy;
 pub use definition::ProviderAdapter;
 pub use definition::ProviderDefaults;
 pub use definition::ProviderDefinition;
+pub use definition::WebSocketApiProfile;
 pub use error::ProviderConfigError;
 pub use input_token_count::InputTokenCountDefinition;
 pub use input_token_count::InputTokenCountModelPolicy;

@@ -52,37 +52,6 @@
   color: var(--zeta-input-placeholder-foreground);
 }
 
-.zeta-package-marketplace-toolbar > button,
-.zeta-package-marketplace-actions button,
-.zeta-package-marketplace-empty-state button {
-  height: 24px;
-  padding: 3px 6px;
-  border: 1px solid var(--zeta-widget-border);
-  border-radius: 6px;
-  color: var(--zeta-button-foreground);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-}
-
-.zeta-package-marketplace-toolbar > button:hover,
-.zeta-package-marketplace-actions button:hover,
-.zeta-package-marketplace-empty-state button:hover {
-  border-color: color-mix(in srgb, var(--zeta-widget-border) 80%, black 20%);
-}
-
-.zeta-package-marketplace-toolbar > button:focus-visible,
-.zeta-package-marketplace-actions button:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: 2px;
-}
-
-.zeta-package-marketplace-toolbar > button:disabled,
-.zeta-package-marketplace-actions button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
 .zeta-package-marketplace-filters {
   min-width: 0;
   min-height: var(--zeta-tab-height);
@@ -92,11 +61,6 @@
   width: max-content;
   max-width: 100%;
   height: var(--zeta-tab-height);
-}
-
-.zeta-package-marketplace-empty-state button:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: 2px;
 }
 
 .zeta-package-marketplace-status,
@@ -160,7 +124,7 @@
     flex-direction: column;
   }
 
-  .zeta-package-marketplace-toolbar > button {
+  .zeta-package-marketplace-toolbar > .zeta-button {
     align-self: flex-start;
   }
 }

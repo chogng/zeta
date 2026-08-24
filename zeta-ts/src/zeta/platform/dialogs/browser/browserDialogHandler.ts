@@ -44,15 +44,15 @@ export class BrowserDialogHandler implements IDialogHandler {
 					(request.kind === "confirmation" ? "Confirm" : "OK"),
 				onClick: () => dialog.close(DialogResult.Primary),
 			}));
-			primaryButton.element.classList.add("zeta-dialog-primary-button");
-			content.actions.append(primaryButton.element);
+			primaryButton.toggleClassName("zeta-dialog-primary-button", true);
+			content.actions.append(primaryButton.domNode);
 
 			if (request.kind === "confirmation") {
 				const cancelButton = disposables.add(new Button(content.actions, {
 					label: request.cancelButton ?? "Cancel",
 					onClick: () => dialog.close(DialogResult.Cancel),
 				}));
-				content.actions.append(cancelButton.element);
+				content.actions.append(cancelButton.domNode);
 			}
 
 			this.container.append(dialog.element);

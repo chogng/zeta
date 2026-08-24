@@ -1,4 +1,5 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import type { Account, AccountLoginCompletion, AccountLoginMethod, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
 
@@ -14,7 +15,7 @@ interface SubscriptionAccountCardOptions {
 export class SubscriptionAccountCard extends DisposableOwner {
 	readonly element: HTMLElement;
 	private readonly summary: HTMLParagraphElement;
-	private readonly action: HTMLButtonElement;
+	private readonly action: Button;
 	private readonly challenge: HTMLParagraphElement;
 	private account: Account | undefined;
 	private activeLoginId: string | undefined;
@@ -36,13 +37,14 @@ export class SubscriptionAccountCard extends DisposableOwner {
 		this.challenge.className = 'zeta-model-settings-account-challenge';
 		this.challenge.hidden = true;
 		copy.append(title, this.summary, this.challenge);
-		this.action = h(document, 'button');
-		this.action.type = 'button';
-		this.action.className = 'zeta-model-settings-account-action';
-		this.action.textContent = 'Sign in';
-		this.element.append(copy, this.action);
+		this.element.append(copy);
+		this.action = this.own(new Button(this.element, {
+			label: 'Sign in',
+			presentation: 'primary',
+			onClick: () => void this.runAction(),
+		}));
+		this.action.toggleClassName('zeta-model-settings-account-action', true);
 		container.append(this.element);
-		this.own(addDisposableListener(this.action, 'click', () => void this.runAction()));
 		this.own(accounts.onDidChangeAccounts(state => this.acceptState(state)));
 		this.own(accounts.onDidCompleteLogin(completion => this.completeLogin(completion)));
 		void this.load();
@@ -70,28 +72,28 @@ export class SubscriptionAccountCard extends DisposableOwner {
 	}
 
 	private render(): void {
-		this.action.disabled = false;
+		this.action.enabled = true;
 		this.challenge.hidden = true;
 		if (!this.account) {
 			this.summary.textContent = this.options.signedOutCopy;
-			this.action.textContent = 'Sign in';
+			this.action.label = 'Sign in';
 			return;
 		}
 		const identity = this.account.displayName ?? this.account.email ?? this.account.accountId;
 		const plan = this.account.plan ? ` · ${this.account.plan}` : '';
 		if (this.account.status === 'ready') {
 			this.summary.textContent = `Signed in as ${identity}${plan}`;
-			this.action.textContent = 'Sign out';
+			this.action.label = 'Sign out';
 		} else {
 			this.summary.textContent = `${this.options.productName} needs authorization for ${identity}${plan}`;
-			this.action.textContent = 'Sign in again';
+			this.action.label = 'Sign in again';
 		}
 	}
 
 	private async runAction(): Promise<void> {
 		if (this.activeLoginId) {
 			const loginId = this.activeLoginId;
-			this.action.disabled = true;
+			this.action.enabled = false;
 			try {
 				await this.accounts.cancelLogin(loginId);
 				if (this.activeLoginId === loginId) this.activeLoginId = undefined;
@@ -99,12 +101,12 @@ export class SubscriptionAccountCard extends DisposableOwner {
 			} catch (error) {
 				this.showError(error, `Unable to cancel ${this.options.productName} sign-in.`);
 			} finally {
-				this.action.disabled = false;
+				this.action.enabled = true;
 			}
 			return;
 		}
 		if (this.account?.status === 'ready') {
-			this.action.disabled = true;
+			this.action.enabled = false;
 			try {
 				await this.accounts.logout(this.options.providerId);
 				this.account = undefined;
@@ -112,11 +114,11 @@ export class SubscriptionAccountCard extends DisposableOwner {
 			} catch (error) {
 				this.showError(error, `Unable to sign out of ${this.options.productName}.`);
 			} finally {
-				this.action.disabled = false;
+				this.action.enabled = true;
 			}
 			return;
 		}
-		this.action.disabled = true;
+		this.action.enabled = false;
 		this.summary.textContent = `Starting ${this.options.productName} sign-in…`;
 		try {
 			const started = await this.accounts.startLogin(this.options.loginMethod);
@@ -125,12 +127,12 @@ export class SubscriptionAccountCard extends DisposableOwner {
 			this.summary.textContent = `${this.options.productName} opened in your browser. Enter the copied code to authorize Zeta.`;
 			this.challenge.textContent = `Code: ${started.userCode}`;
 			this.challenge.hidden = false;
-			this.action.textContent = 'Cancel';
+			this.action.label = 'Cancel';
 		} catch (error) {
 			this.activeLoginId = undefined;
 			this.showError(error, `Unable to start ${this.options.productName} sign-in.`);
 		}
-		this.action.disabled = false;
+		this.action.enabled = true;
 	}
 
 	private completeLogin(completion: AccountLoginCompletion): void {
@@ -139,8 +141,8 @@ export class SubscriptionAccountCard extends DisposableOwner {
 		this.account = completion.account.accounts.find(account => account.provider === this.options.providerId);
 		if (completion.status.type === 'failed') {
 			this.showError(new Error(completion.status.failure.message), `${this.options.productName} sign-in failed.`);
-			this.action.textContent = 'Sign in';
-			this.action.disabled = false;
+			this.action.label = 'Sign in';
+			this.action.enabled = true;
 			return;
 		}
 		this.render();

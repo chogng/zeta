@@ -32,10 +32,10 @@ export class SettingsItemActions extends DisposableOwner {
 			icon: lxiconsLibrary.gear,
 			onClick: () => this.show(),
 		}));
-		this.trigger.element.classList.add('zeta-setting-item-actions-trigger');
-		this.trigger.element.setAttribute('aria-label', `More actions for ${options.label}`);
-		this.trigger.element.setAttribute('aria-haspopup', 'menu');
-		this.trigger.element.setAttribute('aria-expanded', 'false');
+		this.trigger.toggleClassName('zeta-setting-item-actions-trigger', true);
+		this.trigger.domNode.setAttribute('aria-label', `More actions for ${options.label}`);
+		this.trigger.domNode.setAttribute('aria-haspopup', 'menu');
+		this.trigger.domNode.setAttribute('aria-expanded', 'false');
 		setSettingsItemIdentity(container, options.reference.id, 'setting');
 		container.classList.add('zeta-setting-item');
 		container.prepend(this.element);
@@ -66,7 +66,7 @@ export class SettingsItemActions extends DisposableOwner {
 		this.setOpen(true);
 		try {
 			this.options.contextMenuProvider.showContextMenu({
-				anchor: this.trigger.element,
+				anchor: this.trigger.domNode,
 				actions,
 				onHide: () => this.setOpen(false),
 			});
@@ -82,6 +82,6 @@ export class SettingsItemActions extends DisposableOwner {
 
 	private setOpen(open: boolean): void {
 		this.element.classList.toggle('is-open', open);
-		this.trigger.element.setAttribute('aria-expanded', String(open));
+		this.trigger.domNode.setAttribute('aria-expanded', String(open));
 	}
 }

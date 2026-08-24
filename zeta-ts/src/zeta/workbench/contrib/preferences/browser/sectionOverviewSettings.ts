@@ -1,5 +1,6 @@
 import "./media/sectionOverviewSettings.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { h } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ISettingsService } from "../../../services/preferences/common/settings.js";
 import { SettingsTree } from "./settingsTree.js";
@@ -238,12 +239,13 @@ export class SectionOverviewSettingsPane extends DisposableOwner {
 		copy.append(headingRow, description);
 		element.append(copy);
 		if (item.targetSectionId) {
-			const action = h(document, "button");
-			action.type = "button";
-			action.className = "zeta-settings-overview-action";
-			action.textContent = item.actionLabel ?? "Open settings";
-			this.own(addDisposableListener(action, "click", () => settingsService.open(item.targetSectionId)));
-			element.append(action);
+			const action = this.own(new Button(element, {
+				label: item.actionLabel ?? "Open settings",
+				presentation: "secondary",
+				size: "small",
+				onClick: () => settingsService.open(item.targetSectionId),
+			}));
+			action.toggleClassName("zeta-settings-overview-action", true);
 		}
 		return element;
 	}

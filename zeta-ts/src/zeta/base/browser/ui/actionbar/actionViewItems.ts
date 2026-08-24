@@ -88,11 +88,11 @@ export class ButtonActionViewItem extends ActionViewItem {
 	}
 
 	override focus(): void {
-		this.button.element.focus();
+		this.button.focus();
 	}
 
 	override setTabbable(tabbable: boolean): void {
-		this.button.element.tabIndex = tabbable ? 0 : -1;
+		this.button.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 
 	protected get button(): Button {

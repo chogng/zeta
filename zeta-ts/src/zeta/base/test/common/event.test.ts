@@ -40,6 +40,26 @@ test("Emitter treats repeated listener registrations independently", () => {
 	emitter.dispose();
 });
 
+test("Emitter reports the first and final listener lifecycle", () => {
+	const lifecycle: string[] = [];
+	const emitter = new Emitter<void>({
+		onWillAddFirstListener: () => lifecycle.push("add"),
+		onDidRemoveLastListener: () => lifecycle.push("remove"),
+	});
+	const first = emitter.event(() => undefined);
+	const second = emitter.event(() => undefined);
+	assert.deepEqual(lifecycle, ["add"]);
+
+	first.dispose();
+	assert.deepEqual(lifecycle, ["add"]);
+	second.dispose();
+	assert.deepEqual(lifecycle, ["add", "remove"]);
+
+	emitter.event(() => undefined);
+	emitter.dispose();
+	assert.deepEqual(lifecycle, ["add", "remove", "add", "remove"]);
+});
+
 test("Emitter snapshots registrations before delivering an event", () => {
 	const emitter = new Emitter<number>();
 	const received: string[] = [];

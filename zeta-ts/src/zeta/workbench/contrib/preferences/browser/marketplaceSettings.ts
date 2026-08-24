@@ -1,9 +1,10 @@
 import "./media/marketplaceSettings.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IMarketplaceService, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
 import { setSettingsItemIdentity } from "./settingsItem.js";
@@ -31,6 +32,7 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 	private reloadGeneration = 0;
 	private isDisposed = false;
 	private readonly localization: ILocalizationService | undefined;
+	private readonly rendered = this.own(new ResettableDisposableGroup());
 
 	constructor(container: HTMLElement, private readonly marketplace: IMarketplaceService, private readonly fixedPackageType?: string, localization?: ILocalizationService) {
 		super();
@@ -50,10 +52,12 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 		this.input.placeholder = fixedPackageType === "language" ? this.t("searchLanguageExtensions", "Search language extensions") : this.t("searchPackages", "Search Plugins, Skills, MCPs…");
 		this.input.setAttribute("aria-label", this.t("searchMarketplace", "Search Marketplace"));
 		searchControl.append(this.input);
-		const search = h(this.document, "button");
-		search.type = "submit";
-		search.textContent = "Browse Marketplace";
-		toolbar.append(searchControl, search);
+		toolbar.append(searchControl);
+		this.own(new Button(toolbar, {
+			label: "Browse Marketplace",
+			presentation: "primary",
+			type: "submit",
+		}));
 		const filters = h(this.document, "div");
 		filters.className = "zeta-package-marketplace-filters";
 		this.filterTabs = fixedPackageType ? undefined : this.own(new TabList<string>(filters, {
@@ -96,6 +100,7 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 		}
 		this.status.textContent = this.t("loading", "Loading Marketplace…");
 		this.results.classList.remove("empty");
+		this.rendered.clear();
 		this.results.replaceChildren();
 		const loaded = await (forceRefresh
 			? this.marketplace.refreshBrowse(this.query, this.selectedPackageType, 100)
@@ -109,6 +114,7 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 	}
 
 	private render(snapshot: MarketplaceBrowseSnapshot): void {
+		this.rendered.clear();
 		const packages = snapshot.packages;
 		this.status.textContent = packages.length === 0 ? this.t("noMatching", "No matching packages.") : this.t(packages.length === 1 ? "packageCount" : "packageCountPlural", `${packages.length} package${packages.length === 1 ? "" : "s"}`, { count: packages.length });
 		if (packages.length === 0) {
@@ -144,17 +150,18 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 		description.textContent = this.query
 			? this.t("tryDifferent", "Try a different search or clear the current filters.")
 			: this.t("installDescription", "Install Plugins, Skills, MCP servers, language support, and themes from the signed catalog.");
-		const reset = h(this.document, "button");
-		reset.type = "button";
-		reset.textContent = this.t("clearFilters", "Clear filters");
-		this.own(addDisposableListener(reset, "click", () => {
-			this.query = "";
-			this.input.value = "";
-			this.selectedPackageType = this.fixedPackageType;
-			this.updateFilterState();
-			void this.reload(true);
+		empty.append(heading, description);
+		this.rendered.add(new Button(empty, {
+			label: this.t("clearFilters", "Clear filters"),
+			presentation: "secondary",
+			onClick: () => {
+				this.query = "";
+				this.input.value = "";
+				this.selectedPackageType = this.fixedPackageType;
+				this.updateFilterState();
+				void this.reload(true);
+			},
 		}));
-		empty.append(heading, description, reset);
 		return empty;
 	}
 
@@ -190,21 +197,22 @@ export class MarketplaceSettingsPane extends DisposableOwner {
 		const lifecycle = h(this.document, "span");
 		lifecycle.className = "zeta-package-marketplace-lifecycle";
 		lifecycle.textContent = active ? (active.state === "installed" ? this.t("installed", "Installed · activation is separate") : this.t("removalPending", "Removal pending")) : this.t("available", "Available");
-		const action = h(this.document, "button");
-		action.type = "button";
-		action.textContent = active ? this.t("uninstall", "Uninstall") : this.t("install", "Install");
-		action.disabled = active?.state === "pendingRemoval";
-		this.own(addDisposableListener(action, "click", () => {
-			action.disabled = true;
-			const operation = active
-				? this.marketplace.uninstall(active.installationId)
-				: this.marketplace.install(summary.id, summary.version).then(() => undefined);
-			void operation.then(() => this.reload()).catch((error: unknown) => {
-				this.status.textContent = error instanceof Error ? `${this.t("operationFailed", "Marketplace operation failed.")} ${error.message}` : this.t("operationFailed", "Marketplace operation failed.");
-				action.disabled = false;
-			});
+		actions.append(lifecycle);
+		const action = this.rendered.add(new Button(actions, {
+			label: active ? this.t("uninstall", "Uninstall") : this.t("install", "Install"),
+			presentation: active ? "danger" : "primary",
+			enabled: active?.state !== "pendingRemoval",
+			onClick: () => {
+				action.enabled = false;
+				const operation = active
+					? this.marketplace.uninstall(active.installationId)
+					: this.marketplace.install(summary.id, summary.version).then(() => undefined);
+				void operation.then(() => this.reload()).catch((error: unknown) => {
+					this.status.textContent = error instanceof Error ? `${this.t("operationFailed", "Marketplace operation failed.")} ${error.message}` : this.t("operationFailed", "Marketplace operation failed.");
+					action.enabled = true;
+				});
+			},
 		}));
-		actions.append(lifecycle, action);
 		card.append(heading, description, metadata, provenance);
 		if (capabilities.childElementCount > 0) card.append(capabilities);
 		card.append(actions);

@@ -8,6 +8,8 @@
 unary request/response codec、原生 HTTP/SSE streaming invocation 与 terminal response assembly。
 独立 input-token codec 覆盖 OpenAI Responses、Anthropic Messages、Gemini
 `countTokens`、Kimi estimate 和 Z.AI tokenizer。
+Provider-neutral WebSocket transport 已位于 `zeta-websocket-client`，但本 crate 尚未实现 Responses
+WebSocket client/server event codec。
 
 它不选择 provider、model 或 credential，不拥有 base URL，也不执行 socket、retry 或 SSE
 framing。
@@ -184,6 +186,7 @@ unknown optional event、terminal EOF、malformed JSON 与 Anthropic block lifec
 conformance fixture 还覆盖 instructions、Tool Call/Result、图片、refusal、错误分类、未物化附件拒绝
 和 prompt-cache scope，并通过 injected `OperationClient` 验证 request 与 response shape。
 
-当前三种 HTTP/SSE endpoint 已有端到端 streaming invocation；NDJSON、WebSocket、更多
-provider-native catalog codec 和 provider-specific stream profile 仍是潜在演进。新增能力必须继续
-保持 canonical domain、wire codec、operation framing、transport 四层分离。
+当前三种 HTTP/SSE endpoint 已有端到端 streaming invocation；WebSocket transport 已实现，但
+Responses WebSocket codec/session 未实现；NDJSON、更多 provider-native catalog codec 和
+provider-specific stream profile 仍是潜在演进。新增能力必须继续保持 canonical domain、wire codec、
+operation framing、transport 四层分离。

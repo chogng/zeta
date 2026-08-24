@@ -18,7 +18,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 			contentAlignment: "labelCentered",
 			title: "Find Issues",
 		}));
-		findIssues.element.classList.add("zeta-scm-find-issues");
-		this.contentElement.append(empty, findIssues.element);
+		findIssues.toggleClassName("zeta-scm-find-issues", true);
+		this.contentElement.append(empty, findIssues.domNode);
 	}
 }

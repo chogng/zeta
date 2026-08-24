@@ -72,7 +72,8 @@ model provider 负责“如何用已选模型执行一次调用”
 | `zeta-models-manager` | scope、静态 seed、memory cache、source port、singleflight、merge/filter/resolve、snapshot generation | provider DTO、secret、调用、Config persistence、UI |
 | `zeta-model-provider` | provider runtime、adapter 选择、模型调用、manager static resolution consumer | catalog policy、跨 provider merge、UI 查询 |
 | `zeta-api` | endpoint/request/event 的 Provider wire codec | transport、retry、catalog authority、用户筛选 |
-| `zeta-http-client` | HTTP/WebSocket execution、proxy/TLS/pool、transport diagnostics | Provider DTO、catalog policy、模型选择 |
+| `zeta-http-client` | HTTP execution 与共享 proxy/TLS/target policy | Provider DTO、catalog policy、模型选择 |
+| `zeta-websocket-client` | WebSocket handshake/message execution | Provider event、session state、catalog policy、模型选择 |
 | `zeta-client` | operation retry、SSE/NDJSON framing、telemetry | Provider DTO、catalog policy、模型选择 |
 | `zeta-config` | 用户配置 authority、patch/merge/persistence | provider 请求和进程内 refresh task |
 | App Server / clients | 组合、RPC、展示与交互；Local App Server 已投影 shared manager | 各自维护模型表或推断 capability |

@@ -1,6 +1,7 @@
 import "./media/workspaceTrustEditor.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { h } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
+import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IWorkspaceTrustService, WorkspaceTrustEntry, WorkspaceTrustSnapshot, WorkspaceTrustState } from "../../../../platform/workspaceTrust/common/workspaceTrustService.js";
@@ -16,6 +17,7 @@ interface CurrentWorkspaceTrust {
 /** Editor surface owned by the Workspace contrib for current state and the durable trust allowlist. */
 export class WorkspaceTrustEditor extends DisposableOwner {
 	readonly element: HTMLDivElement;
+	private readonly rendered = this.own(new ResettableDisposableGroup());
 	private active = true;
 
 	constructor(container: HTMLElement, private readonly service: IWorkspaceTrustService, private readonly workspaceOpenService: IWorkspaceOpenService, private readonly dialogService: IDialogService, private readonly workspaceContextService?: IWorkspaceContextService) {
@@ -29,6 +31,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 	}
 
 	private async load(): Promise<void> {
+		this.rendered.clear();
 		const document = this.element.ownerDocument;
 		const loading = h(document, "p");
 		loading.className = "zeta-settings-message";
@@ -61,14 +64,15 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 
 		const toolbar = h(document, "div");
 		toolbar.className = "zeta-workspace-trust-toolbar";
-		const addFolder = h(document, "button");
-		addFolder.className = "zeta-theme-action";
-		addFolder.type = "button";
-		addFolder.textContent = "Add Folder…";
-		addFolder.disabled = !this.workspaceOpenService.canOpenFolder;
-		addFolder.title = this.workspaceOpenService.canOpenFolder
-			? "Trust a folder"
-			: "Folder picking is unavailable in this host";
+		const addFolder = this.rendered.add(new Button(toolbar, {
+			label: "Add Folder…",
+			presentation: "primary",
+			enabled: this.workspaceOpenService.canOpenFolder,
+			title: this.workspaceOpenService.canOpenFolder
+				? "Trust a folder"
+				: "Folder picking is unavailable in this host",
+			onClick: () => void this.addFolder(addFolder, list),
+		}));
 
 		const heading = h(document, "h4");
 		heading.className = "zeta-workspace-trust-list-heading";
@@ -88,10 +92,6 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		} else {
 			for (const entry of [...snapshot.entries].sort(compareEntries)) list.append(this.renderEntry(entry, snapshot.revision, list));
 		}
-		this.own(addDisposableListener(addFolder, "click", () => {
-			void this.addFolder(addFolder, list);
-		}));
-		toolbar.append(addFolder);
 		this.element.replaceChildren(...(currentPanel ? [intro, note, currentPanel, toolbar, heading, summary, list] : [intro, note, toolbar, heading, summary, list]));
 	}
 
@@ -130,22 +130,19 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		detail.textContent = current.state === "trusted"
 			? "Workspace capabilities are enabled for this folder."
 			: "Restricted Mode keeps terminals, Git mutations, tasks, executable workspace configuration, and executable language services disabled.";
-		const action = h(document, "button");
-		action.className = "zeta-theme-action";
-		action.type = "button";
-		action.textContent = current.state === "trusted" ? "Revoke Trust" : `Trust This ${current.label}`;
-		this.own(addDisposableListener(action, "click", () => {
-			void this.updateCurrentTrust(current, snapshot.revision, action, panel);
-		}));
 		const actions = h(document, "div");
 		actions.className = "zeta-workspace-trust-current-actions";
-		actions.append(action);
+		const action = this.rendered.add(new Button(actions, {
+			label: current.state === "trusted" ? "Revoke Trust" : `Trust This ${current.label}`,
+			presentation: current.state === "trusted" ? "danger" : "primary",
+			onClick: () => void this.updateCurrentTrust(current, snapshot.revision, action, panel),
+		}));
 		panel.append(path, status, detail, actions);
 		return panel;
 	}
 
-	private async updateCurrentTrust(current: CurrentWorkspaceTrust, revision: number, button: HTMLButtonElement, feedbackContainer: HTMLElement): Promise<void> {
-		button.disabled = true;
+	private async updateCurrentTrust(current: CurrentWorkspaceTrust, revision: number, button: Button, feedbackContainer: HTMLElement): Promise<void> {
+		button.enabled = false;
 		try {
 			await this.service.set(current.root, current.state === "trusted" ? "restricted" : "trusted", revision);
 			if (this.active) await this.load();
@@ -155,12 +152,12 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 			failure.className = "zeta-workspace-trust-error";
 			failure.textContent = error instanceof Error ? `Unable to update Workspace Trust: ${error.message}` : "Unable to update Workspace Trust.";
 			feedbackContainer.append(failure);
-			button.disabled = false;
+			button.enabled = true;
 		}
 	}
 
-	private async addFolder(button: HTMLButtonElement, feedbackContainer: HTMLElement): Promise<void> {
-		button.disabled = true;
+	private async addFolder(button: Button, feedbackContainer: HTMLElement): Promise<void> {
+		button.enabled = false;
 		try {
 			const root = await this.workspaceOpenService.pickFolder();
 			if (!root || !this.active) return;
@@ -175,7 +172,7 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 			failure.textContent = error instanceof Error ? `Unable to add trusted folder: ${error.message}` : "Unable to add trusted folder.";
 			feedbackContainer.append(failure);
 		} finally {
-			if (this.active && this.element.contains(button)) button.disabled = false;
+			if (this.active && this.element.contains(button.domNode)) button.enabled = true;
 		}
 	}
 
@@ -199,19 +196,16 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 
 		const actions = h(document, "div");
 		actions.className = "zeta-workspace-trust-entry-actions";
-		const forget = h(document, "button");
-		forget.className = "zeta-theme-action";
-		forget.type = "button";
-		forget.textContent = "Revoke Trust";
-		this.own(addDisposableListener(forget, "click", () => {
-			void this.forgetEntry(entry, revision, item, forget, list);
+		const forget = this.rendered.add(new Button(actions, {
+			label: "Revoke Trust",
+			presentation: "danger",
+			onClick: () => void this.forgetEntry(entry, revision, item, forget, list),
 		}));
-		actions.append(forget);
 		item.append(copy, actions);
 		return item;
 	}
 
-	private async forgetEntry(entry: WorkspaceTrustEntry, revision: number, item: HTMLElement, button: HTMLButtonElement, list: HTMLElement): Promise<void> {
+	private async forgetEntry(entry: WorkspaceTrustEntry, revision: number, item: HTMLElement, button: Button, list: HTMLElement): Promise<void> {
 		const confirmed = await this.dialogService.confirm({
 			title: "Revoke Workspace Trust?",
 			message: entry.root ?? entry.workspace,
@@ -221,12 +215,12 @@ export class WorkspaceTrustEditor extends DisposableOwner {
 		});
 		if (!confirmed) return;
 		item.setAttribute("aria-busy", "true");
-		button.disabled = true;
+		button.enabled = false;
 		try {
 			await this.service.forget(entry.workspace, revision);
 			await this.load();
 		} catch (error) {
-			button.disabled = false;
+			button.enabled = true;
 			item.removeAttribute("aria-busy");
 			const failure = h(this.element.ownerDocument, "p");
 			failure.className = "zeta-workspace-trust-error";

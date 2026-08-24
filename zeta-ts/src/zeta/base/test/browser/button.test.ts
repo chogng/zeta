@@ -22,18 +22,33 @@ test("Button only installs a Hover for an explicit title", () => {
 	});
 
 	assert.deepEqual(contents, ["Save changes"]);
-	assert.ok(titledButton.element.querySelector(".zeta-button-content.zeta-icon-label"));
-	assert.ok(titledButton.element.querySelector(".zeta-button-label.zeta-icon-label-text"));
-	assert.equal(unlabeledHoverButton.element.hasAttribute("title"), false);
+	assert.ok(titledButton.domNode.querySelector(".zeta-button-content.zeta-icon-label"));
+	assert.ok(titledButton.domNode.querySelector(".zeta-button-label.zeta-icon-label-text"));
+	assert.equal(unlabeledHoverButton.domNode.hasAttribute("title"), false);
+	titledButton.toggleClassName("host-button", true);
 	titledButton.hidden = true;
-	assert.equal(titledButton.element.hidden, true);
-	assert.equal(titledButton.element.classList.contains("hidden"), true);
+	assert.equal(titledButton.domNode.hidden, true);
+	assert.equal(titledButton.domNode.classList.contains("hidden"), true);
+	assert.equal(titledButton.domNode.classList.contains("host-button"), true);
 
 	using labelCenteredButton = new Button(dom.window.document.body, {
 		label: "Commit",
 		contentAlignment: "labelCentered",
 	});
-	assert.equal(labelCenteredButton.element.classList.contains("label-centered"), true);
+	assert.equal(labelCenteredButton.domNode.classList.contains("label-centered"), true);
+	labelCenteredButton.label = "Commit changes";
+	assert.equal(labelCenteredButton.label, "Commit changes");
+
+	using submitButton = new Button(dom.window.document.body, {
+		label: "Submit",
+		presentation: "primary",
+		size: "small",
+		type: "submit",
+	});
+	assert.equal(submitButton.domNode.type, "submit");
+	assert.equal(submitButton.domNode.classList.contains("zeta-button-primary"), true);
+	assert.equal(submitButton.domNode.classList.contains("zeta-button-small"), true);
+	assert.equal(unlabeledHoverButton.domNode.classList.contains("zeta-button-quiet"), true);
 
 	dom.window.close();
 });

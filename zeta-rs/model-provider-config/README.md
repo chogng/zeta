@@ -13,12 +13,13 @@ credential、secret、connection pool 或 process-local adapter。
 | --- | --- | --- |
 | `ModelProviderConfig` | 用户/host 可配置值 | provider、base URL、max output 与 per-model context metadata |
 | `ModelContextConfig` | 单模型的 Core budget metadata | positive context window、optional auto-compact limit |
-| `ProviderDefinition` | provider-owned declaration | adapter identity、API profile、endpoint/catalog/defaults |
+| `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
 | `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 唯一 built-in model 目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `zeta-api::ApiEndpoint` |
+| `WebSocketApiProfile` | exact WebSocket wire capability | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
 | `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
 | `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
@@ -46,7 +47,7 @@ src/
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
-| `ProviderDefinition::validate` | public method | name、default endpoint、defaults、catalog uniqueness | definition 自身必须独立有效 |
+| `ProviderDefinition::validate` | public method | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
 | `STATIC_MODEL_CATALOG` | public constant | 全部产品内置模型及静态 metadata | 新模型只能在这里增加一次 |
 | `attach_static_models` | crate-private function | catalog rows → provider models/default/count eligibility | registry validation 前自动执行 |
@@ -105,6 +106,10 @@ tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transpo
 目录的模型及其 count eligibility 由 `STATIC_MODEL_CATALOG` 自动注入，不由 runtime 按 ID 前缀猜测。
 Provider matrix 和官方依据由系统文档维护，本 README 只固定 definition construction pattern。
 
+OpenAI definition 另外声明 `WebSocketApiProfile::OpenAiResponses`。其他 built-in definition 当前均为
+`Unavailable`，包括 HTTP-compatible provider；xAI 的上游 Responses WebSocket 也不会覆盖当前
+Chat Completions definition。真实调用仍需 runtime target 和 `zeta-api` codec/session client 共同允许。
+
 ## 统一静态模型清单
 
 产品内置模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。最小条目只写 provider、
@@ -157,6 +162,7 @@ service surface 的 provider。`ProviderDefault` 只在 invocation 也使用 pro
 - config crate 依赖 `zeta-api`/HTTP/secret：runtime state 下沉；
 - `ProviderAdapter` 直接存 trait object：declaration 不再 serializable；
 - runtime 根据 provider name 猜 API profile：显式 declaration 被绕过；
+- runtime 根据 HTTP compatibility 猜 WebSocket：handshake/event/session contract 被绕过；
 - runtime 根据 model ID 前缀或 invocation URL 拼 count endpoint：显式 count declaration 被绕过；
 - normalization 追加 `/responses` 等 route：endpoint/profile ownership 混淆；
 - allow-unlisted 被描述为远端可用：static evidence 被夸大；
@@ -169,7 +175,8 @@ cargo test -p zeta-model-provider-config
 bazel test //zeta-rs/model-provider-config:model-provider-config-unit-tests
 ```
 
-测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/output/context tokens、merge semantics、
+测试覆盖 serde/schema、defaults、configured-only endpoint、invalid URL/output/context tokens、HTTP/WebSocket
+profile pairing、merge semantics、
 automatic review model、统一静态目录投影与 metadata contract、catalog gate、built-in completeness 与 provider mismatch。
 
 当前 URL validator 只接受具有非空 authority 的 HTTP(S) shape，不解析 credential、DNS、route 或

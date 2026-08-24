@@ -1,8 +1,8 @@
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Checkbox, Switch, type Toggle } from '../../../../base/browser/ui/toggle/toggle.js';
 import { DisposableOwner, DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -92,6 +92,7 @@ export class SettingsWidgets extends DisposableOwner {
 		setting.append(this.createSettingCopy(descriptor.title, descriptor.description));
 		const button = resources.add(new Button(setting, {
 			label: descriptor.actionLabel,
+			presentation: 'secondary',
 			onClick: () => {
 				button.enabled = false;
 				Promise.resolve(descriptor.run()).catch(error => {
@@ -101,8 +102,8 @@ export class SettingsWidgets extends DisposableOwner {
 				});
 			},
 		}));
-		button.element.classList.add(`zeta-${this.options.presentation}-setting-action`);
-		button.element.dataset.settingActionId = descriptor.id;
+		button.toggleClassName(`zeta-${this.options.presentation}-setting-action`, true);
+		button.domNode.dataset.settingActionId = descriptor.id;
 		return setting;
 	}
 

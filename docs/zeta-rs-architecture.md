@@ -82,7 +82,8 @@ zeta-rs/
 ├── model-provider-config/
 ├── model-provider/
 ├── zeta-api/
-├── http-client/           # shared proxy/TLS/unary HTTP substrate；stream/WebSocket 尚未实现
+├── http-client/           # shared outbound network policy + unary/streaming HTTP substrate
+├── websocket-client/      # provider-neutral WebSocket handshake/message transport
 ├── zeta-client/           # API operation retry 与 SSE framing layer
 ├── server-host/           # product-neutral App Server / Remote process entrypoint
 ├── exec/                  # target headless Agent runner

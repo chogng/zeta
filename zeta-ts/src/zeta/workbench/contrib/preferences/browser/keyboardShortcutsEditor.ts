@@ -189,14 +189,16 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 		actions.className = 'zeta-keybindings-recorder-actions';
 		this.saveButton = this.own(new Button(actions, {
 			label: 'Save',
+			presentation: 'primary',
 			onClick: () => void this.saveEditingItem(),
 		}));
-		this.saveButton.element.classList.add('zeta-keybindings-save');
+		this.saveButton.toggleClassName('zeta-keybindings-save', true);
 		const cancel = this.own(new Button(actions, {
 			label: 'Cancel',
+			presentation: 'secondary',
 			onClick: () => this.closeRecorder(),
 		}));
-		cancel.element.classList.add('zeta-keybindings-cancel');
+		cancel.toggleClassName('zeta-keybindings-cancel', true);
 		recorder.append(this.recorderTitle, fields, actions);
 		this.own(this.keyInput.onKeyDown(event => this.recordKeybinding(event)));
 		return recorder;
@@ -335,16 +337,20 @@ class KeyboardShortcutRow extends DisposableOwner {
 		const edit = this.own(new Button(actions, {
 			label: item.source === 'user' ? 'Edit' : 'Add',
 			title: item.source === 'user' ? 'Edit keybinding' : 'Add keybinding',
+			presentation: 'secondary',
+			size: 'small',
 			onClick: () => callbacks.onEdit(this.item),
 		}));
-		edit.element.classList.add('zeta-keybindings-row-action');
+		edit.toggleClassName('zeta-keybindings-row-action', true);
 		if (item.source === 'user') {
 			const remove = this.own(new Button(actions, {
 				label: 'Remove',
 				title: 'Remove keybinding',
+				presentation: 'danger',
+				size: 'small',
 				onClick: () => callbacks.onRemove(this.item),
 			}));
-			remove.element.classList.add('zeta-keybindings-row-action', 'is-secondary');
+			remove.toggleClassName('zeta-keybindings-row-action', true);
 		}
 		this.element.append(commandCell, this.key, this.when, this.source, actions);
 		container.append(this.element);

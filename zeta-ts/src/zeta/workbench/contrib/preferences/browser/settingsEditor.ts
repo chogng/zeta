@@ -1,5 +1,6 @@
 import './media/settingsEditor.css';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
@@ -25,7 +26,7 @@ export class SettingsEditor extends DisposableOwner {
 	private readonly contentHeading: HTMLHeadingElement;
 	private readonly contentScrollable: ScrollableElement;
 	private readonly navigationEmpty: HTMLParagraphElement;
-	private readonly navigationItems = new Map<string, HTMLButtonElement>();
+	private readonly navigationItems = new Map<string, Button>();
 	private readonly navigationScrollable: ScrollableElement;
 	private readonly searchInput: InputBox;
 	private readonly sectionContent: HTMLDivElement;
@@ -72,15 +73,14 @@ export class SettingsEditor extends DisposableOwner {
 		navigationList.id = `${editorId}-navigation`;
 		for (const section of SettingsSections) {
 			const item = h(ownerDocument, 'li');
-			const button = h(ownerDocument, 'button');
-			button.className = 'zeta-settings-navigation-item';
-			button.type = 'button';
-			button.dataset.settingsSectionId = section.id;
-			button.textContent = this.localizedSectionLabel(section);
+			const button = this.own(new Button(item, {
+				label: this.localizedSectionLabel(section),
+				onClick: () => this.options.settingsService.open(section.id),
+			}));
+			button.toggleClassName('zeta-settings-navigation-item', true);
+			button.domNode.dataset.settingsSectionId = section.id;
 			this.navigationItems.set(section.id, button);
-			this.own(addDisposableListener(button, 'click', () => this.options.settingsService.open(section.id)));
-			this.own(addDisposableListener(button, 'keydown', (event: KeyboardEvent) => this.handleNavigationKeydown(event, section.id)));
-			item.append(button);
+			this.own(addDisposableListener(button.domNode, 'keydown', (event: KeyboardEvent) => this.handleNavigationKeydown(event, section.id)));
 			navigationList.append(item);
 		}
 		this.navigationEmpty = h(ownerDocument, 'p');
@@ -146,9 +146,9 @@ export class SettingsEditor extends DisposableOwner {
 	private renderSection(section: SettingsSectionDescriptor): void {
 		for (const [sectionId, item] of this.navigationItems) {
 			const active = sectionId === section.id;
-			item.classList.toggle('is-active', active);
-			if (active) item.setAttribute('aria-current', 'page');
-			else item.removeAttribute('aria-current');
+			item.toggleClassName('is-active', active);
+			if (active) item.domNode.setAttribute('aria-current', 'page');
+			else item.domNode.removeAttribute('aria-current');
 		}
 		this.content.dataset.activeSettingsSection = section.id;
 		this.contentHeading.textContent = this.localizedSectionLabel(section);
@@ -195,7 +195,7 @@ export class SettingsEditor extends DisposableOwner {
 		let matches = 0;
 		for (const section of SettingsSections) {
 			const visible = !query || `${this.localizedSectionLabel(section)} ${this.localizedSectionDescription(section)}`.toLocaleLowerCase().includes(query);
-			const item = this.navigationItems.get(section.id)?.parentElement;
+			const item = this.navigationItems.get(section.id)?.domNode.parentElement;
 			if (item) item.hidden = !visible;
 			if (visible) matches += 1;
 		}
@@ -211,7 +211,7 @@ export class SettingsEditor extends DisposableOwner {
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		for (const section of SettingsSections) {
 			const button = this.navigationItems.get(section.id);
-			if (button) button.textContent = this.localizedSectionLabel(section);
+			if (button) button.label = this.localizedSectionLabel(section);
 		}
 		const section = getSettingsSection(this.options.settingsService.activeSectionId);
 		this.contentHeading.textContent = this.localizedSectionLabel(section);
@@ -232,7 +232,7 @@ export class SettingsEditor extends DisposableOwner {
 
 	private visibleNavigationSections(): readonly SettingsSectionDescriptor[] {
 		return SettingsSections.filter(section => {
-			const item = this.navigationItems.get(section.id)?.parentElement;
+			const item = this.navigationItems.get(section.id)?.domNode.parentElement;
 			return item ? !item.hidden : false;
 		});
 	}

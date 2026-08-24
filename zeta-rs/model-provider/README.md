@@ -7,7 +7,9 @@
 
 `zeta-model-provider` 把 validated declarative config 与 `ModelRef(provider, model)` 解析成
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `zeta-api`，
-operation retry/framing 属于 `zeta-client`，socket/TLS/proxy 属于 `zeta-http-client`。
+operation retry/framing 属于 `zeta-client`，HTTP transport 与共享 network policy 属于
+`zeta-http-client`。WebSocket handshake/message transport 已独立位于 `zeta-websocket-client`；本 crate 尚未组合
+Responses WebSocket codec 或 `ModelClientSession`。
 
 当前 `EmbeddingInvoker` / `RerankInvoker` 除 canonical、有序、provider-neutral 调用契约外，已接入
 OpenAI-compatible embedding/rerank wire codec、OpenAI/Ollama embedding runtime 和 exact provider
@@ -151,6 +153,9 @@ invoker、request/response validation、OpenAI-compatible/Ollama runtime resolve
 Google Chat-compatible、Anthropic Messages 原生 HTTP/SSE stream。每个 immutable provider definition
 显式发布 `ModelOutputTransport::{NativeStreaming, Unary}`；catalog/Desktop 只消费该声明，不从
 provider 名称或 `ApiProfile` 猜测；
+WebSocket eligibility 由独立的 `WebSocketApiProfile` fail closed 声明，不能从
+`ModelOutputTransport` 或 HTTP compatibility 推断。底层 connector 已实现，但 protocol codec、session
+reuse、sticky turn state、prewarm、`previous_response_id` 和 HTTP fallback 尚未进入本 runtime。
 OpenAI semantic adapter 可以从 host 注入的 `SecretStore` materialize API key；Ollama 与
 OpenAI-compatible semantic endpoint 当前按 unauthenticated endpoint 调用。持久化 secret backend、
 credential 设置 UI、更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整

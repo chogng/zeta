@@ -42,6 +42,14 @@ private readonly model: TextModel;
 private visible = false;
 ```
 
+## Disposable Ownership
+
+- Treat `IDisposable` as a cleanup capability and `DisposableOwner` as a composite ownership mechanism. Choose from the object's ownership role, not to avoid writing `dispose()`.
+- A leaf adapter or handle whose identity is the cleanup operation implements `IDisposable` directly. Its cleanup is synchronous and idempotent, supports `[Symbol.dispose]()`, and participates in disposable tracking.
+- A component that aggregates independently created listeners, child components, timers, or replaceable resources normally extends `DisposableOwner` and registers each resource immediately with `own`, `adopt`, or `defer`.
+- Owning one implementation resource does not by itself make a leaf adapter a composite owner. Do not allocate a `DisposableStore` or extend `DisposableOwner` only to delegate disposal to that resource.
+- When inheritance is unavailable, use a component-owned `DisposableStore`; do not hand-maintain an array of cleanup callbacks.
+
 ## Functions
 
 - Named functions and class methods declare return types.

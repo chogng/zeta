@@ -12,6 +12,10 @@ export interface Event<T> {
 
 /** Error reporting policy for one event source. */
 export interface EmitterOptions {
+	/** Runs immediately before the first listener registration is added. */
+	readonly onWillAddFirstListener?: () => void;
+	/** Runs after the final listener registration is removed. */
+	readonly onDidRemoveLastListener?: () => void;
 	/**
 	 * Receives errors thrown by listeners after delivery continues to the other
 	 * registrations.
@@ -81,6 +85,8 @@ export class Emitter<T> implements IDisposable {
 	private readonly listeners = new Set<ListenerRegistration<T>>();
 	private readonly deliveryQueue: EventDelivery<T>[] = [];
 	private readonly onListenerError: (error: unknown) => void;
+	private readonly onWillAddFirstListener: (() => void) | undefined;
+	private readonly onDidRemoveLastListener: (() => void) | undefined;
 	private delivering = false;
 	private disposed = false;
 
@@ -88,18 +94,27 @@ export class Emitter<T> implements IDisposable {
 		if (this.disposed) {
 			throw new ReferenceError("Emitter is already disposed");
 		}
+		if (this.listeners.size === 0) {
+			this.onWillAddFirstListener?.();
+		}
 		const registration: ListenerRegistration<T> = {
 			listener,
 			active: true,
 		};
 		this.listeners.add(registration);
 		return toDisposable(() => {
+			if (!registration.active) return;
 			registration.active = false;
 			this.listeners.delete(registration);
+			if (this.listeners.size === 0) {
+				this.onDidRemoveLastListener?.();
+			}
 		});
 	};
 
 	constructor(options: EmitterOptions = {}) {
+		this.onWillAddFirstListener = options.onWillAddFirstListener;
+		this.onDidRemoveLastListener = options.onDidRemoveLastListener;
 		this.onListenerError =
 			options.onListenerError ?? reportListenerError;
 		trackDisposable(this);
@@ -138,12 +153,14 @@ export class Emitter<T> implements IDisposable {
 	dispose(): void {
 		if (this.disposed) return;
 		this.disposed = true;
+		const hadListeners = this.listeners.size > 0;
 		try {
 			for (const registration of this.listeners) {
 				registration.active = false;
 			}
 			this.listeners.clear();
 			this.deliveryQueue.length = 0;
+			if (hadListeners) this.onDidRemoveLastListener?.();
 		} finally {
 			markAsDisposed(this);
 		}

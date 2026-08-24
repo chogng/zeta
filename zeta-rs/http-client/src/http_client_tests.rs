@@ -465,14 +465,14 @@ fn public_internet_policy_rejects_non_public_address_classes() {
         "2001:db8::1",
     ] {
         assert!(
-            !crate::ureq_client::is_public_internet_ip(address.parse().unwrap()),
+            !crate::outbound_network::is_public_internet_ip(address.parse().unwrap()),
             "{address} must not be treated as a public Internet target"
         );
     }
-    assert!(crate::ureq_client::is_public_internet_ip(
+    assert!(crate::outbound_network::is_public_internet_ip(
         "1.1.1.1".parse().unwrap()
     ));
-    assert!(crate::ureq_client::is_public_internet_ip(
+    assert!(crate::outbound_network::is_public_internet_ip(
         "2606:4700:4700::1111".parse().unwrap()
     ));
 }

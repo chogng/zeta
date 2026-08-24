@@ -124,6 +124,52 @@ fn builtins_declare_native_streaming_without_inference_from_api_profile() {
 }
 
 #[test]
+fn builtins_declare_websocket_protocol_without_inference_from_http_compatibility() {
+    let registry = ProviderConfigRegistry::builtin();
+    assert_eq!(
+        registry
+            .get(&provider_id("openai"))
+            .unwrap()
+            .websocket_api_profile,
+        WebSocketApiProfile::OpenAiResponses,
+    );
+    for provider in [
+        "openai-compatible",
+        "anthropic",
+        "google",
+        "xai",
+        "qwen",
+        "kimi",
+        "deepseek",
+        "ollama",
+        "huggingface",
+        "zai",
+        "minimax",
+        "mimo",
+    ] {
+        assert_eq!(
+            registry
+                .get(&provider_id(provider))
+                .unwrap()
+                .websocket_api_profile,
+            WebSocketApiProfile::Unavailable,
+            "provider {provider}",
+        );
+    }
+}
+
+#[test]
+fn responses_websocket_requires_the_matching_http_api_profile() {
+    let invalid = definition("custom", EndpointPolicy::ConfiguredOnly)
+        .with_websocket_api_profile(WebSocketApiProfile::OpenAiResponses);
+
+    assert!(matches!(
+        ProviderConfigRegistry::from_definitions([invalid]),
+        Err(ProviderConfigError::InvalidProvider { .. })
+    ));
+}
+
+#[test]
 fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let registry = ProviderConfigRegistry::builtin();
     let openai = registry

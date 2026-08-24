@@ -1,4 +1,5 @@
 import { addDisposableListener, h } from "../../dom.js";
+import { DomEmitter, type DOMEventMap } from "../../event.js";
 import {
 	type AriaAutoComplete,
 	type AriaRole,
@@ -36,13 +37,12 @@ export class InputBox extends DisposableOwner {
 	private readonly _onDidChange = this.own(new Emitter<string>());
 	private readonly _onDidFocus = this.own(new Emitter<void>());
 	private readonly _onDidBlur = this.own(new Emitter<void>());
-	private readonly _onKeyDown = this.own(new Emitter<KeyboardEvent>());
 	private _readOnly: boolean;
 
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
-	readonly onKeyDown: Event<KeyboardEvent> = this._onKeyDown.event;
+	readonly onKeyDown: Event<DOMEventMap["keydown"]>;
 
 	constructor(container: HTMLElement, options: InputBoxOptions = {}) {
 		super();
@@ -94,6 +94,7 @@ export class InputBox extends DisposableOwner {
 		this.message.hidden = true;
 		this.element.append(this.inputElement, this.message);
 		container.append(this.element);
+		this.onKeyDown = this.own(new DomEmitter(this.inputElement, "keydown")).event;
 		this.syncReadOnly();
 		this.own(IME.onDidChange(() => this.syncReadOnly()));
 		this.own(addDisposableListener(
@@ -116,11 +117,6 @@ export class InputBox extends DisposableOwner {
 				this.element.classList.remove("is-focused");
 				this._onDidBlur.fire();
 			},
-		));
-		this.own(addDisposableListener(
-			this.inputElement,
-			"keydown",
-			(event: KeyboardEvent) => this._onKeyDown.fire(event),
 		));
 	}
 

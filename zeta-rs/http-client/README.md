@@ -7,6 +7,8 @@
 proxy route、TLS trust/mTLS、redirect、transport timeout、connection pool、bounded unary/streaming
 body 和 safe telemetry。上层通过 `HttpClient` 执行一个已经完整构造的 request，且每次只执行一次。
 
+它还公开构造时冻结的 `OutboundNetworkSnapshot`，供独立
+[`zeta-websocket-client`](../websocket-client/README.md) 复用 proxy、TLS/mTLS、connect timeout 与 target filtering。
 它不解释 provider JSON，不拥有 model operation retry，也不实现 SSE/NDJSON/WebSocket framing。
 
 ## 当前实现边界
@@ -63,6 +65,8 @@ consumer 可以直接依赖本 crate；需要 operation retry 或 SSE framing �
 | `ClientIdentityPolicy` | no identity 或 DER certificate chain + private key |
 | `CertificateBundle` | non-empty DER certificate bundle，debug 只显示数量 |
 | `ClientIdentity` | DER chain 与 zeroizing private key，debug redacted |
+| `OutboundNetworkSnapshot` | HTTP/WebSocket 共用的 immutable proxy/TLS/timeout/target-policy snapshot |
+| `OutboundProxyRoute` | 对一个 HTTP(S)/WS(S) target 的 direct/proxy 决策；proxy debug redacted |
 
 `HttpClientConfig::default()` 当前使用环境 proxy、拒绝 redirect、30 秒 connect timeout、60 秒
 overall timeout、system roots、无 client identity、100/1 idle pool，以及各自 10 MiB 的普通响应和
@@ -92,12 +96,13 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 | Symbol | 可见性 | 当前职责 | 方向约束 |
 | --- | --- | --- | --- |
 | `UreqHttpClient::{http_direct_agent,http_proxy_agent}` | private fields | 不依赖 system roots 的 HTTP direct/proxied reusable pools | backend type 不进入 public API |
-| `UreqHttpClient::{secure_tls_config,https_direct_agent,https_proxy_agent}` | private fields | 首次 HTTPS route 时加载 roots 并惰性构造 reusable pool | 成功或失败都由 `OnceLock` 缓存 |
-| `UreqHttpClient::agent_for` | private method | 根据 scheme、proxy scheme、authority 与 bypass 选择/准备 agent | caller 不手选 route |
+| `UreqHttpClient::{network,https_direct_agent,https_proxy_agent}` | private fields | 共用 policy snapshot，并在首次 HTTPS route 时惰性构造 reusable pool | 成功或失败都缓存 |
+| `UreqHttpClient::agent_for` | private method | 消费 shared route 并选择/准备 agent | caller 不手选 route |
+| `OutboundNetworkSnapshot::proxy_route` | public method | 对 HTTP(S)/WS(S) target 应用同一份 proxy/bypass snapshot | 不解释 provider |
+| `OutboundNetworkSnapshot::connect_tls` | public method | 以 crate-owned stream 应用 TLS/mTLS 与 hostname validation | 不暴露 rustls stream/config |
 | `resolve_proxy` | private | materialize proxy URL 与 bypass snapshot | `Direct` 不能受环境影响 |
 | `proxy_url_from_environment` | private | 固定优先级读取 proxy env | 只在 client 构造时调用 |
 | `build_agent` | private | 应用 proxy、redirect、timeouts、pool、TLS | 每个 request 不重新 build agent |
-| `request_authority` | private | 提取 hostname/IP 与 optional port | 仅用于 bypass，不进入 diagnostics |
 | `build_tls_config` | private | trust roots + optional client auth | 保持 hostname/chain validation |
 | `system_root_store` | private | 加载 host system roots | failure 是 configuration error |
 | `add_certificate_bundle` | private | 将 DER roots 加入 rustls store | 不记录 certificate bytes |
@@ -109,19 +114,26 @@ URL、header、certificate、request/response body 和 provider identity 不在 
 
 ```text
 UreqHttpClient::new() / with_config(config) → Result
+├─ OutboundNetworkSnapshot::new(config)
+│  ├─ resolve_proxy
+│  │  ├─ proxy_url_from_environment [FromEnvironment]
+│  │  └─ ProxyBypass::from_environment
+│  └─ validate target-policy/proxy/redirect combination
 ├─ build_tls_config(SystemRoots::Skip)
-│  ├─ add_certificate_bundle     [SystemPlus/CustomOnly]
-│  └─ ClientIdentity::private_key [mTLS]
 ├─ build HTTP agent(config, tls, None)
-├─ resolve_proxy
-│  ├─ proxy_url_from_environment [FromEnvironment]
-│  └─ ProxyBypass::from_environment
 └─ build HTTP proxy agent(config, tls, proxy_url) [when proxy exists]
 
 first HTTPS request / HTTPS proxy route
-├─ build_tls_config(SystemRoots::Load)
+├─ OutboundNetworkSnapshot::rustls_client_config
+│  ├─ build_tls_config(SystemRoots::Load)
+│  ├─ add_certificate_bundle     [SystemPlus/CustomOnly]
+│  └─ ClientIdentity::private_key [mTLS]
 │  └─ system_root_store          [SystemRoots/SystemPlus]
 └─ build and cache HTTPS direct/proxy agent
+
+WebSocket secure route
+└─ OutboundNetworkSnapshot::connect_tls
+   └─ reuse cached rustls client config without exposing backend types
 ```
 
 一份 client 对应一份不可变 config generation。配置、certificate 或 proxy 变化应创建新 client；
@@ -133,8 +145,8 @@ first HTTPS request / HTTPS proxy route
 HttpClient::execute(request)
 └─ UreqHttpClient::execute
    ├─ agent_for
-   │  ├─ request_authority
-   │  └─ ProxyBypass::matches
+   │  └─ OutboundNetworkSnapshot::proxy_route
+   │     └─ ProxyBypass::matches
    │     └─ rule_matches
    ├─ construct private ureq request + copy headers
    ├─ send request body exactly once
@@ -202,7 +214,7 @@ cross-origin sensitive-header stripping、scheme-downgrade rule 或 body replay 
 - Provider JSON/status semantics 进入本 crate：wire protocol ownership 下沉；
 - 通过提高 `ResponseBodyLimit` 支持无限流：bounded unary contract 被绕过；
 - telemetry 增加 URL、header value、body 或 exact provider/model：低敏感 contract 漂移；
-- public API 暴露 `ureq`/`rustls` type：backend replaceability 消失。
+- public API 暴露 `ureq`/`rustls` type：backend replaceability 消失；异步 TLS 只返回 crate-owned `OutboundTlsStream`。
 
 修改 config field 时同步检查 `HttpClientConfig` builder/getter/default、`build_agent` 或
 `build_tls_config`、debug redaction 与 tests。修改 request/response shape 时同步检查
@@ -231,9 +243,9 @@ bazel test //zeta-rs/http-client:http-client-unit-tests
 当前实现是 synchronous、one-attempt HTTP；unary response fully buffered，成功 streaming response
 按 chunk 向 caller-owned sink 施加 backpressure。它使用 bounded transport timeout，但不直接接收
 caller cancellation token；上层 `zeta-client` 可以在取消后停止等待并丢弃
-迟到 response，不能强制关闭已经进入 `ureq` 的 socket attempt。stream body、WebSocket、async
-port、per-phase diagnostics、custom redirect security policy 和 config-generation rollover
-manager 仍未实现。
+迟到 response，不能强制关闭已经进入 `ureq` 的 socket attempt。WebSocket connection backend 已拆到
+`zeta-websocket-client`；async HTTP port、per-phase diagnostics、custom redirect security policy 和
+config-generation rollover manager 仍未实现。
 
 这些能力可以演进，但顺序应保持：先定义 provider-neutral typed contract 与 failure/redaction
 invariant，再实现 private backend；不要先暴露 backend-specific future/stream/socket types。Retry、

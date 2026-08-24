@@ -83,10 +83,11 @@ secret persistence
 wire and transport
   zeta-api          ── method/path/protocol headers/body/event codec
   zeta-client       ── operation retry/framing/telemetry
-  zeta-http-client  ── HTTP/WebSocket/proxy/TLS/pool/transport diagnostics
+  zeta-http-client  ── HTTP + shared proxy/TLS/target policy
+  zeta-websocket-client ── WebSocket handshake/message transport
 ```
 
-`zeta-api`、`zeta-client` 和 `zeta-http-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的
+`zeta-api`、`zeta-client`、`zeta-http-client` 和 `zeta-websocket-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的
 请求或已经解析的 sensitive transport value，不查 keychain，也不刷新 token。
 
 ## 4. 公共接口

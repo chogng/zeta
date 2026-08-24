@@ -1,6 +1,7 @@
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -84,14 +85,14 @@ export class IndexingSettingsPane extends DisposableOwner {
 		toolStatus.textContent = toolSearchStatusMessage(toolConfig.embeddingStatus);
 		const toolActions = h(document, 'div');
 		toolActions.className = 'zeta-theme-json-actions';
-		const toolSave = h(document, 'button');
-		toolSave.className = 'zeta-theme-action';
-		toolSave.type = 'button';
-		toolSave.textContent = 'Save tool search';
+		const toolSave = this.renderBindings.add(new Button(toolActions, {
+			label: 'Save tool search',
+			presentation: 'primary',
+		}));
 		this.renderBindings.add(toolEnabled.onDidChange(() => {
 			toolEmbedding.disabled = !toolEnabled.checked;
 		}));
-		this.renderBindings.add(addDisposableListener(toolSave, 'click', () => {
+		this.renderBindings.add(toolSave.onDidClick(() => {
 			let embeddingModel = toolConfig.embeddingModel;
 			try {
 				if (toolEnabled.checked) embeddingModel = parseModel(toolEmbedding.value, 'Tool Search embedding model');
@@ -109,7 +110,6 @@ export class IndexingSettingsPane extends DisposableOwner {
 				toolGroup.disabled = false;
 			});
 		}));
-		toolActions.append(toolSave);
 		toolGroup.append(toolLegend, toolHint, toolEnabled.element, toolEmbedding, toolStatus, toolActions);
 		toolItem.append(toolGroup);
 		this.renderBindings.add(new SettingsItemActions(toolItem, {
@@ -152,10 +152,10 @@ export class IndexingSettingsPane extends DisposableOwner {
 		endpoint.value = codeConfig.providers[configuredProvider]?.baseUrl ?? (configuredProvider === 'ollama' ? 'http://localhost:11434/v1' : '');
 		const providerActions = h(document, 'div');
 		providerActions.className = 'zeta-theme-json-actions';
-		const providerSave = h(document, 'button');
-		providerSave.className = 'zeta-theme-action';
-		providerSave.type = 'button';
-		providerSave.textContent = 'Save endpoint';
+		const providerSave = this.renderBindings.add(new Button(providerActions, {
+			label: 'Save endpoint',
+			presentation: 'primary',
+		}));
 		const enabled = this.renderBindings.add(new Checkbox(group, {
 			label: 'Use an embedding/rerank model endpoint',
 			checked: codeConfig.semanticCodeIndex.selection.type === 'remote',
@@ -193,18 +193,18 @@ export class IndexingSettingsPane extends DisposableOwner {
 		progress.textContent = 'Semantic index status is loading…';
 		const jobActions = h(document, 'div');
 		jobActions.className = 'zeta-theme-json-actions';
-		const cancelJob = h(document, 'button');
-		cancelJob.className = 'zeta-theme-action';
-		cancelJob.type = 'button';
-		cancelJob.textContent = 'Cancel indexing';
-		const retryJob = h(document, 'button');
-		retryJob.className = 'zeta-theme-action';
-		retryJob.type = 'button';
-		retryJob.textContent = 'Retry indexing';
+		const cancelJob = this.renderBindings.add(new Button(jobActions, {
+			label: 'Cancel indexing',
+			presentation: 'secondary',
+		}));
+		const retryJob = this.renderBindings.add(new Button(jobActions, {
+			label: 'Retry indexing',
+			presentation: 'secondary',
+		}));
 		const updateJobStatus = (indexStatus: CodeIndexStatus): void => {
 			progress.textContent = semanticIndexStatusMessage(indexStatus);
-			cancelJob.disabled = indexStatus.semantic.state !== 'syncing';
-			retryJob.disabled = !codeConfig.semanticCodeIndex.activeWorkspaceAuthorized || indexStatus.semantic.state === 'syncing';
+			cancelJob.enabled = indexStatus.semantic.state === 'syncing';
+			retryJob.enabled = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized && indexStatus.semantic.state !== 'syncing';
 		};
 		let polling = true;
 		const timer = this.renderBindings.add(new DisposableSlot<IDisposable>());
@@ -220,25 +220,24 @@ export class IndexingSettingsPane extends DisposableOwner {
 				if (polling && targetWindow) timer.replace(disposableWindowTimeout(targetWindow, poll, 750));
 			});
 		};
-		this.renderBindings.add(addDisposableListener(cancelJob, 'click', () => {
-			cancelJob.disabled = true;
+		this.renderBindings.add(cancelJob.onDidClick(() => {
+			cancelJob.enabled = false;
 			void this.options.codeIndexService.cancel().then(updateJobStatus).catch(() => {
 				progress.textContent = 'Unable to cancel semantic indexing.';
 			});
 		}));
-		this.renderBindings.add(addDisposableListener(retryJob, 'click', () => {
-			retryJob.disabled = true;
+		this.renderBindings.add(retryJob.onDidClick(() => {
+			retryJob.enabled = false;
 			void this.options.codeIndexService.retry().then(updateJobStatus).catch(() => {
 				progress.textContent = 'Unable to retry semantic indexing.';
 			});
 		}));
-		jobActions.append(cancelJob, retryJob);
 		poll();
 		this.renderBindings.add(addDisposableListener(provider, 'change', () => {
 			const configured = codeConfig.providers[provider.value.trim()];
 			endpoint.value = configured?.baseUrl ?? (provider.value.trim() === 'ollama' ? 'http://localhost:11434/v1' : '');
 		}));
-		this.renderBindings.add(addDisposableListener(providerSave, 'click', () => {
+		this.renderBindings.add(providerSave.onDidClick(() => {
 			const providerId = provider.value.trim();
 			const baseUrl = endpoint.value.trim();
 			if (!providerId) {
@@ -265,25 +264,24 @@ export class IndexingSettingsPane extends DisposableOwner {
 				group.disabled = false;
 			});
 		}));
-		providerActions.append(providerSave);
 		const actions = h(document, 'div');
 		actions.className = 'zeta-theme-json-actions';
-		const save = h(document, 'button');
-		save.className = 'zeta-theme-action';
-		save.type = 'button';
-		save.textContent = 'Save model selection';
-		const consent = h(document, 'button');
-		consent.className = 'zeta-theme-action';
-		consent.type = 'button';
-		consent.textContent = codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? 'Revoke workspace access' : 'Authorize active workspace';
-		consent.disabled = !enabled.checked;
+		const save = this.renderBindings.add(new Button(actions, {
+			label: 'Save model selection',
+			presentation: 'primary',
+		}));
+		const consent = this.renderBindings.add(new Button(actions, {
+			label: codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? 'Revoke workspace access' : 'Authorize active workspace',
+			presentation: codeConfig.semanticCodeIndex.activeWorkspaceAuthorized ? 'danger' : 'secondary',
+			enabled: enabled.checked,
+		}));
 		this.renderBindings.add(enabled.onDidChange(() => {
 			embedding.disabled = !enabled.checked;
 			rerank.disabled = !enabled.checked;
 			automaticContext.enabled = enabled.checked;
-			consent.disabled = !enabled.checked;
+			consent.enabled = enabled.checked;
 		}));
-		this.renderBindings.add(addDisposableListener(save, 'click', () => {
+		this.renderBindings.add(save.onDidClick(() => {
 			let selection: SemanticCodeIndexSelection = { type: 'disabled' };
 			try {
 				if (enabled.checked) {
@@ -306,7 +304,7 @@ export class IndexingSettingsPane extends DisposableOwner {
 				group.disabled = false;
 			});
 		}));
-		this.renderBindings.add(addDisposableListener(consent, 'click', () => {
+		this.renderBindings.add(consent.onDidClick(() => {
 			if (!codeConfig.semanticCodeIndex.activeWorkspaceAuthorized) {
 				void this.confirmSemanticCodeIndexAuthorization(group, status, codeConfig.revision);
 				return;
@@ -318,7 +316,6 @@ export class IndexingSettingsPane extends DisposableOwner {
 				group.disabled = false;
 			});
 		}));
-		actions.append(save, consent);
 		group.append(legend, hint, providerHeading, provider, endpoint, providerActions, enabled.element, embedding, rerank, automaticContext.element, status, progress, jobActions, actions);
 		semanticItem.append(group);
 		this.renderBindings.add(new SettingsItemActions(semanticItem, {

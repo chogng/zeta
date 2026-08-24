@@ -93,12 +93,6 @@
 
 .zeta-general-setting-action {
   justify-self: end;
-  border-color: var(--zeta-widget-border);
-  color: var(--zeta-foreground);
-}
-
-.zeta-general-setting-action:hover {
-  background: var(--zeta-list-hover-background);
 }
 
 .zeta-general-settings-status {

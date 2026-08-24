@@ -1,4 +1,5 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IClipboardService } from "../../../../platform/clipboard/common/clipboardService.js";
@@ -103,23 +104,24 @@ export class LocalizationSettingsPane extends DisposableOwner {
 			setSettingsItemIdentity(item, `languagePacks.${packageValue.id}@${packageValue.version}`, "resource");
 			const label = h(this.document, "span");
 			label.textContent = packageValue.displayName + " · " + packageValue.version;
-			const action = h(this.document, "button");
-			action.type = "button";
 			const installed = this.languagePacks.installedPackages.some(candidate => candidate.id === packageValue.id && candidate.version === packageValue.version);
-			action.textContent = installed
-				? this.localization.translate("zeta.settings", "displayLanguage.installed", "Installed")
-				: this.localization.translate("zeta.settings", "displayLanguage.install", "Install");
-			action.disabled = this.isLoadingPackages || installed;
-			this.rendered.add(addDisposableListener(action, "click", () => {
-				action.disabled = true;
-				void this.languagePacks.install(packageValue.id, packageValue.version)
-					.then(() => this.loadLanguagePackPackages())
-					.catch((error: unknown) => {
-						this.status.textContent = error instanceof Error ? error.message : "Unable to install language pack.";
-						action.disabled = false;
-					});
+			item.append(label);
+			const action = this.rendered.add(new Button(item, {
+				label: installed
+					? this.localization.translate("zeta.settings", "displayLanguage.installed", "Installed")
+					: this.localization.translate("zeta.settings", "displayLanguage.install", "Install"),
+				presentation: "primary",
+				enabled: !this.isLoadingPackages && !installed,
+				onClick: () => {
+					action.enabled = false;
+					void this.languagePacks.install(packageValue.id, packageValue.version)
+						.then(() => this.loadLanguagePackPackages())
+						.catch((error: unknown) => {
+							this.status.textContent = error instanceof Error ? error.message : "Unable to install language pack.";
+							action.enabled = true;
+						});
+				},
 			}));
-			item.append(label, action);
 			list.append(item);
 		}
 		this.element.append(heading, list);

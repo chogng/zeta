@@ -1,4 +1,5 @@
-import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { h, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { Button } from "../../../../base/browser/ui/button/button.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 import "./media/connectorSettings.css";
@@ -74,29 +75,28 @@ export class PluginSettingsPane extends DisposableOwner {
 		feedback.className = "zeta-integration-feedback";
 		feedback.setAttribute("role", "status");
 		card.append(heading);
-		if (!plugin.granted) card.append(this.action("Grant", () => this.plugins.grant(plugin, catalog.revision), feedback));
-		if (plugin.granted) card.append(this.action("Revoke grant", () => this.plugins.revokeGrant(plugin, catalog.revision), feedback));
-		if (!plugin.enabled) card.append(this.action("Enable", () => this.plugins.enable(plugin, catalog.revision), feedback));
-		if (plugin.enabled) card.append(this.action("Disable", () => this.plugins.disable(plugin, catalog.revision), feedback));
-		if (!plugin.enabled && !plugin.granted) card.append(this.action("Remove legacy installation", () => this.plugins.uninstall(plugin, catalog.revision), feedback, true));
+		if (!plugin.granted) this.action(card, "Grant", () => this.plugins.grant(plugin, catalog.revision), feedback);
+		if (plugin.granted) this.action(card, "Revoke grant", () => this.plugins.revokeGrant(plugin, catalog.revision), feedback);
+		if (!plugin.enabled) this.action(card, "Enable", () => this.plugins.enable(plugin, catalog.revision), feedback);
+		if (plugin.enabled) this.action(card, "Disable", () => this.plugins.disable(plugin, catalog.revision), feedback);
+		if (!plugin.enabled && !plugin.granted) this.action(card, "Remove legacy installation", () => this.plugins.uninstall(plugin, catalog.revision), feedback, true);
 		card.append(feedback);
 		return card;
 	}
 
-	private action(label: string, invoke: () => Promise<void>, feedback: HTMLElement, danger = false): HTMLButtonElement {
-		const button = h(this.document, "button");
-		button.type = "button";
-		button.className = `zeta-theme-action${danger ? " is-danger" : ""}`;
-		button.textContent = label;
-		this.rows.add(addDisposableListener(button, "click", () => {
-			button.disabled = true;
-			feedback.textContent = `${label}…`;
-			void invoke().then(() => this.reload()).catch((error: unknown) => {
-				button.disabled = false;
-				feedback.textContent = error instanceof Error ? `${label} failed: ${error.message}` : `${label} failed.`;
-			});
+	private action(container: HTMLElement, label: string, invoke: () => Promise<void>, feedback: HTMLElement, danger = false): void {
+		const button = this.rows.add(new Button(container, {
+			label,
+			presentation: danger ? "danger" : "secondary",
+			onClick: () => {
+				button.enabled = false;
+				feedback.textContent = `${label}…`;
+				void invoke().then(() => this.reload()).catch((error: unknown) => {
+					button.enabled = true;
+					feedback.textContent = error instanceof Error ? `${label} failed: ${error.message}` : `${label} failed.`;
+				});
+			},
 		}));
-		return button;
 	}
 }
 

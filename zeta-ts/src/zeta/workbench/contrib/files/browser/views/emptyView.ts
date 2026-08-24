@@ -48,16 +48,14 @@ export class EmptyView extends ViewPane {
 				void this.openFolder();
 			},
 		}));
-		this.openButton.element.classList.add(
-			"zeta-empty-explorer-open-folder",
-		);
+		this.openButton.toggleClassName("zeta-empty-explorer-open-folder", true);
 		this.statusElement = h(container.ownerDocument, "p");
 		this.statusElement.className = "zeta-empty-explorer-status";
 		this.statusElement.setAttribute("role", "status");
 		this.statusElement.setAttribute("aria-live", "polite");
 		this.contentElement.append(
 			message,
-			this.openButton.element,
+			this.openButton.domNode,
 			this.statusElement,
 		);
 	}
