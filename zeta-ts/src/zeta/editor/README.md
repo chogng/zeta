@@ -33,10 +33,10 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
 | `common/model` | `common/core`、`base/common` | `TextModel`、`TextBuffer`、Group/BlockTree/Block/Line、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
-| `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
+| `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
-| `workbench/contrib/{codeEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
+| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
 
 依赖必须保持 `workbench → editor/contrib → editor/browser/common → editor/common → base` 的方向。`src/zeta/editor` 的生产代码不得反向引用 Workbench，`src/zeta/base` 也不得反向引用 editor。每个 `TextModel` 原生拥有 Group 和 BlockTree；Code 使用一个 source Group 和 code Block，Academic 使用 schema 定义更多 Group/Block 类型。浏览器投影和 Workbench 不得为代码块或其他 block 再创建隐藏模型。
 
@@ -75,8 +75,9 @@ Contribution 必须满足以下条件：
 ## 入口与调用路径
 
 ```text
+Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/input/action registration
 Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
-                       └→ workbench/contrib/codeEditor ───→ code/diff pane + input registration
+                       └→ workbench/contrib/codeEditor ────────────────→ code/diff pane + input registration
 Academic build mode ───┬→ editor.academic.all.ts → document contribution only
                        └→ workbench/contrib/academic ──────→ profile + document pane registration
 

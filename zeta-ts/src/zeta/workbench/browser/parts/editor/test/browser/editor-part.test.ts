@@ -36,6 +36,7 @@ import {
 import {
 	EditorPaneRegistry,
 } from "../../../../../../workbench/browser/parts/editor/editorRegistry.js";
+import { ActiveEditorContext } from "../../../../../../workbench/common/contextkeys.js";
 import { h } from "../../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -556,6 +557,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const menus = new MenuService(commands, contextKeys);
 	const editor = new EditorPart(dom.window.document.body, {
 		registry,
+		contextKeyService: contextKeys,
 		titleActions: {
 			menuService: menus,
 			contextMenuProvider: {
@@ -567,6 +569,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	dom.window.document.body.append(editor.element);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
+	assert.equal(contextKeys.getValue(ActiveEditorContext.key), "stanza.editor.code");
 	editor.layout({ width: 800, height: 600 });
 
 	const toolbar = editor.element.querySelector(

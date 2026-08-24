@@ -52,6 +52,7 @@
     "src/zeta/workbench/common/**/*.ts",
     "src/zeta/workbench/contrib/academic/**/*.ts",
     "src/zeta/workbench/contrib/codeEditor/**/*.ts",
+    "src/zeta/workbench/contrib/multiDiffEditor/**/*.ts",
     "src/zeta/workbench/contrib/documentEditor/**/*.ts",
     "src/zeta/workbench/contrib/chat/**/*.ts",
     "src/zeta/workbench/services/documentCollaboration/**/*.ts",

@@ -1,22 +1,25 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { ButtonActionViewItem, type ActionViewItemOptions } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
-import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
+import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
+import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
+import type { ICommandService } from "../../../../platform/commands/common/commands.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
-import type { GitChangeFileComparison, GitChangeStatus, GitCommitFileContent, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
+import type { GitChangeFileComparison, GitChangeStatus, GitRepositoryChange, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
 import { createDiffEditorInput } from "../../codeEditor/browser/diffEditorInput.js";
+import { OpenScmMultiDiffEditorCommandId, type OpenScmMultiDiffEditorOptions, type OpenScmMultiDiffEditorResult } from "../../multiDiffEditor/browser/scmMultiDiffAction.js";
+import { resolveGitChangeInputs } from "./scmChangeEditorInput.js";
 import { gitErrorMessage } from "./scmError.js";
 
 type GitChangeSide = "index" | "worktree";
 type GitPathAction = "stage" | "unstage" | "discard";
-
-const inactiveContextMenuProvider = { showContextMenu(): void {} };
 
 /** Git status and user mutations routed through the workspace App Server. */
 export class ScmViewPane extends ViewPane {
@@ -26,6 +29,7 @@ export class ScmViewPane extends ViewPane {
 	private readonly statusElement: HTMLDivElement;
 	private readonly changesElement: HTMLDivElement;
 	private readonly renderedChanges = this.own(new ResettableDisposableGroup());
+	private readonly actionViewItems: ScmActionViewItem[] = [];
 	private status: GitStatus | undefined;
 	private readonly retiredStreamInstanceIds = new Set<string>();
 	private revision = 0;
@@ -33,7 +37,7 @@ export class ScmViewPane extends ViewPane {
 	private unavailable = false;
 	private disposed = false;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, gitService: IGitService, private readonly fileIconThemeService: IFileIconThemeService, private readonly editorService: IEditorService, private readonly commandService: ICommandService, private readonly contextMenuProvider: IContextMenuProvider) {
 		super(container, options);
 		this.gitService = gitService;
 		this.contentElement.classList.add("zeta-scm");
@@ -177,6 +181,7 @@ export class ScmViewPane extends ViewPane {
 		}
 		this.status = status;
 		this.unavailable = false;
+		this.actionViewItems.length = 0;
 		this.renderedChanges.clear();
 		this.changesElement.replaceChildren();
 		const conflicts = status.changes.filter((change) => change.conflicted);
@@ -203,15 +208,20 @@ export class ScmViewPane extends ViewPane {
 		const label = h(document, "span");
 		label.className = "zeta-scm-section-label";
 		label.textContent = title;
+		heading.append(label);
 		const actions = this.renderActionToolbar(
-			sectionActions(title, changes, side).map((action) => this.pathAction(action.id, action.label, action.action, action.paths)),
+			heading,
+			[
+				...(changes.some((change) => !change.conflicted) ? [this.viewChangesAction(title, changes, side)] : []),
+				...sectionActions(title, changes, side).map((action) => this.pathAction(action.id, action.label, action.action, action.paths)),
+			],
 			`${title} actions`,
 		);
 		actions.classList.add("zeta-scm-section-actions");
 		const count = h(document, "span");
 		count.className = "zeta-scm-section-count";
 		count.textContent = String(changes.length);
-		heading.append(label, actions, count);
+		heading.append(count);
 		const list = h(document, "ul");
 		list.className = "zeta-scm-list";
 		for (const change of changes) list.append(this.renderChange(change, side));
@@ -261,14 +271,15 @@ export class ScmViewPane extends ViewPane {
 				...(isDiscardable(change) ? [this.pathAction(`scm.change.discard.${change.path}`, `Discard ${change.path}`, "discard", [change.path])] : []),
 				this.pathAction(`scm.change.stage.${change.path}`, `Stage ${change.path}`, "stage", changePaths(change)),
 			];
-		const toolbar = this.renderActionToolbar(actions, `Actions for ${change.path}`);
+		item.append(open);
+		const toolbar = this.renderActionToolbar(item, actions, `Actions for ${change.path}`);
 		toolbar.classList.add("zeta-scm-change-actions");
 		const status = side === "index" ? change.indexStatus : change.worktreeStatus;
 		const badge = h(document, "span");
 		badge.className = `zeta-scm-change-status status-${status}`;
 		badge.textContent = statusCode(status);
 		badge.title = statusLabel(status);
-		item.append(open, toolbar, badge);
+		item.append(badge);
 		return item;
 	}
 
@@ -277,20 +288,43 @@ export class ScmViewPane extends ViewPane {
 		if (!status) return;
 		const comparison: GitChangeFileComparison = side === "index" ? "staged" : "unstaged";
 		try {
-			const file = await this.gitService.changeFile(change.path, comparison);
+			const inputs = await resolveGitChangeInputs(this.gitService, status, change, comparison);
 			if (this.disposed) return;
-			const originalPath = changeOriginalPath(change, comparison);
-			const [originalState, modifiedState] = comparison === "staged"
-				? ["HEAD", "Index"] as const
-				: ["Index", "Working Tree"] as const;
-			const original = changeEditorInput(file.original, changeFileUri(status, comparison, originalPath, "original"), `${basename(originalPath)} (${originalState})`);
-			const modified = changeEditorInput(file.modified, changeFileUri(status, comparison, change.path, "modified"), `${basename(change.path)} (${modifiedState})`);
-			if (original && modified) {
-				await this.editorService.openEditor(createDiffEditorInput(original, modified, `${original.label} ↔ ${modified.label}`), { pinned });
-			} else if (modified) {
-				await this.editorService.openEditor(modified, { pinned });
-			} else if (original) {
-				await this.editorService.openEditor(original, { pinned });
+			if (inputs.original && inputs.modified) {
+				await this.editorService.openEditor(createDiffEditorInput(inputs.original, inputs.modified, `${inputs.original.label} ↔ ${inputs.modified.label}`), { pinned });
+			} else if (inputs.modified) {
+				await this.editorService.openEditor(inputs.modified, { pinned });
+			} else if (inputs.original) {
+				await this.editorService.openEditor(inputs.original, { pinned });
+			}
+		} catch (error) {
+			if (!this.disposed) this.statusElement.textContent = gitErrorMessage(error);
+		}
+	}
+
+	private viewChangesAction(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide): IAction {
+		const label = `View All ${title}`;
+		return {
+			id: `scm.section.viewAll.${side}.${sectionActionId(title)}`,
+			label,
+			tooltip: label,
+			icon: lxiconsLibrary.codeReview,
+			enabled: true,
+			checked: undefined,
+			run: () => void this.openChanges(title, changes, side),
+		};
+	}
+
+	private async openChanges(title: string, changes: readonly GitRepositoryChange[], side: GitChangeSide): Promise<void> {
+		const status = this.status;
+		if (!status) return;
+		const comparison: GitChangeFileComparison = side === "index" ? "staged" : "unstaged";
+		try {
+			const options: OpenScmMultiDiffEditorOptions = { title, comparison, status, changes };
+			const result = await this.commandService.executeCommand<OpenScmMultiDiffEditorResult>(OpenScmMultiDiffEditorCommandId, options);
+			if (this.disposed || this.status !== status) return;
+			if (result === "empty") {
+				this.statusElement.textContent = `No text changes are available in ${title}.`;
 			}
 		} catch (error) {
 			if (!this.disposed) this.statusElement.textContent = gitErrorMessage(error);
@@ -309,23 +343,17 @@ export class ScmViewPane extends ViewPane {
 		};
 	}
 
-	private renderActionToolbar(actions: readonly IAction[], ariaLabel: string): HTMLDivElement {
-		const host = h(this.element.ownerDocument, "div");
-		const toolbar = this.renderedChanges.add(new ToolBar(host, {
-			contextMenuProvider: inactiveContextMenuProvider,
+	private renderActionToolbar(container: HTMLElement, actions: readonly IAction[], ariaLabel: string): HTMLDivElement {
+		const toolbar = this.renderedChanges.add(new WorkbenchToolBar(container, this.contextMenuProvider, {
 			ariaLabel,
+			actionViewItemProvider: (action, options) => {
+				const item = new ScmActionViewItem(action, () => this.busy, options);
+				this.actionViewItems.push(item);
+				return item;
+			},
 		}));
 		toolbar.setActions(actions);
 		toolbar.element.classList.add("zeta-scm-action-toolbar");
-		for (const button of toolbar.element.querySelectorAll<HTMLButtonElement>("button")) {
-			button.classList.add("zeta-scm-action-button");
-			const item = button.closest<HTMLElement>(".zeta-action-view-item");
-			const action = actions.find((candidate) => candidate.id === item?.dataset.actionId);
-			if (action) {
-				button.setAttribute("aria-label", action.label);
-				if (action.icon) button.dataset.icon = action.icon.id;
-			}
-		}
 		return toolbar.element;
 	}
 
@@ -333,6 +361,7 @@ export class ScmViewPane extends ViewPane {
 		if (this.disposed || revision !== this.revision) return;
 		this.status = undefined;
 		this.unavailable = true;
+		this.actionViewItems.length = 0;
 		this.renderedChanges.clear();
 		this.changesElement.replaceChildren();
 		this.statusElement.textContent = gitErrorMessage(error);
@@ -348,9 +377,23 @@ export class ScmViewPane extends ViewPane {
 		const hasStagedChanges = (this.status?.changes ?? []).some((change) => !change.conflicted && change.indexStatus !== "unmodified");
 		this.commitButton.disabled = this.busy || !hasStagedChanges;
 		this.commitInput.disabled = this.busy || this.unavailable;
-		for (const button of this.changesElement.querySelectorAll<HTMLButtonElement>(".zeta-scm-action-button")) {
-			button.disabled = this.busy;
-		}
+		for (const item of this.actionViewItems) item.setBusy(this.busy);
+	}
+}
+
+/** SCM-owned projection of repository mutation state onto a standard action button. */
+class ScmActionViewItem extends ButtonActionViewItem {
+	constructor(action: IAction, private readonly isBusy: () => boolean, options: ActionViewItemOptions) {
+		super(action, options);
+	}
+
+	public override render(container: HTMLElement): void {
+		super.render(container);
+		this.setBusy(this.isBusy());
+	}
+
+	public setBusy(busy: boolean): void {
+		this.button.enabled = this.action.enabled && !busy;
 	}
 }
 
@@ -371,6 +414,10 @@ function sectionActions(title: string, changes: readonly GitRepositoryChange[], 
 	if (discardable.length > 0) actions.push({ id: "scm.section.discardAll", label: "Discard All Changes", action: "discard" as const, paths: uniquePaths(discardable) });
 	actions.push({ id: `scm.section.stageAll.${title === "Merge Changes" ? "merge" : "changes"}`, label: title === "Merge Changes" ? "Stage All Merge Changes" : "Stage All Changes", action: "stage" as const, paths: uniquePaths(changes.flatMap(changePaths)) });
 	return actions;
+}
+
+function sectionActionId(title: string): string {
+	return title === "Merge Changes" ? "merge" : title === "Staged Changes" ? "staged" : "changes";
 }
 
 function uniquePaths(paths: readonly string[]): string[] {
@@ -394,31 +441,6 @@ function repositoryFileUri(workspacePath: string | undefined, path: string): URI
 		return URI.file(`${normalizedWorkspace}/${normalizedPath}`);
 	}
 	return URI.parse(`file:///${normalizedPath.split("/").map(encodeURIComponent).join("/")}`);
-}
-
-function changeOriginalPath(change: GitRepositoryChange, comparison: GitChangeFileComparison): string {
-	const status = comparison === "staged" ? change.indexStatus : change.worktreeStatus;
-	return status === "renamed" || status === "copied" ? change.originalPath ?? change.path : change.path;
-}
-
-function changeEditorInput(content: GitCommitFileContent, resource: URI, label: string) {
-	if (content.kind === "binary") return undefined;
-	return {
-		resource,
-		label,
-		readOnly: true,
-		initialText: content.kind === "missing" ? "" : content.text,
-	};
-}
-
-function changeFileUri(status: GitStatus, comparison: GitChangeFileComparison, path: string, side: "original" | "modified"): URI {
-	const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-	const query = new URLSearchParams({
-		side,
-		stream: status.streamInstanceId,
-		revision: String(status.revision),
-	});
-	return URI.parse(`git-change:/${comparison}/${encodedPath}?${query}`);
 }
 
 function statusCode(status: GitChangeStatus): string {

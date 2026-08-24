@@ -33,7 +33,8 @@ import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKey, IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { ActiveEditorContext } from "../../../common/contextkeys.js";
 
 /** Operations and state owned independently by one EditorGroup. */
 export interface IEditorGroup {
@@ -84,6 +85,7 @@ export interface EditorGroupOptions {
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly onDidActivate?: () => void;
+	readonly onDidChangeActiveEditor?: () => void;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
 
@@ -105,6 +107,9 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly registry: EditorPaneRegistry;
 	private readonly configurationService: IConfigurationService | undefined;
 	private readonly contextKeyService: IContextKeyService | undefined;
+	private readonly scopedContextKeyService: IScopedContextKeyService | undefined;
+	private readonly activeEditorContext: IContextKey<string> | undefined;
+	private readonly onDidChangeActiveEditor: (() => void) | undefined;
 	private readonly keybindingService: IKeybindingService | undefined;
 	private readonly keybindingsResourceService: IKeybindingsResourceService | undefined;
 	private readonly keyboardLayoutService: IKeyboardLayoutService | undefined;
@@ -141,6 +146,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.registry = options.registry;
 		this.configurationService = options.configurationService;
 		this.contextKeyService = options.contextKeyService;
+		this.onDidChangeActiveEditor = options.onDidChangeActiveEditor;
 		this.keybindingService = options.keybindingService;
 		this.keybindingsResourceService = options.keybindingsResourceService;
 		this.keyboardLayoutService = options.keyboardLayoutService;
@@ -164,6 +170,12 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.element.className = "zeta-editor-group";
 		this.element.setAttribute("aria-label", "Editor group");
 		container.append(this.element);
+		this.scopedContextKeyService = this.contextKeyService
+			? this.own(this.contextKeyService.createScoped(this.element))
+			: undefined;
+		this.activeEditorContext = this.scopedContextKeyService
+			? ActiveEditorContext.bindTo(this.scopedContextKeyService)
+			: undefined;
 		this.own(new DragAndDropObserver(this.element, {
 			onDragOver: (event) => {
 				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
@@ -203,7 +215,10 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 				},
 				endDrag: () => options.dragAndDrop?.end(),
 			},
-			options.titleActions,
+			options.titleActions ? {
+				...options.titleActions,
+				contextKeyService: this.scopedContextKeyService,
+			} : undefined,
 		));
 		this.contentElement = h(ownerDocument, "div");
 		this.contentElement.className = "zeta-editor-group-content";
@@ -388,6 +403,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		if (wasActive) {
 			const next = this.entries[index] ?? this.entries[index - 1];
 			if (next) this.activateEntry(next, true);
+			else this.updateActiveEditorContext();
 		}
 		this.renderContent();
 		this.renderChrome();
@@ -467,6 +483,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		}
 		this.entries.length = 0;
 		this.activeEntry = undefined;
+		this.updateActiveEditorContext();
 		this.ordinaryContent = content;
 		this.renderContent();
 		this.renderChrome();
@@ -485,16 +502,23 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	}
 
 	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
+		const changed = this.activeEntry !== entry;
 		if (this.activeEntry !== entry) {
 			this.activeEntry?.paneInstance.setVisible(EditorPaneVisibility.Hidden);
 			this.activeEntry = entry;
 		}
+		if (changed) this.updateActiveEditorContext();
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		entry.paneInstance.pane.layout(this.dimension);
 		entry.paneInstance.setVisible(EditorPaneVisibility.Visible);
 		this.renderChrome();
 		if (focus) entry.paneInstance.pane.focus();
+	}
+
+	private updateActiveEditorContext(): void {
+		this.activeEditorContext?.set(this.activePane?.id ?? "");
+		this.onDidChangeActiveEditor?.();
 	}
 
 	private renderContent(): void {

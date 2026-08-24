@@ -1,0 +1,121 @@
+.stanza-multi-diff-editor {
+	position: relative;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	color: var(--zeta-editor-foreground);
+	background: var(--zeta-editor-background);
+	font-family: var(--zeta-font-family-monospace, ui-monospace, monospace);
+	white-space: pre;
+	outline: none;
+}
+
+.stanza-multi-diff-editor:focus-visible {
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: -1px;
+}
+
+.stanza-multi-diff-editor-content {
+	position: relative;
+	box-sizing: border-box;
+	min-width: 100%;
+}
+
+.stanza-multi-diff-editor-section {
+	position: absolute;
+	right: 8px;
+	left: 8px;
+	box-sizing: border-box;
+	overflow: hidden;
+	background: var(--zeta-editor-background);
+	border: 1px solid var(--zeta-widget-border);
+	border-radius: 6px;
+}
+
+.stanza-multi-diff-editor-header {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	width: 100%;
+	height: 34px;
+	min-width: 0;
+	padding: 0 10px;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	background: color-mix(in srgb, var(--zeta-editor-background) 92%, var(--zeta-foreground));
+	border: 0;
+	border-bottom: 1px solid var(--zeta-widget-border);
+	cursor: pointer;
+}
+
+.stanza-multi-diff-editor-header:hover {
+	background: var(--zeta-toolbar-hover-background);
+}
+
+.stanza-multi-diff-editor-header:focus-visible {
+	outline: 1px solid var(--zeta-focus-border);
+	outline-offset: -1px;
+}
+
+.stanza-multi-diff-editor-section.collapsed .stanza-multi-diff-editor-header {
+	border-bottom-color: transparent;
+}
+
+.stanza-multi-diff-editor-title {
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+}
+
+.stanza-multi-diff-editor-labels {
+	min-width: 0;
+	margin-left: auto;
+	padding-left: 16px;
+	overflow: hidden;
+	color: var(--zeta-description-foreground);
+	font-size: 0.9em;
+	text-overflow: ellipsis;
+}
+
+.stanza-multi-diff-editor-body {
+	position: relative;
+	min-width: 100%;
+	overflow: hidden;
+}
+
+.stanza-multi-diff-editor-rows {
+	position: absolute;
+	top: 0;
+	left: 0;
+	min-width: 100%;
+	will-change: transform;
+}
+
+.stanza-multi-diff-editor.hide-line-numbers .stanza-diff-editor-line-number {
+	display: none;
+}
+
+.stanza-multi-diff-editor-status {
+	display: flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: 40px;
+	padding: 0 10px;
+	color: var(--zeta-description-foreground);
+	white-space: normal;
+}
+
+.stanza-multi-diff-editor-accessibility-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+}

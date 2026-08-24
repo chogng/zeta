@@ -10,7 +10,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
@@ -33,6 +33,7 @@ import type { EditorLineGutterDecoration } from "../../../../editor/browser/view
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
+import { ActiveEditorContext } from "../../../common/contextkeys.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -93,13 +94,14 @@ export interface IEditorPartOptions {
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly splitView: SplitView;
-	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
+	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "onDidChangeActiveEditor" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
 	private _activeGroup: EditorGroup;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private welcomeRecentProjects: readonly IEditorWelcomeProject[];
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
+	private readonly activeEditorContext: IContextKey<string> | undefined;
 
 	override get minimumWidth(): number { return 120; }
 	override get minimumHeight(): number { return 119; }
@@ -143,6 +145,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		};
 		this.welcomeRecentProjects = options.welcome?.recentProjects ?? [];
 		this.saveAsResource = options.saveAsResource;
+		this.activeEditorContext = options.contextKeyService
+			? ActiveEditorContext.bindTo(options.contextKeyService)
+			: undefined;
+		this.defer(() => this.activeEditorContext?.reset());
 		this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
 			this.dropEditor(event);
 		});
@@ -153,6 +159,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const initial = this.createGroup();
 		this._groups.push(initial);
 		this._activeGroup = initial.group;
+		this.updateActiveEditorContext();
 		this.splitView.addView(initial.view);
 		this.own(observeElementSize(this.contentElement, size => this.layout(size)));
 	}
@@ -181,11 +188,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			const pane = await host.group.openEditor(input, options);
 			if (!options.preserveFocus) {
 				this._activeGroup = host.group;
+				this.updateActiveEditorContext();
 			}
 			return pane;
 		} catch (error) {
 			if (created) this.removeGroup(host);
 			this._activeGroup = source;
+			this.updateActiveEditorContext();
 			throw error;
 		}
 	}
@@ -219,6 +228,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const source = this._activeGroup;
 		const created = this.insertGroupAfter(source);
 		this._activeGroup = created.group;
+		this.updateActiveEditorContext();
 		try {
 			if (source.activeInput) {
 				await created.group.openEditor(source.activeInput);
@@ -227,6 +237,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		} catch (error) {
 			this.removeGroup(created);
 			this._activeGroup = source;
+			this.updateActiveEditorContext();
 			throw error;
 		}
 	}
@@ -266,6 +277,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			} : {}),
 			onDidActivate: () => {
 				this._activeGroup = group;
+				this.updateActiveEditorContext();
+			},
+			onDidChangeActiveEditor: () => {
+				if (this._activeGroup === group) this.updateActiveEditorContext();
 			},
 			dragAndDrop: {
 				start: (source, input) => this.tabDragAndDrop.start(source, input),
@@ -316,17 +331,23 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (event.source === event.target) {
 			event.target.moveEditor(event.input, targetIndex);
 			this._activeGroup = event.target;
+			this.updateActiveEditorContext();
 			event.target.focus();
 			return;
 		}
 		void event.source.moveEditorTo(event.input, event.target, targetIndex)
 			.then(() => {
 				this._activeGroup = event.target;
+				this.updateActiveEditorContext();
 				event.target.focus();
 			})
 			.catch((error) => {
 				console.error("Failed to move Editor tab", error);
 			});
+	}
+
+	private updateActiveEditorContext(): void {
+		this.activeEditorContext?.set(this.activePane?.id ?? "");
 	}
 }
 

@@ -130,6 +130,8 @@ registerAction2(class TogglePanelAction extends Action2 {
 });
 ```
 
+`keybinding` 可以声明一项，也可以声明多项各自拥有 `when`、参数、来源和优先级的独立规则；同一规则的等价备用按键继续使用 `secondary`。不要为了让不同上下文共享一个 Command 而复制 Action 类。
+
 静态 contribution module 可以让该注册随当前 JavaScript realm 存活。动态功能必须保存并
 释放 `registerAction2()` 返回的 `IDisposable`。如果任一步注册失败，
 `registerAction2()` 会释放此前已完成的注册，不留下半注册状态。
@@ -236,7 +238,7 @@ const toolbar = new MenuWorkbenchToolBar(
 
 `MenuWorkbenchToolBar` 会：
 
-1. 通过 `menuService.createMenu(menuId)` 创建当前 context 下的可观察视图。
+1. 通过 `menuService.createMenu(menuId, contextKeyService?)` 创建当前 context 下的可观察视图；Editor group 等拥有 DOM scope 的 host 传入自己的 scoped context service。
 2. 调用 `menu.getActions()` 获得分组后的 runtime actions。
 3. 将 `navigation` 投影到 primary，其余 group 投影到 secondary。
 4. 在 Menu Registry 或 Context Key 变化时重新解析和渲染。

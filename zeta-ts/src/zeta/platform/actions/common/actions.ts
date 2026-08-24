@@ -235,7 +235,7 @@ export interface IAction2Options extends ICommandAction {
 		readonly group?: "navigation" | string;
 		readonly order?: number;
 	}>;
-	readonly keybinding?: IAction2KeybindingOptions;
+	readonly keybinding?: OneOrMany<IAction2KeybindingOptions>;
 	readonly f1?: boolean;
 }
 
@@ -267,8 +267,7 @@ export function registerAction2(
 			(accessor, ...args) => action.run(accessor, ...args),
 		));
 
-		if (action.desc.keybinding) {
-			const contribution = action.desc.keybinding;
+		for (const contribution of toArray(action.desc.keybinding)) {
 			const keybindings = [
 				contribution.primary,
 				...(contribution.secondary ?? []),
@@ -289,12 +288,7 @@ export function registerAction2(
 			}
 		}
 
-		const placements = action.desc.menu
-			? Array.isArray(action.desc.menu)
-				? action.desc.menu
-				: [action.desc.menu]
-			: [];
-		for (const placement of placements) {
+		for (const placement of toArray(action.desc.menu)) {
 			registrations.add(MenusRegistry.appendMenuItem(placement.id, {
 				command: action.desc,
 				when: placement.when,
@@ -318,4 +312,9 @@ export function registerAction2(
 	}
 
 	return registrations;
+}
+
+function toArray<T>(value: OneOrMany<T> | undefined): readonly T[] {
+	if (value === undefined) return [];
+	return Array.isArray(value) ? value : [value as T];
 }

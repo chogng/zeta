@@ -6,8 +6,9 @@ import { observeResize } from "../../../../base/browser/observer.js";
 import { getWindow } from "../../../../base/browser/window.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
-import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
+import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { DiffOverviewRuler } from "./diffOverviewRuler.js";
+import { createDiffEditorRow } from "./diffEditorRows.js";
 
 const DEFAULT_LINE_HEIGHT = 20;
 const DEFAULT_OVERSCAN_ROW_COUNT = 8;
@@ -213,7 +214,7 @@ export class DiffEditorWidget extends DisposableOwner {
 		const fragment = createFragment(this.element.ownerDocument);
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
 			const row = rows[rowIndex]!;
-			fragment.append(createDiffRow(this.element.ownerDocument, row, this.model.original, this.model.modified, this.lineHeight, rowIndex === this.activeChangeRow, this.showInlineChanges));
+			fragment.append(createDiffEditorRow(this.element.ownerDocument, row, this.model, this.lineHeight, rowIndex === this.activeChangeRow, this.showInlineChanges));
 		}
 		this.rowsNode.setTransform(`translate3d(0, ${startRow * this.lineHeight}px, 0)`);
 		reset(this.rowsElement, fragment);
@@ -222,59 +223,10 @@ export class DiffEditorWidget extends DisposableOwner {
 	}
 }
 
-function createDiffRow(ownerDocument: Document, row: LineDiffRow, original: DiffModel["original"], modified: DiffModel["modified"], lineHeight: number, active: boolean, showInlineChanges: boolean): HTMLDivElement {
-	const element = h(ownerDocument, "div");
-	element.className = `stanza-diff-editor-row ${row.kind}`;
-	element.classList.toggle("active", active);
-	element.style.height = `${lineHeight}px`;
-	element.style.lineHeight = `${lineHeight}px`;
-	element.append(
-		createDiffCell(ownerDocument, "original", row.kind, row.originalLineIndex, row.originalLineIndex === undefined ? undefined : original.getLineContent(row.originalLineIndex), row.originalChanges, showInlineChanges),
-		createDiffCell(ownerDocument, "modified", row.kind, row.modifiedLineIndex, row.modifiedLineIndex === undefined ? undefined : modified.getLineContent(row.modifiedLineIndex), row.modifiedChanges, showInlineChanges),
-	);
-	return element;
-}
-
 function diffRowLocation(row: LineDiffRow): string {
 	const original = row.originalLineIndex === undefined ? "no original line" : `original line ${row.originalLineIndex + 1}`;
 	const modified = row.modifiedLineIndex === undefined ? "no modified line" : `modified line ${row.modifiedLineIndex + 1}`;
 	return `${original}, ${modified}`;
-}
-
-function createDiffCell(ownerDocument: Document, side: "original" | "modified", kind: LineDiffKind, lineIndex: number | undefined, text: string | undefined, changes: readonly DiffRange[], showInlineChanges: boolean): HTMLDivElement {
-	const cell = h(ownerDocument, "div");
-	cell.className = `stanza-diff-editor-cell ${side}`;
-	const number = h(ownerDocument, "span");
-	number.className = "stanza-diff-editor-line-number";
-	number.textContent = lineIndex === undefined ? "" : String(lineIndex + 1);
-	const content = h(ownerDocument, "span");
-	content.className = "stanza-diff-editor-line-content";
-	if (text === undefined) {
-		cell.classList.add("missing");
-	} else {
-		if (showInlineChanges) projectDiffText(ownerDocument, content, text, changes, side === "original" ? LineDiffKind.Removed : LineDiffKind.Added);
-		else content.textContent = text;
-		if (kind === LineDiffKind.Modified) cell.classList.add(side === "original" ? "removed" : "added");
-		else if (kind === LineDiffKind.Removed && side === "original") cell.classList.add("removed");
-		else if (kind === LineDiffKind.Added && side === "modified") cell.classList.add("added");
-	}
-	cell.append(number, content);
-	return cell;
-}
-
-function projectDiffText(ownerDocument: Document, target: HTMLElement, text: string, changes: readonly DiffRange[], changedKind: LineDiffKind): void {
-	const fragment = createFragment(ownerDocument);
-	let previousEnd = 0;
-	for (const change of changes) {
-		fragment.append(text.slice(previousEnd, change.startColumn));
-		const changed = h(ownerDocument, "span");
-		changed.className = `stanza-diff-editor-inline ${changedKind}`;
-		changed.textContent = text.slice(change.startColumn, change.endColumn);
-		fragment.append(changed);
-		previousEnd = change.endColumn;
-	}
-	fragment.append(text.slice(previousEnd));
-	reset(target, fragment);
 }
 
 function validateOptions(options: DiffEditorWidgetOptions): void {

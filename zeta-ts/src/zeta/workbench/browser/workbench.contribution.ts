@@ -31,6 +31,7 @@ import { registerTerminalView } from "../contrib/terminal/browser/terminal.contr
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
+import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";
 import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/commandsQuickAccess.js";

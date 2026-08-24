@@ -11,6 +11,7 @@ const result = spawnSync(process.execPath, [
 	'../.build/desktop/test/src/zeta/editor/**/test/**/*.test.js',
 	'../.build/desktop/test/src/zeta/workbench/contrib/academic/**/test/**/*.test.js',
 	'../.build/desktop/test/src/zeta/workbench/contrib/codeEditor/**/test/**/*.test.js',
+	'../.build/desktop/test/src/zeta/workbench/contrib/multiDiffEditor/**/test/**/*.test.js',
 	'../.build/desktop/test/src/zeta/workbench/contrib/bulkEdit/**/test/**/*.test.js',
 	'../.build/desktop/test/src/zeta/workbench/contrib/documentEditor/**/test/**/*.test.js',
 	'../.build/desktop/test/src/zeta/workbench/services/documentCollaboration/**/test/**/*.test.js',

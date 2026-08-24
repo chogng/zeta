@@ -1,0 +1,391 @@
+import './multiDiffEditorWidget.css';
+import '../diffEditor/diffEditorWidget.css';
+import { addDisposableListener, fragment as createFragment, h, isHTMLElement, reset, stopEvent } from '../../../../base/browser/dom.js';
+import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { getClientArea, type IDimension } from '../../../../base/browser/geometry.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { getWindow } from '../../../../base/browser/window.js';
+import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { type DiffModel } from '../../../common/diff/diffModel.js';
+import { LineDiffKind } from '../../../common/diff/lineDiff.js';
+import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
+
+const DEFAULT_LINE_HEIGHT = 20;
+const DEFAULT_OVERSCAN_ROW_COUNT = 8;
+const SECTION_HEADER_HEIGHT = 34;
+const SECTION_GAP = 8;
+const STATUS_BODY_HEIGHT = 40;
+
+export interface MultiDiffEditorItem {
+	readonly id: string;
+	readonly label: string;
+	readonly originalLabel?: string;
+	readonly modifiedLabel?: string;
+	readonly model: DiffModel;
+}
+
+export interface MultiDiffEditorWidgetOptions {
+	readonly container: HTMLElement;
+	readonly items: readonly MultiDiffEditorItem[];
+	readonly lineHeight?: number;
+	readonly fontFamily?: string;
+	readonly fontSize?: number;
+	readonly fontLigatures?: boolean;
+	readonly showLineNumbers?: boolean;
+	readonly showInlineChanges?: boolean;
+	readonly loopChanges?: boolean;
+	readonly overscanRowCount?: number;
+	readonly ariaLabel?: string;
+}
+
+export interface MultiDiffEditorLocation {
+	readonly itemId: string;
+	readonly rowIndex: number;
+}
+
+interface MultiDiffSectionLayout {
+	readonly top: number;
+	readonly bodyTop: number;
+	readonly bodyHeight: number;
+	readonly height: number;
+}
+
+/** Read-only, vertically virtualized presentation of multiple DiffModels. */
+export class MultiDiffEditorWidget extends DisposableOwner {
+	public readonly domNode: HTMLDivElement;
+	private readonly contentDomNode: HTMLDivElement;
+	private readonly contentNode: FastDomNode<HTMLDivElement>;
+	private readonly accessibilityStatusDomNode: HTMLDivElement;
+	private readonly items: readonly MultiDiffEditorItem[];
+	private readonly sections: readonly MultiDiffSection[];
+	private readonly layouts: MultiDiffSectionLayout[] = [];
+	private readonly collapsedItemIds = new Set<string>();
+	private readonly lineHeight: number;
+	private readonly overscanRowCount: number;
+	private readonly showInlineChanges: boolean;
+	private readonly loopChanges: boolean;
+	private viewportWidth = 0;
+	private viewportHeight = 0;
+	private activeChange: MultiDiffEditorLocation | undefined;
+
+	constructor(options: MultiDiffEditorWidgetOptions) {
+		super();
+		validateOptions(options);
+		this.items = options.items;
+		this.lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
+		this.overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
+		this.showInlineChanges = options.showInlineChanges ?? true;
+		this.loopChanges = options.loopChanges ?? true;
+		const ownerDocument = options.container.ownerDocument;
+		this.domNode = h(ownerDocument, 'div');
+		this.domNode.className = 'stanza-multi-diff-editor';
+		this.domNode.classList.toggle('hide-line-numbers', options.showLineNumbers === false);
+		if (options.fontFamily) this.domNode.style.fontFamily = options.fontFamily;
+		if (options.fontSize !== undefined) this.domNode.style.fontSize = `${options.fontSize}px`;
+		this.domNode.style.fontVariantLigatures = options.fontLigatures ? 'normal' : 'none';
+		this.domNode.tabIndex = 0;
+		this.domNode.setAttribute('role', 'region');
+		this.domNode.setAttribute('aria-label', options.ariaLabel ?? `Multi-file diff editor with ${this.items.length} files`);
+		this.contentDomNode = h(ownerDocument, 'div');
+		this.contentNode = new FastDomNode(this.contentDomNode);
+		this.contentNode.setClassName('stanza-multi-diff-editor-content');
+		this.accessibilityStatusDomNode = h(ownerDocument, 'div');
+		this.accessibilityStatusDomNode.className = 'stanza-multi-diff-editor-accessibility-status';
+		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
+		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
+		this.sections = this.items.map((item) => this.own(new MultiDiffSection(ownerDocument, item, () => this.toggleItem(item.id))));
+		for (const section of this.sections) this.contentDomNode.append(section.domNode);
+		this.domNode.append(this.contentDomNode, this.accessibilityStatusDomNode);
+		options.container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
+		this.own(addDisposableListener(this.domNode, 'scroll', () => this.project()));
+		this.own(addDisposableListener(this.domNode, 'keydown', (event) => this.handleKeydown(event)));
+		for (let index = 0; index < this.items.length; index += 1) {
+			const item = this.items[index]!;
+			const section = this.sections[index]!;
+			this.own(item.model.onDidChange(() => {
+				section.invalidate();
+				if (this.activeChange?.itemId === item.id) this.activeChange = undefined;
+				this.refreshLayout();
+			}));
+		}
+		this.own(observeResize(this.domNode, ([entry]) => {
+			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
+		}));
+		this.refreshLayout();
+		this.layout(getClientArea(this.domNode));
+	}
+
+	public get currentChange(): MultiDiffEditorLocation | undefined {
+		return this.activeChange;
+	}
+
+	public layout(size: IDimension = getClientArea(this.domNode)): void {
+		if (!Number.isFinite(size.width) || size.width < 0 || !Number.isFinite(size.height) || size.height < 0) {
+			throw new RangeError('Multi-diff editor layout size must be finite and non-negative');
+		}
+		this.viewportWidth = size.width;
+		this.viewportHeight = size.height;
+		this.project(true);
+	}
+
+	public toggleItem(itemId: string): boolean {
+		const index = this.items.findIndex((item) => item.id === itemId);
+		if (index < 0) throw new RangeError(`Unknown multi-diff item '${itemId}'`);
+		if (this.collapsedItemIds.has(itemId)) this.collapsedItemIds.delete(itemId);
+		else this.collapsedItemIds.add(itemId);
+		this.sections[index]!.setCollapsed(this.collapsedItemIds.has(itemId));
+		this.refreshLayout();
+		return this.collapsedItemIds.has(itemId);
+	}
+
+	public nextChange(): MultiDiffEditorLocation | undefined {
+		return this.selectRelativeChange(1);
+	}
+
+	public previousChange(): MultiDiffEditorLocation | undefined {
+		return this.selectRelativeChange(-1);
+	}
+
+	public collapseAll(): void {
+		let changed = false;
+		for (let index = 0; index < this.items.length; index += 1) {
+			const item = this.items[index]!;
+			if (this.collapsedItemIds.has(item.id)) continue;
+			this.collapsedItemIds.add(item.id);
+			this.sections[index]!.setCollapsed(true);
+			changed = true;
+		}
+		if (changed) this.refreshLayout();
+	}
+
+	public expandAll(): void {
+		if (this.collapsedItemIds.size === 0) return;
+		this.collapsedItemIds.clear();
+		for (const section of this.sections) section.setCollapsed(false);
+		this.refreshLayout();
+	}
+
+	private refreshLayout(): void {
+		let top = SECTION_GAP;
+		this.layouts.length = 0;
+		for (let index = 0; index < this.items.length; index += 1) {
+			const item = this.items[index]!;
+			const collapsed = this.collapsedItemIds.has(item.id);
+			const rowCount = item.model.diff?.rows.length ?? 0;
+			const bodyHeight = collapsed ? 0 : rowCount > 0 ? rowCount * this.lineHeight : STATUS_BODY_HEIGHT;
+			const height = SECTION_HEADER_HEIGHT + bodyHeight;
+			const layout = { top, bodyTop: top + SECTION_HEADER_HEIGHT, bodyHeight, height };
+			this.layouts.push(layout);
+			this.sections[index]!.layout(layout);
+			top += height + SECTION_GAP;
+		}
+		this.contentNode.setHeight(top);
+		this.project(true);
+	}
+
+	private selectRelativeChange(delta: -1 | 1): MultiDiffEditorLocation | undefined {
+		const changes = this.items.flatMap((item) => item.model.diff?.rows.flatMap((row, rowIndex) =>
+			row.kind === LineDiffKind.Unchanged ? [] : [{ itemId: item.id, rowIndex }]) ?? []);
+		if (changes.length === 0) {
+			this.accessibilityStatusDomNode.textContent = this.items.some((item) => item.model.state.kind === 'loading')
+				? 'Computing differences'
+				: 'No differences';
+			return undefined;
+		}
+		const currentIndex = this.activeChange
+			? changes.findIndex((change) => change.itemId === this.activeChange!.itemId && change.rowIndex === this.activeChange!.rowIndex)
+			: -1;
+		const selectedIndex = currentIndex < 0
+			? delta > 0 ? 0 : changes.length - 1
+			: this.loopChanges
+				? (currentIndex + delta + changes.length) % changes.length
+				: Math.max(0, Math.min(changes.length - 1, currentIndex + delta));
+		const location = changes[selectedIndex]!;
+		this.revealChange(location);
+		const item = this.items.find((candidate) => candidate.id === location.itemId)!;
+		this.accessibilityStatusDomNode.textContent = `Change ${selectedIndex + 1} of ${changes.length}, ${item.label}`;
+		return location;
+	}
+
+	private revealChange(location: MultiDiffEditorLocation): void {
+		const itemIndex = this.items.findIndex((item) => item.id === location.itemId);
+		if (itemIndex < 0) throw new RangeError(`Unknown multi-diff item '${location.itemId}'`);
+		if (this.collapsedItemIds.delete(location.itemId)) {
+			this.sections[itemIndex]!.setCollapsed(false);
+			this.refreshLayout();
+		}
+		const rowCount = this.items[itemIndex]!.model.diff?.rows.length ?? 0;
+		if (!Number.isSafeInteger(location.rowIndex) || location.rowIndex < 0 || location.rowIndex >= rowCount) {
+			throw new RangeError('Multi-diff row index is outside its item');
+		}
+		this.activeChange = Object.freeze({ ...location });
+		const layout = this.layouts[itemIndex]!;
+		const rowTop = layout.bodyTop + location.rowIndex * this.lineHeight;
+		const rowBottom = rowTop + this.lineHeight;
+		const viewportBottom = this.domNode.scrollTop + this.viewportHeight;
+		if (rowTop < this.domNode.scrollTop) this.domNode.scrollTop = rowTop;
+		else if (rowBottom > viewportBottom) this.domNode.scrollTop = Math.max(0, rowBottom - this.viewportHeight);
+		this.project(true);
+	}
+
+	private handleKeydown(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing || event.key !== 'F7' || event.ctrlKey || event.metaKey || event.altKey) return;
+		stopEvent(event);
+		if (event.shiftKey) this.previousChange();
+		else this.nextChange();
+	}
+
+	private project(force = false): void {
+		const viewportTop = this.domNode.scrollTop;
+		const viewportBottom = viewportTop + this.viewportHeight;
+		for (let index = 0; index < this.items.length; index += 1) {
+			const item = this.items[index]!;
+			const section = this.sections[index]!;
+			const layout = this.layouts[index]!;
+			if (this.collapsedItemIds.has(item.id) || layout.top + layout.height < viewportTop || layout.top > viewportBottom) {
+				section.clearRows();
+				continue;
+			}
+			const diff = item.model.diff;
+			if (!diff || diff.rows.length === 0) {
+				section.showStatus(item.model.state.kind === 'error'
+					? `Could not compute differences: ${item.model.state.error.message}`
+					: item.model.state.kind === 'loading' ? 'Computing differences…' : 'No differences');
+				continue;
+			}
+			section.showRows();
+			const firstVisibleRow = Math.floor(Math.max(0, viewportTop - layout.bodyTop) / this.lineHeight);
+			const visibleRowCount = Math.ceil(this.viewportHeight / this.lineHeight);
+			const startRow = Math.max(0, firstVisibleRow - this.overscanRowCount);
+			const endRow = Math.min(diff.rows.length, firstVisibleRow + visibleRowCount + this.overscanRowCount);
+			section.renderRows(
+				startRow,
+				endRow,
+				this.lineHeight,
+				this.activeChange?.itemId === item.id ? this.activeChange.rowIndex : -1,
+				this.showInlineChanges,
+				force,
+			);
+		}
+	}
+}
+
+class MultiDiffSection extends DisposableOwner {
+	public readonly domNode: HTMLElement;
+	private readonly headerDomNode: HTMLButtonElement;
+	private readonly bodyDomNode: HTMLDivElement;
+	private readonly rowsDomNode: HTMLDivElement;
+	private readonly rowsNode: FastDomNode<HTMLDivElement>;
+	private readonly statusDomNode: HTMLDivElement;
+	private renderedStartRow = -1;
+	private renderedEndRow = -1;
+	private renderedActiveRow = -1;
+
+	constructor(ownerDocument: Document, private readonly item: MultiDiffEditorItem, toggle: () => void) {
+		super();
+		this.domNode = h(ownerDocument, 'section');
+		this.domNode.className = 'stanza-multi-diff-editor-section';
+		this.domNode.setAttribute('role', 'group');
+		this.domNode.setAttribute('aria-label', item.label);
+		this.headerDomNode = h(ownerDocument, 'button');
+		this.headerDomNode.type = 'button';
+		this.headerDomNode.className = 'stanza-multi-diff-editor-header';
+		this.headerDomNode.setAttribute('aria-expanded', 'true');
+		const titleDomNode = h(ownerDocument, 'span');
+		titleDomNode.className = 'stanza-multi-diff-editor-title';
+		titleDomNode.textContent = item.label;
+		const labelsDomNode = h(ownerDocument, 'span');
+		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
+		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter((label) => label !== undefined).join(' ↔ ');
+		this.headerDomNode.append(titleDomNode, labelsDomNode);
+		this.bodyDomNode = h(ownerDocument, 'div');
+		this.bodyDomNode.className = 'stanza-multi-diff-editor-body';
+		this.rowsDomNode = h(ownerDocument, 'div');
+		this.rowsNode = new FastDomNode(this.rowsDomNode);
+		this.rowsNode.setClassName('stanza-multi-diff-editor-rows');
+		this.statusDomNode = h(ownerDocument, 'div');
+		this.statusDomNode.className = 'stanza-multi-diff-editor-status';
+		this.bodyDomNode.append(this.rowsDomNode, this.statusDomNode);
+		this.domNode.append(this.headerDomNode, this.bodyDomNode);
+		this.own(addDisposableListener(this.headerDomNode, 'click', toggle));
+	}
+
+	public layout(layout: MultiDiffSectionLayout): void {
+		this.domNode.style.height = `${layout.height}px`;
+		this.domNode.style.transform = `translate3d(0, ${layout.top}px, 0)`;
+		this.bodyDomNode.style.height = `${layout.bodyHeight}px`;
+	}
+
+	public setCollapsed(collapsed: boolean): void {
+		this.domNode.classList.toggle('collapsed', collapsed);
+		this.headerDomNode.setAttribute('aria-expanded', String(!collapsed));
+		if (collapsed) this.clearRows();
+	}
+
+	public invalidate(): void {
+		this.renderedStartRow = -1;
+		this.renderedEndRow = -1;
+		this.renderedActiveRow = -1;
+	}
+
+	public showStatus(message: string): void {
+		this.clearRows();
+		this.rowsDomNode.hidden = true;
+		this.statusDomNode.hidden = false;
+		this.statusDomNode.textContent = message;
+	}
+
+	public showRows(): void {
+		this.rowsDomNode.hidden = false;
+		this.statusDomNode.hidden = true;
+	}
+
+	public renderRows(startRow: number, endRow: number, lineHeight: number, activeRow: number, showInlineChanges: boolean, force: boolean): void {
+		if (!force && startRow === this.renderedStartRow && endRow === this.renderedEndRow && activeRow === this.renderedActiveRow) return;
+		const rows = this.item.model.diff?.rows ?? [];
+		const fragment = createFragment(this.domNode.ownerDocument);
+		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
+			fragment.append(createDiffEditorRow(this.domNode.ownerDocument, rows[rowIndex]!, this.item.model, lineHeight, rowIndex === activeRow, showInlineChanges));
+		}
+		this.rowsNode.setTransform(`translate3d(0, ${startRow * lineHeight}px, 0)`);
+		reset(this.rowsDomNode, fragment);
+		this.renderedStartRow = startRow;
+		this.renderedEndRow = endRow;
+		this.renderedActiveRow = activeRow;
+	}
+
+	public clearRows(): void {
+		if (this.rowsDomNode.childElementCount > 0) reset(this.rowsDomNode);
+		this.invalidate();
+	}
+}
+
+function validateOptions(options: MultiDiffEditorWidgetOptions): void {
+	if (!options || typeof options !== 'object' || !isHTMLElement(options.container)) {
+		throw new TypeError('Multi-diff editor widget requires a browser container');
+	}
+	if (!Array.isArray(options.items) || options.items.length === 0) {
+		throw new TypeError('Multi-diff editor widget requires at least one item');
+	}
+	const ids = new Set<string>();
+	for (const item of options.items) {
+		if (!item || typeof item !== 'object' || typeof item.id !== 'string' || item.id.length === 0 || typeof item.label !== 'string' || item.label.trim().length === 0 || !item.model || typeof item.model !== 'object') {
+			throw new TypeError('Multi-diff editor items require a unique ID, label, and DiffModel');
+		}
+		if (ids.has(item.id)) throw new TypeError(`Duplicate multi-diff item ID '${item.id}'`);
+		ids.add(item.id);
+	}
+	const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
+	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
+	if (!Number.isFinite(lineHeight) || lineHeight <= 0) throw new RangeError('Multi-diff editor line height must be positive and finite');
+	if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
+	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
+	if (options.fontSize !== undefined && (!Number.isFinite(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
+	for (const [name, value] of [['fontLigatures', options.fontLigatures], ['showLineNumbers', options.showLineNumbers], ['showInlineChanges', options.showInlineChanges], ['loopChanges', options.loopChanges]] as const) {
+		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
+	}
+	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
+	const ownerWindow = getWindow(options.container);
+	if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error('Multi-diff editor container must belong to its owner window');
+}

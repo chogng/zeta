@@ -46,6 +46,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		const button = this.createButton(container, {
 			label: this.action.label,
 			icon: this.action.icon,
+			ariaLabel: this.action.label,
 			title: this.action.tooltip,
 			enabled: this.action.enabled,
 			onClick: () => this.show(),

@@ -79,6 +79,7 @@ export class ButtonActionViewItem extends ActionViewItem {
 		this._button = this.createButton(container, {
 			label: this.action.label,
 			icon: this.action.icon,
+			ariaLabel: this.action.label,
 			title: this.action.tooltip,
 			enabled: this.action.enabled,
 			checked: this.action.checked,

@@ -1,0 +1,40 @@
+import { RustDiffComputationService } from '../../../../editor/browser/services/rustDiffComputationService.js';
+import { getBrowserTextModelService } from '../../../../editor/browser/services/browserTextModelService.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
+import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
+import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
+import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction } from './multiDiffEditorActions.js';
+import { MultiDiffEditorPane } from './multiDiffEditorPane.js';
+import { OpenScmMultiDiffEditorAction } from './scmMultiDiffAction.js';
+
+registerAction2(MultiDiffGoToNextChangeAction);
+registerAction2(MultiDiffGoToPreviousChangeAction);
+registerAction2(MultiDiffCollapseAllAction);
+registerAction2(MultiDiffExpandAllAction);
+registerAction2(OpenScmMultiDiffEditorAction);
+
+registerEditorPane({
+	id: MULTI_DIFF_EDITOR_ID,
+	name: 'Stanza Multi Diff',
+	canOpen: matchMultiDiffEditor,
+	create: options => {
+		if (!options.textFileService) throw new Error('Stanza Multi Diff requires the Workbench text file service');
+		if (!options.diffApi) throw new Error('Stanza Multi Diff requires the Rust diff API');
+		const diffApi = options.diffApi;
+		const resourceStore = getBrowserTextResourceStore(options.textFileService);
+		const configuration = options.configurationService;
+		return new MultiDiffEditorPane({
+			modelService: getBrowserTextModelService(resourceStore),
+			createComputationService: () => new RustDiffComputationService(diffApi),
+			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
+			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
+			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
+			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
+			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
+			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
+			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
+		});
+	},
+});

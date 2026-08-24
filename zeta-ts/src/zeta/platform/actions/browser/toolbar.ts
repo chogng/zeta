@@ -3,6 +3,7 @@ import type { AnchorPosition } from "../../../base/browser/ui/contextview/contex
 import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
+import type { IContextKeyService } from "../../contextkey/common/contextkey.js";
 import { createMenuEntryActionViewItem } from "./menuEntryActionViewItem.js";
 import { MenuId, type IMenuActionOptions } from "../common/actions.js";
 import type { IMenu, IMenuChangeEvent, IMenuService } from "../common/menuService.js";
@@ -46,6 +47,7 @@ export class WorkbenchToolBar extends ToolBar {
 
 export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
 	readonly menuOptions?: IMenuActionOptions;
+	readonly contextKeyService?: IContextKeyService;
 }
 
 /** Keeps a WorkbenchToolBar synchronized with one registered menu location. */
@@ -62,7 +64,7 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	) {
 		super(container, contextMenuProvider, options);
 		this.menuOptions = options.menuOptions;
-		const menu = this.own(menuService.createMenu(menuId));
+		const menu = this.own(menuService.createMenu(menuId, options.contextKeyService));
 		this.menu = menu;
 		this.own(menu.onDidChange((event) => this.update(event)));
 		this.update();

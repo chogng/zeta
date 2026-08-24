@@ -12,6 +12,7 @@ export type ButtonContentAlignment = "groupCentered" | "labelCentered";
 export interface ButtonOptions {
 	label: string;
 	icon?: Icon;
+	ariaLabel?: string;
 	contentAlignment?: ButtonContentAlignment;
 	title?: string;
 	hoverGroupId?: string;
@@ -39,6 +40,9 @@ export class Button extends DisposableOwner {
 		element.className = "zeta-button";
 		element.classList.toggle("label-centered", options.contentAlignment === "labelCentered");
 		element.type = "button";
+		if (options.ariaLabel) {
+			setAriaAttribute(element, "label", options.ariaLabel);
+		}
 		const content = this.own(new IconLabel(element, {
 			label: options.label,
 			icon: options.icon,

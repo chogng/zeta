@@ -42,6 +42,10 @@ export const PanelVisibleContext =
 export const EditorAreaVisibleContext =
 	new RawContextKey<boolean>("editorAreaVisible", true);
 
+/** Identifier of the editor pane active in the current Workbench context. */
+export const ActiveEditorContext =
+	new RawContextKey<string>("activeEditor", "");
+
 /** Identifier of the view that currently owns keyboard focus. */
 export const FocusedViewContext =
 	new RawContextKey<string>("focusedView", "");

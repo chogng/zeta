@@ -4,6 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
 import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
@@ -13,6 +14,7 @@ import { h } from "../../../../base/browser/dom.js";
 export interface EditorTitleActions {
 	readonly menuService: IMenuService;
 	readonly contextMenuProvider: IContextMenuProvider;
+	readonly contextKeyService?: IContextKeyService;
 }
 
 /** Hosts one group's Editor tabs and its independent action toolbar. */
@@ -46,7 +48,10 @@ export class EditorTitleControl extends DisposableOwner {
 				titleActions.menuService,
 				titleActions.contextMenuProvider,
 				MenuId.EditorTitle,
-				{ highlightToggledItems: true },
+				{
+					highlightToggledItems: true,
+					contextKeyService: titleActions.contextKeyService,
+				},
 			)
 			: new WorkbenchToolBar(
 				actions,

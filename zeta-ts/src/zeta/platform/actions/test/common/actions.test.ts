@@ -34,6 +34,7 @@ import {
 	KeybindingResolver,
 } from "../../../../platform/keybinding/common/keybindingResolver.js";
 import {
+	KeybindingRuleKind,
 	KeybindingsRegistry,
 } from "../../../../platform/keybinding/common/keybindingsRegistry.js";
 import {
@@ -99,6 +100,37 @@ test("registerAction2 connects command execution and menu placement", async () =
 	assert.ok(paletteIds.includes("test.actions.registered"));
 });
 
+test("registerAction2 accepts independently conditioned keybinding contributions", () => {
+	const commandId = "test.actions.multiple-keybindings";
+	using registration = registerAction2(class MultipleKeybindingsAction extends Action2 {
+		constructor() {
+			super({
+				id: commandId,
+				title: "Multiple keybindings",
+				keybinding: [
+					{
+						primary: Keybinding.single(logicalKey("m", { ctrlKey: true })),
+						when: ContextKeyExpr.has("test.firstBinding"),
+						args: ["first"],
+					},
+					{
+						primary: Keybinding.single(logicalKey("m", { altKey: true })),
+						when: ContextKeyExpr.has("test.secondBinding"),
+						args: ["second"],
+					},
+				],
+			});
+		}
+
+		override run(): void {}
+	});
+
+	const rules = KeybindingsRegistry.getKeybindings().flatMap((rule) => rule.kind === KeybindingRuleKind.Command && rule.command === commandId ? [rule] : []);
+	assert.equal(rules.length, 2);
+	assert.deepEqual(rules.map((rule) => rule.args), [["first"], ["second"]]);
+	assert.deepEqual(rules.map((rule) => [...(rule.when?.keys() ?? [])]), [["test.firstBinding"], ["test.secondBinding"]]);
+});
+
 test("menu actions react to visibility, enablement, and toggle context", () => {
 	using registrations = new DisposableStore();
 	const menuId = new MenuId("test.actions.context");
@@ -161,6 +193,25 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
 
 	contexts.setContext("test.unrelated", true);
 	assert.equal(changes.length, 3);
+});
+
+test("menus can resolve actions against a caller-owned context scope", () => {
+	using registrations = new DisposableStore();
+	const menuId = new MenuId("test.actions.scoped-menu");
+	registrations.add(MenusRegistry.appendMenuItem(menuId, {
+		command: { id: "test.actions.scoped-command", title: "Scoped command" },
+		when: ContextKeyExpr.has("test.scopeVisible"),
+	}));
+	registrations.add(CommandsRegistry.register("test.actions.scoped-command", () => undefined));
+	using rootContexts = new ContextKeyService();
+	using scopedContexts = new ContextKeyService();
+	scopedContexts.setContext("test.scopeVisible", true);
+	const menus = new MenuService(new CommandService(new ServiceCollection()), rootContexts);
+
+	assert.deepEqual(menus.getMenuActions(menuId), []);
+	assert.equal(menus.getMenuActions(menuId, undefined, scopedContexts)[0]?.[1].length, 1);
+	using menu = menus.createMenu(menuId, scopedContexts);
+	assert.equal(menu.getActions()[0]?.[1].length, 1);
 });
 
 test("menu change events include context keys used by nested submenus", () => {

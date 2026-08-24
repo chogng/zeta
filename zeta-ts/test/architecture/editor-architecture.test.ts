@@ -336,6 +336,20 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(academicBundle, /documentEditor\.contribution/u);
 });
 
+test("Multi-diff keeps generic projection in Editor and product integration in Workbench", () => {
+	const widget = readFileSync(join(editorRoot, "browser/widget/multiDiffEditor/multiDiffEditorWidget.ts"), "utf8");
+	const pane = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditorPane.ts"), "utf8");
+	const input = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditorInput.ts"), "utf8");
+	const contribution = readFileSync(join(workbenchRoot, "contrib/multiDiffEditor/browser/multiDiffEditor.contribution.ts"), "utf8");
+	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.contribution.ts"), "utf8");
+	assert.doesNotMatch(widget, /workbench/u);
+	assert.match(pane, /MultiDiffEditorWidget/u);
+	assert.match(input, /EditorInput/u);
+	assert.match(contribution, /registerEditorPane/u);
+	assert.match(contribution, /registerAction2/u);
+	assert.match(sharedWorkbench, /contrib\/multiDiffEditor/u);
+});
+
 test("Standard profile avoids mechanical contribution wrappers", () => {
 	for (const feature of ["anchorSelect", "codelens", "colorPicker", "contextmenu", "cursorUndo", "dropOrPasteInto", "editorState", "fontZoom", "format", "inlayHints", "inlineCompletions", "inlineProgress", "inPlaceReplace", "lineSelection", "linkedEditing", "links", "message", "middleScroll", "parameterHints", "quickAccess", "readOnlyMessage", "rename", "smartSelect", "toggleTabFocusMode", "transpose", "wordWrap"]) {
 		assert.deepEqual(collectFiles(join(editorRoot, "contrib", feature)).filter(file => file.endsWith(".contribution.ts")), [], feature);

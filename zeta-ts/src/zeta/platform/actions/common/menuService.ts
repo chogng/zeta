@@ -46,11 +46,15 @@ export interface IMenu {
 }
 
 export interface IMenuService {
-	createMenu(id: MenuId): IMenu & Disposable;
+	createMenu(
+		id: MenuId,
+		contextKeyService?: IContextKeyService,
+	): IMenu & Disposable;
 
 	getMenuActions(
 		id: MenuId,
 		options?: IMenuActionOptions,
+		contextKeyService?: IContextKeyService,
 	): readonly MenuActionGroup[];
 }
 
@@ -70,18 +74,22 @@ export class MenuService implements IMenuService {
 		this.contextKeyService = contextKeyService;
 	}
 
-	createMenu(id: MenuId): IMenu & Disposable {
-		return new Menu(id, this.commandService, this.contextKeyService);
+	createMenu(
+		id: MenuId,
+		contextKeyService: IContextKeyService = this.contextKeyService,
+	): IMenu & Disposable {
+		return new Menu(id, this.commandService, contextKeyService);
 	}
 
 	getMenuActions(
 		id: MenuId,
 		options?: IMenuActionOptions,
+		contextKeyService: IContextKeyService = this.contextKeyService,
 	): readonly MenuActionGroup[] {
 		return resolveMenu(
 			id,
 			this.commandService,
-			this.contextKeyService,
+			contextKeyService,
 			options,
 			new Set(),
 		);

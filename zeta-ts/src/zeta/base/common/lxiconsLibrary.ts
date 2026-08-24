@@ -10,6 +10,7 @@ import { register } from "./icon.js";
  */
 export const lxiconsLibrary = {
 	add: register("add", svg.add),
+	arrowDown: register("arrow-down", svg.arrowDown),
 	agent: register("agent", svg.agent),
 	arrowUp: register("arrow-up", svg.arrowUp),
 	browserWeb: register("browser-web", svg.browserWeb),
@@ -30,6 +31,7 @@ export const lxiconsLibrary = {
 	error: register("error", svg.error),
 	files: register("files", svg.files),
 	filter: register("filter", svg.filter),
+	fold: register("fold", svg.fold),
 	folders: register("folders", svg.folders),
 	gear: register("gear", svg.gear),
 	gitBranch: register("git-branch", svg.gitBranch),

@@ -1,12 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import type { IContextMenuProvider } from "../../../../../base/browser/contextmenu.js";
 import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/layout.js";
+import { registerAction2 } from "../../../../../platform/actions/common/actions.js";
+import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
+import { ServiceCollection } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
-import type { GraphQuery, GitStatus, IGitService } from "../../../../../workbench/services/git/common/gitService.js";
-import type { EditorInput, EditorOpenOptions, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import { IGitService, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
+import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
+import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
+import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
 
 test("Git contribution registers Changes, Agent Review, and Graph as ordered panes", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -393,6 +399,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 	const installedGlobals = installDomGlobals(browser);
 	let requestCount = 0;
 	let stagedPaths: readonly string[] | undefined;
+	let completeStage: (() => void) | undefined;
 	let committedMessage: string | undefined;
 	let statusListener: ((status: GitStatus) => void) | undefined;
 	const changeFileRequests: Array<{ readonly path: string; readonly comparison: "staged" | "unstaged" }> = [];
@@ -425,50 +432,52 @@ test("ScmViewPane groups App Server Git status", async () => {
 		...first,
 		revision: 3,
 	};
-	const clean: GitStatus = {
-		...committedClean,
-		revision: 4,
-	};
 	const gitService = {
-			status: async () => {
-				requestCount += 1;
-				return requestCount === 1 ? first : clean;
-			},
-			stage: async (paths: readonly string[]) => {
-				stagedPaths = paths;
-				return first;
-			},
-			unstage: async () => first,
-			discardWorktree: async () => first,
-			commit: async (message: string) => {
-				committedMessage = message;
-				return { objectId: "abcdef123456", status: committedClean };
-			},
-			fetch: async () => first,
-			pull: async () => first,
-			push: async () => first,
-			changeFile: async (path: string, comparison: "staged" | "unstaged") => {
-				changeFileRequests.push({ path, comparison });
-				return comparison === "staged"
-					? { original: { kind: "text" as const, text: "head\n" }, modified: { kind: "text" as const, text: "index\n" } }
-					: { original: { kind: "text" as const, text: "index\n" }, modified: { kind: "text" as const, text: "worktree\n" } };
-			},
-			onDidChangeStatus: (listener: (status: GitStatus) => void) => {
-				statusListener = listener;
-				const dispose = () => {
-					statusListener = undefined;
-				};
-				return { dispose, [Symbol.dispose]: dispose };
-			},
-			onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
+		status: async () => {
+			requestCount += 1;
+			return first;
+		},
+		stage: (paths: readonly string[]) => new Promise<GitStatus>((resolve) => {
+			stagedPaths = paths;
+			completeStage = () => resolve(first);
+		}),
+		unstage: async () => first,
+		discardWorktree: async () => first,
+		commit: async (message: string) => {
+			committedMessage = message;
+			return { objectId: "abcdef123456", status: committedClean };
+		},
+		fetch: async () => first,
+		pull: async () => first,
+		push: async () => first,
+		changeFile: async (path: string, comparison: "staged" | "unstaged") => {
+			changeFileRequests.push({ path, comparison });
+			return comparison === "staged"
+				? { original: { kind: "text" as const, text: "head\n" }, modified: { kind: "text" as const, text: "index\n" } }
+				: { original: { kind: "text" as const, text: "index\n" }, modified: { kind: "text" as const, text: "worktree\n" } };
+		},
+		onDidChangeStatus: (listener: (status: GitStatus) => void) => {
+			statusListener = listener;
+			const dispose = () => {
+				statusListener = undefined;
+			};
+			return { dispose, [Symbol.dispose]: dispose };
+		},
+		onDidBecomeReady: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 	} as unknown as IGitService;
 
 	try {
 		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
+		const editorService = testEditorService(opened);
+		const services = new ServiceCollection();
+		services.set(IGitService, gitService);
+		services.set(IEditorService, editorService);
+		using commandService = new CommandService(services);
+		using actionRegistration = registerAction2(OpenScmMultiDiffEditorAction);
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "zeta.git",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), testEditorService(opened));
+		}, gitService, testFileIconThemeService(), editorService, commandService, testContextMenuProvider);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
@@ -513,29 +522,37 @@ test("ScmViewPane groups App Server Git status", async () => {
 		await waitFor(() => opened.length === 3);
 		assert.equal(opened[2].options?.pinned, true);
 
+		const viewAllChanges = pane.element.querySelector<HTMLButtonElement>('button[aria-label="View All Changes"]');
+		assert.ok(viewAllChanges);
+		assert.ok(viewAllChanges.querySelector(".zeta-icon"));
+		viewAllChanges.click();
+		await waitFor(() => opened.length === 4);
+		assert.equal(opened[3].input.contentType, "application/vnd.stanza.editor-multi-diff");
+		assert.equal((opened[3].input as EditorInput & { readonly items: readonly unknown[] }).items.length, 2);
+		assert.equal(opened[3].options?.pinned, true);
+
 		const stageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage All Changes"]');
 		const discardAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Discard All Changes"]');
-		assert.equal(stageAll?.dataset.icon, "add");
-		assert.equal(discardAll?.dataset.icon, "discard");
 		assert.ok(stageAll?.querySelector(".zeta-icon"));
 		assert.ok(discardAll?.querySelector(".zeta-icon"));
 		const unstageAll = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Unstage All Changes"]');
 		const unstage = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Unstage staged.ts"]');
-		assert.equal(unstageAll?.dataset.icon, "remove");
-		assert.equal(unstage?.dataset.icon, "remove");
 		assert.ok(unstageAll?.querySelector(".zeta-icon"));
 		assert.ok(unstage?.querySelector(".zeta-icon"));
 
 		const stage = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]');
 		const discard = pane.element.querySelector<HTMLButtonElement>('button[aria-label="Discard src/working.ts"]');
 		assert.ok(stage);
-		assert.equal(stage.dataset.icon, "add");
-		assert.equal(discard?.dataset.icon, "discard");
 		assert.ok(stage.querySelector(".zeta-icon"));
 		assert.ok(discard?.querySelector(".zeta-icon"));
 		stage.click();
 		await waitFor(() => stagedPaths !== undefined);
 		assert.deepEqual(stagedPaths, ["src/working.ts"]);
+		assert.equal(stage.disabled, true);
+		assert.equal(viewAllChanges.disabled, true);
+		assert.ok(completeStage);
+		completeStage();
+		await waitFor(() => pane.element.querySelector<HTMLButtonElement>('button[aria-label="Stage src/working.ts"]')?.disabled === false);
 
 		const message = pane.element.querySelector<HTMLTextAreaElement>('[aria-label="Commit message"]');
 		const commit = pane.element.querySelector<HTMLButtonElement>(".zeta-scm-commit");
@@ -556,7 +573,7 @@ test("ScmViewPane groups App Server Git status", async () => {
 		statusListener(external);
 		await waitFor(() => pane.element.querySelector(".zeta-scm-status")?.textContent === "4 changed files");
 
-		assert.equal(requestCount, 1);
+		assert.equal(requestCount, 2);
 	} finally {
 		browser.window.close();
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
@@ -605,7 +622,7 @@ test("ScmViewPane accepts a restarted Git stream and rejects its retired predece
 		using pane = new ScmViewPane(browser.window.document.body, {
 			id: "zeta.git.restart",
 			title: "Changes",
-		}, gitService, testFileIconThemeService(), testEditorService());
+		}, gitService, testFileIconThemeService(), testEditorService(), inactiveCommandService(), testContextMenuProvider);
 		browser.window.document.body.append(pane.element);
 		await waitFor(() => pane.element.querySelector('[aria-label="Open changes for before.ts"]') !== null);
 		assert.equal(pane.element.querySelector(".zeta-scm-branch"), null);
@@ -665,6 +682,16 @@ function testFileIconThemeService(): IFileIconThemeService {
 		onDidFileIconThemeChange: () => ({ dispose(): void {}, [Symbol.dispose](): void {} }),
 		renderFileIcon: (resource, container) => { container.dataset.fileIcon = decodeURIComponent(resource.path.split("/").at(-1) ?? ""); },
 	};
+}
+
+const testContextMenuProvider: IContextMenuProvider = {
+	showContextMenu() {},
+};
+
+function inactiveCommandService(): ICommandService {
+	return {
+		executeCommand: async () => undefined,
+	} as unknown as ICommandService;
 }
 
 async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise<void> {

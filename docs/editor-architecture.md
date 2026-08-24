@@ -8,7 +8,7 @@ Stanza 是 Zeta 唯一的可组装编辑器内核。所有文档都由 `TextMode
 
 | 使用场景 | 模式加载入口 | 编辑能力 |
 | --- | --- | --- |
-| Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 独立的文件级行式功能实现 + code/diff pane/input 与文件服务接线 |
+| Code | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 独立的文件级行式功能实现 + code/diff pane/input 与文件服务接线；共享 Workbench 另行加载 multi-diff |
 | Academic | `editor.academic.all.ts` + `workbench/contrib/academic` | 独立的 Block 功能实现；在同一 TextModel 上使用更多 Group/Block 类型与投影 |
 | Code 行式能力全集 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；Academic 不加载它 |
 | DOM-free 调用 | `editor.api.ts` | TextModel、Group、BlockTree、schema、transaction、serialization 和坐标 API；不注册 pane |
@@ -22,10 +22,10 @@ Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM c
 | 层 | 当前状态 | 责任 |
 | --- | --- | --- |
 | `editor/common` | 单一同步内核与纯投影状态已具备 | `TextModel`、`TextBuffer`、Group/BlockTree/Block/LineRange、坐标、selection、transaction、history、schema、serialization、cursor、纯 viewport 与版本化语言状态；不得引用 Workbench、Electron 或 generated DTO |
-| `editor/browser` | Code 与 Academic 的 widget 和 DOM projection 已具备 | code/document/diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择 Workbench 模式 |
+| `editor/browser` | Code 与 Academic 的 widget 和 DOM projection 已具备 | code/document/diff/multi-diff widget、DOM input、viewport、editor contribution registry 与 frontend-contract adapter；不得引用 Workbench 或选择 Workbench 模式 |
 | `editor/contrib` | 行式与结构化 feature 已按能力组织 | 命令、controller、可移除投影、schema、citation 和 collaboration；不得注册 pane、拥有第二套 model 或读取产品 ID |
 | `editor.*.all.ts` | editor 能力按模式装配已具备 | Code、Academic 与完整 editor contribution 清单；不得注册 Workbench pane/input |
-| `workbench/contrib/{codeEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile 和模式注册；不得实现编辑事务或视图内部行为 |
+| `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | 模式宿主适配已具备 | pane/input、文件与 working-copy 接线、Academic profile 和模式注册；不得实现编辑事务或视图内部行为 |
 | `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
 | Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |

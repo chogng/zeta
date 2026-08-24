@@ -27,6 +27,7 @@ test("ToolBar renders primary actions and trails More Actions", () => {
 	assert.equal(toolbar.element.classList.contains("zeta-toolbar-default"), true);
 	assert.equal(buttons.length, 2);
 	assert.equal(buttons[0]?.textContent, "primary");
+	assert.equal(buttons[0]?.getAttribute("aria-label"), "primary");
 	assert.equal(buttons[1]?.title, "More Actions");
 	assert.equal(buttons[1]?.getAttribute("aria-haspopup"), "menu");
 	assert.equal(toolbar.element.textContent?.includes("secondary"), false);
