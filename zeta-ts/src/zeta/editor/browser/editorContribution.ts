@@ -1,4 +1,5 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
+import { type SyncDescriptor } from "../../platform/instantiation/common/instantiation.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
 import { type TextModel } from "../common/model/textModel.js";
@@ -111,11 +112,28 @@ export interface DocumentEditorContributionContext {
 
 export type EditorContributionContext = TextEditorContributionContext | DocumentEditorContributionContext;
 
+/** Runtime object constructed for one text editor with editor-local state followed by injected services. */
+export interface TextEditorRuntimeContribution extends IDisposable {}
+
+/** Controls when a constructor-backed contribution joins one text editor's lifetime. */
+export enum EditorContributionInstantiation {
+	Eager = "eager",
+	AfterFirstRender = "afterFirstRender",
+	Eventually = "eventually",
+}
+
+export interface TextEditorRuntimeContributionRegistration {
+	readonly descriptor: SyncDescriptor<TextEditorRuntimeContribution>;
+	readonly instantiation: EditorContributionInstantiation;
+}
+
 /** Installs one statically selected capability at its supported editor mount point. */
 export interface EditorContribution {
 	readonly id: string;
 	configure?(context: TextEditorContributionConfigurationContext): void;
 	install?(context: EditorContributionContext): void;
+	/** Optional constructor-backed runtime for services that need editor-local state and DI. */
+	readonly runtime?: TextEditorRuntimeContributionRegistration;
 }
 
 const contributions: EditorContribution[] = [];
@@ -123,7 +141,10 @@ const contributionIds = new Set<string>();
 
 /** Registers one flat editor contribution through a Workbench mode bundle side effect. */
 export function registerEditorContribution(contribution: EditorContribution): void {
-	if (!contribution || !contribution.id?.trim() || (typeof contribution.configure !== "function" && typeof contribution.install !== "function")) throw new TypeError("Editor contribution is invalid");
+	if (!contribution || !contribution.id?.trim() || (typeof contribution.configure !== "function" && typeof contribution.install !== "function" && !contribution.runtime)) throw new TypeError("Editor contribution is invalid");
+	if (contribution.runtime && (!contribution.runtime.descriptor?.ctor || !isInstantiation(contribution.runtime.instantiation))) {
+		throw new TypeError("Editor runtime contribution is invalid");
+	}
 	if (contributionIds.has(contribution.id)) throw new RangeError(`Duplicate editor contribution '${contribution.id}'`);
 	contributionIds.add(contribution.id);
 	contributions.push(contribution);
@@ -131,4 +152,10 @@ export function registerEditorContribution(contribution: EditorContribution): vo
 
 export function getEditorContributions(): readonly EditorContribution[] {
 	return contributions;
+}
+
+function isInstantiation(value: EditorContributionInstantiation): boolean {
+	return value === EditorContributionInstantiation.Eager
+		|| value === EditorContributionInstantiation.AfterFirstRender
+		|| value === EditorContributionInstantiation.Eventually;
 }

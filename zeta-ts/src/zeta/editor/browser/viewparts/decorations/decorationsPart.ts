@@ -60,17 +60,21 @@ export class DecorationsPart extends EditorOverlayPart {
 	}
 
 	public overviewMarkers(): readonly DecorationsPartMarker[] {
-		const decorations = this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
-		return Object.freeze([
-			...createStanzaDiagnosticOverviewMarkers(decorations, this.model.lineCount),
-			...createStanzaDiffOverviewMarkers(decorations, this.model.lineCount),
-		]);
+		const decorations = this.allDecorations().filter(decoration => decoration.overviewRuler !== false);
+		return markersForDecorations(decorations, this.model.lineCount);
+	}
+
+	public minimapMarkers(): readonly DecorationsPartMarker[] {
+		const decorations = this.allDecorations().filter(decoration => decoration.minimap !== false);
+		return markersForDecorations(decorations, this.model.lineCount);
+	}
+
+	private allDecorations(): readonly ResolvedDecoration[] {
+		return this.decorationSources.flatMap(source => this.decorationSnapshots.get(source) ?? []);
 	}
 
 	private rebuildDecorationLineIndex(): void {
-		this.decorationLineIndex = new DecorationLineIndex(this.decorationSources.flatMap(
-			source => this.decorationSnapshots.get(source) ?? [],
-		));
+		this.decorationLineIndex = new DecorationLineIndex(this.allDecorations());
 		this.markerRevision += 1;
 	}
 
@@ -88,4 +92,11 @@ export class DecorationsPart extends EditorOverlayPart {
 			? []
 			: this.decorationLineIndex.getIntersectingLines(minimumLogicalLineIndex, maximumLogicalLineIndex);
 	}
+}
+
+function markersForDecorations(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DecorationsPartMarker[] {
+	return Object.freeze([
+		...createStanzaDiagnosticOverviewMarkers(decorations, lineCount),
+		...createStanzaDiffOverviewMarkers(decorations, lineCount),
+	]);
 }

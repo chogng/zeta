@@ -44,6 +44,8 @@ export interface DecorationPresentationResolution {
 	readonly presentation: DecorationPresentation;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
+	readonly overviewRuler?: boolean;
+	readonly minimap?: boolean;
 }
 
 export interface ResolvedDecoration {
@@ -53,6 +55,8 @@ export interface ResolvedDecoration {
 	readonly hoverText?: string;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
+	readonly overviewRuler?: boolean;
+	readonly minimap?: boolean;
 }
 
 export interface DecorationSource {
@@ -116,6 +120,8 @@ export function createStanzaDecorationSource<TMetadata>(
 				}
 				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration);
 				const blockDecoration = normalizeBlockPresentation(details?.blockDecoration);
+				const overviewRuler = normalizeOptionalBoolean(details?.overviewRuler, "overview ruler visibility");
+				const minimap = normalizeOptionalBoolean(details?.minimap, "minimap visibility");
 				if (blockDecoration?.isAfterEnd && !decoration.range.empty) {
 					throw new TypeError("Stanza block decoration isAfterEnd requires an empty range");
 				}
@@ -126,6 +132,8 @@ export function createStanzaDecorationSource<TMetadata>(
 					...(hoverText === undefined ? {} : { hoverText }),
 					...(linesDecoration === undefined ? {} : { linesDecoration }),
 					...(blockDecoration === undefined ? {} : { blockDecoration }),
+					...(overviewRuler === undefined ? {} : { overviewRuler }),
+					...(minimap === undefined ? {} : { minimap }),
 				}));
 			}
 			return Object.freeze(resolved);
@@ -268,6 +276,12 @@ function normalizeOptionalText(value: string | undefined, name: string): string 
 	if (typeof value !== "string" || value.trim().length === 0) {
 		throw new TypeError(`Stanza ${name} must be non-empty text`);
 	}
+	return value;
+}
+
+function normalizeOptionalBoolean(value: boolean | undefined, name: string): boolean | undefined {
+	if (value === undefined) return undefined;
+	if (typeof value !== "boolean") throw new TypeError(`Stanza ${name} must be a boolean`);
 	return value;
 }
 

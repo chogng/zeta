@@ -242,18 +242,20 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		decorationSources: [createStanzaDecorationSource(decorations, decoration => decoration.metadata)],
+		decorationSources: [createStanzaDecorationSource(decorations, decoration => ({
+			presentation: decoration.metadata,
+			overviewRuler: decoration.metadata !== DecorationPresentation.DiffAdded,
+			minimap: decoration.metadata !== DecorationPresentation.DiffModified,
+		}))],
 	});
 	viewport.layout({ width: 200, height: 80 });
 
 	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-overview-marker")].map(marker => marker.classList[1]), [
-		DecorationPresentation.DiffAdded,
 		DecorationPresentation.DiffModified,
 		DecorationPresentation.DiffDeleted,
 	]);
 	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-minimap-diagnostic-marker")].map(marker => marker.classList[1]), [
 		DecorationPresentation.DiffAdded,
-		DecorationPresentation.DiffModified,
 		DecorationPresentation.DiffDeleted,
 	]);
 	dom.window.close();

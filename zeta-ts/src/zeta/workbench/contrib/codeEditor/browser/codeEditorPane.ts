@@ -42,6 +42,8 @@ export interface EditorPanePartOptions extends EditorPartOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
+	readonly diffApi?: EditorPartOptions["diffApi"];
+	readonly instantiationService?: EditorPartOptions["instantiationService"];
 }
 
 export interface EditorPaneOptions {
@@ -52,6 +54,8 @@ export interface EditorPaneOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
+	readonly diffApi?: EditorPartOptions["diffApi"];
+	readonly instantiationService?: EditorPartOptions["instantiationService"];
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -146,6 +150,8 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 				languageFeaturesService: this.options.languageFeaturesService,
 				syntaxApi: this.options.syntaxApi,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
+				diffApi: this.options.diffApi,
+				instantiationService: this.options.instantiationService,
 				lineWrapping: this.options.lineWrapping,
 				fontFamily: this.options.fontFamily,
 				fontSize: this.options.fontSize,

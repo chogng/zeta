@@ -596,6 +596,7 @@ export class Workbench extends DisposableOwner {
 			languageFeaturesService,
 			languageResolver: languageFeaturesService,
 			diffApi: api.diff,
+			instantiationService,
 			syntaxApi: api.syntax,
 			languageDiagnosticsService,
 			documentCollaborationApi: api.documentCollaboration,

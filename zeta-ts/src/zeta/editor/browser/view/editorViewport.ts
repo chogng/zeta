@@ -336,7 +336,7 @@ export class EditorViewport extends DisposableOwner {
 			model: this.model,
 			readLayout: () => this.viewport.layout,
 			scrollTo: position => this.scrollTo(position),
-			readMarkers: () => this.decorationsPart.overviewMarkers(),
+			readMarkers: () => this.decorationsPart.minimapMarkers(),
 			readMarkersRevision: () => this.decorationsPart.markersRevision,
 			enabled: this.minimap === EditorMinimap.On,
 		}));

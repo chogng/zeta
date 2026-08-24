@@ -285,6 +285,53 @@ test("Code editor keeps large files editable while disabling full-document backg
 	}
 });
 
+test("constructor-backed editor contributions receive editor context and window services", async () => {
+	const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, InstantiationService, ServiceCollection, SyncDescriptor }] = await Promise.all([
+		import("../../browser/editorContribution.js"),
+		import("../../../platform/instantiation/common/instantiation.js"),
+	]);
+	const IService = createServiceIdentifier<{ readonly value: string }>("editorRuntimeContributionTestService");
+	let receivedResource = "";
+	let receivedService = "";
+	let disposed = false;
+	class RuntimeContribution {
+		constructor(context: { readonly options: { readonly input: { readonly resource: URI } } }, service: { readonly value: string }) {
+			receivedResource = context.options.input.resource.toString();
+			receivedService = service.value;
+		}
+		dispose(): void { disposed = true; }
+		[Symbol.dispose](): void { this.dispose(); }
+	}
+	registerEditorContribution({
+		id: "editor.contrib.runtimeInjection.test",
+		runtime: {
+			descriptor: new SyncDescriptor(RuntimeContribution, { serviceDependencies: [IService] }),
+			instantiation: EditorContributionInstantiation.Eager,
+		},
+	});
+	const services = new ServiceCollection();
+	services.set(IService, { value: "window-service" });
+	const instantiationService = new InstantiationService(services);
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const model = new TextModel("runtime");
+	const reference = modelReference(URI.file("C:\\project\\runtime.txt"), model);
+	const editorPart = new EditorPart({
+		container: dom.window.document.querySelector<HTMLElement>("main")!,
+		input: { resource: reference.resource },
+		languageId: "plaintext",
+		modelReference: reference,
+		instantiationService,
+	});
+
+	assert.equal(receivedResource, reference.resource.toString());
+	assert.equal(receivedService, "window-service");
+	assert.equal(disposed, false);
+	editorPart.dispose();
+	assert.equal(disposed, true);
+	dom.window.close();
+});
+
 function modelReference(resource: URI, model: TextModel): TextModelReference {
 	let disposed = false;
 	const dispose = (): void => {

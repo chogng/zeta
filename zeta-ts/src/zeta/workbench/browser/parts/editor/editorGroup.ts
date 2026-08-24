@@ -12,6 +12,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -72,6 +73,7 @@ export interface EditorGroupOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffApi?: IDiffApi;
+	readonly instantiationService?: IInstantiationService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
@@ -120,6 +122,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
 	private readonly diffApi: IDiffApi | undefined;
+	private readonly instantiationService: IInstantiationService | undefined;
 	private readonly syntaxApi: ISyntaxApi | undefined;
 	private readonly languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
 	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
@@ -158,6 +161,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.languageFeaturesService = options.languageFeaturesService;
 		this.languageResolver = options.languageResolver;
 		this.diffApi = options.diffApi;
+		this.instantiationService = options.instantiationService;
 		this.syntaxApi = options.syntaxApi;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
 		this.documentCollaborationApi = options.documentCollaborationApi;
@@ -311,6 +315,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			textMateService: this.textMateService,
 			languageFeaturesService: this.languageFeaturesService,
 			diffApi: this.diffApi,
+			instantiationService: this.instantiationService,
 			syntaxApi: this.syntaxApi,
 			languageDiagnosticsService: this.languageDiagnosticsService,
 			documentCollaborationApi: this.documentCollaborationApi,

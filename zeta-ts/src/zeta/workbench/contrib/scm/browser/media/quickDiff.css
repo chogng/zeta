@@ -1,0 +1,71 @@
+.stanza-editor-line-decoration.zeta-quick-diff-gutter {
+  width: 4px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.stanza-editor-line-decoration.zeta-quick-diff-added {
+  background: var(--zeta-diff-editor-inserted-line-marker);
+}
+
+.stanza-editor-line-decoration.zeta-quick-diff-modified {
+  background: var(--zeta-focus-border);
+}
+
+.stanza-editor-line-decoration.zeta-quick-diff-deleted {
+  width: 0;
+  height: 0;
+  top: 50%;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--zeta-diff-editor-removed-line-marker);
+  transform: translateY(-50%);
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-line-decoration.zeta-quick-diff-gutter {
+    background: CanvasText;
+    border-left-color: CanvasText;
+  }
+}
+
+.zeta-quick-diff-peek .stanza-editor-peek-view-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.zeta-quick-diff-peek-body {
+  display: flex;
+  min-height: 180px;
+  flex-direction: column;
+}
+
+.zeta-quick-diff-peek-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--zeta-widget-border);
+}
+
+.zeta-quick-diff-peek-action {
+  min-width: 24px;
+  padding: 2px 6px;
+  color: var(--zeta-editor-foreground);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+}
+
+.zeta-quick-diff-peek-action:hover,
+.zeta-quick-diff-peek-action:focus-visible {
+  background: var(--zeta-list-hover-background);
+  outline: 1px solid var(--zeta-focus-border);
+}
+
+.zeta-quick-diff-peek-diff {
+  min-height: 0;
+  flex: 1;
+  height: 220px;
+}

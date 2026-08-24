@@ -20,6 +20,9 @@ import { type EditorLineVisibilitySource } from "../common/viewModel/modelLinePr
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type TextInputCompletionOptions } from "../browser/input/textInputController.js";
 import { type TextInputLanguageEditingAdapter } from "../browser/input/textInputController.js";
+import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from "../../base/browser/scheduler.js";
+import { getWindow } from "../../base/browser/window.js";
+import { EditorContributionInstantiation, type EditorContribution, type TextEditorContributionContext } from "../browser/editorContribution.js";
 
 /** Owns all per-pane state projected over one shared text model reference. */
 class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntime {
@@ -164,31 +167,33 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 				}
 			}));
 			this.own(new EditingCommandController(this.textInput.element, this.viewport, this.selections));
+			const installContext: TextEditorContributionContext = {
+				kind: "text",
+				options,
+				model,
+				languageId: this.languageId,
+				languageFeaturesService,
+				configurations,
+				textInput: this.textInput,
+				viewport: this.viewport,
+				selections: this.selections,
+				onLanguageError: this.onLanguageError,
+				getCapability,
+				getOptionalCapability,
+				registerBeforeSave: hook => {
+					if (typeof hook !== "function") throw new TypeError("Editor before-save hook must be a function");
+					this.beforeSaveHooks.push(hook);
+					return toDisposable(() => {
+						const index = this.beforeSaveHooks.indexOf(hook);
+						if (index >= 0) this.beforeSaveHooks.splice(index, 1);
+					});
+				},
+				own: value => this.own(value),
+			};
 			for (const contribution of selectedContributions) {
-				contribution.install?.({
-					kind: "text",
-					options,
-					model,
-					languageId: this.languageId,
-					languageFeaturesService,
-					configurations,
-					textInput: this.textInput,
-					viewport: this.viewport,
-					selections: this.selections,
-					onLanguageError: this.onLanguageError,
-					getCapability,
-					getOptionalCapability,
-					registerBeforeSave: hook => {
-						if (typeof hook !== "function") throw new TypeError("Editor before-save hook must be a function");
-						this.beforeSaveHooks.push(hook);
-						return toDisposable(() => {
-							const index = this.beforeSaveHooks.indexOf(hook);
-							if (index >= 0) this.beforeSaveHooks.splice(index, 1);
-						});
-					},
-					own: value => this.own(value),
-				});
+				contribution.install?.(installContext);
 			}
+			this.installRuntimeContributions(selectedContributions, installContext, options);
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -238,6 +243,36 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 
 	async revert(): Promise<void> {
 		await this.onRevert?.();
+	}
+
+	private installRuntimeContributions(contributions: readonly EditorContribution[], context: TextEditorContributionContext, options: EditorPartOptions): void {
+		const runtimeContributions = contributions.filter(contribution => contribution.runtime !== undefined);
+		if (runtimeContributions.length === 0) return;
+		const instantiationService = options.instantiationService;
+		if (!instantiationService) throw new Error("Runtime editor contributions require an instantiation service");
+		const targetWindow = getWindow(this.viewport.element);
+		for (const contribution of runtimeContributions) {
+			const instantiate = (): void => {
+				if (this.isDisposed || !contribution.runtime) return;
+				try {
+					this.own(instantiationService.createInstance(contribution.runtime.descriptor, context));
+				} catch (error) {
+					if (contribution.runtime.instantiation === EditorContributionInstantiation.Eager) throw error;
+					this.onLanguageError(error);
+				}
+			};
+			switch (contribution.runtime!.instantiation) {
+				case EditorContributionInstantiation.Eager:
+					instantiate();
+					break;
+				case EditorContributionInstantiation.AfterFirstRender:
+					this.own(scheduleAtNextAnimationFrame(targetWindow, instantiate));
+					break;
+				case EditorContributionInstantiation.Eventually:
+					this.own(runWhenWindowIdle(targetWindow, instantiate, { timeoutMs: 5_000 }));
+					break;
+			}
+		}
 	}
 
 }

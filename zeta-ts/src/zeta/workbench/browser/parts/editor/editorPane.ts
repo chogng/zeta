@@ -14,6 +14,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { EditorInput } from "./editorInput.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
@@ -83,6 +84,7 @@ export interface EditorPaneCreationOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly diffApi?: IDiffApi;
+	readonly instantiationService?: IInstantiationService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;

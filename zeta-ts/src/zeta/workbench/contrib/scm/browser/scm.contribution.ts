@@ -18,9 +18,6 @@ import { GIT_GRAPH_VIEW_ID } from "./scmGraphTitleActions.js";
 import { ScmStatusContribution } from "./scmStatus.js";
 import { ScmViewPane } from "./scmViewPane.js";
 import "./media/scm.css";
-import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
-import { registerEditorDecorationSourceFactory } from "../../../browser/parts/editor/editorDecorations.js";
-import { DirtyDiffDecorationSource } from "./dirtyDiffDecorationSource.js";
 import { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
@@ -28,15 +25,11 @@ import { ScmWorkingSetController } from "./workingSet.js";
 import { ScmHistoryChatContextContribution } from "./scmHistoryChatContext.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import "../common/scmConfiguration.js";
+import "./quickDiff.contribution.js";
 
 export const GIT_VIEW_ID = "zeta.gitView";
 export const GIT_AGENT_REVIEW_VIEW_ID = "zeta.gitAgentReview";
 export { GIT_GRAPH_VIEW_ID };
-
-registerEditorDecorationSourceFactory(({ accessor, diffApi, model, resource }) => {
-	if (!diffApi || (resource.scheme !== "file" && !isRemoteResource(resource))) return undefined;
-	return new DirtyDiffDecorationSource(resource, model, accessor.get(IGitService), diffApi);
-});
 
 /** Registers the Git Sidebar container and its initial pane. */
 export function registerGitViews(

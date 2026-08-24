@@ -20,6 +20,8 @@ import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspac
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
 import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
+import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
+import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;
@@ -46,6 +48,10 @@ export interface EditorPartOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	/** Optional Rust-backed syntax facts used for parser-grade fold ranges. */
 	readonly syntaxApi?: ISyntaxApi;
+	/** Optional Rust-backed line diff API exposed to editor-local contributions. */
+	readonly diffApi?: IDiffApi;
+	/** Window-scoped constructor service for runtime editor contributions. */
+	readonly instantiationService?: IInstantiationService;
 	/** Optional host service that synchronizes open models and supplies push diagnostics. */
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly modelReference: TextModelReference;
