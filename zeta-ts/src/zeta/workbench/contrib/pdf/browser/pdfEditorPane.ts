@@ -6,6 +6,7 @@ import { Separator } from "../../../../base/common/actions.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { clamp } from "../../../../base/common/numbers.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
@@ -489,8 +490,8 @@ function action(id: string, label: string, tooltip: string, icon: IAction["icon"
 function annotationPoint(layer: HTMLElement, event: PointerEvent): PdfAnnotationPoint {
 	const bounds = layer.getBoundingClientRect();
 	return {
-		x: clamp((event.clientX - bounds.left) / Math.max(1, bounds.width)),
-		y: clamp((event.clientY - bounds.top) / Math.max(1, bounds.height)),
+		x: clamp((event.clientX - bounds.left) / Math.max(1, bounds.width), 0, 1),
+		y: clamp((event.clientY - bounds.top) / Math.max(1, bounds.height), 0, 1),
 	};
 }
 
@@ -540,10 +541,6 @@ function withAlpha(color: string, opacity: number): string {
 
 function samePoint(left: PdfAnnotationPoint | undefined, right: PdfAnnotationPoint): boolean {
 	return left?.x === right.x && left.y === right.y;
-}
-
-function clamp(value: number): number {
-	return Math.min(1, Math.max(0, value));
 }
 
 function isAnnotationLayer(value: Element | null): value is HTMLDivElement {

@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
 
 /** A transferable semantic presentation rule matched against one TextMate scope selector. */
@@ -192,10 +193,6 @@ function matchesAnyScope(selector: string, scopes: readonly string[]): boolean {
 function matchesScope(selector: string, scope: string): boolean {
 	if (selector.length === 0 || typeof scope !== "string") return false;
 	if (!selector.includes("*")) return scope === selector || scope.startsWith(`${selector}.`);
-	const expression = selector.split("*").map(escapeRegularExpression).join("[^.]*");
+	const expression = selector.split("*").map(escapeRegExpCharacters).join("[^.]*");
 	return new RegExp(`^${expression}(?:\\.|$)`, "u").test(scope);
-}
-
-function escapeRegularExpression(value: string): string {
-	return value.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&");
 }

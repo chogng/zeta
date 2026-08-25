@@ -1,6 +1,7 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { isRecord } from "../../../../base/common/types.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
@@ -449,10 +450,6 @@ function validatePrincipalId(value: string): string {
 function validateRoomRole(value: unknown): DocumentCollaborationRoomRole {
 	if (value === "owner" || value === "editor" || value === "viewer") return value;
 	throw new TypeError("Remote Stanza collaboration invitation role must be owner, editor, or viewer");
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function validateProtocolInteger(value: unknown, name: string, minimum: number): number {

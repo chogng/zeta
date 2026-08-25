@@ -4,6 +4,7 @@ import { Dimension, type IDimension } from "../../../../base/browser/geometry.js
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableMap, DisposableOwner, DisposableStore, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
@@ -136,7 +137,7 @@ export class EditorParts extends DisposableOwner implements IEditorPartsService 
 		if (!Number.isInteger(offset) || offset === 0) throw new TypeError("Editor MRU offset must be a non-zero integer");
 		const editors = this.editorsMru;
 		if (editors.length === 0) return undefined;
-		const index = ((Math.abs(offset) % editors.length) * Math.sign(offset) + editors.length) % editors.length;
+		const index = rot(offset, editors.length);
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 

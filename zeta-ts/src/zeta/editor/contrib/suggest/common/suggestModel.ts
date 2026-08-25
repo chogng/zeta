@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
@@ -247,7 +248,7 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 		this.assertNotDisposed();
 		const state = this.currentState;
 		if (!state) return false;
-		return this.selectIndex((state.selectedIndex + delta + state.items.length) % state.items.length);
+		return this.selectIndex(rot(state.selectedIndex + delta, state.items.length));
 	}
 
 	private replaceState(result: VersionedLanguageResult<LanguageCompletionResult> | undefined, reason: LanguageCompletionSessionChangeReason): void {

@@ -1,6 +1,7 @@
 import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { escapeRegExpCharacters } from "../../../base/common/strings.js";
 import { assertLanguageId } from "./languageId.js";
 import type { TextResourceLanguageInput } from "../../../platform/language/common/textResourceLanguage.js";
 
@@ -251,7 +252,7 @@ function matchesGlob(pattern: string, value: string): boolean {
 		} else if (character === "?") {
 			expression += "[^/]";
 		} else {
-			expression += escapeRegularExpression(character);
+			expression += escapeRegExpCharacters(character);
 		}
 	}
 	try {
@@ -259,8 +260,4 @@ function matchesGlob(pattern: string, value: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-function escapeRegularExpression(value: string): string {
-	return value.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&");
 }

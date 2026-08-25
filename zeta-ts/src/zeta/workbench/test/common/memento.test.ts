@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../base/common/event.js";
 import type { JsonValue } from "../../../base/common/jsonValue.js";
+import { isRecord } from "../../../base/common/types.js";
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../platform/storage/common/storage.js";
 import { Memento } from "../../../workbench/common/memento.js";
 
@@ -216,10 +217,6 @@ function serializeTestState(state: TestMementoState): JsonValue {
 		expanded: state.expanded,
 		selected: state.selected,
 	};
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 class TestStorageService implements IStorageService {

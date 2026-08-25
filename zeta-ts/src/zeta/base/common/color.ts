@@ -1,9 +1,7 @@
-function clamp(value: number): number {
-	return Math.min(1, Math.max(0, value));
-}
+import { clamp } from "./numbers.js";
 
 function byte(value: number): string {
-	return Math.round(clamp(value) * 255).toString(16).padStart(2, "0");
+	return Math.round(clamp(value, 0, 1) * 255).toString(16).padStart(2, "0");
 }
 
 /** Immutable RGBA color used by domain-agnostic rendering infrastructure. */
@@ -14,10 +12,10 @@ export class Color {
 	readonly alpha: number;
 
 	constructor(red: number, green: number, blue: number, alpha = 1) {
-		this.red = clamp(red);
-		this.green = clamp(green);
-		this.blue = clamp(blue);
-		this.alpha = clamp(alpha);
+		this.red = clamp(red, 0, 1);
+		this.green = clamp(green, 0, 1);
+		this.blue = clamp(blue, 0, 1);
+		this.alpha = clamp(alpha, 0, 1);
 		Object.freeze(this);
 	}
 
@@ -35,7 +33,7 @@ export class Color {
 	}
 
 	transparent(factor: number): Color {
-		return new Color(this.red, this.green, this.blue, this.alpha * clamp(factor));
+		return new Color(this.red, this.green, this.blue, this.alpha * clamp(factor, 0, 1));
 	}
 
 	lighten(factor: number): Color {
@@ -47,7 +45,7 @@ export class Color {
 	}
 
 	mix(other: Color, factor: number): Color {
-		const amount = clamp(factor);
+		const amount = clamp(factor, 0, 1);
 		return new Color(
 			this.red + (other.red - this.red) * amount,
 			this.green + (other.green - this.green) * amount,

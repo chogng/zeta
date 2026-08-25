@@ -1,3 +1,4 @@
+import { isRecord } from "../../../base/common/types.js";
 import type { DocumentAttributes, DocumentMark, DocumentNode } from "./document.js";
 import { decodeDocumentNode, DocumentSerializationError, encodeDocumentNode, type SerializedDocumentNode } from "./documentSerialization.js";
 import { type DocumentSchema } from "./documentSchema.js";
@@ -212,8 +213,4 @@ function requireInteger(value: unknown, name: string): number {
 function requireBoolean(value: unknown, name: string): boolean {
 	if (typeof value !== "boolean") throw new DocumentSerializationError(`${name} must be a boolean`);
 	return value;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

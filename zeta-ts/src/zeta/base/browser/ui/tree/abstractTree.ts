@@ -6,6 +6,7 @@ import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
+import { rot } from "../../../common/numbers.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState } from "./tree.js";
 
 export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
@@ -425,7 +426,7 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 	next(nodes: readonly TNode[], delta: 1 | -1): TNode | undefined {
 		if (this.matches.length === 0) this.update(this.pattern, nodes);
 		if (this.matches.length === 0) return undefined;
-		this.activeIndex = (this.activeIndex + delta + this.matches.length) % this.matches.length;
+		this.activeIndex = rot(this.activeIndex + delta, this.matches.length);
 		return this.activeMatch;
 	}
 

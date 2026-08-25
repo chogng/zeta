@@ -1,4 +1,6 @@
 import { toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { isFiniteNumber } from "../../../base/common/numbers.js";
+import { isNonEmptyString, isRecord } from "../../../base/common/types.js";
 import { URI } from "../../../base/common/uri.js";
 import type { IStateService } from "../../state/node/state.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspaceIdentifier, type WorkbenchState, isEmptyWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, workbenchStateFromWorkspaceIdentifier } from "../../workspace/common/workspace.js";
@@ -445,20 +447,8 @@ function readBounds(read: () => {
 	}
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isWindowMode(value: unknown): value is IWindowState["mode"] {
 	return value === WindowMode.Normal ||
 		value === WindowMode.Maximized ||
 		value === WindowMode.Fullscreen;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-	return typeof value === "number" && Number.isFinite(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-	return typeof value === "string" && value.trim().length > 0;
 }

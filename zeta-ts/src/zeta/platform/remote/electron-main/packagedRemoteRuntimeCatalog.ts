@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream, lstatSync, readFileSync } from "node:fs";
 import { lstat, readFile } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { isRecord } from "../../../base/common/types.js";
 import { developmentArtifactsPath } from "../../environment/node/developmentArtifacts.js";
 import { validLocalCommand } from "./serverHostRemoteCommand.js";
 import { type TrustedRemoteRuntimeArtifact, validateTrustedRemoteRuntimeArtifact } from "./serverHostRemoteRuntimeInstaller.js";
@@ -189,10 +190,6 @@ function sha256(path: string): Promise<string> {
 		input.once("error", reject);
 		input.once("end", () => resolveDigest(hash.digest("hex")));
 	});
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasExactKeys(value: Record<string, unknown>, expected: ReadonlySet<string>): boolean {

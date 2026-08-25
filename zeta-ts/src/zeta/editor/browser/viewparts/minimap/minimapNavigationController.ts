@@ -1,5 +1,6 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { clamp } from "../../../../base/common/numbers.js";
 import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 
 /**
@@ -54,10 +55,6 @@ export class MinimapNavigationController extends DisposableOwner {
 		const fraction = clamp((clientY - bounds.top) / layout.viewportSize.height, 0, 1);
 		this.scrollTo({ left: layout.scrollPosition.left, top: fraction * layout.maximumScrollPosition.top });
 	}
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }
 
 function readPointerId(event: PointerEvent): number {

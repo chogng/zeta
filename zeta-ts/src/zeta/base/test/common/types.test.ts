@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assert as assertCondition, assertDefined } from "../../common/types.js";
+import { assert as assertCondition, assertDefined, isNonEmptyString, isRecord } from "../../common/types.js";
 
 test("assert narrows caller-defined conditions", () => {
 	assert.equal(requireStringFromUnknown("value"), "value");
@@ -31,6 +31,19 @@ test("assertDefined rejects nullish values with caller context", () => {
 test("assertDefined preserves caller-owned errors", () => {
 	const error = new ReferenceError("value was not initialized");
 	assert.throws(() => assertDefined(undefined, error), (thrown) => thrown === error);
+});
+
+test("isRecord accepts records and rejects arrays and null", () => {
+	assert.equal(isRecord({ value: 1 }), true);
+	assert.equal(isRecord(Object.create(null)), true);
+	assert.equal(isRecord([]), false);
+	assert.equal(isRecord(null), false);
+});
+
+test("isNonEmptyString requires non-whitespace text", () => {
+	assert.equal(isNonEmptyString(" value "), true);
+	assert.equal(isNonEmptyString(" \t\n"), false);
+	assert.equal(isNonEmptyString(1), false);
 });
 
 function requireString(value: string | undefined): string {

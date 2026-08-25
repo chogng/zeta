@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
+import { toError } from "../../../base/common/errors.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type TextModel } from "../model/textModel.js";
 import { type DiffComputationDocument, type IDiffComputationService } from "./diffComputationService.js";
@@ -119,7 +120,7 @@ export class DiffModel extends DisposableOwner {
 				kind: "error",
 				originalVersion: original.version,
 				modifiedVersion: modified.version,
-				error: asError(error),
+				error: toError(error),
 			}));
 		}
 	}
@@ -150,8 +151,4 @@ function validateOptions(options: DiffModelOptions): void {
 	if (!options.computationService || typeof options.computationService.compute !== "function") {
 		throw new TypeError("Diff model requires a diff computation service");
 	}
-}
-
-function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
 }

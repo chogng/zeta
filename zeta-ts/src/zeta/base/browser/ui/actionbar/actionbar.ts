@@ -2,6 +2,7 @@ import { addDisposableListener, h } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
 import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
+import { rot } from "../../../common/numbers.js";
 import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from "./actionViewItems.js";
 import { DndCssClasses } from "../dnd/dnd.js";
 
@@ -182,7 +183,7 @@ export class ActionBar extends DisposableOwner {
 			targetIndex = direction === "next" ? 0 : entries.length - 1;
 		} else {
 			const delta = direction === "next" ? 1 : -1;
-			targetIndex = (currentIndex + delta + entries.length) % entries.length;
+			targetIndex = rot(currentIndex + delta, entries.length);
 		}
 		const target = entries[targetIndex]!.item;
 		this._setTabStop(target);

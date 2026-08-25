@@ -2,6 +2,7 @@ import { Dimension, type IDimension } from "../../geometry.js";
 import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
+import { clamp } from "../../../common/numbers.js";
 import { Sash, SashState } from "../sash/sash.js";
 import { h } from "../../dom.js";
 
@@ -211,10 +212,6 @@ function setSashBounds(sash: Sash, left: number, top: number, width: number, hei
 	sash.element.style.top = `${top}px`;
 	sash.element.style.width = `${width}px`;
 	sash.element.style.height = `${height}px`;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.max(minimum, Math.min(maximum, value));
 }
 
 function assertSize(value: IDimension, name: string, allowInfinity = false): void {

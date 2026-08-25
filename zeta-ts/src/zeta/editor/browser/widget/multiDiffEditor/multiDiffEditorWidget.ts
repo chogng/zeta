@@ -6,6 +6,7 @@ import { getClientArea, type IDimension } from '../../../../base/browser/geometr
 import { observeResize } from '../../../../base/browser/observer.js';
 import { getWindow } from '../../../../base/browser/window.js';
 import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
@@ -205,7 +206,7 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 		const selectedIndex = currentIndex < 0
 			? delta > 0 ? 0 : changes.length - 1
 			: this.loopChanges
-				? (currentIndex + delta + changes.length) % changes.length
+				? rot(currentIndex + delta, changes.length)
 				: Math.max(0, Math.min(changes.length - 1, currentIndex + delta));
 		const location = changes[selectedIndex]!;
 		this.revealChange(location);

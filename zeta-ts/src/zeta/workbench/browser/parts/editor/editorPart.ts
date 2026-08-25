@@ -8,6 +8,7 @@ import { Dimension, type IDimension, type IRectangle } from "../../../../base/br
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
 import { DisposableMap, DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { rot } from "../../../../base/common/numbers.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -342,7 +343,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		if (!Number.isInteger(offset) || offset === 0) throw new TypeError("Editor MRU offset must be a non-zero integer");
 		const editors = this.editorsMru;
 		if (editors.length === 0) return undefined;
-		const index = ((Math.abs(offset) % editors.length) * Math.sign(offset) + editors.length) % editors.length;
+		const index = rot(offset, editors.length);
 		return this.activateEditorIdentifier(editors[index]!);
 	}
 

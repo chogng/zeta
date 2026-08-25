@@ -1,3 +1,4 @@
+import { escapeRegExpCharacters } from "../../../base/common/strings.js";
 import { TextPosition } from "../core/text.js";
 import { TextRange } from "../core/text.js";
 import type { TextModel } from "./textModel.js";
@@ -122,16 +123,12 @@ function readResultLimit(value: number | undefined): number {
 function compileQuery(query: TextSearchQuery): RegExp {
 	const source = query.patternKind === TextSearchPatternKind.RegularExpression
 		? query.pattern
-		: escapeRegularExpression(query.pattern);
+		: escapeRegExpCharacters(query.pattern);
 	try {
 		return new RegExp(source, `gmu${query.matchCase ? "" : "i"}`);
 	} catch (error) {
 		throw new TextSearchQueryError("Text search regular expression is invalid", { cause: error });
 	}
-}
-
-function escapeRegularExpression(value: string): string {
-	return value.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
 }
 
 function isWholeWordMatch(text: string, start: number, end: number): boolean {

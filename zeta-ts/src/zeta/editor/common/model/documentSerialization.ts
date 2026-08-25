@@ -1,3 +1,4 @@
+import { isRecord } from "../../../base/common/types.js";
 import { createDocumentNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
 import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
 
@@ -146,10 +147,6 @@ function decodeAttributes(value: unknown, owner: string): DocumentAttributes {
 		attrs[key] = attribute;
 	}
 	return Object.freeze(attrs);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isAttributeValue(value: unknown): value is DocumentAttributeValue {

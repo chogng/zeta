@@ -1,3 +1,4 @@
+import { isFiniteNumber } from "../../../base/common/numbers.js";
 import {
 	WINDOW_MINIMUM_SIZE,
 } from "../../window/common/window.js";
@@ -183,8 +184,4 @@ function getWorkingArea(display: IWindowDisplay): IWindowBounds | undefined {
 		return display.bounds;
 	}
 	return undefined;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-	return typeof value === "number" && Number.isFinite(value);
 }

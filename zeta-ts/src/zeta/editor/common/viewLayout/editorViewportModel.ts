@@ -1,6 +1,7 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { clamp } from "../../../base/common/numbers.js";
 import { type TextModelChange } from "../core/text.js";
 import { TextModel } from "../model/textModel.js";
 
@@ -331,10 +332,6 @@ function nonNegativeSafeInteger(value: number, name: string): number {
 		throw new RangeError(`${name} must be a non-negative safe integer`);
 	}
 	return value;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }
 
 function sizesEqual(left: ISize, right: ISize): boolean {

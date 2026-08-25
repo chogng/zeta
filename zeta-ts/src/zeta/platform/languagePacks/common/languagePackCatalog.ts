@@ -1,3 +1,4 @@
+import { isRecord } from "../../../base/common/types.js";
 import type { LanguagePackCatalog } from "./languagePacksService.js";
 import { ZETA_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
 
@@ -42,8 +43,4 @@ export function decodeBase64(value: string): string {
 	const binary = atob(value);
 	const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
 	return new TextDecoder().decode(bytes);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

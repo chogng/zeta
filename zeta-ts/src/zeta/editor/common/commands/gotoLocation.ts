@@ -1,3 +1,4 @@
+import { clamp } from "../../../base/common/numbers.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 
@@ -74,8 +75,4 @@ function parseInteger(value: string): number | undefined {
 	if (!/^-?\d+$/u.test(value)) return undefined;
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }

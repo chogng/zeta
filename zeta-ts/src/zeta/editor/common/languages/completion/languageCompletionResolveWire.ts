@@ -1,4 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { toError } from "../../../../base/common/errors.js";
 import { normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "./languageCompletions.js";
 import { type LanguageWorkerWirePort } from "../languageWorkerWire.js";
 
@@ -110,7 +111,7 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 			pending.removeAbort();
 			pending.resolve(details);
 		} catch (error) {
-			this.invalidate(asError(error));
+			this.invalidate(toError(error));
 		}
 	}
 
@@ -197,7 +198,7 @@ export class LanguageCompletionResolveWireServer extends DisposableOwner {
 	}
 
 	private sendFailure(requestId: number, error: unknown): void {
-		const normalized = asError(error);
+		const normalized = toError(error);
 		this.port.send(Object.freeze({
 			protocol: RESOLVE_PROTOCOL,
 			version: RESOLVE_PROTOCOL_VERSION,
@@ -266,8 +267,4 @@ function abortError(reason: unknown): Error {
 	const error = new Error(reason === undefined ? "Completion resolve request was cancelled" : String(reason));
 	error.name = "AbortError";
 	return error;
-}
-
-function asError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value));
 }

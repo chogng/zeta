@@ -5,11 +5,8 @@ import {
 	writeFile,
 } from "node:fs/promises";
 import { dirname } from "node:path";
+import { isRecord } from "../../../base/common/types.js";
 import type { IStateService } from "./state.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function isFileNotFound(error: unknown): boolean {
 	return isRecord(error) && error.code === "ENOENT";

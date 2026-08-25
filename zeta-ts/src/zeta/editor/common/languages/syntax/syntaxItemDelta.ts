@@ -1,3 +1,4 @@
+import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
 import { SYNTAX_TOKEN_LANE, type SyntaxLane } from "./syntaxService.js";
 import { type LanguageDiagnostic, type LanguageToken } from "../languageResults.js";
 import { type TextRange, type TextSnapshot } from "../../core/text.js";
@@ -208,27 +209,9 @@ function comparePairs(left: LinePair, right: LinePair): number {
 	return left.previousLineIndex - right.previousLineIndex || left.currentLineIndex - right.currentLineIndex;
 }
 
-function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
-	const limit = Math.min(left.length, right.length);
-	let index = 0;
-	while (index < limit && left[index] === right[index]) index += 1;
-	return index;
-}
-
-function commonSuffixLength(left: readonly string[], right: readonly string[], prefixLength: number): number {
-	const limit = Math.min(left.length, right.length) - prefixLength;
-	let length = 0;
-	while (length < limit && left[left.length - length - 1] === right[right.length - length - 1]) length += 1;
-	return length;
-}
-
 function rangesEqual(current: TextRange, previous: TextRange, lineDelta: number): boolean {
 	return current.start.lineIndex === previous.start.lineIndex + lineDelta &&
 		current.start.columnIndex === previous.start.columnIndex &&
 		current.end.lineIndex === previous.end.lineIndex + lineDelta &&
 		current.end.columnIndex === previous.end.columnIndex;
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-	return left.length === right.length && left.every((value, index) => value === right[index]);
 }

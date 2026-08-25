@@ -1,4 +1,6 @@
 import { isAbsolute } from "node:path";
+import { isRecord } from "../../../base/common/types.js";
+import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import type { RemoteRuntimeCatalogSource } from "./packagedRemoteRuntimeCatalog.js";
 import { type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
@@ -115,19 +117,7 @@ function parseArtifact(text: string, target: string): TrustedRemoteRuntimeArtifa
 	return Object.freeze({ ...artifact });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function hasExactKeys(value: Record<string, unknown>, expected: ReadonlySet<string>): boolean {
 	const keys = Object.keys(value);
 	return keys.length === expected.size && keys.every(key => expected.has(key));
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-	return isNonNegativeSafeInteger(value) && value > 0;
 }

@@ -1,3 +1,4 @@
+import { isRecord } from '../../../../base/common/types.js';
 import { ConfigurationsRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { ModelRef } from '../../../../sessions/services/sessions/common/session.js';
 
@@ -60,8 +61,4 @@ function compareModelRefs(left: ModelRef, right: ModelRef): number {
 	if (left.provider !== right.provider) return left.provider < right.provider ? -1 : 1;
 	if (left.model === right.model) return 0;
 	return left.model < right.model ? -1 : 1;
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

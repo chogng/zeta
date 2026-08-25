@@ -1,5 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { isRecord } from "../../../../base/common/types.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IRecentWorkspacesService, type IRecentWorkspace } from "../common/recentWorkspacesService.js";
@@ -115,8 +116,4 @@ function resourceName(root: string): string {
 	const normalized = root.replace(/[\\/]+$/, "");
 	const separator = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
 	return normalized.slice(separator + 1) || normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

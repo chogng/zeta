@@ -1,3 +1,4 @@
+import { isRecord } from "../../../base/common/types.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../platform/storage/common/storage.js";
 
@@ -111,8 +112,4 @@ function storedDimension(value: number | undefined, fallback: number): number {
 
 function isDimension(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }

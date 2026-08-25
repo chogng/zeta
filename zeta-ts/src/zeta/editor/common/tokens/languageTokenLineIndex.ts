@@ -1,3 +1,4 @@
+import { arraysEqual } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
@@ -360,10 +361,6 @@ function lineMatchesResult(payload: LanguageTokenLinePayload, lineIndex: number,
 
 function presentationsEqual(left: LanguageToken["presentation"], right: LanguageToken["presentation"]): boolean {
 	return left?.foreground === right?.foreground && left?.background === right?.background && arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? []);
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-	return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 const EMPTY_TOKENS: readonly LanguageToken[] = Object.freeze([]);

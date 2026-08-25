@@ -1,3 +1,4 @@
+import { commonPrefixLength, commonSuffixLength } from "../../../base/common/arrays.js";
 import { type LanguageWorkerDocumentSynchronization } from "./languageWorkerDocumentMirror.js";
 import { createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
@@ -145,20 +146,6 @@ function updateLines(scanner: LanguageLexicalLineScanner, previousLines: readonl
 		scannedLineCount += 1;
 	}
 	return { lineResults: Object.freeze(lineResults), scannedLineCount };
-}
-
-function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
-	const limit = Math.min(left.length, right.length);
-	let index = 0;
-	while (index < limit && left[index] === right[index]) index += 1;
-	return index;
-}
-
-function commonSuffixLength(left: readonly string[], right: readonly string[], prefixLength: number): number {
-	const limit = Math.min(left.length, right.length) - prefixLength;
-	let length = 0;
-	while (length < limit && left[left.length - length - 1] === right[right.length - length - 1]) length += 1;
-	return length;
 }
 
 function aggregateResults(lineResults: readonly LanguageLexicalLineResult[]): { readonly tokens: LanguageTokenResult; readonly diagnostics: LanguageDiagnosticResult } {

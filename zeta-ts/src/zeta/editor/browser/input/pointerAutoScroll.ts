@@ -1,5 +1,6 @@
 import { AnimationFrameScheduler } from "../../../base/browser/scheduler.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { clamp } from "../../../base/common/numbers.js";
 import { type EditorViewport } from "../view/editorViewport.js";
 import { type ClientPoint, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
 
@@ -145,8 +146,4 @@ function validateBounds(bounds: PointerAutoScrollBounds): void {
 	) {
 		throw new RangeError("Stanza autoscroll bounds are invalid");
 	}
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }

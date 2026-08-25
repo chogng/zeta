@@ -1,5 +1,7 @@
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { isAbsolute } from "node:path";
+import { isRecord } from "../../../base/common/types.js";
+import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { isCanonicalAbsolutePosixPath, normalizeCredentialFreeSshHost, type RunServerHostRemoteCommand, runServerHostRemoteCommand, validLocalCommand } from "./serverHostRemoteCommand.js";
 
 export type { RunServerHostRemoteCommand, ServerHostCommandResult } from "./serverHostRemoteCommand.js";
@@ -188,16 +190,4 @@ function parsePositiveSafeInteger(value: string, name: string): number {
 	const parsed = Number(value);
 	if (!Number.isSafeInteger(parsed)) throw new Error(`${name} exceeds the supported integer range`);
 	return parsed;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-	return isNonNegativeSafeInteger(value) && value > 0;
 }

@@ -1,3 +1,4 @@
+import { clamp } from "../../../base/common/numbers.js";
 import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
@@ -318,8 +319,4 @@ function boundaryAtOrBefore(boundaries: readonly number[], column: number): numb
 function selectionsEqual(left: TextSelection, right: TextSelection): boolean {
 	return left.anchor.compareTo(right.anchor) === 0 &&
 		left.active.compareTo(right.active) === 0;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }

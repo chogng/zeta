@@ -1,4 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageCompletionSnippet } from "./snippetParser.js";
@@ -155,7 +156,7 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 		const group = this.groups[this.currentGroupIndex];
 		if (!group?.choices || group.choices.length === 0) return false;
 		const current = this.choiceIndexes.get(this.currentGroupIndex) ?? 0;
-		const next = (current + delta + group.choices.length) % group.choices.length;
+		const next = rot(current + delta, group.choices.length);
 		if (!this.replaceChoice(group, group.choices[next]!)) return false;
 		this.choiceIndexes.set(this.currentGroupIndex, next);
 		this.synchronizeTransforms(group);

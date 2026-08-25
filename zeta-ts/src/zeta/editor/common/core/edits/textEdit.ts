@@ -1,3 +1,4 @@
+import { commonPrefixLength, commonSuffixLength } from "../../../../base/common/strings.js";
 import { TextPosition } from "../position.js";
 import { TextRange } from "../range.js";
 import { TextLength } from "../text/textLength.js";
@@ -161,5 +162,3 @@ function createSyntheticSource(first: TextEdit, second: TextEdit): string {
 }
 
 function countNewlines(value: string): number { let count = 0; for (const character of value) if (character === "\n") count += 1; return count; }
-function commonPrefixLength(left: string, right: string): number { let index = 0; const length = Math.min(left.length, right.length); while (index < length && left.charCodeAt(index) === right.charCodeAt(index)) index += 1; return index; }
-function commonSuffixLength(left: string, right: string): number { let index = 0; const length = Math.min(left.length, right.length); while (index < length && left.charCodeAt(left.length - index - 1) === right.charCodeAt(right.length - index - 1)) index += 1; return index; }

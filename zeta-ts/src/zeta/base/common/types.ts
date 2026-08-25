@@ -21,3 +21,13 @@ export function assertDefined<T>(
 ): asserts value is NonNullable<T> {
 	assert(value !== undefined && value !== null, messageOrError);
 }
+
+/** Narrows an unknown value to a non-array object with string keys. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Narrows an unknown value to a string containing non-whitespace text. */
+export function isNonEmptyString(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0;
+}

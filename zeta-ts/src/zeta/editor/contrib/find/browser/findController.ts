@@ -1,6 +1,7 @@
 import "./media/findWidget.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { rot } from "../../../../base/common/numbers.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -292,7 +293,7 @@ export class FindController extends DisposableOwner {
 		const base = this.currentMatchIndex >= 0 ? this.currentMatchIndex : this.findCurrentMatchIndex();
 		const candidate = base + delta;
 		const index = this.loop
-			? (candidate + this.matches.length) % this.matches.length
+			? rot(candidate, this.matches.length)
 			: Math.max(0, Math.min(this.matches.length - 1, candidate));
 		this.selectMatch(index);
 	}

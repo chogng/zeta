@@ -1,4 +1,6 @@
 import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { toError } from "../../../base/common/errors.js";
+import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
@@ -104,7 +106,7 @@ export class ViteDevAppServerConnection {
 			this.setState("ready");
 			return metadata;
 		} catch (error) {
-			this.fail(asError(error));
+			this.fail(toError(error));
 			throw error;
 		}
 	}
@@ -159,7 +161,7 @@ export class ViteDevAppServerConnection {
 		try {
 			this.hot.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
 		} catch (error) {
-			this.rejectPending(id, asError(error));
+			this.rejectPending(id, toError(error));
 		}
 		return promise;
 	}
@@ -175,7 +177,7 @@ export class ViteDevAppServerConnection {
 			this.connectReject = undefined;
 			resolve?.(metadata);
 		} catch (error) {
-			this.fail(asError(error));
+			this.fail(toError(error));
 		}
 	};
 
@@ -190,7 +192,7 @@ export class ViteDevAppServerConnection {
 				this.handleResponse(message);
 			}
 		} catch (error) {
-			this.fail(asError(error));
+			this.fail(toError(error));
 		}
 	};
 
@@ -333,14 +335,6 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
 	return resolved;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function describeValue(value: unknown): string {
 	return typeof value === "string" ? JSON.stringify(value) : String(value);
-}
-
-function asError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value));
 }

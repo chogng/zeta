@@ -1,3 +1,4 @@
+import { commonPrefixLength, commonSuffixLength } from "../../../../base/common/strings.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { StringText } from "../text/abstractText.js";
 import { BaseEdit, BaseReplacement } from "./edit.js";
@@ -203,20 +204,6 @@ export class AnnotatedStringReplacement<Data extends IEditData<Data>> extends Ba
 	tryJoinTouching(other: AnnotatedStringReplacement<Data>): AnnotatedStringReplacement<Data> | undefined { const data = this.data.join(other.data); return data === undefined ? undefined : new AnnotatedStringReplacement(this.replaceRange.joinRightTouching(other.replaceRange), this.newText + other.newText, data); }
 	slice(range: OffsetRange, rangeInReplacement?: OffsetRange): AnnotatedStringReplacement<Data> { return new AnnotatedStringReplacement(range, rangeInReplacement?.substring(this.newText) ?? this.newText, this.data); }
 	normalizeEOL(eol: "\n" | "\r\n" = "\n"): AnnotatedStringReplacement<Data> { return new AnnotatedStringReplacement(this.replaceRange, this.newText.replace(/\r\n|\n/g, eol), this.data); }
-}
-
-function commonPrefixLength(left: string, right: string): number {
-	const length = Math.min(left.length, right.length);
-	let index = 0;
-	while (index < length && left.charCodeAt(index) === right.charCodeAt(index)) index += 1;
-	return index;
-}
-
-function commonSuffixLength(left: string, right: string): number {
-	const length = Math.min(left.length, right.length);
-	let index = 0;
-	while (index < length && left.charCodeAt(left.length - index - 1) === right.charCodeAt(right.length - index - 1)) index += 1;
-	return index;
 }
 
 function areConcurrentInserts(left: OffsetRange, right: OffsetRange): boolean { return left.isEmpty && right.isEmpty && left.start === right.start; }

@@ -4,6 +4,7 @@ import { SerializableGrid, type SerializedGridDescriptor } from "../../base/brow
 import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { isRecord } from "../../base/common/types.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/common/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
@@ -817,8 +818,4 @@ function isVerticalLayoutRegionState(
 
 function isLayoutDimension(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }

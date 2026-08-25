@@ -1,3 +1,5 @@
+import { clamp } from "../../../common/numbers.js";
+
 export interface ScrollbarAxisMetrics {
 	readonly viewportSize: number;
 	readonly scrollSize: number;
@@ -49,10 +51,6 @@ export function clampScrollbarPosition(
 	maximum: number,
 ): number {
 	return clamp(nonNegativeFinite(value), 0, nonNegativeFinite(maximum));
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(maximum, Math.max(minimum, value));
 }
 
 function nonNegativeFinite(value: number): number {

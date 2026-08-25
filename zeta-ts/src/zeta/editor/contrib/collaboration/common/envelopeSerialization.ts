@@ -1,3 +1,4 @@
+import { isRecord } from "../../../../base/common/types.js";
 import { DocumentSerializationError } from "../../../common/model/documentSerialization.js";
 import { type DocumentSchema } from "../../../common/model/documentSchema.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction, type SerializedDocumentTransaction } from "../../../common/model/documentTransactionSerialization.js";
@@ -84,8 +85,4 @@ function requirePositiveInteger(value: unknown, name: string): number {
 function requireNonNegativeInteger(value: unknown, name: string): number {
 	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new DocumentSerializationError(`${name} must be a non-negative safe integer`);
 	return value as number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

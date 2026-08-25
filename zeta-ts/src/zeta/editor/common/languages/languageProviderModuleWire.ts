@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
+import { toError } from "../../../base/common/errors.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { assertLanguageProviderModuleId, assertLanguageProviderModuleState, LanguageProviderModuleHost, LanguageProviderModuleRegistry, LanguageProviderModuleState, normalizeLanguageProviderModuleCatalog, type LanguageProviderModuleCatalog, type LanguageProviderModuleController, type LanguageProviderModuleStateChange } from "./languageProviderModules.js";
 import { type LanguageWorkerWirePort } from "./languageWorkerWire.js";
@@ -113,7 +114,7 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 			}
 			pending.resolve(Object.freeze({ moduleId: pending.moduleId, state: pending.state, changed: value.changed }));
 		} catch (error) {
-			this.fail(asError(error));
+			this.fail(toError(error));
 		}
 	}
 
@@ -227,7 +228,7 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 	}
 
 	private sendFailure(requestId: number, error: unknown): void {
-		const normalized = asError(error);
+		const normalized = toError(error);
 		this.port.send(Object.freeze({
 			protocol: this.descriptor.protocol,
 			version: this.descriptor.version,
@@ -304,10 +305,6 @@ function assertDescriptor(descriptor: LanguageProviderModuleWireDescriptor): voi
 	if (!descriptor || typeof descriptor.protocol !== "string" || descriptor.protocol.length === 0 || !Number.isSafeInteger(descriptor.version) || descriptor.version < 1) {
 		throw new TypeError("Provider module wire descriptor is invalid");
 	}
-}
-
-function asError(value: unknown): Error {
-	return value instanceof Error ? value : new Error(String(value));
 }
 
 const EMPTY_MODULE_CATALOG: LanguageProviderModuleCatalog = Object.freeze({

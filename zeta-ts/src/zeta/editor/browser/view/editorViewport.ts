@@ -7,6 +7,7 @@ import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
 import { type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { clamp } from "../../../base/common/numbers.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../common/editorIndentation.js";
 import { type EditorLineVisibilitySource } from "../../common/viewModel/modelLineProjection.js";
@@ -778,8 +779,4 @@ function nonNegativePaddingValue(value: number, side: keyof EditorViewportPaddin
 		throw new RangeError(`Stanza editor padding.${side} must be non-negative and finite`);
 	}
 	return value;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }

@@ -1,3 +1,4 @@
+import { clamp } from "../../../base/common/numbers.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../cursor/cursorNavigation.js";
 import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
@@ -179,8 +180,4 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
 function selectionsEqual(left: TextSelection, right: TextSelection): boolean {
 	return left.anchor.compareTo(right.anchor) === 0 &&
 		left.active.compareTo(right.active) === 0;
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
 }

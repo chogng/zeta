@@ -1,5 +1,6 @@
 import { URI } from "../../../base/common/uri.js";
 import type { Event } from "../../../base/common/event.js";
+import { isNonEmptyString } from "../../../base/common/types.js";
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
@@ -339,8 +340,4 @@ function resourceName(resource: URI): string {
 	const path = decodeURIComponent(resource.path).replace(/\/+$/, '');
 	const name = path.slice(path.lastIndexOf('/') + 1);
 	return name || resource.authority || resource.toString();
-}
-
-function isNonEmptyString(value: unknown): value is string {
-	return typeof value === "string" && value.trim().length > 0;
 }

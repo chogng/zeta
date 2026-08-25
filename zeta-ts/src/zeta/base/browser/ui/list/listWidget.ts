@@ -1,6 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner } from "../../../common/lifecycle.js";
+import { rot } from "../../../common/numbers.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import type { ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
 import { ListView } from "./listView.js";
@@ -193,7 +194,7 @@ export class List<T> extends DisposableOwner {
 		const length = this.items.length;
 		if (length === 0) return undefined;
 		const candidate = this._activeIndex + delta;
-		return this.loopNavigation ? (candidate + length) % length : Math.max(0, Math.min(candidate, length - 1));
+		return this.loopNavigation ? rot(candidate, length) : Math.max(0, Math.min(candidate, length - 1));
 	}
 
 	private syncRows(): void {

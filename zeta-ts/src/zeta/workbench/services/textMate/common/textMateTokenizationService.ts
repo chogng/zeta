@@ -1,3 +1,5 @@
+import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
+import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/common/languages/languageWorkerDocumentMirror.js";
 import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/common/core/text.js";
@@ -375,12 +377,8 @@ function matchesScopeSelector(selector: string, scopes: readonly string[]): bool
 function matchesScope(selector: string, scope: string): boolean {
 	if (selector === "*") return true;
 	if (!selector.includes("*")) return scope === selector || scope.startsWith(`${selector}.`);
-	const expression = selector.split("*").map(escapeRegularExpression).join("[^.]*");
+	const expression = selector.split("*").map(escapeRegExpCharacters).join("[^.]*");
 	return new RegExp(`^${expression}(?:\\.|$)`, "u").test(scope);
-}
-
-function escapeRegularExpression(value: string): string {
-	return value.replace(/[|\\{}()[\]^$+?.]/gu, "\\$&");
 }
 
 const EMPTY_MODIFIERS: readonly string[] = Object.freeze([]);
@@ -513,22 +511,4 @@ function normalizeFontStyle(value: readonly string[]): readonly ("italic" | "bol
 
 function presentationsEqual(left: LanguageToken["presentation"], right: LanguageToken["presentation"]): boolean {
 	return left?.foreground === right?.foreground && left?.background === right?.background && arraysEqual(left?.fontStyle ?? [], right?.fontStyle ?? []);
-}
-
-function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
-	const limit = Math.min(left.length, right.length);
-	let index = 0;
-	while (index < limit && left[index] === right[index]) index += 1;
-	return index;
-}
-
-function commonSuffixLength(left: readonly string[], right: readonly string[], prefixLength: number): number {
-	const limit = Math.min(left.length, right.length) - prefixLength;
-	let length = 0;
-	while (length < limit && left[left.length - length - 1] === right[right.length - length - 1]) length += 1;
-	return length;
-}
-
-function arraysEqual(left: readonly string[], right: readonly string[]): boolean {
-	return left.length === right.length && left.every((value, index) => value === right[index]);
 }

@@ -1,5 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { isRecord } from "../../../../base/common/types.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { disposableWindowInterval } from "../../../../base/browser/scheduler.js";
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../platform/storage/common/storage.js";
@@ -319,8 +320,4 @@ function validateTarget(value: unknown): asserts value is StorageTarget {
 	if (value !== StorageTarget.USER && value !== StorageTarget.MACHINE) {
 		throw new TypeError("Storage target is invalid");
 	}
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
