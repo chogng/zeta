@@ -2,6 +2,7 @@ import { type IDimension } from "../../base/browser/geometry.js";
 import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.js";
+import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
@@ -55,7 +56,7 @@ export function isEditorTextViewState(value: unknown): value is EditorTextViewSt
 	if (!value || typeof value !== "object") return false;
 	const state = value as Partial<EditorTextViewState>;
 	if (!isNonEmptyArray(state.selections)) return false;
-	if (!Number.isSafeInteger(state.primarySelectionIndex) || state.primarySelectionIndex! < 0 || state.primarySelectionIndex! >= state.selections.length) return false;
+	if (!isSafeInteger(state.primarySelectionIndex) || state.primarySelectionIndex! < 0 || state.primarySelectionIndex! >= state.selections.length) return false;
 	if (!isViewScrollPosition(state.scrollPosition)) return false;
 	return state.selections.every(selection => isViewPosition(selection?.anchor) && isViewPosition(selection?.active));
 }
@@ -216,11 +217,11 @@ export class EditorPart extends DisposableOwner implements IEditorPartRuntime {
 function isViewPosition(value: unknown): value is EditorTextViewPositionState {
 	if (!value || typeof value !== "object") return false;
 	const position = value as Partial<EditorTextViewPositionState>;
-	return Number.isSafeInteger(position.lineIndex) && position.lineIndex! >= 0 && Number.isSafeInteger(position.columnIndex) && position.columnIndex! >= 0;
+	return isSafeInteger(position.lineIndex) && position.lineIndex! >= 0 && isSafeInteger(position.columnIndex) && position.columnIndex! >= 0;
 }
 
 function isViewScrollPosition(value: unknown): value is EditorTextViewState["scrollPosition"] {
 	if (!value || typeof value !== "object") return false;
 	const position = value as Partial<EditorTextViewState["scrollPosition"]>;
-	return Number.isFinite(position.left) && position.left! >= 0 && Number.isFinite(position.top) && position.top! >= 0;
+	return isFiniteNumber(position.left) && position.left! >= 0 && isFiniteNumber(position.top) && position.top! >= 0;
 }

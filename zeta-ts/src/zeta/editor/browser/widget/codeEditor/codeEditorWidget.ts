@@ -1,3 +1,4 @@
+import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -88,7 +89,7 @@ export function registerCodeEditorPlaceholderFactory(factory: CodeEditorPlacehol
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-	if (!options || typeof options !== "object" || !options.container || !options.model || !options.selectionController) {
+	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || !options.model || !options.selectionController) {
 		throw new TypeError("Stanza code editor requires a container, text model, and selection controller");
 	}
 	if (options.selectionController.textModel !== options.model) {

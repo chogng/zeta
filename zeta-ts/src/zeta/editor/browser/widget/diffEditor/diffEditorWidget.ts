@@ -5,7 +5,7 @@ import { getClientArea, type IDimension } from "../../../../base/browser/geometr
 import { observeResize } from "../../../../base/browser/observer.js";
 import { getWindow } from "../../../../base/browser/window.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { rot } from "../../../../base/common/numbers.js";
+import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/common/numbers.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { DiffOverviewRuler } from "./diffOverviewRuler.js";
@@ -110,7 +110,7 @@ export class DiffEditorWidget extends DisposableOwner {
 	}
 
 	layout(size: IDimension = getClientArea(this.element)): void {
-		if (!Number.isFinite(size.width) || size.width < 0 || !Number.isFinite(size.height) || size.height < 0) {
+		if (!isFiniteNumber(size.width) || size.width < 0 || !isFiniteNumber(size.height) || size.height < 0) {
 			throw new RangeError("Diff editor widget layout size must be finite and non-negative");
 		}
 		this.viewportWidth = size.width;
@@ -151,7 +151,7 @@ export class DiffEditorWidget extends DisposableOwner {
 	}
 
 	private revealLine(side: "originalLineIndex" | "modifiedLineIndex", lineIndex: number): void {
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) {
+		if (!isNonNegativeSafeInteger(lineIndex)) {
 			throw new RangeError("Stanza diff line index must be a non-negative safe integer");
 		}
 		const diff = this.currentDiff;
@@ -239,13 +239,13 @@ function validateOptions(options: DiffEditorWidgetOptions): void {
 	}
 	const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-	if (!Number.isFinite(lineHeight) || lineHeight <= 0) throw new RangeError("Diff editor widget line height must be positive and finite");
+	if (!isFiniteNumber(lineHeight) || lineHeight <= 0) throw new RangeError("Diff editor widget line height must be positive and finite");
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== "string" || !options.fontFamily.trim())) throw new TypeError("Diff editor font family must be a non-empty string");
-	if (options.fontSize !== undefined && (!Number.isFinite(options.fontSize) || options.fontSize <= 0)) throw new RangeError("Diff editor font size must be positive and finite");
+	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError("Diff editor font size must be positive and finite");
 	for (const [name, value] of [["fontLigatures", options.fontLigatures], ["showLineNumbers", options.showLineNumbers], ["showInlineChanges", options.showInlineChanges], ["loopChanges", options.loopChanges]] as const) {
 		if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Diff editor option '${name}' must be boolean`);
 	}
-	if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError("Diff editor widget overscan row count must be a non-negative safe integer");
+	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError("Diff editor widget overscan row count must be a non-negative safe integer");
 	const ownerWindow = getWindow(options.container);
 	if (options.container.ownerDocument.defaultView !== ownerWindow) throw new Error("Diff editor widget container must belong to its owner window");
 }

@@ -27,6 +27,7 @@ export class MemoryTextFiles implements ITextFileService {
 			text: request.bootstrapText ?? this.contents.get(request.resource.toString()) ?? "",
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: request.bootstrapText === undefined ? this.revisionFor(request.resource) : undefined,
+			encoding: "utf8",
 		});
 	}
 

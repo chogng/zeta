@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { clamp } from "../../../base/common/numbers.js";
+import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type TextModelChange } from "../core/text.js";
 import { TextModel } from "../model/textModel.js";
 
@@ -321,14 +321,14 @@ function nonNegativeFinite(value: number, name: string): number {
 }
 
 function finite(value: number, name: string): number {
-	if (!Number.isFinite(value)) {
+	if (!isFiniteNumber(value)) {
 		throw new RangeError(`${name} must be finite`);
 	}
 	return value;
 }
 
 function nonNegativeSafeInteger(value: number, name: string): number {
-	if (!Number.isSafeInteger(value) || value < 0) {
+	if (!isNonNegativeSafeInteger(value)) {
 		throw new RangeError(`${name} must be a non-negative safe integer`);
 	}
 	return value;
@@ -391,7 +391,7 @@ function validateLineSource(source: EditorViewportLineSource): void {
 }
 
 function validateLineCount(lineCount: number): void {
-	if (!Number.isSafeInteger(lineCount) || lineCount < 1) {
+	if (!isPositiveSafeInteger(lineCount)) {
 		throw new RangeError("Editor viewport line count must be a positive safe integer");
 	}
 }

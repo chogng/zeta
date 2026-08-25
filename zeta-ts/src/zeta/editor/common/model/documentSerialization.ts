@@ -1,4 +1,5 @@
 import { isRecord } from "../../../base/common/types.js";
+import { isFiniteNumber } from "../../../base/common/numbers.js";
 import { createDocumentNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
 import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
 
@@ -150,5 +151,5 @@ function decodeAttributes(value: unknown, owner: string): DocumentAttributes {
 }
 
 function isAttributeValue(value: unknown): value is DocumentAttributeValue {
-	return value === null || typeof value === "string" || typeof value === "boolean" || (typeof value === "number" && Number.isFinite(value));
+	return value === null || typeof value === "string" || typeof value === "boolean" || isFiniteNumber(value);
 }

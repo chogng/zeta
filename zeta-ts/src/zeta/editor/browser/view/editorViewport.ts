@@ -7,7 +7,7 @@ import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
 import { type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
-import { clamp } from "../../../base/common/numbers.js";
+import { clamp, isFiniteNumber, isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../common/editorIndentation.js";
 import { type EditorLineVisibilitySource } from "../../common/viewModel/modelLineProjection.js";
@@ -556,7 +556,7 @@ export class EditorViewport extends DisposableOwner {
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
 	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
-		if (!Number.isFinite(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
+		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
@@ -654,7 +654,7 @@ export class EditorViewport extends DisposableOwner {
 	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
-		return line && Number.isSafeInteger(offset) && offset >= 0 && offset <= line.textElement.textContent?.length
+		return line && isNonNegativeSafeInteger(offset) && offset <= line.textElement.textContent?.length
 			? getStanzaDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
 			: undefined;
 	}
@@ -756,8 +756,8 @@ export class EditorViewport extends DisposableOwner {
 function validateClientPoint(point: ClientPoint): void {
 	if (
 		!point ||
-		!Number.isFinite(point.clientX) ||
-		!Number.isFinite(point.clientY)
+		!isFiniteNumber(point.clientX) ||
+		!isFiniteNumber(point.clientY)
 	) {
 		throw new RangeError(
 			"Stanza client point must contain finite coordinates",
@@ -775,7 +775,7 @@ function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined
 }
 
 function nonNegativePaddingValue(value: number, side: keyof EditorViewportPadding): number {
-	if (!Number.isFinite(value) || value < 0) {
+	if (!isFiniteNumber(value) || value < 0) {
 		throw new RangeError(`Stanza editor padding.${side} must be non-negative and finite`);
 	}
 	return value;

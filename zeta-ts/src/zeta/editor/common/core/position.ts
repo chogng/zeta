@@ -1,3 +1,5 @@
+import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
+
 export interface IPosition {
 	readonly lineIndex: number;
 	readonly columnIndex: number;
@@ -87,7 +89,7 @@ export class TextPosition {
 }
 
 function assertIndex(value: number, name: string): void {
-	if (!Number.isSafeInteger(value) || value < 0) {
+	if (!isNonNegativeSafeInteger(value)) {
 		throw new RangeError(`${name} must be a non-negative safe integer`);
 	}
 }

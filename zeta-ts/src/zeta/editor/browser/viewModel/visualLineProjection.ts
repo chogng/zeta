@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
+import { isFiniteNumber, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
@@ -219,7 +220,7 @@ export class VisualLineProjection extends DisposableOwner {
 		for (let index = 1; index < boundaries.length; index += 1) {
 			const column = boundaries[index]!;
 			const width = this.textMeasurer.measureLineWidth(text.slice(startColumn, column));
-			if (!Number.isFinite(width) || width < 0) {
+			if (!isFiniteNumber(width) || width < 0) {
 				throw new RangeError("Stanza wrapped line measurement must be finite and non-negative");
 			}
 			if (width > this.wrapWidth && previousColumn > startColumn) {
@@ -243,7 +244,7 @@ function readWrapping(value: EditorLineWrapping | undefined): EditorLineWrapping
 
 function readWrapWidth(value: number | undefined): number {
 	const width = value ?? 0;
-	if (!Number.isFinite(width) || width < 0) {
+	if (!isFiniteNumber(width) || width < 0) {
 		throw new RangeError("Stanza editor wrap width must be finite and non-negative");
 	}
 	return width;
@@ -256,10 +257,10 @@ function readInitialMeasurement(value: VisualLineInitialMeasurementOptions | und
 	}
 	const initialLineCount = value.initialLineCount ?? 512;
 	const linesPerSlice = value.linesPerSlice ?? initialLineCount;
-	if (!Number.isSafeInteger(initialLineCount) || initialLineCount <= 0) {
+	if (!isPositiveSafeInteger(initialLineCount)) {
 		throw new RangeError("Stanza initial visual-line measurement count must be a positive safe integer");
 	}
-	if (!Number.isSafeInteger(linesPerSlice) || linesPerSlice <= 0) {
+	if (!isPositiveSafeInteger(linesPerSlice)) {
 		throw new RangeError("Stanza visual-line measurement slice size must be a positive safe integer");
 	}
 	return Object.freeze({ initialLineCount, linesPerSlice, schedule: value.schedule });

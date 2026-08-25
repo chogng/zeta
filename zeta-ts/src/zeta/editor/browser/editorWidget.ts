@@ -1,6 +1,7 @@
 import "./media/editorWidget.css";
 import { throwIfCancelled } from "../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../base/common/lifecycle.js";
+import { isSafeInteger } from "../../base/common/numbers.js";
 import { assertDefined } from "../../base/common/types.js";
 import { URI } from "../../base/common/uri.js";
 import type { IDimension } from "../../base/browser/geometry.js";
@@ -1523,7 +1524,7 @@ function isTextStyleFontFamily(value: unknown): value is "sans" | "serif" | "mon
 }
 
 function isTextStyleFontSize(value: unknown): value is number {
-	return typeof value === "number" && Number.isSafeInteger(value) && value >= 8 && value <= 72;
+	return isSafeInteger(value) && value >= 8 && value <= 72;
 }
 
 function findNode(document: DocumentNode, id: string): DocumentNode | undefined {

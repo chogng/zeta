@@ -7,7 +7,7 @@ import { observeResize } from '../../../../base/browser/observer.js';
 import { getWindow } from '../../../../base/browser/window.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { rot } from '../../../../base/common/numbers.js';
+import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
@@ -129,7 +129,7 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 	}
 
 	public layout(size: IDimension = getClientArea(this.domNode)): void {
-		if (!Number.isFinite(size.width) || size.width < 0 || !Number.isFinite(size.height) || size.height < 0) {
+		if (!isFiniteNumber(size.width) || size.width < 0 || !isFiniteNumber(size.height) || size.height < 0) {
 			throw new RangeError('Multi-diff editor layout size must be finite and non-negative');
 		}
 		this.viewportWidth = size.width;
@@ -224,7 +224,7 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 			this.refreshLayout();
 		}
 		const rowCount = this.items[itemIndex]!.model.diff?.rows.length ?? 0;
-		if (!Number.isSafeInteger(location.rowIndex) || location.rowIndex < 0 || location.rowIndex >= rowCount) {
+		if (!isNonNegativeSafeInteger(location.rowIndex) || location.rowIndex >= rowCount) {
 			throw new RangeError('Multi-diff row index is outside its item');
 		}
 		this.activeChange = Object.freeze({ ...location });
@@ -404,10 +404,10 @@ function validateOptions(options: MultiDiffEditorWidgetOptions): void {
 	}
 	const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-	if (!Number.isFinite(lineHeight) || lineHeight <= 0) throw new RangeError('Multi-diff editor line height must be positive and finite');
-	if (!Number.isSafeInteger(overscanRowCount) || overscanRowCount < 0) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
+	if (!isFiniteNumber(lineHeight) || lineHeight <= 0) throw new RangeError('Multi-diff editor line height must be positive and finite');
+	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
 	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
-	if (options.fontSize !== undefined && (!Number.isFinite(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
+	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
 	for (const [name, value] of [['fontLigatures', options.fontLigatures], ['showLineNumbers', options.showLineNumbers], ['showInlineChanges', options.showInlineChanges], ['loopChanges', options.loopChanges]] as const) {
 		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}

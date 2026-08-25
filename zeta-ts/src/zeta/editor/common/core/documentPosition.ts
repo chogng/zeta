@@ -1,3 +1,4 @@
+import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
 import type { DocumentNode, DocumentNodeId } from "../model/document.js";
 import type { DocumentPoint } from "./documentSelection.js";
 import type { DocumentSchema } from "../model/documentSchema.js";
@@ -79,7 +80,7 @@ interface TextRange {
 function findPointPosition(node: DocumentNode, schema: DocumentSchema, point: DocumentPoint, start: number): number | undefined {
 	if (node.id === point.nodeId) {
 		if (node.text === undefined) throw new RangeError(`Document point '${point.nodeId}' must target a text node`);
-		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > node.text.length) throw new RangeError(`Document point offset must be between 0 and ${node.text.length}`);
+		if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length) throw new RangeError(`Document point offset must be between 0 and ${node.text.length}`);
 		return start + point.offset;
 	}
 	if (node.text !== undefined || isDocumentLeaf(node, schema)) return undefined;
@@ -122,7 +123,7 @@ function findPointPath(node: DocumentNode, schema: DocumentSchema, nodeId: Docum
 
 function validateDocumentPosition(document: DocumentNode, schema: DocumentSchema, pos: number): void {
 	const contentSize = documentContentSize(document, schema);
-	if (!Number.isSafeInteger(pos) || pos < 0 || pos > contentSize) throw new RangeError(`Document position must be between 0 and ${contentSize}`);
+	if (!isNonNegativeSafeInteger(pos) || pos > contentSize) throw new RangeError(`Document position must be between 0 and ${contentSize}`);
 }
 
 function lastTextPoint(ranges: readonly TextRange[]): DocumentPoint {

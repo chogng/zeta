@@ -1,3 +1,4 @@
+import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
 import { IPosition, TextPosition } from "./position.js";
 import { TextRange } from "./range.js";
 
@@ -98,8 +99,7 @@ export class TextSelectionSet {
 			throw new RangeError("TextSelectionSet must not be empty");
 		}
 		if (
-			!Number.isSafeInteger(primaryIndex) ||
-			primaryIndex < 0 ||
+			!isNonNegativeSafeInteger(primaryIndex) ||
 			primaryIndex >= selections.length
 		) {
 			throw new RangeError(

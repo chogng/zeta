@@ -1,3 +1,5 @@
+import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
+
 /**
  * Converts UTF-16 columns to the editor's approximate visible columns.
  *
@@ -83,5 +85,5 @@ function isWideCodePoint(codePoint: number): boolean {
 }
 
 function validateTabSize(value: number): void {
-	if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError("Tab size must be a positive safe integer");
+	if (!isPositiveSafeInteger(value)) throw new RangeError("Tab size must be a positive safe integer");
 }

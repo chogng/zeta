@@ -1,3 +1,4 @@
+import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
 import { findDocumentNode, type DocumentNode, type DocumentNodeId } from "../model/document.js";
 
 export interface DocumentPoint {
@@ -75,12 +76,12 @@ export function isDocumentSelectionValid(document: DocumentNode, selection: Docu
 function validatePointInDocument(document: DocumentNode, point: DocumentPoint): void {
 	const node = findDocumentNode(document, point.nodeId)?.node;
 	if (!node || node.text === undefined) throw new RangeError(`Text selection target '${point.nodeId}' is not a text node`);
-	if (point.offset < 0 || point.offset > node.text.length) throw new RangeError(`Text selection offset must be between 0 and ${node.text.length}`);
+	if (!isNonNegativeSafeInteger(point.offset) || point.offset > node.text.length) throw new RangeError(`Text selection offset must be between 0 and ${node.text.length}`);
 }
 
 function validatePoint(point: DocumentPoint): void {
 	validateNodeId(point.nodeId);
-	if (!Number.isSafeInteger(point.offset) || point.offset < 0) throw new RangeError("Document point offset must be a non-negative safe integer");
+	if (!isNonNegativeSafeInteger(point.offset)) throw new RangeError("Document point offset must be a non-negative safe integer");
 }
 
 function validateNodeId(id: string): void {

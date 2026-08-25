@@ -1,3 +1,5 @@
+import { isNonNegativeSafeInteger } from "../../../base/common/numbers.js";
+
 /** A compact character classifier with a fast ASCII path and sparse Unicode map. */
 export class CharacterClassifier<T extends number> {
 	private readonly asciiMap: Uint8Array;
@@ -11,7 +13,7 @@ export class CharacterClassifier<T extends number> {
 	}
 
 	set(charCode: number, value: T): void {
-		if (!Number.isSafeInteger(charCode) || charCode < 0) throw new RangeError("Character code must be a non-negative safe integer");
+		if (!isNonNegativeSafeInteger(charCode)) throw new RangeError("Character code must be a non-negative safe integer");
 		const normalizedValue = toUint8(value);
 		if (charCode < 256) this.asciiMap[charCode] = normalizedValue;
 		else this.map.set(charCode, normalizedValue);
@@ -39,6 +41,6 @@ export class CharacterSet {
 enum CharacterSetValue { False = 0, True = 1 }
 
 function toUint8(value: number): number {
-	if (!Number.isSafeInteger(value) || value < 0 || value > 255) throw new RangeError("Character classifier values must fit in one byte");
+	if (!isNonNegativeSafeInteger(value) || value > 255) throw new RangeError("Character classifier values must fit in one byte");
 	return value;
 }

@@ -1,4 +1,5 @@
 import { isRecord } from "../../../base/common/types.js";
+import { isFiniteNumber, isSafeInteger } from "../../../base/common/numbers.js";
 import type { DocumentAttributes, DocumentMark, DocumentNode } from "./document.js";
 import { decodeDocumentNode, DocumentSerializationError, encodeDocumentNode, type SerializedDocumentNode } from "./documentSerialization.js";
 import { type DocumentSchema } from "./documentSchema.js";
@@ -172,7 +173,7 @@ function decodeAttributes(value: unknown, name: string): DocumentAttributes {
 	const attrs: Record<string, string | number | boolean | null> = {};
 	for (const [key, attribute] of Object.entries(value)) {
 		if (!/^[a-z][a-zA-Z0-9_-]*$/.test(key)) throw new DocumentSerializationError(`${name} contains an invalid attribute '${key}'`);
-		if (attribute !== null && typeof attribute !== "string" && typeof attribute !== "boolean" && (typeof attribute !== "number" || !Number.isFinite(attribute))) throw new DocumentSerializationError(`${name}.${key} is not a document attribute value`);
+		if (attribute !== null && typeof attribute !== "string" && typeof attribute !== "boolean" && !isFiniteNumber(attribute)) throw new DocumentSerializationError(`${name}.${key} is not a document attribute value`);
 		attrs[key] = attribute;
 	}
 	return attrs;
@@ -180,7 +181,7 @@ function decodeAttributes(value: unknown, name: string): DocumentAttributes {
 
 function normalizeJsonValue(value: unknown, seen = new Set<object>()): JsonValue {
 	if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-	if (typeof value === "number" && Number.isFinite(value)) return value;
+	if (isFiniteNumber(value)) return value;
 	if (Array.isArray(value)) {
 		if (seen.has(value)) throw new DocumentSerializationError("Document transaction metadata cannot contain cycles");
 		seen.add(value);
@@ -206,7 +207,7 @@ function requireString(value: unknown, name: string): string {
 }
 
 function requireInteger(value: unknown, name: string): number {
-	if (!Number.isSafeInteger(value)) throw new DocumentSerializationError(`${name} must be a safe integer`);
+	if (!isSafeInteger(value)) throw new DocumentSerializationError(`${name} must be a safe integer`);
 	return value as number;
 }
 
