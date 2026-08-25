@@ -7,13 +7,8 @@ import {
 import { Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
+import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import type { WorkbenchModeId } from "../common/workbenchMode.js";
-import type {
-	WorkbenchState,
-} from "../../platform/workspace/common/workspace.js";
-import {
-	workbenchStateToContextValue,
-} from "../common/contextkeys.js";
 import { type IWorkbenchHostService, type WorkbenchTextDownload } from "../services/host/common/workbenchHostService.js";
 import { h } from "../../base/browser/dom.js";
 
@@ -97,7 +92,7 @@ export class WorkbenchWindow
 	setWorkbenchState(state: WorkbenchState): void {
 		this.root.setAttribute(
 			"data-workbench-state",
-			workbenchStateToContextValue(state),
+			workbenchStateToString(state),
 		);
 	}
 }

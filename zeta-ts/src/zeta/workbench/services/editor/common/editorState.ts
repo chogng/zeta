@@ -19,6 +19,7 @@ export interface EditorInstanceState extends EditorIdentifier {
 	readonly isActive: boolean;
 	readonly isPreview: boolean;
 	readonly isDirty: boolean;
+	readonly canRevert: boolean;
 	readonly hasExternalChange: boolean;
 }
 
@@ -34,6 +35,7 @@ export interface EditorPartState {
 	readonly groups: readonly EditorGroupState[];
 	readonly activeGroupId: EditorGroupId;
 	readonly activeEditor: EditorIdentifier | undefined;
+	readonly isModalEditorVisible: boolean;
 }
 
 export type EditorCloseReason = 'close' | 'move' | 'replace' | 'previewReplace' | 'reset';

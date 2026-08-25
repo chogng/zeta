@@ -45,9 +45,6 @@ const {
 const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
-const {
-	bindWorkbenchPartVisibilityContextKeys,
-} = await import("../../../workbench/browser/contextkeys.js");
 const { WorkbenchPart } = await import("../../../workbench/browser/part.js");
 const { SidebarPart } = await import(
 	"../../../workbench/browser/parts/sidebar/sidebarPart.js"
@@ -169,16 +166,12 @@ function createLayoutHarness(
 
 test("Workbench layout hides and restores Parts with context keys", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
-	const harness = createLayoutHarness(dom.window.document);
+	const contextKeys = new ContextKeyService();
+	const harness = createLayoutHarness(dom.window.document, { contextKeyService: contextKeys });
+	harness.disposables.add(contextKeys);
 	const overlay = h(dom.window.document, "div");
 	overlay.className = "persistent-overlay";
 	harness.container.append(overlay);
-	const contextKeys = new ContextKeyService();
-	harness.disposables.add(contextKeys);
-	harness.disposables.add(bindWorkbenchPartVisibilityContextKeys(
-		contextKeys,
-		harness.layout,
-	));
 
 	harness.layout.layout(new Dimension(1_000, 700));
 	assert.equal(
@@ -268,14 +261,12 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 
 test("Workbench pane sashes snap closed and remain available for drag restore", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
+	const contextKeys = new ContextKeyService();
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
+		contextKeyService: contextKeys,
 	});
-	const contextKeys = harness.disposables.add(new ContextKeyService());
-	harness.disposables.add(bindWorkbenchPartVisibilityContextKeys(
-		contextKeys,
-		harness.layout,
-	));
+	harness.disposables.add(contextKeys);
 	harness.layout.layout(new Dimension(1_200, 800));
 
 	dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, -140);
@@ -674,16 +665,13 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	}));
 	const sidebar = disposables.add(new SidebarPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
+		contextKeyService: contextKeys,
 	}));
 	dom.window.document.body.append(sidebar.domNode);
 	const compositeBar = sidebar.compositeBar;
 	const selections: string[] = [];
-	const activeCompositeChanges: string[] = [];
 	disposables.add(sidebar.onDidSelectComposite(
 		({ compositeId }) => selections.push(compositeId),
-	));
-	disposables.add(sidebar.onDidChangeActiveComposite(
-		compositeId => activeCompositeChanges.push(compositeId),
 	));
 
 	assert.equal(
@@ -807,10 +795,12 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	sidebar.addComposite(searchComposite);
 	sidebar.showComposite(explorerComposite.id);
 	assert.equal(sidebar.activeCompositeId, explorerComposite.id);
+	assert.equal(contextKeys.getValue('activeViewlet'), explorerComposite.id);
 	assert.equal(explorerComposite.element.hidden, false);
 	assert.equal(searchComposite.element.hidden, true);
 	sidebar.showComposite(searchComposite.id);
 	assert.equal(sidebar.activeCompositeId, searchComposite.id);
+	assert.equal(contextKeys.getValue('activeViewlet'), searchComposite.id);
 	assert.equal(explorerComposite.element.hidden, true);
 	assert.equal(searchComposite.element.hidden, false);
 	sidebar.showComposite(explorerComposite.id);
@@ -819,11 +809,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
 		explorerComposite,
 	);
 	assert.equal(explorerComposite.element.hidden, false);
-	assert.deepEqual(activeCompositeChanges, [
-		explorerComposite.id,
-		searchComposite.id,
-		explorerComposite.id,
-	]);
+	assert.equal(contextKeys.getValue('activeViewlet'), explorerComposite.id);
 
 	disposables.dispose();
 	dom.window.close();
@@ -928,6 +914,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	}));
 	const agentSidebar = disposables.add(new SidebarPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
+		contextKeyService: contextKeys,
 		id: "agentSidebar",
 		location: ViewContainerLocation.AgentSidebar,
 		ariaLabel: "Agent sidebar",
@@ -944,6 +931,17 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		),
 		null,
 	);
+	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.AgentSidebar);
+	assert.ok(descriptor);
+	const composite = new PaneComposite(dom.window.document.body, {
+		viewContainer: descriptor,
+		model: viewDescriptors.getViewContainerModel(descriptor.id),
+		instantiationService: new InstantiationService(),
+		contextKeyService: contextKeys,
+	});
+	agentSidebar.addComposite(composite);
+	agentSidebar.showComposite(composite.id);
+	assert.equal(contextKeys.getValue('activeAgentSidebar'), composite.id);
 
 	disposables.dispose();
 	dom.window.close();
@@ -983,6 +981,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	}));
 	const panel = disposables.add(new PanelPart(dom.window.document.body, {
 		viewDescriptorService: viewDescriptors,
+		contextKeyService: contextKeys,
 		titleActions: {
 			menuService,
 			contextMenuProvider,
@@ -1020,6 +1019,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	});
 	panel.addComposite(terminal);
 	panel.showComposite(terminal.id);
+	assert.equal(contextKeys.getValue('activePanel'), terminal.id);
 
 	const toolbar = panel.domNode.querySelector(".zeta-pane-composite-title-view-actions [role='toolbar']");
 	const terminalTab = panel.domNode.querySelector("[role='tab'][aria-selected='true']");
@@ -1208,6 +1208,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	const auxiliarybar = disposables.add(
 		new AuxiliarybarPart(dom.window.document.body, {
 			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
 		}),
 	);
 	auxiliarybar.addComposite(composite);
@@ -1219,6 +1220,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	assert.ok(content);
 	assert.equal(content.firstElementChild, composite.element);
 	assert.equal(auxiliarybar.activeCompositeId, descriptor.id);
+	assert.equal(contextKeys.getValue('activeAuxiliary'), descriptor.id);
 	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>(".zeta-composite-bar");
 	assert.ok(compositeBar);
 	assert.equal(compositeBar.hidden, true);

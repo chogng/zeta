@@ -6,6 +6,8 @@ import { localize, type ILocalizationService, type LocalizationKey } from "../..
 import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";
 import { type MenuId } from "../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../platform/actions/common/menuService.js";
+import type { IContextKey, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, ActiveViewletContext } from '../../common/contextkeys.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";
 import { CompositePart } from "./compositePart.js";
@@ -24,6 +26,7 @@ export interface PaneCompositeTitleActions {
 /** Construction inputs shared by Sidebars, Auxiliary Bar, and Panel. */
 export interface PaneCompositePartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id: string;
@@ -51,6 +54,7 @@ export class PaneCompositePart extends CompositePart {
 	readonly compositeBar: CompositeBar;
 	readonly onDidSelectComposite: Event<CompositeBarSelectionEvent>;
 	private readonly viewDescriptorService: IViewDescriptorService;
+	private readonly activeCompositeContext: IContextKey<string> | undefined;
 	private readonly storageService: IStorageService | undefined;
 	private readonly location: ViewContainerLocation;
 	private readonly titleContentDomNode: HTMLDivElement;
@@ -63,6 +67,10 @@ export class PaneCompositePart extends CompositePart {
 	constructor(container: HTMLElement, options: PaneCompositePartOptions) {
 		super(container, options.id);
 		this.viewDescriptorService = options.viewDescriptorService;
+		this.activeCompositeContext = options.contextKeyService
+			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
+			: undefined;
+		this.defer(() => this.activeCompositeContext?.reset());
 		this.storageService = options.storageService;
 		this.location = options.location;
 		const ownerDocument = container.ownerDocument;
@@ -125,6 +133,7 @@ export class PaneCompositePart extends CompositePart {
 
 	override showComposite(compositeId: string): void {
 		super.showComposite(compositeId);
+		this.activeCompositeContext?.set(compositeId);
 		this.compositeBar.setActiveComposite(compositeId);
 		this.storeActiveComposite(compositeId);
 	}
@@ -171,3 +180,10 @@ const activeCompositeStorageKeys = {
 	[ViewContainerLocation.AuxiliaryBar]: "workbench.auxiliarybar.activeViewContainer",
 	[ViewContainerLocation.AgentSidebar]: "workbench.agentSidebar.activeViewContainer",
 } as const satisfies Record<ViewContainerLocation, string>;
+
+const activeCompositeContextKeys = {
+	[ViewContainerLocation.Sidebar]: ActiveViewletContext,
+	[ViewContainerLocation.Panel]: ActivePanelContext,
+	[ViewContainerLocation.AuxiliaryBar]: ActiveAuxiliaryContext,
+	[ViewContainerLocation.AgentSidebar]: ActiveAgentSidebarContext,
+} as const satisfies Record<ViewContainerLocation, typeof ActiveViewletContext>;

@@ -28,7 +28,6 @@ import {
 	getVisibleViewContextKey,
 } from "../../../workbench/common/contextkeys.js";
 import {
-	bindWorkbenchActiveCompositeContextKeys,
 	bindWorkbenchContextKeys,
 } from "../../../workbench/browser/contextkeys.js";
 import {
@@ -85,54 +84,6 @@ test("workbench context keys describe the current workspace", () => {
 	using registration = workingCopies.register(copy);
 	copy.setDirty(true);
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), true);
-});
-
-test('workbench context keys follow active view containers', () => {
-	using contextKeys = new ContextKeyService();
-	using sidebar = new TestCompositeContextSource('zeta.explorer');
-	using auxiliarybar = new TestCompositeContextSource('zeta.chat');
-	using agentSidebar = new TestCompositeContextSource();
-	using panel = new TestCompositeContextSource('zeta.panel.problems');
-	const changes: string[][] = [];
-	using listener = contextKeys.onDidChangeContext(event => changes.push([...event.keys].sort()));
-
-	{
-		using bindings = bindWorkbenchActiveCompositeContextKeys(contextKeys, {
-			sidebar,
-			auxiliarybar,
-			agentSidebar,
-			panel,
-		});
-		assert.deepEqual(changes, [[
-			'activeAgentSidebar',
-			'activeAuxiliary',
-			'activePanel',
-			'activeViewlet',
-		]]);
-		assert.deepEqual(activeCompositeContext(contextKeys), {
-			activeViewlet: 'zeta.explorer',
-			activeAuxiliary: 'zeta.chat',
-			activeAgentSidebar: '',
-			activePanel: 'zeta.panel.problems',
-		});
-
-		sidebar.setActive('zeta.search');
-		agentSidebar.setActive('zeta.agent');
-		panel.setActive('zeta.panel.terminal');
-		assert.deepEqual(activeCompositeContext(contextKeys), {
-			activeViewlet: 'zeta.search',
-			activeAuxiliary: 'zeta.chat',
-			activeAgentSidebar: 'zeta.agent',
-			activePanel: 'zeta.panel.terminal',
-		});
-	}
-
-	assert.deepEqual(activeCompositeContext(contextKeys), {
-		activeViewlet: '',
-		activeAuxiliary: '',
-		activeAgentSidebar: '',
-		activePanel: '',
-	});
 });
 
 test("workbench contributions start once at their declared phases", () => {
@@ -373,29 +324,6 @@ class TestView implements IView {
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
-	}
-}
-
-function activeCompositeContext(contextKeys: ContextKeyService): Record<string, unknown> {
-	return {
-		activeViewlet: contextKeys.getValue('activeViewlet'),
-		activeAuxiliary: contextKeys.getValue('activeAuxiliary'),
-		activeAgentSidebar: contextKeys.getValue('activeAgentSidebar'),
-		activePanel: contextKeys.getValue('activePanel'),
-	};
-}
-
-class TestCompositeContextSource extends DisposableOwner {
-	private readonly activeCompositeEmitter = this.own(new Emitter<string>());
-	readonly onDidChangeActiveComposite = this.activeCompositeEmitter.event;
-
-	constructor(public activeCompositeId: string | undefined = undefined) {
-		super();
-	}
-
-	setActive(id: string): void {
-		this.activeCompositeId = id;
-		this.activeCompositeEmitter.fire(id);
 	}
 }
 

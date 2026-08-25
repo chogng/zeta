@@ -118,10 +118,7 @@ import {
 	DialogService,
 } from "../services/dialogs/common/dialogService.js";
 import {
-	bindEditorContextKeys,
-	bindWorkbenchActiveCompositeContextKeys,
 	bindWorkbenchContextKeys,
-	bindWorkbenchPartVisibilityContextKeys,
 } from "./contextkeys.js";
 import { WorkbenchThemeController } from "./theme.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
@@ -132,6 +129,7 @@ import { IWorkspaceSearchService } from "../../platform/search/common/search.js"
 import { BrowserWorkspaceSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
+import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
 import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
 import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
 import { EditorPanes } from './parts/editor/editorRegistry.js';
@@ -575,6 +573,7 @@ export class Workbench extends DisposableOwner {
 		}));
 		const sidebar = this.own(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 			ariaLabelKey: { bundle: "zeta.regions", key: "primarySidebar" },
@@ -582,6 +581,7 @@ export class Workbench extends DisposableOwner {
 		}));
 		const agentSidebar = this.own(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 			id: "agentSidebar",
@@ -663,7 +663,7 @@ export class Workbench extends DisposableOwner {
 			};
 		}));
 		services.set(IEditorPartsService, editorParts);
-		this.own(bindEditorContextKeys(contextKeys, editorParts, EditorPanes, languageFeaturesService));
+		this.own(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
 		services.set(IEditorPart, editorParts);
 		const editorService = new BrowserEditorService(editorParts);
 		services.set(IEditorService, editorService);
@@ -720,6 +720,7 @@ export class Workbench extends DisposableOwner {
 		};
 		const panel = this.own(new PanelPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 			contextMenuProvider: contextMenus,
@@ -762,17 +763,11 @@ export class Workbench extends DisposableOwner {
 		};
 		const auxiliarybar = this.own(new AuxiliarybarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
+			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 		}));
 		const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
-		this.own(bindWorkbenchActiveCompositeContextKeys(contextKeys, {
-			sidebar,
-			auxiliarybar,
-			agentSidebar,
-			panel,
-		}));
-
 		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			["statusbar", statusbar],
@@ -784,6 +779,7 @@ export class Workbench extends DisposableOwner {
 		]);
 		const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
+			contextKeyService: contextKeys,
 			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
 			defaultLayout,
 			storageService: storage,
@@ -867,7 +863,6 @@ export class Workbench extends DisposableOwner {
 			if (request.focus === "take") viewsService.focusView(OUTPUT_VIEW_ID);
 			else viewsService.openView(OUTPUT_VIEW_ID);
 		}));
-		this.own(bindWorkbenchPartVisibilityContextKeys(contextKeys, layout));
 		this.own(sidebar.onDidSelectComposite(
 			({ compositeId }) => {
 				if (sidebar.activeCompositeId === compositeId) return;

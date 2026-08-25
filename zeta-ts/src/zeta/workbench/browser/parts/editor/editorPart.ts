@@ -14,7 +14,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import { DialogResult, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
@@ -39,7 +39,6 @@ import type { EditorLineGutterDecoration } from "../../../../editor/browser/view
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
-import { ActiveEditorContext } from "../../../common/contextkeys.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
 import { ModalEditorPart } from "./modalEditorPart.js";
@@ -139,14 +138,13 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly gridSlot = this.own(new DisposableSlot<SerializableGrid<EditorGroupGridView>>());
 	private readonly groupHosts = this.own(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
-	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "onDidChangeActiveEditor" | "dragAndDrop">;
+	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
 	private _activeGroup: EditorGroup;
 	private readonly tabDragAndDrop: EditorTabDragAndDropController;
 	private welcomeRecentProjects: readonly IEditorWelcomeProject[];
 	private dimension = Dimension.Zero;
 	private readonly saveAsResource: ((defaultName: string) => Promise<URI | undefined>) | undefined;
-	private readonly activeEditorContext: IContextKey<string> | undefined;
 	private readonly inputSerializers: EditorInputSerializerRegistry;
 	private readonly dialogService: IDialogService | undefined;
 	private readonly mruEditorIds: EditorInstanceId[] = [];
@@ -198,10 +196,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.saveAsResource = options.saveAsResource;
 		this.inputSerializers = options.inputSerializers ?? EditorInputSerializers;
 		this.dialogService = options.dialogService;
-		this.activeEditorContext = options.contextKeyService
-			? ActiveEditorContext.bindTo(options.contextKeyService)
-			: undefined;
-		this.defer(() => this.activeEditorContext?.reset());
 		this.tabDragAndDrop = new EditorTabDragAndDropController((event) => {
 			this.dropEditor(event);
 		});
@@ -249,7 +243,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		this.own(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
-		this.updateActiveEditorContext();
 		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
 	}
 
@@ -298,6 +291,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			groups: Object.freeze(this._groups.map(({ group }) => group.getEditorState())),
 			activeGroupId: this._activeGroup.id,
 			activeEditor: this.activeEditorIdentifier(),
+			isModalEditorVisible: this.modalEditor.isVisible,
 		});
 	}
 
@@ -308,7 +302,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				throw new CancellationError("Opening the modal editor was cancelled");
 			}
 			const pane = await this.modalEditor.openEditor(input, options);
-			this.updateActiveEditorContext();
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: true }));
 			return pane;
 		}
@@ -359,7 +352,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			if (pane && !await this.confirmEditorClose(undefined, input, pane)) return false;
 			if (!this.modalEditor.closeEditor(input)) return false;
 			if (pane) this.addRecentlyClosed(input, pane.id);
-			this.updateActiveEditorContext();
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false }));
 			return true;
 		}
@@ -379,7 +371,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		for (const { group } of inputsByGroup) {
 			for (const input of [...group.inputs]) await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
 		}
-		this.updateActiveEditorContext();
 		return true;
 	}
 
@@ -542,9 +533,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			} : {}),
 			onDidActivate: () => {
 				this.setActiveGroup(group);
-			},
-			onDidChangeActiveEditor: () => {
-				if (this._activeGroup === group) this.updateActiveEditorContext();
 			},
 			dragAndDrop: {
 				start: (source, input) => this.tabDragAndDrop.start(source, input),
@@ -723,10 +711,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		}
 	}
 
-	private updateActiveEditorContext(): void {
-		this.activeEditorContext?.set(this.activePane?.id ?? "");
-	}
-
 	private handleEditorGroupChange(event: EditorGroupChangeEvent): void {
 		if (event.kind === "activeEditorChanged" && event.editor) {
 			this.touchEditorMru(event.editor.instanceId);
@@ -755,12 +739,8 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	private setActiveGroup(group: EditorGroup): void {
-		if (this._activeGroup === group) {
-			this.updateActiveEditorContext();
-			return;
-		}
+		if (this._activeGroup === group) return;
 		this._activeGroup = group;
-		this.updateActiveEditorContext();
 		const editor = group.editors.find(candidate => candidate.isActive);
 		if (editor) this.touchEditorMru(editor.instanceId);
 		this.editorChangeEmitter.fire(Object.freeze({ kind: "activeGroupChanged", groupId: group.id }));

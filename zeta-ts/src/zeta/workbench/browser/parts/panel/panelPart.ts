@@ -1,6 +1,7 @@
 import "./panelpart.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
+import type { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { ViewContainerLocation } from "../../../common/views.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
@@ -9,6 +10,7 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 /** Construction inputs for the bottom Panel Composite host. */
 export interface PanelPartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly contextMenuProvider?: IContextMenuProvider;
@@ -22,6 +24,7 @@ export class PanelPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: PanelPartOptions) {
 		super(container, {
 			viewDescriptorService: options.viewDescriptorService,
+			contextKeyService: options.contextKeyService,
 			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: "panel",

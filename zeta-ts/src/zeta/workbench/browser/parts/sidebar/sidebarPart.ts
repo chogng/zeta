@@ -1,6 +1,7 @@
 import "./sidebarpart.css";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
+import type { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
 import type { IViewDescriptorService } from "../../../services/views/common/viewDescriptorService.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
@@ -8,6 +9,7 @@ import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompos
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
 	readonly viewDescriptorService: IViewDescriptorService;
+	readonly contextKeyService?: IContextKeyService;
 	readonly storageService?: IStorageService;
 	readonly localizationService?: ILocalizationService;
 	readonly id?: string;
@@ -30,6 +32,7 @@ export class SidebarPart extends PaneCompositePart {
 	constructor(container: HTMLElement, options: SidebarPartOptions) {
 		super(container, {
 			viewDescriptorService: options.viewDescriptorService,
+			contextKeyService: options.contextKeyService,
 			storageService: options.storageService,
 			localizationService: options.localizationService,
 			id: options.id ?? "sidebar",

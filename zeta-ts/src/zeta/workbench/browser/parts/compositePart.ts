@@ -1,4 +1,3 @@
-import { Emitter, type Event } from '../../../base/common/event.js';
 import { WorkbenchPart } from "../part.js";
 import { PaneComposite } from "./views/paneComposite.js";
 
@@ -9,10 +8,8 @@ import { PaneComposite } from "./views/paneComposite.js";
  * add their standard title and CompositeBar through PaneCompositePart.
  */
 export abstract class CompositePart extends WorkbenchPart {
-	private readonly activeCompositeChangeEmitter = this.own(new Emitter<string>());
 	private readonly composites = new Map<string, PaneComposite>();
 	private activeComposite: PaneComposite | undefined;
-	readonly onDidChangeActiveComposite: Event<string> = this.activeCompositeChangeEmitter.event;
 
 	protected constructor(container: HTMLElement, id: string) {
 		super(container, id);
@@ -45,7 +42,6 @@ export abstract class CompositePart extends WorkbenchPart {
 		this.activeComposite = composite;
 		this.contentDomNode.append(composite.element);
 		composite.setVisible(true);
-		this.activeCompositeChangeEmitter.fire(composite.id);
 	}
 
 	get activeCompositeId(): string | undefined {

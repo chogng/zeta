@@ -4,8 +4,10 @@ import { SerializableGrid, type SerializedGridDescriptor } from "../../base/brow
 import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
+import type { IContextKey, IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import type { ILayoutOffsetInfo } from "../../platform/layout/common/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
+import { AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, EditorAreaVisibleContext, PanelVisibleContext, SideBarVisibleContext } from '../common/contextkeys.js';
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
 import type { WorkbenchPart } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
@@ -57,6 +59,7 @@ export interface WorkbenchLayoutState {
 
 export interface WorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
+	readonly contextKeyService?: IContextKeyService;
 	/** Product fallback used whenever no persisted or host-supplied value applies. */
 	readonly fallbackPartVisibility?: WorkbenchDefaultLayout["parts"];
 	readonly defaultLayout?: WorkbenchDefaultLayout;
@@ -76,6 +79,8 @@ export class WorkbenchLayout
 	private readonly grid: SerializableGrid<WorkbenchPartView>;
 	private readonly stateModel: WorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
+	private readonly partVisibilityContextKeys = new Map<WorkbenchPartId, IContextKey<boolean>>();
+	private readonly contextKeyService: IContextKeyService | undefined;
 	private readonly _onDidChangePartVisibility = this.own(
 		new Emitter<WorkbenchPartVisibilityChangeEvent>(),
 	);
@@ -90,6 +95,7 @@ export class WorkbenchLayout
 	) {
 		super();
 		validateParts(parts);
+		this.contextKeyService = options.contextKeyService;
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "zeta-workbench-layout";
 		container.append(this.domNode);
@@ -136,6 +142,7 @@ export class WorkbenchLayout
 				edgeSnapping: true,
 			},
 		));
+		this.initializePartVisibilityContextKeys();
 		this.own(this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
@@ -312,12 +319,33 @@ export class WorkbenchLayout
 	}
 
 	private publishPartVisibility(): void {
-		for (const partId of workbenchPartIds) {
-			const visible = this.isPartVisible(partId);
-			if (this.partVisibility.get(partId) === visible) continue;
-			this.partVisibility.set(partId, visible);
-			this._onDidChangePartVisibility.fire({ partId, visible });
-		}
+		const publish = (): void => {
+			for (const partId of workbenchPartIds) {
+				const visible = this.isPartVisible(partId);
+				if (this.partVisibility.get(partId) === visible) continue;
+				this.partVisibility.set(partId, visible);
+				this.partVisibilityContextKeys.get(partId)?.set(visible);
+				this._onDidChangePartVisibility.fire({ partId, visible });
+			}
+		};
+		if (this.contextKeyService) this.contextKeyService.bufferChangeEvents(publish);
+		else publish();
+	}
+
+	private initializePartVisibilityContextKeys(): void {
+		const contextKeyService = this.contextKeyService;
+		if (!contextKeyService) return;
+		this.partVisibilityContextKeys.set('sidebar', SideBarVisibleContext.bindTo(contextKeyService));
+		this.partVisibilityContextKeys.set('auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService));
+		this.partVisibilityContextKeys.set('agentSidebar', AgentSidebarVisibleContext.bindTo(contextKeyService));
+		this.partVisibilityContextKeys.set('panel', PanelVisibleContext.bindTo(contextKeyService));
+		this.partVisibilityContextKeys.set('editor', EditorAreaVisibleContext.bindTo(contextKeyService));
+		contextKeyService.bufferChangeEvents(() => {
+			for (const [partId, key] of this.partVisibilityContextKeys) key.set(this.isPartVisible(partId));
+		});
+		this.defer(() => contextKeyService.bufferChangeEvents(() => {
+			for (const key of this.partVisibilityContextKeys.values()) key.reset();
+		}));
 	}
 
 	private view(partId: WorkbenchPartId): WorkbenchPartView {

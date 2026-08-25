@@ -18,8 +18,9 @@ import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymb
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
-import type {
-	Context,
+import {
+	ContextKeyService,
+	type Context,
 } from "../../../../../../platform/contextkey/common/contextkey.js";
 import type {
 	IKeybindingService,
@@ -73,6 +74,9 @@ const {
 	IEditorPart,
 } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorPart.js"
+);
+const { EditorContextKeyController } = await import(
+	'../../../../../../workbench/browser/parts/editor/editorContextKeys.js'
 );
 const {
 	EditorGroupWatermarkEntries,
@@ -844,7 +848,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
-	assert.equal(contextKeys.getValue(ActiveEditorContext.key), "stanza.editor.code");
+	assert.equal(contextKeys.getContext(editor.activeGroup.domNode).getValue(ActiveEditorContext.key), "stanza.editor.code");
 	editor.layout({ width: 800, height: 600 });
 
 	const toolbar = editor.domNode.querySelector(
@@ -929,6 +933,100 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
 	assert.equal(editor.activePane, workingPane);
 	assert.equal(editor.activeInput, workingInput);
 	assert.equal(panes[1]?.disposed, true);
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test('editor context keys follow preview, readonly, dirty, and close transitions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	const registry = new EditorPaneRegistry();
+	const resource = URI.file('C:\\project\\readonly.ts');
+	let workingCopy: TestWorkingCopy | undefined;
+	registry.register(descriptor(
+		'stanza.editor.code',
+		'.ts',
+		() => {
+			workingCopy = new TestWorkingCopy(resource);
+			return new TestEditorPane('stanza.editor.code', workingCopy);
+		},
+	));
+	using contextKeys = new ContextKeyService();
+	const contextChanges: string[][] = [];
+	using contextListener = contextKeys.onDidChangeContext(event => contextChanges.push([...event.keys]));
+	const editor = new EditorPart(dom.window.document.body, {
+		contextKeyService: contextKeys,
+		dialogService: new TestDialogService(DialogResult.Secondary),
+		registry,
+	});
+	const groupProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
+	assert.equal(groupProjectionChanges.length, 1);
+	assert.equal(groupProjectionChanges[0]?.includes('activeEditor'), true);
+	contextChanges.length = 0;
+	using editorContexts = new EditorContextKeyController(contextKeys, editor, registry, undefined);
+	const editorProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
+	assert.equal(editorProjectionChanges.length, 1);
+	assert.equal(editorProjectionChanges[0]?.includes('activeEditor'), true);
+	assert.equal(editorProjectionChanges[0]?.includes('activeEditorGroupIndex'), true);
+	const activeInput: EditorInput = { resource, languageId: 'typescript', readOnly: true };
+	await editor.openEditor(activeInput, { pinned: false });
+
+	assert.deepEqual({
+		canRevert: contextKeys.getValue('activeEditorCanRevert'),
+		dirty: contextKeys.getValue('activeEditorIsDirty'),
+		pinned: contextKeys.getValue('activeEditorIsNotPreview'),
+		readonly: contextKeys.getValue('activeEditorIsReadonly'),
+	}, {
+		canRevert: true,
+		dirty: false,
+		pinned: false,
+		readonly: true,
+	});
+	workingCopy?.markDirty();
+	assert.equal(contextKeys.getValue('activeEditorIsDirty'), true);
+	const groupContext = contextKeys.getContext(editor.activeGroup.domNode);
+	assert.deepEqual({
+		dirty: groupContext.getValue('activeEditorIsDirty'),
+		resource: groupContext.getValue('resource'),
+		resourceSet: groupContext.getValue('resourceSet'),
+	}, {
+		dirty: true,
+		resource: resource.toString(),
+		resourceSet: true,
+	});
+
+	await editor.closeEditor(activeInput);
+	assert.deepEqual({
+		activeEditor: contextKeys.getValue('activeEditor'),
+		dirty: contextKeys.getValue('activeEditorIsDirty'),
+		editorIsOpen: contextKeys.getValue('editorIsOpen'),
+		resource: contextKeys.getValue('resource'),
+		resourceSet: contextKeys.getValue('resourceSet'),
+	}, {
+		activeEditor: '',
+		dirty: false,
+		editorIsOpen: false,
+		resource: undefined,
+		resourceSet: false,
+	});
+
+	await editor.openEditor(activeInput, {}, 'modalGroup');
+	assert.deepEqual({
+		activeEditor: contextKeys.getValue('activeEditor'),
+		activeEditorGroupEmpty: contextKeys.getValue('activeEditorGroupEmpty'),
+		editorPartModalVisible: contextKeys.getValue('editorPartModalVisible'),
+		groupEditorsCount: contextKeys.getValue('groupEditorsCount'),
+		resourceSet: contextKeys.getValue('resourceSet'),
+	}, {
+		activeEditor: 'stanza.editor.code',
+		activeEditorGroupEmpty: false,
+		editorPartModalVisible: true,
+		groupEditorsCount: 0,
+		resourceSet: true,
+	});
+	await editor.closeEditor(activeInput);
+	assert.equal(contextKeys.getValue('editorPartModalVisible'), false);
 
 	editor.dispose();
 	dom.window.close();
@@ -1037,9 +1135,12 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	const main = new EditorPart(dom.window.document.body, { registry });
 	const windows = new TestAuxiliaryWindowService();
 	const editorParts = new EditorParts(main, windows, container => ({ part: new EditorPart(container, { registry }) }));
+	using contextKeys = new ContextKeyService();
+	using editorContexts = new EditorContextKeyController(contextKeys, editorParts, registry, undefined);
 	const resourceInput = input("C:\\project\\detached.ts");
 	await editorParts.openEditor(resourceInput);
 	const instanceId = editorParts.getEditorState().activeEditor?.instanceId;
+	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
 	workingCopy.markDirty();
 
 	const auxiliary = await editorParts.moveActiveEditorToNewWindow();
@@ -1048,6 +1149,8 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	assert.equal(main.groups[0]?.inputs.length, 0);
 	assert.equal(auxiliary.activeInput?.resource.fsPath, resourceInput.resource.fsPath);
 	assert.equal(auxiliary.getEditorState().activeEditor?.instanceId, instanceId);
+	assert.equal(contextKeys.getValue('activeEditor'), 'stanza.editor.code');
+	assert.equal(contextKeys.getValue('resource'), resourceInput.resource.toString());
 	assert.ok(windows.lastWindow?.container.querySelector(".zeta-workbench-statusbar"));
 	assert.match(windows.lastWindow?.requestBeforeUnload() ?? "", /unsaved changes/i);
 	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), false);

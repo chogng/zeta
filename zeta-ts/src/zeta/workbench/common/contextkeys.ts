@@ -1,11 +1,8 @@
 import { RawContextKey } from '../../platform/contextkey/common/contextkey.js';
-import { WorkbenchState } from '../../platform/workspace/common/workspace.js';
-
-/** String representation exposed to workbench context expressions. */
-export type WorkbenchStateContextValue = 'empty' | 'folder' | 'workspace';
+import type { WorkbenchStateValue } from '../../platform/workspace/common/workspace.js';
 
 /** Kind of workspace currently hosted by the window. */
-export const WorkbenchStateContext = new RawContextKey<WorkbenchStateContextValue>('workbenchState', 'empty');
+export const WorkbenchStateContext = new RawContextKey<WorkbenchStateValue>('workbenchState', 'empty');
 
 /** Number of root folders in the current workspace. */
 export const WorkspaceFolderCountContext = new RawContextKey<number>('workspaceFolderCount', 0);
@@ -111,18 +108,6 @@ export const ResourceExtensionContext = new RawContextKey<string | undefined>('r
 
 /** Whether an active editor resource is present. */
 export const ResourceSetContext = new RawContextKey<boolean | undefined>('resourceSet', undefined);
-
-/** Converts the workspace model enum into its stable context-key value. */
-export function workbenchStateToContextValue(state: WorkbenchState): WorkbenchStateContextValue {
-	switch (state) {
-		case WorkbenchState.EMPTY:
-			return 'empty';
-		case WorkbenchState.FOLDER:
-			return 'folder';
-		case WorkbenchState.WORKSPACE:
-			return 'workspace';
-	}
-}
 
 /** Returns the context key used to expose one view's visibility. */
 export function getVisibleViewContextKey(viewId: string): string {

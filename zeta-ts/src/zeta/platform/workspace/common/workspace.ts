@@ -12,6 +12,20 @@ export const enum WorkbenchState {
 	WORKSPACE,
 }
 
+/** Stable string projection used when exposing a Workbench state outside the workspace model. */
+export type WorkbenchStateValue = 'empty' | 'folder' | 'workspace';
+
+export function workbenchStateToString(state: WorkbenchState): WorkbenchStateValue {
+	switch (state) {
+		case WorkbenchState.EMPTY:
+			return 'empty';
+		case WorkbenchState.FOLDER:
+			return 'folder';
+		case WorkbenchState.WORKSPACE:
+			return 'workspace';
+	}
+}
+
 /** Identity shared by empty, single-folder, and multi-root workspaces. */
 export interface IBaseWorkspaceIdentifier {
 	readonly id: string;
