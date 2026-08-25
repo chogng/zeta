@@ -11,6 +11,7 @@ import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IEditorService, type EditorInput } from '../../../../services/editor/common/editorService.js';
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 
 test('MultiDiff Action2 contributions use active-editor context and route to the active pane', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -80,6 +81,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		services.set(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
 		const openedInputs: EditorInput[] = [];
 		services.set(IEditorService, {
+			...emptyEditorServiceState,
 			async openEditor(input) { openedInputs.push(input); },
 			focusActiveEditor() {},
 		});

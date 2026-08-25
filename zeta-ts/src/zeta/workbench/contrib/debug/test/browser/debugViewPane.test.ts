@@ -5,13 +5,14 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type EditorInput, type IEditorService } from "../../../../services/editor/common/editorService.js";
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { type DebugEvaluateContext, type DebugSessionState, type IDebugBreakpoint, type IDebugCompound, type IDebugConfiguration, type IDebugEvaluateResult, type IDebugScope, type IDebugService, type IDebugSession, type IDebugSource, type IDebugSourceContent, type IDebugStackFrame, type IDebugThread, type IDebugVariable } from "../../../../services/debug/common/debugService.js";
 
 test("Debug view switches sessions and renders threads, recursive variables, watches, and source references", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const opened: unknown[] = [];
-	const editor: IEditorService = { openEditor: async (input: EditorInput) => { opened.push(input); }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened.push(input); }, focusActiveEditor() {} };
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new FakeDebugService();
@@ -48,7 +49,7 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	let opened: EditorInput | undefined;
-	const editor: IEditorService = { openEditor: async (input: EditorInput) => { opened = input; }, focusActiveEditor() {} };
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: EditorInput) => { opened = input; }, focusActiveEditor() {} };
 	const resource = URI.parse("zeta-remote://ssh+work-server/srv/project/src/main.ts");
 	try {
 		const { DebugViewPane } = await import("../../browser/debugViewPane.js");

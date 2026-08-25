@@ -18,6 +18,7 @@ import { UserSettingsResource } from '../../../../../workbench/services/preferen
 import { SettingsFileSystemProvider } from '../../../../../workbench/contrib/preferences/common/settingsFilesystemProvider.js';
 import { createJsonCompletionProvider } from '../../../../../workbench/services/language/common/jsonLanguageFeatures.js';
 import { SmartSnippetInserter } from '../../../../../workbench/contrib/preferences/common/smartSnippetInserter.js';
+import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test('SettingsFileSystemProvider projects only the editable JSONC settings resource', async () => {
 	const registry = testRegistry();
@@ -127,6 +128,7 @@ test('generic JSON schema completion is resource-scoped and omits configured key
 test('PreferencesService opens User Settings JSON as a pinned JSON editor input', async () => {
 	let opened: { readonly input: EditorInput; readonly options: EditorOpenOptions | undefined; readonly target: EditorOpenTarget | undefined } | undefined;
 	const editorService: IEditorService = {
+		...emptyEditorServiceState,
 		openEditor(input, options, target): Promise<void> {
 			opened = { input, options, target };
 			return Promise.resolve();

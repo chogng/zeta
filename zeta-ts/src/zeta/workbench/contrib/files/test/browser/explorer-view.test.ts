@@ -10,6 +10,7 @@ import type { IFileIconThemeService } from "../../../../../platform/theme/browse
 import type { IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/common/listConfiguration.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test("ExplorerViewPane opens workspace files on single click", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -80,6 +81,7 @@ test("ExplorerViewPane opens workspace files on single click", async () => {
 		uri: root,
 	});
 	const editorService: IEditorService = {
+		...emptyEditorServiceState,
 		openEditor: async (input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget) => {
 			openedInput = input;
 			openedOptions = options;

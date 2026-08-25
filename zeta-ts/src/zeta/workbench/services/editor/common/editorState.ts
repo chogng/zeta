@@ -1,5 +1,4 @@
 import type { Event } from '../../../../base/common/event.js';
-import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorInput } from './editorService.js';
 
 export type EditorGroupId = string;
@@ -59,7 +58,3 @@ export interface IEditorStateSource {
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent>;
 	getEditorState(): EditorPartState;
 }
-
-export interface IEditorStateService extends IEditorStateSource {}
-
-export const IEditorStateService = createServiceIdentifier<IEditorStateService>('editorStateService');

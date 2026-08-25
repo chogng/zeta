@@ -15,6 +15,7 @@ import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import { OpenScmMultiDiffEditorAction } from "../../../../../workbench/contrib/multiDiffEditor/browser/scmMultiDiffAction.js";
 import { resolveGitChangeInputs } from "../../../../../workbench/contrib/scm/browser/scmChangeEditorInput.js";
+import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test("SCM diff inputs open live files and keep deleted files on the readable side", async () => {
 	const status: GitStatus = {
@@ -801,6 +802,7 @@ function testManagedHover(): IManagedHover {
 
 function testEditorService(opened: Array<{ readonly input: EditorInput; readonly options: EditorOpenOptions | undefined }> = []): IEditorService {
 	return {
+		...emptyEditorServiceState,
 		openEditor: async (input, options) => { opened.push({ input, options }); },
 		focusActiveEditor() {},
 	};

@@ -27,9 +27,7 @@ import { BrowserWorkingCopyService } from '../../../workbench/services/workingCo
 import {
 	getVisibleViewContextKey,
 } from "../../../workbench/common/contextkeys.js";
-import {
-	bindWorkbenchContextKeys,
-} from "../../../workbench/browser/contextkeys.js";
+import { createTestWorkbenchContextKeysHandler } from './testWorkbenchContextKeys.js';
 import {
 	WorkbenchContributionRegistry,
 	WorkbenchPhase,
@@ -61,20 +59,48 @@ test("workbench context keys describe the current workspace", () => {
 	using workingCopies = new BrowserWorkingCopyService();
 	const initialChanges: string[][] = [];
 	using listener = contextKeys.onDidChangeContext(event => initialChanges.push([...event.keys].sort()));
-	using bindings = bindWorkbenchContextKeys(contextKeys, workspace, workingCopies);
+	using bindings = createTestWorkbenchContextKeysHandler(contextKeys, { workspaceContextService: workspace, workingCopyService: workingCopies });
 
 	assert.deepEqual(initialChanges, [[
+		'activeEditorGroupEmpty',
+		'activeEditorGroupIndex',
+		'activeEditorGroupLast',
+		'agentSidebarVisible',
+		'auxiliaryBarVisible',
 		'dirtyWorkingCopies',
+		'editorAreaVisible',
+		'editorIsOpen',
+		'isLinux',
+		'isMac',
+		'isNative',
+		'isWeb',
+		'isWindows',
+		'multipleEditorGroups',
+		'panelMaximized',
+		'panelVisible',
+		'sideBarVisible',
 		'workbenchState',
 		'workspaceFolderCount',
 	]]);
 	assert.equal(contextKeys.getValue("workbenchState"), "folder");
 	assert.equal(contextKeys.getValue("workspaceFolderCount"), 1);
 	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), false);
+	assert.equal(contextKeys.getValue('isNative'), true);
+	assert.equal(contextKeys.getValue('isWeb'), false);
 	assert.equal(
 		getVisibleViewContextKey("zeta.explorer"),
 		"view.zeta.explorer.visible",
 	);
+	workspace.updateWorkspace({
+		id: 'workspace',
+		configuration: URI.file('C:\\project\\zeta.code-workspace'),
+		folders: [
+			{ id: 'first', uri: URI.file('C:\\project'), name: 'project', index: 0 },
+			{ id: 'second', uri: URI.file('C:\\library'), name: 'library', index: 1 },
+		],
+	});
+	assert.equal(contextKeys.getValue('workbenchState'), 'workspace');
+	assert.equal(contextKeys.getValue('workspaceFolderCount'), 2);
 
 	workspace.updateWorkspace({ id: "empty" });
 	assert.equal(contextKeys.getValue("workbenchState"), "empty");

@@ -8,6 +8,7 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
 import { type EditorInput, type EditorOpenOptions, type IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
+import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
 
 test("ProblemsViewPane filters diagnostics and opens the selected range", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -22,6 +23,7 @@ test("ProblemsViewPane filters diagnostics and opens the selected range", async 
 	let opened: { readonly input: EditorInput; readonly options?: EditorOpenOptions } | undefined;
 	let focusCount = 0;
 	const editorService: IEditorService = {
+		...emptyEditorServiceState,
 		openEditor: async (input, options) => { opened = { input, options }; if (options?.preserveFocus !== true) focusCount += 1; },
 		focusActiveEditor() { focusCount += 1; },
 	};

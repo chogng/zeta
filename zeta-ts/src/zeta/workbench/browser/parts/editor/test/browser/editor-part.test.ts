@@ -78,6 +78,7 @@ const {
 const { EditorContextKeyController } = await import(
 	'../../../../../../workbench/browser/parts/editor/editorContextKeys.js'
 );
+const { createTestWorkbenchContextKeysHandler } = await import('../../../../../../workbench/test/common/testWorkbenchContextKeys.js');
 const {
 	EditorGroupWatermarkEntries,
 } = await import(
@@ -594,11 +595,18 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const pinnedInput = input("C:\\project\\pinned.ts");
 	await editor.openEditor(sourceInput);
 	const sourceGroup = editor.activeGroup;
-	const service = new BrowserEditorService(editor);
+	using service = new BrowserEditorService(editor);
+	let groupChanges = 0;
+	let activeEditorChanges = 0;
+	let visibleEditorChanges = 0;
+	using groupListener = service.onDidChangeGroups(() => groupChanges += 1);
+	using activeEditorListener = service.onDidActiveEditorChange(() => activeEditorChanges += 1);
+	using visibleEditorListener = service.onDidVisibleEditorsChange(() => visibleEditorChanges += 1);
 
 	await service.openEditor(previewInput, { pinned: false, preserveFocus: true }, "sideGroup");
 	const previewPane = editor.groups[1]?.activePane as TestEditorPane;
 	assert.equal(editor.groups.length, 2);
+	assert.equal(service.count, 2);
 	assert.equal(editor.activeGroup, sourceGroup);
 	assert.deepEqual(editor.groups[1]?.inputs, [previewInput]);
 	assert.equal(previewPane.focusCount, 0);
@@ -607,8 +615,12 @@ test("EditorPart opens beside the active group without stealing caller focus", a
 	const pinnedPane = editor.groups[1]?.activePane as TestEditorPane;
 	assert.equal(editor.groups.length, 2);
 	assert.equal(editor.activeGroup, editor.groups[1]);
+	assert.equal(service.activeGroup.id, editor.groups[1]?.id);
 	assert.deepEqual(editor.groups[1]?.inputs, [previewInput, pinnedInput]);
 	assert.equal(pinnedPane.focusCount, 1);
+	assert.ok(groupChanges > 0);
+	assert.ok(activeEditorChanges > 0);
+	assert.ok(visibleEditorChanges > 0);
 
 	editor.dispose();
 	dom.window.close();
@@ -965,10 +977,15 @@ test('editor context keys follow preview, readonly, dirty, and close transitions
 	assert.equal(groupProjectionChanges[0]?.includes('activeEditor'), true);
 	contextChanges.length = 0;
 	using editorContexts = new EditorContextKeyController(contextKeys, editor, registry, undefined);
+	using editorService = new BrowserEditorService(editor);
+	using workbenchContexts = createTestWorkbenchContextKeysHandler(contextKeys, {
+		editorGroupsService: editorService,
+		editorService,
+	});
 	const editorProjectionChanges = contextChanges.filter(keys => keys.includes('resourceSet'));
 	assert.equal(editorProjectionChanges.length, 1);
 	assert.equal(editorProjectionChanges[0]?.includes('activeEditor'), true);
-	assert.equal(editorProjectionChanges[0]?.includes('activeEditorGroupIndex'), true);
+	assert.equal(contextKeys.getValue('activeEditorGroupIndex'), 1);
 	const activeInput: EditorInput = { resource, languageId: 'typescript', readOnly: true };
 	await editor.openEditor(activeInput, { pinned: false });
 

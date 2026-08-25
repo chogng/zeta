@@ -117,9 +117,7 @@ import type {
 import {
 	DialogService,
 } from "../services/dialogs/common/dialogService.js";
-import {
-	bindWorkbenchContextKeys,
-} from "./contextkeys.js";
+import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeController } from "./theme.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
@@ -210,7 +208,7 @@ import { IOutputService } from "../services/output/common/outputService.js";
 import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
-import { IEditorStateService } from "../services/editor/common/editorState.js";
+import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
@@ -543,7 +541,6 @@ export class Workbench extends DisposableOwner {
 				configurationService: configuration,
 			}));
 		services.set(IAccessibilityService, accessibilityService);
-		this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext, workingCopyService));
 		const viewDescriptors = this.own(new ViewDescriptorService({
 			contextKeyService: contextKeys,
 		}));
@@ -665,9 +662,9 @@ export class Workbench extends DisposableOwner {
 		services.set(IEditorPartsService, editorParts);
 		this.own(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
 		services.set(IEditorPart, editorParts);
-		const editorService = new BrowserEditorService(editorParts);
+		const editorService = this.own(new BrowserEditorService(editorParts));
 		services.set(IEditorService, editorService);
-		services.set(IEditorStateService, editorService);
+		services.set(IEditorGroupsService, editorService);
 		const openSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -779,7 +776,6 @@ export class Workbench extends DisposableOwner {
 		]);
 		const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
-			contextKeyService: contextKeys,
 			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
 			defaultLayout,
 			storageService: storage,
@@ -787,6 +783,7 @@ export class Workbench extends DisposableOwner {
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
 		services.set(IWorkbenchLayoutService, layout);
+		this.own(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
 		this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors

@@ -43,10 +43,25 @@ export class WorkspaceContextService extends DisposableOwner implements IWorkspa
 	updateWorkspace(next: IAnyWorkspaceIdentifier | IWorkspace): void {
 		const workspace = resolveWorkspace(next);
 		const previous = this.workspace;
-		if (previous.id === workspace.id) return;
+		if (sameWorkspace(previous, workspace)) return;
 		this.workspace = workspace;
 		this._onDidChangeWorkspace.fire({ previous, workspace });
 	}
+}
+
+function sameWorkspace(left: IWorkspace, right: IWorkspace): boolean {
+	return left.id === right.id &&
+		left.configuration?.toString() === right.configuration?.toString() &&
+		left.name === right.name &&
+		left.folders.length === right.folders.length &&
+		left.folders.every((folder, index) => {
+			const candidate = right.folders[index];
+			return candidate !== undefined &&
+				folder.id === candidate.id &&
+				folder.uri.toString() === candidate.uri.toString() &&
+				folder.name === candidate.name &&
+				folder.index === candidate.index;
+		});
 }
 
 function resolveWorkspace(

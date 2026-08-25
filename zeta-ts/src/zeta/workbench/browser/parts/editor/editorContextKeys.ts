@@ -2,7 +2,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
-import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
+import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';
 import type { EditorGroupChangeEvent, EditorGroupState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
 import type { IWorkingCopy } from '../../../services/workingCopy/common/workingCopyService.js';
@@ -22,7 +22,6 @@ export interface EditorGroupContextKeySource {
 /** Projects editor-owned state into the Workbench context used by editor actions. */
 export class EditorContextKeyController extends DisposableOwner {
 	private readonly keys: EditorContextKeyBindings;
-	private readonly workbenchKeys: WorkbenchEditorContextKeyBindings;
 	private readonly workingCopyListener = this.own(new DisposableSlot<IDisposable>());
 	private activeWorkingCopy: IWorkingCopy | undefined;
 
@@ -33,19 +32,16 @@ export class EditorContextKeyController extends DisposableOwner {
 		private readonly languageResolver: TextResourceLanguageResolver | undefined,
 	) {
 		super();
-		const bindings = bufferContextKeyChanges(contextKeyService, () => {
+		this.keys = bufferContextKeyChanges(contextKeyService, () => {
 			const keys = createEditorContextKeyBindings(contextKeyService);
-			const workbenchKeys = createWorkbenchEditorContextKeyBindings(contextKeyService);
-			this.update(keys, workbenchKeys);
-			return { keys, workbenchKeys };
+			this.update(keys);
+			return keys;
 		});
-		this.keys = bindings.keys;
-		this.workbenchKeys = bindings.workbenchKeys;
 		this.own(this.source.onDidChangeEditors(() => this.update()));
 		this.defer(() => this.reset());
 	}
 
-	private update(keys: EditorContextKeyBindings = this.keys, workbenchKeys: WorkbenchEditorContextKeyBindings = this.workbenchKeys): void {
+	private update(keys: EditorContextKeyBindings = this.keys): void {
 		const state = this.source.getEditorState();
 		const group = state.groups.find(candidate => candidate.id === state.activeGroupId);
 		const activeEditor = group?.editors.find(candidate => candidate.instanceId === state.activeEditor?.instanceId);
@@ -64,7 +60,6 @@ export class EditorContextKeyController extends DisposableOwner {
 				groupEditorCount: group?.editors.length ?? 0,
 				isModal: state.isModalEditorVisible,
 			});
-			applyWorkbenchEditorContextKeys(workbenchKeys, state, group);
 		});
 	}
 
@@ -81,7 +76,6 @@ export class EditorContextKeyController extends DisposableOwner {
 		this.workingCopyListener.clear();
 		this.contextKeyService.bufferChangeEvents(() => {
 			resetEditorContextKeys(this.contextKeyService, this.keys);
-			for (const key of this.workbenchKeys.all) key.reset();
 		});
 	}
 }
@@ -150,31 +144,6 @@ function createEditorContextKeyBindings(contextKeyService: IContextKeyService) {
 }
 
 type EditorContextKeyBindings = ReturnType<typeof createEditorContextKeyBindings>;
-
-function createWorkbenchEditorContextKeyBindings(contextKeyService: IContextKeyService) {
-	const bindings = {
-		activeEditorGroupEmpty: ActiveEditorGroupEmptyContext.bindTo(contextKeyService),
-		activeEditorGroupIndex: ActiveEditorGroupIndexContext.bindTo(contextKeyService),
-		activeEditorGroupLast: ActiveEditorGroupLastContext.bindTo(contextKeyService),
-		multipleEditorGroups: MultipleEditorGroupsContext.bindTo(contextKeyService),
-		editorsVisible: EditorsVisibleContext.bindTo(contextKeyService),
-	};
-	return {
-		...bindings,
-		all: Object.values(bindings) as readonly Pick<IContextKey<never>, 'reset'>[],
-	};
-}
-
-type WorkbenchEditorContextKeyBindings = ReturnType<typeof createWorkbenchEditorContextKeyBindings>;
-
-function applyWorkbenchEditorContextKeys(keys: WorkbenchEditorContextKeyBindings, state: ReturnType<IEditorStateSource['getEditorState']>, activeGroup: EditorGroupState | undefined): void {
-	const activeGroupIndex = activeGroup ? state.groups.indexOf(activeGroup) : -1;
-	keys.activeEditorGroupEmpty.set(!state.isModalEditorVisible && (!activeGroup || activeGroup.editors.length === 0));
-	keys.activeEditorGroupIndex.set(activeGroupIndex >= 0 ? activeGroupIndex + 1 : 0);
-	keys.activeEditorGroupLast.set(activeGroupIndex >= 0 && activeGroupIndex === state.groups.length - 1);
-	keys.multipleEditorGroups.set(state.groups.length > 1);
-	keys.editorsVisible.set(state.isModalEditorVisible || state.groups.some(group => group.editors.length > 0));
-}
 
 interface EditorContextKeyProjection {
 	readonly input: EditorInput | undefined;

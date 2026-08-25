@@ -104,6 +104,7 @@ class VisibleAuxiliarybarLayoutService implements IWorkbenchLayoutService {
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 
 	isPartVisible(partId: WorkbenchPartId): boolean { return partId === "auxiliarybar"; }
+	isPanelMaximized(): boolean { return false; }
 	showPart(_partId: WorkbenchPartId): void {}
 	showParts(_partIds: readonly WorkbenchPartId[]): void {}
 	hidePart(_partId: WorkbenchPartId): void {}

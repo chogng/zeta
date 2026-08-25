@@ -9,6 +9,7 @@ import { type IFileService } from "../../../../../platform/files/common/files.js
 import { type IEditorService } from "../../../../services/editor/common/editorService.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
 import { acceptWorkspaceSymbol } from "../../browser/workspaceSymbolNavigation.js";
+import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 
 const resource = URI.file("/workspace/src/main.rs");
 const range = TextRange.from(TextPosition.at(2, 4), TextPosition.at(2, 8));
@@ -54,7 +55,7 @@ function acceptanceEvents(revision: string, workingCopyContent?: string) {
 	let opened = 0;
 	const files = { readFile: async () => ({ resource, content: "fn main() {}\n", revision }) } as unknown as IFileService;
 	const workingCopies = { get: () => workingCopyContent === undefined ? [] : [{ backupKind: "text", backup: () => workingCopyContent }] } as unknown as IWorkingCopyService;
-	const editor = { openEditor: async () => { opened += 1; }, focusActiveEditor() {} } satisfies IEditorService;
+	const editor = { ...emptyEditorServiceState, openEditor: async () => { opened += 1; }, focusActiveEditor() {} } satisfies IEditorService;
 	return {
 		files,
 		workingCopies,

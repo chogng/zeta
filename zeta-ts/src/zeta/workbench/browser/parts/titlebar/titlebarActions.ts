@@ -2,7 +2,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { localizedString } from "../../../../platform/action/common/action.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
-import { AuxiliaryBarVisibleContext, EditorAreaVisibleContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
+import { AuxiliaryBarVisibleContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext } from "../../../common/contextkeys.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 
 export const ToggleSideBarCommandId = "workbench.action.toggleSideBar";
@@ -138,7 +138,7 @@ registerAction2(class ToggleMaximizedPanelAction extends Action2 {
 			tooltip: localizedString("zeta.actions", "maximizePanel", "Maximize Panel"),
 			icon: lxiconsLibrary.screenFull,
 			toggled: {
-				condition: EditorAreaVisibleContext.isEqualTo(false),
+				condition: PanelMaximizedContext.isEqualTo(true),
 				title: localizedString("zeta.actions", "restoreEditorArea", "Restore Editor Area"),
 				tooltip: localizedString("zeta.actions", "restoreEditorArea", "Restore Editor Area"),
 				icon: lxiconsLibrary.screenNormal,

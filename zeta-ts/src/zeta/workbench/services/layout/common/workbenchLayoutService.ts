@@ -16,6 +16,7 @@ export interface WorkbenchPartVisibilityChangeEvent {
 export interface IWorkbenchLayoutService {
 	readonly onDidChangePartVisibility: Event<WorkbenchPartVisibilityChangeEvent>;
 	isPartVisible(partId: WorkbenchPartId): boolean;
+	isPanelMaximized(): boolean;
 	showPart(partId: WorkbenchPartId): void;
 	showParts(partIds: readonly WorkbenchPartId[]): void;
 	hidePart(partId: WorkbenchPartId): void;

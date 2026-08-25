@@ -1,4 +1,5 @@
 import type { URI } from "../../../../base/common/uri.js";
+import type { Event } from '../../../../base/common/event.js';
 import type { TextRange } from "../../../../editor/common/core/text.js";
 import type { EditorActivationOptions } from "../../../../platform/editor/common/editor.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -25,6 +26,10 @@ export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup";
 
 /** Resource-oriented editor operations available to Workbench contributions. */
 export interface IEditorService {
+	readonly onDidActiveEditorChange: Event<void>;
+	readonly onDidVisibleEditorsChange: Event<void>;
+	readonly activeEditor: EditorInput | undefined;
+	readonly visibleEditors: readonly EditorInput[];
 	openEditor(input: EditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void>;
 	focusActiveEditor(): void;
 }

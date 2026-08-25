@@ -42,6 +42,7 @@ const { MenuService } = await import(
 const {
 	WorkbenchLayout,
 } = await import("../../../workbench/browser/layout.js");
+const { createTestWorkbenchContextKeysHandler } = await import('../../../workbench/test/common/testWorkbenchContextKeys.js');
 const { BrowserLayoutService } = await import("../../../platform/layout/browser/layoutService.js");
 const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
@@ -167,8 +168,9 @@ function createLayoutHarness(
 test("Workbench layout hides and restores Parts with context keys", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();
-	const harness = createLayoutHarness(dom.window.document, { contextKeyService: contextKeys });
+	const harness = createLayoutHarness(dom.window.document);
 	harness.disposables.add(contextKeys);
+	harness.disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
 	const overlay = h(dom.window.document, "div");
 	overlay.className = "persistent-overlay";
 	harness.container.append(overlay);
@@ -185,6 +187,7 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	assert.equal(contextKeys.getValue("auxiliaryBarVisible"), true);
 	assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
 	assert.equal(contextKeys.getValue("panelVisible"), true);
+	assert.equal(contextKeys.getValue('panelMaximized'), false);
 	const editorElement = harness.container.querySelector<HTMLElement>(
 		"[data-part='editor']",
 	);
@@ -254,6 +257,11 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	assert.equal(contextKeys.getValue("sideBarVisible"), true);
 	assert.equal(editorFrame?.style.paddingLeft, "3px");
 	assert.equal(editorFrame?.style.paddingRight, "8px");
+	harness.layout.showPart('panel');
+	harness.layout.hidePart('editor');
+	assert.equal(contextKeys.getValue('panelMaximized'), true);
+	harness.layout.showPart('editor');
+	assert.equal(contextKeys.getValue('panelMaximized'), false);
 
 	harness.disposables.dispose();
 	dom.window.close();
@@ -264,9 +272,9 @@ test("Workbench pane sashes snap closed and remain available for drag restore", 
 	const contextKeys = new ContextKeyService();
 	const harness = createLayoutHarness(dom.window.document, {
 		initialDimension: new Dimension(1_200, 800),
-		contextKeyService: contextKeys,
 	});
 	harness.disposables.add(contextKeys);
+	harness.disposables.add(createTestWorkbenchContextKeysHandler(contextKeys, { layoutService: harness.layout }));
 	harness.layout.layout(new Dimension(1_200, 800));
 
 	dragWorkbenchSash(dom.window, harness.container, "sidebar", 0, -140);
@@ -1412,7 +1420,7 @@ test("panel layout actions use state icons", () => {
 	assert.equal(panelAction()?.icon, lxiconsLibrary.layoutPanel);
 	assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenFull);
 	assert.equal(maximizePanelAction()?.checked, false);
-	contextKeys.setContext("editorAreaVisible", false);
+	contextKeys.setContext('panelMaximized', true);
 	assert.equal(maximizePanelAction()?.icon, lxiconsLibrary.screenNormal);
 	assert.equal(maximizePanelAction()?.checked, true);
 });
