@@ -3,6 +3,7 @@ use crate::ui::foundation::{Color, Icon, IconDefinition, IconId, IconRendering, 
 use crate::ui::presentation::PaintIcon;
 
 use super::UiRenderError;
+use crate::devtools::assets;
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("circle"),
@@ -91,4 +92,18 @@ fn separates_multicolor_artwork_into_symbolic_mask_and_fixed_color_pixels() {
             .chunks_exact(4)
             .any(|pixel| pixel == [199, 199, 199, 255])
     );
+}
+
+#[test]
+fn built_in_devtools_icons_rasterize_as_symbolic_assets() {
+    for icon in [assets::PICK, assets::CLOSE, assets::ANCESTOR] {
+        let raster = rasterize_icon(icon, 16, 16).expect("built-in DevTools SVG should parse");
+
+        assert!(
+            raster.mask.iter().any(|alpha| *alpha > 0),
+            "built-in DevTools icon {} should contain visible coverage",
+            icon.id().as_str()
+        );
+        assert!(raster.color.iter().all(|channel| *channel == 0));
+    }
 }

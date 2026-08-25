@@ -2,6 +2,7 @@ use crate::accessibility::AccessibilityAction;
 use crate::accessibility::AccessibilityBridge;
 use crate::app::AppProxy;
 use crate::app::ApplicationError;
+use crate::devtools::DevToolsRequestSender;
 use crate::internal::ActiveEventLoop;
 use crate::render::RenderOutcome;
 use crate::render::RenderTargetSize;
@@ -18,6 +19,7 @@ use crate::window::WindowChrome;
 use crate::window::WindowEvent;
 use crate::window::WindowHandle;
 use crate::window::WindowId;
+use crate::window::WindowRole;
 
 /// Native window creation policy supplied by an application.
 #[derive(Debug)]
@@ -125,6 +127,7 @@ pub(crate) struct WindowRuntime {
     renderer: Box<dyn Renderer>,
     metrics: WindowMetrics,
     accessibility: AccessibilityBridge,
+    role: WindowRole,
 }
 
 impl WindowRuntime {
@@ -133,6 +136,8 @@ impl WindowRuntime {
         renderer_factory: &mut dyn RendererFactory,
         proxy: &AppProxy<T>,
         options: WindowOptions,
+        role: WindowRole,
+        request_sender: DevToolsRequestSender,
     ) -> Result<Self, ApplicationError> {
         let title = options.title;
         let window = NativeWindow::create(
@@ -140,6 +145,7 @@ impl WindowRuntime {
             title.clone(),
             options.inner_size,
             options.chrome,
+            request_sender,
         )
         .map_err(ApplicationError::window)?;
         let accessibility = AccessibilityBridge::new(event_loop, &window, proxy, title);
@@ -158,6 +164,7 @@ impl WindowRuntime {
             renderer,
             metrics,
             accessibility,
+            role,
         })
     }
 
@@ -179,6 +186,10 @@ impl WindowRuntime {
 
     pub(crate) fn handle(&self) -> WindowHandle {
         self.window.handle()
+    }
+
+    pub(crate) const fn role(&self) -> WindowRole {
+        self.role
     }
 
     pub(crate) fn apply_platform_event(&mut self, event: &WindowEvent) {

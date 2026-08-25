@@ -11,11 +11,26 @@ use crate::ui::presentation::UiScene;
 use crate::window::WindowId;
 use crate::window::WindowMetrics;
 
+pub(crate) mod assets;
 mod inspection;
+pub(crate) mod view;
 
 pub use inspection::DevToolsHandle;
 pub use inspection::InspectionSelection;
 pub use inspection::InspectorState;
+
+/// Main-thread request emitted by a window capability when its DevTools session changes.
+///
+/// The request is intentionally separate from the shared inspector state: changing the state is
+/// safe from any thread, while creating or destroying native windows remains an event-loop
+/// operation owned by [`crate::app`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DevToolsRequest {
+    SetOpen { owner: WindowId, open: bool },
+}
+
+/// Thread-safe bridge from a [`DevToolsHandle`] to the owning native application loop.
+pub(crate) type DevToolsRequestSender = Arc<dyn Fn(DevToolsRequest) + Send + Sync>;
 
 /// Runtime transition captured by the bounded ZUI diagnostic trace.
 #[derive(Clone, Debug, Eq, PartialEq)]

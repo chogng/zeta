@@ -1,0 +1,417 @@
+use crate::ui::Border;
+use crate::ui::Color;
+use crate::ui::FontFamily;
+use crate::ui::FontWeight;
+use crate::ui::InspectionFrame;
+use crate::ui::PaintIcon;
+use crate::ui::PaintRect;
+use crate::ui::Point;
+use crate::ui::Rect;
+use crate::ui::Size;
+use crate::ui::TextBlock;
+use crate::ui::TextBlockWrap;
+use crate::ui::TextStyle;
+use crate::ui::UiScene;
+
+use super::DevToolsHandle;
+use super::assets;
+
+pub(crate) const TOOLBAR_HEIGHT: f32 = 46.0;
+
+const BACKGROUND: Color = Color::rgb(248, 248, 250);
+const BORDER: Color = Color::rgb(218, 218, 224);
+const FOREGROUND: Color = Color::rgb(35, 35, 42);
+const MUTED: Color = Color::rgb(105, 105, 116);
+const ACCENT: Color = Color::rgb(35, 131, 226);
+const ROW_BACKGROUND: Color = Color::rgba(35, 131, 226, 24);
+const ROW_HEIGHT: f32 = 90.0;
+const CONTENT_PADDING: f32 = 16.0;
+const ACTION_WIDTH: f32 = 74.0;
+const ACTION_HEIGHT: f32 = 28.0;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ToolbarAction {
+    Pick,
+    Close,
+}
+
+pub(crate) fn toolbar_action_at(bounds: Rect, point: Point) -> Option<ToolbarAction> {
+    let toolbar = toolbar_bounds(bounds);
+    [ToolbarAction::Pick, ToolbarAction::Close]
+        .into_iter()
+        .find(|action| action_bounds(toolbar, *action).contains(point))
+}
+
+pub(crate) fn row_index_at(bounds: Rect, point: Point, row_count: usize) -> Option<usize> {
+    let content = content_bounds(bounds);
+    if !content.contains(point) {
+        return None;
+    }
+    let index = ((point.y - content.origin.y) / ROW_HEIGHT).floor() as usize;
+    (index < row_count).then_some(index)
+}
+
+pub(crate) fn compose(
+    size: Size,
+    frame: Option<&InspectionFrame>,
+    devtools: &DevToolsHandle,
+) -> UiScene {
+    let bounds = Rect::from_xywh(0.0, 0.0, size.width.max(0.0), size.height.max(0.0));
+    let mut scene = UiScene::new(BACKGROUND);
+    if bounds.is_empty() {
+        return scene;
+    }
+
+    scene.draw_rect(PaintRect::new(bounds, BACKGROUND).with_border(Border::uniform(1.0, BORDER)));
+    let toolbar = toolbar_bounds(bounds);
+    scene.draw_rect(
+        PaintRect::new(toolbar, Color::WHITE).with_border(Border::new(
+            crate::ui::Edges::new(0.0, 0.0, 1.0, 0.0),
+            BORDER,
+        )),
+    );
+    paint_text(
+        &mut scene,
+        "ZUI DevTools",
+        Point::new(toolbar.origin.x + CONTENT_PADDING, toolbar.origin.y + 14.0),
+        150.0,
+        TextStyle::new(14.0, FOREGROUND)
+            .with_weight(FontWeight::Bold)
+            .with_line_height(18.0),
+    );
+    paint_button(
+        &mut scene,
+        action_bounds(toolbar, ToolbarAction::Pick),
+        assets::PICK,
+        if devtools.is_picking() {
+            "Stop"
+        } else {
+            "Pick"
+        },
+        devtools.is_picking(),
+    );
+    paint_button(
+        &mut scene,
+        action_bounds(toolbar, ToolbarAction::Close),
+        assets::CLOSE,
+        "Close",
+        false,
+    );
+
+    let content = content_bounds(bounds);
+    scene.with_clip(content, |scene| {
+        let Some(frame) = frame else {
+            paint_message(
+                scene,
+                "Waiting for the application to present an inspectable scene.",
+                content,
+            );
+            return;
+        };
+        let Some(selection) = devtools.selection() else {
+            let message = if devtools.is_picking() {
+                "Move over the application window and click an element to inspect it."
+            } else {
+                "Select Pick, then move over the application window to inspect it."
+            };
+            paint_message(scene, message, content);
+            paint_text(
+                scene,
+                &format!("{} nodes in the latest frame", frame.nodes().len()),
+                Point::new(
+                    content.origin.x + CONTENT_PADDING,
+                    content.origin.y + CONTENT_PADDING + 42.0,
+                ),
+                (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
+                TextStyle::new(11.0, MUTED)
+                    .with_family(FontFamily::Monospace)
+                    .with_line_height(15.0),
+            );
+            return;
+        };
+
+        for (index, node) in selection.path().iter().enumerate() {
+            let y = content.origin.y + index as f32 * ROW_HEIGHT;
+            if y >= content.bottom() {
+                break;
+            }
+            let row = Rect::from_xywh(content.origin.x, y, content.size.width, ROW_HEIGHT);
+            let selected = index == selection.selected_index();
+            if selected {
+                scene.draw_rect(PaintRect::new(row, ROW_BACKGROUND));
+                scene.draw_rect(PaintRect::new(
+                    Rect::from_xywh(row.origin.x, row.origin.y, 3.0, row.size.height),
+                    ACCENT,
+                ));
+            }
+            paint_row(scene, row, node, index, selected);
+            scene.draw_rect(PaintRect::new(
+                Rect::from_xywh(
+                    row.origin.x + CONTENT_PADDING,
+                    row.bottom() - 1.0,
+                    (row.size.width - CONTENT_PADDING).max(0.0),
+                    1.0,
+                ),
+                BORDER,
+            ));
+        }
+    });
+    scene
+}
+
+pub(crate) fn decorate_product_scene(
+    scene: &UiScene,
+    devtools: &DevToolsHandle,
+) -> Option<UiScene> {
+    let selection = devtools.selection()?;
+    let mut decorated = scene.clone();
+    decorated.with_overlay(|scene| paint_selection(scene, &selection));
+    Some(decorated)
+}
+
+fn toolbar_bounds(bounds: Rect) -> Rect {
+    Rect::from_xywh(
+        bounds.origin.x,
+        bounds.origin.y,
+        bounds.size.width,
+        TOOLBAR_HEIGHT.min(bounds.size.height),
+    )
+}
+
+fn content_bounds(bounds: Rect) -> Rect {
+    let toolbar = toolbar_bounds(bounds);
+    Rect::from_xywh(
+        bounds.origin.x,
+        toolbar.bottom(),
+        bounds.size.width,
+        (bounds.size.height - toolbar.size.height).max(0.0),
+    )
+}
+
+fn action_bounds(toolbar: Rect, action: ToolbarAction) -> Rect {
+    let x = match action {
+        ToolbarAction::Pick => toolbar.right() - ACTION_WIDTH * 2.0 - CONTENT_PADDING,
+        ToolbarAction::Close => toolbar.right() - ACTION_WIDTH - CONTENT_PADDING,
+    };
+    Rect::from_xywh(
+        x.max(toolbar.origin.x + CONTENT_PADDING),
+        toolbar.origin.y + (toolbar.size.height - ACTION_HEIGHT) * 0.5,
+        ACTION_WIDTH - 6.0,
+        ACTION_HEIGHT,
+    )
+}
+
+fn paint_button(
+    scene: &mut UiScene,
+    bounds: Rect,
+    icon: crate::ui::Icon,
+    label: &str,
+    selected: bool,
+) {
+    let icon_color = if selected { ACCENT } else { FOREGROUND };
+    scene.draw_rect(
+        PaintRect::new(
+            bounds,
+            if selected {
+                Color::rgba(35, 131, 226, 40)
+            } else {
+                Color::TRANSPARENT
+            },
+        )
+        .with_border(Border::uniform(1.0, if selected { ACCENT } else { BORDER })),
+    );
+    scene.draw_icon(PaintIcon::new(
+        icon,
+        Rect::from_xywh(
+            bounds.origin.x + 8.0,
+            bounds.origin.y + (bounds.size.height - 14.0) * 0.5,
+            14.0,
+            14.0,
+        ),
+        icon_color,
+    ));
+    paint_text(
+        scene,
+        label,
+        Point::new(bounds.origin.x + 28.0, bounds.origin.y + 6.0),
+        (bounds.size.width - 34.0).max(0.0),
+        TextStyle::new(11.0, icon_color)
+            .with_weight(FontWeight::Bold)
+            .with_line_height(15.0),
+    );
+}
+
+fn paint_message(scene: &mut UiScene, message: &str, bounds: Rect) {
+    paint_text(
+        scene,
+        message,
+        Point::new(
+            bounds.origin.x + CONTENT_PADDING,
+            bounds.origin.y + CONTENT_PADDING,
+        ),
+        (bounds.size.width - CONTENT_PADDING * 2.0).max(0.0),
+        TextStyle::new(12.0, MUTED).with_line_height(18.0),
+    );
+}
+
+fn paint_row(
+    scene: &mut UiScene,
+    row: Rect,
+    node: &crate::ui::InspectionNode,
+    depth: usize,
+    selected: bool,
+) {
+    let x = row.origin.x + CONTENT_PADDING + depth as f32 * 12.0;
+    let width = (row.size.width - (x - row.origin.x) - CONTENT_PADDING).max(0.0);
+    let title = node
+        .label()
+        .map(|label| format!("{}  {label}", node.name()))
+        .unwrap_or_else(|| node.name().to_owned());
+    scene.draw_icon(PaintIcon::new(
+        assets::ANCESTOR,
+        Rect::from_xywh(x, row.origin.y + 8.0, 12.0, 12.0),
+        if selected { ACCENT } else { MUTED },
+    ));
+    paint_text(
+        scene,
+        &title,
+        Point::new(x + 18.0, row.origin.y + 8.0),
+        (width - 18.0).max(0.0),
+        TextStyle::new(12.0, if selected { ACCENT } else { FOREGROUND })
+            .with_weight(FontWeight::Bold)
+            .with_line_height(16.0),
+    );
+    paint_text(
+        scene,
+        &metrics(node),
+        Point::new(x + 18.0, row.origin.y + 28.0),
+        (width - 18.0).max(0.0),
+        TextStyle::new(11.0, FOREGROUND)
+            .with_family(FontFamily::Monospace)
+            .with_line_height(15.0),
+    );
+    paint_text(
+        scene,
+        &source(node),
+        Point::new(x + 18.0, row.origin.y + 48.0),
+        (width - 18.0).max(0.0),
+        TextStyle::new(10.0, MUTED)
+            .with_family(FontFamily::Monospace)
+            .with_line_height(14.0),
+    );
+}
+
+fn paint_selection(scene: &mut UiScene, selection: &super::InspectionSelection) {
+    let Some(target) = selection.target() else {
+        return;
+    };
+    paint_padding(scene, target);
+    for gap in target.gap_regions() {
+        let bounds = target.bounds().intersection(*gap);
+        if !bounds.is_empty() {
+            scene.draw_rect(PaintRect::new(bounds, Color::rgba(45, 184, 164, 112)));
+        }
+    }
+    for (index, node) in selection
+        .path()
+        .iter()
+        .take(selection.selected_index() + 1)
+        .enumerate()
+    {
+        scene.draw_rect(
+            PaintRect::new(node.bounds(), Color::TRANSPARENT).with_border(Border::uniform(
+                if index == selection.selected_index() {
+                    2.0
+                } else {
+                    1.0
+                },
+                if index == selection.selected_index() {
+                    ACCENT
+                } else {
+                    Color::rgba(116, 92, 217, 150)
+                },
+            )),
+        );
+    }
+}
+
+fn paint_padding(scene: &mut UiScene, node: &crate::ui::InspectionNode) {
+    let Some(padding) = node.padding() else {
+        return;
+    };
+    let bounds = node.bounds();
+    let top = padding.top.max(0.0).min(bounds.size.height);
+    let bottom = padding
+        .bottom
+        .max(0.0)
+        .min((bounds.size.height - top).max(0.0));
+    let middle_height = (bounds.size.height - top - bottom).max(0.0);
+    let left = padding.left.max(0.0).min(bounds.size.width);
+    let right = padding
+        .right
+        .max(0.0)
+        .min((bounds.size.width - left).max(0.0));
+    for bounds in [
+        Rect::from_xywh(bounds.origin.x, bounds.origin.y, bounds.size.width, top),
+        Rect::from_xywh(
+            bounds.origin.x,
+            bounds.bottom() - bottom,
+            bounds.size.width,
+            bottom,
+        ),
+        Rect::from_xywh(bounds.origin.x, bounds.origin.y + top, left, middle_height),
+        Rect::from_xywh(
+            bounds.right() - right,
+            bounds.origin.y + top,
+            right,
+            middle_height,
+        ),
+    ] {
+        if !bounds.is_empty() {
+            scene.draw_rect(PaintRect::new(bounds, Color::rgba(238, 147, 54, 92)));
+        }
+    }
+}
+
+fn metrics(node: &crate::ui::InspectionNode) -> String {
+    let mut value = format!("size {:.0} × {:.0}", node.width(), node.height());
+    if let Some(padding) = node.padding() {
+        value.push_str(&format!(
+            "   padding {:.0} {:.0} {:.0} {:.0}",
+            padding.top, padding.right, padding.bottom, padding.left
+        ));
+    }
+    if let Some(gap) = node.gap() {
+        value.push_str(&format!("   gap {gap:.0}"));
+    }
+    if let Some(radii) = node.corner_radii() {
+        value.push_str(&format!("   radius {:.0}", radii.top_left));
+    }
+    value
+}
+
+fn source(node: &crate::ui::InspectionNode) -> String {
+    if node.source_file().is_empty() || node.source_line() == 0 {
+        return "source unavailable".to_owned();
+    }
+    let file = node
+        .source_file()
+        .rsplit('/')
+        .next()
+        .unwrap_or(node.source_file());
+    format!("{file}:{}  ·  layer {}", node.source_line(), node.layer())
+}
+
+fn paint_text(scene: &mut UiScene, text: &str, origin: Point, width: f32, style: TextStyle) {
+    if width <= 0.0 {
+        return;
+    }
+    scene.draw_text(
+        TextBlock::new(text, origin, Size::new(width, style.line_height()), style)
+            .with_wrap(TextBlockWrap::None),
+    );
+}
+
+#[cfg(test)]
+#[path = "view_tests.rs"]
+mod tests;

@@ -1,10 +1,14 @@
+use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use super::DevToolsRequest;
+use super::DevToolsRequestSender;
 use crate::ui::foundation::Point;
 use crate::ui::presentation::InspectionFrame;
 use crate::ui::presentation::InspectionNode;
 use crate::ui::presentation::InspectionNodeId;
+use crate::window::WindowId;
 
 /// A selected node and its complete parent path within one immutable inspection frame.
 ///
@@ -66,8 +70,9 @@ impl InspectionSelection {
 
 /// Product-neutral state machine shared by interactive native layout inspectors.
 ///
-/// The state owns enablement, picking, hover, and locked selection. A host remains responsible
-/// for window policy, pointer routing, panel layout, and presentation of the selected nodes.
+/// The state owns enablement, picking, hover, and locked selection. The zui host owns the default
+/// window, pointer routing, panel layout, and presentation; products may consume the same state
+/// to add their own tooling without creating a second inspector session.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct InspectorState {
     enabled: bool,
@@ -191,12 +196,27 @@ impl InspectorState {
 
 /// Cloneable DevTools session capability associated with one runtime-owned window.
 ///
-/// The runtime owns the session state so any part of an application that has the window
-/// capability can open, close, or toggle DevTools without creating a second inspector state. A
-/// host still decides how the session is laid out and painted in its scene.
-#[derive(Clone, Debug)]
+/// The runtime owns the session state and the latest immutable inspection frame. Calling
+/// `open`, `close`, or `toggle` from a window capability also asks the native ZUI host to create or
+/// destroy the default DevTools window. A product may still use the state and frame to build a
+/// custom DevTools surface, but the framework supplies a default Inspector view.
+#[derive(Clone)]
 pub struct DevToolsHandle {
     state: Arc<Mutex<InspectorState>>,
+    inspection: Arc<Mutex<Option<InspectionFrame>>>,
+    request_sender: Option<DevToolsRequestSender>,
+    owner: Option<WindowId>,
+}
+
+impl fmt::Debug for DevToolsHandle {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("DevToolsHandle")
+            .field("state", &self.state)
+            .field("inspection", &self.inspection)
+            .field("owner", &self.owner)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Default for DevToolsHandle {
@@ -210,6 +230,24 @@ impl DevToolsHandle {
     pub fn new() -> Self {
         Self {
             state: Arc::new(Mutex::new(InspectorState::default())),
+            inspection: Arc::new(Mutex::new(None)),
+            request_sender: None,
+            owner: None,
+        }
+    }
+
+    pub(crate) fn with_request(owner: WindowId, request_sender: DevToolsRequestSender) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(InspectorState::default())),
+            inspection: Arc::new(Mutex::new(None)),
+            request_sender: Some(request_sender),
+            owner: Some(owner),
+        }
+    }
+
+    fn request_open(&self, open: bool) {
+        if let (Some(owner), Some(sender)) = (self.owner, self.request_sender.as_ref()) {
+            sender(DevToolsRequest::SetOpen { owner, open });
         }
     }
 
@@ -226,26 +264,57 @@ impl DevToolsHandle {
     /// Opens the DevTools session and clears its previous selection.
     pub fn open(&self) {
         self.state.lock().expect("devtools state lock").open();
+        self.inspection
+            .lock()
+            .expect("devtools inspection lock")
+            .take();
+        self.request_open(true);
     }
 
     /// Closes the DevTools session and clears its selection.
     pub fn close(&self) {
+        self.close_local();
+        self.request_open(false);
+    }
+
+    pub(crate) fn close_local(&self) {
         self.state.lock().expect("devtools state lock").close();
+        self.inspection
+            .lock()
+            .expect("devtools inspection lock")
+            .take();
     }
 
     /// Toggles the DevTools session and returns whether it is now open.
     pub fn toggle(&self) -> bool {
-        self.state.lock().expect("devtools state lock").toggle()
+        let is_open = self.state.lock().expect("devtools state lock").toggle();
+        if !is_open {
+            self.inspection
+                .lock()
+                .expect("devtools inspection lock")
+                .take();
+        }
+        self.request_open(is_open);
+        is_open
     }
 
     /// Stops picking, or closes the session when picking is already stopped.
     ///
     /// Returns `true` when the session was closed.
     pub fn stop_picking_or_close(&self) -> bool {
-        self.state
+        let closed = self
+            .state
             .lock()
             .expect("devtools state lock")
-            .stop_picking_or_close()
+            .stop_picking_or_close();
+        if closed {
+            self.inspection
+                .lock()
+                .expect("devtools inspection lock")
+                .take();
+            self.request_open(false);
+        }
+        closed
     }
 
     /// Toggles pointer picking when the session is open.
@@ -296,6 +365,35 @@ impl DevToolsHandle {
             .expect("devtools state lock")
             .selection()
             .cloned()
+    }
+
+    /// Returns the latest inspection frame submitted by the associated product window.
+    pub fn inspection(&self) -> Option<InspectionFrame> {
+        self.inspection
+            .lock()
+            .expect("devtools inspection lock")
+            .clone()
+    }
+
+    /// Replaces the live inspection frame while this session is open.
+    pub(crate) fn set_inspection(&self, frame: InspectionFrame) {
+        if self.is_open() {
+            *self.inspection.lock().expect("devtools inspection lock") = Some(frame);
+        }
+    }
+
+    /// Resolves and stores the node currently under `point` while picking.
+    pub(crate) fn hover_at(&self, point: Point) {
+        let selection = self
+            .inspection()
+            .as_ref()
+            .and_then(|frame| InspectionSelection::at(frame, point));
+        self.set_hovered(selection);
+    }
+
+    /// Commits the current hover selection and stops picking.
+    pub(crate) fn select_hovered(&self) {
+        self.select(self.selection());
     }
 }
 

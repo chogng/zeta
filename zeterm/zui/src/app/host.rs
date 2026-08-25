@@ -1,12 +1,19 @@
 use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 
+use crate::devtools::DevToolsRequest;
+use crate::devtools::DevToolsRequestSender;
 use crate::internal::ActiveEventLoop;
 use crate::internal::ApplicationHandler;
 use crate::internal::NativeWindowEvent;
 use crate::internal::NativeWindowId;
+use crate::ui::Point;
 use crate::window::WindowEvent;
 use crate::window::WindowId;
+use crate::window::WindowRole;
 
 use super::App;
 use super::AppContext;
@@ -31,6 +38,9 @@ use super::WindowContext;
 use super::WindowContextParts;
 use super::WindowRuntime;
 
+#[path = "host_devtools.rs"]
+mod host_devtools;
+
 pub(super) struct ApplicationHost<T: 'static, A> {
     pub(super) app: A,
     windows: HashMap<WindowId, WindowRuntime>,
@@ -47,6 +57,9 @@ pub(super) struct ApplicationHost<T: 'static, A> {
     exit_policy: ExitPolicy,
     launch_urls: Vec<ProtocolUrl>,
     diagnostics: DiagnosticsHandle,
+    devtools_requests: Arc<Mutex<VecDeque<DevToolsRequest>>>,
+    devtools_request_sender: DevToolsRequestSender,
+    cursor_positions: HashMap<WindowId, Point>,
 }
 
 pub(super) struct ApplicationResources<T: 'static> {
@@ -65,25 +78,35 @@ impl<T: 'static, A> ApplicationHost<T, A> {
     where
         T: Send,
     {
+        let devtools_requests = Arc::new(Mutex::new(VecDeque::new()));
+        let request_queue = Arc::clone(&devtools_requests);
+        let request_proxy = resources.event_proxy.inner.clone();
+        let devtools_request_sender: DevToolsRequestSender = Arc::new(move |request| {
+            request_queue
+                .lock()
+                .expect("devtools request queue lock")
+                .push_back(request);
+            let _ = request_proxy.send_event(RuntimeEvent::DevToolsWake);
+        });
         let runtime_proxy = resources.event_proxy.inner.clone();
         resources
             .services
             .menus()
-            .set_event_handler(Some(std::sync::Arc::new(move |action| {
+            .set_event_handler(Some(Arc::new(move |action| {
                 let _ = runtime_proxy.send_event(RuntimeEvent::MenuAction(action));
             })));
         let tray_proxy = resources.event_proxy.inner.clone();
         resources
             .services
             .tray()
-            .set_event_handler(Some(std::sync::Arc::new(move |event| {
+            .set_event_handler(Some(Arc::new(move |event| {
                 let _ = tray_proxy.send_event(RuntimeEvent::Tray(event));
             })));
         let shortcut_proxy = resources.event_proxy.inner.clone();
         resources
             .services
             .global_shortcuts()
-            .set_event_handler(Some(std::sync::Arc::new(move |event| {
+            .set_event_handler(Some(Arc::new(move |event| {
                 let _ = shortcut_proxy.send_event(RuntimeEvent::GlobalShortcut(event));
             })));
         Self {
@@ -102,13 +125,16 @@ impl<T: 'static, A> ApplicationHost<T, A> {
             exit_policy,
             launch_urls: resources.launch_urls,
             diagnostics: resources.diagnostics,
+            devtools_requests,
+            devtools_request_sender,
+            cursor_positions: HashMap::new(),
         }
     }
 }
 
 impl<T, A> ApplicationHost<T, A>
 where
-    T: 'static,
+    T: Send + 'static,
     A: App<T>,
 {
     fn with_app_context<R>(
@@ -129,6 +155,7 @@ where
             background,
             timers,
             diagnostics,
+            devtools_request_sender,
             ..
         } = self;
         let mut context = AppContext::new(AppContextParts {
@@ -144,6 +171,7 @@ where
             background,
             timers,
             diagnostics,
+            devtools_requests: devtools_request_sender.clone(),
         });
         callback(app, &mut context)
     }
@@ -153,33 +181,50 @@ where
     }
 
     fn process_window_commands(&mut self, event_loop: &ActiveEventLoop) {
-        let mut closed_window = false;
+        self.process_devtools_requests(event_loop);
+        let mut closed_product_window = false;
         while let Some(command) = self.commands.pop() {
             match command {
                 WindowCommand::Opened(window) => {
-                    if self.windows.contains_key(&window) {
+                    if self
+                        .windows
+                        .get(&window)
+                        .is_some_and(|runtime| runtime.role() == WindowRole::Product)
+                    {
                         self.with_app_context(event_loop, |app, context| {
                             app.window_opened(context, window)
                         });
                     }
                 }
                 WindowCommand::Close(window) => {
-                    self.services.menus().detach_window(window);
+                    let role = self.windows.get(&window).map(WindowRuntime::role);
+                    if role == Some(WindowRole::Product) {
+                        self.close_devtools_windows(window);
+                        self.services.menus().detach_window(window);
+                    }
                     if self.windows.remove(&window).is_some() {
-                        closed_window = true;
                         self.background.cancel_window(window);
                         self.timer_registry.cancel_scope(TaskScope::Window(window));
+                        self.cursor_positions.remove(&window);
                         self.diagnostics.close_window(window);
-                        self.with_app_context(event_loop, |app, context| {
-                            app.window_closed(context, window)
-                        });
+                        if role == Some(WindowRole::Product) {
+                            closed_product_window = true;
+                            self.with_app_context(event_loop, |app, context| {
+                                app.window_closed(context, window)
+                            });
+                        } else if let Some(WindowRole::DevTools { owner }) = role
+                            && let Some(runtime) = self.windows.get(&owner)
+                        {
+                            runtime.handle().devtools().close_local();
+                            runtime.handle().request_redraw();
+                        }
                     }
                 }
                 WindowCommand::Exit => event_loop.exit(),
             }
         }
-        if closed_window
-            && self.windows.is_empty()
+        if closed_product_window
+            && !self.has_product_windows()
             && self.exit_policy == ExitPolicy::OnLastWindowClosed
         {
             event_loop.exit();
@@ -209,7 +254,7 @@ where
 
 impl<T, A> ApplicationHandler<RuntimeEvent<T>> for ApplicationHost<T, A>
 where
-    T: 'static,
+    T: Send + 'static,
     A: App<T>,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -240,34 +285,47 @@ where
         event: NativeWindowEvent,
     ) {
         let window_id = WindowId::from_native(window_id);
-        let Some(runtime) = self.windows.get_mut(&window_id) else {
-            return;
+        let (role, event, destroyed) = {
+            let Some(runtime) = self.windows.get_mut(&window_id) else {
+                return;
+            };
+            runtime.process_accessibility_window_event(&event);
+            let event = WindowEvent::from_native(event);
+            runtime.apply_platform_event(&event);
+            self.diagnostics.update_window(window_id, runtime.metrics());
+            let destroyed = matches!(event, WindowEvent::Destroyed);
+            (runtime.role(), event, destroyed)
         };
-        runtime.process_accessibility_window_event(&event);
-        let event = WindowEvent::from_native(event);
-        runtime.apply_platform_event(&event);
-        self.diagnostics.update_window(window_id, runtime.metrics());
         self.diagnostics
             .record(DiagnosticEventKind::WindowEvent(window_id));
-        let destroyed = matches!(event, WindowEvent::Destroyed);
-        {
-            let mut context = WindowContext::new(WindowContextParts {
-                runtime,
-                clipboard: &self.clipboard,
-                services: &self.services,
-                error: &mut self.error,
-                commands: &mut self.commands,
-                background: &self.background,
-                timers: &self.timers,
-                diagnostics: &self.diagnostics,
-            });
-            if matches!(event, WindowEvent::RedrawRequested) {
-                self.app.redraw(&mut context);
-            } else {
-                self.app.window_event(&mut context, event);
+        match role {
+            WindowRole::Product => {
+                if !self.handle_product_devtools_event(window_id, &event) {
+                    let Some(runtime) = self.windows.get_mut(&window_id) else {
+                        return;
+                    };
+                    let mut context = WindowContext::new(WindowContextParts {
+                        runtime,
+                        clipboard: &self.clipboard,
+                        services: &self.services,
+                        error: &mut self.error,
+                        commands: &mut self.commands,
+                        background: &self.background,
+                        timers: &self.timers,
+                        diagnostics: &self.diagnostics,
+                    });
+                    if matches!(event, WindowEvent::RedrawRequested) {
+                        self.app.redraw(&mut context);
+                    } else {
+                        self.app.window_event(&mut context, event);
+                    }
+                }
+            }
+            WindowRole::DevTools { owner } => {
+                self.handle_devtools_window_event(window_id, owner, event_loop, &event);
             }
         }
-        if destroyed {
+        if destroyed && role == WindowRole::Product {
             self.commands.push(WindowCommand::Close(window_id));
         }
         self.process_window_commands(event_loop);
@@ -306,6 +364,7 @@ where
                 let action = self
                     .windows
                     .get_mut(&window)
+                    .filter(|runtime| runtime.role() == WindowRole::Product)
                     .and_then(|runtime| runtime.handle_accessibility_event(event.window_event));
                 if let Some(action) = action {
                     self.diagnostics
@@ -315,6 +374,7 @@ where
                     });
                 }
             }
+            RuntimeEvent::DevToolsWake => {}
         }
         self.process_window_commands(event_loop);
         self.apply_control_flow(event_loop);

@@ -1,4 +1,6 @@
 use super::DevToolsHandle;
+use super::DevToolsRequest;
+use super::DevToolsRequestSender;
 use super::InspectionSelection;
 use super::InspectorState;
 use crate::ui::Point;
@@ -6,6 +8,9 @@ use crate::ui::Rect;
 use crate::ui::foundation::Color;
 use crate::ui::presentation::Element;
 use crate::ui::presentation::UiScene;
+use crate::window::WindowId;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[test]
 fn selection_copies_the_deepest_target_and_its_ancestor_path() {
@@ -72,4 +77,31 @@ fn devtools_handle_provides_one_shared_session_for_window_capabilities() {
     first.close();
     assert!(!second.is_open());
     assert!(!second.is_picking());
+}
+
+#[test]
+fn native_handle_requests_the_default_window_without_changing_session_ownership() {
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let queue = Arc::clone(&requests);
+    let sender: DevToolsRequestSender = Arc::new(move |request| {
+        queue.lock().expect("request queue lock").push(request);
+    });
+    let handle = DevToolsHandle::with_request(WindowId::from_raw(7), sender);
+
+    handle.open();
+    handle.close();
+
+    assert_eq!(
+        *requests.lock().expect("request queue lock"),
+        vec![
+            DevToolsRequest::SetOpen {
+                owner: WindowId::from_raw(7),
+                open: true,
+            },
+            DevToolsRequest::SetOpen {
+                owner: WindowId::from_raw(7),
+                open: false,
+            },
+        ]
+    );
 }

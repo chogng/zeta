@@ -128,7 +128,7 @@ Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut
 
 `SignedHttpUpdater` 对 manifest 的原始 payload 执行 strict Ed25519 verification，再按目标平台选择 artifact；下载完成后必须通过 manifest 中的 SHA-256 才能原子进入 staging。`UpdateInstaller` 只接收已经验证的 `StagedUpdate`，默认 backend 交给操作系统打开 installer，也可注入企业部署或测试实现。HTTP check/download 是阻塞服务，产品通过 `BackgroundExecutor` 调用，不能阻塞 UI callback。
 
-`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、menu、tray、shortcut、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。调用 `ApplicationBuilder::with_diagnostics_inspection` 后，最近一帧的完整 `InspectionFrame` 也会保留在 `SceneDiagnostics` 中；默认关闭以避免每帧复制节点。每个 runtime window 都提供共享的 `DevToolsHandle`，因此产品可以直接调用 `WindowContext::{open_devtools, close_devtools, toggle_devtools}` 或 `WindowHandle` 上的同名方法；快捷键、工具栏和其他 host 入口不会再各自维护 inspector 状态。`InspectionSelection`、`InspectorState` 与 `DevToolsHandle` 是 product-neutral 的会话状态，面板布局、快捷键绑定、窗口扩展和视觉样式仍由产品 host 拥有。snapshot 不持有 native window、renderer 或产品状态。
+`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、menu、tray、shortcut、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。调用 `ApplicationBuilder::with_diagnostics_inspection` 后，最近一帧的完整 `InspectionFrame` 也会保留在 `SceneDiagnostics` 中；默认关闭以避免每帧复制节点。每个 runtime window 都提供共享的 `DevToolsHandle`，因此产品可以直接调用 `WindowContext::{open_devtools, close_devtools, toggle_devtools}` 或 `WindowHandle` 上的同名方法；这些调用会由 zui 创建/销毁一个独立的默认 DevTools 原生窗口，并把产品最近提交的 scene 作为 Inspector 数据源。快捷键、工具栏和拾取路由由 zui 统一维护，产品不需要再复制 inspector 状态。默认 Inspector 所需的通用 SVG（Pick、Close、层级 Chevron）也编译进 `zui`，其他 App 不需要提供资源；产品图标目录仍由 `zeta-icons` 负责。`InspectionSelection`、`InspectorState` 与 `DevToolsHandle` 仍是 product-neutral 的会话 contract；zui 提供默认 Inspector 视图，zeta-ui 或产品可以在此基础上提供主题和扩展。snapshot 不持有 native window、renderer 或产品状态。
 
 `InteractionFrame::accessibility_nodes` 是语义树的唯一来源。`WindowContext::present_scene` 在绘制同一帧时把该快照映射为 AccessKit tree；adapter 在窗口第一次可见前创建。OS 请求的 Focus/Click 转换成 `AccessibilityActionKind::{Focus, Activate}` 并回到 `App::accessibility_action`，产品继续通过现有 `UiDispatch` 与 reducer 处理，不产生第二套控件身份。renderer 仍只消费 `UiScene`，不拥有 accessibility。
 
@@ -190,16 +190,16 @@ ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发�
 - **新 layout 算法**：放入 `ui/layout`，输入必须是 caller-owned state，输出必须是 immutable geometry。
 - **新 renderer**：实现 public trait，通过 factory 注入；默认 backend 实现保持 private。
 - **新通用组件**：放入 `zeta-ui`；产品专属 surface/state 留在产品 crate。
-- **新 icon artwork/语义目录**：放入 `zeta-icons`，通用 icon value contract 只在 `ui/foundation/icon` 演进。
+- **新 product icon artwork/语义目录**：放入 `zeta-icons`，通用 icon value contract 只在 `ui/foundation/icon` 演进；仅服务于 zui 默认 DevTools 的内置 artwork 放在 `devtools/assets`，避免 zui 反向依赖 product icon crate。
 - **文件规模**：production Rust module 不超过 500 行，超过时按单一职责拆出 owned submodule。
 
 `architecture_tests.rs` 固定能力目录、同名 public root、backend-neutral dependency direction、native dependency owner、无 `mod.rs`、500 行上限、旧技术层目录不得回流，以及 public API 不导出 native backend type。修改 ownership 时同步这些测试与本文。
 
 ## 11. 当前能力与剩余边界
 
-当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy/文件拖放 contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、三平台 tray/global shortcut、resource/process、三平台严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、三平台发布 workflow、bounded diagnostics/devtools、窗口级直接 DevTools 调用与可复用 inspector session state、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
+当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy/文件拖放 contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、三平台 tray/global shortcut、resource/process、三平台严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、三平台发布 workflow、bounded diagnostics/devtools、zui-owned 独立 DevTools 原生窗口与默认 Inspector 视图、窗口级直接 DevTools 调用与可复用 inspector session state、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
 
-这使 `zui` 具备 Electron 类原生应用 framework 的完整核心职责边界，但不等于 Electron 兼容层。仍然明确保留的边界是：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖已有真实消费者的策略；Linux application menu 还没有可依附 winit window 的 GTK native menubar（tray menu 已完整支持）；Windows AppContainer 只接受能够无降级表达的权限组合；真实 tray、portal、accessibility、签名账户与 OS 安装验收仍由对应平台 CI/smoke test 负责。当前 devtools 是 native scene/runtime 的结构化 diagnostics，不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger。
+这使 `zui` 具备 Electron 类原生应用 framework 的完整核心职责边界，但不等于 Electron 兼容层。仍然明确保留的边界是：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖已有真实消费者的策略；Linux application menu 还没有可依附 winit window 的 GTK native menubar（tray menu 已完整支持）；Windows AppContainer 只接受能够无降级表达的权限组合；真实 tray、portal、accessibility、签名账户与 OS 安装验收仍由对应平台 CI/smoke test 负责。当前 DevTools 是 zui-owned native scene/runtime Inspector：它可以独立开窗、读取 scene inspection hierarchy、拾取节点并展示布局元数据，同时把 hover、选中节点的 outline/padding/gap overlay 画回产品 scene；但不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger。
 
 后续能力继续采用同一准则：先形成 ZUI-owned contract 和可注入测试替身，再接具体平台 backend。资源打包、安装器、自动更新与开发工具属于 SDK/tooling 层，不能把产品组件或产品状态收进 `zui`。
 

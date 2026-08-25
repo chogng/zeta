@@ -13,6 +13,7 @@ use zui::input::KeyEvent;
 use zui::input::ModifiersState;
 use zui::input::NamedKey;
 use zui::services::ClipboardHandle;
+use zui::window::WindowHandle;
 
 use crate::NativeApp;
 use crate::keybindings::{
@@ -35,7 +36,11 @@ impl NativeApp {
         if event.state != ElementState::Pressed {
             return;
         }
-        if self.route_layout_inspector_keyboard(&event) {
+        if is_devtools_toggle_shortcut(&event, self.modifiers) {
+            let _ = self
+                .window
+                .as_ref()
+                .is_some_and(WindowHandle::toggle_devtools);
             return;
         }
         if self.keyboard_shortcuts.is_visible() {
@@ -804,6 +809,21 @@ fn encode_key_event(
         return Vec::new();
     };
     terminal.encode_key(key, terminal_modifiers(modifiers))
+}
+
+fn is_devtools_toggle_shortcut(event: &KeyEvent, modifiers: ModifiersState) -> bool {
+    let Key::Character(character) = &event.logical_key else {
+        return false;
+    };
+    let primary = if cfg!(target_os = "macos") {
+        modifiers.super_key()
+    } else {
+        modifiers.control_key()
+    };
+    primary
+        && modifiers.shift_key()
+        && !modifiers.alt_key()
+        && character.as_str().eq_ignore_ascii_case("i")
 }
 
 fn terminal_modifiers(modifiers: ModifiersState) -> KeyModifiers {

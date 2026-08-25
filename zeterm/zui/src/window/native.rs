@@ -16,6 +16,7 @@ use winit::window::Window;
 use winit::window::WindowAttributes;
 
 use crate::devtools::DevToolsHandle;
+use crate::devtools::DevToolsRequestSender;
 
 use super::Theme;
 use super::WindowChrome;
@@ -238,13 +239,13 @@ impl WindowHandle {
         self.devtools.clone()
     }
 
-    /// Opens DevTools for this window and schedules a frame for the host presentation.
+    /// Opens the default zui DevTools window for this window and schedules a frame.
     pub fn open_devtools(&self) {
         self.devtools.open();
         self.request_redraw();
     }
 
-    /// Closes DevTools for this window and schedules a frame for the host presentation.
+    /// Closes the default zui DevTools window for this window and schedules a frame.
     pub fn close_devtools(&self) {
         self.devtools.close();
         self.request_redraw();
@@ -358,6 +359,7 @@ impl NativeWindow {
         title: String,
         inner_size: Option<LogicalSize>,
         chrome: WindowChrome,
+        request_sender: DevToolsRequestSender,
     ) -> Result<Self, winit::error::OsError> {
         let mut attributes = WindowAttributes::default().with_title(title);
         if let Some(inner_size) = inner_size {
@@ -365,12 +367,13 @@ impl NativeWindow {
         }
         let attributes = apply_window_chrome(attributes, chrome).with_visible(false);
         let window = Arc::new(event_loop.create_window(attributes)?);
+        let owner = WindowId::from_native(window.id());
         Ok(Self {
             window,
             #[cfg(feature = "wgpu")]
             display_handle: event_loop.owned_display_handle(),
             chrome,
-            devtools: DevToolsHandle::new(),
+            devtools: DevToolsHandle::with_request(owner, request_sender),
         })
     }
 

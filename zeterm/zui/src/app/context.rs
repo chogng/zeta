@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::devtools::DevToolsHandle;
+use crate::devtools::DevToolsRequestSender;
 use crate::internal::ActiveEventLoop;
 use crate::internal::ControlFlow;
 use crate::render::RenderOutcome;
@@ -31,6 +32,7 @@ use super::WindowMetrics;
 use super::WindowOptions;
 use super::lifecycle::WindowCommand;
 use super::lifecycle::WindowCommandQueue;
+use crate::window::WindowRole;
 use crate::window::WindowRuntime;
 
 /// Main-thread application capabilities available outside a specific window callback.
@@ -47,6 +49,7 @@ pub struct AppContext<'a, T: 'static> {
     background: &'a BackgroundExecutor<T>,
     timers: &'a TimerScheduler<T>,
     diagnostics: &'a DiagnosticsHandle,
+    devtools_requests: DevToolsRequestSender,
 }
 
 pub(super) struct AppContextParts<'a, T: 'static> {
@@ -62,6 +65,7 @@ pub(super) struct AppContextParts<'a, T: 'static> {
     pub(super) background: &'a BackgroundExecutor<T>,
     pub(super) timers: &'a TimerScheduler<T>,
     pub(super) diagnostics: &'a DiagnosticsHandle,
+    pub(super) devtools_requests: DevToolsRequestSender,
 }
 
 impl<'a, T: 'static> AppContext<'a, T> {
@@ -79,6 +83,7 @@ impl<'a, T: 'static> AppContext<'a, T> {
             background: parts.background,
             timers: parts.timers,
             diagnostics: parts.diagnostics,
+            devtools_requests: parts.devtools_requests,
         }
     }
 
@@ -92,6 +97,8 @@ impl<'a, T: 'static> AppContext<'a, T> {
             self.renderer_factory,
             self.event_proxy,
             options,
+            WindowRole::Product,
+            self.devtools_requests.clone(),
         )?;
         let opened = runtime.opened_window();
         self.services
@@ -254,12 +261,12 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.runtime.handle().devtools()
     }
 
-    /// Opens DevTools for this window and schedules a frame for the host presentation.
+    /// Opens the default zui DevTools window for this window and schedules a frame.
     pub fn open_devtools(&self) {
         self.runtime.handle().open_devtools();
     }
 
-    /// Closes DevTools for this window and schedules a frame for the host presentation.
+    /// Closes the default zui DevTools window for this window and schedules a frame.
     pub fn close_devtools(&self) {
         self.runtime.handle().close_devtools();
     }
@@ -296,6 +303,13 @@ impl<'a, T: 'static> WindowContext<'a, T> {
 
     /// Submits one immutable UI scene through this window's renderer.
     pub fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {
+        let devtools = self.runtime.handle().devtools();
+        devtools.set_inspection(scene.inspection().clone());
+        let decorated = devtools
+            .is_open()
+            .then(|| crate::devtools::view::decorate_product_scene(scene, &devtools))
+            .flatten();
+        let scene = decorated.as_ref().unwrap_or(scene);
         let outcome = self.runtime.render_scene(scene)?;
         self.diagnostics.present(
             self.id(),
@@ -312,6 +326,13 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         scene: &UiScene,
         accessibility: &[AccessibilityNode],
     ) -> Result<RenderOutcome, RendererError> {
+        let devtools = self.runtime.handle().devtools();
+        devtools.set_inspection(scene.inspection().clone());
+        let decorated = devtools
+            .is_open()
+            .then(|| crate::devtools::view::decorate_product_scene(scene, &devtools))
+            .flatten();
+        let scene = decorated.as_ref().unwrap_or(scene);
         self.runtime.update_accessibility(accessibility);
         let outcome = self.runtime.render_scene(scene)?;
         self.diagnostics.present(
