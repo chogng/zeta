@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
 import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepareDevPackage.ts";
 
@@ -194,6 +195,14 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
     assert.equal(metadata.entrypoint, "bin/zeta-server.exe");
     assert.equal(metadata.target, "x86_64-pc-windows-msvc");
+    assert.equal(metadata.components.serverHost.binarySha256, createHash("sha256").update("zeta-server").digest("hex"));
+    assert.equal(metadata.components.appServerDaemon.binarySha256, createHash("sha256").update("zeta-app-server-daemon").digest("hex"));
+    assert.match(metadata.buildId, /^sha256:[a-f0-9]{64}$/);
+    assert.deepEqual(metadata.protocol, {
+      major: APP_SERVER_PROTOCOL_MAJOR,
+      revision: APP_SERVER_PROTOCOL_REVISION,
+      schemaHash: APP_SERVER_SCHEMA_HASH,
+    });
     assert.deepEqual(metadata.remoteRuntimeCatalog, {
       path: "zeta-remote-runtimes/catalog.json",
       sha256: createHash("sha256").update(await readFile(join(remoteRuntimeBundle, "catalog.json"))).digest("hex"),

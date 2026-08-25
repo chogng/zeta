@@ -16,7 +16,9 @@ use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 #[cfg(unix)]
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 #[cfg(unix)]
-use zeta_app_server_protocol::schema_hash;
+use zeta_app_server_protocol::protocol::initialize::{
+    APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
+};
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
 use zeta_remote::RemoteWorkspacePath;
@@ -112,7 +114,7 @@ fn remote_connection_errors_keep_stable_failure_categories() {
         zeta_app_server_client::ClientError::Transport("ssh failed".into()),
     );
     let protocol = super::RemoteConnectionError::from_client_error(
-        zeta_app_server_client::ClientError::Protocol("schema hash mismatch".into()),
+        zeta_app_server_client::ClientError::Protocol("protocol major mismatch".into()),
     );
     let server = super::RemoteConnectionError::from_client_error(
         zeta_app_server_client::ClientError::Server {
@@ -172,20 +174,19 @@ fn runtime_probe_distinguishes_available_and_missing_runtime() {
 
 #[cfg(unix)]
 #[test]
-fn compatibility_probe_performs_the_schema_handshake_and_closes_the_process() {
+fn compatibility_probe_uses_protocol_capabilities_and_tolerates_schema_drift() {
     let directory = tempfile::tempdir().unwrap();
     let compatible = directory.path().join("compatible-ssh");
-    let current_schema_hash = schema_hash();
-    write_initialize_server(&compatible, &current_schema_hash);
+    write_initialize_server(&compatible, APP_SERVER_PROTOCOL_MAJOR, "newer-schema");
 
     let initialization = SshAppServerConnectionOptions::new(profile())
         .with_ssh_executable(&compatible)
         .probe_compatibility(client_info(), ClientCapabilities::default())
         .unwrap();
-    assert_eq!(initialization.schema_hash.0, current_schema_hash);
+    assert_eq!(initialization.schema_hash.0, "newer-schema");
 
     let incompatible = directory.path().join("incompatible-ssh");
-    write_initialize_server(&incompatible, "obsolete-schema");
+    write_initialize_server(&incompatible, APP_SERVER_PROTOCOL_MAJOR + 1, "newer-schema");
     let error = SshAppServerConnectionOptions::new(profile())
         .with_ssh_executable(incompatible)
         .probe_compatibility(client_info(), ClientCapabilities::default())
@@ -205,19 +206,23 @@ fn client_info() -> ClientInfo {
 }
 
 #[cfg(unix)]
-fn write_initialize_server(path: &Path, server_schema_hash: &str) {
+fn write_initialize_server(path: &Path, protocol_major: u32, server_schema_hash: &str) {
     let response = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
         "result": {
             "serverInfo": { "name": "fake-remote", "version": "1" },
+            "protocolVersion": {
+                "major": protocol_major,
+                "revision": APP_SERVER_PROTOCOL_REVISION
+            },
             "schemaHash": server_schema_hash,
             "capabilities": {
                 "agentInteractions": false,
                 "documentCollaboration": false,
-                "sessions": false,
-                "threads": false,
-                "turns": false,
+                "sessions": true,
+                "threads": true,
+                "turns": true,
                 "resources": false,
                 "attachments": false,
                 "fileSystem": false,
@@ -235,7 +240,12 @@ fn write_initialize_server(path: &Path, server_schema_hash: &str) {
                 "plugins": false,
                 "marketplace": false,
                 "mcp": false,
-                "mcpOAuth": false
+                "mcpOAuth": false,
+                "contracts": {
+                    "sessions": { "version": 1 },
+                    "threads": { "version": 1 },
+                    "turns": { "version": 1 }
+                }
             },
             "slashCommands": []
         }

@@ -133,11 +133,14 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 }
 ```
 
-返回值包含 `serverInfo`、完整 schema 的 `schemaHash`、server capability，以及 composition
-边界冻结的 `slashCommands` snapshot：
+返回值包含 `serverInfo`、`protocolVersion`、完整 schema 的 `schemaHash`、版本化 server capability，
+以及 composition 边界冻结的 `slashCommands` snapshot：
 
 ```json
 {
+  "serverInfo": { "name": "zeta-app-server", "version": "0.1.0" },
+  "protocolVersion": { "major": 1, "revision": 1 },
+  "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
     "threads": true,
@@ -151,7 +154,12 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "mcp": true,
     "mcpOAuth": false,
     "typst": true,
-    "updateReplay": true
+    "updateReplay": true,
+    "contracts": {
+      "sessions": { "version": 1 },
+      "threads": { "version": 1 },
+      "turns": { "version": 1 }
+    }
   },
   "slashCommands": [
     {
@@ -163,7 +171,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 }
 ```
 
-schema hash 不一致时客户端必须拒绝继续运行。
+客户端必须拒绝不同 protocol major、缺失的 required capability 或不支持的 capability version。
+schema hash 是 exact artifact 诊断信号，不单独决定运行时兼容性。
 `slashCommands` 每项的 `name` 只能使用 lowercase ASCII letters、digits 与 interior hyphens，
 description 不能为空，同一 snapshot 中 name 必须唯一。该 snapshot 负责 discoverability 与
 inline argument parsing；客户端必须按命令契约分发。Skill 和 server prompt command 通过

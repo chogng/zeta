@@ -855,7 +855,7 @@ CLI 负责：
 - 解析命令行和选择 interactive 模式；
 - 加载 config 和 state root；
 - 选择 in-process、daemon 或 remote transport；
-- initialize 并校验 schema hash；
+- initialize 并校验 protocol major 与 required capability versions，记录 schema hash 诊断；
 - 构造 `TuiOptions` 和已初始化 `AppServerSession`；
 - 把 `TuiExit` 映射为进程退出码。
 

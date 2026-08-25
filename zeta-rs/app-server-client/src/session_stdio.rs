@@ -20,10 +20,11 @@ use serde_json::Value;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
+use zeta_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use zeta_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use zeta_app_server_protocol::rpc::JsonRpcId;
 use zeta_app_server_protocol::rpc::JsonRpcRequest;
 use zeta_app_server_protocol::rpc::JsonRpcResponse;
-use zeta_app_server_protocol::schema_hash;
 use zeta_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use zeta_app_server_transport::JsonlReader;
 use zeta_app_server_transport::JsonlWriter;
@@ -193,19 +194,18 @@ pub(super) fn start(
         capabilities,
     });
     match initialized {
-        Ok(initialized) if initialized.schema_hash.0 == schema_hash() => {}
         Ok(initialized) => {
-            closing.store(true, Ordering::Release);
-            let _ = commands.send(DriverCommand::Shutdown);
-            let _ = process.kill();
-            let _ = process.wait();
-            let _ = writer.join();
-            let _ = event_pump.join();
-            return Err(ClientError::Protocol(format!(
-                "schema hash mismatch: client expected {}, server returned {}",
-                schema_hash(),
-                initialized.schema_hash.0
-            )));
+            if let Err(compatibility_error) =
+                ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
+            {
+                closing.store(true, Ordering::Release);
+                let _ = commands.send(DriverCommand::Shutdown);
+                let _ = process.kill();
+                let _ = process.wait();
+                let _ = writer.join();
+                let _ = event_pump.join();
+                return Err(ClientError::Protocol(compatibility_error.to_string()));
+            }
         }
         Err(error) => {
             closing.store(true, Ordering::Release);

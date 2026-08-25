@@ -14,7 +14,8 @@ use zeta_app_server::SlashCommandCatalog;
 use zeta_app_server::open_local_app_server;
 use zeta_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
-use zeta_app_server_protocol::schema_hash;
+use zeta_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use zeta_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use zeta_client::OperationClient;
 
 /// Startup inputs for an embedded App Server connection.
@@ -251,12 +252,7 @@ fn initialize_client(
         client_info,
         capabilities,
     })?;
-    let expected_schema = schema_hash();
-    if initialized.schema_hash.0 != expected_schema {
-        return Err(ClientError::Protocol(format!(
-            "schema hash mismatch: client expected {expected_schema}, server returned {}",
-            initialized.schema_hash.0
-        )));
-    }
+    ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
+        .map_err(|error| ClientError::Protocol(error.to_string()))?;
     Ok(client)
 }

@@ -1944,6 +1944,19 @@
         }
       ]
     },
+    "CapabilityContract": {
+      "properties": {
+        "version": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "type": "object"
+    },
     "CapabilitySupport": {
       "enum": [
         "supported",
@@ -13467,6 +13480,9 @@
         "capabilities": {
           "$ref": "#/$defs/ServerCapabilities"
         },
+        "protocolVersion": {
+          "$ref": "#/$defs/ProtocolVersion"
+        },
         "schemaHash": {
           "$ref": "#/$defs/SchemaHash"
         },
@@ -13482,6 +13498,7 @@
       },
       "required": [
         "serverInfo",
+        "protocolVersion",
         "schemaHash",
         "capabilities",
         "slashCommands"
@@ -18074,6 +18091,25 @@
         }
       ]
     },
+    "ProtocolVersion": {
+      "properties": {
+        "major": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "revision": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "major",
+        "revision"
+      ],
+      "type": "object"
+    },
     "ProviderConfigDto": {
       "description": "Non-secret declarative provider settings exposed through the App Server contract.",
       "properties": {
@@ -18592,6 +18628,12 @@
         "connectors": {
           "type": "boolean"
         },
+        "contracts": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CapabilityContract"
+          },
+          "type": "object"
+        },
         "debugAdapter": {
           "type": "boolean"
         },
@@ -18670,7 +18712,8 @@
         "plugins",
         "marketplace",
         "mcp",
-        "mcpOAuth"
+        "mcpOAuth",
+        "contracts"
       ],
       "type": "object"
     },
@@ -18998,7 +19041,7 @@
       ]
     },
     "Session": {
-      "description": "Canonical product-level container for a task and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
+      "description": "Canonical user-visible work container and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
       "properties": {
         "model": {
           "anyOf": [

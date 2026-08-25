@@ -10,7 +10,7 @@ use zeta_app_server_protocol::protocol::document::{
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::initialize::{
-    InitializeParams, InitializeResult, ServerCapabilities,
+    InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
 };
 use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::resources::{
@@ -150,37 +150,41 @@ impl AppServer {
             .lock()
             .map(|catalog| catalog.is_available())
             .unwrap_or(false);
+        let mut capabilities = ServerCapabilities {
+            agent_interactions: true,
+            document_collaboration: true,
+            sessions: true,
+            threads: true,
+            turns: true,
+            resources: true,
+            attachments: true,
+            file_system,
+            git,
+            workspace_search,
+            code_index,
+            cloud_code_index,
+            terminal,
+            debug_adapter,
+            typst: true,
+            update_replay: true,
+            extensions,
+            extension_host: self.extension_hosts.is_some(),
+            connectors: self.connectors.is_some(),
+            plugins: self.plugins.is_some(),
+            marketplace: self.marketplace_manager_client.is_some(),
+            mcp: self.config.is_some(),
+            mcp_oauth: self.mcp_oauth.is_some(),
+            contracts: Default::default(),
+        };
+        capabilities.advertise_contracts();
         result(&InitializeResult {
             server_info: ServerInfo {
                 name: "zeta-app-server".into(),
                 version: env!("CARGO_PKG_VERSION").into(),
             },
+            protocol_version: ProtocolVersion::current(),
             schema_hash: SchemaHash(schema_hash()),
-            capabilities: ServerCapabilities {
-                agent_interactions: true,
-                document_collaboration: true,
-                sessions: true,
-                threads: true,
-                turns: true,
-                resources: true,
-                attachments: true,
-                file_system,
-                git,
-                workspace_search,
-                code_index,
-                cloud_code_index,
-                terminal,
-                debug_adapter,
-                typst: true,
-                update_replay: true,
-                extensions,
-                extension_host: self.extension_hosts.is_some(),
-                connectors: self.connectors.is_some(),
-                plugins: self.plugins.is_some(),
-                marketplace: self.marketplace_manager_client.is_some(),
-                mcp: self.config.is_some(),
-                mcp_oauth: self.mcp_oauth.is_some(),
-            },
+            capabilities,
             slash_commands: self.slash_commands.commands().to_vec(),
         })
     }

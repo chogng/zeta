@@ -2,7 +2,6 @@ import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { APP_SERVER_SCHEMA_HASH } from "../../../../generated/app-server/types.js";
 import { isCancellationError } from "../../base/common/cancellation.js";
 import { DisposableOwner, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
@@ -13,7 +12,7 @@ import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
-import { appServerDaemonExecutablePath, developmentServerHostGenerationPath, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
+import { appServerDaemonExecutablePath, developmentServerHostGenerationPath, packagedServerHostSha256, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
 import { DevelopmentServerHostReloader, readDevelopmentServerHostGenerationSync, selectDevelopmentServerHostExecutable } from "../../platform/server-host/electron-main/developmentServerHostReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
@@ -380,12 +379,15 @@ export class ZetaApplication extends DisposableOwner {
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
 	): AppServerSupervisor {
-		const packagedExecutable = serverHostExecutablePath({
+		const packageLocation = {
 			appPath: app.getAppPath(),
+			expectedVersion: app.getVersion(),
 			isPackaged: app.isPackaged,
 			platform: process.platform,
 			resourcesPath: process.resourcesPath,
-		});
+		};
+		const packagedExecutable = serverHostExecutablePath(packageLocation);
+		const expectedPackagedSha256 = packagedServerHostSha256(packageLocation);
 		const generationFile = !app.isPackaged && process.env.ZETA_DEV_SERVER_HOST_RELOAD === "1"
 			? developmentServerHostGenerationPath(app.getAppPath())
 			: undefined;
@@ -401,6 +403,7 @@ export class ZetaApplication extends DisposableOwner {
 			? this.createSshAppServerProcessLauncher(workspace, resources)
 			: new LocalAppServerProcessLauncher({
 				executable: selectDevelopmentServerHostExecutable(packagedExecutable, developmentExecutable),
+				expectedSha256: expectedPackagedSha256,
 				args: ["app-server", "connect"],
 				environment: this.appServerEnvironment(workspace),
 			});
@@ -409,7 +412,6 @@ export class ZetaApplication extends DisposableOwner {
 			session: {
 				clientName: "zeta-desktop",
 				clientVersion: app.getVersion(),
-				schemaHash: APP_SERVER_SCHEMA_HASH,
 				initializeTimeoutMs: 10_000,
 				expectedServerName: "zeta-app-server",
 				capabilities: {

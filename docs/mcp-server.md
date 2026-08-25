@@ -92,7 +92,7 @@ transport 本身不创造 parent/child 语义。
 - protocol、真实 in-process App Server、binary stdio restart 和 HTTP socket/SSE tests；
 - App Server 已提供 `session/create`、`session/request`、带 Session scope 的 Thread subscription 和
   canonical Session/Thread updates；
-- `zeta-app-server-client` 已有 typed methods、schema hash 校验和 embedded
+- `zeta-app-server-client` 已有 typed methods、protocol/capability 兼容性校验、schema hash 诊断和 embedded
   `InProcessTransport`；
 - `open_local_app_server` 是本地 composition root，`InProcessAppServer` 允许多个 MCP HTTP
   session 连接同一个 embedded host；

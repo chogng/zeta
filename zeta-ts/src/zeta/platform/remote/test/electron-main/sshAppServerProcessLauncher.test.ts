@@ -272,8 +272,9 @@ test("Desktop provisions once for a typed protocol incompatibility and launches 
 	});
 	await launcher.validate();
 
-	assert.equal(await launcher.recoverInitializationFailure(new AppServerProtocolIncompatibleError("current", "old")), true);
-	assert.equal(await launcher.recoverInitializationFailure(new AppServerProtocolIncompatibleError("current", "old")), false);
+	const incompatible = new AppServerProtocolIncompatibleError({ kind: "majorVersion", expected: 1, received: 2 });
+	assert.equal(await launcher.recoverInitializationFailure(incompatible), true);
+	assert.equal(await launcher.recoverInitializationFailure(incompatible), false);
 	launcher.launch();
 
 	assert.deepEqual(provisions, ["work-server"]);
@@ -299,10 +300,11 @@ test("an explicit new startup validation permits protocol provisioning after a f
 	});
 
 	await launcher.validate();
-	await assert.rejects(() => launcher.recoverInitializationFailure(new AppServerProtocolIncompatibleError("current", "old")), /temporary install failure/);
-	assert.equal(await launcher.recoverInitializationFailure(new AppServerProtocolIncompatibleError("current", "old")), false);
+	const incompatible = new AppServerProtocolIncompatibleError({ kind: "majorVersion", expected: 1, received: 2 });
+	await assert.rejects(() => launcher.recoverInitializationFailure(incompatible), /temporary install failure/);
+	assert.equal(await launcher.recoverInitializationFailure(incompatible), false);
 
 	await launcher.validate();
-	assert.equal(await launcher.recoverInitializationFailure(new AppServerProtocolIncompatibleError("current", "old")), true);
+	assert.equal(await launcher.recoverInitializationFailure(incompatible), true);
 	assert.equal(provisions, 2);
 });

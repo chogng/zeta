@@ -16,7 +16,8 @@ use zeta_app_server::{AppServer, ConnectionNotifications};
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::initialize::InitializeParams;
-use zeta_app_server_protocol::schema_hash;
+use zeta_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use zeta_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 
 #[path = "session_stdio.rs"]
 mod stdio;
@@ -187,18 +188,17 @@ impl AppServerSession {
             capabilities,
         });
         match initialized {
-            Ok(initialized) if initialized.schema_hash.0 == schema_hash() => {}
             Ok(initialized) => {
-                closing.store(true, Ordering::Release);
-                let _ = commands.send(DriverCommand::Shutdown);
-                notifications.close();
-                let _ = driver.join();
-                let _ = event_pump.join();
-                return Err(ClientError::Protocol(format!(
-                    "schema hash mismatch: client expected {}, server returned {}",
-                    schema_hash(),
-                    initialized.schema_hash.0
-                )));
+                if let Err(compatibility_error) =
+                    ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
+                {
+                    closing.store(true, Ordering::Release);
+                    let _ = commands.send(DriverCommand::Shutdown);
+                    notifications.close();
+                    let _ = driver.join();
+                    let _ = event_pump.join();
+                    return Err(ClientError::Protocol(compatibility_error.to_string()));
+                }
             }
             Err(error) => {
                 closing.store(true, Ordering::Release);

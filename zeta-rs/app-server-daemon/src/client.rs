@@ -11,6 +11,9 @@ use std::time::Instant;
 
 use serde_json::Value;
 use serde_json::json;
+use zeta_app_server_protocol::protocol::initialize::InitializeResult;
+use zeta_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use zeta_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use zeta_app_server_protocol::schema_hash;
 use zeta_uds::UnixStream;
 
@@ -332,24 +335,24 @@ fn probe_app_server(
     if response.get("id") != Some(&Value::from(1)) {
         return Err("App Server initialize probe returned the wrong request id".into());
     }
-    let server_name = response
-        .pointer("/result/serverInfo/name")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "App Server initialize response has no server name".to_string())?
-        .to_string();
-    let initialized_schema = response
-        .pointer("/result/schemaHash")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "App Server initialize response has no schema hash".to_string())?
-        .to_string();
-    if server_name != "zeta-app-server" || initialized_schema != schema_hash() {
+    let initialized: InitializeResult = serde_json::from_value(
+        response
+            .get("result")
+            .cloned()
+            .ok_or_else(|| "App Server initialize response has no result".to_string())?,
+    )
+    .map_err(|error| format!("App Server initialize response is malformed: {error}"))?;
+    if initialized.server_info.name != "zeta-app-server" {
         return Err(format!(
-            "App Server initialize contract mismatch: server={server_name}, schema={initialized_schema}"
+            "Unexpected App Server identity: {}",
+            initialized.server_info.name
         ));
     }
+    ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES)
+        .map_err(|error| format!("App Server protocol is incompatible: {error}"))?;
     Ok(ProbeInfo {
-        server_name,
-        schema_hash: initialized_schema,
+        server_name: initialized.server_info.name,
+        schema_hash: initialized.schema_hash.0,
     })
 }
 

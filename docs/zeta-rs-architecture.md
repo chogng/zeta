@@ -366,7 +366,7 @@ Registry/generator 实现见
 
 `zeta-app-server` 负责：
 
-- initialize 与 schema hash gate；
+- initialize、protocol version 与版本化 capability advertisement；
 - method dispatch；registry 解析 global/Session/connection-resource serialization scope，App Server
   通过跨 connection FIFO/shared-read scheduler 执行；
 - connection subscription cursor；

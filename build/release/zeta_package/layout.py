@@ -1,5 +1,6 @@
 """Canonical Zeta package directory assembly and validation."""
 
+import hashlib
 import json
 import os
 import re
@@ -7,7 +8,7 @@ import shutil
 import stat
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
@@ -159,7 +160,17 @@ def build_package_directory(
         if ripgrep.archive_sha256 is not None:
             ripgrep_metadata["archiveSha256"] = ripgrep.archive_sha256
         components = {
+            "appServerDaemon": {
+                "source": "cargo-build",
+                "binarySha256": file_sha256(
+                    binary_directory / spec.app_server_daemon_name
+                ),
+            },
             "ripgrep": ripgrep_metadata,
+            "serverHost": {
+                "source": "cargo-build",
+                "binarySha256": file_sha256(binary_directory / spec.server_name),
+            },
         }
         if node is not None:
             components["node"] = {
@@ -173,7 +184,21 @@ def build_package_directory(
             components["bubblewrap"] = bubblewrap_metadata
         if windows_sandbox_metadata is not None:
             components["windowsSandbox"] = windows_sandbox_metadata
+        protocol = load_protocol_metadata(repository_root)
+        build_identity = {
+            "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
+            "protocol": protocol,
+            "serverHostSha256": components["serverHost"]["binarySha256"],
+            "target": spec.target,
+            "version": version,
+        }
         metadata = {
+            "buildId": "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    build_identity, separators=(",", ":"), sort_keys=True
+                ).encode("utf-8")
+            ).hexdigest(),
             "layoutVersion": LAYOUT_VERSION,
             "version": version,
             "target": spec.target,
@@ -184,6 +209,7 @@ def build_package_directory(
                 "kind": "packagedNode" if node is not None else "hostProvidedNode",
             },
             "components": components,
+            "protocol": protocol,
         }
         write_json(staging / METADATA_FILE, metadata)
         validate_package_directory(staging, spec)
@@ -230,6 +256,39 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     components = metadata.get("components")
     if not isinstance(components, dict):
         raise RuntimeError("Invalid package component metadata")
+    first_party_artifacts = {
+        "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
+        "serverHost": package / "bin" / spec.server_name,
+    }
+    for component_name, artifact in first_party_artifacts.items():
+        component = components.get(component_name)
+        expected_digest = (
+            component.get("binarySha256") if isinstance(component, dict) else None
+        )
+        if (
+            not isinstance(expected_digest, str)
+            or re.fullmatch(r"[a-f0-9]{64}", expected_digest) is None
+            or file_sha256(artifact) != expected_digest
+        ):
+            raise RuntimeError(
+                "Package component digest does not match: {}".format(component_name)
+            )
+    build_identity = {
+        "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
+        "protocol": metadata.get("protocol"),
+        "serverHostSha256": components["serverHost"]["binarySha256"],
+        "target": metadata.get("target"),
+        "version": metadata.get("version"),
+    }
+    expected_build_id = "sha256:" + hashlib.sha256(
+        json.dumps(build_identity, separators=(",", ":"), sort_keys=True).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    if metadata.get("buildId") != expected_build_id:
+        raise RuntimeError(
+            "Package build identity does not match its first-party artifacts"
+        )
     javascript_runtime = metadata.get("javascriptRuntime")
     if javascript_runtime == {"kind": "packagedNode"}:
         if not isinstance(components.get("node"), dict):
@@ -460,3 +519,35 @@ def is_executable(path: Path) -> bool:
 
 def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def load_protocol_metadata(repository_root: Path) -> Dict[str, object]:
+    generated = (
+        repository_root / "zeta-rs" / "app-server-protocol" / "schema" / "types.ts"
+    ).read_text(encoding="utf-8")
+    major = re.search(
+        r"^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$",
+        generated,
+        re.MULTILINE,
+    )
+    revision = re.search(
+        r"^export const APP_SERVER_PROTOCOL_REVISION = (\d+) as const;$",
+        generated,
+        re.MULTILINE,
+    )
+    schema_hash = re.search(
+        r'^export const APP_SERVER_SCHEMA_HASH = "(sha256:[a-f0-9]{64})" as const;$',
+        generated,
+        re.MULTILINE,
+    )
+    if major is None or revision is None or schema_hash is None:
+        raise RuntimeError("Generated App Server protocol metadata is invalid")
+    return {
+        "major": int(major.group(1)),
+        "revision": int(revision.group(1)),
+        "schemaHash": schema_hash.group(1),
+    }

@@ -10,8 +10,8 @@
 
 `zeta-app-server-protocol` 是 App Server 对外 wire contract 的唯一 Rust source。它定义类型化
 参数、结果、错误、JSON-RPC 2.0 envelope，以及客户端方法、服务端通知和宿主方法注册表；同一套
-定义还会生成 canonical `ServerNotification`、payload decoder、JSON Schema、TypeScript binding
-和协商用 schema hash。
+定义还会生成 canonical `ServerNotification`、payload decoder、JSON Schema、TypeScript binding、
+协议主版本、能力契约版本和诊断用 schema hash。
 
 它不拥有 connection、framing、dispatcher、业务执行、Core state、resource bytes 或 persistence。
 
@@ -161,7 +161,7 @@ policy，Server → Client browser request 使用与其隔离的非空字符串 
 | Symbol | 输出 |
 | --- | --- |
 | `json_schema()` | pretty JSON schema + trailing newline |
-| `typescript()` | DTO declarations、client/host method map、notification union、schema hash |
+| `typescript()` | DTO declarations、client/host method map、notification union、协议版本与 schema hash |
 | `schema_hash()` | `sha256:` + generated schema 的 deterministic digest |
 | `JSON_SCHEMA_FIXTURE` / `TYPESCRIPT_FIXTURE` | checked-in artifact 相对路径 |
 
@@ -352,7 +352,10 @@ schema coverage、host method 名称与 request/result coverage、agent interact
 config 三态、MCP/Skill round trip、schema
 hash 和 checked-in fixtures exact match。
 
-当前只有 JSON-RPC 2.0 artifact，schema compatibility 依赖 exact hash + synchronized client build；
-尚无 semantic protocol version、migration layer 或 multi-version server。未来增加 Protobuf 或
-compatibility window 时，应复用 `protocol::*` 语义和 registry，不把第二套 method ownership 带进
-transport adapter。
+运行时兼容性由 `ProtocolVersion.major` 和 client 所需的版本化 capability contract 决定；主版本
+不同、能力缺失或能力版本不在 client 支持窗口内时 fail closed。revision 和 schema hash 用于诊断，
+exact schema hash 不再是启动门禁，因此同一主版本内增加可选字段或能力不会无条件阻断启动。
+
+checked-in JSON Schema 与 TypeScript fixture 仍必须在 CI、build 和完整 Desktop dev 启动前 exact
+匹配生成器。这个构建一致性门禁与运行时兼容性协商是两条独立边界；未来增加 Protobuf 或 migration
+layer 时，应复用 `protocol::*` 语义和 registry，不把第二套 method ownership 带进 transport adapter。

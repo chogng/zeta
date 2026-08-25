@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import type { URI } from "../../../base/common/uri.js";
-import { AppServerProtocolIncompatibleError } from "../../app-server/electron-main/app-server-session.js";
+import { AppServerProtocolIncompatibleError } from "../../app-server/common/appServerProtocolCompatibility.js";
 import type { IAppServerProcessLauncher } from "../../app-server/electron-main/appServerProcessLauncher.js";
 import { createSshRemoteWorkspaceUri, getRemoteAuthority, getRemoteWorkspacePath } from "../common/remote.js";
 import { isCanonicalAbsolutePosixPath, validLocalCommand } from "./serverHostRemoteCommand.js";

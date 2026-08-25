@@ -215,6 +215,19 @@ class PackageTests(unittest.TestCase):
             self.assertEqual("aarch64-apple-darwin", metadata["target"])
             self.assertEqual("local-override", metadata["components"]["ripgrep"]["source"])
             self.assertEqual("local-override", metadata["components"]["node"]["source"])
+            self.assertRegex(metadata["buildId"], r"^sha256:[a-f0-9]{64}$")
+            self.assertEqual(1, metadata["protocol"]["major"])
+            self.assertRegex(
+                metadata["protocol"]["schemaHash"], r"^sha256:[a-f0-9]{64}$"
+            )
+            self.assertEqual(
+                hashlib.sha256(b"zeta-server").hexdigest(),
+                metadata["components"]["serverHost"]["binarySha256"],
+            )
+            self.assertEqual(
+                hashlib.sha256(b"zeta-app-server-daemon").hexdigest(),
+                metadata["components"]["appServerDaemon"]["binarySha256"],
+            )
             self.assertEqual(
                 hashlib.sha256(b"ripgrep").hexdigest(),
                 metadata["components"]["ripgrep"]["binarySha256"],

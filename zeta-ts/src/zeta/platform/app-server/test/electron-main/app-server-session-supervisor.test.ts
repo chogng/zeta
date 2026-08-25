@@ -5,6 +5,7 @@ import test from "node:test";
 import { PassThrough } from "node:stream";
 import {
 	APP_SERVER_METHODS,
+	APP_SERVER_PROTOCOL_MAJOR,
 	APP_SERVER_SCHEMA_HASH,
 } from "../../../../../../generated/app-server/types.js";
 import { AppServerClient } from "../../../../platform/app-server/electron-main/app-server-client.js";
@@ -30,6 +31,13 @@ class ProtocolChildProcess extends EventEmitter {
 		readonly schemaHash: string = APP_SERVER_SCHEMA_HASH,
 		readonly respondToInitialize = true,
 		readonly serverName = "zeta-test",
+		readonly protocolMajor: number = APP_SERVER_PROTOCOL_MAJOR,
+		readonly contracts: Readonly<Record<string, { readonly version: number }>> = {
+			sessions: { version: 1 },
+			threads: { version: 1 },
+			turns: { version: 1 },
+		},
+		readonly includeProtocolVersion = true,
 	) {
 		super();
 		this.stdin.on("data", (chunk: Buffer) => this.onStdin(chunk));
@@ -66,19 +74,33 @@ class ProtocolChildProcess extends EventEmitter {
 			if (request.method === "initialize" && this.respondToInitialize) {
 				this.respond(request.id, {
 					serverInfo: { name: this.serverName, version: "1" },
+					...(this.includeProtocolVersion ? { protocolVersion: { major: this.protocolMajor, revision: 1 } } : {}),
 					schemaHash: this.schemaHash,
 					capabilities: {
+						agentInteractions: true,
+						documentCollaboration: true,
 						sessions: true,
 						threads: true,
 						turns: true,
 						resources: true,
+						attachments: true,
 						fileSystem: true,
+						git: true,
 						workspaceSearch: true,
+						codeIndex: true,
+						cloudCodeIndex: false,
 						terminal: true,
 						debugAdapter: true,
 						typst: true,
 						updateReplay: true,
 						extensions: true,
+						extensionHost: true,
+						connectors: true,
+						plugins: true,
+						marketplace: true,
+						mcp: true,
+						mcpOAuth: true,
+						contracts: this.contracts,
 					},
 					slashCommands: [{ name: "diagnose", description: "Inspect workspace", argumentMode: "optional" }],
 				});
@@ -101,7 +123,6 @@ function session(
 		{
 			clientName: "desktop-test",
 			clientVersion: "1",
-			schemaHash: APP_SERVER_SCHEMA_HASH,
 			initializeTimeoutMs: options.initializeTimeoutMs ?? 100,
 			expectedServerName: "zeta-test",
 		},
@@ -124,7 +145,6 @@ function supervisorOptions(
 		session: {
 			clientName: "desktop-test",
 			clientVersion: "1",
-			schemaHash: APP_SERVER_SCHEMA_HASH,
 			initializeTimeoutMs: 100,
 			expectedServerName: "zeta-test",
 		},
@@ -132,7 +152,7 @@ function supervisorOptions(
 	};
 }
 
-test("session becomes ready only after protocol and schema gates pass", async () => {
+test("session becomes ready after protocol and required capability gates pass", async () => {
 	const child = new ProtocolChildProcess();
 	const appServer = session(child);
 
@@ -140,6 +160,7 @@ test("session becomes ready only after protocol and schema gates pass", async ()
 
 	assert.equal(appServer.state, "ready");
 	assert.equal(initialized.schemaHash, APP_SERVER_SCHEMA_HASH);
+	assert.equal(appServer.protocolDiagnostics.schemaMatches, true);
 	assert.equal(appServer.capabilities.resources, true);
 	assert.equal(appServer.serverInfo.name, "zeta-test");
 	assert.equal(appServer.slashCommands[0]?.name, "diagnose");
@@ -147,14 +168,48 @@ test("session becomes ready only after protocol and schema gates pass", async ()
 	assert.equal(appServer.state, "closed");
 });
 
-test("session closes a schema-mismatched connection", async () => {
+test("session keeps a schema mismatch as diagnostics", async () => {
 	const child = new ProtocolChildProcess("sha256:wrong");
 	const appServer = session(child);
 
-	await assert.rejects(appServer.initialize(), /schema mismatch/);
+	await appServer.initialize();
+
+	assert.equal(appServer.state, "ready");
+	assert.equal(appServer.protocolDiagnostics.schemaMatches, false);
+	assert.match(appServer.diagnostics(), /sha256:wrong/);
+	await appServer.close();
+});
+
+test("session closes a protocol-major-mismatched connection", async () => {
+	const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, true, "zeta-test", APP_SERVER_PROTOCOL_MAJOR + 1);
+	const appServer = session(child);
+
+	await assert.rejects(appServer.initialize(), /protocol major mismatch/);
 
 	assert.equal(appServer.state, "closed");
 	assert.equal(child.signalCode, "SIGTERM");
+});
+
+test("session classifies a legacy unversioned server as protocol-incompatible", async () => {
+	const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, true, "zeta-test", APP_SERVER_PROTOCOL_MAJOR, {
+		sessions: { version: 1 },
+		threads: { version: 1 },
+		turns: { version: 1 },
+	}, false);
+	const appServer = session(child);
+
+	await assert.rejects(appServer.initialize(), AppServerProtocolIncompatibleError);
+
+	assert.equal(appServer.state, "closed");
+});
+
+test("session reports a missing required capability", async () => {
+	const child = new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, true, "zeta-test", APP_SERVER_PROTOCOL_MAJOR, {});
+	const appServer = session(child);
+
+	await assert.rejects(appServer.initialize(), /missing required capability sessions/);
+
+	assert.equal(appServer.state, "closed");
 });
 
 test("session initialization deadline closes an unresponsive child", async () => {
@@ -392,6 +447,20 @@ test("local launcher applies a validated authority environment to the next conne
 	assert.throws(() => launcher.replaceExecutable("relative/zeta-server"), /must be absolute/u);
 });
 
+test("local launcher rejects a packaged binary that does not match its manifest digest", async () => {
+	const expectedSha256 = "a".repeat(64);
+	const launcher = new LocalAppServerProcessLauncher({
+		executable: "/test/zeta-server",
+		args: [],
+		environment: {},
+		expectedSha256,
+		fileExists: () => true,
+		fileSha256: async () => "b".repeat(64),
+	});
+
+	await assert.rejects(launcher.validate(), /failed integrity validation/u);
+});
+
 test("initialization failures consume exactly the bounded startup retry budget", async () => {
 	const children: ProtocolChildProcess[] = [];
 	const options = supervisorOptions(children);
@@ -454,7 +523,9 @@ test("supervisor gives a launcher one typed initialization recovery without cons
 		description: "recovering-remote-app-server",
 		validate() {},
 		launch: () => {
-			const child = new ProtocolChildProcess(children.length === 0 ? "sha256:old" : APP_SERVER_SCHEMA_HASH);
+			const child = children.length === 0
+				? new ProtocolChildProcess(APP_SERVER_SCHEMA_HASH, true, "zeta-test", APP_SERVER_PROTOCOL_MAJOR + 1)
+				: new ProtocolChildProcess();
 			children.push(child);
 			return child as unknown as ChildProcessWithoutNullStreams;
 		},

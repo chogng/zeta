@@ -21,6 +21,7 @@ import {
 	trackDisposable,
 } from "../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../base/common/types.js";
+import { appServerProtocolDiagnostics, type AppServerProtocolDiagnostics, AppServerProtocolIncompatibleError, validateAppServerInitializeResult } from "../common/appServerProtocolCompatibility.js";
 import { AppServerClient } from "./app-server-client.js";
 import type {
 	RpcMethodDefinition,
@@ -30,18 +31,11 @@ import type {
 
 export type AppServerSessionState = "created" | "initializing" | "ready" | "closed";
 
-/** Typed initialize failure that a Remote host may recover with a trusted runtime upgrade. */
-export class AppServerProtocolIncompatibleError extends Error {
-	constructor(readonly expectedSchemaHash: string, readonly receivedSchemaHash: string) {
-		super(`Zeta app-server schema mismatch: expected ${expectedSchemaHash}, received ${receivedSchemaHash}`);
-		this.name = "AppServerProtocolIncompatibleError";
-	}
-}
+export { AppServerProtocolIncompatibleError } from "../common/appServerProtocolCompatibility.js";
 
 export interface AppServerSessionOptions {
 	clientName: string;
 	clientVersion: string;
-	schemaHash: string;
 	initializeTimeoutMs: number;
 	expectedServerName?: string;
 	capabilities?: ClientCapabilities;
@@ -78,6 +72,10 @@ export class AppServerSession implements IDisposable {
 		return this.initialization.slashCommands;
 	}
 
+	get protocolDiagnostics(): AppServerProtocolDiagnostics {
+		return appServerProtocolDiagnostics(this.initialization);
+	}
+
 	async initialize(): Promise<InitializeResult> {
 		if (this._state !== "created") {
 			throw new Error(`Cannot initialize App Server session from ${this._state}`);
@@ -95,19 +93,7 @@ export class AppServerSession implements IDisposable {
 				},
 				{ timeoutMs: this.options.initializeTimeoutMs },
 			);
-			validateInitializeResult(initialized);
-			if (
-				this.options.expectedServerName &&
-				initialized.serverInfo.name !== this.options.expectedServerName
-			) {
-				throw new Error(
-					`Unexpected App Server identity: ${initialized.serverInfo.name}`,
-				);
-			}
-			if (initialized.schemaHash !== this.options.schemaHash) {
-				throw new AppServerProtocolIncompatibleError(this.options.schemaHash, initialized.schemaHash);
-			}
-			this._initializeResult = initialized;
+			this._initializeResult = validateAppServerInitializeResult(initialized, { expectedServerName: this.options.expectedServerName });
 			this._state = "ready";
 			return initialized;
 		} catch (error) {
@@ -151,7 +137,9 @@ export class AppServerSession implements IDisposable {
 	}
 
 	diagnostics(): string {
-		return this.client.diagnostics();
+		const transport = this.client.diagnostics();
+		if (!this._initializeResult) return transport;
+		return `${transport}\nprotocol=${JSON.stringify(this.protocolDiagnostics)}`;
 	}
 
 	async close(): Promise<void> {
@@ -181,34 +169,5 @@ export class AppServerSession implements IDisposable {
 	private get initialization(): InitializeResult {
 		assertDefined(this._initializeResult, "App Server session is not initialized");
 		return this._initializeResult;
-	}
-}
-
-function validateInitializeResult(value: InitializeResult): void {
-	if (
-		!value ||
-		typeof value !== "object" ||
-		!value.serverInfo ||
-		typeof value.serverInfo.name !== "string" ||
-		value.serverInfo.name.trim().length === 0 ||
-		typeof value.serverInfo.version !== "string" ||
-		value.serverInfo.version.trim().length === 0 ||
-		typeof value.schemaHash !== "string" ||
-		!value.capabilities ||
-		typeof value.capabilities.sessions !== "boolean" ||
-		typeof value.capabilities.threads !== "boolean" ||
-		typeof value.capabilities.turns !== "boolean" ||
-		typeof value.capabilities.resources !== "boolean" ||
-		typeof value.capabilities.fileSystem !== "boolean" ||
-		typeof value.capabilities.workspaceSearch !== "boolean" ||
-		typeof value.capabilities.terminal !== "boolean" ||
-		typeof value.capabilities.debugAdapter !== "boolean" ||
-		typeof value.capabilities.typst !== "boolean" ||
-		typeof value.capabilities.updateReplay !== "boolean" ||
-		typeof value.capabilities.extensions !== "boolean" ||
-		!Array.isArray(value.slashCommands) ||
-		value.slashCommands.some(command => !command || typeof command.name !== "string" || typeof command.description !== "string" || (command.argumentMode !== "none" && command.argumentMode !== "optional"))
-	) {
-		throw new Error("App Server initialize result is malformed");
 	}
 }

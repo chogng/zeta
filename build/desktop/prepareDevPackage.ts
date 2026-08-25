@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { desktopBuildPath } from "../lib/paths.ts";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
 const cargoWorkspace = repositoryRoot;
@@ -94,11 +95,13 @@ interface FirstPartyExecutables {
 }
 
 interface PackageMetadata {
+  readonly buildId: string;
   readonly components: Record<string, unknown> & { node?: unknown };
   readonly entrypoint: string;
   readonly javascriptRuntime: { readonly kind: string };
   readonly layoutVersion: number;
   readonly pathDir: string;
+  readonly protocol: { readonly major: number; readonly revision: number; readonly schemaHash: string };
   remoteRuntimeCatalog?: { readonly path?: string; readonly sha256: string; readonly trustBinding: string; readonly url?: string };
   readonly resourcesDir: string;
   readonly target: string;
@@ -645,12 +648,20 @@ export async function assemblePackage(
   await copyFile(join(repositoryRoot, "third_party", "vscode", "LICENSE.txt"), join(vscodeLicenseDirectory, "LICENSE.txt"));
 
   const components: Record<string, unknown> & { node?: unknown } = {
+    appServerDaemon: {
+      binarySha256: await sha256(join(binDirectory, appServerDaemonName)),
+      source: "cargo-build",
+    },
     ripgrep: {
       archive: ripgrep.archive,
       archiveSha256: ripgrep.archiveSha256,
       binarySha256: ripgrep.binarySha256,
       source: ripgrep.source,
       version: ripgrep.version,
+    },
+    serverHost: {
+      binarySha256: await sha256(join(binDirectory, serverHostName)),
+      source: "cargo-build",
     },
   };
   if (node) {
@@ -688,15 +699,26 @@ export async function assemblePackage(
       version: bubblewrap.version,
     };
   }
+  const version = await workspaceVersion();
+  const protocol = {
+    major: APP_SERVER_PROTOCOL_MAJOR,
+    revision: APP_SERVER_PROTOCOL_REVISION,
+    schemaHash: APP_SERVER_SCHEMA_HASH,
+  };
+  const appServerDaemonSha256 = (components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
+  const serverHostSha256 = (components.serverHost as { readonly binarySha256: string }).binarySha256;
+  const buildId = packageBuildId({ appServerDaemonSha256, protocol, serverHostSha256, target, version });
   const metadata: PackageMetadata = {
+    buildId,
     components,
     entrypoint: `bin/${serverHostName}`,
     javascriptRuntime: { kind: node ? "packagedNode" : "hostProvidedNode" },
     layoutVersion: 2,
     pathDir: "zeta-path",
+    protocol,
     resourcesDir: "zeta-resources",
     target,
-    version: await workspaceVersion(),
+    version,
   };
   if (remoteRuntimeBundle || remoteRuntimeRelease) {
     const packagedCatalogSha256 = remoteRuntimeBundle ? await sha256(join(staging, "zeta-remote-runtimes", "catalog.json")) : undefined;
@@ -741,6 +763,13 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   }
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
+  await requireComponentDigest(metadata, "serverHost", join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
+  await requireComponentDigest(metadata, "appServerDaemon", join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
+  const appServerDaemonSha256 = (metadata.components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
+  const serverHostSha256 = (metadata.components.serverHost as { readonly binarySha256: string }).binarySha256;
+  if (metadata.buildId !== packageBuildId({ appServerDaemonSha256, protocol: metadata.protocol, serverHostSha256, target: metadata.target, version: metadata.version })) {
+    throw new Error("Package build identity does not match its first-party artifacts");
+  }
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
   if (metadata.javascriptRuntime?.kind === "packagedNode") {
     if (typeof metadata.components.node !== "object" || metadata.components.node === null) {
@@ -877,6 +906,27 @@ if (isMain) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   });
+}
+
+async function requireComponentDigest(metadata: PackageMetadata, name: string, path: string): Promise<void> {
+  const component = metadata.components[name];
+  if (typeof component !== "object" || component === null || !("binarySha256" in component)) {
+    throw new Error(`Package component metadata is missing: ${name}`);
+  }
+  const expected = (component as { readonly binarySha256?: unknown }).binarySha256;
+  if (typeof expected !== "string" || !/^[a-f0-9]{64}$/.test(expected) || await sha256(path) !== expected) {
+    throw new Error(`Package component digest does not match: ${name}`);
+  }
+}
+
+function packageBuildId(identity: {
+  readonly appServerDaemonSha256: string;
+  readonly protocol: PackageMetadata["protocol"];
+  readonly serverHostSha256: string;
+  readonly target: string;
+  readonly version: string;
+}): string {
+  return `sha256:${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}`;
 }
 
 function isErrorCode(error: unknown, code: string): boolean {

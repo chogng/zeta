@@ -1,10 +1,11 @@
-import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
+import { validateAppServerInitializeResult } from "../common/appServerProtocolCompatibility.js";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "zeta:app-server:connect";
@@ -301,22 +302,8 @@ function validateFramePayload(payload: unknown): string {
 }
 
 function validateInitializeResult(value: InitializeResult): Pick<InitializeResult, "capabilities" | "slashCommands"> {
-	const result = value as unknown;
-	const serverInfo = isRecord(result) && isRecord(result.serverInfo) ? result.serverInfo : undefined;
-	const serverName = serverInfo?.name;
-	const schemaHash = isRecord(result) ? result.schemaHash : undefined;
-	if (serverName !== "zeta-app-server" || schemaHash !== APP_SERVER_SCHEMA_HASH) {
-		throw new Error(`Web App Server initialization identity or schema mismatch (received server ${describeValue(serverName)}, schema ${describeValue(schemaHash)})`);
-	}
-	const capabilities = isRecord(result) ? result.capabilities : undefined;
-	if (!isRecord(capabilities) || typeof capabilities.sessions !== "boolean" || typeof capabilities.threads !== "boolean" || typeof capabilities.turns !== "boolean" || typeof capabilities.extensionHost !== "boolean") {
-		throw new Error("Web App Server initialize result is malformed");
-	}
-	const slashCommands = isRecord(result) ? result.slashCommands : undefined;
-	if (!Array.isArray(slashCommands) || slashCommands.some((command) => !isRecord(command) || typeof command.name !== "string" || typeof command.description !== "string" || (command.argumentMode !== "none" && command.argumentMode !== "optional"))) {
-		throw new Error("Web App Server initialize slash commands are malformed");
-	}
-	return { capabilities: capabilities as unknown as ServerCapabilities, slashCommands: slashCommands as InitializeResult["slashCommands"] };
+	const initialized = validateAppServerInitializeResult(value, { expectedServerName: "zeta-app-server" });
+	return { capabilities: initialized.capabilities, slashCommands: initialized.slashCommands };
 }
 
 function disposable(dispose: () => void): DisposableHandle {

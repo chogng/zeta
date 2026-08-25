@@ -11,3 +11,7 @@ pub use export::{JSON_SCHEMA_FIXTURE, TYPESCRIPT_FIXTURE, json_schema, schema_ha
 #[cfg(test)]
 #[path = "schema_fixtures.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "protocol_compatibility_tests.rs"]
+mod protocol_compatibility_tests;

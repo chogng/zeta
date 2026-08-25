@@ -1,5 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { createReadStream, existsSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import { isAllowedAppServerEnvironmentKey } from "../common/appServerEnvironment.js";
 import type { IAppServerProcessLauncher } from "./appServerProcessLauncher.js";
@@ -17,20 +18,25 @@ export interface LocalAppServerProcessLauncherOptions {
 	readonly allowedEnvironmentKeys?: readonly string[];
 	readonly spawnProcess?: SpawnLocalAppServer;
 	readonly fileExists?: (path: string) => boolean;
+	readonly expectedSha256?: string;
+	readonly fileSha256?: (path: string) => Promise<string>;
 }
 
 /** Launches the packaged App Server directly on the Desktop host. */
 export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher {
 	private readonly spawnProcess: SpawnLocalAppServer;
 	private readonly fileExists: (path: string) => boolean;
+	private readonly fileSha256: (path: string) => Promise<string>;
 	private executableValue: string;
 	private environmentValue: Readonly<Record<string, string>>;
 
 	constructor(readonly options: LocalAppServerProcessLauncherOptions) {
 		validateExecutable(options.executable);
+		if (options.expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(options.expectedSha256)) throw new Error("App Server executable digest must be a SHA-256 hex string");
 		this.validateEnvironment(options.environment);
 		this.spawnProcess = options.spawnProcess ?? defaultSpawn;
 		this.fileExists = options.fileExists ?? existsSync;
+		this.fileSha256 = options.fileSha256 ?? sha256File;
 		this.executableValue = options.executable;
 		this.environmentValue = options.environment;
 	}
@@ -59,8 +65,12 @@ export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher 
 		this.executableValue = executable;
 	}
 
-	validate(): void {
+	async validate(): Promise<void> {
 		if (!this.fileExists(this.executableValue)) throw new Error(`Packaged Zeta binary is missing: ${this.executableValue}`);
+		if (this.options.expectedSha256 !== undefined) {
+			const actual = await this.fileSha256(this.executableValue);
+			if (actual !== this.options.expectedSha256) throw new Error(`Packaged Zeta binary failed integrity validation: ${this.executableValue}`);
+		}
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
@@ -74,6 +84,16 @@ export class LocalAppServerProcessLauncher implements IAppServerProcessLauncher 
 			if (!allowed) throw new Error(`App Server environment variable is not allowed: ${key}`);
 		}
 	}
+}
+
+function sha256File(path: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const digest = createHash("sha256");
+		const stream = createReadStream(path);
+		stream.on("data", chunk => digest.update(chunk));
+		stream.on("error", reject);
+		stream.on("end", () => resolve(digest.digest("hex")));
+	});
 }
 
 function validateExecutable(executable: string): void {

@@ -255,9 +255,13 @@ error、timeout/abort、late/unknown/duplicate response、入站 handler cancell
 `APP_SERVER_NOTIFICATIONS` typed definitions，Electron Main 通过 `AppServerClient` 使用；
 产品代码不能传任意 method string 或手写 result 泛型。
 
-`AppServerSession` 独占一个 peer，只有 initialize response 同时通过 server identity、
-protocol version 和 schema hash gate 后才进入 Ready，并保存协商后的 server
-info/capabilities。
+正式包的 `zeta-package.json` 绑定 first-party Server Host/daemon SHA-256、target、版本、protocol
+metadata 和由这些字段确定性生成的 `buildId`。该清单随产品包进入签名边界；Desktop 在 spawn 本地
+Server Host 前复验清单形状和二进制 digest，开发热重载不把可变产物伪装成签名发布物。
+
+`AppServerSession` 独占一个 peer，只有 initialize response 同时通过 server identity、protocol major
+和 required capability version gate 后才进入 Ready，并保存协商后的 server info/capabilities；schema
+hash 差异进入诊断，不单独阻止启动。
 
 `AppServerSession` 是 connection lifecycle。它不是 canonical 产品 `Session`，不得保存
 产品 Session membership、lineage 或权威业务状态；Renderer 只维护可丢弃并可 resync 的
@@ -773,7 +777,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 Desktop 完成的最低证据：
 
 - TypeScript strict build 通过；
-- initialize 成功并校验 schema hash；
+- initialize 成功并校验 protocol major 与 required capability versions，同时记录 schema hash 诊断；
 - Session 创建、Thread 创建/fork、订阅恢复和 Turn 中断端到端通过；
 - 通知能从 App Server 到 Renderer；
 - 未生成或参数错误的 IPC 被拒绝；

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { isRecord } from "../../../../base/common/types.js";
-import { APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/types.js";
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type ViteDevHotContext } from "../../../../platform/app-server/browser/viteDevConnection.js";
 
@@ -44,8 +44,34 @@ class FakeHotContext implements ViteDevHotContext {
 		if (request.method === "initialize") {
 			this.respond(request, {
 				serverInfo: { name: "zeta-app-server", version: "0.1.0" },
+				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: 1 },
 				schemaHash: APP_SERVER_SCHEMA_HASH,
-				capabilities: { sessions: true, threads: true, turns: true, extensionHost: true },
+				capabilities: {
+					agentInteractions: true,
+					documentCollaboration: true,
+					sessions: true,
+					threads: true,
+					turns: true,
+					resources: true,
+					attachments: true,
+					fileSystem: true,
+					git: true,
+					workspaceSearch: true,
+					codeIndex: true,
+					cloudCodeIndex: false,
+					terminal: true,
+					debugAdapter: true,
+					typst: true,
+					updateReplay: true,
+					extensions: true,
+					extensionHost: true,
+					connectors: true,
+					plugins: true,
+					marketplace: true,
+					mcp: true,
+					mcpOAuth: true,
+					contracts: { sessions: { version: 1 }, threads: { version: 1 }, turns: { version: 1 } },
+				},
 				slashCommands: [],
 			});
 		} else if (request.method === "session/list") {

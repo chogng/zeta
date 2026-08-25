@@ -189,7 +189,9 @@ use crate::protocol::git::{
     GitRepositoryIdentityDto, GitRepositoryParams, GitStatusChanged, GitStatusResult,
     GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
 };
-use crate::protocol::initialize::{InitializeParams, InitializeResult, ServerCapabilities};
+use crate::protocol::initialize::{
+    CapabilityContract, InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
+};
 use crate::protocol::language::{
     LanguageCloseParams, LanguageCodeActionDiagnosticDto, LanguageCodeActionDto,
     LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCodeLensDto,
@@ -2159,6 +2161,8 @@ typescript_bindings! {
     ExtensionHostChanged,
     SlashCommandArgumentModeDto,
     SlashCommandDefinition,
+    ProtocolVersion,
+    CapabilityContract,
     ServerCapabilities,
     InitializeParams,
     InitializeResult,
