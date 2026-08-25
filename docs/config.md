@@ -681,6 +681,8 @@ Settings。daemon 内部以 canonical Workspace root + trust source 建立隔离
 broker endpoint 和 start lock 是运行时协调数据，不是可迁移 profile 数据。Unix 放在当前 UID 私有的
 `/tmp/zeta-local-app-server-<uid>/`，Windows 放在 `<profile_root>/run/`；daemon 空闲后自动退出，
 `state.sqlite3`、TOML/JSON 配置和 Marketplace cache 仍保留在规范化 profile root。
+该进程边界和 endpoint contract 由 [`zeta-rs/app-server-daemon`](../zeta-rs/app-server-daemon/README.md)
+拥有；`zeta-server-host` 只解析产品环境并代理 stdio。
 
 | 数据类别 | TOML | SQLite |
 | --- | --- | --- |

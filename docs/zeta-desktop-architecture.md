@@ -219,7 +219,9 @@ package；它读取 production builder 使用的同一份 runtime lock、校验 
 只有新 package 完整构建并通过 layout validation 后才替换上一代。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该
 package root，在发布态选择 Electron `resourcesPath`，两者都只启动
-`<package>/bin/zeta-server[.exe]`。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
+`<package>/bin/zeta-server[.exe]`，并把同一 package 中
+`<package>/bin/zeta-app-server-daemon[.exe]` 的绝对路径加入受控环境。两者都由开发与发布组装器
+显式构建和校验。因此 ripgrep、sandbox helper 与 built-in Skills 不依赖开发机
 `PATH`，缺失或 digest 不匹配会在 package preparation 阶段失败，而不是推迟到 App Server
 initialize gate。
 
@@ -227,8 +229,9 @@ initialize gate。
 
 Main 必须：
 
-1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`，由 `server-host` 连接或选举
-   profile/Workspace-scoped local authority；
+1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`；`server-host` 调用
+   `zeta-app-server-daemon` crate 连接或选举 profile-scoped local authority，并以 connection
+   prelude 选择 Workspace runtime；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
 4. 校验 protocol version、schema hash 和 server build；
@@ -757,6 +760,7 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 
 - 可运行的 `zeta` 二进制；
 - `zeta-server app-server connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
+- 独立的 `zeta-app-server-daemon` binary（profile authority、socket 与 idle lifecycle）；
 - `zeta-rs/app-server-protocol/schema/types.ts`；
 - `zeta-rs/app-server-protocol/schema/schema.json`；
 - schema hash；

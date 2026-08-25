@@ -52,6 +52,54 @@ def resolve_server_binary(
     return validate_input_binary(binary, "built Zeta server executable", cargo, spec.is_windows)
 
 
+def resolve_app_server_daemon_binary(
+    repository_root: Path,
+    spec: TargetSpec,
+    explicit_binary: Optional[Path],
+    cargo: str,
+    cargo_profile: str,
+) -> Path:
+    if explicit_binary is not None:
+        return validate_input_binary(
+            explicit_binary,
+            "Zeta App Server daemon executable",
+            "--app-server-daemon-bin",
+            spec.is_windows,
+        )
+
+    target_directory = resolve_cargo_target_directory(repository_root)
+    command = [
+        cargo,
+        "build",
+        "--manifest-path",
+        str(repository_root / "Cargo.toml"),
+        "--package",
+        "zeta-app-server-daemon",
+        "--bin",
+        "zeta-app-server-daemon",
+        "--profile",
+        cargo_profile,
+        "--target",
+        spec.target,
+        "--target-dir",
+        str(target_directory),
+    ]
+    subprocess.run(command, check=True)
+    profile_directory = cargo_profile_directory(cargo_profile)
+    binary = (
+        target_directory
+        / spec.target
+        / profile_directory
+        / spec.app_server_daemon_name
+    )
+    return validate_input_binary(
+        binary,
+        "built Zeta App Server daemon executable",
+        cargo,
+        spec.is_windows,
+    )
+
+
 def validate_input_binary(
     path: Path, description: str, flag_name: str, is_windows_target: bool
 ) -> Path:

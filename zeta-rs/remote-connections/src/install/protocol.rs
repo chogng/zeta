@@ -112,9 +112,10 @@ pub(crate) fn remote_runtime_install_command(
             "tar -xzf \"$archive\" -C \"$package\" || fail 'archive-extraction-failed' 65; ",
             "[ -f \"$package/zeta-package.json\" ] || fail 'package-metadata-missing' 65; ",
             "[ -f \"$package/bin/zeta-server\" ] || fail 'package-entrypoint-missing' 65; ",
+            "[ -f \"$package/bin/zeta-app-server-daemon\" ] || fail 'package-app-server-daemon-missing' 65; ",
             "[ -f \"$package/zeta-path/rg\" ] || fail 'package-ripgrep-missing' 65; ",
             "[ -f \"$package/zeta-resources/node/bin/node\" ] || fail 'package-node-missing' 65; ",
-            "chmod 700 \"$package/bin/zeta-server\" \"$package/zeta-path/rg\" \"$package/zeta-resources/node/bin/node\" || fail 'package-executable-permissions-failed' 73; ",
+            "chmod 700 \"$package/bin/zeta-server\" \"$package/bin/zeta-app-server-daemon\" \"$package/zeta-path/rg\" \"$package/zeta-resources/node/bin/node\" || fail 'package-executable-permissions-failed' 73; ",
             "printf '%s\\n' \"$digest\" > \"$package/.zeta-remote-runtime-sha256\" || fail 'receipt-write-failed' 73; ",
             "mv \"$package\" \"$runtime_dir\" || fail 'runtime-commit-failed' 73; report {installed_marker}"
         ),

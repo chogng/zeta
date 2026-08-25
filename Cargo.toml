@@ -5,6 +5,7 @@ members = [
     "zeta-rs/agents",
     "zeta-rs/attachments",
     "zeta-rs/app-server",
+    "zeta-rs/app-server-daemon",
     "zeta-rs/app-server-client",
     "zeta-rs/app-server-protocol",
     "zeta-rs/app-server-transport",
@@ -238,6 +239,7 @@ zeta-ansi-escape = { path = "zeta-code/ansi-escape" }
 zeta-agent-sidebar = { path = "zeterm/agent-sidebar" }
 zeta-commands = { path = "zeterm/commands" }
 zeta-app-server = { path = "zeta-rs/app-server" }
+zeta-app-server-daemon = { path = "zeta-rs/app-server-daemon" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }

@@ -384,6 +384,7 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
         }
         _ => unpacked_size += append_file(&mut builder, "bin/zeta-server", b"zeta", 0o755),
     }
+    unpacked_size += append_file(&mut builder, "bin/zeta-app-server-daemon", b"daemon", 0o755);
     unpacked_size += append_file(&mut builder, "zeta-path/rg", b"ripgrep", 0o755);
     if !matches!(variant, PackageVariant::HostProvidedNode) {
         unpacked_size += append_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);

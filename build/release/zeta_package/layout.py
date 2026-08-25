@@ -31,6 +31,7 @@ def build_package_directory(
     version: str,
     spec: TargetSpec,
     server_binary: Path,
+    app_server_daemon_binary: Path,
     ripgrep: RipgrepResolution,
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
@@ -72,6 +73,11 @@ def build_package_directory(
         copy_executable(
             server_binary,
             binary_directory / spec.server_name,
+            is_windows=spec.is_windows,
+        )
+        copy_executable(
+            app_server_daemon_binary,
+            binary_directory / spec.app_server_daemon_name,
             is_windows=spec.is_windows,
         )
         copy_executable(
@@ -218,6 +224,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
 
     executables = [
         package / "bin" / spec.server_name,
+        package / "bin" / spec.app_server_daemon_name,
         package / "zeta-path" / spec.ripgrep_name,
     ]
     components = metadata.get("components")

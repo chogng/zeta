@@ -86,6 +86,7 @@ interface ResolvedBubblewrap {
 }
 
 interface FirstPartyExecutables {
+  readonly appServerDaemon: string;
   readonly bubblewrap?: ResolvedBubblewrap;
   readonly commandRunner?: string;
   readonly sandboxSetup?: string;
@@ -398,12 +399,15 @@ function cargoBuild(packageName: string, binaryArgs: readonly string[], expected
 
 async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<FirstPartyExecutables> {
   const serverArtifacts = cargoBuild("zeta-server-host", ["--bin", "zeta-server"], ["zeta-server"]);
+  const daemonArtifacts = cargoBuild("zeta-app-server-daemon", ["--bin", "zeta-app-server-daemon"], ["zeta-app-server-daemon"]);
   const executables: {
+    appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
     commandRunner?: string;
     sandboxSetup?: string;
     serverHost: string;
   } = {
+    appServerDaemon: requiredExecutable(daemonArtifacts, "zeta-app-server-daemon"),
     serverHost: requiredExecutable(serverArtifacts, "zeta-server"),
   };
   if (platform === "win32") {
@@ -606,6 +610,7 @@ export async function assemblePackage(
   remoteRuntimeRelease?: RemoteRuntimeRelease,
 ): Promise<void> {
   const isWindows = platform === "win32";
+  const appServerDaemonName = isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon";
   const serverHostName = isWindows ? "zeta-server.exe" : "zeta-server";
   const rgName = isWindows ? "rg.exe" : "rg";
   const binDirectory = join(staging, "bin");
@@ -624,6 +629,7 @@ export async function assemblePackage(
     await copyRegularTree(remoteRuntimeBundle, join(staging, "zeta-remote-runtimes"), "Remote runtime bundle");
   }
   await copyExecutable(executables.serverHost, join(binDirectory, serverHostName), isWindows);
+  await copyExecutable(executables.appServerDaemon, join(binDirectory, appServerDaemonName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   if (node) {
     const nodeDirectory = join(resourcesDirectory, "node", "bin");
@@ -734,6 +740,7 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
     throw new Error("Invalid package metadata");
   }
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
+  await requireFile(join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
   if (metadata.javascriptRuntime?.kind === "packagedNode") {
     if (typeof metadata.components.node !== "object" || metadata.components.node === null) {

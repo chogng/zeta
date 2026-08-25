@@ -58,6 +58,7 @@ class RemoteRuntimeBundleTests(unittest.TestCase):
 
 def create_package(path: Path) -> Path:
     files = {
+        "bin/zeta-app-server-daemon": b"daemon",
         "bin/zeta-server": b"zeta",
         "zeta-path/rg": b"ripgrep",
         "zeta-resources/node/bin/node": b"node",

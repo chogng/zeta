@@ -1,3 +1,107 @@
+//! Profile-scoped local App Server daemon and stdio connection proxy.
+
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use zeta_app_server::AppServer;
+use zeta_app_server::LocalAppServerOptions;
+use zeta_app_server::LocalProductServicesConfig;
+use zeta_app_server::LocalProfileRuntime;
+use zeta_app_server::open_local_app_server;
+use zeta_app_server_client::local_profile_root;
+
+/// Environment variable that selects the daemon executable used by a client host.
+pub const DAEMON_PATH_ENV: &str = "ZETA_APP_SERVER_DAEMON_PATH";
+
+/// Workspace trust source attached to one daemon connection.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspaceTrustSource {
+    /// Trust was resolved by the product host and passed explicitly.
+    HostConfiguration,
+    /// Trust is resolved from the shared user configuration.
+    UserConfig,
+}
+
+/// Profile, Workspace, trust, and product-service inputs for one daemon connection.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConnectionOptions {
+    profile_root: PathBuf,
+    workspace_root: Option<PathBuf>,
+    workspace_trust_source: WorkspaceTrustSource,
+    product_services: Option<PathBuf>,
+}
+
+impl ConnectionOptions {
+    /// Creates the explicit inputs carried in a daemon connection prelude.
+    pub fn new(
+        profile_root: impl Into<PathBuf>,
+        workspace_root: Option<PathBuf>,
+        workspace_trust_source: WorkspaceTrustSource,
+        product_services: Option<PathBuf>,
+    ) -> Self {
+        Self {
+            profile_root: profile_root.into(),
+            workspace_root,
+            workspace_trust_source,
+            product_services,
+        }
+    }
+
+    /// Returns the shared local profile root.
+    pub fn profile_root(&self) -> &Path {
+        &self.profile_root
+    }
+
+    /// Returns the explicitly selected Workspace root, when present.
+    pub fn workspace_root(&self) -> Option<&Path> {
+        self.workspace_root.as_deref()
+    }
+
+    /// Returns the trust source for the selected Workspace.
+    pub fn workspace_trust_source(&self) -> WorkspaceTrustSource {
+        self.workspace_trust_source
+    }
+
+    /// Returns the optional product-services manifest for this connection.
+    pub fn product_services(&self) -> Option<&Path> {
+        self.product_services.as_deref()
+    }
+}
+
+fn open_server_with_profile_runtime(
+    host: &ConnectionOptions,
+    profile_runtime: Option<Arc<LocalProfileRuntime>>,
+) -> Result<AppServer, String> {
+    let mut options = LocalAppServerOptions::new(host.profile_root());
+    if let Some(runtime) = profile_runtime {
+        options = options.with_profile_runtime(runtime);
+    }
+    if let Some(workspace_root) = host.workspace_root() {
+        options = match host.workspace_trust_source() {
+            WorkspaceTrustSource::UserConfig => {
+                options.with_user_config_workspace_root(workspace_root)
+            }
+            WorkspaceTrustSource::HostConfiguration => options.with_workspace_root(workspace_root),
+        };
+    }
+    if let Some(path) = host.product_services() {
+        options = options.with_product_services(
+            LocalProductServicesConfig::load(path, host.profile_root())
+                .map_err(|error| error.to_string())?,
+        );
+    }
+    open_local_app_server(options).map_err(|error| error.to_string())
+}
+
+/// Runs the daemon entrypoint using the local profile selected by the environment.
+pub fn run_from_environment(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
+    if arguments.into_iter().next().is_some() {
+        return Err("usage: zeta-app-server-daemon".into());
+    }
+    serve(local_profile_root())
+}
+
 #[cfg(any(unix, windows))]
 mod platform {
     use std::collections::BTreeMap;
@@ -50,20 +154,21 @@ mod platform {
     use zeta_uds::UnixListener;
     use zeta_uds::UnixStream;
 
-    use crate::app_server::AppServerHostOptions;
-    use crate::app_server::WorkspaceTrustSource;
-    use crate::app_server::open_server_with_profile_runtime;
+    use crate::ConnectionOptions;
+    use crate::WorkspaceTrustSource;
+    use crate::open_server_with_profile_runtime;
 
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
     const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
+    const CONNECTION_PRELUDE_TIMEOUT: Duration = Duration::from_secs(5);
     const DEFAULT_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+    const ENDPOINT_CONTRACT_VERSION: u32 = 1;
     const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(50);
     const IDLE_TIMEOUT_ENV: &str = "ZETA_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS";
     const MAX_LOG_BYTES: u64 = 1024 * 1024;
     const MAX_PRODUCT_SERVICES_IDENTITY_BYTES: u64 = 1024 * 1024;
     const MAX_CONNECTION_PRELUDE_BYTES: usize = 16 * 1024;
     const PROFILE_ROOT_ENV: &str = "ZETA_PROFILE_ROOT";
-    const PRODUCT_SERVICES_ARGUMENT: &str = "--product-services";
     const STALE_START_LOCK_AGE: Duration = Duration::from_secs(15);
     const WORKSPACE_ROOT_ENV: &str = "ZETA_WORKSPACE_ROOT";
     const WORKSPACE_TRUST_SOURCE_ENV: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
@@ -85,7 +190,7 @@ mod platform {
     }
 
     impl ConnectionPrelude {
-        fn from_options(options: &AppServerHostOptions) -> Self {
+        fn from_options(options: &ConnectionOptions) -> Self {
             Self {
                 version: 1,
                 workspace_root: options.workspace_root().map(Path::to_path_buf),
@@ -117,13 +222,13 @@ mod platform {
     }
 
     struct ProfileAppServerRegistry {
-        host: AppServerHostOptions,
+        host: ConnectionOptions,
         profile_runtime: Arc<LocalProfileRuntime>,
         servers: Mutex<BTreeMap<WorkspaceRuntimeKey, Arc<AppServer>>>,
     }
 
     impl ProfileAppServerRegistry {
-        fn open(host: AppServerHostOptions) -> Result<Self, String> {
+        fn open(host: ConnectionOptions) -> Result<Self, String> {
             let profile_runtime = Arc::new(
                 LocalProfileRuntime::open(host.profile_root())
                     .map_err(|error| error.to_string())?,
@@ -142,7 +247,7 @@ mod platform {
             let workspace_root = prelude
                 .workspace_root
                 .as_deref()
-                .map(fs::canonicalize)
+                .map(dunce::canonicalize)
                 .transpose()
                 .map_err(io_error)?;
             let product_services_identity = product_services_identity(
@@ -161,7 +266,7 @@ mod platform {
             if let Some(server) = servers.get(&key) {
                 return Ok(Arc::clone(server));
             }
-            let host = AppServerHostOptions::new(
+            let host = ConnectionOptions::new(
                 self.host.profile_root(),
                 workspace_root,
                 prelude.trust_source(),
@@ -188,15 +293,19 @@ mod platform {
         }
     }
 
-    pub(super) fn connect(options: AppServerHostOptions) -> Result<(), String> {
+    pub(super) fn connect(
+        options: ConnectionOptions,
+        daemon_executable: &Path,
+    ) -> Result<(), String> {
         let endpoint = BrokerEndpoint::prepare(&options)?;
-        let stream = connect_or_start(&endpoint, &options)?;
+        let stream = connect_or_start(&endpoint, &options, daemon_executable)?;
         proxy_stdio(stream, &options).map_err(|error| error.to_string())
     }
 
-    pub(super) fn serve(options: AppServerHostOptions) -> Result<(), String> {
+    pub(super) fn serve(options: ConnectionOptions) -> Result<(), String> {
         let endpoint = BrokerEndpoint::prepare(&options)?;
         let listener = bind_listener(&endpoint)?;
+        eprintln!("local App Server daemon endpoint ready");
         let _socket_cleanup = SocketCleanup(endpoint.socket.clone());
         let _ = fs::remove_dir(&endpoint.start_lock);
         listener.set_nonblocking(true).map_err(io_error)?;
@@ -207,39 +316,42 @@ mod platform {
         loop {
             match listener.accept() {
                 Ok((stream, _)) => {
+                    eprintln!("local App Server daemon connection accepted");
                     stream.set_nonblocking(false).map_err(io_error)?;
+                    stream
+                        .set_read_timeout(Some(CONNECTION_PRELUDE_TIMEOUT))
+                        .map_err(io_error)?;
                     idle_since = None;
+                    let reader = match stream.try_clone() {
+                        Ok(reader) => reader,
+                        Err(error) => {
+                            eprintln!("local App Server connection clone failed: {error}");
+                            continue;
+                        }
+                    };
+                    let mut reader = BufReader::new(reader);
+                    let prelude = match read_connection_prelude(&mut reader) {
+                        Ok(prelude) => prelude,
+                        Err(error) => {
+                            eprintln!("local App Server connection prelude failed: {error}");
+                            continue;
+                        }
+                    };
+                    reader.get_mut().set_read_timeout(None).map_err(io_error)?;
+                    eprintln!("local App Server daemon connection prelude accepted");
+                    let server = match registry.server_for(prelude) {
+                        Ok(server) => server,
+                        Err(error) => {
+                            eprintln!("local App Server Workspace runtime failed: {error}");
+                            continue;
+                        }
+                    };
                     active_connections.fetch_add(1, Ordering::AcqRel);
-                    let registry = Arc::clone(&registry);
                     let connection_counter = Arc::clone(&active_connections);
                     thread::Builder::new()
                         .name("zeta-local-app-server-connection".into())
                         .spawn(move || {
                             let _connection = ActiveConnection(connection_counter);
-                            let reader = match stream.try_clone() {
-                                Ok(reader) => reader,
-                                Err(error) => {
-                                    eprintln!("local App Server connection clone failed: {error}");
-                                    return;
-                                }
-                            };
-                            let mut reader = BufReader::new(reader);
-                            let prelude = match read_connection_prelude(&mut reader) {
-                                Ok(prelude) => prelude,
-                                Err(error) => {
-                                    eprintln!(
-                                        "local App Server connection prelude failed: {error}"
-                                    );
-                                    return;
-                                }
-                            };
-                            let server = match registry.server_for(prelude) {
-                                Ok(server) => server,
-                                Err(error) => {
-                                    eprintln!("local App Server Workspace runtime failed: {error}");
-                                    return;
-                                }
-                            };
                             if let Err(error) = server.serve_jsonl(reader, stream) {
                                 eprintln!("local App Server connection failed: {error}");
                             }
@@ -292,7 +404,7 @@ mod platform {
     }
 
     impl BrokerEndpoint {
-        fn prepare(options: &AppServerHostOptions) -> Result<Self, String> {
+        fn prepare(options: &ConnectionOptions) -> Result<Self, String> {
             fs::create_dir_all(options.profile_root()).map_err(io_error)?;
             let profile_root = fs::canonicalize(options.profile_root()).map_err(io_error)?;
             let runtime_root = runtime_root(&profile_root);
@@ -306,13 +418,25 @@ mod platform {
         }
     }
 
+    pub(super) fn endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
+        let options = ConnectionOptions::new(
+            profile_root,
+            None,
+            WorkspaceTrustSource::HostConfiguration,
+            None,
+        );
+        Ok(BrokerEndpoint::prepare(&options)?.socket)
+    }
+
     pub(super) fn endpoint_identity(
-        _options: &AppServerHostOptions,
+        _options: &ConnectionOptions,
         profile_root: &Path,
         _workspace_root: Option<&Path>,
     ) -> Result<String, String> {
         let mut digest = Sha256::new();
         update_path_digest(&mut digest, profile_root);
+        digest.update(b"zeta-app-server-daemon");
+        digest.update(ENDPOINT_CONTRACT_VERSION.to_le_bytes());
         digest.update(env!("CARGO_PKG_VERSION").as_bytes());
         digest.update([0]);
         digest.update(schema_hash().as_bytes());
@@ -436,7 +560,8 @@ mod platform {
 
     fn connect_or_start(
         endpoint: &BrokerEndpoint,
-        options: &AppServerHostOptions,
+        options: &ConnectionOptions,
+        daemon_executable: &Path,
     ) -> Result<UnixStream, String> {
         if let Some(stream) = connect_existing(&endpoint.socket)? {
             return Ok(stream);
@@ -452,7 +577,7 @@ mod platform {
             }
             if !owns_start_lock && acquire_start_lock(&endpoint.start_lock)? {
                 owns_start_lock = true;
-                if let Err(error) = spawn_daemon(endpoint, options) {
+                if let Err(error) = spawn_daemon(endpoint, options, daemon_executable) {
                     let _ = fs::remove_dir(&endpoint.start_lock);
                     return Err(error);
                 }
@@ -517,36 +642,26 @@ mod platform {
 
     fn spawn_daemon(
         endpoint: &BrokerEndpoint,
-        options: &AppServerHostOptions,
+        options: &ConnectionOptions,
+        daemon_executable: &Path,
     ) -> Result<(), String> {
-        let executable = std::env::current_exe().map_err(io_error)?;
+        let metadata = fs::symlink_metadata(daemon_executable).map_err(io_error)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(format!(
+                "Local App Server daemon is not a regular executable: {}",
+                daemon_executable.display()
+            ));
+        }
         let log = open_log(&endpoint.log)?;
         let error_log = log.try_clone().map_err(io_error)?;
-        let mut command = Command::new(executable);
+        let mut command = Command::new(daemon_executable);
         command
-            .args(["app-server", "daemon"])
             .env(PROFILE_ROOT_ENV, options.profile_root())
+            .env_remove(WORKSPACE_ROOT_ENV)
+            .env_remove(WORKSPACE_TRUST_SOURCE_ENV)
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(error_log));
-        match options.workspace_root() {
-            Some(workspace_root) => {
-                command.env(WORKSPACE_ROOT_ENV, workspace_root);
-            }
-            None => {
-                command.env_remove(WORKSPACE_ROOT_ENV);
-            }
-        }
-        command.env(
-            WORKSPACE_TRUST_SOURCE_ENV,
-            match options.workspace_trust_source() {
-                WorkspaceTrustSource::HostConfiguration => "hostConfiguration",
-                WorkspaceTrustSource::UserConfig => "userConfig",
-            },
-        );
-        if let Some(path) = options.product_services() {
-            command.arg(PRODUCT_SERVICES_ARGUMENT).arg(path);
-        }
         detach_command(&mut command);
         command.spawn().map_err(io_error)?;
         Ok(())
@@ -672,7 +787,7 @@ mod platform {
         serde_json::from_str(&line).map_err(|error| error.to_string())
     }
 
-    fn proxy_stdio(mut stream: UnixStream, options: &AppServerHostOptions) -> io::Result<()> {
+    fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
         serde_json::to_writer(&mut stream, &ConnectionPrelude::from_options(options))?;
         stream.write_all(b"\n")?;
         stream.flush()?;
@@ -698,28 +813,43 @@ mod platform {
     }
 }
 
-use crate::app_server::AppServerHostOptions;
-
 #[cfg(any(unix, windows))]
-pub(super) fn connect(options: AppServerHostOptions) -> Result<(), String> {
-    platform::connect(options)
+pub fn connect(options: ConnectionOptions, daemon_executable: &Path) -> Result<(), String> {
+    platform::connect(options, daemon_executable)
 }
 
 #[cfg(any(unix, windows))]
-pub(super) fn serve(options: AppServerHostOptions) -> Result<(), String> {
-    platform::serve(options)
+pub fn serve(profile_root: impl Into<PathBuf>) -> Result<(), String> {
+    platform::serve(ConnectionOptions::new(
+        profile_root,
+        None,
+        WorkspaceTrustSource::HostConfiguration,
+        None,
+    ))
+}
+
+/// Returns the profile-scoped daemon endpoint path used for diagnostics and integration tests.
+#[cfg(any(unix, windows))]
+pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
+    platform::endpoint_path(profile_root)
 }
 
 #[cfg(not(any(unix, windows)))]
-pub(super) fn connect(_options: AppServerHostOptions) -> Result<(), String> {
+pub fn connect(_options: ConnectionOptions, _daemon_executable: &Path) -> Result<(), String> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
 #[cfg(not(any(unix, windows)))]
-pub(super) fn serve(_options: AppServerHostOptions) -> Result<(), String> {
+pub fn serve(_profile_root: impl Into<PathBuf>) -> Result<(), String> {
+    Err("Local App Server daemon requires Unix-domain socket support".into())
+}
+
+/// Reports that this target does not support a local daemon endpoint.
+#[cfg(not(any(unix, windows)))]
+pub fn daemon_endpoint_path(_profile_root: &Path) -> Result<PathBuf, String> {
     Err("Local App Server daemon requires Unix-domain socket support".into())
 }
 
 #[cfg(test)]
-#[path = "app_server_broker_tests.rs"]
+#[path = "app_server_daemon_tests.rs"]
 mod tests;

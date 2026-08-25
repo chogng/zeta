@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from .bubblewrap import resolve_bubblewrap
-from .cargo import resolve_server_binary
+from .cargo import resolve_app_server_daemon_binary, resolve_server_binary
 from .layout import build_package_directory
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
@@ -52,6 +52,11 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         "--server-bin",
         type=Path,
         help="Prebuilt product-neutral Zeta server executable. If omitted, Cargo builds it.",
+    )
+    parser.add_argument(
+        "--app-server-daemon-bin",
+        type=Path,
+        help="Prebuilt profile-scoped App Server daemon executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
         "--rg-bin",
@@ -153,6 +158,13 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
+    app_server_daemon_binary = resolve_app_server_daemon_binary(
+        REPOSITORY_ROOT,
+        spec,
+        args.app_server_daemon_bin,
+        cargo=args.cargo,
+        cargo_profile=args.cargo_profile,
+    )
     ripgrep = resolve_ripgrep(
         spec,
         args.ripgrep_lock.expanduser().resolve(),
@@ -196,6 +208,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         version,
         spec,
         server_binary,
+        app_server_daemon_binary,
         ripgrep,
         node,
         bubblewrap,

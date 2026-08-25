@@ -2,14 +2,14 @@ use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 
-use std::sync::Arc;
 use zeta_app_server::AppServer;
 use zeta_app_server::LocalAppServerOptions;
 use zeta_app_server::LocalProductServicesConfig;
-use zeta_app_server::LocalProfileRuntime;
 use zeta_app_server::open_local_app_server;
 use zeta_app_server_client::discovered_product_services_path;
 use zeta_app_server_client::local_profile_root;
+use zeta_app_server_daemon::ConnectionOptions;
+use zeta_app_server_daemon::DAEMON_PATH_ENV;
 
 const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
 
@@ -21,8 +21,10 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
         AppServerHostCommand::Direct => open_server(&options)?
             .serve_stdio()
             .map_err(|error| error.to_string()),
-        AppServerHostCommand::Connect => super::app_server_broker::connect(options),
-        AppServerHostCommand::Daemon => super::app_server_broker::serve(options),
+        AppServerHostCommand::Connect => zeta_app_server_daemon::connect(
+            options.daemon_connection_options(),
+            &daemon_executable_path()?,
+        ),
     }
 }
 
@@ -36,9 +38,6 @@ fn parse_arguments(
         [command, remaining @ ..] if command == "connect" => {
             (AppServerHostCommand::Connect, remaining)
         }
-        [command, remaining @ ..] if command == "daemon" => {
-            (AppServerHostCommand::Daemon, remaining)
-        }
         _ => return Err(usage().into()),
     };
     let product_services = match remaining {
@@ -50,14 +49,13 @@ fn parse_arguments(
 }
 
 fn usage() -> &'static str {
-    "usage: zeta-server app-server (--listen stdio:// | connect | daemon) [--product-services PATH]"
+    "usage: zeta-server app-server (--listen stdio:// | connect) [--product-services PATH]"
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AppServerHostCommand {
     Direct,
     Connect,
-    Daemon,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -118,6 +116,22 @@ impl AppServerHostOptions {
     pub(super) fn product_services(&self) -> Option<&Path> {
         self.product_services.as_deref()
     }
+
+    fn daemon_connection_options(&self) -> ConnectionOptions {
+        ConnectionOptions::new(
+            self.profile_root(),
+            self.workspace_root().map(Path::to_path_buf),
+            match self.workspace_trust_source() {
+                WorkspaceTrustSource::HostConfiguration => {
+                    zeta_app_server_daemon::WorkspaceTrustSource::HostConfiguration
+                }
+                WorkspaceTrustSource::UserConfig => {
+                    zeta_app_server_daemon::WorkspaceTrustSource::UserConfig
+                }
+            },
+            self.product_services().map(Path::to_path_buf),
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -127,17 +141,7 @@ pub(super) enum WorkspaceTrustSource {
 }
 
 pub(super) fn open_server(host: &AppServerHostOptions) -> Result<AppServer, String> {
-    open_server_with_profile_runtime(host, None)
-}
-
-pub(super) fn open_server_with_profile_runtime(
-    host: &AppServerHostOptions,
-    profile_runtime: Option<Arc<LocalProfileRuntime>>,
-) -> Result<AppServer, String> {
     let mut options = LocalAppServerOptions::new(host.profile_root());
-    if let Some(runtime) = profile_runtime {
-        options = options.with_profile_runtime(runtime);
-    }
     if let Some(workspace_root) = host.workspace_root() {
         options = match host.workspace_trust_source() {
             WorkspaceTrustSource::UserConfig => {
@@ -153,6 +157,25 @@ pub(super) fn open_server_with_profile_runtime(
         );
     }
     open_local_app_server(options).map_err(|error| error.to_string())
+}
+
+fn daemon_executable_path() -> Result<PathBuf, String> {
+    if let Some(path) = env::var_os(DAEMON_PATH_ENV) {
+        let path = PathBuf::from(path);
+        if !path.is_absolute() {
+            return Err(format!("{DAEMON_PATH_ENV} must be an absolute path"));
+        }
+        return Ok(path);
+    }
+    let executable = env::current_exe().map_err(|error| error.to_string())?;
+    let directory = executable
+        .parent()
+        .ok_or_else(|| "zeta-server executable has no parent directory".to_string())?;
+    Ok(directory.join(if cfg!(windows) {
+        "zeta-app-server-daemon.exe"
+    } else {
+        "zeta-app-server-daemon"
+    }))
 }
 
 pub(super) fn product_services_path() -> Option<PathBuf> {

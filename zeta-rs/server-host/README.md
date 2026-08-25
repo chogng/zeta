@@ -11,21 +11,17 @@ Zeta Code CLI/TUI composition. The canonical cross-product consumer boundary is 
 while `run_app_server` and `run_remote` preserve compatibility for product hosts that already parse
 their own top-level arguments. `src/main.rs` only maps process success and failure to an exit code.
 
-`src/app_server.rs::run` validates direct, broker-connect, and daemon commands; binds
+`src/app_server.rs::run` validates direct and broker-connect commands; binds
 `ZETA_PROFILE_ROOT`; binds a Workspace only when `ZETA_WORKSPACE_ROOT` is explicitly present;
 resolves the optional product services manifest through `InstallContext`; and delegates server
 behavior to `zeta-app-server`. It must never infer a Workspace from the host process current
 directory.
 
-`src/app_server_broker.rs` owns the local profile authority process. Its endpoint identity includes
-only the canonical profile root, host version, and protocol schema; Workspace and product-services
-identities are carried in a bounded connection prelude instead of partitioning the daemon. One
-`ProfileAppServerRegistry` reuses a single `LocalProfileRuntime` and lazily composes an isolated
-`AppServer` runtime per canonical Workspace/trust-source/product-adapter key. Session/Thread
-projections, Config, Marketplace instances for equivalent authorities, and Session notifications
-are profile-wide; filesystem, Git, language, document, terminal, and execution runtime remain
-Workspace-scoped. The broker also owns daemon election, private
-Unix-domain socket paths, stdio proxying, bounded logs, idle shutdown, and stale-start recovery.
+`zeta-app-server-daemon` owns the local profile authority process, daemon election, private socket
+paths, bounded connection prelude, stdio proxy, logs, idle shutdown, and stale-start recovery.
+`app-server connect` resolves its packaged executable from `ZETA_APP_SERVER_DAEMON_PATH`, or from
+the `zeta-server` sibling path for standalone and Remote runtime packages. The daemon crate's
+[`README`](../app-server-daemon/README.md) defines its profile-wide and Workspace-scoped ownership.
 
 `src/remote.rs::run` owns the non-interactive Remote command adapter used by Desktop: runtime probe,
 download and installation, connection catalog operations, and runtime profile operations. Domain
@@ -43,7 +39,8 @@ unbound Sessions remain readable but cannot be mutated implicitly.
 
 ## Integration obligations
 
-Desktop packages `bin/zeta-server[.exe]` and invokes `app-server connect`; TUI and zeterm expose the
+Desktop packages sibling `bin/zeta-server[.exe]` and `bin/zeta-app-server-daemon[.exe]` executables
+and invokes `app-server connect`; TUI and zeterm expose the
 same hidden command by delegating it to this crate. `app-server --listen stdio://` remains the direct,
 single-process compatibility/test mode. Product compatibility commands may delegate here, but
 product clients must not package `zeta-cli` as their backend. Adding TUI state, interactive prompts,
@@ -51,8 +48,7 @@ renderer policy, or product-specific command discovery here is architectural dri
 
 ## Tests and extension points
 
-Run `cargo test -p zeta-server-host`. Unit tests live beside the broker and Remote command modules;
-stdio integration tests exercise the real binary, explicit and empty Workspace behavior, and live
-Session visibility across two product connections.
+Run `cargo test -p zeta-server-host -p zeta-app-server-daemon`. Server-host stdio tests exercise the
+direct compatibility binary; daemon tests exercise the real profile endpoint and initialize gate.
 Add a new command only when it is backend-neutral and has a canonical shared domain owner. Product
 commands remain in their product host.

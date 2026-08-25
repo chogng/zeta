@@ -24,7 +24,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 发行服务发现由 `discovered_product_services_path` / `load_discovered_product_services` 统一实现，
 但不会自动进入 embedded composition。Embedded host 显式调用
 `InProcessClientOptions::with_discovered_product_services`；brokered Desktop、TUI 与 zeterm 由
-`zeta-server-host` 在 daemon composition 时加载一次。Marketplace trust/cache 边界见
+`zeta-app-server-daemon` 按 connection composition 加载并按 adapter identity 复用。Marketplace trust/cache 边界见
 [`marketplace-integration.md`](../../docs/marketplace-integration.md)。
 
 | 能力 | Owned session | Synchronous adapter |

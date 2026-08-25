@@ -13,7 +13,7 @@ import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
 import { AppServerSupervisor } from "../../platform/app-server/electron-main/app-server-supervisor.js";
-import { developmentServerHostGenerationPath, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
+import { appServerDaemonExecutablePath, developmentServerHostGenerationPath, serverHostExecutablePath } from "../../platform/server-host/electron-main/serverHostPackage.js";
 import { DevelopmentServerHostReloader, readDevelopmentServerHostGenerationSync, selectDevelopmentServerHostExecutable } from "../../platform/server-host/electron-main/developmentServerHostReloader.js";
 import { LocalAppServerProcessLauncher } from "../../platform/app-server/electron-main/localAppServerProcessLauncher.js";
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from "../../platform/ipc/electron-main/trustedIpcRouter.js";
@@ -1210,6 +1210,12 @@ export class ZetaApplication extends DisposableOwner {
 	}
 
 	private appServerEnvironment(workspace: IAnyWorkspaceIdentifier): Readonly<Record<string, string>> {
+		const packageLocation = {
+			appPath: app.getAppPath(),
+			isPackaged: app.isPackaged,
+			platform: process.platform,
+			resourcesPath: process.resourcesPath,
+		};
 		return buildAppServerEnvironment(process.env, process.platform === "win32" ? "windows" : "posix", {
 			...(process.env.ZETA_RG_PATH
 				? { ZETA_RG_PATH: process.env.ZETA_RG_PATH }
@@ -1218,6 +1224,7 @@ export class ZetaApplication extends DisposableOwner {
 				? { ZETA_PRODUCT_SERVICES_PATH: process.env.ZETA_PRODUCT_SERVICES_PATH }
 				: {}),
 			ZETA_ELECTRON_RUN_AS_NODE_PATH: process.execPath,
+			ZETA_APP_SERVER_DAEMON_PATH: appServerDaemonExecutablePath(packageLocation),
 			ZETA_PROFILE_ROOT: this.profileRoot,
 			...(isSingleFolderWorkspaceIdentifier(workspace)
 				? {

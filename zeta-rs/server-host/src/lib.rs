@@ -5,7 +5,6 @@
 //! App Server and Remote domain behavior remain in their canonical shared crates.
 
 mod app_server;
-mod app_server_broker;
 mod remote;
 
 /// Runs one supported backend command from a product-neutral process entrypoint.
@@ -37,5 +36,5 @@ pub fn run_remote(arguments: impl IntoIterator<Item = String>) -> Result<(), Str
 }
 
 fn usage() -> &'static str {
-    "usage: zeta-server app-server (--listen stdio:// | connect | daemon) [--product-services PATH] | zeta-server remote <command> | zeta-server remote-server <command>"
+    "usage: zeta-server app-server (--listen stdio:// | connect) [--product-services PATH] | zeta-server remote <command> | zeta-server remote-server <command>"
 }

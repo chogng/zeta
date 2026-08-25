@@ -264,7 +264,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 ## 运行时安装、升级与回滚
 
 Remote runtime artifact 必须是 canonical layout version 2 的 rootless `tar.gz`，并使用
-`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta-server`、`zeta-path/rg`、Node、Skills、Extensions、
+`javascriptRuntime.kind=packagedNode`。它包含 `bin/zeta-server`、`bin/zeta-app-server-daemon`、`zeta-path/rg`、Node、Skills、Extensions、
 product services 与平台 sandbox 资源；安装器不会用裸二进制伪装成完整 `zeta code` runtime。
 
 网络发布先要求产品已认证无凭据 HTTPS `catalog.json` URL 和 64 位小写 SHA-256。共享 updater 拒绝

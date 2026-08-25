@@ -23,6 +23,10 @@ class TargetSpec:
         return "zeta-server" + self.executable_suffix
 
     @property
+    def app_server_daemon_name(self) -> str:
+        return "zeta-app-server-daemon" + self.executable_suffix
+
+    @property
     def ripgrep_name(self) -> str:
         return "rg" + self.executable_suffix
 

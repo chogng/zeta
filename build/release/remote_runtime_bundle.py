@@ -33,11 +33,13 @@ POSIX_TARGETS = {
 }
 REQUIRED_RUNTIME_FILES = {
     "zeta-package.json",
+    "bin/zeta-app-server-daemon",
     "bin/zeta-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",
 }
 EXECUTABLE_RUNTIME_FILES = {
+    "bin/zeta-app-server-daemon",
     "bin/zeta-server",
     "zeta-path/rg",
     "zeta-resources/node/bin/node",

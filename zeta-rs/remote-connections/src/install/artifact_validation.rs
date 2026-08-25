@@ -148,6 +148,7 @@ fn validate_package_archive(
     }
     for required in [
         "zeta-package.json",
+        "bin/zeta-app-server-daemon",
         "bin/zeta-server",
         "zeta-path/rg",
         "zeta-resources/node/bin/node",

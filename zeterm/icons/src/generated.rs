@@ -71,6 +71,7 @@ pub(crate) mod artwork {
     pub(crate) const DOWNLOAD_BOX: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/download-box.svg"));
     pub(crate) const DOWNLOAD_TRAY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/download-tray.svg"));
     pub(crate) const EDIT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit.svg"));
+    pub(crate) const EDIT_WRITE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/edit-write.svg"));
     pub(crate) const ELLIPSIS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/ellipsis.svg"));
     pub(crate) const ENTER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/enter.svg"));
     pub(crate) const ERASER: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eraser.svg"));
@@ -79,6 +80,7 @@ pub(crate) mod artwork {
     pub(crate) const EXPORT_TRAY: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/export-tray.svg"));
     pub(crate) const EYE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye.svg"));
     pub(crate) const EYE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/eye-filled.svg"));
+    pub(crate) const FILE: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file.svg"));
     pub(crate) const FILE_DOWNLOADED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file-downloaded.svg"));
     pub(crate) const FILE_TEXT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/file-text.svg"));
     pub(crate) const FILES: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/files.svg"));
@@ -256,6 +258,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("download-box", artwork::DOWNLOAD_BOX),
     ("download-tray", artwork::DOWNLOAD_TRAY),
     ("edit", artwork::EDIT),
+    ("edit-write", artwork::EDIT_WRITE),
     ("ellipsis", artwork::ELLIPSIS),
     ("enter", artwork::ENTER),
     ("eraser", artwork::ERASER),
@@ -264,6 +267,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("export-tray", artwork::EXPORT_TRAY),
     ("eye", artwork::EYE),
     ("eye-filled", artwork::EYE_FILLED),
+    ("file", artwork::FILE),
     ("file-downloaded", artwork::FILE_DOWNLOADED),
     ("file-text", artwork::FILE_TEXT),
     ("files", artwork::FILES),

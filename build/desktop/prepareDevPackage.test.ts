@@ -143,6 +143,7 @@ test("assembles and validates the canonical Windows development layout", async (
   const root = await mkdtemp(join(tmpdir(), "zeta-dev-package-test-"));
   const staging = join(root, "package");
   const executables = {
+    appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
     serverHost: join(root, "zeta-server.exe"),
@@ -154,6 +155,7 @@ test("assembles and validates the canonical Windows development layout", async (
   try {
     await mkdir(join(remoteRuntimeBundle, "artifacts"), { recursive: true });
     await Promise.all([
+      writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
       writeFile(executables.serverHost, "zeta-server"),
@@ -199,6 +201,7 @@ test("assembles and validates the canonical Windows development layout", async (
     });
     assert.equal(await readFile(join(staging, "zeta-remote-runtimes", "artifacts", "zeta-linux.tar.gz"), "utf8"), "remote runtime");
     assert.equal(await readFile(join(staging, "zeta-path", "rg.exe"), "utf8"), "ripgrep");
+    assert.equal(await readFile(join(staging, "bin", "zeta-app-server-daemon.exe"), "utf8"), "zeta-app-server-daemon");
     assert.equal(await readFile(join(staging, "zeta-resources", "node", "bin", "node.exe"), "utf8"), "node");
     assert.equal(await readFile(join(staging, "zeta-resources", "zeta-command-runner.exe"), "utf8"), "runner");
     const productServices = JSON.parse(await readFile(join(staging, "zeta-resources", "product-services", "product-services.json"), "utf8"));
@@ -251,6 +254,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const root = await mkdtemp(join(tmpdir(), "zeta-dev-host-runtime-test-"));
   const staging = join(root, "package");
   const executables = {
+    appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
     serverHost: join(root, "zeta-server.exe"),
@@ -258,6 +262,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const ripgrepExecutable = join(root, "rg.exe");
   try {
     await Promise.all([
+      writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
       writeFile(executables.serverHost, "zeta-server"),

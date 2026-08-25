@@ -9580,6 +9580,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-app-server-daemon"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "libc",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "zeta-app-server",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
+ "zeta-uds",
+]
+
+[[package]]
 name = "zeta-app-server-protocol"
 version = "0.1.0"
 dependencies = [
@@ -10502,20 +10519,16 @@ dependencies = [
 name = "zeta-server-host"
 version = "0.1.0"
 dependencies = [
- "libc",
- "rustix 1.1.4",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tempfile",
  "zeta-app-server",
  "zeta-app-server-client",
+ "zeta-app-server-daemon",
  "zeta-app-server-protocol",
- "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",
- "zeta-uds",
 ]
 
 [[package]]

@@ -1,29 +1,30 @@
 [package]
-name = "zeta-server-host"
+name = "zeta-app-server-daemon"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
 
 [[bin]]
-name = "zeta-server"
+name = "zeta-app-server-daemon"
 path = "src/main.rs"
 
 [lib]
 doctest = false
-name = "zeta_server_host"
+name = "zeta_app_server_daemon"
 path = "src/lib.rs"
 
 [dependencies]
+dunce = { workspace = true }
+libc = { workspace = true }
+rustix = { workspace = true, features = ["process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 zeta-app-server = { workspace = true }
 zeta-app-server-client = { workspace = true }
-zeta-app-server-daemon = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
-zeta-remote = { workspace = true }
-zeta-remote-connections = { workspace = true }
-zeta-remote-server = { workspace = true }
+zeta-uds = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
