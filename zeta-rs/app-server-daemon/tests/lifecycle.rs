@@ -1,0 +1,214 @@
+#![cfg(any(unix, windows))]
+
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Write;
+use std::path::Path;
+use std::time::Duration;
+
+use serde_json::json;
+use zeta_app_server_daemon::ConnectionOptions;
+use zeta_app_server_daemon::LifecycleCommand;
+use zeta_app_server_daemon::LifecycleStatus;
+use zeta_app_server_daemon::WorkspaceTrustSource;
+use zeta_app_server_daemon::daemon_endpoint_path;
+use zeta_app_server_daemon::run_lifecycle;
+use zeta_uds::UnixStream;
+
+struct StopOnDrop<'a> {
+    options: ConnectionOptions,
+    executable: &'a Path,
+}
+
+impl Drop for StopOnDrop<'_> {
+    fn drop(&mut self) {
+        let _ = run_lifecycle(
+            LifecycleCommand::Stop,
+            self.options.clone(),
+            self.executable,
+        );
+    }
+}
+
+#[test]
+fn lifecycle_commands_are_idempotent_and_probe_initialize() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&workspace).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        Some(workspace),
+        WorkspaceTrustSource::HostConfiguration,
+        None,
+    );
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable,
+    };
+
+    let started = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
+    assert_eq!(started.status, LifecycleStatus::Started);
+    assert_eq!(started.app_server_name.as_deref(), Some("zeta-app-server"));
+    assert!(
+        started
+            .schema_hash
+            .as_deref()
+            .is_some_and(|hash| hash.starts_with("sha256:"))
+    );
+    assert!(started.pid.is_some());
+    assert!(started.instance_id.is_some());
+
+    let already = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
+    assert_eq!(already.status, LifecycleStatus::AlreadyRunning);
+    assert_eq!(already.pid, started.pid);
+    assert_eq!(already.instance_id, started.instance_id);
+
+    let running = run_lifecycle(LifecycleCommand::Version, options.clone(), executable).unwrap();
+    assert_eq!(running.status, LifecycleStatus::Running);
+    assert_eq!(running.pid, started.pid);
+
+    let restarted = run_lifecycle(LifecycleCommand::Restart, options.clone(), executable).unwrap();
+    assert_eq!(restarted.status, LifecycleStatus::Restarted);
+    assert_ne!(restarted.instance_id, started.instance_id);
+    assert_eq!(
+        restarted.app_server_name.as_deref(),
+        Some("zeta-app-server")
+    );
+
+    let stopped = run_lifecycle(LifecycleCommand::Stop, options.clone(), executable).unwrap();
+    assert_eq!(stopped.status, LifecycleStatus::Stopped);
+    assert_eq!(stopped.instance_id, restarted.instance_id);
+
+    let not_running = run_lifecycle(LifecycleCommand::Version, options, executable).unwrap();
+    assert_eq!(not_running.status, LifecycleStatus::NotRunning);
+    assert!(not_running.pid.is_none());
+    drop(cleanup);
+}
+
+#[test]
+fn concurrent_starts_publish_one_process_generation() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&workspace).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        Some(workspace),
+        WorkspaceTrustSource::HostConfiguration,
+        None,
+    );
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable,
+    };
+    let first_options = options.clone();
+    let second_options = options.clone();
+    let first = std::thread::spawn(move || {
+        run_lifecycle(LifecycleCommand::Start, first_options, executable).unwrap()
+    });
+    let second = std::thread::spawn(move || {
+        run_lifecycle(LifecycleCommand::Start, second_options, executable).unwrap()
+    });
+    let first = first.join().unwrap();
+    let second = second.join().unwrap();
+
+    assert_eq!(first.pid, second.pid);
+    assert_eq!(first.instance_id, second.instance_id);
+    assert_eq!(
+        [first.status, second.status]
+            .into_iter()
+            .filter(|status| *status == LifecycleStatus::Started)
+            .count(),
+        1
+    );
+    assert_eq!(
+        [first.status, second.status]
+            .into_iter()
+            .filter(|status| *status == LifecycleStatus::AlreadyRunning)
+            .count(),
+        1
+    );
+    drop(cleanup);
+}
+
+#[test]
+fn stop_closes_active_connections_after_its_bounded_grace_window() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&workspace).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        Some(workspace.clone()),
+        WorkspaceTrustSource::HostConfiguration,
+        None,
+    );
+    let executable = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable,
+    };
+    run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
+    let mut stream = UnixStream::connect(daemon_endpoint_path(&profile).unwrap()).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(8)))
+        .unwrap();
+    writeln!(
+        stream,
+        "{}",
+        json!({
+            "version": 1,
+            "workspaceRoot": workspace,
+            "workspaceTrustSource": "hostConfiguration",
+            "productServices": null,
+        })
+    )
+    .unwrap();
+    writeln!(
+        stream,
+        "{}",
+        json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "active-stop-test", "version": "1"},
+                "capabilities": {},
+            },
+        })
+    )
+    .unwrap();
+    stream.flush().unwrap();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    let mut initialize = String::new();
+    reader.read_line(&mut initialize).unwrap();
+    assert!(initialize.contains("\"result\""));
+
+    let stop_options = options.clone();
+    let stopped = std::thread::spawn(move || {
+        run_lifecycle(LifecycleCommand::Stop, stop_options, executable).unwrap()
+    })
+    .join()
+    .unwrap();
+    assert_eq!(stopped.status, LifecycleStatus::Stopped);
+    let mut after_stop = String::new();
+    match reader.read_line(&mut after_stop) {
+        Ok(0) => {}
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionReset
+                    | std::io::ErrorKind::ConnectionAborted
+                    | std::io::ErrorKind::BrokenPipe
+            ) => {}
+        result => panic!("active connection remained readable after stop: {result:?}"),
+    }
+    drop(stream);
+    drop(cleanup);
+}

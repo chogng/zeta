@@ -678,11 +678,13 @@ Settings。daemon 内部以 canonical Workspace root + trust source 建立隔离
 否则返回 `WorkspaceAuthorityMismatch`。旧的未绑定 Session 保持只读，等待显式迁移，不能被当前目录
 自动认领。
 
-broker endpoint 和 start lock 是运行时协调数据，不是可迁移 profile 数据。Unix 放在当前 UID 私有的
+broker endpoint、heartbeat operation lock 和 PID/process-generation record 是运行时协调数据，
+不是可迁移 profile 数据。Unix 放在当前 UID 私有的
 `/tmp/zeta-local-app-server-<uid>/`，Windows 放在 `<profile_root>/run/`；daemon 空闲后自动退出，
 `state.sqlite3`、TOML/JSON 配置和 Marketplace cache 仍保留在规范化 profile root。
-该进程边界和 endpoint contract 由 [`zeta-rs/app-server-daemon`](../zeta-rs/app-server-daemon/README.md)
-拥有；`zeta-server-host` 只解析产品环境并代理 stdio。
+该进程边界、机器可读 lifecycle 和 initialize readiness contract 由
+[`zeta-rs/app-server-daemon`](../zeta-rs/app-server-daemon/README.md) 拥有；`zeta-server-host` 只解析
+产品环境、输出 lifecycle JSON 并代理 stdio。
 
 | 数据类别 | TOML | SQLite |
 | --- | --- | --- |

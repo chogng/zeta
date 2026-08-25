@@ -10,6 +10,7 @@ use zeta_app_server_client::discovered_product_services_path;
 use zeta_app_server_client::local_profile_root;
 use zeta_app_server_daemon::ConnectionOptions;
 use zeta_app_server_daemon::DAEMON_PATH_ENV;
+use zeta_app_server_daemon::LifecycleCommand;
 
 const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
 
@@ -25,6 +26,18 @@ pub(super) fn run(arguments: Vec<String>) -> Result<(), String> {
             options.daemon_connection_options(),
             &daemon_executable_path()?,
         ),
+        AppServerHostCommand::Daemon(command) => {
+            let output = zeta_app_server_daemon::run_lifecycle(
+                command,
+                options.daemon_connection_options(),
+                &daemon_executable_path()?,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string(&output).map_err(|error| error.to_string())?
+            );
+            Ok(())
+        }
     }
 }
 
@@ -38,6 +51,16 @@ fn parse_arguments(
         [command, remaining @ ..] if command == "connect" => {
             (AppServerHostCommand::Connect, remaining)
         }
+        [daemon, action, remaining @ ..] if daemon == "daemon" => {
+            let command = match action.as_str() {
+                "start" => LifecycleCommand::Start,
+                "restart" => LifecycleCommand::Restart,
+                "stop" => LifecycleCommand::Stop,
+                "version" => LifecycleCommand::Version,
+                _ => return Err(usage().into()),
+            };
+            (AppServerHostCommand::Daemon(command), remaining)
+        }
         _ => return Err(usage().into()),
     };
     let product_services = match remaining {
@@ -49,13 +72,14 @@ fn parse_arguments(
 }
 
 fn usage() -> &'static str {
-    "usage: zeta-server app-server (--listen stdio:// | connect) [--product-services PATH]"
+    "usage: zeta-server app-server (--listen stdio:// | connect | daemon <start|restart|stop|version>) [--product-services PATH]"
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum AppServerHostCommand {
     Direct,
     Connect,
+    Daemon(LifecycleCommand),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -181,3 +205,7 @@ fn daemon_executable_path() -> Result<PathBuf, String> {
 pub(super) fn product_services_path() -> Option<PathBuf> {
     discovered_product_services_path()
 }
+
+#[cfg(test)]
+#[path = "app_server_tests.rs"]
+mod tests;

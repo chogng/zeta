@@ -76,6 +76,11 @@ let event = events.recv();
 session.shutdown()?;
 ```
 
+Brokered stdio host 在创建 `AppServerSession` 之前由 `zeta-app-server-daemon` lifecycle client
+完成一次独立的真实 initialize/schema readiness probe。该 probe 只证明 daemon generation 与所选
+Workspace composition 可用；`AppServerSession::start_stdio` 仍必须为实际产品连接执行自己的
+initialize，不能复用或信任 lifecycle probe 的连接状态。
+
 Typed method 当前同步等待该 request 的 completion，但实际 dispatch 位于独立 driver。
 Notification 不依附 request completion；consumer 不得对 session handle 调用
 `drain_notifications()`。

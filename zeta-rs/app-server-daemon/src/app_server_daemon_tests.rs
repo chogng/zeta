@@ -1,9 +1,11 @@
 #[cfg(any(unix, windows))]
 use super::ConnectionOptions;
+use super::LifecycleOutput;
+use super::LifecycleStatus;
 #[cfg(any(unix, windows))]
 use super::WorkspaceTrustSource;
 #[cfg(any(unix, windows))]
-use super::platform::endpoint_identity;
+use super::endpoint::endpoint_identity;
 
 #[test]
 #[cfg(any(unix, windows))]
@@ -25,12 +27,9 @@ fn endpoint_identity_is_shared_across_workspaces() {
         None,
     );
 
-    let first_identity = endpoint_identity(&first, profile.path(), Some(first_workspace.path()))
-        .expect("first identity is valid");
-    let same_identity = endpoint_identity(&same, profile.path(), Some(first_workspace.path()))
-        .expect("same identity is valid");
-    let second_identity = endpoint_identity(&second, profile.path(), Some(second_workspace.path()))
-        .expect("second identity is valid");
+    let first_identity = endpoint_identity(first.profile_root());
+    let same_identity = endpoint_identity(same.profile_root());
+    let second_identity = endpoint_identity(second.profile_root());
 
     assert_eq!(first_identity, same_identity);
     assert_eq!(first_identity, second_identity);
@@ -55,8 +54,8 @@ fn endpoint_identity_is_shared_across_workspace_trust_policies() {
     );
 
     assert_eq!(
-        endpoint_identity(&host, profile.path(), Some(workspace.path())).unwrap(),
-        endpoint_identity(&user, profile.path(), Some(workspace.path())).unwrap()
+        endpoint_identity(host.profile_root()),
+        endpoint_identity(user.profile_root())
     );
 }
 
@@ -82,7 +81,35 @@ fn endpoint_identity_is_shared_across_product_service_adapters() {
     );
 
     assert_eq!(
-        endpoint_identity(&first, profile.path(), Some(workspace.path())).unwrap(),
-        endpoint_identity(&second, profile.path(), Some(workspace.path())).unwrap()
+        endpoint_identity(first.profile_root()),
+        endpoint_identity(second.profile_root())
+    );
+}
+
+#[test]
+fn lifecycle_output_uses_one_stable_camel_case_json_contract() {
+    let output = LifecycleOutput {
+        status: LifecycleStatus::Running,
+        pid: Some(42),
+        instance_id: Some("instance".into()),
+        daemon_version: "1.2.3".into(),
+        endpoint_path: "daemon.sock".into(),
+        log_path: "daemon.log".into(),
+        app_server_name: Some("zeta-app-server".into()),
+        schema_hash: Some("sha256:test".into()),
+    };
+
+    assert_eq!(
+        serde_json::to_value(output).unwrap(),
+        serde_json::json!({
+            "status": "running",
+            "pid": 42,
+            "instanceId": "instance",
+            "daemonVersion": "1.2.3",
+            "endpointPath": "daemon.sock",
+            "logPath": "daemon.log",
+            "appServerName": "zeta-app-server",
+            "schemaHash": "sha256:test",
+        })
     );
 }

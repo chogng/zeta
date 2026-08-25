@@ -11,14 +11,15 @@ Zeta Code CLI/TUI composition. The canonical cross-product consumer boundary is 
 while `run_app_server` and `run_remote` preserve compatibility for product hosts that already parse
 their own top-level arguments. `src/main.rs` only maps process success and failure to an exit code.
 
-`src/app_server.rs::run` validates direct and broker-connect commands; binds
+`src/app_server.rs::run` validates direct, broker-connect, and daemon lifecycle commands; binds
 `ZETA_PROFILE_ROOT`; binds a Workspace only when `ZETA_WORKSPACE_ROOT` is explicitly present;
 resolves the optional product services manifest through `InstallContext`; and delegates server
 behavior to `zeta-app-server`. It must never infer a Workspace from the host process current
 directory.
 
-`zeta-app-server-daemon` owns the local profile authority process, daemon election, private socket
-paths, bounded connection prelude, stdio proxy, logs, idle shutdown, and stale-start recovery.
+`zeta-app-server-daemon` owns the local profile authority process, serialized lifecycle operations,
+private socket paths, bounded data/control preludes, process-generation records, initialize/schema
+readiness probes, stdio proxy, bounded logs, cooperative stop, idle shutdown, and stale-state recovery.
 `app-server connect` resolves its packaged executable from `ZETA_APP_SERVER_DAEMON_PATH`, or from
 the `zeta-server` sibling path for standalone and Remote runtime packages. The daemon crate's
 [`README`](../app-server-daemon/README.md) defines its profile-wide and Workspace-scoped ownership.
@@ -48,7 +49,8 @@ renderer policy, or product-specific command discovery here is architectural dri
 
 ## Tests and extension points
 
-Run `cargo test -p zeta-server-host -p zeta-app-server-daemon`. Server-host stdio tests exercise the
-direct compatibility binary; daemon tests exercise the real profile endpoint and initialize gate.
+Run `cargo test -p zeta-server-host -p zeta-app-server-daemon`. Server-host tests exercise direct
+compatibility and command parsing; daemon tests exercise the real profile endpoint, concurrent
+startup election, idempotent lifecycle commands, generation replacement, and initialize gate.
 Add a new command only when it is backend-neutral and has a canonical shared domain owner. Product
 commands remain in their product host.

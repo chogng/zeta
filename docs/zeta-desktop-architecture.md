@@ -230,8 +230,10 @@ initialize gate。
 Main 必须：
 
 1. 从应用包内确定的绝对路径启动 `zeta-server app-server connect`；`server-host` 调用
-   `zeta-app-server-daemon` crate 连接或选举 profile-scoped local authority，并以 connection
-   prelude 选择 Workspace runtime；
+   `zeta-app-server-daemon` crate 串行化 start、连接或选举 profile-scoped local authority，以
+   connection prelude 选择 Workspace runtime，并在交付 stdio 前完成真实 initialize/schema
+   readiness probe；显式诊断和恢复使用 `app-server daemon start|restart|stop|version` 的单行 JSON
+   控制面；
 2. 使用 `shell: false`，只传递环境变量 allowlist；
 3. 在创建业务 UI 前完成 `initialize`；
 4. 校验 protocol version、schema hash 和 server build；
@@ -760,7 +762,8 @@ TypeScript 生成。进程内 CLI client 与 Desktop stdio client 必须经过�
 
 - 可运行的 `zeta` 二进制；
 - `zeta-server app-server connect`（共享 local authority）与 `--listen stdio://`（direct compatibility）；
-- 独立的 `zeta-app-server-daemon` binary（profile authority、socket 与 idle lifecycle）；
+- 独立的 `zeta-app-server-daemon` binary（profile authority、process-generation record、真实
+  initialize readiness、协作停止、socket 与 idle lifecycle）；
 - `zeta-rs/app-server-protocol/schema/types.ts`；
 - `zeta-rs/app-server-protocol/schema/schema.json`；
 - schema hash；
