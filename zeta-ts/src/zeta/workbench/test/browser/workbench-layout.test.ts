@@ -678,8 +678,12 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	dom.window.document.body.append(sidebar.domNode);
 	const compositeBar = sidebar.compositeBar;
 	const selections: string[] = [];
+	const activeCompositeChanges: string[] = [];
 	disposables.add(sidebar.onDidSelectComposite(
 		({ compositeId }) => selections.push(compositeId),
+	));
+	disposables.add(sidebar.onDidChangeActiveComposite(
+		compositeId => activeCompositeChanges.push(compositeId),
 	));
 
 	assert.equal(
@@ -815,6 +819,11 @@ test("Sidebar hosts its Composite Bar before content", () => {
 		explorerComposite,
 	);
 	assert.equal(explorerComposite.element.hidden, false);
+	assert.deepEqual(activeCompositeChanges, [
+		explorerComposite.id,
+		searchComposite.id,
+		explorerComposite.id,
+	]);
 
 	disposables.dispose();
 	dom.window.close();

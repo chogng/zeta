@@ -51,6 +51,29 @@ test("scoped contexts inherit values and override the nearest DOM subtree", () =
 	assert.equal(childContext.getValue("test.language"), "global");
 });
 
+test('context key change buffering publishes one complete change set', () => {
+	using contexts = new ContextKeyService();
+	const changes: string[][] = [];
+	using listener = contexts.onDidChangeContext(event => {
+		changes.push([...event.keys].sort());
+	});
+
+	contexts.bufferChangeEvents(() => {
+		contexts.setContext('resource', 'file:///project/main.ts');
+		contexts.setContext('resourceScheme', 'file');
+		contexts.bufferChangeEvents(() => {
+			contexts.setContext('resourceLangId', 'typescript');
+			contexts.setContext('resourceScheme', 'file');
+		});
+	});
+
+	assert.deepEqual(changes, [[
+		'resource',
+		'resourceLangId',
+		'resourceScheme',
+	]]);
+});
+
 function fakeNode(parentNode: Node | null = null): Node {
 	return {
 		nodeType: 1,

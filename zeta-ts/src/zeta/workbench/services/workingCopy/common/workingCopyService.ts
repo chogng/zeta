@@ -38,6 +38,8 @@ export interface IWorkingCopy extends IDisposable {
 export interface IWorkingCopyService extends IDisposable {
 	readonly onDidRegister: Event<IWorkingCopy>;
 	readonly onDidUnregister: Event<IWorkingCopy>;
+	readonly onDidChangeDirty: Event<void>;
+	readonly hasDirtyWorkingCopies: boolean;
 	register(workingCopy: IWorkingCopy): IDisposable;
 	get(resource: URI): readonly IWorkingCopy[];
 	getAll(): readonly IWorkingCopy[];

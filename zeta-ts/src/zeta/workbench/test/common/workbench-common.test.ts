@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { toDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter } from '../../../base/common/event.js';
+import { DisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import {
 	ConfigurationsRegistry,
@@ -22,10 +23,12 @@ import {
 	WorkbenchState,
 } from "../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../workbench/services/workspaces/browser/workspaceContextService.js";
+import { BrowserWorkingCopyService } from '../../../workbench/services/workingCopy/browser/browserWorkingCopyService.js';
 import {
 	getVisibleViewContextKey,
 } from "../../../workbench/common/contextkeys.js";
 import {
+	bindWorkbenchActiveCompositeContextKeys,
 	bindWorkbenchContextKeys,
 } from "../../../workbench/browser/contextkeys.js";
 import {
@@ -56,11 +59,19 @@ test("workbench context keys describe the current workspace", () => {
 		id: "workspace",
 		uri: URI.file("C:\\project"),
 	});
-	using bindings = bindWorkbenchContextKeys(contextKeys, workspace);
+	using workingCopies = new BrowserWorkingCopyService();
+	const initialChanges: string[][] = [];
+	using listener = contextKeys.onDidChangeContext(event => initialChanges.push([...event.keys].sort()));
+	using bindings = bindWorkbenchContextKeys(contextKeys, workspace, workingCopies);
 
+	assert.deepEqual(initialChanges, [[
+		'dirtyWorkingCopies',
+		'workbenchState',
+		'workspaceFolderCount',
+	]]);
 	assert.equal(contextKeys.getValue("workbenchState"), "folder");
 	assert.equal(contextKeys.getValue("workspaceFolderCount"), 1);
-	assert.equal(contextKeys.getValue("sideBarVisible"), true);
+	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), false);
 	assert.equal(
 		getVisibleViewContextKey("zeta.explorer"),
 		"view.zeta.explorer.visible",
@@ -69,6 +80,59 @@ test("workbench context keys describe the current workspace", () => {
 	workspace.updateWorkspace({ id: "empty" });
 	assert.equal(contextKeys.getValue("workbenchState"), "empty");
 	assert.equal(contextKeys.getValue("workspaceFolderCount"), 0);
+
+	using copy = new TestWorkingCopy(URI.file('C:\\project\\main.ts'));
+	using registration = workingCopies.register(copy);
+	copy.setDirty(true);
+	assert.equal(contextKeys.getValue('dirtyWorkingCopies'), true);
+});
+
+test('workbench context keys follow active view containers', () => {
+	using contextKeys = new ContextKeyService();
+	using sidebar = new TestCompositeContextSource('zeta.explorer');
+	using auxiliarybar = new TestCompositeContextSource('zeta.chat');
+	using agentSidebar = new TestCompositeContextSource();
+	using panel = new TestCompositeContextSource('zeta.panel.problems');
+	const changes: string[][] = [];
+	using listener = contextKeys.onDidChangeContext(event => changes.push([...event.keys].sort()));
+
+	{
+		using bindings = bindWorkbenchActiveCompositeContextKeys(contextKeys, {
+			sidebar,
+			auxiliarybar,
+			agentSidebar,
+			panel,
+		});
+		assert.deepEqual(changes, [[
+			'activeAgentSidebar',
+			'activeAuxiliary',
+			'activePanel',
+			'activeViewlet',
+		]]);
+		assert.deepEqual(activeCompositeContext(contextKeys), {
+			activeViewlet: 'zeta.explorer',
+			activeAuxiliary: 'zeta.chat',
+			activeAgentSidebar: '',
+			activePanel: 'zeta.panel.problems',
+		});
+
+		sidebar.setActive('zeta.search');
+		agentSidebar.setActive('zeta.agent');
+		panel.setActive('zeta.panel.terminal');
+		assert.deepEqual(activeCompositeContext(contextKeys), {
+			activeViewlet: 'zeta.search',
+			activeAuxiliary: 'zeta.chat',
+			activeAgentSidebar: 'zeta.agent',
+			activePanel: 'zeta.panel.terminal',
+		});
+	}
+
+	assert.deepEqual(activeCompositeContext(contextKeys), {
+		activeViewlet: '',
+		activeAuxiliary: '',
+		activeAgentSidebar: '',
+		activePanel: '',
+	});
 });
 
 test("workbench contributions start once at their declared phases", () => {
@@ -310,4 +374,55 @@ class TestView implements IView {
 	setVisible(visible: boolean): void {
 		this.visible = visible;
 	}
+}
+
+function activeCompositeContext(contextKeys: ContextKeyService): Record<string, unknown> {
+	return {
+		activeViewlet: contextKeys.getValue('activeViewlet'),
+		activeAuxiliary: contextKeys.getValue('activeAuxiliary'),
+		activeAgentSidebar: contextKeys.getValue('activeAgentSidebar'),
+		activePanel: contextKeys.getValue('activePanel'),
+	};
+}
+
+class TestCompositeContextSource extends DisposableOwner {
+	private readonly activeCompositeEmitter = this.own(new Emitter<string>());
+	readonly onDidChangeActiveComposite = this.activeCompositeEmitter.event;
+
+	constructor(public activeCompositeId: string | undefined = undefined) {
+		super();
+	}
+
+	setActive(id: string): void {
+		this.activeCompositeId = id;
+		this.activeCompositeEmitter.fire(id);
+	}
+}
+
+class TestWorkingCopy extends DisposableOwner {
+	private readonly dirtyEmitter = this.own(new Emitter<void>());
+	private readonly contentEmitter = this.own(new Emitter<void>());
+	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+	readonly onDidChangeDirty = this.dirtyEmitter.event;
+	readonly onDidChangeContent = this.contentEmitter.event;
+	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
+	readonly backupKind = 'text' as const;
+	readonly hasExternalChange = false;
+	isDirty = false;
+
+	constructor(readonly resource: URI) {
+		super();
+	}
+
+	setDirty(isDirty: boolean): void {
+		if (this.isDirty === isDirty) return;
+		this.isDirty = isDirty;
+		this.dirtyEmitter.fire();
+	}
+
+	backup(): string { return ''; }
+	restoreBackup(): void {}
+	async save(): Promise<void> {}
+	async saveAs(): Promise<void> {}
+	async revert(): Promise<void> {}
 }

@@ -18,9 +18,7 @@ import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymb
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
-import type {
-	Context,
-} from "../../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService, type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
 import type {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
@@ -59,6 +57,9 @@ const {
 	IEditorPart,
 } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorPart.js"
+);
+const { bindEditorContextKeys } = await import(
+	'../../../../../../workbench/browser/contextkeys.js'
 );
 const {
 	EditorGroupWatermarkEntries,
@@ -608,11 +609,52 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 			},
 		},
 	});
+	using editorContexts = bindEditorContextKeys(contextKeys, editor, registry);
 	services.set(IEditorPart, editor);
 	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
-	assert.equal(contextKeys.getValue(ActiveEditorContext.key), "stanza.editor.code");
+	assert.deepEqual({
+		activeEditor: contextKeys.getValue(ActiveEditorContext.key),
+		activeEditorAvailableEditorIds: contextKeys.getValue('activeEditorAvailableEditorIds'),
+		activeEditorGroupEmpty: contextKeys.getValue('activeEditorGroupEmpty'),
+		activeEditorGroupIndex: contextKeys.getValue('activeEditorGroupIndex'),
+		activeEditorGroupLast: contextKeys.getValue('activeEditorGroupLast'),
+		activeEditorIsFirstInGroup: contextKeys.getValue('activeEditorIsFirstInGroup'),
+		activeEditorIsLastInGroup: contextKeys.getValue('activeEditorIsLastInGroup'),
+		activeEditorIsNotPreview: contextKeys.getValue('activeEditorIsNotPreview'),
+		editorIsOpen: contextKeys.getValue('editorIsOpen'),
+		groupEditorsCount: contextKeys.getValue('groupEditorsCount'),
+		multipleEditorGroups: contextKeys.getValue('multipleEditorGroups'),
+		resource: contextKeys.getValue('resource'),
+		resourceDirname: contextKeys.getValue('resourceDirname'),
+		resourceExtname: contextKeys.getValue('resourceExtname'),
+		resourceFilename: contextKeys.getValue('resourceFilename'),
+		resourceLangId: contextKeys.getValue('resourceLangId'),
+		resourcePath: contextKeys.getValue('resourcePath'),
+		resourceScheme: contextKeys.getValue('resourceScheme'),
+		resourceSet: contextKeys.getValue('resourceSet'),
+	}, {
+		activeEditor: 'stanza.editor.code',
+		activeEditorAvailableEditorIds: 'stanza.editor.code',
+		activeEditorGroupEmpty: false,
+		activeEditorGroupIndex: 1,
+		activeEditorGroupLast: true,
+		activeEditorIsFirstInGroup: true,
+		activeEditorIsLastInGroup: true,
+		activeEditorIsNotPreview: true,
+		editorIsOpen: true,
+		groupEditorsCount: 1,
+		multipleEditorGroups: false,
+		resource: activeInput.resource.toString(),
+		resourceDirname: 'C:\\project',
+		resourceExtname: '.ts',
+		resourceFilename: 'main.ts',
+		resourceLangId: 'typescript',
+		resourcePath: 'C:\\project\\main.ts',
+		resourceScheme: 'file',
+		resourceSet: true,
+	});
 	editor.layout({ width: 800, height: 600 });
 
 	const toolbar = editor.domNode.querySelector(
@@ -639,6 +681,15 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 
 	assert.equal(editor.groups.length, 2);
 	assert.equal(editor.activeGroup, editor.groups[1]);
+	assert.deepEqual({
+		activeEditorGroupIndex: contextKeys.getValue('activeEditorGroupIndex'),
+		activeEditorGroupLast: contextKeys.getValue('activeEditorGroupLast'),
+		multipleEditorGroups: contextKeys.getValue('multipleEditorGroups'),
+	}, {
+		activeEditorGroupIndex: 2,
+		activeEditorGroupLast: true,
+		multipleEditorGroups: true,
+	});
 	assert.deepEqual(
 		editor.groups.map((group) => group.inputs),
 		[[activeInput], [activeInput]],
@@ -702,6 +753,81 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
 	dom.window.close();
 });
 
+test('editor context keys follow preview, readonly, dirty, and close transitions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+	const registry = new EditorPaneRegistry();
+	const resource = URI.file('C:\\project\\readonly.ts');
+	let workingCopy: TestWorkingCopy | undefined;
+	registry.register(descriptor(
+		'stanza.editor.code',
+		'.ts',
+		() => {
+			workingCopy = new TestWorkingCopy(resource);
+			return new TestEditorPane('stanza.editor.code', workingCopy);
+		},
+	));
+	using contextKeys = new ContextKeyService();
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const contextChanges: string[][] = [];
+	using contextListener = contextKeys.onDidChangeContext(event => contextChanges.push([...event.keys]));
+	using editorContexts = bindEditorContextKeys(contextKeys, editor, registry);
+	assert.equal(contextChanges.length, 1);
+	assert.equal(contextChanges[0]?.includes('activeEditor'), true);
+	assert.equal(contextChanges[0]?.includes('resourceSet'), true);
+	const activeInput: EditorInput = { resource, languageId: 'typescript', readOnly: true };
+	await editor.openEditor(activeInput, { pinned: false });
+
+	assert.deepEqual({
+		canRevert: contextKeys.getValue('activeEditorCanRevert'),
+		dirty: contextKeys.getValue('activeEditorIsDirty'),
+		pinned: contextKeys.getValue('activeEditorIsNotPreview'),
+		readonly: contextKeys.getValue('activeEditorIsReadonly'),
+	}, {
+		canRevert: true,
+		dirty: false,
+		pinned: false,
+		readonly: true,
+	});
+	workingCopy?.setDirty(true);
+	assert.equal(contextKeys.getValue('activeEditorIsDirty'), true);
+
+	editor.closeEditor(activeInput);
+	assert.deepEqual({
+		activeEditor: contextKeys.getValue('activeEditor'),
+		dirty: contextKeys.getValue('activeEditorIsDirty'),
+		editorIsOpen: contextKeys.getValue('editorIsOpen'),
+		resource: contextKeys.getValue('resource'),
+		resourceSet: contextKeys.getValue('resourceSet'),
+	}, {
+		activeEditor: '',
+		dirty: false,
+		editorIsOpen: false,
+		resource: undefined,
+		resourceSet: false,
+	});
+
+	await editor.openEditor(activeInput, {}, 'modalGroup');
+	assert.deepEqual({
+		activeEditor: contextKeys.getValue('activeEditor'),
+		activeEditorGroupEmpty: contextKeys.getValue('activeEditorGroupEmpty'),
+		editorPartModalVisible: contextKeys.getValue('editorPartModalVisible'),
+		groupEditorsCount: contextKeys.getValue('groupEditorsCount'),
+		resourceSet: contextKeys.getValue('resourceSet'),
+	}, {
+		activeEditor: 'stanza.editor.code',
+		activeEditorGroupEmpty: false,
+		editorPartModalVisible: true,
+		groupEditorsCount: 0,
+		resourceSet: true,
+	});
+	editor.closeEditor(activeInput);
+	assert.equal(contextKeys.getValue('editorPartModalVisible'), false);
+
+	editor.dispose();
+	dom.window.close();
+});
+
 test("EditorPart rejects an open superseded by ordinary content", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
@@ -748,8 +874,9 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 	readonly revealedRanges: TextRange[] = [];
 	get disposed(): boolean { return this.isDisposed; }
 
-	constructor(readonly id: string) {
+	constructor(readonly id: string, readonly workingCopy?: TestWorkingCopy) {
 		super();
+		if (workingCopy) this.own(workingCopy);
 	}
 
 	create(parent: HTMLElement): void {
@@ -791,6 +918,34 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 	async save(): Promise<void> {
 		this.saveCount += 1;
 	}
+}
+
+class TestWorkingCopy extends DisposableOwner {
+	private readonly dirtyEmitter = this.own(new Emitter<void>());
+	private readonly contentEmitter = this.own(new Emitter<void>());
+	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+	readonly onDidChangeDirty = this.dirtyEmitter.event;
+	readonly onDidChangeContent = this.contentEmitter.event;
+	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
+	readonly backupKind = 'text' as const;
+	readonly hasExternalChange = false;
+	isDirty = false;
+
+	constructor(readonly resource: URI) {
+		super();
+	}
+
+	setDirty(isDirty: boolean): void {
+		if (this.isDirty === isDirty) return;
+		this.isDirty = isDirty;
+		this.dirtyEmitter.fire();
+	}
+
+	backup(): string { return ''; }
+	restoreBackup(): void {}
+	async save(): Promise<void> {}
+	async saveAs(): Promise<void> {}
+	async revert(): Promise<void> {}
 }
 
 function nextTask(): Promise<void> {

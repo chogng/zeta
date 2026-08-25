@@ -114,6 +114,8 @@ import {
 	DialogService,
 } from "../services/dialogs/common/dialogService.js";
 import {
+	bindEditorContextKeys,
+	bindWorkbenchActiveCompositeContextKeys,
 	bindWorkbenchContextKeys,
 	bindWorkbenchPartVisibilityContextKeys,
 } from "./contextkeys.js";
@@ -127,6 +129,7 @@ import { BrowserWorkspaceSearchService } from "../../platform/search/browser/sea
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
 import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";
+import { EditorPanes } from './parts/editor/editorRegistry.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
@@ -532,7 +535,7 @@ export class Workbench extends DisposableOwner {
 				configurationService: configuration,
 			}));
 		services.set(IAccessibilityService, accessibilityService);
-		this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext));
+		this.own(bindWorkbenchContextKeys(contextKeys, workspaceContext, workingCopyService));
 		const viewDescriptors = this.own(new ViewDescriptorService({
 			contextKeyService: contextKeys,
 		}));
@@ -634,6 +637,7 @@ export class Workbench extends DisposableOwner {
 				},
 			},
 		}));
+		this.own(bindEditorContextKeys(contextKeys, editor, EditorPanes, languageFeaturesService));
 		services.set(IEditorPart, editor);
 		services.set(IEditorService, new BrowserEditorService(editor));
 		const openSidebarComposite = (
@@ -734,6 +738,12 @@ export class Workbench extends DisposableOwner {
 			localizationService,
 		}));
 		const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
+		this.own(bindWorkbenchActiveCompositeContextKeys(contextKeys, {
+			sidebar,
+			auxiliarybar,
+			agentSidebar,
+			panel,
+		}));
 
 		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
 			["titlebar", titlebar],

@@ -118,6 +118,8 @@ function emptyWorkingCopies(): IWorkingCopyService {
 	return {
 		onDidRegister: emptyEvent,
 		onDidUnregister: emptyEvent,
+		onDidChangeDirty: emptyEvent,
+		hasDirtyWorkingCopies: false,
 		register: () => toDisposable(() => undefined),
 		get: () => [],
 		getAll: () => [],

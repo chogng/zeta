@@ -88,7 +88,7 @@ export interface EditorGroupOptions {
 	readonly welcome?: EditorWelcomeOptions;
 	readonly welcomeVisible?: boolean;
 	readonly onDidActivate?: () => void;
-	readonly onDidChangeActiveEditor?: () => void;
+	readonly onDidChangeEditors?: () => void;
 	readonly dragAndDrop?: IEditorTabDragAndDrop;
 }
 
@@ -112,7 +112,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	private readonly contextKeyService: IContextKeyService | undefined;
 	private readonly scopedContextKeyService: IScopedContextKeyService | undefined;
 	private readonly activeEditorContext: IContextKey<string> | undefined;
-	private readonly onDidChangeActiveEditor: (() => void) | undefined;
+	private readonly onDidChangeEditors: (() => void) | undefined;
 	private readonly keybindingService: IKeybindingService | undefined;
 	private readonly keybindingsResourceService: IKeybindingsResourceService | undefined;
 	private readonly keyboardLayoutService: IKeyboardLayoutService | undefined;
@@ -151,7 +151,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.registry = options.registry;
 		this.configurationService = options.configurationService;
 		this.contextKeyService = options.contextKeyService;
-		this.onDidChangeActiveEditor = options.onDidChangeActiveEditor;
+		this.onDidChangeEditors = options.onDidChangeEditors;
 		this.keybindingService = options.keybindingService;
 		this.keybindingsResourceService = options.keybindingsResourceService;
 		this.keyboardLayoutService = options.keyboardLayoutService;
@@ -422,8 +422,8 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		if (wasActive) {
 			const next = this.entries[index] ?? this.entries[index - 1];
 			if (next) this.activateEntry(next, true);
-			else this.updateActiveEditorContext();
 		}
+		this.updateEditorContext();
 		this.renderContent();
 		this.renderChrome();
 	}
@@ -470,6 +470,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.entries.splice(adjustedIndex, 0, entry);
 		this.renderContent();
 		this.renderChrome();
+		this.updateEditorContext();
 	}
 
 	private async openExternalEditors(dataTransfer: DataTransfer | null, target: EditorInput | undefined, position: EditorTabDropPosition): Promise<void> {
@@ -502,7 +503,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		}
 		this.entries.length = 0;
 		this.activeEntry = undefined;
-		this.updateActiveEditorContext();
+		this.updateEditorContext();
 		this.ordinaryContent = content;
 		this.renderContent();
 		this.renderChrome();
@@ -521,12 +522,11 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 	}
 
 	private activateEntry(entry: EditorGroupEntry, focus: boolean): void {
-		const changed = this.activeEntry !== entry;
 		if (this.activeEntry !== entry) {
 			this.activeEntry?.paneInstance.setVisible(EditorPaneVisibility.Hidden);
 			this.activeEntry = entry;
 		}
-		if (changed) this.updateActiveEditorContext();
+		this.updateEditorContext();
 		this.ordinaryContent = undefined;
 		this.renderContent();
 		entry.paneInstance.pane.layout(this.dimension);
@@ -535,9 +535,9 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		if (focus) entry.paneInstance.pane.focus();
 	}
 
-	private updateActiveEditorContext(): void {
+	private updateEditorContext(): void {
 		this.activeEditorContext?.set(this.activePane?.id ?? "");
-		this.onDidChangeActiveEditor?.();
+		this.onDidChangeEditors?.();
 	}
 
 	private renderContent(): void {

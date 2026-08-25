@@ -23,18 +23,41 @@ test("BrowserWorkingCopyService indexes and unregisters format-specific copies",
 	assert.deepEqual(unregistered, [copy]);
 });
 
+test('BrowserWorkingCopyService publishes aggregate dirty state changes', () => {
+	using service = new BrowserWorkingCopyService();
+	using first = new FakeWorkingCopy(URI.file('C:\\project\\first.ts'));
+	using second = new FakeWorkingCopy(URI.file('C:\\project\\second.ts'));
+	const changes: boolean[] = [];
+	using listener = service.onDidChangeDirty(() => changes.push(service.hasDirtyWorkingCopies));
+	using firstRegistration = service.register(first);
+	using secondRegistration = service.register(second);
+
+	first.setDirty(true);
+	second.setDirty(true);
+	first.setDirty(false);
+	second.setDirty(false);
+
+	assert.deepEqual(changes, [true, false]);
+});
+
 class FakeWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	private readonly dirtyEmitter = this.own(new Emitter<void>());
 	private readonly externalChangeEmitter = this.own(new Emitter<void>());
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
 	readonly onDidChangeContent = this.dirtyEmitter.event;
-	readonly isDirty = false;
+	isDirty = false;
 	readonly hasExternalChange = false;
 	readonly backupKind = "text" as const;
 
 	constructor(readonly resource: URI) {
 		super();
+	}
+
+	setDirty(isDirty: boolean): void {
+		if (this.isDirty === isDirty) return;
+		this.isDirty = isDirty;
+		this.dirtyEmitter.fire();
 	}
 
 	async save(_signal: AbortSignal): Promise<void> {}

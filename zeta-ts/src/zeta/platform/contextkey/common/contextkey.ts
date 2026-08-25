@@ -51,6 +51,7 @@ export interface IContextKeyService extends Context {
 	): IContextKey<T>;
 	createScoped(target: HTMLElement): IScopedContextKeyService;
 	getContext(target?: Node | null): Context;
+	bufferChangeEvents(callback: () => void): void;
 	setContext(key: string, value: ContextKeyValue): void;
 	removeContext(key: string): void;
 }
@@ -149,6 +150,8 @@ export const ContextKeyExpr = {
 interface ContextKeyState {
 	readonly emitter: Emitter<ContextKeyChangeEvent>;
 	readonly scopes: WeakMap<Node, AbstractContextKeyService>;
+	readonly bufferedKeys: Set<string>;
+	bufferDepth: number;
 	root: AbstractContextKeyService | undefined;
 }
 
@@ -213,6 +216,20 @@ abstract class AbstractContextKeyService
 			this;
 	}
 
+	bufferChangeEvents(callback: () => void): void {
+		this.state.bufferDepth += 1;
+		try {
+			callback();
+		} finally {
+			this.state.bufferDepth -= 1;
+			if (this.state.bufferDepth === 0 && this.state.bufferedKeys.size > 0) {
+				const keys = new Set(this.state.bufferedKeys);
+				this.state.bufferedKeys.clear();
+				fireContextChange(this.state, keys);
+			}
+		}
+	}
+
 	setContext(key: string, value: ContextKeyValue): void {
 		if (this.values.has(key) && Object.is(this.values.get(key), value)) {
 			return;
@@ -233,6 +250,8 @@ export class ContextKeyService extends AbstractContextKeyService {
 		const state: ContextKeyState = {
 			emitter: new Emitter<ContextKeyChangeEvent>(),
 			scopes: new WeakMap(),
+			bufferedKeys: new Set(),
+			bufferDepth: 0,
 			root: undefined,
 		};
 		super(state);
@@ -311,6 +330,10 @@ function fireContextChange(
 	keys: ReadonlySet<string>,
 ): void {
 	if (keys.size === 0) return;
+	if (state.bufferDepth > 0) {
+		for (const key of keys) state.bufferedKeys.add(key);
+		return;
+	}
 	state.emitter.fire({
 		keys,
 		affectsSome(candidateKeys): boolean {
