@@ -152,6 +152,10 @@ export class EditorViewport extends DisposableOwner {
 	private readonly textDirection: EditorTextDirection;
 	private softWrapping: boolean;
 
+	get currentLayout(): EditorViewportLayout {
+		return this.viewport.layout;
+	}
+
 	constructor(options: EditorViewportOptions) {
 		super();
 		const ownerDocument = options.container.ownerDocument;

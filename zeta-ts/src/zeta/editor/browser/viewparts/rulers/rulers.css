@@ -12,7 +12,7 @@
   top: 0;
   width: 1px;
   pointer-events: none;
-  box-shadow: 1px 0 0 0 var(--zeta-editor-ruler-foreground, color-mix(in srgb, var(--zeta-editor-foreground) 25%, transparent)) inset;
+  box-shadow: 1px 0 0 0 color-mix(in srgb, var(--zeta-editor-foreground) 25%, transparent) inset;
 }
 
 @media (forced-colors: active) {

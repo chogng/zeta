@@ -28,6 +28,13 @@ export interface IConfirmationDialogOptions extends IDialogOptions {
 	readonly cancelButton?: string;
 }
 
+/** Options for a modal decision with save, discard, and cancel-style outcomes. */
+export interface IPromptDialogOptions extends IDialogOptions {
+	readonly primaryButton: string;
+	readonly secondaryButton: string;
+	readonly cancelButton?: string;
+}
+
 /** Requests understood by a host-specific dialog handler. */
 export type DialogRequest =
 	| ({
@@ -35,11 +42,15 @@ export type DialogRequest =
 	} & IMessageDialogOptions)
 	| ({
 		readonly kind: "confirmation";
-	} & IConfirmationDialogOptions);
+	} & IConfirmationDialogOptions)
+	| ({
+		readonly kind: "prompt";
+	} & IPromptDialogOptions);
 
 /** Result returned by a host-specific dialog handler. */
 export enum DialogResult {
 	Primary = "primary",
+	Secondary = "secondary",
 	Cancel = "cancel",
 }
 
@@ -59,6 +70,7 @@ export interface IDialogHandler {
 export interface IDialogService {
 	showMessage(options: IMessageDialogOptions): Promise<void>;
 	confirm(options: IConfirmationDialogOptions): Promise<boolean>;
+	prompt(options: IPromptDialogOptions): Promise<DialogResult>;
 }
 
 export const IDialogService =

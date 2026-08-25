@@ -186,7 +186,7 @@ zeta-ts/
 │       ├── code/
 │       ├── editor/
 │       ├── platform/
-│       ├── product/
+│       ├── sessions/
 │       └── workbench/
 ├── generated/
 │   └── app-server/
@@ -198,11 +198,11 @@ zeta-ts/
 
 `src/` 根目录属于宿主进程启动侧。`bootstrap.ts` 只配置必须在 Electron `ready`
 之前生效的进程级策略，`main.ts` 在 bootstrap 完成后加载 Zeta 应用入口。
-`src/zeta/` 是产品源码命名空间；其中 `code/electron-main/main.ts` 选择产品并创建
+`src/zeta/` 是 Desktop 源码命名空间；其中 `code/electron-main/main.ts` 读取初始 Workbench Mode 并创建
 `ZetaApplication`，`code/electron-main/app.ts` 持有服务、窗口、IPC 与退出生命周期。
-产品功能不得反向进入根 bootstrap。
+Workbench 功能不得反向进入根 bootstrap。
 
-产品主进程入口同步注册 Electron `ready` 监听器；异步启动链只能从该监听器触发，
+Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链只能从该监听器触发，
 不得在 ESM 顶层等待一个内部再调用 `app.whenReady()` 的 Promise。
 `ZetaApplication.startupAfterReady()` 断言 Ready 前置条件，并在不创建业务窗口的状态下
 完成 App Server gate。gate 成功后才创建 Workbench；主窗口在 `ready-to-show` 前保持隐藏，
@@ -369,11 +369,11 @@ Renderer Host，也不能导入生成 DTO。所有产品代码禁止直接导入
 execute(method: string, params?: unknown): Promise<unknown>
 ```
 
-### 5.1 平台服务与产品装配
+### 5.1 平台服务与 Workbench 装配
 
-平台目录按“契约、运行时适配、产品装配”分层，不按 VS Code 的目录名称机械对齐。当前稳定边界如下：
+平台目录按“契约、运行时适配、Workbench 装配”分层，不按 VS Code 的目录名称机械对齐。当前稳定边界如下：
 
-| 能力 | 前端契约 owner | 运行时或传输 owner | 产品装配责任 |
+| 能力 | 前端契约 owner | 运行时或传输 owner | Workbench 装配责任 |
 | --- | --- | --- | --- |
 | 配置 | `configurationService.ts` | `configurationIpc.ts` 与 Electron adapters | Workbench 创建窗口级 service |
 | 生命周期 | `ILifecycleService` | `BrowserLifecycleService` | Workbench 注册 backup、storage 等同步 joiner |
@@ -381,7 +381,7 @@ execute(method: string, params?: unknown): Promise<unknown>
 | 外部 URL 与剪贴板 | `IOpenerService` / `IClipboardService` | Browser、Electron Main adapters | Connector host 注入适配器 |
 | 编辑器打开 | `IEditorService` | `BrowserEditorService` | Workbench 把具体 `EditorPart` 封装在 service 后面 |
 | 窗口宿主操作 | `IWorkbenchHostService` | `WorkbenchWindow` | Workbench 注册当前窗口实现 |
-| Code 产品能力 | 各领域 `I*Service` | 对应 browser service implementation | `codeWorkbenchServices.ts` 静态选择并按依赖安装 |
+| Code Mode 能力 | 各领域 `I*Service` | 对应 browser service implementation | `codeWorkbenchServices.ts` 按 Mode 静态选择并按依赖安装 |
 
 `common/*Service.ts` 只能包含调用方使用的领域类型和 service identifier。IPC channel、生成 DTO、
 context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现中；UI contribution 不得负责
@@ -391,8 +391,9 @@ context bridge API 与 host validation 留在 `*Ipc.ts` 或具体运行时实现
 Zeta 当前没有 VS Code `externalServices` 中的 telemetry machine ID / Marketplace header 组合语义，
 也没有构建时替换的 Copilot license endpoint，因此不建立同名空目录。Marketplace 请求继续由
 `platform/marketplace` 拥有；不可把任意网络调用、外部 URL 或产品常量汇总进一个模糊的
-`externalServices` 或 `endpoint` 包。运行时事实保留在 `base/common/environment.ts`，产品版本在
-`product`，跨产品本地资料根在 `platform/profile`；只有出现需要注入、替换或拥有生命周期的真实
+`externalServices` 或 `endpoint` 包。运行时事实保留在 `base/common/environment.ts`，固定 Desktop
+应用身份保留在 `code/common/application.ts`，内置模式目录保留在 `workbench/common/workbenchMode.ts`，
+跨客户端本地资料根在 `platform/profile`；只有出现需要注入、替换或拥有生命周期的真实
 调用方时，才把这些不可变策略升级成 service。
 
 ## 6. Renderer
@@ -413,15 +414,11 @@ Renderer 不复制 Rust 状态机。遇到 durable `sequence` 或 `streamCursor`
 
 ### 6.1 Editor 宿主
 
-`EditorPart` 是 Workbench 中央编辑区域的唯一宿主。`EditorInput` 表示待打开资源；
-`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义；
-`EditorPaneRegistry` 负责默认匹配、候选枚举和显式编辑器选择。具体产品装配规则由
-[`workbench-modes.md`](workbench-modes.md) 负责。
+`EditorParts` 是跨浏览器窗口的协调面，主窗口和每个辅助窗口各自拥有一个 `EditorPart`；每个 `EditorPart` 使用二维 `SerializableGrid` 管理稳定 ID 的 `EditorGroup`，每个 group 管理 tabs、preview/pinned、pane 生命周期、活动状态和 JSON-safe view state。`EditorInput` 表示待打开资源，`IEditorPane` 定义编辑器真正共享的创建、输入、取消、布局、可见性、聚焦与释放语义，`EditorPaneRegistry` 负责默认匹配、候选枚举和显式 `Reopen With` 选择。具体产品装配规则由 [`workbench-modes.md`](workbench-modes.md) 负责。
 
-打开新输入时，旧 pane 保持可见，直到新 pane 的异步 `setInput()` 成功。失败不会破坏当前
-编辑器；被后续打开或普通内容替代时，宿主中止 `AbortSignal` 并释放候选 pane。成功切换后由
-宿主隐藏、清空并释放旧 pane。当前只实现单活动 pane，尚无 tab、文档模型、脏状态、保存、
-备份或恢复协议。
+打开新输入时，旧 pane 保持可见，直到新 pane 的异步 `setInput()` 成功；首次打开失败时，group 提供可重试、可关闭的错误 pane，严格文本检测发现二进制或非 UTF-8 内容时还可切换到只读 Binary Editor。被后续打开或普通内容替代时，宿主中止 `AbortSignal` 并释放候选 pane。dirty close 由 Workbench 统一执行 Save / Don't Save / Cancel，工作区切换与跨窗口关闭先完成全局预检再变更状态。
+
+Workbench editor 宿主当前拥有多组二维拆分、跨组与跨窗口移动、MRU、最近关闭、Quick Pick、working set/Grid 持久化、tabs 三种显示模式、资源路径 breadcrumbs、状态栏投影、自动保存、外改冲突标记和辅助窗口关闭 veto。文本 transaction、undo、selection、viewport、语言能力和模型引用仍由 `src/zeta/editor` 与具体 editor contribution 拥有，不能反向并入 Workbench。
 
 ### 6.2 iframe Webview
 
@@ -502,16 +499,16 @@ base 能力不引用 Part、ViewContainer 或其他 Workbench domain。
 
 `workbench/services/layout/browser/layoutService.ts` 拥有面向 contribution 的窗口级布局
 契约、Part identity 和 service identifier。`workbench/browser/layout.ts` 是具体实现，
-拥有合法的 Workbench 拓扑和初始化策略；产品入口通过
+拥有合法的 Workbench 拓扑和初始化策略；Mode 入口通过
 `workbench/browser/workbenchSession.ts` 提供初始 Sidebar、Auxiliary Bar、Agent Sidebar 和
-Panel profile，Workbench 不反向导入产品 contribution。窗口变化由高优先级 Editor 区域吸收，
+Panel profile，Workbench 不反向导入 Mode contribution。窗口变化由高优先级 Editor 区域吸收，
 Part 即使隐藏也保持挂载，尺寸查询返回其可恢复尺寸。
 
 当前可变尺寸和显隐快照是具体 `WorkbenchLayout` 的私有实现关注点，不是 Layout Service
 契约，也不存在独立的 `layoutState` service。状态流为：
 
 ```text
-Product session profile defaults
+Workbench Mode session profile defaults
   → initialization state
   → Profile/Workspace scoped stored values
   → SerializableGrid runtime

@@ -9,7 +9,7 @@ const DRAG_OVER_ACTIVATE_DELAY = 1500;
 
 /** Renders every open Editor in one reorderable tab list. */
 export class MultiEditorTabsControl extends EditorTabsControl {
-	private readonly tabList: TabList<EditorInput>;
+	private readonly tabList: TabList<EditorTabDescriptor>;
 	private previewedInput: EditorInput | undefined;
 
 	constructor(container: HTMLElement, delegate: EditorTabsDelegate) {
@@ -21,10 +21,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			draggable: true,
 			dragAndDrop: {
 				canDrop: (event) => delegate.isDragging() || containsExternalEditorDrop(event),
-				onDragStart: (input, event) => {
-					event.dataTransfer?.setData(DataTransfers.Text, editorInputKey(input));
+				onDragStart: (editor, event) => {
+					event.dataTransfer?.setData(DataTransfers.Text, editor.instanceId);
 					if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-					delegate.startDrag(input);
+					delegate.startDrag(editor.input);
 				},
 				onDragEnter: (_target, _position, event) => {
 					this.previewedInput = undefined;
@@ -32,9 +32,9 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				},
 				onDragOver: (target, _position, event, duration) => {
 					if (event.dataTransfer) event.dataTransfer.dropEffect = delegate.isDragging() ? "move" : "copy";
-					if (target && duration >= DRAG_OVER_ACTIVATE_DELAY && target !== this.previewedInput) {
-						this.previewedInput = target;
-						delegate.preview(target);
+					if (target && duration >= DRAG_OVER_ACTIVATE_DELAY && target.input !== this.previewedInput) {
+						this.previewedInput = target.input;
+						delegate.preview(target.input);
 					}
 				},
 				onDragLeave: () => {
@@ -43,28 +43,32 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 				onDrop: (target, position, event) => {
 					this.previewedInput = undefined;
 					event.stopPropagation();
-					if (delegate.isDragging()) delegate.drop(target, position);
-					else delegate.dropExternal(event, target, position);
+					if (delegate.isDragging()) delegate.drop(target?.input, position);
+					else delegate.dropExternal(event, target?.input, position);
 				},
 				onDragEnd: () => {
 					this.previewedInput = undefined;
 					delegate.endDrag();
 				},
 			},
-			onActivate: (input) => delegate.activate(input),
-			onClose: (input) => delegate.close(input),
+			onActivate: (editor) => delegate.activate(editor.input),
+			onClose: (editor) => delegate.close(editor.input),
 		}));
 	}
 
 	setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void {
-		const activeKey = activeInput ? editorInputKey(activeInput) : undefined;
+		const activeKey = activeInput ? editors.find(editor => editorInputKey(editor.input) === editorInputKey(activeInput))?.instanceId : undefined;
 		this.tabList.setTabs(editors.map((editor) => {
 			const label = editorInputLabel(editor.input);
+			const state = editor.hasExternalChange ? "conflict" : editor.isDirty ? "dirty" : undefined;
+			const stateLabel = editor.hasExternalChange ? "conflict with changes on disk" : editor.isDirty ? "unsaved changes" : undefined;
 			return {
-				id: editorInputKey(editor.input),
-				value: editor.input,
+				id: editor.instanceId,
+				value: editor,
 				label,
-				tooltip: editor.input.resource.toString(),
+				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
+				ariaLabel: stateLabel ? `${label}, ${stateLabel}` : label,
+				...(state ? { state } : {}),
 				preview: editor.preview,
 				tabId: editor.tabId,
 				panelId: editor.panelId,

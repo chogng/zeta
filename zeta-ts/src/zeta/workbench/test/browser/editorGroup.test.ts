@@ -26,6 +26,7 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
 		const second = input("second");
 		await source.openEditor(first);
 		await source.openEditor(second);
+		const secondInstanceId = source.editors.find(editor => editor.input === second)?.instanceId;
 
 		source.moveEditor(first, source.getEditorInsertionIndex(second, "after"));
 		assert.deepEqual(source.inputs, [second, first]);
@@ -34,6 +35,7 @@ test("EditorGroup reorders tabs and moves them between groups", async () => {
 		assert.deepEqual(source.inputs, [first]);
 		assert.deepEqual(target.inputs, [second]);
 		assert.equal(target.activeInput, second);
+		assert.equal(target.editors[0]?.instanceId, secondInstanceId);
 		source.dispose();
 		target.dispose();
 	} finally {

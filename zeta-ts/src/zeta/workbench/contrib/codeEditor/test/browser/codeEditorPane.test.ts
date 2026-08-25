@@ -129,6 +129,7 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 		text: "late",
 		source: TextFileContentSource.FileSystem,
 		revision: "revision-1",
+		encoding: "utf8",
 	});
 
 	await assert.rejects(opening, error => (error as Error).name === "CancellationError");
@@ -316,6 +317,7 @@ class ImmediateTextFiles implements ITextFileService {
 			text: request.bootstrapText ?? this.text,
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
+			encoding: "utf8",
 		};
 	}
 

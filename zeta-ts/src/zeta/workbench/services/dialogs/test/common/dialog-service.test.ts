@@ -35,6 +35,21 @@ test("dialog service maps cancellation to a false confirmation", async () => {
 	assert.equal(await confirmation, false);
 });
 
+test("dialog service preserves all three prompt outcomes", async () => {
+	using service = new DialogService();
+	const prompt = service.prompt({
+		message: "Save changes?",
+		primaryButton: "Save",
+		secondaryButton: "Don't Save",
+	});
+	const item = service.model.dialogs[0];
+
+	assert.equal(item?.request.kind, "prompt");
+	item?.close(DialogResult.Secondary);
+
+	assert.equal(await prompt, DialogResult.Secondary);
+});
+
 test("disposing dialog service cancels every queued model request", async () => {
 	const service = new DialogService();
 	const confirmation = service.confirm({ message: "Active" });

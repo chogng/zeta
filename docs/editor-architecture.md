@@ -1455,7 +1455,7 @@ Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能�
 | original/modified 版本 gate、diff result 与前端计算取消 | `DiffModel` / `IDiffComputationService` | ✅ common model；browser Worker 为当前实现 |
 | JSON/JSONC TextMate 与 Analysis Worker | `workbench/services/textMate` (`ITextMateService`) | ✅ 产品 Stanza pane 已选择 |
 | Completion Worker | `createBrowserEditorPart` | ✅ 产品 Stanza pane 已选择 |
-| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；CAS 与 Workbench 备份恢复已完成，非 UTF-8 编码仍是单独能力 |
+| dirty、save/revert、CRLF/LF、粗粒度外改重载与冲突状态 | `BrowserTextModelService` | ✅；CAS 与 Workbench 备份恢复已完成，TextFile 边界严格接受 UTF-8 并把其他内容路由到只读 Binary Editor |
 
 打开资源时，`ExplorerViewPane` 只提交 `{ resource, label }`；它不再预读文件或伪造
 `initialText`。`EditorPart` 选定 descriptor 后把 `ITextFileService` 注入 pane。
@@ -1479,9 +1479,27 @@ Stanza 内部契约见
 Grammar catalog 由共享 Workbench `ITextMateService` 拥有，声明式 extension resource contribution
 会更新其 revision；每个文档的 Analysis Worker 仍由其 model coordinator 独立拥有，避免故障域和增量 mirror 互相污染。
 
-本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host
-已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；
-expected-revision write、workspace-scoped working-copy 备份恢复已经接通；非 UTF-8 编码恢复仍是独立能力。
+本阶段明确没有把 TextFile、TextMate 或 document identity 下沉到 `base`。当前 host 已具备原子写入与粗粒度变更通知，Stanza 因而拥有 dirty/save/revert 和外改 policy；expected-revision write、workspace-scoped working-copy 备份恢复已经接通。TextFile resolve 先以 stat 限制文本大小，再读取 bytes、剥离 UTF-8 BOM、拒绝 NUL/控制字符密集内容和非法 UTF-8；被拒绝的内容可显式切换到只读 Binary Editor。保留原编码写回与编码选择器仍是独立的未来能力，当前实现不会静默转码。
+
+### Current 47：Workbench Editor 宿主与 VS Code 文件边界
+
+Zeta 不以 VS Code `workbench/browser/parts/editor` 的文件数量作为完成度指标；对齐对象是宿主不变量和用户行为。VS Code 为兼容多代编辑器、配置组合与平台服务拆分了大量类，Zeta 在保持 `base → platform → editor → workbench` 依赖方向的前提下合并同一所有者内的实现，并把格式专用视图放入 contribution。
+
+| 能力或 VS Code 文件族 | Zeta 所有者 | 当前结论 |
+| --- | --- | --- |
+| `editorPart`、`editorGroupView`、`editorParts`、`auxiliaryEditorPart` | `workbench/browser/parts/editor/{editorPart,editorGroup,editorParts}.ts` + `services/auxiliaryWindow` | 已具备二维 Grid、稳定 group/editor identity、跨窗口活动 part、移动与关闭 veto |
+| `editorTabsControl`、multi/single/no tabs | Editor title/tabs controls | 已具备 multiple/single/none、preview/pinned、dirty/conflict decoration、reorder 与 edge split；multi-row tabs 未引入，因为当前产品没有对应配置与密度需求 |
+| `editorQuickAccess`、`editorTypePicker`、`editorsObserver` | `editorActions.ts` + `EditorParts`/`EditorPart` 可观察状态 | 已具备 Show All Editors、Reopen With、MRU、recently closed；不复制第二套 observer model |
+| `editorWithViewState`、placeholder、drop target、auto save、status | pane capability + group/part contributions | 已具备 JSON-safe view state、retry/close/binary fallback、内部/外部 DnD、自动保存和状态栏 |
+| breadcrumbs model/picker | `breadcrumbsControl.ts` | 当前只投影资源路径；符号 breadcrumbs 和目录 picker 需要 outline/file navigation service，不能在 control 内私建索引 |
+| `textEditor`、`textCodeEditor`、`textResourceEditor` | `workbench/contrib/codeEditor` + `src/zeta/editor` | 不在 Workbench 复制；模型、selection、undo、viewport 与 language runtime 归 editor 域 |
+| binary editor | `workbench/contrib/binaryEditor` | 已具备有界只读 hex/ascii 预览；binary diff 尚无产品交互需求，不用文本 diff 伪装 |
+| side-by-side/text diff | `workbench/contrib/codeEditor` 的 diff pane/model 与 multi-diff contribution | 不复制 VS Code 继承树；版本 gate 和 diff 取消归 diff model/service |
+| editor commands/context | action registry、Workbench context-key projection、editor services | 已按命令/菜单/快捷键和稳定事件契约拆分，不建立同名转发文件 |
+
+Workbench editor 宿主负责资源视图的“在哪个 group/window、以哪个 pane、何时激活或关闭”；具体 pane 负责“如何解释和编辑内容”。跨窗口服务只注册同源 UI 窗口、镜像样式并提供布局/卸载事件，不获得文件或模型权限。Binary Pane 只消费 `IFileService.readFileBytes`，TextFile service 只向文本模型发布经过验证的 UTF-8，二者不会共享可写模型。
+
+新增 VS Code 对应能力前必须先判断基座所有者：需要稳定布局与事件时扩展 EditorPart/Group state；需要窗口时扩展 auxiliary-window service 与 scoped services；需要格式解释时新增 contribution/pane；需要 transaction、selection 或 language 状态时进入 `src/zeta/editor`。只有出现至少两个真实调用方时，才把领域无关 DOM、Grid、取消或生命周期原语下沉到 `base`。
 
 ### Proposed 3：语言边界
 

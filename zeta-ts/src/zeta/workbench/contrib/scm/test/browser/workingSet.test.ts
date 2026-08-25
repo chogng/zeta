@@ -18,7 +18,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	const saved: string[] = [];
 	const applied: EditorWorkingSetTarget[] = [];
 	const editorPart = {
-		element: globalThis.document?.body ?? ({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
+		domNode: globalThis.document?.body ?? ({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
 		saveWorkingSet(id: string): EditorWorkingSet {
 			saved.push(id);
 			return workingSet(id);

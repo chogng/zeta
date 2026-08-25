@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileRevisionConflictError, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
-import { TextFileContentSource, TextFileSaveConflictError, TextFileService } from "../../../../../workbench/services/textfile/common/textFileService.js";
+import {
+	TextFileBinaryError,
+	TextFileContentSource,
+	TextFileSaveConflictError,
+	TextFileService,
+	TextFileTooLargeError,
+} from "../../../../../workbench/services/textfile/common/textFileService.js";
 
 test("TextFileService uses bootstrap content without reading the workspace", async () => {
 	const files = new TestFileService("workspace");
@@ -14,6 +20,7 @@ test("TextFileService uses bootstrap content without reading the workspace", asy
 	assert.equal(content.text, "bootstrap");
 	assert.equal(content.source, TextFileContentSource.Bootstrap);
 	assert.equal(content.revision, undefined);
+	assert.equal(content.encoding, "utf8");
 	assert.equal(files.readCount, 0);
 });
 
@@ -25,6 +32,7 @@ test("TextFileService reads missing bootstrap content and observes cancellation"
 	assert.equal(content.text, "workspace");
 	assert.equal(content.source, TextFileContentSource.FileSystem);
 	assert.equal(content.revision, "revision-1");
+	assert.equal(content.encoding, "utf8");
 
 	const cancelled = new AbortController();
 	cancelled.abort("closed");
@@ -32,7 +40,7 @@ test("TextFileService reads missing bootstrap content and observes cancellation"
 	assert.equal(files.readCount, 1);
 });
 
-test("TextFileService cancels an in-flight file read without publishing late content", async () => {
+test("TextFileService cancels before starting a byte read when metadata resolution yields", async () => {
 	const pending = deferred<string>();
 	const files = new TestFileService(pending.promise);
 	const service = new TextFileService(files);
@@ -42,7 +50,7 @@ test("TextFileService cancels an in-flight file read without publishing late con
 	controller.abort("closed");
 	await assert.rejects(resolving, error => (error as Error).name === "CancellationError");
 	pending.resolve("late");
-	assert.equal(files.readCount, 1);
+	assert.equal(files.readCount, 0);
 });
 
 test("TextFileService preserves file-system failures", async () => {
@@ -53,6 +61,32 @@ test("TextFileService preserves file-system failures", async () => {
 		service.resolve({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal),
 		error => error === failure,
 	);
+});
+
+test("TextFileService decodes a UTF-8 BOM and rejects binary or invalid UTF-8 content", async () => {
+	const resource = URI.file("C:\\project\\content.txt");
+	const withBom = new TestFileService(new Uint8Array([0xef, 0xbb, 0xbf, 0x68, 0x69]));
+	assert.equal((await new TextFileService(withBom).resolve({ resource }, new AbortController().signal)).text, "hi");
+
+	await assert.rejects(
+		new TextFileService(new TestFileService(new Uint8Array([0x68, 0x00, 0x69]))).resolve({ resource }, new AbortController().signal),
+		TextFileBinaryError,
+	);
+	await assert.rejects(
+		new TextFileService(new TestFileService(new Uint8Array([0xc3, 0x28]))).resolve({ resource }, new AbortController().signal),
+		TextFileBinaryError,
+	);
+});
+
+test("TextFileService rejects oversized resources before reading their bytes", async () => {
+	const files = new TestFileService("small");
+	files.reportedSizeBytes = 32 * 1024 * 1024 + 1;
+
+	await assert.rejects(
+		new TextFileService(files).resolve({ resource: URI.file("C:\\project\\large.txt") }, new AbortController().signal),
+		TextFileTooLargeError,
+	);
+	assert.equal(files.readCount, 0);
 });
 
 test("TextFileService writes text and observes cancellation", async () => {
@@ -81,6 +115,7 @@ test("TextFileService maps conditional file-write conflicts to its editor-facing
 
 class TestFileService implements IFileService {
 	readCount = 0;
+	reportedSizeBytes: number | undefined;
 	readonly writes: IFileWriteRequest[] = [];
 	rejectWritesWithRevisionConflict = false;
 	readonly onDidChangeFiles = () => ({
@@ -88,13 +123,13 @@ class TestFileService implements IFileService {
 		[Symbol.dispose]() {},
 	});
 
-	constructor(private readonly content: string | Promise<string>) {}
+	constructor(private readonly content: string | Uint8Array | Promise<string>) {}
 
 	async stat(resource: URI) {
 		return {
 			resource,
 			kind: FileKind.File,
-			sizeBytes: typeof this.content === "string" ? this.content.length : 0,
+			sizeBytes: this.reportedSizeBytes ?? (typeof this.content === "string" || this.content instanceof Uint8Array ? this.content.length : 0),
 			readonly: false,
 			modifiedAtMillis: undefined,
 		};
@@ -106,11 +141,14 @@ class TestFileService implements IFileService {
 
 	async readFile(resource: URI) {
 		this.readCount += 1;
-		return { resource, content: await this.content, revision: "revision-1" };
+		const content = await this.content;
+		return { resource, content: typeof content === "string" ? content : new TextDecoder().decode(content), revision: "revision-1" };
 	}
 
 	async readFileBytes(resource: URI) {
-		return { resource, bytes: new Uint8Array(), revision: "revision-1" };
+		this.readCount += 1;
+		const content = await this.content;
+		return { resource, bytes: typeof content === "string" ? new TextEncoder().encode(content) : content, revision: "revision-1" };
 	}
 
 	async writeFile(request: IFileWriteRequest) {

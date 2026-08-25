@@ -3,6 +3,7 @@ import {
 	type IConfirmationDialogOptions,
 	type IDialogService,
 	type IMessageDialogOptions,
+	type IPromptDialogOptions,
 	DialogResult,
 } from "../../../../platform/dialogs/common/dialogs.js";
 import { DialogsModel } from "../../../common/dialogs.js";
@@ -28,5 +29,12 @@ export class DialogService extends DisposableOwner
 			...options,
 		});
 		return await handle.result === DialogResult.Primary;
+	}
+
+	prompt(options: IPromptDialogOptions): Promise<DialogResult> {
+		return this.model.show({
+			kind: "prompt",
+			...options,
+		}).result;
 	}
 }

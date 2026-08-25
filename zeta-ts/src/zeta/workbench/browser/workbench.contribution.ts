@@ -30,6 +30,7 @@ import { registerProblemsView } from "../contrib/problems/browser/problems.contr
 import { registerTerminalView } from "../contrib/terminal/browser/terminal.contribution.js";
 import { lxiconsLibrary } from "../../base/common/lxiconsLibrary.js";
 import "../contrib/bulkEdit/browser/bulkEdit.contribution.js";
+import "../contrib/binaryEditor/browser/binaryEditor.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";
 import "../contrib/pdf/browser/pdf.contribution.js";
@@ -40,6 +41,12 @@ import { registerRemoteViews } from "../contrib/remote/browser/remote.contributi
 import "../contrib/sash/browser/sash.contribution.js";
 import "./parts/dialogs/dialog.contribution.js";
 import "./parts/editor/editorActions.js";
+import { EditorStatusContribution } from "./parts/editor/editorStatus.js";
+import { IEditorPart } from "./parts/editor/editorPart.js";
+import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
+import { EditorAutoSaveContribution } from "./parts/editor/editorAutoSave.js";
+import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyService.js";
+import { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
 import "./parts/titlebar/menubar.contribution.js";
 import "./parts/titlebar/titlebarActions.js";
 
@@ -67,4 +74,23 @@ registerWorkbenchContribution(
 	(accessor) => new KeybindingsResourceContribution({
 		service: accessor.get(IKeybindingsResourceService),
 	}),
+);
+
+registerWorkbenchContribution(
+	"workbench.contrib.editorStatus",
+	WorkbenchPhase.AfterRestored,
+	(accessor) => new EditorStatusContribution(
+		accessor.get(IEditorPart),
+		accessor.get(IStatusbarService),
+	),
+);
+
+registerWorkbenchContribution(
+	"workbench.contrib.editorAutoSave",
+	WorkbenchPhase.AfterRestored,
+	(accessor) => new EditorAutoSaveContribution(
+		accessor.get(IEditorPart),
+		accessor.get(IWorkingCopyService),
+		accessor.get(IConfigurationService),
+	),
 );

@@ -18,10 +18,17 @@ import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymb
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
-import { ContextKeyService, type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
+import type {
+	Context,
+} from "../../../../../../platform/contextkey/common/contextkey.js";
 import type {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
+import {
+	DialogResult,
+	type IDialogService,
+	type IPromptDialogOptions,
+} from "../../../../../../platform/dialogs/common/dialogs.js";
 import type {
 	EditorInput,
 } from "../../../../../../workbench/browser/parts/editor/editorInput.js";
@@ -30,12 +37,21 @@ import {
 	EditorPaneVisibility,
 	type IEditorPane,
 	type IEditorPaneDescriptor,
+	type IEditorPaneWithViewState,
 } from "../../../../../../workbench/browser/parts/editor/editorPane.js";
 import {
 	EditorPaneRegistry,
 } from "../../../../../../workbench/browser/parts/editor/editorRegistry.js";
 import { ActiveEditorContext } from "../../../../../../workbench/common/contextkeys.js";
 import { h } from "../../../../../../base/browser/dom.js";
+import type { IWorkingCopy } from "../../../../../../workbench/services/workingCopy/common/workingCopyService.js";
+import { TextFileBinaryError } from "../../../../../../workbench/services/textfile/common/textFileService.js";
+import type {
+	AuxiliaryWindowBeforeUnloadEvent,
+	AuxiliaryWindowOpenOptions,
+	IAuxiliaryWindow,
+	IAuxiliaryWindowService,
+} from "../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -58,9 +74,6 @@ const {
 } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorPart.js"
 );
-const { bindEditorContextKeys } = await import(
-	'../../../../../../workbench/browser/contextkeys.js'
-);
 const {
 	EditorGroupWatermarkEntries,
 } = await import(
@@ -70,6 +83,8 @@ const { SplitEditorHorizontalCommandId } = await import(
 	"../../../../../../workbench/browser/parts/editor/editorActions.js"
 );
 const { BrowserEditorService } = await import("../../../../../../workbench/services/editor/browser/browserEditorService.js");
+const { EditorParts } = await import("../../../../../../workbench/browser/parts/editor/editorParts.js");
+const { BrowserAuxiliaryWindowService } = await import("../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js");
 await import(
 	"../../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
@@ -403,7 +418,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	);
 
 	editor.layout({ width: 800, height: 600 });
-	assert.deepEqual(panes[0]?.dimension, { width: 800, height: 565 });
+	assert.deepEqual(panes[0]?.dimension, { width: 800, height: 543 });
 	editor.focus();
 	assert.equal(panes[0]?.focusCount, 1);
 
@@ -422,7 +437,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 	assert.deepEqual(panes[0]?.visibilities.slice(-1), [
 		EditorPaneVisibility.Hidden,
 	]);
-	assert.deepEqual(panes[1]?.dimension, { width: 800, height: 565 });
+	assert.deepEqual(panes[1]?.dimension, { width: 800, height: 543 });
 	const tabs = editor.domNode.querySelectorAll<HTMLElement>("[role='tab']");
 	assert.equal(tabs.length, 2);
 	assert.deepEqual(
@@ -453,7 +468,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 
 	const content = h(dom.window.document, "div");
 	content.textContent = "Welcome";
-	editor.setContent(content);
+	await editor.setContent(content);
 	assert.equal(editor.activePane, undefined);
 	assert.equal(editor.activeInput, undefined);
 	assert.equal(panes[1]?.disposed, true);
@@ -495,6 +510,69 @@ test("EditorPart replaces preview tabs and preserves pinned tabs", async () => {
 	assert.deepEqual(editor.activeGroup.inputs, [second, third]);
 	assert.equal(editor.domNode.querySelectorAll(".zeta-tab.preview").length, 1);
 	assert.equal(editor.domNode.querySelector(".zeta-tab.preview .zeta-icon-label-text")?.textContent, "third.ts");
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart requires an explicit dirty-close decision", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\dirty.ts"));
+	workingCopy.markDirty();
+	registry.register(descriptor(
+		"stanza.editor.code",
+		".ts",
+		() => new TestEditorPane("stanza.editor.code", workingCopy),
+	));
+	const dialogs = new TestDialogService(DialogResult.Cancel, DialogResult.Secondary);
+	const editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+	const resourceInput = input("C:\\project\\dirty.ts");
+	await editor.openEditor(resourceInput);
+
+	assert.equal(await editor.closeEditor(resourceInput), false);
+	assert.equal(editor.activeInput, resourceInput);
+	assert.equal(workingCopy.isDirty, true);
+	assert.equal(await editor.closeEditor(resourceInput), true);
+	assert.equal(editor.activeInput, undefined);
+	assert.equal(workingCopy.revertCount, 1);
+	assert.deepEqual(dialogs.prompts.map(prompt => [prompt.primaryButton, prompt.secondaryButton]), [
+		["Save", "Don't Save"],
+		["Save", "Don't Save"],
+	]);
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart saves before closing and pins a dirty preview", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const copies = new Map<string, TestWorkingCopy>();
+	registry.register(descriptor(
+		"stanza.editor.code",
+		".ts",
+		() => {
+			const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\current.ts"));
+			copies.set("current", workingCopy);
+			return new TestEditorPane("stanza.editor.code", workingCopy);
+		},
+	));
+	const dialogs = new TestDialogService(DialogResult.Primary);
+	const editor = new EditorPart(dom.window.document.body, { registry, dialogService: dialogs });
+	const current = input("C:\\project\\current.ts");
+	const next = input("C:\\project\\next.ts");
+	await editor.openEditor(current, { pinned: false });
+	const currentWorkingCopy = copies.get("current")!;
+	currentWorkingCopy.markDirty();
+	await editor.openEditor(next, { pinned: false });
+
+	assert.deepEqual(editor.activeGroup.inputs, [current, next]);
+	assert.equal(editor.activeGroup.isPreview(current), false);
+	editor.activateEditor(current);
+	assert.equal(await editor.closeEditor(current), true);
+	assert.equal(currentWorkingCopy.saveCount, 1);
+	assert.equal(currentWorkingCopy.isDirty, false);
 
 	editor.dispose();
 	dom.window.close();
@@ -575,6 +653,159 @@ test("EditorPart saves and restores groups, tabs, previews, active state, and pa
 	dom.window.close();
 });
 
+test("EditorPart publishes stable editor identities and working-copy state changes", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const workingCopies: TestWorkingCopy[] = [];
+	registry.register(descriptor("stanza.editor.code", ".ts", () => {
+		const workingCopy = new TestWorkingCopy(URI.file(`C:\\project\\state-${workingCopies.length}.ts`));
+		workingCopies.push(workingCopy);
+		return new TestEditorPane("stanza.editor.code", workingCopy);
+	}));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const events: string[] = [];
+	editor.onDidChangeEditors(event => {
+		events.push(event.kind === "groupChanged" ? event.event.kind : event.kind);
+	});
+	const first = input("C:\\project\\first.ts");
+	const second = input("C:\\project\\second.ts");
+	await editor.openEditor(first);
+	await editor.openEditor(second);
+	const beforeDirty = editor.getEditorState();
+	const identities = beforeDirty.groups[0]!.editors.map(candidate => candidate.instanceId);
+
+	assert.equal(new Set(identities).size, 2);
+	assert.equal(beforeDirty.activeEditor?.instanceId, identities[1]);
+	workingCopies[0]!.markDirty();
+	assert.equal(editor.getEditorState().groups[0]!.editors[0]!.isDirty, true);
+	assert.deepEqual(events.slice(0, 4), [
+		"editorOpened",
+		"activeEditorChanged",
+		"editorOpened",
+		"activeEditorChanged",
+	]);
+	assert.equal(events.at(-1), "editorStateChanged");
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart tracks MRU editors, reopens closed inputs, and reopens with another pane", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor("test.editor.default", ".ts", () => new TestEditorPane("test.editor.default")));
+	registry.register(descriptor("test.editor.alternate", ".ts", () => new TestEditorPane("test.editor.alternate")));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const first = input("C:\\project\\first.ts");
+	const second = input("C:\\project\\second.ts");
+	await editor.openEditor(first);
+	await editor.openEditor(second);
+
+	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [second, first]);
+	editor.activateEditorMru(1);
+	assert.equal(editor.activeInput, first);
+	assert.deepEqual(editor.editorsMru.map(candidate => candidate.input), [first, second]);
+	assert.equal(await editor.closeEditor(first), true);
+	assert.equal(editor.recentlyClosedEditors[0]?.input, first);
+	assert.equal(await editor.reopenClosedEditor(), true);
+	assert.equal(editor.activeInput?.resource.fsPath, first.resource.fsPath);
+	assert.equal(editor.recentlyClosedEditors.length, 0);
+	const instanceId = editor.getEditorState().activeEditor?.instanceId;
+
+	assert.deepEqual(editor.getEditorPaneChoices().map(candidate => candidate.id), ["test.editor.default", "test.editor.alternate"]);
+	await editor.reopenActiveEditorWith("test.editor.alternate");
+	assert.equal(editor.activePane?.id, "test.editor.alternate");
+	assert.equal(editor.getEditorState().activeEditor?.instanceId, instanceId);
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart persists JSON-safe pane view state in working sets", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const panes: TestViewStateEditorPane[] = [];
+	registry.register(descriptor("stanza.editor.code", ".ts", () => {
+		const pane = new TestViewStateEditorPane("stanza.editor.code");
+		panes.push(pane);
+		return pane;
+	}));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const resourceInput = input("C:\\project\\view-state.ts");
+	await editor.openEditor(resourceInput);
+	panes[0]!.viewState = { cursorLine: 42, scrollTop: 320 };
+	const saved = editor.saveWorkingSet("view-state");
+
+	assert.deepEqual(saved.groups[0]!.editors[0]!.viewState, {
+		typeId: "test.textView",
+		value: { cursorLine: 42, scrollTop: 320 },
+	});
+	await editor.applyWorkingSet("empty", { preserveFocus: true });
+	await editor.applyWorkingSet(saved, { preserveFocus: true });
+	assert.deepEqual(panes[1]!.restoredViewState, { cursorLine: 42, scrollTop: 320 });
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart restores nested horizontal and vertical Grid layouts", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	editor.layout({ width: 960, height: 640 });
+	await editor.openEditor(input("C:\\project\\left.ts"));
+	await editor.splitActiveGroupHorizontal();
+	await editor.openEditor(input("C:\\project\\top-right.ts"));
+	await editor.splitActiveGroupVertical();
+	await editor.openEditor(input("C:\\project\\bottom-right.ts"));
+	const saved = editor.saveWorkingSet("nested-grid");
+
+	assert.equal(saved.layout?.type, "branch");
+	assert.equal(saved.layout?.orientation, "horizontal");
+	assert.equal(saved.layout?.type === "branch" && saved.layout.children[1]?.type, "branch");
+	const rightBranch = saved.layout?.type === "branch" && saved.layout.children[1]?.type === "branch"
+		? saved.layout.children[1]
+		: undefined;
+	assert.equal(rightBranch?.orientation, "vertical");
+	const groupIds = saved.groups.map(group => group.id);
+
+	await editor.applyWorkingSet("empty", { preserveFocus: true });
+	await editor.applyWorkingSet(saved, { preserveFocus: true });
+	assert.deepEqual(editor.groups.map(group => group.id), groupIds);
+	const restored = editor.saveWorkingSet("nested-grid-restored");
+	assert.equal(restored.layout?.type, "branch");
+	assert.equal(restored.layout?.orientation, "horizontal");
+	assert.equal(restored.layout?.type === "branch" && restored.layout.children[1]?.type === "branch" && restored.layout.children[1].orientation, "vertical");
+
+	editor.dispose();
+	dom.window.close();
+});
+
+test("EditorPart validates Grid layouts before closing current editors", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code")));
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	const current = input("C:\\project\\safe.ts");
+	await editor.openEditor(current);
+	const saved = editor.saveWorkingSet("safe");
+	const invalid = {
+		...saved,
+		layout: saved.layout?.type === "leaf"
+			? { ...saved.layout, data: { groupId: "unknown-group" } }
+			: saved.layout?.type === "branch"
+				? { ...saved.layout, children: [{ ...saved.layout.children[0]!, data: { groupId: "unknown-group" } }] }
+				: undefined,
+	} as typeof saved;
+
+	await assert.rejects(editor.applyWorkingSet(invalid), /Editor Grid/);
+	assert.equal(editor.activeInput, current);
+
+	editor.dispose();
+	dom.window.close();
+});
+
 test("Editor title toolbar splits the active group and owns More Actions", async () => {
 	const [
 		{ MenuService },
@@ -609,52 +840,11 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 			},
 		},
 	});
-	using editorContexts = bindEditorContextKeys(contextKeys, editor, registry);
 	services.set(IEditorPart, editor);
 	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);
-	assert.deepEqual({
-		activeEditor: contextKeys.getValue(ActiveEditorContext.key),
-		activeEditorAvailableEditorIds: contextKeys.getValue('activeEditorAvailableEditorIds'),
-		activeEditorGroupEmpty: contextKeys.getValue('activeEditorGroupEmpty'),
-		activeEditorGroupIndex: contextKeys.getValue('activeEditorGroupIndex'),
-		activeEditorGroupLast: contextKeys.getValue('activeEditorGroupLast'),
-		activeEditorIsFirstInGroup: contextKeys.getValue('activeEditorIsFirstInGroup'),
-		activeEditorIsLastInGroup: contextKeys.getValue('activeEditorIsLastInGroup'),
-		activeEditorIsNotPreview: contextKeys.getValue('activeEditorIsNotPreview'),
-		editorIsOpen: contextKeys.getValue('editorIsOpen'),
-		groupEditorsCount: contextKeys.getValue('groupEditorsCount'),
-		multipleEditorGroups: contextKeys.getValue('multipleEditorGroups'),
-		resource: contextKeys.getValue('resource'),
-		resourceDirname: contextKeys.getValue('resourceDirname'),
-		resourceExtname: contextKeys.getValue('resourceExtname'),
-		resourceFilename: contextKeys.getValue('resourceFilename'),
-		resourceLangId: contextKeys.getValue('resourceLangId'),
-		resourcePath: contextKeys.getValue('resourcePath'),
-		resourceScheme: contextKeys.getValue('resourceScheme'),
-		resourceSet: contextKeys.getValue('resourceSet'),
-	}, {
-		activeEditor: 'stanza.editor.code',
-		activeEditorAvailableEditorIds: 'stanza.editor.code',
-		activeEditorGroupEmpty: false,
-		activeEditorGroupIndex: 1,
-		activeEditorGroupLast: true,
-		activeEditorIsFirstInGroup: true,
-		activeEditorIsLastInGroup: true,
-		activeEditorIsNotPreview: true,
-		editorIsOpen: true,
-		groupEditorsCount: 1,
-		multipleEditorGroups: false,
-		resource: activeInput.resource.toString(),
-		resourceDirname: 'C:\\project',
-		resourceExtname: '.ts',
-		resourceFilename: 'main.ts',
-		resourceLangId: 'typescript',
-		resourcePath: 'C:\\project\\main.ts',
-		resourceScheme: 'file',
-		resourceSet: true,
-	});
+	assert.equal(contextKeys.getValue(ActiveEditorContext.key), "stanza.editor.code");
 	editor.layout({ width: 800, height: 600 });
 
 	const toolbar = editor.domNode.querySelector(
@@ -681,15 +871,6 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 
 	assert.equal(editor.groups.length, 2);
 	assert.equal(editor.activeGroup, editor.groups[1]);
-	assert.deepEqual({
-		activeEditorGroupIndex: contextKeys.getValue('activeEditorGroupIndex'),
-		activeEditorGroupLast: contextKeys.getValue('activeEditorGroupLast'),
-		multipleEditorGroups: contextKeys.getValue('multipleEditorGroups'),
-	}, {
-		activeEditorGroupIndex: 2,
-		activeEditorGroupLast: true,
-		multipleEditorGroups: true,
-	});
 	assert.deepEqual(
 		editor.groups.map((group) => group.inputs),
 		[[activeInput], [activeInput]],
@@ -709,8 +890,8 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	assert.deepEqual(
 		panes.map((pane) => pane.dimension),
 		[
-			{ width: 400, height: 565 },
-			{ width: 400, height: 565 },
+			{ width: 400, height: 543 },
+			{ width: 400, height: 543 },
 		],
 	);
 
@@ -753,76 +934,61 @@ test("EditorPart retains the active pane when a replacement fails", async () => 
 	dom.window.close();
 });
 
-test('editor context keys follow preview, readonly, dirty, and close transitions', async () => {
-	const dom = new JSDOM('<!doctype html><body></body>');
-	dom.window.HTMLElement.prototype.scrollTo = () => undefined;
+test("EditorPart shows a retryable placeholder when an editor cannot open", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
 	const registry = new EditorPaneRegistry();
-	const resource = URI.file('C:\\project\\readonly.ts');
-	let workingCopy: TestWorkingCopy | undefined;
+	let attempts = 0;
 	registry.register(descriptor(
-		'stanza.editor.code',
-		'.ts',
+		"zeta.editor.retryable",
+		".retry",
 		() => {
-			workingCopy = new TestWorkingCopy(resource);
-			return new TestEditorPane('stanza.editor.code', workingCopy);
+			const pane = new TestEditorPane("zeta.editor.retryable");
+			attempts += 1;
+			if (attempts === 1) pane.inputError = new Error("Temporary decoder failure");
+			return pane;
 		},
 	));
-	using contextKeys = new ContextKeyService();
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	const contextChanges: string[][] = [];
-	using contextListener = contextKeys.onDidChangeContext(event => contextChanges.push([...event.keys]));
-	using editorContexts = bindEditorContextKeys(contextKeys, editor, registry);
-	assert.equal(contextChanges.length, 1);
-	assert.equal(contextChanges[0]?.includes('activeEditor'), true);
-	assert.equal(contextChanges[0]?.includes('resourceSet'), true);
-	const activeInput: EditorInput = { resource, languageId: 'typescript', readOnly: true };
-	await editor.openEditor(activeInput, { pinned: false });
+	const retryable = input("C:\\project\\document.retry");
 
-	assert.deepEqual({
-		canRevert: contextKeys.getValue('activeEditorCanRevert'),
-		dirty: contextKeys.getValue('activeEditorIsDirty'),
-		pinned: contextKeys.getValue('activeEditorIsNotPreview'),
-		readonly: contextKeys.getValue('activeEditorIsReadonly'),
-	}, {
-		canRevert: true,
-		dirty: false,
-		pinned: false,
-		readonly: true,
-	});
-	workingCopy?.setDirty(true);
-	assert.equal(contextKeys.getValue('activeEditorIsDirty'), true);
+	await assert.rejects(editor.openEditor(retryable), /Temporary decoder failure/);
+	assert.equal(editor.activeInput, retryable);
+	assert.equal(editor.activePane?.id, "workbench.editor.openError");
+	assert.match(editor.domNode.textContent ?? "", /Unable to open document\.retry/);
+	assert.match(editor.domNode.textContent ?? "", /Temporary decoder failure/);
+	editor.domNode.querySelector<HTMLButtonElement>(".zeta-editor-open-error-actions button")?.click();
+	await nextTask();
 
-	editor.closeEditor(activeInput);
-	assert.deepEqual({
-		activeEditor: contextKeys.getValue('activeEditor'),
-		dirty: contextKeys.getValue('activeEditorIsDirty'),
-		editorIsOpen: contextKeys.getValue('editorIsOpen'),
-		resource: contextKeys.getValue('resource'),
-		resourceSet: contextKeys.getValue('resourceSet'),
-	}, {
-		activeEditor: '',
-		dirty: false,
-		editorIsOpen: false,
-		resource: undefined,
-		resourceSet: false,
-	});
+	assert.equal(attempts, 2);
+	assert.equal(editor.activePane?.id, "zeta.editor.retryable");
+	assert.equal(editor.domNode.querySelector(".zeta-editor-open-error"), null);
 
-	await editor.openEditor(activeInput, {}, 'modalGroup');
-	assert.deepEqual({
-		activeEditor: contextKeys.getValue('activeEditor'),
-		activeEditorGroupEmpty: contextKeys.getValue('activeEditorGroupEmpty'),
-		editorPartModalVisible: contextKeys.getValue('editorPartModalVisible'),
-		groupEditorsCount: contextKeys.getValue('groupEditorsCount'),
-		resourceSet: contextKeys.getValue('resourceSet'),
-	}, {
-		activeEditor: 'stanza.editor.code',
-		activeEditorGroupEmpty: false,
-		editorPartModalVisible: true,
-		groupEditorsCount: 0,
-		resourceSet: true,
+	editor.dispose();
+	dom.window.close();
+});
+
+test("Editor open error offers a registered Binary Editor for unsafe text content", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	registry.register(descriptor("zeta.editor.text", ".bin", () => {
+		const pane = new TestEditorPane("zeta.editor.text");
+		pane.inputError = new TextFileBinaryError(URI.file("C:\\project\\unsafe.bin"));
+		return pane;
+	}));
+	registry.register({
+		id: "zeta.editor.binary",
+		name: "Binary Editor",
+		canOpen: () => EditorPaneMatch.Optional,
+		create: () => new TestEditorPane("zeta.editor.binary"),
 	});
-	editor.closeEditor(activeInput);
-	assert.equal(contextKeys.getValue('editorPartModalVisible'), false);
+	const editor = new EditorPart(dom.window.document.body, { registry });
+	await assert.rejects(editor.openEditor(input("C:\\project\\unsafe.bin")), TextFileBinaryError);
+	const button = [...editor.domNode.querySelectorAll<HTMLButtonElement>(".zeta-editor-open-error-actions button")]
+		.find(candidate => candidate.textContent === "Open as Binary");
+	assert.ok(button);
+	button.click();
+	await nextTask();
+	assert.equal(editor.activePane?.id, "zeta.editor.binary");
 
 	editor.dispose();
 	dom.window.close();
@@ -848,7 +1014,7 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 	const opening = editor.openEditor(input("C:\\project\\document.slow"));
 	const content = h(dom.window.document, "div");
 	content.textContent = "Replacement";
-	editor.setContent(content);
+	await editor.setContent(content);
 	assert.equal(slowPane?.inputSignal?.aborted, true);
 	pending.resolve(undefined);
 
@@ -863,6 +1029,63 @@ test("EditorPart rejects an open superseded by ordinary content", async () => {
 	dom.window.close();
 });
 
+test("EditorParts moves an editor to an auxiliary window without changing its instance identity", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const registry = new EditorPaneRegistry();
+	const workingCopy = new TestWorkingCopy(URI.file("C:\\project\\detached.ts"));
+	registry.register(descriptor("stanza.editor.code", ".ts", () => new TestEditorPane("stanza.editor.code", workingCopy)));
+	const main = new EditorPart(dom.window.document.body, { registry });
+	const windows = new TestAuxiliaryWindowService();
+	const editorParts = new EditorParts(main, windows, container => ({ part: new EditorPart(container, { registry }) }));
+	const resourceInput = input("C:\\project\\detached.ts");
+	await editorParts.openEditor(resourceInput);
+	const instanceId = editorParts.getEditorState().activeEditor?.instanceId;
+	workingCopy.markDirty();
+
+	const auxiliary = await editorParts.moveActiveEditorToNewWindow();
+	assert.ok(auxiliary);
+	assert.equal(editorParts.parts.length, 2);
+	assert.equal(main.groups[0]?.inputs.length, 0);
+	assert.equal(auxiliary.activeInput?.resource.fsPath, resourceInput.resource.fsPath);
+	assert.equal(auxiliary.getEditorState().activeEditor?.instanceId, instanceId);
+	assert.ok(windows.lastWindow?.container.querySelector(".zeta-workbench-statusbar"));
+	assert.match(windows.lastWindow?.requestBeforeUnload() ?? "", /unsaved changes/i);
+	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), false);
+
+	await workingCopy.save();
+	assert.equal(await editorParts.closeAuxiliaryEditorPart(auxiliary), true);
+	assert.equal(editorParts.parts.length, 1);
+	assert.equal(editorParts.activePart, main);
+
+	editorParts.dispose();
+	windows.dispose();
+	main.dispose();
+	workingCopy.dispose();
+	dom.window.close();
+});
+
+test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releases a popup", async () => {
+	const opener = new JSDOM("<!doctype html><head><style>.mirrored { color: red; }</style></head><body></body>");
+	const popup = new JSDOM("<!doctype html><body></body>", { url: "https://zeta.test/auxiliary" });
+	Object.defineProperty(opener.window, "open", {
+		configurable: true,
+		value: () => popup.window,
+	});
+	const service = new BrowserAuxiliaryWindowService(opener.window as unknown as Window);
+	const auxiliary = await service.open({ title: "Detached Editor", width: 640, height: 480 });
+
+	assert.equal(auxiliary.window.document.title, "Detached Editor");
+	assert.equal(auxiliary.container.ownerDocument, popup.window.document);
+	assert.match(popup.window.document.head.textContent ?? "", /mirrored/);
+	assert.equal(service.getWindow(auxiliary.id), auxiliary);
+
+	auxiliary[Symbol.dispose]();
+	assert.equal(service.getWindow(auxiliary.id), undefined);
+	service.dispose();
+	opener.window.close();
+	popup.window.close();
+});
+
 class TestEditorPane extends DisposableOwner implements IEditorPane {
 	readonly visibilities: EditorPaneVisibility[] = [];
 	inputError: Error | undefined;
@@ -874,9 +1097,8 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 	readonly revealedRanges: TextRange[] = [];
 	get disposed(): boolean { return this.isDisposed; }
 
-	constructor(readonly id: string, readonly workingCopy?: TestWorkingCopy) {
+	constructor(readonly id: string, readonly workingCopy?: IWorkingCopy) {
 		super();
-		if (workingCopy) this.own(workingCopy);
 	}
 
 	create(parent: HTMLElement): void {
@@ -920,32 +1142,118 @@ class TestEditorPane extends DisposableOwner implements IEditorPane {
 	}
 }
 
-class TestWorkingCopy extends DisposableOwner {
+class TestViewStateEditorPane extends TestEditorPane implements IEditorPaneWithViewState {
+	readonly viewStateTypeId = "test.textView";
+	viewState: unknown = null;
+	restoredViewState: unknown;
+
+	saveViewState(): unknown { return this.viewState; }
+	restoreViewState(state: unknown): void { this.restoredViewState = state; }
+}
+
+class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly contentEmitter = this.own(new Emitter<void>());
 	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+	private readonly contentEmitter = this.own(new Emitter<void>());
+	private dirty = false;
+	readonly backupKind = "text" as const;
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
-	readonly onDidChangeContent = this.contentEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
-	readonly backupKind = 'text' as const;
+	readonly onDidChangeContent = this.contentEmitter.event;
 	readonly hasExternalChange = false;
-	isDirty = false;
+	saveCount = 0;
+	revertCount = 0;
 
 	constructor(readonly resource: URI) {
 		super();
 	}
 
-	setDirty(isDirty: boolean): void {
-		if (this.isDirty === isDirty) return;
-		this.isDirty = isDirty;
+	get isDirty(): boolean { return this.dirty; }
+	backup(): string { return "dirty"; }
+	restoreBackup(): void { this.markDirty(); }
+	markDirty(): void {
+		if (this.dirty) return;
+		this.dirty = true;
 		this.dirtyEmitter.fire();
 	}
+	async save(): Promise<void> {
+		this.saveCount += 1;
+		this.markClean();
+	}
+	async saveAs(): Promise<void> { this.markClean(); }
+	async revert(): Promise<void> {
+		this.revertCount += 1;
+		this.markClean();
+	}
+	private markClean(): void {
+		if (!this.dirty) return;
+		this.dirty = false;
+		this.dirtyEmitter.fire();
+	}
+}
 
-	backup(): string { return ''; }
-	restoreBackup(): void {}
-	async save(): Promise<void> {}
-	async saveAs(): Promise<void> {}
-	async revert(): Promise<void> {}
+class TestDialogService implements IDialogService {
+	readonly prompts: IPromptDialogOptions[] = [];
+	private readonly results: DialogResult[];
+
+	constructor(...results: DialogResult[]) {
+		this.results = [...results];
+	}
+
+	async showMessage(): Promise<void> {}
+	async confirm(): Promise<boolean> { return false; }
+	async prompt(options: IPromptDialogOptions): Promise<DialogResult> {
+		this.prompts.push(options);
+		return this.results.shift() ?? DialogResult.Cancel;
+	}
+}
+
+class TestAuxiliaryWindowService extends DisposableOwner implements IAuxiliaryWindowService {
+	private readonly openEmitter = this.own(new Emitter<IAuxiliaryWindow>());
+	readonly onDidOpenWindow = this.openEmitter.event;
+	lastWindow: TestAuxiliaryWindow | undefined;
+
+	async open(_options?: AuxiliaryWindowOpenOptions): Promise<IAuxiliaryWindow> {
+		const auxiliary = this.own(new TestAuxiliaryWindow());
+		this.lastWindow = auxiliary;
+		this.openEmitter.fire(auxiliary);
+		return auxiliary;
+	}
+
+	getWindow(id: number): IAuxiliaryWindow | undefined {
+		return this.lastWindow?.id === id ? this.lastWindow : undefined;
+	}
+}
+
+class TestAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow {
+	readonly id = 42;
+	private readonly dom = new JSDOM("<!doctype html><body><main></main></body>");
+	private readonly layoutEmitter = this.own(new Emitter<IDimension>());
+	private readonly beforeUnloadEmitter = this.own(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
+	private readonly closeEmitter = this.own(new Emitter<void>());
+	readonly onDidLayout = this.layoutEmitter.event;
+	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
+	readonly onDidClose = this.closeEmitter.event;
+	readonly window = this.dom.window as unknown as Window;
+	readonly container = this.dom.window.document.querySelector<HTMLElement>("main")!;
+
+	constructor() {
+		super();
+		this.defer(() => {
+			this.closeEmitter.fire();
+			this.dom.window.close();
+		});
+	}
+
+	layout(): void {
+		this.layoutEmitter.fire({ width: 800, height: 600 });
+	}
+
+	requestBeforeUnload(): string | undefined {
+		let reason: string | undefined;
+		this.beforeUnloadEmitter.fire({ veto: candidate => { reason = candidate; } });
+		return reason;
+	}
 }
 
 function nextTask(): Promise<void> {

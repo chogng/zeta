@@ -30,6 +30,35 @@ export interface EditorContextMenuRequest {
 	readonly clientY: number;
 }
 
+export interface EditorTextViewPositionState {
+	readonly lineIndex: number;
+	readonly columnIndex: number;
+}
+
+export interface EditorTextViewSelectionState {
+	readonly anchor: EditorTextViewPositionState;
+	readonly active: EditorTextViewPositionState;
+}
+
+/** JSON-safe instance state persisted by a Workbench text-editor pane. */
+export interface EditorTextViewState {
+	readonly selections: readonly EditorTextViewSelectionState[];
+	readonly primarySelectionIndex: number;
+	readonly scrollPosition: {
+		readonly left: number;
+		readonly top: number;
+	};
+}
+
+export function isEditorTextViewState(value: unknown): value is EditorTextViewState {
+	if (!value || typeof value !== "object") return false;
+	const state = value as Partial<EditorTextViewState>;
+	if (!Array.isArray(state.selections) || state.selections.length === 0) return false;
+	if (!Number.isSafeInteger(state.primarySelectionIndex) || state.primarySelectionIndex! < 0 || state.primarySelectionIndex! >= state.selections.length) return false;
+	if (!isViewScrollPosition(state.scrollPosition)) return false;
+	return state.selections.every(selection => isViewPosition(selection?.anchor) && isViewPosition(selection?.active));
+}
+
 /** Defaults applied whenever the editor-local Find and Replace widget opens. */
 export interface EditorFindOptions {
 	readonly seedSearchStringFromSelection?: boolean;
@@ -120,6 +149,8 @@ export interface IEditorPartRuntime extends IDisposable {
 	getValue(): string;
 	setValue(value: string): void;
 	revealRange(range: TextRange): void;
+	getViewState(): EditorTextViewState;
+	restoreViewState(state: EditorTextViewState): void;
 	readonly isDirty: boolean;
 	readonly hasExternalChange: boolean;
 	save(): Promise<void>;
@@ -173,8 +204,22 @@ export class EditorPart extends DisposableOwner implements IEditorPartRuntime {
 	getValue(): string { return this.runtime.getValue(); }
 	setValue(value: string): void { this.runtime.setValue(value); }
 	revealRange(range: TextRange): void { this.runtime.revealRange(range); }
+	getViewState(): EditorTextViewState { return this.runtime.getViewState(); }
+	restoreViewState(state: EditorTextViewState): void { this.runtime.restoreViewState(state); }
 	get isDirty(): boolean { return this.runtime.isDirty; }
 	get hasExternalChange(): boolean { return this.runtime.hasExternalChange; }
 	save(): Promise<void> { return this.runtime.save(); }
 	revert(): Promise<void> { return this.runtime.revert(); }
+}
+
+function isViewPosition(value: unknown): value is EditorTextViewPositionState {
+	if (!value || typeof value !== "object") return false;
+	const position = value as Partial<EditorTextViewPositionState>;
+	return Number.isSafeInteger(position.lineIndex) && position.lineIndex! >= 0 && Number.isSafeInteger(position.columnIndex) && position.columnIndex! >= 0;
+}
+
+function isViewScrollPosition(value: unknown): value is EditorTextViewState["scrollPosition"] {
+	if (!value || typeof value !== "object") return false;
+	const position = value as Partial<EditorTextViewState["scrollPosition"]>;
+	return Number.isFinite(position.left) && position.left! >= 0 && Number.isFinite(position.top) && position.top! >= 0;
 }

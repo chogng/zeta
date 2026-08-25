@@ -1663,6 +1663,7 @@ class MemoryTextFiles implements ITextFileService {
 			text: request.bootstrapText ?? this.text,
 			source: request.bootstrapText === undefined ? "fileSystem" as ResolvedTextFileContent["source"] : "bootstrap" as ResolvedTextFileContent["source"],
 			revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
+			encoding: "utf8",
 		};
 	}
 

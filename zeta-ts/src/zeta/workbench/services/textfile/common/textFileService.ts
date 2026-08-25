@@ -20,6 +20,7 @@ export interface ResolvedTextFileContent {
 	readonly source: TextFileContentSource;
 	/** Opaque file revision when the content came from the workspace file service. */
 	readonly revision: string | undefined;
+	readonly encoding: "utf8";
 }
 
 export interface TextFileSaveRequest {
@@ -38,6 +39,20 @@ export class TextFileSaveConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`Text file changed since it was resolved: ${resource.toString()}`);
 		this.name = "TextFileSaveConflictError";
+	}
+}
+
+export class TextFileBinaryError extends Error {
+	constructor(readonly resource: URI, message = "The file is binary or uses an unsupported text encoding", options?: ErrorOptions) {
+		super(`${message}: ${resource.toString()}`, options);
+		this.name = "TextFileBinaryError";
+	}
+}
+
+export class TextFileTooLargeError extends Error {
+	constructor(readonly resource: URI, readonly sizeBytes: number) {
+		super(`The text file is too large to open safely (${sizeBytes} bytes): ${resource.toString()}`);
+		this.name = "TextFileTooLargeError";
 	}
 }
 
@@ -70,15 +85,19 @@ export class TextFileService implements ITextFileService {
 				text: request.bootstrapText,
 				source: TextFileContentSource.Bootstrap,
 				revision: undefined,
+				encoding: "utf8",
 			});
 		}
-		const content = await raceCancellation(this.files.readFile(request.resource), signal, "Text file resolution was cancelled");
-		if (typeof content.content !== "string" || typeof content.revision !== "string") throw new TypeError("File service returned invalid text content");
+		const stat = await raceCancellation(this.files.stat(request.resource), signal, "Text file resolution was cancelled");
+		if (stat.sizeBytes > MAX_SAFE_TEXT_FILE_BYTES) throw new TextFileTooLargeError(request.resource, stat.sizeBytes);
+		const content = await raceCancellation(this.files.readFileBytes(request.resource), signal, "Text file resolution was cancelled");
+		if (!(content.bytes instanceof Uint8Array) || typeof content.revision !== "string") throw new TypeError("File service returned invalid text content");
 		return Object.freeze({
 			resource: request.resource,
-			text: content.content,
+			text: decodeUtf8Text(content.bytes, request.resource),
 			source: TextFileContentSource.FileSystem,
 			revision: content.revision,
+			encoding: "utf8",
 		});
 	}
 
@@ -97,6 +116,30 @@ export class TextFileService implements ITextFileService {
 			throw error;
 		}
 	}
+}
+
+const MAX_SAFE_TEXT_FILE_BYTES = 32 * 1024 * 1024;
+
+function decodeUtf8Text(bytes: Uint8Array, resource: URI): string {
+	if (looksBinary(bytes)) throw new TextFileBinaryError(resource);
+	try {
+		const offset = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+		return new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(offset));
+	} catch (error) {
+		throw new TextFileBinaryError(resource, "The file is not valid UTF-8 text", { cause: error });
+	}
+}
+
+function looksBinary(bytes: Uint8Array): boolean {
+	const sampleLength = Math.min(bytes.length, 8_192);
+	if (sampleLength === 0) return false;
+	let suspicious = 0;
+	for (let index = 0; index < sampleLength; index += 1) {
+		const byte = bytes[index]!;
+		if (byte === 0) return true;
+		if (byte < 0x09 || (byte > 0x0d && byte < 0x20)) suspicious += 1;
+	}
+	return suspicious / sampleLength > 0.1;
 }
 
 function validateRequest(request: TextFileResolveRequest): void {

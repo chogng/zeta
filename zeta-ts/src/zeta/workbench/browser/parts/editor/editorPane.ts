@@ -32,6 +32,7 @@ import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { Event } from "../../../../base/common/event.js";
 
 export enum EditorPaneVisibility {
 	Hidden,
@@ -63,6 +64,38 @@ export interface IEditorPane extends IDisposable {
 	save?(): Promise<void>;
 	/** Serializes and persists the active document to a new resource when supported. */
 	saveAs?(resource: URI): Promise<void>;
+}
+
+/** Optional pane capability for JSON-safe, instance-local view state. */
+export interface IEditorPaneWithViewState extends IEditorPane {
+	readonly viewStateTypeId: string;
+	saveViewState(): unknown;
+	restoreViewState(state: unknown): void;
+}
+
+export function isEditorPaneWithViewState(pane: IEditorPane): pane is IEditorPaneWithViewState {
+	const candidate = pane as Partial<IEditorPaneWithViewState>;
+	return typeof candidate.viewStateTypeId === "string" && candidate.viewStateTypeId.length > 0 && typeof candidate.saveViewState === "function" && typeof candidate.restoreViewState === "function";
+}
+
+/** Format-neutral status details projected into the Workbench status bar. */
+export interface EditorPaneStatus {
+	readonly lineNumber?: number;
+	readonly columnNumber?: number;
+	readonly selectionCount?: number;
+	readonly languageId?: string;
+	readonly encoding?: string;
+	readonly endOfLine?: string;
+}
+
+export interface IEditorPaneWithStatus extends IEditorPane {
+	readonly onDidChangeStatus: Event<void>;
+	getStatus(): EditorPaneStatus;
+}
+
+export function isEditorPaneWithStatus(pane: IEditorPane | undefined): pane is IEditorPaneWithStatus {
+	const candidate = pane as Partial<IEditorPaneWithStatus> | undefined;
+	return typeof candidate?.onDidChangeStatus === "function" && typeof candidate.getStatus === "function";
 }
 
 export interface EditorPaneCreationOptions {

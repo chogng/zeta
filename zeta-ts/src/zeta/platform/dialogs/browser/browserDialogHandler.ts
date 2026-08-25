@@ -47,7 +47,15 @@ export class BrowserDialogHandler implements IDialogHandler {
 			primaryButton.toggleClassName("zeta-dialog-primary-button", true);
 			content.actions.append(primaryButton.domNode);
 
-			if (request.kind === "confirmation") {
+			if (request.kind === "prompt") {
+				const secondaryButton = disposables.add(new Button(content.actions, {
+					label: request.secondaryButton,
+					onClick: () => dialog.close(DialogResult.Secondary),
+				}));
+				content.actions.append(secondaryButton.domNode);
+			}
+
+			if (request.kind !== "message") {
 				const cancelButton = disposables.add(new Button(content.actions, {
 					label: request.cancelButton ?? "Cancel",
 					onClick: () => dialog.close(DialogResult.Cancel),
@@ -61,9 +69,9 @@ export class BrowserDialogHandler implements IDialogHandler {
 			}, { once: true }));
 
 			const result = await dialog.show();
-			return result === DialogResult.Primary
-				? DialogResult.Primary
-				: DialogResult.Cancel;
+			if (result === DialogResult.Primary) return DialogResult.Primary;
+			if (result === DialogResult.Secondary) return DialogResult.Secondary;
+			return DialogResult.Cancel;
 		} finally {
 			disposables.dispose();
 			if (isHTMLElement(previousFocus)) restoreFocus(previousFocus);
@@ -102,7 +110,7 @@ function createDialogContent(
 }
 
 function defaultTitle(request: DialogRequest): string {
-	if (request.kind === "confirmation") return "Confirm";
+	if (request.kind !== "message") return "Confirm";
 	switch (request.severity) {
 		case DialogSeverity.Warning:
 			return "Warning";

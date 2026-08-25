@@ -11,7 +11,7 @@ import { LanguageFeaturesService } from "../common/services/languageService.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition, type TextRange } from "../common/core/text.js";
-import { registerEditorPartFactory, type EditorPartOptions, type IEditorPartRuntime } from "../browser/editorPart.js";
+import { registerEditorPartFactory, type EditorPartOptions, type EditorTextViewState, type IEditorPartRuntime } from "../browser/editorPart.js";
 import { getEditorContributions, type EditorCapability } from "../browser/editorContribution.js";
 import { type DecorationSource } from "../browser/viewparts/decorations/decorationPresentation.js";
 import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "../browser/viewparts/margin/lineGutterDecoration.js";
@@ -226,6 +226,29 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 		this.viewport.textModel.offsetAt(range.end);
 		this.selections.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
 		this.viewport.revealPosition(range.start);
+	}
+
+	getViewState(): EditorTextViewState {
+		return Object.freeze({
+			selections: Object.freeze(this.selections.selections.selections.map(selection => Object.freeze({
+				anchor: Object.freeze({ lineIndex: selection.anchor.lineIndex, columnIndex: selection.anchor.columnIndex }),
+				active: Object.freeze({ lineIndex: selection.active.lineIndex, columnIndex: selection.active.columnIndex }),
+			}))),
+			primarySelectionIndex: this.selections.selections.primaryIndex,
+			scrollPosition: Object.freeze({ ...this.viewport.currentLayout.scrollPosition }),
+		});
+	}
+
+	restoreViewState(state: EditorTextViewState): void {
+		const selections = state.selections.map(selection => {
+			const anchor = TextPosition.at(selection.anchor.lineIndex, selection.anchor.columnIndex);
+			const active = TextPosition.at(selection.active.lineIndex, selection.active.columnIndex);
+			this.modelReference.model.offsetAt(anchor);
+			this.modelReference.model.offsetAt(active);
+			return TextSelection.from(anchor, active);
+		});
+		this.selections.setSelections(TextSelectionSet.withPrimary(selections, state.primarySelectionIndex));
+		this.viewport.scrollTo(state.scrollPosition);
 	}
 
 	get isDirty(): boolean {

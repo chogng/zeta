@@ -20,18 +20,11 @@ canonical in [`docs/editor-architecture.md`](../../../../../../docs/editor-archi
 | Pre-write external-change conflict detection | `ITextModelService` | ✅, editor-owned defense in depth |
 | Atomic expected-revision writes | `ITextModelService` → file service → App Server | ✅ |
 | Crash backup and workspace-scoped recovery | `IWorkingCopyBackupService` / `WorkingCopyBackupTracker` | ✅ |
-| Encoding and mixed line-ending preservation | future TextFile model layer | 尚未完成 |
+| UTF-8 validation, BOM handling, binary detection, and safe size limit | `ITextFileService.resolve` | ✅ |
+| Binary preview fallback | `workbench/contrib/binaryEditor` | ✅, bounded read-only hex/ascii view |
+| Non-UTF-8 decode and original-encoding writeback | future TextFile model layer | 尚未完成；当前明确拒绝且不会静默转码 |
 
-`TextFileService.resolve` validates one `TextFileResolveRequest`, observes
-cancellation, returns `bootstrapText` without touching the file system, and
-otherwise delegates exactly one read to `IFileService.readFile`. The result
-records whether its content came from `Bootstrap` or `FileSystem`.
-`TextFileService.save` validates one `TextFileSaveRequest`, observes
-cancellation, and delegates exactly one atomic write to `IFileService.writeFile`.
-`ITextFileService.onDidChangeFiles` forwards coarse App Server filesystem
-invalidations without introducing a live document cache. A concrete editor
-decides whether a clean model may reload or a dirty model must retain local
-text and report a conflict.
+`TextFileService.resolve` validates one `TextFileResolveRequest`, observes cancellation, returns `bootstrapText` without touching the file system, and otherwise checks `IFileService.stat` before one `readFileBytes` call. It rejects resources above the text safety limit, NUL/control-character-heavy samples, and invalid UTF-8; a UTF-8 BOM is stripped and the result records `encoding: "utf8"` plus whether content came from `Bootstrap` or `FileSystem`. `TextFileService.save` validates one `TextFileSaveRequest`, observes cancellation, and delegates exactly one atomic write to `IFileService.writeFile`. `ITextFileService.onDidChangeFiles` forwards coarse App Server filesystem invalidations without introducing a live document cache. A concrete editor decides whether a clean model may reload or a dirty model must retain local text and report a conflict.
 
 This service deliberately does not cache live models. The Text and Document engines have
 different transaction and undo semantics, so each editor domain owns its model
@@ -47,10 +40,7 @@ Workbench lifecycle.
 it as `ITextFileService`, and injects it through `EditorPaneCreationOptions`.
 Stanza text and document contributions reject construction when that service is absent.
 
-Cancellation before resolution or save, or while awaiting the underlying I/O,
-rejects without publishing a result. File-service errors pass through
-unchanged. A non-text file-service result is rejected before it can enter an
-editor model.
+Cancellation before resolution or save, or while awaiting the underlying I/O, rejects without publishing a result. File-service errors pass through unchanged. `TextFileBinaryError` and `TextFileTooLargeError` are editor-facing classification failures: the open-error pane may offer the registered Binary Editor, but the bytes never enter a text model.
 
 Adding model caches, backup persistence, or conflict policy directly to
 `ExplorerViewPane` would signal architectural drift. Dirty state and conflict
@@ -60,8 +50,7 @@ exposes their common lifecycle without requiring a second editor model authority
 
 ## Tests and modification impact
 
-`test/common/text-file-service.test.ts` covers bootstrap precedence, file
-delegation, cancellation, validation, and failure propagation.
+`test/common/text-file-service.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
 `../../../platform/files/test/browser/file-service.test.ts` covers App Server
 invalidation projection.
 `../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file

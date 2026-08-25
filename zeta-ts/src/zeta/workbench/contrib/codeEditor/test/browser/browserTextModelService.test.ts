@@ -87,6 +87,7 @@ test("Stanza text model save tolerates its final reference closing before I/O co
 				text: "from disk",
 				source: TextFileContentSource.FileSystem,
 				revision: "revision-1",
+				encoding: "utf8",
 			};
 		},
 		async save() {
@@ -182,6 +183,7 @@ class TestTextFileService implements ITextFileService {
 			text: request.bootstrapText ?? this.text,
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: request.bootstrapText === undefined ? this.currentRevision() : undefined,
+			encoding: "utf8" as const,
 		};
 	}
 

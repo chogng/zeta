@@ -7,3 +7,26 @@
   align-items: center;
   overflow: hidden;
 }
+
+.zeta-multi-editor-tabs-control .zeta-tab[data-state] .zeta-tab-close-action {
+  visibility: visible;
+}
+
+.zeta-multi-editor-tabs-control .zeta-tab[data-state]:not(:hover) .zeta-tab-close-action svg {
+  visibility: hidden;
+}
+
+.zeta-multi-editor-tabs-control .zeta-tab[data-state]:not(:hover) .zeta-tab-close-action button::after {
+  width: 8px;
+  height: 8px;
+  margin: auto;
+  border-radius: 50%;
+  background: currentcolor;
+  content: "";
+}
+
+.zeta-multi-editor-tabs-control .zeta-tab[data-state="conflict"] .zeta-tab-close-action button::after {
+  border-radius: 1px;
+  color: var(--zeta-warning-foreground);
+  transform: rotate(45deg);
+}

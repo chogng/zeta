@@ -88,6 +88,7 @@ class BootstrapTextFiles implements ITextFileService {
 			text: request.bootstrapText ?? '',
 			source: request.bootstrapText === undefined ? TextFileContentSource.FileSystem : TextFileContentSource.Bootstrap,
 			revision: undefined,
+			encoding: "utf8",
 		};
 	}
 

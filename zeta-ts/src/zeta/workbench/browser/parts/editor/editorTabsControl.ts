@@ -2,13 +2,17 @@ import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/ta
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
 import { h } from "../../../../base/browser/dom.js";
+import type { EditorInstanceId } from "../../../services/editor/common/editorState.js";
 
 /** One open Editor presented by an EditorTabsControl. */
 export interface EditorTabDescriptor {
+	readonly instanceId: EditorInstanceId;
 	readonly input: EditorInput;
 	readonly panelId: string;
 	readonly tabId: string;
 	readonly preview?: boolean;
+	readonly isDirty?: boolean;
+	readonly hasExternalChange?: boolean;
 }
 
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */

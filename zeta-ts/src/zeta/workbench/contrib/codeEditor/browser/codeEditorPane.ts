@@ -3,6 +3,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
@@ -12,7 +13,7 @@ import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { EditorPart, type EditorPartOptions } from "../../../../editor/browser/editorPart.js";
+import { EditorPart, isEditorTextViewState, type EditorPartOptions, type EditorTextViewState } from "../../../../editor/browser/editorPart.js";
 import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/textModelService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view/editorViewport.js";
 import { type EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
@@ -24,12 +25,18 @@ import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
+import type { EditorSelectionController } from "../../../../editor/common/cursor/editorSelectionController.js";
+import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 
 export interface EditorPanePart extends IDisposable {
+	readonly onDidChange?: Event<void>;
+	readonly selections?: EditorSelectionController;
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
 	revealRange?(range: TextRange): void;
+	getViewState?(): EditorTextViewState;
+	restoreViewState?(state: EditorTextViewState): void;
 	announceAccessibilityStatus?(message: string): void;
 	readonly isDirty?: boolean;
 	readonly hasExternalChange?: boolean;
@@ -95,13 +102,18 @@ export interface EditorPaneOptions {
 /** Workbench pane that composes the text model, input, view, and language services. */
 export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 	readonly id = CODE_EDITOR_ID;
+	readonly viewStateTypeId = "stanza.code.textView";
 	private readonly part = this.own(new DisposableSlot<EditorPanePart>());
 	private readonly workingCopySlot = this.own(new DisposableSlot<IWorkingCopy>());
+	private readonly statusListener = this.own(new DisposableSlot<IDisposable>());
+	private readonly statusChangeEmitter = this.own(new Emitter<void>());
 	private readonly modelService: ITextModelService;
 	private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 	private saving = false;
+	private languageId: string | undefined;
+	readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
 	get workingCopy(): IWorkingCopy | undefined {
 		return this.workingCopySlot.value;
@@ -141,10 +153,11 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 		let part: EditorPanePart | undefined;
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
 			part = this.createPart({
 				container,
 				input,
-				languageId: languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService),
+				languageId,
 				modelReference,
 				textMateService: this.options.textMateService,
 				languageFeaturesService: this.options.languageFeaturesService,
@@ -196,6 +209,8 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 		}
 		this.workingCopySlot.clear();
 		this.part.replace(part);
+		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
+		this.statusListener.replace(part.onDidChange?.(() => this.statusChangeEmitter.fire()));
 		this.workingCopySlot.replace(new EditorWorkingCopy(
 			modelReference,
 			this.resourceStore,
@@ -204,11 +219,15 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 			input.resource.scheme === "untitled" ? this.options.onSave : undefined,
 		));
 		part.layout(this.dimension);
+		this.statusChangeEmitter.fire();
 	}
 
 	clearInput(): void {
+		this.statusListener.clear();
 		this.workingCopySlot.clear();
 		this.part.clear();
+		this.languageId = undefined;
+		this.statusChangeEmitter.fire();
 	}
 
 	layout(dimension: IDimension): void {
@@ -260,6 +279,29 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 
 	revealRange(range: TextRange): void {
 		this.part.value?.revealRange?.(range);
+	}
+
+	saveViewState(): unknown {
+		return this.part.value?.getViewState?.();
+	}
+
+	restoreViewState(state: unknown): void {
+		if (!isEditorTextViewState(state)) throw new TypeError("Invalid Stanza code editor view state");
+		const part = this.part.value;
+		if (!part?.restoreViewState) throw new Error("Stanza code editor view-state restoration is unavailable");
+		part.restoreViewState(state);
+	}
+
+	getStatus(): EditorPaneStatus {
+		const selections = this.part.value?.selections?.selections;
+		const active = selections?.primary.active;
+		return Object.freeze({
+			...(active ? { lineNumber: active.lineIndex + 1, columnNumber: active.columnIndex + 1 } : {}),
+			...(selections && selections.selections.length > 1 ? { selectionCount: selections.selections.length } : {}),
+			...(this.languageId ? { languageId: this.languageId } : {}),
+			encoding: "UTF-8",
+			endOfLine: "LF",
+		});
 	}
 
 	private handleSaveKeydown(event: KeyboardEvent): void {
