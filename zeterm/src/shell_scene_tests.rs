@@ -23,23 +23,25 @@ use crate::shell_interaction::{
     AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR,
     COMPOSER_PANEL, ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
     MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER, SESSION_SEARCH_INPUT,
-    SESSION_SIDEBAR_RESIZE_HANDLE, THREAD_TIMELINE, TITLEBAR,
+    SESSION_SIDEBAR_RESIZE_HANDLE, SETTINGS_WORKBENCH_TAB, THREAD_TIMELINE, TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
+use crate::workbench::WorkbenchItem;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
+use zeta_settings::SettingsPageSection;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui::{
     CaretVisibility, Color, Edges, Point, Rect, ScrollbarPresentation, TextInputCommand,
     TextInputLayoutEngine, UiScene,
 };
-use zeta_winit::WindowControlInsets;
-use zui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
+use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
+use zui::window::WindowControlInsets;
 
 fn viewport() -> LogicalViewport {
     LogicalViewport {
@@ -126,6 +128,28 @@ fn presentation_with_workspace(
     agent_sidebar_workspace: &AgentSidebarWorkspace,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
+    presentation_with_workbench_item(
+        terminal,
+        scroll_offset,
+        session_sidebar,
+        agent_sidebar,
+        session_context_menu,
+        agent_sidebar_workspace,
+        dispatch,
+        WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+    )
+}
+
+fn presentation_with_workbench_item(
+    terminal: Option<&TerminalCore>,
+    scroll_offset: usize,
+    session_sidebar: SessionSidebarState,
+    agent_sidebar: AgentSidebarState,
+    session_context_menu: SessionContextMenuState,
+    agent_sidebar_workspace: &AgentSidebarWorkspace,
+    dispatch: &mut UiDispatch,
+    workbench_item: WorkbenchItem,
+) -> ShellPresentation {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
@@ -163,6 +187,7 @@ fn presentation_with_workspace(
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
@@ -177,8 +202,11 @@ fn presentation_with_workspace(
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },
@@ -215,6 +243,7 @@ fn presentation_with_workspace(
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
@@ -229,13 +258,53 @@ fn presentation_with_workspace(
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },
         &mut text_layout,
     )
+}
+
+#[test]
+fn settings_workbench_item_renders_settings_and_selects_the_sidebar_entry() {
+    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let mut dispatch = UiDispatch::default();
+    let presentation = presentation_with_workbench_item(
+        None,
+        0,
+        SessionSidebarState::expanded(),
+        AgentSidebarState::default(),
+        SessionContextMenuState::default(),
+        &agent_sidebar_workspace,
+        &mut dispatch,
+        WorkbenchItem::Settings,
+    );
+
+    assert!(
+        presentation
+            .scene()
+            .text_blocks()
+            .iter()
+            .any(|text| text.text() == "Settings")
+    );
+    assert!(
+        presentation
+            .scene()
+            .icons()
+            .iter()
+            .any(|icon| icon.icon() == zeta_icons::icons::GEAR)
+    );
+    let node = presentation
+        .accessibility_nodes
+        .iter()
+        .find(|node| node.id == SETTINGS_WORKBENCH_TAB)
+        .expect("settings workbench item should be mounted");
+    assert_eq!(node.selection, zui::ui::AccessibilitySelection::Selected);
 }
 
 #[test]
@@ -362,6 +431,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
@@ -376,8 +446,11 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },
@@ -642,6 +715,7 @@ fn session_search_filters_tabs_by_session_name() {
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::expanded(),
@@ -656,8 +730,11 @@ fn session_search_filters_tabs_by_session_name() {
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },
@@ -846,6 +923,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
@@ -860,8 +938,11 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },
@@ -1066,6 +1147,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         session_search: &session_search,
         session_tabs: &[],
         selected_session_tab: ACTIVE_SESSION_TAB,
+        workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
         caret_visibility: CaretVisibility::Visible,
         dispatch: &dispatch,
         session_sidebar: SessionSidebarState::collapsed(),
@@ -1080,8 +1162,11 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         keybindings: &keybindings,
         keyboard_shortcuts: &keyboard_shortcuts,
         language_server_settings: &language_server_settings,
+        settings_section: SettingsPageSection::default(),
         language_server_runtime_state: None,
         keybinding_diagnostics: &[],
+        theme_scheme: zeta_theme::ColorScheme::Light,
+        theme_follows_system: true,
         window_control_insets: WindowControlInsets::NONE,
         pointer_position: None,
     };
@@ -1231,6 +1316,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
+            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
@@ -1245,8 +1331,11 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             keybindings: &NativeKeybindings::default(),
             keyboard_shortcuts: &KeyboardShortcutsState::default(),
             language_server_settings: &LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             language_server_runtime_state: None,
             keybinding_diagnostics: &[],
+            theme_scheme: zeta_theme::ColorScheme::Light,
+            theme_follows_system: true,
             window_control_insets: WindowControlInsets::NONE,
             pointer_position: None,
         },

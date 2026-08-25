@@ -39,6 +39,7 @@ pub(crate) const SESSION_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCO
 pub(crate) const SESSION_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
 pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SESSION_SCOPE, 1);
 pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SESSION_SCOPE, 2);
+pub(crate) const SETTINGS_WORKBENCH_TAB: ElementId = ElementId::scoped(SESSION_SCOPE, 4);
 pub(crate) const SESSION_SIDEBAR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
 pub(crate) const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(SHELL_SCOPE, 17);
 const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(SHELL_SCOPE, 18);

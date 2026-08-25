@@ -31,7 +31,7 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
         scene.icons()[0].icon(),
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
     );
-    assert_eq!(scene.icons()[1].icon(), icons::SETTINGS);
+    assert_eq!(scene.icons()[1].icon(), icons::GEAR);
     assert_eq!(
         scene.icons()[2].icon(),
         icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
@@ -106,6 +106,6 @@ fn expanded_sidebars_use_the_left_and_right_icons() {
     titlebar.paint(&mut scene);
 
     assert_eq!(scene.icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
-    assert_eq!(scene.icons()[1].icon(), icons::SETTINGS);
+    assert_eq!(scene.icons()[1].icon(), icons::GEAR);
     assert_eq!(scene.icons()[2].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
 }

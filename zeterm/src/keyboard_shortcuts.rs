@@ -12,6 +12,7 @@ use crate::keybindings::KeybindingsResourcePoll;
 use crate::keybindings::NativeKeybindings;
 use crate::shell_interaction::WINDOW;
 use zeta_commands::ZetermCommandId;
+use zeta_settings::SettingsPageSection;
 
 const SHORTCUT_SCOPE: u32 = 3;
 pub(crate) const KEYBOARD_SHORTCUTS: ElementId = ElementId::scoped(SHORTCUT_SCOPE, 1);
@@ -55,12 +56,20 @@ fn command_for_row(id: ElementId) -> Option<ZetermCommandId> {
 
 impl NativeApp {
     pub(super) fn activate_keyboard_shortcuts_element(&mut self, id: ElementId) -> bool {
-        if !self.keyboard_shortcuts.is_visible() {
-            return false;
-        }
         if id == KEYBOARD_SHORTCUTS_CLOSE {
+            if !self.keyboard_shortcuts.is_visible() {
+                return false;
+            }
             self.keyboard_shortcuts.close();
         } else if let Some(command) = command_for_row(id) {
+            if !self.keyboard_shortcuts.is_visible() {
+                if !self.workbench_item.is_settings()
+                    || self.settings_section != SettingsPageSection::Keybindings
+                {
+                    return false;
+                }
+                self.keyboard_shortcuts.toggle();
+            }
             self.keyboard_shortcuts.start_recording(command);
         } else {
             return false;

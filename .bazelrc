@@ -6,6 +6,11 @@ common --incompatible_strict_action_env
 common --test_output=errors
 common --symlink_prefix=.build/bazel-
 
+# Persist local Rust action results across Bazel server/output-base churn. The
+# workspace build directory is already ignored by Git and keeps this cache
+# separate from the hermetic repository inputs.
+common --disk_cache=.build/bazel-disk-cache
+
 # Do not probe the machine's Xcode installation; the SDK is supplied by
 # MODULE.bazel and the LLVM toolchain.
 common --xcode_version_config=//:disable_xcode

@@ -1,11 +1,12 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use zeta_icons::icons;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_ui::{
     Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,
-    FontWeight, InteractionRegion, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
+    FontWeight, InteractionRegion, PaintIcon, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
     TabListOrientation, TabListStyle, TabSelection, TabState, TabStyle, TextBlock, TextStyle,
     UiScene,
 };
@@ -23,9 +24,16 @@ const TAB_INFORMATION_HEIGHT: f32 = 36.0;
 const STATUS_CONTAINER_SIZE: f32 = TAB_INFORMATION_HEIGHT;
 const STATUS_CONTENT_GAP: f32 = 10.0;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WorkbenchTabKind {
+    Session,
+    Settings,
+}
+
 #[derive(Clone, Copy)]
-pub(crate) struct SessionTab<'a> {
+pub(crate) struct WorkbenchTab<'a> {
     id: ElementId,
+    kind: WorkbenchTabKind,
     name: &'a str,
     workspace: &'a str,
     status_label: &'a str,
@@ -218,7 +226,7 @@ fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
         .unwrap_or_else(|| fallback.to_owned())
 }
 
-impl<'a> SessionTab<'a> {
+impl<'a> WorkbenchTab<'a> {
     pub(crate) const fn new(
         id: ElementId,
         name: &'a str,
@@ -227,26 +235,37 @@ impl<'a> SessionTab<'a> {
     ) -> Self {
         Self {
             id,
+            kind: WorkbenchTabKind::Session,
             name,
             workspace,
             status_label,
         }
     }
+
+    pub(crate) const fn settings(id: ElementId) -> Self {
+        Self {
+            id,
+            kind: WorkbenchTabKind::Settings,
+            name: "Settings",
+            workspace: "Application",
+            status_label: "",
+        }
+    }
 }
 
-/// Product-owned vertical TabList for real terminal sessions.
-pub(crate) struct SessionTabList<'a> {
+/// Product-owned vertical TabList for sessions and singleton workbench destinations.
+pub(crate) struct WorkbenchTabList<'a> {
     bounds: Rect,
-    tabs: &'a [SessionTab<'a>],
+    tabs: &'a [WorkbenchTab<'a>],
     selected_id: ElementId,
     palette: ShellPalette,
     dispatch: &'a UiDispatch,
 }
 
-impl<'a> SessionTabList<'a> {
+impl<'a> WorkbenchTabList<'a> {
     pub(crate) fn new(
         bounds: Rect,
-        tabs: &'a [SessionTab<'a>],
+        tabs: &'a [WorkbenchTab<'a>],
         selected_id: ElementId,
         palette: ShellPalette,
         dispatch: &'a UiDispatch,
@@ -265,13 +284,19 @@ impl<'a> SessionTabList<'a> {
         let tab_list = self.tab_list();
         for (index, tab) in self.tabs.iter().enumerate() {
             let tab_bounds = tab_list.tab_bounds(index).expect("registered tab");
+            let label = match tab.kind {
+                WorkbenchTabKind::Session => {
+                    format!("{}, {}, {}", tab.name, tab.workspace, tab.status_label)
+                }
+                WorkbenchTabKind::Settings => "Settings".to_owned(),
+            };
             regions.push(
                 InteractionRegion::new(
-                    "SessionTab",
+                    "WorkbenchTab",
                     tab.id,
                     tab_bounds,
                     AccessibilityRole::Tab,
-                    format!("{}, {}, {}", tab.name, tab.workspace, tab.status_label),
+                    label,
                 )
                 .with_cursor(CursorFeedback::Pointer)
                 .with_focus(FocusBehavior::TabStop)
@@ -341,13 +366,29 @@ impl<'a> SessionTabList<'a> {
                 STATUS_CONTAINER_SIZE,
                 STATUS_CONTAINER_SIZE,
             );
-            // Keep this white status container independent from Session lifecycle data. Planning,
-            // Thinking, Editing, and any later Session states can project their own SVG inside it
-            // once the App Server exposes an authoritative typed activity status.
-            scene.draw_rect(
-                PaintRect::new(status_bounds, self.palette.surface)
-                    .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
-            );
+            if tab.kind == WorkbenchTabKind::Settings {
+                let icon_size = 18.0;
+                let icon_bounds = Rect::from_xywh(
+                    status_bounds.origin.x + (status_bounds.size.width - icon_size) * 0.5,
+                    status_bounds.origin.y + (status_bounds.size.height - icon_size) * 0.5,
+                    icon_size,
+                    icon_size,
+                );
+                scene.draw_icon(PaintIcon::new(
+                    icons::GEAR,
+                    icon_bounds,
+                    self.palette.text_muted,
+                ));
+            } else {
+                // Keep this white status container independent from Session lifecycle data.
+                // Planning, Thinking, Editing, and any later Session states can project their own
+                // SVG inside it once the App Server exposes an authoritative typed activity
+                // status.
+                scene.draw_rect(
+                    PaintRect::new(status_bounds, self.palette.surface)
+                        .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
+                );
+            }
 
             let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
             let text_width = (tab_bounds.right() - text_x - TAB_CONTENT_PADDING).max(1.0);
@@ -367,9 +408,9 @@ impl<'a> SessionTabList<'a> {
     }
 }
 
-impl Component for SessionTabList<'_> {
+impl Component for WorkbenchTabList<'_> {
     fn element(&self) -> ComponentElement {
-        Element::leaf("SessionTabList")
+        Element::leaf("WorkbenchTabList")
             .in_bounds(self.bounds)
             .with_identity(SESSION_TAB_LIST)
     }
@@ -380,7 +421,7 @@ impl Component for SessionTabList<'_> {
                 SESSION_TAB_LIST,
                 element.bounds(),
                 AccessibilityRole::TabList,
-                "Terminal sessions",
+                "Workbench navigation",
             )
             .with_parent(SESSION_SIDEBAR),
         )

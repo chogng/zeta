@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "input-classifier",
+    crate_name = "zeta_input_classifier",
+)

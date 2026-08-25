@@ -1,17 +1,20 @@
-use super::SessionTab;
-use super::SessionTabList;
 use super::SessionTabUpsert;
+use super::WorkbenchTab;
+use super::WorkbenchTabList;
 use super::upsert_session_catalog_tab;
 use super::upsert_session_tab;
-use crate::shell_interaction::{ACTIVE_SESSION_TAB, SESSION_TAB_LIST, session_tab_id};
+use crate::shell_interaction::{
+    ACTIVE_SESSION_TAB, SESSION_TAB_LIST, SETTINGS_WORKBENCH_TAB, session_tab_id,
+};
 use crate::shell_style::SHELL_PALETTE;
+use zeta_icons::icons;
 use zeta_protocol::{Session, SessionId, SessionStatus};
 use zeta_ui::{Color, Component, CornerRadii, FontWeight, Point, Rect, UiScene};
-use zui::{
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, InteractionFrame, UiDispatch, UiFrame, UiIntent,
 };
 
-fn second_session_tab() -> zui::ElementId {
+fn second_session_tab() -> zui::ui::ElementId {
     session_tab_id(1)
 }
 
@@ -79,15 +82,15 @@ fn catalog_upsert_does_not_change_the_selected_tab() {
 fn session_tabs_render_status_and_two_line_information_with_selected_semantics() {
     let dispatch = UiDispatch::default();
     let tabs = [
-        SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Thinking"),
-        SessionTab::new(
+        WorkbenchTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Thinking"),
+        WorkbenchTab::new(
             second_session_tab(),
             "Review terminal navigation",
             "~/Desktop/another-workspace-with-a-long-name",
             "Planning",
         ),
     ];
-    let list = SessionTabList::new(
+    let list = WorkbenchTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
         &tabs,
         ACTIVE_SESSION_TAB,
@@ -167,10 +170,10 @@ fn session_tabs_render_status_and_two_line_information_with_selected_semantics()
 fn hovering_an_unselected_tab_uses_the_same_light_gray_highlight() {
     let mut dispatch = UiDispatch::default();
     let tabs = [
-        SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
-        SessionTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
+        WorkbenchTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
+        WorkbenchTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
     ];
-    let resting = SessionTabList::new(
+    let resting = WorkbenchTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
         &tabs,
         ACTIVE_SESSION_TAB,
@@ -184,7 +187,7 @@ fn hovering_an_unselected_tab_uses_the_same_light_gray_highlight() {
         Point::new(second_bounds.origin.x + 2.0, second_bounds.origin.y + 2.0),
         frame.interaction(),
     );
-    let hovered = SessionTabList::new(
+    let hovered = WorkbenchTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
         &tabs,
         ACTIVE_SESSION_TAB,
@@ -202,10 +205,10 @@ fn hovering_an_unselected_tab_uses_the_same_light_gray_highlight() {
 fn clicking_an_unselected_tab_emits_its_stable_activation_intent() {
     let mut dispatch = UiDispatch::default();
     let tabs = [
-        SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
-        SessionTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
+        WorkbenchTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
+        WorkbenchTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
     ];
-    let list = SessionTabList::new(
+    let list = WorkbenchTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
         &tabs,
         ACTIVE_SESSION_TAB,
@@ -224,5 +227,40 @@ fn clicking_an_unselected_tab_emits_its_stable_activation_intent() {
     assert_eq!(
         outcome.intent,
         Some(UiIntent::Activate(second_session_tab()))
+    );
+}
+
+#[test]
+fn settings_workbench_tab_renders_as_a_selectable_gear_item() {
+    let mut dispatch = UiDispatch::default();
+    let tabs = [WorkbenchTab::settings(SETTINGS_WORKBENCH_TAB)];
+    let list = WorkbenchTabList::new(
+        Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+        &tabs,
+        SETTINGS_WORKBENCH_TAB,
+        SHELL_PALETTE,
+        &dispatch,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(SHELL_PALETTE.background);
+    frame.draw_component(&list);
+
+    assert_eq!(frame.scene().icons()[0].icon(), icons::GEAR);
+    let node = frame
+        .interaction()
+        .accessibility_nodes(&dispatch)
+        .into_iter()
+        .find(|node| node.id == SETTINGS_WORKBENCH_TAB)
+        .expect("settings workbench tab should be registered");
+    assert_eq!(node.label, "Settings");
+    assert_eq!(node.selection, AccessibilitySelection::Selected);
+
+    let bounds = list.tab_list().tab_bounds(0).expect("settings tab bounds");
+    let point = Point::new(bounds.origin.x + 2.0, bounds.origin.y + 2.0);
+    dispatch.pointer_moved(point, frame.interaction());
+    dispatch.press_primary(frame.interaction());
+    let outcome = dispatch.release_primary(point, frame.interaction());
+    assert_eq!(
+        outcome.intent,
+        Some(UiIntent::Activate(SETTINGS_WORKBENCH_TAB))
     );
 }

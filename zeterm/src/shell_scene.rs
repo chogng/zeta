@@ -40,12 +40,13 @@ use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
 use crate::session_sidebar_toolbar::SessionSidebarToolbar;
-use crate::session_tab_list::{SessionTab, SessionTabList, SessionTabState};
+use crate::session_tab_list::{SessionTabState, WorkbenchTab, WorkbenchTabList};
+use crate::settings_sections::SettingsSectionPane;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,
     AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
     MAIN_SURFACE, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE,
-    TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
+    SETTINGS_WORKBENCH_TAB, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::ShellPalette;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
@@ -54,6 +55,7 @@ use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::ThreadTimeline;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
+use crate::workbench::WorkbenchItem;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
@@ -69,6 +71,8 @@ use zeta_editor::CodeEditorStyle;
 use zeta_layout::TerminalWorkspaceLayout;
 use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
+use zeta_settings::SettingsPageMode;
+use zeta_settings::SettingsPageSection;
 use zeta_winit::WindowControlInsets;
 use zui::{
     AccessibilityNode, AccessibilityRole, ComponentContext, CursorFeedback, ElementId,
@@ -282,7 +286,6 @@ struct ShellOverlayPresentation {
     remote_connection_manager_list_viewport: Option<Rect>,
     remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
     remote_tunnel_manager_list_viewport: Option<Rect>,
-    language_server_settings_content: Option<Rect>,
 }
 
 #[derive(Clone, Copy)]
@@ -316,6 +319,7 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) session_search: &'a SessionSearch,
     pub(crate) session_tabs: &'a [SessionTabState],
     pub(crate) selected_session_tab: ElementId,
+    pub(crate) workbench_item: WorkbenchItem,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
     pub(crate) session_sidebar: SessionSidebarState,
@@ -330,9 +334,12 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) keybindings: &'a NativeKeybindings,
     pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
     pub(crate) language_server_settings: &'a LanguageServerSettingsState,
+    pub(crate) settings_section: SettingsPageSection,
     pub(crate) language_server_runtime_state:
         Option<&'a zeta_language_service::LanguageServerState>,
     pub(crate) keybinding_diagnostics: &'a [String],
+    pub(crate) theme_scheme: zeta_theme::ColorScheme,
+    pub(crate) theme_follows_system: bool,
     pub(crate) window_control_insets: WindowControlInsets,
     pub(crate) pointer_position: Option<zeta_ui::Point>,
 }
@@ -343,7 +350,7 @@ struct SessionSidebarView<'a> {
     context: &'a WorkspaceContext,
     search: &'a SessionSearch,
     tabs: &'a [SessionTabState],
-    selected_tab: ElementId,
+    workbench_item: WorkbenchItem,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -375,10 +382,28 @@ struct FileEditorPresentationView<'a> {
 struct MainPresentationView<'a> {
     terminal: TerminalView<'a>,
     workspace_surface: WorkspaceSurfaceKind,
+    workbench_item: WorkbenchItem,
+    language_server_settings: &'a LanguageServerSettingsState,
+    settings_section: SettingsPageSection,
+    language_server_runtime_state: Option<&'a zeta_language_service::LanguageServerState>,
     session_title: &'a str,
     thread_projection: &'a ThreadProjection,
     thread_timeline_scroll_offset: usize,
     composer: ComposerPanelView<'a>,
+    workspace_context: &'a WorkspaceContext,
+    keybindings: &'a NativeKeybindings,
+    keyboard_shortcuts: &'a KeyboardShortcutsState,
+    keybinding_diagnostics: &'a [String],
+    theme_scheme: zeta_theme::ColorScheme,
+    theme_follows_system: bool,
+    caret_visibility: CaretVisibility,
+    dispatch: &'a UiDispatch,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct MainDrawResult {
+    ime_cursor_area: Option<Rect>,
+    settings_content: Option<Rect>,
 }
 
 #[cfg(test)]
@@ -479,7 +504,7 @@ fn build_shell_presentation_with_bindings(
                     context: model.workspace_context,
                     search: model.session_search,
                     tabs: model.session_tabs,
-                    selected_tab: model.selected_session_tab,
+                    workbench_item: model.workbench_item,
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
@@ -552,7 +577,7 @@ fn build_shell_presentation_with_bindings(
     } else {
         None
     };
-    let composer_caret = frame.with_context(|context| {
+    let main_draw = |context: &mut ComponentContext<'_, '_>| {
         draw_main(
             context,
             layout,
@@ -564,6 +589,10 @@ fn build_shell_presentation_with_bindings(
                     selection: model.terminal_selection,
                 },
                 workspace_surface: model.workspace_surface,
+                workbench_item: model.workbench_item,
+                language_server_settings: model.language_server_settings,
+                settings_section: model.settings_section,
+                language_server_runtime_state: model.language_server_runtime_state,
                 session_title,
                 thread_projection: model.thread_projection,
                 thread_timeline_scroll_offset: model.thread_timeline_scroll_offset,
@@ -576,11 +605,23 @@ fn build_shell_presentation_with_bindings(
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
+                workspace_context: model.workspace_context,
+                keybindings: model.keybindings,
+                keyboard_shortcuts: model.keyboard_shortcuts,
+                keybinding_diagnostics: model.keybinding_diagnostics,
+                theme_scheme: model.theme_scheme,
+                theme_follows_system: model.theme_follows_system,
+                caret_visibility: model.caret_visibility,
+                dispatch: model.dispatch,
             },
             palette,
             text_layout,
         )
-    });
+    };
+    let main_draw = match animation_bindings.as_deref_mut() {
+        Some(animation_bindings) => frame.with_animation_bindings(animation_bindings, main_draw),
+        None => frame.with_context(main_draw),
+    };
     if let Some(bounds) = layout.agent_sidebar {
         draw_agent_sidebar_border(frame.scene_mut(), bounds, palette);
     }
@@ -605,7 +646,7 @@ fn build_shell_presentation_with_bindings(
     } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
         session_search_caret
     } else {
-        composer_caret
+        main_draw.ime_cursor_area
     };
     if let Some(bounds) = layout.session_sidebar_sash_track {
         frame.with_context(|context| {
@@ -644,7 +685,7 @@ fn build_shell_presentation_with_bindings(
         remote_connection_manager_list_viewport: overlay.remote_connection_manager_list_viewport,
         remote_tunnel_manager_scroll_metrics: overlay.remote_tunnel_manager_scroll_metrics,
         remote_tunnel_manager_list_viewport: overlay.remote_tunnel_manager_list_viewport,
-        language_server_settings_content: overlay.language_server_settings_content,
+        language_server_settings_content: main_draw.settings_content,
         base_checkpoint: Some(base_checkpoint),
         retained_fragments: BTreeMap::new(),
     }
@@ -691,7 +732,6 @@ pub(crate) fn rebuild_shell_overlays(
     presentation.remote_tunnel_manager_scroll_metrics =
         overlay.remote_tunnel_manager_scroll_metrics;
     presentation.remote_tunnel_manager_list_viewport = overlay.remote_tunnel_manager_list_viewport;
-    presentation.language_server_settings_content = overlay.language_server_settings_content;
     true
 }
 
@@ -735,7 +775,6 @@ fn draw_shell_overlays(
     let mut remote_connection_manager_list_viewport = None;
     let mut remote_tunnel_manager_scroll_metrics = None;
     let mut remote_tunnel_manager_list_viewport = None;
-    let mut language_server_settings_content = None;
     if let Some(context_menu) = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.session_context_menu,
@@ -854,57 +893,6 @@ fn draw_shell_overlays(
     ) {
         frame.draw_component(&shortcuts);
     }
-    if model.language_server_settings.is_visible() {
-        let actions = SettingsPageActionAvailability::none()
-            .with_reset_enabled(model.language_server_settings.can_reset())
-            .with_save_enabled(model.language_server_settings.can_save());
-        let settings_page = SettingsPage::new_with_header_height(
-            viewport_bounds,
-            TITLEBAR_HEIGHT,
-            model.language_server_settings.search_input(),
-            model.caret_visibility,
-            palette.settings_page_style(),
-            actions,
-            model.dispatch,
-            text_layout,
-        )
-        .with_parent(WINDOW);
-        if model
-            .dispatch
-            .is_focused(zeta_settings::SETTINGS_SEARCH_INPUT)
-        {
-            ime_cursor_area = settings_page.search_caret_bounds();
-        }
-        frame.draw_component(&settings_page);
-        language_server_settings_content = Some(settings_page.content_bounds());
-        if let Some(settings) = LanguageServerSettings::new_in_content(
-            settings_page.content_bounds(),
-            model.language_server_settings,
-            model.caret_visibility,
-            palette,
-            text_layout,
-            model.dispatch,
-        ) {
-            let settings = if let Some(runtime_state) = model.language_server_runtime_state {
-                settings.with_runtime_state(runtime_state)
-            } else {
-                settings
-            }
-            .without_switch_fragment();
-            let settings = settings.with_parent(zeta_settings::SETTINGS_PAGE);
-            if model
-                .dispatch
-                .is_focused(crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT)
-            {
-                ime_cursor_area = settings.executable_caret_bounds();
-            }
-            if let Some(animation_bindings) = animation_bindings {
-                frame.draw_component_with_animation_bindings(animation_bindings, &settings);
-            } else {
-                frame.draw_component(&settings);
-            }
-        }
-    }
     ShellOverlayPresentation {
         ime_cursor_area,
         workspace_path_picker_scroll_metrics,
@@ -915,7 +903,6 @@ fn draw_shell_overlays(
         remote_connection_manager_list_viewport,
         remote_tunnel_manager_scroll_metrics,
         remote_tunnel_manager_list_viewport,
-        language_server_settings_content,
     }
 }
 
@@ -1137,7 +1124,7 @@ fn draw_session_sidebar(
         SESSION_SIDEBAR,
         bounds,
         AccessibilityRole::Group,
-        "Sessions sidebar",
+        "Workbench navigator",
     )
     .with_parent(WINDOW);
     context.with_component(&sidebar, |context, _| {
@@ -1159,11 +1146,11 @@ fn draw_session_sidebar(
         );
         let search_caret = toolbar.search_caret_bounds();
         context.draw_component(&toolbar);
-        let tabs = if view.tabs.is_empty() {
+        let mut tabs = if view.tabs.is_empty() {
             view.search
                 .matches_session_name(view.title)
                 .then(|| {
-                    SessionTab::new(
+                    WorkbenchTab::new(
                         ACTIVE_SESSION_TAB,
                         view.title,
                         view.context.working_directory_label(),
@@ -1177,18 +1164,15 @@ fn draw_session_sidebar(
                 .iter()
                 .filter(|tab| view.search.matches_session_name(tab.title()))
                 .map(|tab| {
-                    SessionTab::new(tab.id(), tab.title(), tab.workspace(), tab.status_label())
+                    WorkbenchTab::new(tab.id(), tab.title(), tab.workspace(), tab.status_label())
                 })
                 .collect::<Vec<_>>()
         };
-        let tab_list = SessionTabList::new(
+        tabs.push(WorkbenchTab::settings(SETTINGS_WORKBENCH_TAB));
+        let tab_list = WorkbenchTabList::new(
             SessionSidebarToolbar::content_bounds(bounds),
             &tabs,
-            if view.tabs.is_empty() {
-                ACTIVE_SESSION_TAB
-            } else {
-                view.selected_tab
-            },
+            view.workbench_item.element_id(),
             palette,
             view.dispatch,
         );
@@ -1276,21 +1260,26 @@ fn draw_main(
     view: MainPresentationView<'_>,
     palette: ShellPalette,
     text_layout: &mut TextInputLayoutEngine,
-) -> Option<Rect> {
+) -> MainDrawResult {
     let active_screen = match view.workspace_surface {
         WorkspaceSurfaceKind::Terminal => ScreenBuffer::Alternate,
         WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ScreenBuffer::Primary,
+    };
+    let main_label = if view.workbench_item.is_settings() {
+        "Settings"
+    } else {
+        match view.workspace_surface {
+            WorkspaceSurfaceKind::Agent => "Agent workspace",
+            WorkspaceSurfaceKind::Editor => "Agent session with file inspector",
+            WorkspaceSurfaceKind::Terminal => "Interactive terminal",
+        }
     };
     let main_surface = InteractionRegion::new(
         "MainSurface",
         MAIN_SURFACE,
         layout.main,
         AccessibilityRole::Group,
-        match view.workspace_surface {
-            WorkspaceSurfaceKind::Agent => "Agent workspace",
-            WorkspaceSurfaceKind::Editor => "Agent session with file inspector",
-            WorkspaceSurfaceKind::Terminal => "Interactive terminal",
-        },
+        main_label,
     )
     .with_parent(WINDOW)
     .with_cursor(CursorFeedback::Text);
@@ -1298,68 +1287,152 @@ fn draw_main(
         context
             .scene_mut()
             .draw_rect(PaintRect::new(layout.main, palette.background));
-        let mut ime_cursor_area = None;
-        context.with_clip(layout.main, |context| match view.workspace_surface {
-            WorkspaceSurfaceKind::Terminal => {
-                let terminal_region = InteractionRegion::new(
-                    "TerminalOutput",
-                    TERMINAL_OUTPUT,
-                    terminal_content_bounds(layout, active_screen),
-                    AccessibilityRole::Terminal,
-                    "Interactive terminal",
-                )
-                .with_parent(MAIN_SURFACE)
-                .with_cursor(CursorFeedback::Text);
-                context.with_component(&terminal_region, |context, _| {
-                    draw_terminal(
-                        context.scene_mut(),
-                        layout,
-                        view.terminal,
-                        active_screen,
-                        palette,
-                    );
-                });
-            }
-            WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
-                context.draw_component(&SessionHeader::new(
-                    layout.session_header,
-                    view.session_title,
-                    view.thread_projection,
-                    view.composer.context,
-                    palette,
-                ));
-                let timeline_region = InteractionRegion::new(
-                    "ThreadTimeline",
-                    THREAD_TIMELINE,
-                    layout.thread_timeline,
-                    AccessibilityRole::Group,
-                    "Agent Thread timeline",
-                )
-                .with_parent(MAIN_SURFACE)
-                .with_cursor(CursorFeedback::Text);
-                context.with_component(&timeline_region, |context, _| {
-                    context.draw_component(&ThreadTimeline::new(
-                        layout.thread_timeline,
-                        view.thread_projection,
-                        view.thread_timeline_scroll_offset,
-                        palette,
-                    ));
-                });
-                ime_cursor_area = draw_composer_panel(
-                    context,
-                    layout.composer_panel_layout,
-                    view.composer,
+        context.with_clip(layout.main, |context| {
+            let mut ime_cursor_area = None;
+            let mut settings_content = None;
+            if view.workbench_item.is_settings() {
+                let actions = if view.settings_section == SettingsPageSection::LanguageServers {
+                    SettingsPageActionAvailability::none()
+                        .with_reset_enabled(view.language_server_settings.can_reset())
+                        .with_save_enabled(view.language_server_settings.can_save())
+                } else {
+                    SettingsPageActionAvailability::none()
+                };
+                let settings_page = SettingsPage::new_with_header_height_and_section(
+                    layout.main,
+                    TITLEBAR_HEIGHT,
+                    view.language_server_settings.search_input(),
+                    view.caret_visibility,
+                    palette.settings_page_style(),
+                    actions,
+                    view.settings_section,
+                    view.dispatch,
                     text_layout,
-                    palette,
-                );
+                )
+                .with_parent(MAIN_SURFACE)
+                .with_mode(SettingsPageMode::Surface);
+                if view.settings_section == SettingsPageSection::LanguageServers {
+                    settings_content = Some(settings_page.content_bounds());
+                }
+                if view
+                    .dispatch
+                    .is_focused(zeta_settings::SETTINGS_SEARCH_INPUT)
+                {
+                    ime_cursor_area = settings_page.search_caret_bounds();
+                }
+                context.draw_component(&settings_page);
+                match view.settings_section {
+                    SettingsPageSection::LanguageServers => {
+                        if let Some(settings) = LanguageServerSettings::new_in_content(
+                            settings_page.content_bounds(),
+                            view.language_server_settings,
+                            view.caret_visibility,
+                            palette,
+                            text_layout,
+                            view.dispatch,
+                        ) {
+                            let settings =
+                                if let Some(runtime_state) = view.language_server_runtime_state {
+                                    settings.with_runtime_state(runtime_state)
+                                } else {
+                                    settings
+                                }
+                                .without_switch_fragment()
+                                .with_parent(zeta_settings::SETTINGS_PAGE);
+                            if view.dispatch.is_focused(
+                                crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT,
+                            ) {
+                                ime_cursor_area = settings.executable_caret_bounds();
+                            }
+                            context.draw_component(&settings);
+                        }
+                    }
+                    section => context.draw_component(&SettingsSectionPane::new(
+                        settings_page.content_bounds(),
+                        section,
+                        palette,
+                        view.workspace_context,
+                        view.workspace_surface,
+                        view.keybindings,
+                        view.keyboard_shortcuts,
+                        view.keybinding_diagnostics,
+                        view.theme_scheme,
+                        view.theme_follows_system,
+                        view.dispatch,
+                    )),
+                }
+            } else {
+                match view.workspace_surface {
+                    WorkspaceSurfaceKind::Terminal => {
+                        let terminal_region = InteractionRegion::new(
+                            "TerminalOutput",
+                            TERMINAL_OUTPUT,
+                            terminal_content_bounds(layout, active_screen),
+                            AccessibilityRole::Terminal,
+                            "Interactive terminal",
+                        )
+                        .with_parent(MAIN_SURFACE)
+                        .with_cursor(CursorFeedback::Text);
+                        context.with_component(&terminal_region, |context, _| {
+                            draw_terminal(
+                                context.scene_mut(),
+                                layout,
+                                view.terminal,
+                                active_screen,
+                                palette,
+                            );
+                        });
+                    }
+                    WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
+                        context.draw_component(&SessionHeader::new(
+                            layout.session_header,
+                            view.session_title,
+                            view.thread_projection,
+                            view.composer.context,
+                            palette,
+                        ));
+                        let timeline_region = InteractionRegion::new(
+                            "ThreadTimeline",
+                            THREAD_TIMELINE,
+                            layout.thread_timeline,
+                            AccessibilityRole::Group,
+                            "Agent Thread timeline",
+                        )
+                        .with_parent(MAIN_SURFACE)
+                        .with_cursor(CursorFeedback::Text);
+                        context.with_component(&timeline_region, |context, _| {
+                            context.draw_component(&ThreadTimeline::new(
+                                layout.thread_timeline,
+                                view.thread_projection,
+                                view.thread_timeline_scroll_offset,
+                                palette,
+                            ));
+                        });
+                        ime_cursor_area = draw_composer_panel(
+                            context,
+                            layout.composer_panel_layout,
+                            view.composer,
+                            text_layout,
+                            palette,
+                        );
+                    }
+                }
             }
-        });
-        match view.workspace_surface {
-            WorkspaceSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
-                terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
-            }),
-            WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
-        }
+            let ime_cursor_area = if view.workbench_item.is_settings() {
+                ime_cursor_area
+            } else {
+                match view.workspace_surface {
+                    WorkspaceSurfaceKind::Terminal => view.terminal.core.and_then(|terminal| {
+                        terminal_cursor_area(layout, terminal, view.terminal.scroll_offset)
+                    }),
+                    WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
+                }
+            };
+            MainDrawResult {
+                ime_cursor_area,
+                settings_content,
+            }
+        })
     })
 }
 

@@ -10,18 +10,27 @@ use crate::language_server_settings::{
     LANGUAGE_SERVER_SWITCH, LanguageServerSettingsTarget,
 };
 use crate::terminal_input::text_input_command;
+use zeta_settings::SETTINGS_NAV_APPEARANCE;
 use zeta_settings::SETTINGS_NAV_BACK;
+use zeta_settings::SETTINGS_NAV_GENERAL;
+use zeta_settings::SETTINGS_NAV_KEYBINDINGS;
 use zeta_settings::SETTINGS_NAV_LANGUAGE_SERVERS;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
+use zeta_settings::SettingsPageSection;
 
 impl NativeApp {
     pub(super) fn activate_language_server_settings_element(&mut self, id: ElementId) -> bool {
-        if !self.language_server_settings.is_visible() {
+        if !self.workbench_item.is_settings() {
             return false;
         }
         match id {
             SETTINGS_NAV_BACK => self.close_language_server_settings(),
-            SETTINGS_NAV_LANGUAGE_SERVERS => {}
+            SETTINGS_NAV_GENERAL => self.settings_section = SettingsPageSection::General,
+            SETTINGS_NAV_LANGUAGE_SERVERS => {
+                self.settings_section = SettingsPageSection::LanguageServers
+            }
+            SETTINGS_NAV_APPEARANCE => self.settings_section = SettingsPageSection::Appearance,
+            SETTINGS_NAV_KEYBINDINGS => self.settings_section = SettingsPageSection::Keybindings,
             LANGUAGE_SERVER_SETTINGS_CLOSE => self.close_language_server_settings(),
             LANGUAGE_SERVER_RUST => self
                 .language_server_settings
@@ -50,7 +59,7 @@ impl NativeApp {
     }
 
     pub(super) fn route_language_server_settings_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.language_server_settings.is_visible() || event.state != ElementState::Pressed {
+        if !self.workbench_item.is_settings() || event.state != ElementState::Pressed {
             return false;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
@@ -158,11 +167,6 @@ impl NativeApp {
     }
 
     fn close_language_server_settings(&mut self) {
-        self.language_server_settings.close();
-        self.pending_focus = Some(if self.workspace_surface.is_editor() {
-            crate::shell_interaction::FILE_EDITOR_DOCUMENT
-        } else {
-            crate::shell_interaction::COMPOSER
-        });
+        self.close_settings_tab();
     }
 }

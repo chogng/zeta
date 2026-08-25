@@ -27,7 +27,7 @@ pub(crate) struct Titlebar {
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
     session_toggle_label: &'static str,
-    language_server_settings_label: &'static str,
+    settings_label: &'static str,
     agent_toggle_label: &'static str,
 }
 
@@ -107,7 +107,7 @@ impl Titlebar {
         } else {
             icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
         };
-        let language_server_settings_label = "Language server settings";
+        let settings_label = "Settings";
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(palette.surface_raised)
                 .with_hovered(palette.surface_hovered)
@@ -141,8 +141,8 @@ impl Titlebar {
                 ActionBarOrientation::Horizontal,
                 vec![
                     ActionBarItem::Button(ActionBarButton::icon(
-                        icons::SETTINGS,
-                        language_server_settings_label,
+                        icons::GEAR,
+                        settings_label,
                         settings_toggle_state,
                     )),
                     ActionBarItem::Button(ActionBarButton::icon(
@@ -155,7 +155,7 @@ impl Titlebar {
                     .with_gap(TITLEBAR_ACTION_GAP),
             ),
             session_toggle_label,
-            language_server_settings_label,
+            settings_label,
             agent_toggle_label,
         }
     }
@@ -175,13 +175,13 @@ impl Titlebar {
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate),
             InteractionRegion::new(
-                "LanguageServerSettingsToggle",
+                "SettingsToggle",
                 LANGUAGE_SERVER_SETTINGS_TOGGLE,
                 self.right_action_bar
                     .interactive_item_bounds(0)
                     .expect("language server settings toggle is enabled"),
                 AccessibilityRole::Button,
-                self.language_server_settings_label,
+                self.settings_label,
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)

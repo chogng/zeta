@@ -1340,11 +1340,16 @@ impl NativeApp {
             format_args!("index={index} tab_id={tab_id:?} session_id={session_id}"),
         );
         if tab_id == self.selected_session_tab {
-            session_switch_trace::event(
-                Some(switch_id),
-                "activation-rejected",
-                format_args!("reason=already-selected"),
-            );
+            if self.workbench_item.is_settings() {
+                self.activate_session_workbench_tab(tab_id);
+                self.rebuild_presentation_on_next_redraw();
+            } else {
+                session_switch_trace::event(
+                    Some(switch_id),
+                    "activation-rejected",
+                    format_args!("reason=already-selected"),
+                );
+            }
             return;
         }
         let switches_workspace = target_workspace_root
@@ -1400,6 +1405,7 @@ impl NativeApp {
             return;
         }
         self.selected_session_tab = tab_id;
+        self.activate_session_workbench_tab(tab_id);
         let terminal_activated = self.activate_terminal_for_session(&session_id);
         session_switch_trace::event(
             Some(switch_id),
@@ -1429,6 +1435,7 @@ impl NativeApp {
             SessionTabUpsert::Added(tab_id) => ("session-tab-added", tab_id),
             SessionTabUpsert::Updated(tab_id) => ("session-tab-updated", tab_id),
         };
+        self.synchronize_session_workbench_tab(tab_id);
         session_switch_trace::event(
             None,
             label,

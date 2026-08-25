@@ -230,7 +230,8 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
 }
 
 fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandRequest) {
-    app.language_server_settings.close();
+    let selected_session_tab = app.selected_session_tab;
+    app.activate_session_workbench_tab(selected_session_tab);
     app.remote_connection_picker.dismiss();
     app.dismiss_remote_connection_manager();
     app.dismiss_remote_tunnel_manager();
@@ -239,16 +240,7 @@ fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandReques
 }
 
 fn execute_open_language_server_settings(app: &mut NativeApp, _request: &CommandRequest) {
-    app.language_server_settings.open();
-    app.keyboard_shortcuts.close();
-    let _ = app.git_branch_context_menu.dismiss();
-    let _ = app.workspace_path_picker.dismiss();
-    let _ = app.remote_connection_picker.dismiss();
-    app.dismiss_remote_connection_manager();
-    app.dismiss_remote_tunnel_manager();
-    app.dismiss_session_context_menu();
-    app.pending_focus = Some(zeta_settings::SETTINGS_SEARCH_INPUT);
-    app.keybindings.cancel_chord();
+    app.activate_settings_tab();
 }
 
 fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest) {
@@ -259,7 +251,8 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
     }
     let restore_focus = app.ui_dispatch.focused();
     app.keyboard_shortcuts.close();
-    app.language_server_settings.close();
+    let selected_session_tab = app.selected_session_tab;
+    app.activate_session_workbench_tab(selected_session_tab);
     app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();
 }

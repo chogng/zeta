@@ -36,6 +36,7 @@ use terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey
 use terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
 use thread_projection::ThreadProjection;
 use thread_timeline_scroll::ThreadTimelineScroll;
+use workbench::WorkbenchItem;
 use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
@@ -45,6 +46,7 @@ use zeta_editor::CodeEditorStyle;
 use zeta_layout::{InspectorPane, LogicalViewport, RootLayout};
 use zeta_protocol::SessionId;
 use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
+use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
@@ -130,6 +132,7 @@ mod session_sidebar;
 mod session_sidebar_toolbar;
 mod session_switch_trace;
 mod session_tab_list;
+mod settings_sections;
 mod shell_interaction;
 mod shell_scene;
 mod shell_style;
@@ -146,6 +149,7 @@ mod thread_projection;
 mod thread_timeline;
 mod thread_timeline_scroll;
 mod titlebar;
+mod workbench;
 mod workspace_context;
 mod workspace_path_picker;
 mod workspace_path_picker_input;
@@ -238,6 +242,7 @@ struct NativeApp {
     session_search: SessionSearch,
     session_tabs: Vec<SessionTabState>,
     selected_session_tab: ElementId,
+    workbench_item: WorkbenchItem,
     session_context_menu: SessionContextMenuState,
     git_branch_context_menu: GitBranchContextMenuState,
     workspace_path_picker: WorkspacePathPickerState,
@@ -268,6 +273,7 @@ struct NativeApp {
     keybindings_resource: KeybindingsResource,
     keyboard_shortcuts: KeyboardShortcutsState,
     language_server_settings: LanguageServerSettingsState,
+    settings_section: SettingsPageSection,
     layout_inspector: LayoutInspector,
     modifiers: ModifiersState,
     pending_focus: Option<ElementId>,
@@ -336,6 +342,7 @@ impl NativeApp {
             session_search: SessionSearch::default(),
             session_tabs: Vec::new(),
             selected_session_tab: shell_interaction::ACTIVE_SESSION_TAB,
+            workbench_item: WorkbenchItem::default(),
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
@@ -366,6 +373,7 @@ impl NativeApp {
             keybindings_resource,
             keyboard_shortcuts: KeyboardShortcutsState::default(),
             language_server_settings: LanguageServerSettingsState::default(),
+            settings_section: SettingsPageSection::default(),
             layout_inspector: LayoutInspector::default(),
             modifiers: ModifiersState::default(),
             pending_focus: None,
@@ -919,6 +927,10 @@ impl NativeApp {
         if self.activate_workspace_path_picker_element(id) {
             return;
         }
+        if id == shell_interaction::SETTINGS_WORKBENCH_TAB {
+            self.activate_settings_tab();
+            return;
+        }
         if let Some(index) = shell_interaction::session_tab_index(id, 0..self.session_tabs.len()) {
             session_switch_trace::event(
                 None,
@@ -1164,6 +1176,7 @@ fn with_shell_presentation_model<R>(
         session_search,
         session_tabs,
         selected_session_tab,
+        workbench_item,
         caret_blink,
         ui_dispatch,
         session_sidebar,
@@ -1183,6 +1196,9 @@ fn with_shell_presentation_model<R>(
         keybindings,
         keyboard_shortcuts,
         language_server_settings,
+        settings_section,
+        theme_scheme,
+        theme_follows_system,
         cursor_position,
         keybindings_resource,
         text_layout,
@@ -1216,6 +1232,7 @@ fn with_shell_presentation_model<R>(
             session_search,
             session_tabs,
             selected_session_tab: *selected_session_tab,
+            workbench_item: *workbench_item,
             caret_visibility: caret_blink.visibility(),
             dispatch: ui_dispatch,
             session_sidebar: *session_sidebar,
@@ -1230,8 +1247,11 @@ fn with_shell_presentation_model<R>(
             keybindings,
             keyboard_shortcuts,
             language_server_settings,
+            settings_section: *settings_section,
             language_server_runtime_state,
             keybinding_diagnostics: keybindings_resource.diagnostics(),
+            theme_scheme: *theme_scheme,
+            theme_follows_system: *theme_follows_system,
             window_control_insets,
             pointer_position: *cursor_position,
         },

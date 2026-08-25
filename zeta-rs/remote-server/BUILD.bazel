@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "remote-server",
+    crate_name = "zeta_remote_server",
+)

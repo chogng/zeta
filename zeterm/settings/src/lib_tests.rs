@@ -6,18 +6,24 @@ use zeta_ui::CaretVisibility;
 use zeta_ui::Color;
 use zeta_ui::InputBoxStateColors;
 use zeta_ui::InputBoxStyle;
+use zeta_ui::InteractionRegion;
 use zeta_ui::SearchBoxStyle;
 use zeta_ui::TextInputLayoutEngine;
 use zeta_ui::TextStyle;
-use zui::AccessibilityRole;
-use zui::InteractionFrame;
-use zui::UiDispatch;
-use zui::UiFrame;
+use zui::ui::AccessibilityRole;
+use zui::ui::AccessibilitySelection;
+use zui::ui::ElementId;
+use zui::ui::FocusBehavior;
+use zui::ui::InteractionFrame;
+use zui::ui::NodeAction;
+use zui::ui::UiDispatch;
+use zui::ui::UiFrame;
 
 use super::{
-    SETTINGS_CLOSE, SETTINGS_NAV_BACK, SETTINGS_NAV_LANGUAGE_SERVERS, SETTINGS_PAGE,
-    SETTINGS_RESET, SETTINGS_SAVE, SETTINGS_SEARCH_INPUT, SettingsPage,
-    SettingsPageActionAvailability, SettingsPageLayout, SettingsPageStyle,
+    SETTINGS_CLOSE, SETTINGS_NAV_APPEARANCE, SETTINGS_NAV_BACK, SETTINGS_NAV_GENERAL,
+    SETTINGS_NAV_KEYBINDINGS, SETTINGS_NAV_LANGUAGE_SERVERS, SETTINGS_PAGE, SETTINGS_RESET,
+    SETTINGS_SAVE, SETTINGS_SEARCH_INPUT, SettingsPage, SettingsPageActionAvailability,
+    SettingsPageLayout, SettingsPageMode, SettingsPageSection, SettingsPageStyle,
 };
 
 fn style() -> SettingsPageStyle {
@@ -87,7 +93,7 @@ fn page_registers_host_boundary_and_page_actions() {
         &mut text_layout,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(zeta_ui::Color::WHITE);
-    let parent = zui::ElementId::scoped(1, 1);
+    let parent = zui::ui::ElementId::scoped(1, 1);
     let page = page.with_parent(parent);
     frame.draw_component(&page);
     let nodes = frame.interaction().accessibility_nodes(&dispatch);
@@ -95,11 +101,15 @@ fn page_registers_host_boundary_and_page_actions() {
     assert!(nodes.iter().any(|node| node.id == SETTINGS_SEARCH_INPUT));
     assert!(nodes.iter().any(|node| node.id == SETTINGS_CLOSE));
     assert!(nodes.iter().any(|node| node.id == SETTINGS_NAV_BACK));
-    assert!(
-        nodes
-            .iter()
-            .any(|node| node.id == SETTINGS_NAV_LANGUAGE_SERVERS)
-    );
+    for id in [
+        SETTINGS_NAV_GENERAL,
+        SETTINGS_NAV_LANGUAGE_SERVERS,
+        SETTINGS_NAV_APPEARANCE,
+        SETTINGS_NAV_KEYBINDINGS,
+    ] {
+        let node = frame.interaction().node(id).expect("section node");
+        assert_eq!(node.action(), zui::ui::NodeAction::Activate);
+    }
     assert!(nodes.iter().any(|node| node.id == SETTINGS_RESET));
     assert!(nodes.iter().any(|node| node.id == SETTINGS_SAVE));
     assert!(
@@ -107,4 +117,75 @@ fn page_registers_host_boundary_and_page_actions() {
             .iter()
             .all(|node| { node.id != SETTINGS_PAGE || node.role == AccessibilityRole::Group })
     );
+}
+
+#[test]
+fn selected_section_is_projected_to_the_navigation_semantics() {
+    let dispatch = UiDispatch::default();
+    let input = zeta_ui::TextInput::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let page = SettingsPage::new_with_header_height_and_section(
+        zeta_ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        32.0,
+        &input,
+        CaretVisibility::Visible,
+        style(),
+        SettingsPageActionAvailability::none(),
+        SettingsPageSection::Appearance,
+        &dispatch,
+        &mut text_layout,
+    );
+    assert_eq!(page.section(), SettingsPageSection::Appearance);
+
+    let mut frame = UiFrame::<InteractionFrame>::new(zeta_ui::Color::WHITE);
+    frame.draw_component(&page);
+    let nodes = frame.interaction().accessibility_nodes(&dispatch);
+    assert_eq!(
+        nodes
+            .iter()
+            .find(|node| node.id == SETTINGS_NAV_APPEARANCE)
+            .expect("appearance node")
+            .selection,
+        AccessibilitySelection::Selected
+    );
+    assert_eq!(
+        nodes
+            .iter()
+            .find(|node| node.id == SETTINGS_NAV_GENERAL)
+            .expect("general node")
+            .selection,
+        AccessibilitySelection::Unselected
+    );
+}
+
+#[test]
+fn surface_mode_leaves_the_workbench_host_interactive() {
+    let dispatch = UiDispatch::default();
+    let input = zeta_ui::TextInput::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let host_id = ElementId::scoped(1, 1);
+    let host = InteractionRegion::new(
+        "SettingsHost",
+        host_id,
+        zeta_ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        AccessibilityRole::Group,
+        "Main surface",
+    )
+    .with_focus(FocusBehavior::TabStop)
+    .with_action(NodeAction::Activate);
+    let page = SettingsPage::new(
+        zeta_ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &input,
+        CaretVisibility::Visible,
+        style(),
+        SettingsPageActionAvailability::none(),
+        &dispatch,
+        &mut text_layout,
+    )
+    .with_mode(SettingsPageMode::Surface);
+    let mut frame = UiFrame::<InteractionFrame>::new(zeta_ui::Color::WHITE);
+    frame.draw_component(&host);
+    frame.draw_component(&page);
+
+    assert!(frame.interaction().focus_order().any(|id| id == host_id));
 }
