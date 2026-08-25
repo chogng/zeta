@@ -1,5 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type VersionedLanguageResult } from "./languageRequestCoordinator.js";
 import { type TextModel } from "../model/textModel.js";
 
@@ -190,7 +191,7 @@ function assertResultEnvelope<TResult>(result: VersionedLanguageResult<TResult>)
 }
 
 function assertPositiveSafeInteger(value: number, name: string): void {
-	if (!Number.isSafeInteger(value) || value < 1) {
+	if (!isPositiveSafeInteger(value)) {
 		throw new RangeError(`Language result ${name} must be a positive safe integer`);
 	}
 }

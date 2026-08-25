@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, APP_SERVER_SCHEMA_HASH, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import { toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
@@ -295,7 +296,7 @@ function validateConnectedPayload(payload: unknown): ViteDevAppServerMetadata {
 
 function validateFramePayload(payload: unknown): string {
 	if (!isRecord(payload) || typeof payload.frame !== "string") throw new Error("Web App Server bridge frame is invalid");
-	if (new TextEncoder().encode(payload.frame).byteLength > MAX_FRAME_BYTES) throw new Error(`Web App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
+	if (VSBuffer.fromString(payload.frame).byteLength > MAX_FRAME_BYTES) throw new Error(`Web App Server frame exceeds ${MAX_FRAME_BYTES} bytes`);
 	return payload.frame;
 }
 

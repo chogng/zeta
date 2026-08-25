@@ -1,5 +1,16 @@
 import { URI } from "./uri.js";
 
+/** Returns the value for a key, inserting the supplied value when the key is absent. */
+export function getOrSet<K, V>(map: Map<K, V>, key: K, value: V): V {
+	let result = map.get(key);
+	if (result === undefined) {
+		result = value;
+		map.set(key, result);
+	}
+
+	return result;
+}
+
 /** Converts a URI into the string used by a resource collection. */
 export type ResourceMapKeyFn = (resource: URI) => string;
 

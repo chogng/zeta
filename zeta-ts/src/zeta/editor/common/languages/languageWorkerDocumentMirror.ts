@@ -1,4 +1,6 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { CharCode } from "../../../base/common/charCode.js";
+import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import type { TextBuffer } from "../model/textBuffer.js";
 import { createTextBuffer } from "../model/textBufferFactory.js";
 import { normalizeTextLineEndings, type TextSnapshot } from "../core/text.js";
@@ -63,7 +65,7 @@ export class LanguageWorkerDocumentMirror {
 		if (previousVersion !== this._version || modelVersion !== this._version + 1) {
 			throw new Error("Language worker sync version does not follow its document mirror");
 		}
-		if (!Array.isArray(changes) || changes.length === 0) {
+		if (!isNonEmptyArray(changes)) {
 			throw new RangeError("Language worker sync must contain changes");
 		}
 		let previousStart = -1;
@@ -91,13 +93,13 @@ export class LanguageWorkerDocumentMirror {
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+	if (!isPositiveSafeInteger(value)) {
 		throw new RangeError(`${owner} must be a positive safe integer`);
 	}
 }
 
 function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) < 0) {
+	if (!isNonNegativeSafeInteger(value)) {
 		throw new RangeError(`${owner} must be a non-negative safe integer`);
 	}
 }

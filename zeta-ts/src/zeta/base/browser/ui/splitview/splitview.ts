@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../common/event.js";
 import { type IDisposable, DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
-import { clamp } from "../../../common/numbers.js";
+import { clamp, isFiniteNumber } from "../../../common/numbers.js";
 import { Sash, SashState, type SashDragEvent, type SashPresentation } from "../sash/sash.js";
 import { h } from "../../dom.js";
 
@@ -672,7 +672,7 @@ function resetLeadingViewSize(total: number, leading: ViewItem, trailing: ViewIt
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {
-	if (!Number.isFinite(value) || value < 0) {
+	if (!isFiniteNumber(value) || value < 0) {
 		throw new RangeError(
 			`SplitView ${name} must be a non-negative finite number`,
 		);

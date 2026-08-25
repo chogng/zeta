@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalResizeParams, type TerminalWriteParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -95,7 +96,7 @@ function terminalWriteParams(value: unknown): TerminalWriteParams {
 	const params = record(value, ["terminalId", "data"], ["workspaceFolderId"]);
 	const data = string(params.data, "data");
 	if (data.length === 0) throw new Error("data must not be empty");
-	if (new TextEncoder().encode(data).byteLength > 65_536) {
+	if (VSBuffer.fromString(data).byteLength > 65_536) {
 		throw new Error("data must not exceed 65536 UTF-8 bytes");
 	}
 	return {

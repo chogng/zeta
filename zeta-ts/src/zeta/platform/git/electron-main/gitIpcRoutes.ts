@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type GitBranchSwitchParams, type GitChangeFileParams, type GitCommitChangesParams, type GitCommitFileParams, type GitCommitParams, type GitGraphParams, type GitPathsParams, type GitRepositoryParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -121,7 +122,7 @@ function gitPathsParams(value: unknown): GitPathsParams {
 function gitCommitParams(value: unknown): GitCommitParams {
 	const params = record(value, ["message"], ["repositoryId"]);
 	const message = string(params.message, "message");
-	if (!message.trim() || message.includes("\0") || new TextEncoder().encode(message).byteLength > 65_536) {
+	if (!message.trim() || message.includes("\0") || VSBuffer.fromString(message).byteLength > 65_536) {
 		throw new Error("message must be non-empty, NUL-free, and no larger than 65536 UTF-8 bytes");
 	}
 	return { ...(params.repositoryId === undefined ? {} : { repositoryId: gitRepositoryId(params.repositoryId) }), message };

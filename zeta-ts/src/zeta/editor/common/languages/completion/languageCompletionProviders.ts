@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
@@ -125,7 +126,7 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 
 	registerMany(providers: readonly LanguageCompletionProvider[]): IDisposable {
 		this.assertNotDisposed();
-		if (!Array.isArray(providers) || providers.length === 0) {
+		if (!isNonEmptyArray(providers)) {
 			throw new TypeError("Language completion provider batch must not be empty");
 		}
 		return this.registerGroup(providers);
@@ -303,7 +304,7 @@ function normalizeProvider(provider: LanguageCompletionProvider): RegisteredLang
 		throw new TypeError("Language completion provider must be an object");
 	}
 	assertIdentifier(provider.id, "Language completion provider ID");
-	if (!Array.isArray(provider.languageIds) || provider.languageIds.length === 0) {
+	if (!isNonEmptyArray(provider.languageIds)) {
 		throw new TypeError("Language completion provider must declare language IDs");
 	}
 	const languageIds = provider.languageIds.map(languageId => {
@@ -340,7 +341,7 @@ function assertProviderMetadata(provider: LanguageCompletionProviderMetadata): v
 		throw new TypeError("Language completion provider metadata must be an object");
 	}
 	assertIdentifier(provider.id, "Language completion provider ID");
-	if (!Array.isArray(provider.languageIds) || provider.languageIds.length === 0) {
+	if (!isNonEmptyArray(provider.languageIds)) {
 		throw new TypeError("Language completion provider metadata must declare language IDs");
 	}
 	for (const languageId of provider.languageIds) assertLanguageSelector(languageId);

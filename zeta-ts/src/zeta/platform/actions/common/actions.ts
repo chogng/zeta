@@ -10,6 +10,7 @@ import {
 	type IDisposable,
 	toDisposable,
 } from "../../../base/common/lifecycle.js";
+import { getOrSet } from "../../../base/common/map.js";
 import {
 	commandActionLabel,
 	type CommandActionTitle,
@@ -118,11 +119,7 @@ export class MenuRegistry {
 		this._onDidChangeMenu.event;
 
 	appendMenuItem(id: MenuId, item: MenuRegistryItem): IDisposable {
-		let items = this.items.get(id);
-		if (!items) {
-			items = [];
-			this.items.set(id, items);
-		}
+		const items = getOrSet(this.items, id, []);
 		items.push(item);
 		this._onDidChangeMenu.fire({ menuId: id });
 

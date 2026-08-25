@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type TypstCompileParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -27,7 +28,7 @@ function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
 function typstCompileParams(value: unknown): TypstCompileParams {
 	const params = record(value, ["source"]);
 	const source = string(params.source, "source");
-	if (new TextEncoder().encode(source).byteLength > MAX_TYPST_SOURCE_BYTES) {
+	if (VSBuffer.fromString(source).byteLength > MAX_TYPST_SOURCE_BYTES) {
 		throw new Error(`source must not exceed ${MAX_TYPST_SOURCE_BYTES} UTF-8 bytes`);
 	}
 	return { source };

@@ -1,3 +1,4 @@
+import { isNonNegativeSafeInteger, isPositiveSafeInteger, isSafeInteger } from "../../../base/common/numbers.js";
 import { TextRange, type TextPosition, type TextSnapshot } from "../core/text.js";
 import { VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { type TextModel } from "../model/textModel.js";
@@ -227,14 +228,14 @@ function assertIdentifier(value: unknown, owner: string): asserts value is strin
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) <= 0) throw new RangeError(`${owner} must be a positive safe integer`);
+	if (!isPositiveSafeInteger(value)) throw new RangeError(`${owner} must be a positive safe integer`);
 }
 
 function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative safe integer`);
+	if (!isNonNegativeSafeInteger(value)) throw new RangeError(`${owner} must be a non-negative safe integer`);
 }
 
 function assertSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value)) throw new RangeError(`${owner} must be a safe integer`);
+	if (!isSafeInteger(value)) throw new RangeError(`${owner} must be a safe integer`);
 }
 

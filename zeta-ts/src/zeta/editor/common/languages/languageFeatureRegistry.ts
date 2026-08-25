@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "./languageId.js";
 
@@ -66,7 +67,7 @@ export class LanguageFeatureProviderRegistry<TProvider extends LanguageFeaturePr
 
 function validateProvider<TProvider extends LanguageFeatureProviderMetadata>(provider: TProvider): void {
 	if (!provider || typeof provider !== "object") throw new TypeError("Language feature provider must be an object");
-	if (!Array.isArray(provider.languageIds) || provider.languageIds.length === 0) throw new TypeError("Language feature provider must declare language IDs");
+	if (!isNonEmptyArray(provider.languageIds)) throw new TypeError("Language feature provider must declare language IDs");
 	const languageIds = provider.languageIds.map(languageId => {
 		assertLanguageSelector(languageId);
 		return languageId;

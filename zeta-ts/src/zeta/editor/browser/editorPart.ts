@@ -1,4 +1,5 @@
 import { type IDimension } from "../../base/browser/geometry.js";
+import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
@@ -53,7 +54,7 @@ export interface EditorTextViewState {
 export function isEditorTextViewState(value: unknown): value is EditorTextViewState {
 	if (!value || typeof value !== "object") return false;
 	const state = value as Partial<EditorTextViewState>;
-	if (!Array.isArray(state.selections) || state.selections.length === 0) return false;
+	if (!isNonEmptyArray(state.selections)) return false;
 	if (!Number.isSafeInteger(state.primarySelectionIndex) || state.primarySelectionIndex! < 0 || state.primarySelectionIndex! >= state.selections.length) return false;
 	if (!isViewScrollPosition(state.scrollPosition)) return false;
 	return state.selections.every(selection => isViewPosition(selection?.anchor) && isViewPosition(selection?.active));

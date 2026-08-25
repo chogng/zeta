@@ -1,4 +1,5 @@
 import { isCancellationError, throwIfCancelled } from "../../../../../base/common/cancellation.js";
+import { getErrorMessage } from "../../../../../base/common/errors.js";
 import { type URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
 import { normalizeTextLineEndings } from "../../../../../editor/common/core/text.js";
@@ -48,7 +49,7 @@ async function previewEntry(entry: LanguageWorkspaceEditEntry, index: number, de
 	} catch (error) {
 		if (isCancellationError(error)) throw error;
 		throwIfCancelled(signal, "Bulk edit preview was cancelled");
-		return { index, kind: entry.kind, resource: resourceFor(entry), ...(entry.kind === "rename" ? { secondaryResource: entry.target } : {}), detail: "Could not prepare this edit", error: errorMessage(error) };
+		return { index, kind: entry.kind, resource: resourceFor(entry), ...(entry.kind === "rename" ? { secondaryResource: entry.target } : {}), detail: "Could not prepare this edit", error: getErrorMessage(error) };
 	}
 }
 
@@ -138,8 +139,4 @@ function textChangeSummary(before: string, after: string): string {
 	const beforeLines = before.split("\n").length;
 	const afterLines = after.split("\n").length;
 	return `${beforeLines} → ${afterLines} lines`;
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }

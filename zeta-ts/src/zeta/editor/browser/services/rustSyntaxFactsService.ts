@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../base/common/buffer.js";
 import { raceCancellation } from "../../../base/common/cancellation.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../platform/syntax/common/syntaxApi.js";
@@ -36,7 +37,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
 		const language = syntaxLanguageForStanzaLanguage(languageId);
 		if (!language) return undefined;
 		const text = snapshot.getText();
-		if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return undefined;
+		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return undefined;
 		const key = `${language}\u0000${snapshot.version}\u0000${text}`;
 		let cached = this.cached;
 		if (!cached || cached.key !== key) {
@@ -59,7 +60,7 @@ export class RustSyntaxFactsService extends DisposableOwner {
 		const language = syntaxLanguageForStanzaLanguage(languageId);
 		if (!language || ranges.length === 0) return Object.freeze([]);
 		const text = snapshot.getText();
-		if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
+		if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) return Object.freeze([]);
 		const result = await raceCancellation(this.syntax.selectionRanges({
 			language,
 			revision: snapshot.version,

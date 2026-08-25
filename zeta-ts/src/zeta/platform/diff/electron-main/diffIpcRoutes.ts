@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type DiffComputeParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -31,7 +32,7 @@ function diffComputeParams(value: unknown): DiffComputeParams {
 
 function boundedText(value: unknown, name: string): string {
 	const text = string(value, name);
-	if (text.includes("\0") || new TextEncoder().encode(text).byteLength > MAX_DIFF_INPUT_BYTES_PER_SIDE) {
+	if (text.includes("\0") || VSBuffer.fromString(text).byteLength > MAX_DIFF_INPUT_BYTES_PER_SIDE) {
 		throw new Error(`${name} must be NUL-free and no larger than ${MAX_DIFF_INPUT_BYTES_PER_SIDE} UTF-8 bytes`);
 	}
 	return text;

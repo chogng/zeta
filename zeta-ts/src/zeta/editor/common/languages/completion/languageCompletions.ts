@@ -1,3 +1,4 @@
+import { isPositiveSafeInteger } from "../../../../base/common/numbers.js";
 import { VersionedLanguageResultStore } from "../languageResultStore.js";
 import { parseLanguageCompletionSnippet } from "../../../contrib/snippet/common/snippetParser.js";
 import { normalizeTextLineEndings, TextPosition, TextRange, type TextSnapshot } from "../../core/text.js";
@@ -394,7 +395,7 @@ function assertNonEmptyText(value: unknown, owner: string): asserts value is str
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+	if (!isPositiveSafeInteger(value)) {
 		throw new RangeError(`${owner} must be a positive safe integer`);
 	}
 }

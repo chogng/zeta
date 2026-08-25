@@ -1,4 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { getErrorMessage } from "../../../../base/common/errors.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
@@ -374,5 +375,5 @@ function taskTerminalCommand(command: string, profileId: string): string {
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message.slice(0, 4096) : String(error).slice(0, 4096);
+	return getErrorMessage(error).slice(0, 4096);
 }

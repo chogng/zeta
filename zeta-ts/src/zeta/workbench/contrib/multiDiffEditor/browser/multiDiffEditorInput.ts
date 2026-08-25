@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { URI } from '../../../../base/common/uri.js';
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
@@ -58,7 +59,7 @@ export interface MultiDiffEditorInput extends EditorInput {
 /** Creates one Workbench tab containing an ordered collection of text comparisons. */
 export function createMultiDiffEditorInput(resource: URI, items: readonly MultiDiffEditorInputItem[], label: string): MultiDiffEditorInput {
 	if (!resource || typeof resource.toString !== 'function') throw new TypeError('Multi-diff editor input requires a resource identity');
-	if (!Array.isArray(items) || items.length === 0) throw new TypeError('Multi-diff editor input requires at least one comparison');
+	if (!isNonEmptyArray(items)) throw new TypeError('Multi-diff editor input requires at least one comparison');
 	if (typeof label !== 'string' || label.trim().length === 0) throw new TypeError('Multi-diff editor label must be a non-empty string');
 	const keys = new Set<string>();
 	const normalizedItems = items.map((item) => {

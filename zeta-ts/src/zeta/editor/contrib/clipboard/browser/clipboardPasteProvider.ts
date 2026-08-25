@@ -1,3 +1,5 @@
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
+
 /** Immutable textual snapshot captured synchronously from one native clipboard event. */
 export interface ClipboardTextTransfer {
 	readonly types: readonly string[];
@@ -39,7 +41,7 @@ export function normalizeStanzaClipboardPasteProviders(providers: readonly Clipb
 		}
 		if (ids.has(provider.id)) throw new RangeError(`Duplicate Stanza clipboard paste provider '${provider.id}'`);
 		ids.add(provider.id);
-		if (!Array.isArray(provider.mimeTypes) || provider.mimeTypes.length === 0 || provider.mimeTypes.some((type: string) => typeof type !== "string" || type.length === 0)) {
+		if (!isNonEmptyArray(provider.mimeTypes) || provider.mimeTypes.some((type: string) => typeof type !== "string" || type.length === 0)) {
 			throw new TypeError(`Stanza clipboard paste provider '${provider.id}' requires MIME types`);
 		}
 		if (new Set(provider.mimeTypes).size !== provider.mimeTypes.length || typeof provider.providePaste !== "function") {

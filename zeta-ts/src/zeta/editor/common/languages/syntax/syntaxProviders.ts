@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
@@ -48,7 +49,7 @@ export class SyntaxProviderRegistry extends DisposableOwner {
 
 	registerMany(providers: readonly SyntaxProvider[]): IDisposable {
 		this.assertNotDisposed();
-		if (!Array.isArray(providers) || providers.length === 0) {
+		if (!isNonEmptyArray(providers)) {
 			throw new TypeError("Syntax provider batch must not be empty");
 		}
 		const registered = providers.map(normalizeProvider);
@@ -109,7 +110,7 @@ function normalizeProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
 		throw new TypeError("Syntax provider must be an object");
 	}
 	assertIdentifier(provider.id, "Syntax provider ID");
-	if (!Array.isArray(provider.languageIds) || provider.languageIds.length === 0) {
+	if (!isNonEmptyArray(provider.languageIds)) {
 		throw new TypeError("Syntax provider must declare language IDs");
 	}
 	const languageIds = provider.languageIds.map(languageId => {

@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { APP_SERVER_METHODS, type ConnectorApiTokenConnectParams, type ConnectorCommandResultDto, type ConnectorDeviceOAuthPollResult, type ConnectorDeviceOAuthStartResult, type ConnectorDisconnectParams, type ConnectorOAuthStartResult } from "../../../../../generated/app-server/types.js";
+import { timeout } from "../../../base/common/async.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { ElectronClipboardService } from "../../clipboard/electron-main/electronClipboardService.js";
 import type { IClipboardService } from "../../clipboard/common/clipboardService.js";
@@ -89,7 +90,7 @@ async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuth
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
 		for (;;) {
-			await wait(Math.min(waitSeconds, 30) * 1_000);
+			await timeout(Math.min(waitSeconds, 30) * 1_000);
 			const result = await supervisor.request(APP_SERVER_METHODS["connector/connect/oauth/device/poll"], { flowId }) as ConnectorDeviceOAuthPollResult;
 			if (result.status === "connected") {
 				completed = true;
@@ -106,10 +107,6 @@ async function connectDeviceOAuth(supervisor: AppServerSupervisor, params: OAuth
 
 function electronConnectorHostServices(): ConnectorHostServices {
 	return { openerService: new ElectronOpenerService(), clipboardService: new ElectronClipboardService() };
-}
-
-function wait(milliseconds: number): Promise<void> {
-	return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
 class LoopbackOAuthCallback {

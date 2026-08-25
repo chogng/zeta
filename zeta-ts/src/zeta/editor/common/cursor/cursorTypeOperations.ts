@@ -1,3 +1,4 @@
+import { getOrSet } from "../../../base/common/map.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 import { createSelectionEditCommand, normalizeSelectionOffsets, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
 import { type TextSelectionSet } from "../core/selection.js";
@@ -81,11 +82,7 @@ export function createLinePasteCommand(model: TextModel, selections: TextSelecti
 			throw new RangeError("Line paste requires collapsed selections");
 		}
 		const lineIndex = selection.active.lineIndex;
-		let group = groups.get(lineIndex);
-		if (!group) {
-			group = { lineIndex, selectionIndices: [], text: "" };
-			groups.set(lineIndex, group);
-		}
+		const group = getOrSet(groups, lineIndex, { lineIndex, selectionIndices: [], text: "" });
 		group.selectionIndices.push(selectionIndex);
 		group.text += normalized[selectionIndex]!;
 	}

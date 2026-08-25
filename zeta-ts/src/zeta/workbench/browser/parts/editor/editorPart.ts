@@ -1,4 +1,5 @@
 import "./media/editorpart.css";
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -766,7 +767,7 @@ function validateWorkingSet(value: EditorWorkingSet): EditorWorkingSet {
 	if (!value || typeof value !== "object" || typeof value.id !== "string" || !value.id.trim()) {
 		throw new TypeError("Invalid editor working set");
 	}
-	if (!Array.isArray(value.groups) || value.groups.length === 0 || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
+	if (!isNonEmptyArray(value.groups) || !Number.isInteger(value.activeGroupIndex) || value.activeGroupIndex < 0 || value.activeGroupIndex >= value.groups.length) {
 		throw new TypeError("Invalid editor working set groups");
 	}
 	let sizeTotal = 0;

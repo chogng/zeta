@@ -1,3 +1,4 @@
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -43,7 +44,7 @@ export class SettingsFileSystemProvider extends DisposableOwner implements IFile
 
 	public async readFileBytes(resource: URI): Promise<IFileBytes> {
 		const content = await this.readFile(resource);
-		return Object.freeze({ resource, bytes: new TextEncoder().encode(content.content), revision: content.revision });
+		return Object.freeze({ resource, bytes: VSBuffer.fromString(content.content).buffer, revision: content.revision });
 	}
 
 	public async writeFile(request: IFileWriteRequest): Promise<IFileWriteResult> {
@@ -87,7 +88,7 @@ function fileStat(resource: URI, sizeBytes: number): IFileStat {
 }
 
 function encodedSize(source: string): number {
-	return new TextEncoder().encode(source).byteLength;
+	return VSBuffer.fromString(source).byteLength;
 }
 
 function userSettingsRevision(revision: number): string {

@@ -1,3 +1,5 @@
+import { isFiniteNumber } from "../../../common/numbers.js";
+
 export type ScrollbarVisibility = "auto" | "visible" | "hidden";
 export type ScrollDirection = "horizontal" | "vertical" | "both";
 
@@ -96,7 +98,7 @@ function positiveFinite(
 	value: number | undefined,
 	fallback: number,
 ): number {
-	return value !== undefined && Number.isFinite(value) && value > 0
+	return isFiniteNumber(value) && value > 0
 		? value
 		: fallback;
 }
@@ -105,7 +107,7 @@ function nonNegativeFinite(
 	value: number | undefined,
 	fallback: number,
 ): number {
-	return value !== undefined && Number.isFinite(value) && value >= 0
+	return isFiniteNumber(value) && value >= 0
 		? value
 		: fallback;
 }

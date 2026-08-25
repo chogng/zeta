@@ -1,4 +1,5 @@
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
+import { getErrorMessage } from "../../../../base/common/errors.js";
 import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
 import { CommandsRegistry, type CommandDefinition, type CommandRegistration, type CommandRegistry } from "../../../../platform/commands/common/commands.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
@@ -559,7 +560,7 @@ function combineSignals(first: AbortSignal, second: AbortSignal): { readonly sig
 }
 
 function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message.slice(0, 4096) : String(error).slice(0, 4096);
+	return getErrorMessage(error).slice(0, 4096);
 }
 
 function reportExtensionHostError(error: unknown): void {

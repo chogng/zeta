@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type DocumentCollaborationOpenParams, type DocumentCollaborationPresenceParams, type DocumentCollaborationPresenceReadParams, type DocumentCollaborationSubmitParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { nonEmptyString, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -80,7 +81,7 @@ function documentCollaborationPresenceReadParams(value: unknown): DocumentCollab
 
 function boundedString(value: unknown, name: string, maximumBytes: number): string {
 	const text = string(value, name);
-	if (new TextEncoder().encode(text).byteLength > maximumBytes) throw new Error(`${name} must not exceed ${maximumBytes} UTF-8 bytes`);
+	if (VSBuffer.fromString(text).byteLength > maximumBytes) throw new Error(`${name} must not exceed ${maximumBytes} UTF-8 bytes`);
 	return text;
 }
 

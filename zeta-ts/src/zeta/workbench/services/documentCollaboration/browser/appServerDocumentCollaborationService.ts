@@ -1,6 +1,7 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { getOrSet } from "../../../../base/common/map.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
@@ -51,11 +52,7 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 		throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
 		const snapshot = decodeSnapshot(opened.snapshot, input.schema);
 		const connection = new AppServerDocumentCollaborationConnection(this, input.schema, opened.clientId, snapshot);
-		let roomConnections = this.connections.get(connection.roomId);
-		if (!roomConnections) {
-			roomConnections = new Set();
-			this.connections.set(connection.roomId, roomConnections);
-		}
+		const roomConnections = getOrSet(this.connections, connection.roomId, new Set<AppServerDocumentCollaborationConnection>());
 		roomConnections.add(connection);
 		try {
 			connection.acceptPresence(await this.api.readPresence({ roomId: connection.roomId }));

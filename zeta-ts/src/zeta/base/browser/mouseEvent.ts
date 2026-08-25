@@ -1,4 +1,5 @@
 import { stopEvent } from "./dom.js";
+import { isFiniteNumber } from "../common/numbers.js";
 
 /** Normalized mouse-event coordinates and buttons across browser windows. */
 export class StandardMouseEvent {
@@ -188,7 +189,7 @@ function finite(value: number): number {
 }
 
 function positiveFinite(value: number | undefined, fallback: number): number {
-	return value !== undefined && Number.isFinite(value) && value > 0
+	return isFiniteNumber(value) && value > 0
 		? value
 		: fallback;
 }

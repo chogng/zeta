@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../../base/common/buffer.js";
 import { DisposableOwner, DisposableSlot, DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
@@ -463,7 +464,7 @@ class AppServerWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvide
 function languageDocument(root: LanguageWorkspaceRoot, request: LanguageLocationRequest | LanguageHierarchyRequest | LanguageHierarchyFollowupRequest | LanguageRenameRequest | LanguageCodeActionRequest) {
 	if (request.model.largeFile.tooLargeForSynchronization) return undefined;
 	const text = request.snapshot.getText();
-	if (new TextEncoder().encode(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
+	if (VSBuffer.fromString(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
 	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 
@@ -475,7 +476,7 @@ function languageCompletionDocument(root: LanguageWorkspaceRoot, request: Langua
 function languageSnapshotDocument(root: LanguageWorkspaceRoot, request: { readonly resource?: URI; readonly languageId: string; readonly snapshot: { readonly version: number; getText(): string } }) {
 	if (!request.resource) return undefined;
 	const text = request.snapshot.getText();
-	if (new TextEncoder().encode(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
+	if (VSBuffer.fromString(text).byteLength > APP_SERVER_LANGUAGE_DOCUMENT_MAX_BYTES) return undefined;
 	return { ...(root.wireId ? { workspaceFolderId: root.wireId } : {}), path: workspaceRelativePath(root.uri, request.resource), languageId: request.languageId, revision: request.snapshot.version, text };
 }
 

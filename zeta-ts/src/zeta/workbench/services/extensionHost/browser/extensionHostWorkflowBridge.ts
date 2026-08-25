@@ -1,3 +1,4 @@
+import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import type { JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 import type { TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../tasks/common/taskService.js";
 import type { TestProfileContribution, TestProfileProvider } from "../../testing/common/testingService.js";
@@ -98,5 +99,5 @@ function assertUnique(values: readonly string[], owner: string): void {
 }
 
 function hexIdentifier(value: string): string {
-	return [...new TextEncoder().encode(value)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+	return encodeHex(VSBuffer.fromString(value));
 }

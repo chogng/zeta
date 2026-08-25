@@ -1,5 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableMap, DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 
@@ -25,11 +26,7 @@ export class BrowserWorkingCopyService extends DisposableOwner implements IWorki
 		this.assertNotDisposed();
 		validateWorkingCopy(workingCopy);
 		const key = workingCopy.resource.toString();
-		let copies = this.copies.get(key);
-		if (!copies) {
-			copies = new Set<IWorkingCopy>();
-			this.copies.set(key, copies);
-		}
+		const copies = getOrSet(this.copies, key, new Set<IWorkingCopy>());
 		if (copies.has(workingCopy)) throw new Error(`Working copy is already registered: ${key}`);
 		copies.add(workingCopy);
 		this.dirtySubscriptions.set(workingCopy, workingCopy.onDidChangeDirty(() => this.publishDirtyChange()));

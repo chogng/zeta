@@ -1,3 +1,4 @@
+import { timeout } from "../../../base/common/async.js";
 import type { ViteDevAppServerConnection } from "../../app-server/browser/viteDevConnection.js";
 import { viteDevRequest } from "../../app-server/browser/viteDevRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
@@ -43,7 +44,7 @@ async function connectDeviceOAuth(connection: ViteDevAppServerConnection, params
 		await hostServices.clipboardService.writeText(started.userCode);
 		let waitSeconds = started.pollIntervalSeconds;
 		for (;;) {
-			await new Promise(resolve => setTimeout(resolve, Math.min(waitSeconds, 30) * 1_000));
+			await timeout(Math.min(waitSeconds, 30) * 1_000);
 			const result = await viteDevRequest(connection, "connector/connect/oauth/device/poll", { flowId: started.flowId });
 			if (result.status === "connected") {
 				completed = true;

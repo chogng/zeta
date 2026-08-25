@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { type Event } from "../../../base/common/event.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
@@ -189,7 +190,7 @@ export class EditorVisualLineProjection {
 const identityLineCache = new WeakMap<EditorVisualLineProjection, readonly EditorVisualLine[]>();
 
 function validateBreakColumns(text: string, breakColumns: readonly number[]): void {
-	if (!Array.isArray(breakColumns) || breakColumns.length === 0) {
+	if (!isNonEmptyArray(breakColumns)) {
 		throw new RangeError("Each logical line must have at least one visual segment");
 	}
 	if (breakColumns.length === 1 && breakColumns[0] === text.length) return;

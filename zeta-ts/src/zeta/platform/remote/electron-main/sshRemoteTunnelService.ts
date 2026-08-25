@@ -1,5 +1,6 @@
 import { createConnection, createServer } from "node:net";
 import { type ChildProcess, spawn } from "node:child_process";
+import { getErrorMessage } from "../../../base/common/errors.js";
 import { Emitter } from "../../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
@@ -241,13 +242,13 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 					this.publish(record, "open");
 					return;
 				} catch (error) {
-					lastFailure = errorMessage(error);
+					lastFailure = getErrorMessage(error);
 					if (child) await stopChild(child);
 					if (record.candidateChild === child) record.candidateChild = undefined;
 				}
 			}
 		} catch (error) {
-			if (this.isCurrent(record)) this.failRecovery(record, attempts, errorMessage(error));
+			if (this.isCurrent(record)) this.failRecovery(record, attempts, getErrorMessage(error));
 		}
 	}
 
@@ -421,10 +422,6 @@ function recoveryDelayWithinWindow(policy: SshRemoteTunnelRecoveryPolicy, elapse
 	const remaining = policy.windowMs - elapsed;
 	const delay = Math.min(policy.initialDelayMs * (2 ** Math.min(attempt, 31)), policy.maxDelayMs);
 	return delay <= remaining ? delay : undefined;
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 function hasControlCharacter(value: string): boolean {

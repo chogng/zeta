@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -184,7 +185,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 		if (!this.workspaceTrusted) return;
 		const snapshot = entry.model.createSnapshot();
 		const text = snapshot.getText();
-		if (new TextEncoder().encode(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
+		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
 			if (!this.workspaceTrusted || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			const document = { ...(entry.wireWorkspaceFolderId ? { workspaceFolderId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };

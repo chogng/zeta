@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../base/common/buffer.js";
 import { CancellationError, throwIfCancelled } from "../../../base/common/cancellation.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
@@ -456,5 +457,5 @@ function outputChannelId(value: unknown): string {
 }
 
 function utf8Length(value: string): number {
-	return new TextEncoder().encode(value).length;
+	return VSBuffer.fromString(value).byteLength;
 }

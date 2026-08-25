@@ -1,3 +1,5 @@
+import { timeout } from "../../../../base/common/async.js";
+import { decodeBase64, VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionPersistence, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcessService.js";
@@ -318,12 +320,12 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		if (this.connectionPersistence === "reconnectable") {
 			if (this._state !== "reconnecting") {
 				this.setState("reconnecting");
-				this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal reconnecting]\r\n"));
+				this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal reconnecting]\r\n").buffer);
 			}
 			return;
 		}
 		this.setState("disconnected");
-		this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal connection lost; process was not preserved]\r\n"));
+		this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal connection lost; process was not preserved]\r\n").buffer);
 	}
 
 	restoreConnection(): void {
@@ -350,7 +352,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 			this.nextSequence = 0;
 			this.nextCommandSequence = 0;
 			this._exitCode = undefined;
-			this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal relaunched]\r\n"));
+			this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal relaunched]\r\n").buffer);
 			this.setState("running");
 			this.start();
 		} catch (error) {
@@ -399,14 +401,14 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 				if (this.closed || generation !== this.pollGeneration) return;
 				if (recoveryPending) {
 					if (this._state !== "reconnecting") return;
-					this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal reconnected]\r\n"));
+					this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal reconnected]\r\n").buffer);
 					this.setState("running");
 					recoveryPending = false;
 				} else if (this._state !== "running") {
 					return;
 				}
 				if (result.outputGap) {
-					this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal output truncated]\r\n"));
+					this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal output truncated]\r\n").buffer);
 				}
 				this.emitReadResult(result.chunks, result.commandEvents);
 				this.nextSequence = result.nextSequence;
@@ -417,11 +419,11 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 					this._onDidExit.fire(this._exitCode);
 					return;
 				}
-				if (result.chunks.length === 0) await delay(POLL_DELAY_MILLIS);
+				if (result.chunks.length === 0) await timeout(POLL_DELAY_MILLIS);
 			} catch {
 				if (!this.closed && generation === this.pollGeneration) {
 					if (recoveryPending && this._state === "reconnecting") {
-						this._onDidWriteData.fire(new TextEncoder().encode("\r\n[terminal recovery failed; relaunch required]\r\n"));
+						this._onDidWriteData.fire(VSBuffer.fromString("\r\n[terminal recovery failed; relaunch required]\r\n").buffer);
 					}
 					this.setState("error");
 				}
@@ -454,7 +456,7 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		emitEventsThrough(outputSequence);
 		for (const chunk of chunks) {
 			emitEventsThrough(chunk.sequence - 1);
-			this._onDidWriteData.fire(decodeBase64(chunk.dataBase64));
+			this._onDidWriteData.fire(decodeBase64(chunk.dataBase64).buffer);
 			outputSequence = chunk.sequence;
 			emitEventsThrough(outputSequence);
 		}
@@ -468,27 +470,13 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 	}
 }
 
-function decodeBase64(value: string): Uint8Array {
-	const binary = atob(value);
-	const bytes = new Uint8Array(binary.length);
-	for (let index = 0; index < binary.length; index += 1) {
-		bytes[index] = binary.charCodeAt(index);
-	}
-	return bytes;
-}
-
-function delay(milliseconds: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 function takeUtf8Prefix(value: string, maximumBytes: number): string {
-	const encoder = new TextEncoder();
-	if (encoder.encode(value).byteLength <= maximumBytes) return value;
+	if (VSBuffer.fromString(value).byteLength <= maximumBytes) return value;
 	let lower = 1;
 	let upper = value.length;
 	while (lower < upper) {
 		const middle = Math.ceil((lower + upper) / 2);
-		if (encoder.encode(value.slice(0, middle)).byteLength <= maximumBytes) {
+		if (VSBuffer.fromString(value.slice(0, middle)).byteLength <= maximumBytes) {
 			lower = middle;
 		} else {
 			upper = middle - 1;

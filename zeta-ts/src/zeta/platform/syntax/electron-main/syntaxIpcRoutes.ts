@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type SyntaxAnalyzeParams, type SyntaxRangeDto, type SyntaxSelectionRangesParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -49,7 +50,7 @@ function syntaxDocumentParams(params: Record<string, unknown>): SyntaxAnalyzePar
 		throw new Error("language must be one of javascript, javascriptreact, json, jsonc, rust, shell, typescript, or typescriptreact");
 	}
 	const text = string(params.text, "text");
-	if (new TextEncoder().encode(text).byteLength > MAX_SYNTAX_INPUT_BYTES) {
+	if (VSBuffer.fromString(text).byteLength > MAX_SYNTAX_INPUT_BYTES) {
 		throw new Error(`text must not exceed ${MAX_SYNTAX_INPUT_BYTES} UTF-8 bytes`);
 	}
 	return {

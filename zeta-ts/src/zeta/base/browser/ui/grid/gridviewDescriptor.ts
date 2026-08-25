@@ -1,5 +1,6 @@
 import { type IRectangle } from "../../geometry.js";
 import { type Event } from "../../../common/event.js";
+import { isFiniteNumber } from "../../../common/numbers.js";
 import { type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewSizing } from "../splitview/splitview.js";
 
 /** A leaf hosted by a GridView. */
@@ -249,7 +250,7 @@ export function assertChildIndex(index: number, length: number): void {
 }
 
 export function assertDimension(value: number, name: string): void {
-	if (!Number.isFinite(value) || value < 0) {
+	if (!isFiniteNumber(value) || value < 0) {
 		throw new RangeError(`GridView ${name} must be a non-negative finite number`);
 	}
 }

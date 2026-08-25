@@ -5,34 +5,36 @@ import { type SyntaxService } from "../../../common/languages/syntax/syntaxServi
 
 /** Schedules syntax lanes while the selected Workbench mode's language support changes. */
 export class LanguageAnalysisController extends DisposableOwner {
-	private generation = 0;
+	private requestGeneration = 0;
 
-	constructor(private readonly syntax: SyntaxService, private readonly languageId: string, whenLanguageSupportReady: () => Promise<unknown>, onDidChangeLanguageSupport: Event<void> | undefined, private readonly onLanguageError: (error: unknown) => void) {
+	constructor(
+		private readonly syntaxService: SyntaxService,
+		private readonly languageId: string,
+		whenLanguageSupportReady: () => Promise<unknown>,
+		onDidChangeLanguageSupport: Event<void> | undefined,
+		private readonly handleLanguageError: (error: unknown) => void,
+	) {
 		super();
-		const schedule = () => {
-			const generation = ++this.generation;
-			queueMicrotask(() => void this.run(generation, whenLanguageSupportReady));
+		const scheduleAnalysis = () => {
+			const requestGeneration = ++this.requestGeneration;
+			queueMicrotask(() => void this.requestAnalysis(requestGeneration, whenLanguageSupportReady));
 		};
-		this.own(syntax.tokens.textModel.onDidChange(schedule));
-		if (onDidChangeLanguageSupport) this.own(onDidChangeLanguageSupport(schedule));
+		this.own(syntaxService.tokens.textModel.onDidChange(scheduleAnalysis));
+		if (onDidChangeLanguageSupport) this.own(onDidChangeLanguageSupport(scheduleAnalysis));
 		this.defer(() => {
-			this.generation += 1;
+			this.requestGeneration += 1;
 		});
-		schedule();
+		scheduleAnalysis();
 	}
 
-	private async run(generation: number, whenLanguageSupportReady: () => Promise<unknown>): Promise<void> {
+	private async requestAnalysis(requestGeneration: number, whenLanguageSupportReady: () => Promise<unknown>): Promise<void> {
 		try {
 			await whenLanguageSupportReady();
-			if (this.isDisposed || generation !== this.generation) return;
-			await this.syntax.requestAll(this.languageId);
+			if (this.isDisposed || requestGeneration !== this.requestGeneration) return;
+			await this.syntaxService.requestAll(this.languageId);
 		} catch (error) {
-			if (this.isDisposed || generation !== this.generation || isCancellationError(error) || isAbortError(error)) return;
-			this.onLanguageError(error);
+			if (this.isDisposed || requestGeneration !== this.requestGeneration || isCancellationError(error) || (error instanceof Error && error.name === "AbortError")) return;
+			this.handleLanguageError(error);
 		}
 	}
-}
-
-function isAbortError(error: unknown): boolean {
-	return error instanceof Error && error.name === "AbortError";
 }

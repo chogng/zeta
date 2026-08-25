@@ -2,7 +2,7 @@ import { Dimension, type IDimension } from "../../geometry.js";
 import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
-import { clamp } from "../../../common/numbers.js";
+import { clamp, isFiniteNumber } from "../../../common/numbers.js";
 import { Sash, SashState } from "../sash/sash.js";
 import { h } from "../../dom.js";
 
@@ -223,7 +223,7 @@ function assertSize(value: IDimension, name: string, allowInfinity = false): voi
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {
-	if (!Number.isFinite(value) || value < 0) {
+	if (!isFiniteNumber(value) || value < 0) {
 		throw new RangeError(`Resizable ${name} must be non-negative and finite`);
 	}
 }

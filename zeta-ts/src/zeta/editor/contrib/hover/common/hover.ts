@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -40,7 +41,7 @@ export class HoverService extends DisposableOwner {
 }
 
 export function normalizeLanguageHover(value: LanguageHover): LanguageHover {
-	if (!value || typeof value !== "object" || !Array.isArray(value.contents) || value.contents.length === 0) throw new TypeError("Language hover must contain content");
+	if (!value || typeof value !== "object" || !isNonEmptyArray(value.contents)) throw new TypeError("Language hover must contain content");
 	const contents = value.contents.map(content => {
 		if (typeof content === "string") return content;
 		if (!content || typeof content !== "object" || typeof content.value !== "string") throw new TypeError("Language hover content must contain a string value");

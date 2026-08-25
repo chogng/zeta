@@ -1,11 +1,11 @@
 /** Restricts a number to an inclusive range. */
-export function clamp(value: number, minimum: number, maximum: number): number {
-	return Math.min(Math.max(value, minimum), maximum);
+export function clamp(value: number, min: number, max: number): number {
+	return Math.min(Math.max(value, min), max);
 }
 
 /** Wraps an integer into the range from zero (inclusive) to modulo (exclusive). */
 export function rot(index: number, modulo: number): number {
-	return (modulo + index % modulo) % modulo;
+	return (modulo + (index % modulo)) % modulo;
 }
 
 /** Returns whether a value is a finite number. */

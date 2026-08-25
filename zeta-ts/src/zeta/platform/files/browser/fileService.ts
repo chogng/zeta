@@ -1,6 +1,7 @@
 import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../generated/app-server/types.js";
 import type { FsChanged } from "../../../../../generated/app-server/types.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
+import { decodeBase64 } from "../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
@@ -204,10 +205,8 @@ function decodeResourceChunk(chunk: ResourceReadResult, resourceId: string, expe
 	if (chunk.resourceId !== resourceId || chunk.offset !== expectedOffset) {
 		throw new Error("Workspace binary resource response is inconsistent");
 	}
-	const binary = atob(chunk.dataBase64);
-	const bytes = new Uint8Array(binary.length);
-	for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-	if (chunk.decodedLength !== bytes.length || bytes.length === 0 || bytes.length > totalSize - expectedOffset || chunk.eof !== (expectedOffset + bytes.length === totalSize)) {
+	const bytes = decodeBase64(chunk.dataBase64).buffer;
+	if (chunk.decodedLength !== bytes.byteLength || bytes.byteLength === 0 || bytes.byteLength > totalSize - expectedOffset || chunk.eof !== (expectedOffset + bytes.byteLength === totalSize)) {
 		throw new Error("Workspace binary resource response is inconsistent");
 	}
 	return bytes;

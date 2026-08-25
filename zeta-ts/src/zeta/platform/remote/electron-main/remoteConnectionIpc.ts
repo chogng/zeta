@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { nonEmptyString } from "../../ipc/electron-main/ipcValidation.js";
 import { record } from "../../ipc/electron-main/ipcValidation.js";
@@ -81,6 +82,6 @@ function connectionDefinition(value: unknown): RemoteConnectionDefinition {
 
 function boundedString(value: unknown, field: string, maximumBytes: number): string {
 	const string = nonEmptyString(value, field);
-	if (new TextEncoder().encode(string).byteLength > maximumBytes) throw new Error(`${field} exceeds its maximum encoded length`);
+	if (VSBuffer.fromString(string).byteLength > maximumBytes) throw new Error(`${field} exceeds its maximum encoded length`);
 	return string;
 }

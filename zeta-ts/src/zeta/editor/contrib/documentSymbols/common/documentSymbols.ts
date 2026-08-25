@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
@@ -59,7 +60,7 @@ function normalizeFallbackProviders(providers: readonly LanguageDocumentSymbolPr
 	if (providers === undefined) return Object.freeze([]);
 	if (!Array.isArray(providers)) throw new TypeError("Document symbol fallback providers must be an array");
 	return Object.freeze(providers.map(provider => {
-		if (!provider || typeof provider !== "object" || !Array.isArray(provider.languageIds) || provider.languageIds.length === 0 || typeof provider.provideDocumentSymbols !== "function") {
+		if (!provider || typeof provider !== "object" || !isNonEmptyArray(provider.languageIds) || typeof provider.provideDocumentSymbols !== "function") {
 			throw new TypeError("Document symbol fallback provider is invalid");
 		}
 		return provider;

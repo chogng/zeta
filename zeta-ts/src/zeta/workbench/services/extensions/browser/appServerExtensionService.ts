@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
@@ -384,7 +385,7 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 }
 
 async function verifyManifestDigest(extension: TransportExtensionDescriptor): Promise<void> {
-	const bytes = new TextEncoder().encode(extension.manifestJson);
+	const bytes = VSBuffer.fromString(extension.manifestJson).buffer;
 	const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
 	const actual = `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 	if (actual !== extension.manifestSha256) throw new Error(`Extension '${extension.id}' manifest digest does not match its catalog descriptor`);

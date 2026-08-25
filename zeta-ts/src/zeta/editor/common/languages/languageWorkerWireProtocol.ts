@@ -1,4 +1,6 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { CharCode } from "../../../base/common/charCode.js";
+import { isNonNegativeSafeInteger, isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type LanguageWorkerRequest } from "./languageRequestCoordinator.js";
 import { normalizeTextLineEndings, type TextModelChange, type TextSnapshot } from "../core/text.js";
 
@@ -130,7 +132,7 @@ export function encodeRequestMessage<TLane extends string, TPayload, TResult>(re
 
 export function encodeSyncMessage(change: TextModelChange): SyncWireMessage {
 	assertPositiveSafeInteger(change.version, "Language worker sync model version");
-	if (change.version <= 1 || !Array.isArray(change.changes) || change.changes.length === 0) {
+	if (change.version <= 1 || !isNonEmptyArray(change.changes)) {
 		throw new RangeError("Language worker sync must describe one committed model version");
 	}
 	return Object.freeze({
@@ -337,13 +339,13 @@ function encodeError(value: unknown, fallbackMessage: string): ErrorWireDto {
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+	if (!isPositiveSafeInteger(value)) {
 		throw new RangeError(`${owner} must be a positive safe integer`);
 	}
 }
 
 function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts value is number {
-	if (!Number.isSafeInteger(value) || (value as number) < 0) {
+	if (!isNonNegativeSafeInteger(value)) {
 		throw new RangeError(`${owner} must be a non-negative safe integer`);
 	}
 }

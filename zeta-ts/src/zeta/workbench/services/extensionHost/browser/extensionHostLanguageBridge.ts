@@ -1,3 +1,4 @@
+import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { TextPosition, TextRange, type TextEdit, type TextSnapshot } from "../../../../editor/common/core/text.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
@@ -327,5 +328,5 @@ function boundedIndex(value: JsonValue | undefined, length: number, owner: strin
 }
 
 function hexIdentifier(value: string): string {
-	return [...new TextEncoder().encode(value)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+	return encodeHex(VSBuffer.fromString(value));
 }

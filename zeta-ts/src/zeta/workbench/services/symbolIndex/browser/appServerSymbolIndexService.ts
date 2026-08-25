@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import type { SymbolIndexSearchHitDto, SymbolIndexStatusResult as SymbolIndexStatusDto } from "../../../../../../generated/app-server/types.js";
 import type { ISymbolIndexApi } from "../../../../platform/symbolIndex/common/symbolIndexApi.js";
@@ -15,7 +16,7 @@ export class AppServerSymbolIndexService implements ISymbolIndexService {
 	}
 
 	async search(query: string, maxResults: number, signal: AbortSignal = new AbortController().signal): Promise<SymbolIndexSearchResult> {
-		if (typeof query !== "string" || new TextEncoder().encode(query).byteLength > MAX_QUERY_BYTES) throw new RangeError("Symbol-index query exceeds its byte limit");
+		if (typeof query !== "string" || VSBuffer.fromString(query).byteLength > MAX_QUERY_BYTES) throw new RangeError("Symbol-index query exceeds its byte limit");
 		if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) throw new RangeError("Symbol-index result limit is invalid");
 		const response = await raceCancellation(this.api.search({ query, maxResults }), signal, "Symbol-index search was cancelled");
 		return Object.freeze({

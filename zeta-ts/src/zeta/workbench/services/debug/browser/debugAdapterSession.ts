@@ -1,3 +1,5 @@
+import { timeout } from "../../../../base/common/async.js";
+import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
@@ -159,7 +161,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 
 	async disconnect(): Promise<void> {
 		if (this._state !== "terminated") {
-			try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: true } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${message(error)}\n`); }
+			try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: true } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`); }
 		}
 		await this.closeProcess();
 		this.setState("terminated");
@@ -172,7 +174,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 		this.supportsConfigurationDone = capabilities.supportsConfigurationDoneRequest === true;
 		this._capabilities = Object.freeze({ supportsRestart: capabilities.supportsRestartRequest === true, supportsTerminate: capabilities.supportsTerminateRequest === true || capabilities.supportTerminateDebuggee === true, exceptionBreakpointFilters: exceptionBreakpointFilters(capabilities.exceptionBreakpointFilters) });
 		const launch = this.request(this.configuration.request, expandWorkspaceVariables(this.configuration.arguments, workspaceFolder));
-		void launch.catch(error => { this.initializedRejecter?.(error instanceof Error ? error : new Error(message(error))); });
+		void launch.catch(error => { this.initializedRejecter?.(error instanceof Error ? error : new Error(getErrorMessage(error))); });
 		await withTimeout(this.initializedPromise, REQUEST_TIMEOUT_MS, "Debug Adapter did not emit the initialized event");
 		await this.syncBreakpoints();
 		const configuredExceptionBreakpoints = this.exceptionBreakpoints?.() ?? [];
@@ -211,7 +213,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 				if (!pending) return;
 				clearTimeout(pending.timeout);
 				this.pending.delete(sequence);
-				pending.reject(new Error(`Could not send Debug Adapter request: ${message(error)}`));
+				pending.reject(new Error(`Could not send Debug Adapter request: ${getErrorMessage(error)}`));
 			});
 		});
 	}
@@ -231,11 +233,11 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 					break;
 				}
 			} catch (error) {
-				this._reason = message(error);
+				this._reason = getErrorMessage(error);
 				this.setState("error");
 				break;
 			}
-			await delay(POLL_DELAY_MS);
+			await timeout(POLL_DELAY_MS);
 		}
 		this.polling = false;
 	}
@@ -288,7 +290,7 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 			const body = await this.runInTerminal(request.arguments);
 			await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: true, command, body });
 		} catch (error) {
-			await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: false, command, message: message(error) }).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${message(sendError)}\n`));
+			await this.processService.send(this.sessionId, { seq: this.requestSequence++, type: "response", request_seq: sequence, success: false, command, message: getErrorMessage(error) }).catch(sendError => this.emitOutput(`Could not answer Debug Adapter request: ${getErrorMessage(sendError)}\n`));
 		}
 	}
 
@@ -375,9 +377,7 @@ function array(value: unknown, path: string): readonly unknown[] { if (!Array.is
 function string(value: unknown, path: string): string { if (typeof value !== "string") throw new TypeError(`${path} must be a string`); return value; }
 function boolean(value: unknown, path: string): boolean { if (typeof value !== "boolean") throw new TypeError(`${path} must be a boolean`); return value; }
 function positiveInteger(value: unknown, path: string, allowZero = false): number { if (!Number.isSafeInteger(value) || (allowZero ? (value as number) < 0 : (value as number) <= 0)) throw new TypeError(`${path} must be ${allowZero ? "non-negative" : "positive"}`); return value as number; }
-function delay(milliseconds: number): Promise<void> { return new Promise(resolve => setTimeout(resolve, milliseconds)); }
 function withTimeout<T>(promise: Promise<T>, milliseconds: number, timeoutMessage: string): Promise<T> { return new Promise((resolve, reject) => { const timeout = setTimeout(() => reject(new Error(timeoutMessage)), milliseconds); promise.then(value => { clearTimeout(timeout); resolve(value); }, error => { clearTimeout(timeout); reject(error); }); }); }
-function message(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 function workspaceFolderPath(workspace: URI): string { return workspace.scheme === "file" ? workspace.fsPath : decodeURIComponent(workspace.path); }
 
 function sourceResource(workspace: URI, adapterPath: string): URI | undefined {

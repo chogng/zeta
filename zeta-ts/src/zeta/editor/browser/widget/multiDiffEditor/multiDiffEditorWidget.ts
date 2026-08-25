@@ -5,6 +5,7 @@ import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { getClientArea, type IDimension } from '../../../../base/browser/geometry.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { getWindow } from '../../../../base/browser/window.js';
+import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
@@ -390,7 +391,7 @@ function validateOptions(options: MultiDiffEditorWidgetOptions): void {
 	if (!options || typeof options !== 'object' || !isHTMLElement(options.container)) {
 		throw new TypeError('Multi-diff editor widget requires a browser container');
 	}
-	if (!Array.isArray(options.items) || options.items.length === 0) {
+	if (!isNonEmptyArray(options.items)) {
 		throw new TypeError('Multi-diff editor widget requires at least one item');
 	}
 	const ids = new Set<string>();

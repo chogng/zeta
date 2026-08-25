@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableMap, DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 
@@ -148,7 +149,7 @@ export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
 		if (this.modules.getModule(moduleId) !== module) {
 			throw new ReferenceError(`Language provider module '${moduleId}' was removed while loading`);
 		}
-		if (!Array.isArray(providers) || providers.length === 0) {
+		if (!isNonEmptyArray(providers)) {
 			throw new TypeError(`Language provider module '${moduleId}' must load providers`);
 		}
 		const registration = this.providers.registerMany(providers);

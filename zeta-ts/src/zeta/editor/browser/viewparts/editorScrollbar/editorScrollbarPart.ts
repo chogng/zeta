@@ -1,5 +1,6 @@
 import "./editorScrollbar.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
@@ -155,6 +156,6 @@ function isRendered(visibility: EditorScrollbarVisibility, needed: boolean): boo
 }
 
 function positiveFinite(value: number, name: string): number {
-	if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be positive and finite`);
+	if (!isFiniteNumber(value) || value <= 0) throw new RangeError(`${name} must be positive and finite`);
 	return value;
 }

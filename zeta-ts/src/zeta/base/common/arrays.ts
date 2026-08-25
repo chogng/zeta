@@ -9,6 +9,13 @@ export function arraysEqual<T>(
 	return left.every((value, index) => equals(value, right[index]!));
 }
 
+/** Returns whether the provided array has at least one element. */
+export function isNonEmptyArray<T>(obj: T[] | undefined | null): obj is T[];
+export function isNonEmptyArray<T>(obj: readonly T[] | undefined | null): obj is readonly T[];
+export function isNonEmptyArray<T>(obj: T[] | readonly T[] | undefined | null): obj is T[] | readonly T[] {
+	return Array.isArray(obj) && obj.length > 0;
+}
+
 /** Returns the number of equal items at the beginning of two sequences. */
 export function commonPrefixLength<T>(
 	left: readonly T[],

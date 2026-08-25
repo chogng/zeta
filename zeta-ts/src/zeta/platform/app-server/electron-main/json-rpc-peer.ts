@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { CancellationError } from "../../../base/common/cancellation.js";
+import { getOrSet } from "../../../base/common/map.js";
 import {
 	DisposableStore,
 	type IDisposable,
@@ -173,11 +174,7 @@ export class JsonRpcPeer implements IDisposable {
 		listener: (params: P) => void,
 	): IDisposable {
 		if (this.closedError) throw this.closedError;
-		let listeners = this.notificationListeners.get(definition.method);
-		if (!listeners) {
-			listeners = new Set();
-			this.notificationListeners.set(definition.method, listeners);
-		}
+		const listeners = getOrSet(this.notificationListeners, definition.method, new Set<(params: unknown) => void>());
 		const untypedListener = listener as (params: unknown) => void;
 		listeners.add(untypedListener);
 		return toDisposable(() => {

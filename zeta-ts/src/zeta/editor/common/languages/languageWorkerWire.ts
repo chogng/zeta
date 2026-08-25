@@ -1,3 +1,4 @@
+import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
 import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler } from "./languageRequestCoordinator.js";
@@ -345,7 +346,7 @@ function assertPort(value: LanguageWorkerWirePort, requireFailure: boolean): voi
 }
 
 function assertCodec<TLane extends string, TPayload, TResult>(value: LanguageWorkerWireCodec<TLane, TPayload, TResult>): void {
-	if (!value || !Array.isArray(value.lanes) || value.lanes.length === 0 || value.lanes.some(lane => typeof lane !== "string" || lane.length === 0) || new Set(value.lanes).size !== value.lanes.length || (value.resultProtocol !== "stateless" && value.resultProtocol !== "confirmedBase") || typeof value.encodePayload !== "function" || typeof value.decodePayload !== "function" || typeof value.encodeResult !== "function" || typeof value.decodeResult !== "function") {
+	if (!value || !isNonEmptyArray(value.lanes) || value.lanes.some(lane => typeof lane !== "string" || lane.length === 0) || new Set(value.lanes).size !== value.lanes.length || (value.resultProtocol !== "stateless" && value.resultProtocol !== "confirmedBase") || typeof value.encodePayload !== "function" || typeof value.decodePayload !== "function" || typeof value.encodeResult !== "function" || typeof value.decodeResult !== "function") {
 		throw new TypeError("Language worker wire codec is invalid");
 	}
 }

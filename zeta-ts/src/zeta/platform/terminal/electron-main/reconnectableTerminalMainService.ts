@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalReadResult, type TerminalReconnectLease, type TerminalResizeParams, type TerminalWriteParams } from "../../../../../generated/app-server/types.js";
+import { timeout } from "../../../base/common/async.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
@@ -41,7 +42,7 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		super();
 		this.supervisor = options.supervisor;
 		this.now = options.now ?? Date.now;
-		this.wait = options.wait ?? wait;
+		this.wait = options.wait ?? timeout;
 		this.reportError = options.reportError ?? defaultReportError;
 		this.previousState = this.supervisor.state;
 		this.own(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
@@ -237,10 +238,6 @@ function requireReconnectLease(value: TerminalReconnectLease | null): TerminalRe
 }
 
 class RecoverySupersededError extends Error {}
-
-function wait(milliseconds: number): Promise<void> {
-	return new Promise(resolve => setTimeout(resolve, milliseconds));
-}
 
 function defaultReportError(message: string, error: unknown): void {
 	console.error(message, error);

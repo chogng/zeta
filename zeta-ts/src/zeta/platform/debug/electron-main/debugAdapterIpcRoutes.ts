@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type DebugAdapterCloseParams, type DebugAdapterReadParams, type DebugAdapterSendParams, type DebugAdapterStartParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import { type AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import { type IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -21,14 +22,14 @@ function startParams(value: unknown): DebugAdapterStartParams {
 	const params = record(value, ["program", "arguments"], ["workspaceFolderId"]);
 	if (!Array.isArray(params.arguments) || params.arguments.length > MAX_ARGUMENTS) throw new Error("arguments must be a bounded array");
 	const argumentsList = params.arguments.map((argument, index) => string(argument, `arguments[${index}]`));
-	if (argumentsList.reduce((bytes, argument) => bytes + new TextEncoder().encode(argument).byteLength, 0) > MAX_ARGUMENT_BYTES) throw new Error("arguments exceed the supported size");
+	if (argumentsList.reduce((bytes, argument) => bytes + VSBuffer.fromString(argument).byteLength, 0) > MAX_ARGUMENT_BYTES) throw new Error("arguments exceed the supported size");
 	return { ...workspaceFolder(params.workspaceFolderId), program: nonEmptyString(params.program, "program"), arguments: argumentsList };
 }
 
 function sendParams(value: unknown): DebugAdapterSendParams {
 	const params = record(value, ["sessionId", "message"], ["workspaceFolderId"]);
 	const message = jsonValue(params.message, "message");
-	if (new TextEncoder().encode(JSON.stringify(message)).byteLength > MAX_MESSAGE_BYTES) throw new Error("message exceeds the supported size");
+	if (VSBuffer.fromString(JSON.stringify(message)).byteLength > MAX_MESSAGE_BYTES) throw new Error("message exceeds the supported size");
 	return { ...workspaceFolder(params.workspaceFolderId), sessionId: nonEmptyString(params.sessionId, "sessionId"), message };
 }
 

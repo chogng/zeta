@@ -3,6 +3,7 @@ import { ManagedStyleSheet } from "../../domStylesheets.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
 import { type IDisposable, DisposableSlot, DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
+import { isFiniteNumber } from "../../../common/numbers.js";
 
 export type SashOrientation = "vertical" | "horizontal";
 
@@ -407,19 +408,19 @@ function sashHoverDelay(element: HTMLElement): number {
 	const milliseconds = value.endsWith("ms")
 		? Number(value.slice(0, -2))
 		: Number.NaN;
-	return Number.isFinite(milliseconds) && milliseconds >= 0
+	return isFiniteNumber(milliseconds) && milliseconds >= 0
 		? milliseconds
 		: DefaultSashHoverDelay;
 }
 
 function assertPositiveFinite(value: number, name: string): void {
-	if (!Number.isFinite(value) || value <= 0) {
+	if (!isFiniteNumber(value) || value <= 0) {
 		throw new RangeError(`Sash ${name} must be a positive finite number`);
 	}
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {
-	if (!Number.isFinite(value) || value < 0) {
+	if (!isFiniteNumber(value) || value < 0) {
 		throw new RangeError(
 			`Sash ${name} must be a non-negative finite number`,
 		);

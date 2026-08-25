@@ -1,3 +1,4 @@
+import { VSBuffer } from "../../../../base/common/buffer.js";
 import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { type IFileService } from "../../../../platform/files/common/files.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
@@ -27,7 +28,7 @@ async function currentSourceRevision(symbol: LanguageWorkspaceSymbol, files: IFi
 	if (contents.length > 0) {
 		const content = contents[0] as string;
 		if (contents.some(candidate => candidate !== content)) return undefined;
-		const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
+		const digest = await globalThis.crypto.subtle.digest("SHA-256", VSBuffer.fromString(content).buffer);
 		return `sha256:${[...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
 	}
 	const current = await files.readFile(symbol.resource);

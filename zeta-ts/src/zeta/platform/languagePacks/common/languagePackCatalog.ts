@@ -1,3 +1,4 @@
+import { decodeBase64 as decodeBase64Buffer } from "../../../base/common/buffer.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { LanguagePackCatalog } from "./languagePacksService.js";
 import { ZETA_LOCALIZATION_CATALOG_VERSION } from "./languagePackContract.js";
@@ -39,8 +40,6 @@ export function parseLanguagePackCatalog(value: unknown): LanguagePackCatalog | 
 	};
 }
 
-export function decodeBase64(value: string): string {
-	const binary = atob(value);
-	const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
-	return new TextDecoder().decode(bytes);
+export function decodeBase64(encoded: string): string {
+	return decodeBase64Buffer(encoded).toString();
 }

@@ -2,6 +2,7 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
@@ -192,11 +193,7 @@ function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly r
 	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[] }>();
 	for (const problem of problems) {
 		const key = problem.resource.toString();
-		let group = groups.get(key);
-		if (!group) {
-			group = { resource: problem.resource, problems: [] };
-			groups.set(key, group);
-		}
+		const group = getOrSet(groups, key, { resource: problem.resource, problems: [] });
 		group.problems.push(problem);
 	}
 	return [...groups.values()];

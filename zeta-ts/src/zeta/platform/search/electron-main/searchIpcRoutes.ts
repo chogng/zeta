@@ -1,4 +1,5 @@
 import { APP_SERVER_METHODS, type WorkspaceSearchCancelParams, type WorkspaceSearchReadParams, type WorkspaceSearchStartParams } from "../../../../../generated/app-server/types.js";
+import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import { boundedPositiveInteger, nonEmptyString, nonNegativeInteger, record, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -35,7 +36,7 @@ function route<P, R>(definition: IpcRoute<P, R>): IpcRoute<unknown, unknown> {
 function workspaceSearchStartParams(value: unknown): WorkspaceSearchStartParams {
 	const params = record(value, ["query", "patternKind", "caseSensitivity", "includePatterns", "excludePatterns", "maxResults"], ["workspaceFolderId"]);
 	const query = nonEmptyString(params.query, "query");
-	if (new TextEncoder().encode(query).byteLength > 16_384) {
+	if (VSBuffer.fromString(query).byteLength > 16_384) {
 		throw new Error("query must not exceed 16384 UTF-8 bytes");
 	}
 	return {
@@ -74,7 +75,7 @@ function searchPatterns(value: unknown, field: string): string[] {
 	}
 	return value.map((entry, index) => {
 		const pattern = nonEmptyString(entry, `${field}[${index}]`);
-		if (new TextEncoder().encode(pattern).byteLength > 1_024 || pattern.includes("\0") || pattern.startsWith("!") || pattern.startsWith("/") || /^[A-Za-z]:[\\/]/.test(pattern) || pattern.replaceAll("\\", "/").split("/").includes("..")) {
+		if (VSBuffer.fromString(pattern).byteLength > 1_024 || pattern.includes("\0") || pattern.startsWith("!") || pattern.startsWith("/") || /^[A-Za-z]:[\\/]/.test(pattern) || pattern.replaceAll("\\", "/").split("/").includes("..")) {
 			throw new Error(`${field}[${index}] must be a workspace-relative glob`);
 		}
 		return pattern;

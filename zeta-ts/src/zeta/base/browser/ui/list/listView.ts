@@ -2,6 +2,7 @@ import { addDisposableListener, isNode, h } from "../../dom.js";
 import { DataTransfers } from "../../dnd.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
+import { isFiniteNumber } from "../../../common/numbers.js";
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { DndCssClasses, DragAndDropDataKind, type DragAndDropData, type DragAndDropDataKind as DragDataKind } from "../dnd/dnd.js";
@@ -406,7 +407,7 @@ function feedbackClass(position: DragOverPosition): string {
 	return DndCssClasses.DropTarget;
 }
 
-function normalizeHeight(value: number | undefined): number | undefined { return value !== undefined && Number.isFinite(value) && value > 0 ? value : undefined; }
+function normalizeHeight(value: number | undefined): number | undefined { return isFiniteNumber(value) && value > 0 ? value : undefined; }
 function sameFeedback(left: readonly number[], right: readonly number[]): boolean { return left.length === right.length && left.every((value, index) => value === right[index]); }
 
 let listSequence = 1;
