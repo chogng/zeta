@@ -627,3 +627,739 @@ function removeObjectProperty(source: string, document: JsonDocument, property: 
 function replaceSource(source: string, offset: number, length: number, replacement: string): string {
 	return `${source.slice(0, offset)}${replacement}${source.slice(offset + length)}`;
 }
+
+export * from './jsonEdit.js';
+export * from './jsonErrorMessages.js';
+export * from './jsonFormatter.js';
+
+export enum ScanError {
+	None = 0,
+	UnexpectedEndOfComment = 1,
+	UnexpectedEndOfString = 2,
+	UnexpectedEndOfNumber = 3,
+	InvalidUnicode = 4,
+	InvalidEscapeCharacter = 5,
+	InvalidCharacter = 6,
+}
+
+export enum SyntaxKind {
+	OpenBraceToken = 1,
+	CloseBraceToken = 2,
+	OpenBracketToken = 3,
+	CloseBracketToken = 4,
+	CommaToken = 5,
+	ColonToken = 6,
+	NullKeyword = 7,
+	TrueKeyword = 8,
+	FalseKeyword = 9,
+	StringLiteral = 10,
+	NumericLiteral = 11,
+	LineCommentTrivia = 12,
+	BlockCommentTrivia = 13,
+	LineBreakTrivia = 14,
+	Trivia = 15,
+	Unknown = 16,
+	EOF = 17,
+}
+
+export interface JSONScanner {
+	setPosition(position: number): void;
+	scan(): SyntaxKind;
+	getPosition(): number;
+	getToken(): SyntaxKind;
+	getTokenValue(): string;
+	getTokenOffset(): number;
+	getTokenLength(): number;
+	getTokenError(): ScanError;
+}
+
+export interface ParseError {
+	readonly error: ParseErrorCode;
+	readonly offset: number;
+	readonly length: number;
+}
+
+export enum ParseErrorCode {
+	InvalidSymbol = 1,
+	InvalidNumberFormat = 2,
+	PropertyNameExpected = 3,
+	ValueExpected = 4,
+	ColonExpected = 5,
+	CommaExpected = 6,
+	CloseBraceExpected = 7,
+	CloseBracketExpected = 8,
+	EndOfFileExpected = 9,
+	InvalidCommentToken = 10,
+	UnexpectedEndOfComment = 11,
+	UnexpectedEndOfString = 12,
+	UnexpectedEndOfNumber = 13,
+	InvalidUnicode = 14,
+	InvalidEscapeCharacter = 15,
+	InvalidCharacter = 16,
+}
+
+export type NodeType = 'object' | 'array' | 'property' | 'string' | 'number' | 'boolean' | 'null';
+
+export interface Node {
+	readonly type: NodeType;
+	readonly value?: unknown;
+	readonly offset: number;
+	readonly length: number;
+	readonly colonOffset?: number;
+	readonly parent?: Node;
+	readonly children?: readonly Node[];
+}
+
+export type Segment = string | number;
+export type JSONPath = Segment[];
+
+export interface Location {
+	readonly previousNode?: Node;
+	readonly path: JSONPath;
+	readonly matches: (patterns: JSONPath) => boolean;
+	readonly isAtPropertyKey: boolean;
+}
+
+export interface ParseOptions {
+	readonly disallowComments?: boolean;
+	readonly allowTrailingComma?: boolean;
+	readonly allowEmptyContent?: boolean;
+}
+
+export namespace ParseOptions {
+	export const DEFAULT: ParseOptions = Object.freeze({ allowTrailingComma: true });
+}
+
+export interface JSONVisitor {
+	onObjectBegin?: (offset: number, length: number) => void;
+	onObjectProperty?: (property: string, offset: number, length: number) => void;
+	onObjectEnd?: (offset: number, length: number) => void;
+	onArrayBegin?: (offset: number, length: number) => void;
+	onArrayEnd?: (offset: number, length: number) => void;
+	onLiteralValue?: (value: unknown, offset: number, length: number) => void;
+	onSeparator?: (character: string, offset: number, length: number) => void;
+	onComment?: (offset: number, length: number) => void;
+	onError?: (error: ParseErrorCode, offset: number, length: number) => void;
+}
+
+const whitespacePattern = /[\t\v\f \u00a0\u1680\u2000-\u200b\u202f\u205f\u3000\ufeff]/u;
+const lineBreakPattern = /[\n\r\u2028\u2029]/u;
+
+export function createScanner(text: string, ignoreTrivia = false): JSONScanner {
+	if (typeof text !== 'string') throw new TypeError('JSON source must be text');
+	let position = 0;
+	let tokenOffset = 0;
+	let token = SyntaxKind.Unknown;
+	let tokenValue = '';
+	let scanError = ScanError.None;
+
+	const setPosition = (newPosition: number): void => {
+		position = Math.max(0, Math.min(text.length, newPosition));
+		tokenOffset = position;
+		token = SyntaxKind.Unknown;
+		tokenValue = '';
+		scanError = ScanError.None;
+	};
+
+	const scanHexDigits = (count: number): number => {
+		let value = 0;
+		let digits = 0;
+		while (digits < count) {
+			const character = text.charCodeAt(position);
+			const digit = hexDigit(character);
+			if (digit < 0) break;
+			value = value * 16 + digit;
+			position += 1;
+			digits += 1;
+		}
+		if (digits !== count) return -1;
+		return value;
+	};
+
+	const scanNumber = (): string => {
+		const start = position;
+		if (text.charCodeAt(position) === 0x30) {
+			position += 1;
+		} else {
+			position += 1;
+			while (isDigit(text.charCodeAt(position))) position += 1;
+		}
+		if (text.charCodeAt(position) === 0x2e) {
+			position += 1;
+			if (!isDigit(text.charCodeAt(position))) {
+				scanError = ScanError.UnexpectedEndOfNumber;
+				return text.slice(start, position);
+			}
+			position += 1;
+			while (isDigit(text.charCodeAt(position))) position += 1;
+		}
+		let end = position;
+		if (text.charCodeAt(position) === 0x45 || text.charCodeAt(position) === 0x65) {
+			position += 1;
+			if (text.charCodeAt(position) === 0x2b || text.charCodeAt(position) === 0x2d) position += 1;
+			if (!isDigit(text.charCodeAt(position))) {
+				scanError = ScanError.UnexpectedEndOfNumber;
+			} else {
+				position += 1;
+				while (isDigit(text.charCodeAt(position))) position += 1;
+				end = position;
+			}
+		}
+		return text.slice(start, end);
+	};
+
+	const scanString = (): string => {
+		let result = '';
+		let start = position;
+		while (position < text.length) {
+			const character = text.charCodeAt(position);
+			if (character === 0x22) {
+				result += text.slice(start, position);
+				position += 1;
+				return result;
+			}
+			if (character === 0x5c) {
+				result += text.slice(start, position);
+				position += 1;
+				if (position >= text.length) {
+					scanError = ScanError.UnexpectedEndOfString;
+					return result;
+				}
+				const escaped = text.charCodeAt(position);
+				position += 1;
+				switch (escaped) {
+					case 0x22: result += '"'; break;
+					case 0x5c: result += '\\'; break;
+					case 0x2f: result += '/'; break;
+					case 0x62: result += '\b'; break;
+					case 0x66: result += '\f'; break;
+					case 0x6e: result += '\n'; break;
+					case 0x72: result += '\r'; break;
+					case 0x74: result += '\t'; break;
+					case 0x75: {
+						const codePoint = scanHexDigits(4);
+						if (codePoint < 0) scanError = ScanError.InvalidUnicode;
+						else result += String.fromCharCode(codePoint);
+						break;
+					}
+					default: scanError = ScanError.InvalidEscapeCharacter;
+				}
+				start = position;
+				continue;
+			}
+			if (character <= 0x1f) {
+				result += text.slice(start, position);
+				if (isLineBreakCode(character)) {
+					scanError = ScanError.UnexpectedEndOfString;
+					return result;
+				}
+				scanError = ScanError.InvalidCharacter;
+				position += 1;
+				start = position;
+				continue;
+			}
+			position += 1;
+		}
+		result += text.slice(start, position);
+		scanError = ScanError.UnexpectedEndOfString;
+		return result;
+	};
+
+	const scanNext = (): SyntaxKind => {
+		tokenValue = '';
+		scanError = ScanError.None;
+		tokenOffset = position;
+		if (position >= text.length) {
+			tokenOffset = text.length;
+			return (token = SyntaxKind.EOF);
+		}
+		const code = text.charCodeAt(position);
+		if (isWhitespaceCode(code)) {
+			do {
+				position += 1;
+			} while (position < text.length && isWhitespaceCode(text.charCodeAt(position)));
+			tokenValue = text.slice(tokenOffset, position);
+			return (token = SyntaxKind.Trivia);
+		}
+		if (isLineBreakCode(code)) {
+			position += 1;
+			if (code === 0x0d && text.charCodeAt(position) === 0x0a) position += 1;
+			tokenValue = text.slice(tokenOffset, position);
+			return (token = SyntaxKind.LineBreakTrivia);
+		}
+		switch (code) {
+			case 0x7b: position += 1; return (token = SyntaxKind.OpenBraceToken);
+			case 0x7d: position += 1; return (token = SyntaxKind.CloseBraceToken);
+			case 0x5b: position += 1; return (token = SyntaxKind.OpenBracketToken);
+			case 0x5d: position += 1; return (token = SyntaxKind.CloseBracketToken);
+			case 0x3a: position += 1; return (token = SyntaxKind.ColonToken);
+			case 0x2c: position += 1; return (token = SyntaxKind.CommaToken);
+			case 0x22:
+				position += 1;
+				tokenValue = scanString();
+				return (token = SyntaxKind.StringLiteral);
+			case 0x2f:
+				if (text.charCodeAt(position + 1) === 0x2f) {
+					position += 2;
+					while (position < text.length && !isLineBreakCode(text.charCodeAt(position))) position += 1;
+					tokenValue = text.slice(tokenOffset, position);
+					return (token = SyntaxKind.LineCommentTrivia);
+				}
+				if (text.charCodeAt(position + 1) === 0x2a) {
+					position += 2;
+					let closed = false;
+					while (position < text.length - 1) {
+						if (text.charCodeAt(position) === 0x2a && text.charCodeAt(position + 1) === 0x2f) {
+							position += 2;
+							closed = true;
+							break;
+						}
+						position += 1;
+					}
+					if (!closed) {
+						position = text.length;
+						scanError = ScanError.UnexpectedEndOfComment;
+					}
+					tokenValue = text.slice(tokenOffset, position);
+					return (token = SyntaxKind.BlockCommentTrivia);
+				}
+				position += 1;
+				tokenValue = '/';
+				return (token = SyntaxKind.Unknown);
+			case 0x2d:
+				position += 1;
+				if (!isDigit(text.charCodeAt(position))) {
+					tokenValue = '-';
+					return (token = SyntaxKind.Unknown);
+				}
+				tokenValue = `-${scanNumber()}`;
+				return (token = SyntaxKind.NumericLiteral);
+			default:
+				if (isDigit(code)) {
+					tokenValue = scanNumber();
+					return (token = SyntaxKind.NumericLiteral);
+				}
+				while (position < text.length && isUnknownContentCharacter(text.charCodeAt(position))) position += 1;
+				if (position !== tokenOffset) {
+					tokenValue = text.slice(tokenOffset, position);
+					switch (tokenValue) {
+						case 'true': return (token = SyntaxKind.TrueKeyword);
+						case 'false': return (token = SyntaxKind.FalseKeyword);
+						case 'null': return (token = SyntaxKind.NullKeyword);
+						default: return (token = SyntaxKind.Unknown);
+					}
+				}
+				position += 1;
+				tokenValue = text.slice(tokenOffset, position);
+				return (token = SyntaxKind.Unknown);
+		}
+	};
+
+	const scan = (): SyntaxKind => {
+		let result: SyntaxKind;
+		do {
+			result = scanNext();
+		} while (ignoreTrivia && isCompatibilityTrivia(result));
+		return result;
+	};
+
+	return {
+		setPosition,
+		scan,
+		getPosition: () => position,
+		getToken: () => token,
+		getTokenValue: () => tokenValue,
+		getTokenOffset: () => tokenOffset,
+		getTokenLength: () => position - tokenOffset,
+		getTokenError: () => scanError,
+	};
+}
+
+export function parse(text: string, errors: ParseError[] = [], options: ParseOptions = ParseOptions.DEFAULT): unknown {
+	let currentProperty: string | null = null;
+	let currentParent: unknown[] | Record<string, unknown> = [];
+	const previousParents: Array<unknown[] | Record<string, unknown>> = [];
+	const visitor: JSONVisitor = {
+		onObjectBegin: () => {
+			const object: Record<string, unknown> = {};
+			onValue(object);
+			previousParents.push(currentParent);
+			currentParent = object;
+			currentProperty = null;
+		},
+		onObjectProperty: name => { currentProperty = name; },
+		onObjectEnd: () => { currentParent = previousParents.pop() ?? []; },
+		onArrayBegin: () => {
+			const array: unknown[] = [];
+			onValue(array);
+			previousParents.push(currentParent);
+			currentParent = array;
+			currentProperty = null;
+		},
+		onArrayEnd: () => { currentParent = previousParents.pop() ?? []; },
+		onLiteralValue: onValue,
+		onError: (error, offset, length) => errors.push({ error, offset, length }),
+	};
+	visit(text, visitor, options);
+	return (currentParent as unknown[])[0];
+
+	function onValue(value: unknown): void {
+		if (Array.isArray(currentParent)) {
+			currentParent.push(value);
+			return;
+		}
+		if (currentProperty !== null) currentParent[currentProperty] = value;
+	}
+}
+
+export function parseTree(text: string, errors: ParseError[] = [], options: ParseOptions = ParseOptions.DEFAULT): Node | undefined {
+	let currentParent: MutableNode = { type: 'array', offset: -1, length: -1, children: [] };
+	const visitor: JSONVisitor = {
+		onObjectBegin: (offset, length) => {
+			currentParent = append({ type: 'object', offset, length: -1, parent: currentParent, children: [] });
+		},
+		onObjectProperty: (name, offset, length) => {
+			const property = append({ type: 'property', offset, length: -1, parent: currentParent, children: [] });
+			property.children!.push({ type: 'string', value: name, offset, length, parent: property });
+			currentParent = property;
+		},
+		onObjectEnd: (offset, length) => {
+			currentParent.length = offset + length - currentParent.offset;
+			currentParent = currentParent.parent ?? currentParent;
+			completeProperty(offset + length);
+		},
+		onArrayBegin: (offset, length) => { currentParent = append({ type: 'array', offset, length: -1, parent: currentParent, children: [] }); },
+		onArrayEnd: (offset, length) => {
+			currentParent.length = offset + length - currentParent.offset;
+			currentParent = currentParent.parent ?? currentParent;
+			completeProperty(offset + length);
+		},
+		onLiteralValue: (value, offset, length) => {
+			append({ type: getNodeType(value), value, offset, length, parent: currentParent });
+			completeProperty(offset + length);
+		},
+		onSeparator: (separator, offset) => {
+			if (currentParent.type !== 'property') return;
+			if (separator === ':') {
+				currentParent.colonOffset = offset;
+				return;
+			}
+			if (separator === ',') completeProperty(offset);
+		},
+		onError: (error, offset, length) => errors.push({ error, offset, length }),
+	};
+	visit(text, visitor, options);
+	const result = currentParent.children?.[0];
+	if (result) delete result.parent;
+	return result;
+
+	function append(node: MutableNode): MutableNode {
+		currentParent.children!.push(node);
+		return node;
+	}
+
+	function completeProperty(endOffset: number): void {
+		if (currentParent.type !== 'property') return;
+		currentParent.length = endOffset - currentParent.offset;
+		currentParent = currentParent.parent ?? currentParent;
+	}
+}
+
+export function visit(text: string, visitor: JSONVisitor, options: ParseOptions = ParseOptions.DEFAULT): boolean {
+	const scanner = createScanner(text);
+	const disallowComments = options.disallowComments === true;
+	const allowTrailingComma = options.allowTrailingComma === true;
+	let current = scanNext();
+	if (current === SyntaxKind.EOF) {
+		if (!options.allowEmptyContent) report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), 1);
+		return options.allowEmptyContent === true;
+	}
+	if (!parseValue()) {
+		report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+		return false;
+	}
+	if ((current as SyntaxKind) !== SyntaxKind.EOF) {
+		report(ParseErrorCode.EndOfFileExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+	}
+	return true;
+
+	function scanNext(): SyntaxKind {
+		while (true) {
+			const result = scanner.scan();
+			reportScannerError();
+			if (result === SyntaxKind.LineCommentTrivia || result === SyntaxKind.BlockCommentTrivia) {
+				if (disallowComments) report(ParseErrorCode.InvalidCommentToken, scanner.getTokenOffset(), scanner.getTokenLength());
+				else visitor.onComment?.(scanner.getTokenOffset(), scanner.getTokenLength());
+				continue;
+			}
+			if (result === SyntaxKind.Trivia || result === SyntaxKind.LineBreakTrivia) continue;
+			if (result === SyntaxKind.Unknown) report(ParseErrorCode.InvalidSymbol, scanner.getTokenOffset(), scanner.getTokenLength());
+			return result;
+		}
+	}
+
+	function reportScannerError(): void {
+		const error = scanner.getTokenError();
+		const offset = scanner.getTokenOffset();
+		const length = scanner.getTokenLength();
+		switch (error) {
+			case ScanError.UnexpectedEndOfComment: report(ParseErrorCode.UnexpectedEndOfComment, offset, length); break;
+			case ScanError.UnexpectedEndOfString: report(ParseErrorCode.UnexpectedEndOfString, offset, length); break;
+			case ScanError.UnexpectedEndOfNumber: report(ParseErrorCode.UnexpectedEndOfNumber, offset, length); break;
+			case ScanError.InvalidUnicode: report(ParseErrorCode.InvalidUnicode, offset, length); break;
+			case ScanError.InvalidEscapeCharacter: report(ParseErrorCode.InvalidEscapeCharacter, offset, length); break;
+			case ScanError.InvalidCharacter: report(ParseErrorCode.InvalidCharacter, offset, length); break;
+		}
+	}
+
+	function parseValue(): boolean {
+		switch (current) {
+			case SyntaxKind.OpenBracketToken: return parseArray();
+			case SyntaxKind.OpenBraceToken: return parseObject();
+			case SyntaxKind.StringLiteral: return parseString(true);
+			default: return parseLiteral();
+		}
+	}
+
+	function parseString(isValue: boolean): boolean {
+		const value = scanner.getTokenValue();
+		if (isValue) visitor.onLiteralValue?.(value, scanner.getTokenOffset(), scanner.getTokenLength());
+		else visitor.onObjectProperty?.(value, scanner.getTokenOffset(), scanner.getTokenLength());
+		current = scanNext();
+		return true;
+	}
+
+	function parseLiteral(): boolean {
+		let value: unknown;
+		switch (current) {
+			case SyntaxKind.NumericLiteral:
+				try {
+					value = JSON.parse(scanner.getTokenValue());
+					if (typeof value !== 'number') throw new TypeError('not a number');
+				} catch {
+					report(ParseErrorCode.InvalidNumberFormat, scanner.getTokenOffset(), scanner.getTokenLength());
+					value = 0;
+				}
+				break;
+			case SyntaxKind.NullKeyword: value = null; break;
+			case SyntaxKind.TrueKeyword: value = true; break;
+			case SyntaxKind.FalseKeyword: value = false; break;
+			default: return false;
+		}
+		visitor.onLiteralValue?.(value, scanner.getTokenOffset(), scanner.getTokenLength());
+		current = scanNext();
+		return true;
+	}
+
+	function parseProperty(): boolean {
+		if (current !== SyntaxKind.StringLiteral) {
+			report(ParseErrorCode.PropertyNameExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+			recover(SyntaxKind.CloseBraceToken, SyntaxKind.CommaToken);
+			return false;
+		}
+		parseString(false);
+		if ((current as SyntaxKind) !== SyntaxKind.ColonToken) {
+			report(ParseErrorCode.ColonExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+			return false;
+		}
+		visitor.onSeparator?.(':', scanner.getTokenOffset(), scanner.getTokenLength());
+		current = scanNext();
+		if (!parseValue()) {
+			report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+			return false;
+		}
+		return true;
+	}
+
+	function parseObject(): boolean {
+		visitor.onObjectBegin?.(scanner.getTokenOffset(), scanner.getTokenLength());
+		current = scanNext();
+		let needsComma = false;
+		while (current !== SyntaxKind.CloseBraceToken && current !== SyntaxKind.EOF) {
+			if (current === SyntaxKind.CommaToken) {
+				if (!needsComma) report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+				visitor.onSeparator?.(',', scanner.getTokenOffset(), scanner.getTokenLength());
+				current = scanNext();
+				if (current === SyntaxKind.CloseBraceToken && allowTrailingComma) break;
+			} else if (needsComma) {
+				report(ParseErrorCode.CommaExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+			}
+			if (!parseProperty()) recover(SyntaxKind.CloseBraceToken, SyntaxKind.CommaToken);
+			needsComma = true;
+		}
+		visitor.onObjectEnd?.(scanner.getTokenOffset(), scanner.getTokenLength());
+		if (current !== SyntaxKind.CloseBraceToken) {
+			report(ParseErrorCode.CloseBraceExpected, scanner.getTokenOffset(), 1);
+			return true;
+		}
+		current = scanNext();
+		return true;
+	}
+
+	function parseArray(): boolean {
+		visitor.onArrayBegin?.(scanner.getTokenOffset(), scanner.getTokenLength());
+		current = scanNext();
+		let needsComma = false;
+		while (current !== SyntaxKind.CloseBracketToken && current !== SyntaxKind.EOF) {
+			if (current === SyntaxKind.CommaToken) {
+				if (!needsComma) report(ParseErrorCode.ValueExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+				visitor.onSeparator?.(',', scanner.getTokenOffset(), scanner.getTokenLength());
+				current = scanNext();
+				if (current === SyntaxKind.CloseBracketToken && allowTrailingComma) break;
+			} else if (needsComma) {
+				report(ParseErrorCode.CommaExpected, scanner.getTokenOffset(), scanner.getTokenLength());
+			}
+			if (!parseValue()) recover(SyntaxKind.CloseBracketToken, SyntaxKind.CommaToken);
+			needsComma = true;
+		}
+		visitor.onArrayEnd?.(scanner.getTokenOffset(), scanner.getTokenLength());
+		if (current !== SyntaxKind.CloseBracketToken) {
+			report(ParseErrorCode.CloseBracketExpected, scanner.getTokenOffset(), 1);
+			return true;
+		}
+		current = scanNext();
+		return true;
+	}
+
+	function recover(...until: readonly SyntaxKind[]): void {
+		while (current !== SyntaxKind.EOF && !until.includes(current)) current = scanNext();
+	}
+
+	function report(error: ParseErrorCode, offset: number, length: number): void {
+		visitor.onError?.(error, offset, Math.max(length, 1));
+	}
+}
+
+export function findNodeAtLocation(root: Node | undefined, path: JSONPath): Node | undefined {
+	if (!root) return undefined;
+	let node = root;
+	for (const segment of path) {
+		if (typeof segment === 'string') {
+			if (node.type !== 'object') return undefined;
+			const property = node.children?.find(candidate => candidate.type === 'property' && candidate.children?.[0]?.value === segment);
+			if (!property?.children?.[1]) return undefined;
+			node = property.children[1];
+			continue;
+		}
+		if (node.type !== 'array' || segment < 0 || segment >= (node.children?.length ?? 0)) return undefined;
+		node = node.children![segment]!;
+	}
+	return node;
+}
+
+export function getNodePath(node: Node | undefined): JSONPath {
+	if (!node?.parent) return [];
+	const path = getNodePath(node.parent);
+	if (node.parent.type === 'property') {
+		const key = node.parent.children?.[0]?.value;
+		if (typeof key === 'string') path.push(key);
+	} else if (node.parent.type === 'array') {
+		const index = node.parent.children?.indexOf(node) ?? -1;
+		if (index >= 0) path.push(index);
+	}
+	return path;
+}
+
+export function getNodeValue(node: Node | undefined): unknown {
+	if (!node) return undefined;
+	if (node.type === 'array') return (node.children ?? []).map(getNodeValue);
+	if (node.type === 'object') {
+		const value: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+		for (const property of node.children ?? []) {
+			if (property.type !== 'property') continue;
+			const key = property.children?.[0]?.value;
+			const child = property.children?.[1];
+			if (typeof key === 'string' && child) value[key] = getNodeValue(child);
+		}
+		return value;
+	}
+	return node.value;
+}
+
+export function contains(node: Node, offset: number, includeRightBound = false): boolean {
+	return offset >= node.offset && (offset < node.offset + node.length || includeRightBound && offset === node.offset + node.length);
+}
+
+export function findNodeAtOffset(node: Node | undefined, offset: number, includeRightBound = false): Node | undefined {
+	if (!node || !contains(node, offset, includeRightBound)) return undefined;
+	for (const child of node.children ?? []) {
+		if (child.offset > offset) break;
+		const nested = findNodeAtOffset(child, offset, includeRightBound);
+		if (nested) return nested;
+	}
+	return node;
+}
+
+export function getLocation(text: string, position: number): Location {
+	const root = parseTree(text, [], { allowTrailingComma: true });
+	const boundedPosition = Math.max(0, Math.min(text.length, position));
+	const node = root ? findNodeAtOffset(root, boundedPosition, true) : undefined;
+	const path = node ? getNodePath(node) : [];
+	const previousNode = node && ['property', 'string', 'number', 'boolean', 'null'].includes(node.type) ? node : undefined;
+	const isAtPropertyKey = node?.type === 'string' && node.parent?.type === 'property' && node.parent.children?.[0] === node;
+	return {
+		previousNode,
+		path,
+		isAtPropertyKey: isAtPropertyKey === true,
+		matches: patterns => matchesPath(path, patterns),
+	};
+}
+
+function matchesPath(path: JSONPath, patterns: JSONPath): boolean {
+	const match = (pathIndex: number, patternIndex: number): boolean => {
+		if (patternIndex === patterns.length) return pathIndex === path.length;
+		const pattern = patterns[patternIndex];
+		if (pattern === '**') return match(pathIndex, patternIndex + 1) || pathIndex < path.length && match(pathIndex + 1, patternIndex);
+		return pathIndex < path.length && (pattern === '*' || pattern === path[pathIndex]) && match(pathIndex + 1, patternIndex + 1);
+	};
+	return match(0, 0);
+}
+
+function getNodeType(value: unknown): NodeType {
+	if (value === null) return 'null';
+	if (Array.isArray(value)) return 'array';
+	switch (typeof value) {
+		case 'boolean': return 'boolean';
+		case 'number': return 'number';
+		case 'string': return 'string';
+		default: return 'null';
+	}
+}
+
+function isCompatibilityTrivia(kind: SyntaxKind): boolean {
+	return kind >= SyntaxKind.LineCommentTrivia && kind <= SyntaxKind.Trivia;
+}
+
+function isWhitespaceCode(code: number): boolean {
+	return whitespacePattern.test(String.fromCharCode(code));
+}
+
+function isLineBreakCode(code: number): boolean {
+	return lineBreakPattern.test(String.fromCharCode(code));
+}
+
+function isDigit(code: number): boolean {
+	return code >= 0x30 && code <= 0x39;
+}
+
+function isUnknownContentCharacter(code: number): boolean {
+	if (code < 0 || isWhitespaceCode(code) || isLineBreakCode(code)) return false;
+	return ![0x7d, 0x5d, 0x7b, 0x5b, 0x22, 0x3a, 0x2c, 0x2f].includes(code);
+}
+
+function hexDigit(code: number): number {
+	if (code >= 0x30 && code <= 0x39) return code - 0x30;
+	if (code >= 0x41 && code <= 0x46) return code - 0x41 + 10;
+	if (code >= 0x61 && code <= 0x66) return code - 0x61 + 10;
+	return -1;
+}
+
+interface MutableNode {
+	type: NodeType;
+	value?: unknown;
+	offset: number;
+	length: number;
+	colonOffset?: number;
+	parent?: MutableNode;
+	children?: MutableNode[];
+}

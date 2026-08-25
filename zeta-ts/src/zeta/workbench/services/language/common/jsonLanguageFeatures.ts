@@ -1,4 +1,6 @@
-import { formatJson, getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, type JsonObjectNode, type JsonPropertyNode, type JsonValueNode } from '../../../../base/common/json.js';
+import { applyEdits } from '../../../../base/common/jsonEdit.js';
+import { format, type FormattingOptions } from '../../../../base/common/jsonFormatter.js';
+import { getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, type JsonObjectNode, type JsonPropertyNode, type JsonValueNode } from '../../../../base/common/json.js';
 import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { TextPosition, TextRange, type TextEdit } from '../../../../editor/common/core/text.js';
 import { LanguageCompletionItemKind } from '../../../../editor/common/languages/completion/languageCompletions.js';
@@ -74,7 +76,8 @@ export function createJsonFormattingProvider(): LanguageFormattingProvider {
 			if (parseJsonDocument(source, jsonParseOptions(request.languageId)).errors.length > 0) return Object.freeze([]);
 			let formatted: string;
 			try {
-				formatted = formatJson(source, request.options);
+				const formattingEdits = format(source, undefined, request.options as FormattingOptions);
+				formatted = applyEdits(source, formattingEdits);
 			} catch {
 				return Object.freeze([]);
 			}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { editJsonObjectProperty, formatJson, JsonTokenKind, parseJsonDocument, scanJson } from '../../common/json.js';
-import { parseJsonc } from '../../common/jsonc.js';
+import { parse, parseJsonc, stripComments } from '../../common/jsonc.js';
 
 test('JSON scanner retains JSONC structure and source ranges', () => {
 	const source = '{\n\t// note\n\t"enabled": true,\n}\n';
@@ -51,4 +51,13 @@ test('JSONC formatting preserves comments and produces valid source', () => {
 	assert.match(formatted, /\/\/ note/u);
 	assert.match(formatted, /\n  "items": \[/u);
 	assert.deepEqual(parseJsonc(formatted, 'formatted JSONC'), { enabled: true, items: [1, 2] });
+});
+
+test('JSONC compatibility helpers strip comments and trailing commas without touching strings', () => {
+	const source = '{\n  "text": "// keep,}", /* remove */\n  "enabled": true,\n}\n';
+	const stripped = stripComments(source);
+	assert.match(stripped, /"text": "\/\/ keep,\}"/u);
+	assert.doesNotMatch(stripped, /remove/u);
+	assert.doesNotMatch(stripped, /true,\s*\}/u);
+	assert.deepEqual(parse<{ text: string; enabled: boolean }>(source), { text: '// keep,}', enabled: true });
 });
