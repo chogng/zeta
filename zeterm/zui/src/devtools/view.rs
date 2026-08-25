@@ -8,15 +8,22 @@ use crate::ui::PaintRect;
 use crate::ui::Point;
 use crate::ui::Rect;
 use crate::ui::Size;
-use crate::ui::TextBlock;
-use crate::ui::TextBlockWrap;
 use crate::ui::TextStyle;
 use crate::ui::UiScene;
 
 use super::DevToolsHandle;
 use super::assets;
-
-pub(crate) const TOOLBAR_HEIGHT: f32 = 46.0;
+use super::view_text::metrics;
+use super::view_text::paint_message;
+use super::view_text::paint_text;
+use super::view_text::source;
+use super::view_tree::ROW_HEIGHT;
+use super::view_tree::TOOLBAR_HEIGHT;
+pub(crate) use super::view_tree::TreeHit;
+use super::view_tree::clamped_scroll;
+use super::view_tree::tree_bounds;
+pub(crate) use super::view_tree::tree_hit_at;
+pub(crate) use super::view_tree::tree_rows;
 
 const BACKGROUND: Color = Color::rgb(248, 248, 250);
 const BORDER: Color = Color::rgb(218, 218, 224);
@@ -24,7 +31,6 @@ const FOREGROUND: Color = Color::rgb(35, 35, 42);
 const MUTED: Color = Color::rgb(105, 105, 116);
 const ACCENT: Color = Color::rgb(35, 131, 226);
 const ROW_BACKGROUND: Color = Color::rgba(35, 131, 226, 24);
-const ROW_HEIGHT: f32 = 90.0;
 const CONTENT_PADDING: f32 = 16.0;
 const ACTION_WIDTH: f32 = 74.0;
 const ACTION_HEIGHT: f32 = 28.0;
@@ -40,15 +46,6 @@ pub(crate) fn toolbar_action_at(bounds: Rect, point: Point) -> Option<ToolbarAct
     [ToolbarAction::Pick, ToolbarAction::Close]
         .into_iter()
         .find(|action| action_bounds(toolbar, *action).contains(point))
-}
-
-pub(crate) fn row_index_at(bounds: Rect, point: Point, row_count: usize) -> Option<usize> {
-    let content = content_bounds(bounds);
-    if !content.contains(point) {
-        return None;
-    }
-    let index = ((point.y - content.origin.y) / ROW_HEIGHT).floor() as usize;
-    (index < row_count).then_some(index)
 }
 
 pub(crate) fn compose(
@@ -105,38 +102,64 @@ pub(crate) fn compose(
                 scene,
                 "Waiting for the application to present an inspectable scene.",
                 content,
+                CONTENT_PADDING,
+                MUTED,
             );
             return;
         };
-        let Some(selection) = devtools.selection() else {
-            let message = if devtools.is_picking() {
-                "Move over the application window and click an element to inspect it."
-            } else {
-                "Select Pick, then move over the application window to inspect it."
-            };
-            paint_message(scene, message, content);
-            paint_text(
-                scene,
-                &format!("{} nodes in the latest frame", frame.nodes().len()),
-                Point::new(
-                    content.origin.x + CONTENT_PADDING,
-                    content.origin.y + CONTENT_PADDING + 42.0,
-                ),
-                (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
-                TextStyle::new(11.0, MUTED)
-                    .with_family(FontFamily::Monospace)
-                    .with_line_height(15.0),
-            );
-            return;
+        let message = if devtools.is_picking() {
+            "Move over the application window and click an element to inspect it."
+        } else {
+            "Select Pick, then move over the application window to inspect it."
         };
-
-        for (index, node) in selection.path().iter().enumerate() {
-            let y = content.origin.y + index as f32 * ROW_HEIGHT;
-            if y >= content.bottom() {
+        paint_text(
+            scene,
+            message,
+            Point::new(
+                content.origin.x + CONTENT_PADDING,
+                content.origin.y + CONTENT_PADDING,
+            ),
+            (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
+            TextStyle::new(12.0, MUTED).with_line_height(18.0),
+        );
+        paint_text(
+            scene,
+            &format!("{} nodes in the latest frame", frame.nodes().len()),
+            Point::new(
+                content.origin.x + CONTENT_PADDING,
+                content.origin.y + CONTENT_PADDING + 22.0,
+            ),
+            (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
+            TextStyle::new(11.0, MUTED)
+                .with_family(FontFamily::Monospace)
+                .with_line_height(15.0),
+        );
+        let tree = tree_bounds(content);
+        let rows = tree_rows(frame, devtools);
+        let selected_id = devtools
+            .selection()
+            .and_then(|selection| selection.target().map(|node| node.id()));
+        if let Some(index) =
+            selected_id.and_then(|id| rows.iter().position(|tree_row| tree_row.id == id))
+        {
+            devtools.ensure_row_visible(index, ROW_HEIGHT, tree.size.height);
+        }
+        let scroll = clamped_scroll(devtools.scroll_offset(), rows.len(), tree.size.height);
+        devtools.set_scroll_offset(scroll);
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(tree.origin.x, tree.origin.y, tree.size.width, 1.0),
+            BORDER,
+        ));
+        for (index, tree_row) in rows.iter().enumerate() {
+            let y = tree.origin.y + index as f32 * ROW_HEIGHT - scroll;
+            if y + ROW_HEIGHT <= tree.origin.y {
+                continue;
+            }
+            if y >= tree.bottom() {
                 break;
             }
-            let row = Rect::from_xywh(content.origin.x, y, content.size.width, ROW_HEIGHT);
-            let selected = index == selection.selected_index();
+            let row = Rect::from_xywh(tree.origin.x, y, tree.size.width, ROW_HEIGHT);
+            let selected = selected_id == Some(tree_row.id);
             if selected {
                 scene.draw_rect(PaintRect::new(row, ROW_BACKGROUND));
                 scene.draw_rect(PaintRect::new(
@@ -144,7 +167,18 @@ pub(crate) fn compose(
                     ACCENT,
                 ));
             }
-            paint_row(scene, row, node, index, selected);
+            let Some(node) = frame.node(tree_row.id) else {
+                continue;
+            };
+            paint_row(
+                scene,
+                row,
+                node,
+                tree_row.depth,
+                tree_row.has_children,
+                devtools.is_collapsed(tree_row.id),
+                selected,
+            );
             scene.draw_rect(PaintRect::new(
                 Rect::from_xywh(
                     row.origin.x + CONTENT_PADDING,
@@ -241,24 +275,13 @@ fn paint_button(
     );
 }
 
-fn paint_message(scene: &mut UiScene, message: &str, bounds: Rect) {
-    paint_text(
-        scene,
-        message,
-        Point::new(
-            bounds.origin.x + CONTENT_PADDING,
-            bounds.origin.y + CONTENT_PADDING,
-        ),
-        (bounds.size.width - CONTENT_PADDING * 2.0).max(0.0),
-        TextStyle::new(12.0, MUTED).with_line_height(18.0),
-    );
-}
-
 fn paint_row(
     scene: &mut UiScene,
     row: Rect,
     node: &crate::ui::InspectionNode,
     depth: usize,
+    has_children: bool,
+    collapsed: bool,
     selected: bool,
 ) {
     let x = row.origin.x + CONTENT_PADDING + depth as f32 * 12.0;
@@ -267,15 +290,22 @@ fn paint_row(
         .label()
         .map(|label| format!("{}  {label}", node.name()))
         .unwrap_or_else(|| node.name().to_owned());
-    scene.draw_icon(PaintIcon::new(
-        assets::ANCESTOR,
-        Rect::from_xywh(x, row.origin.y + 8.0, 12.0, 12.0),
-        if selected { ACCENT } else { MUTED },
-    ));
+    if has_children {
+        scene.draw_icon(PaintIcon::new(
+            if collapsed {
+                assets::ANCESTOR
+            } else {
+                assets::EXPANDED
+            },
+            Rect::from_xywh(x, row.origin.y + 8.0, 12.0, 12.0),
+            if selected { ACCENT } else { MUTED },
+        ));
+    }
+    let label_origin = Point::new(x + 18.0, row.origin.y + 8.0);
     paint_text(
         scene,
         &title,
-        Point::new(x + 18.0, row.origin.y + 8.0),
+        label_origin,
         (width - 18.0).max(0.0),
         TextStyle::new(12.0, if selected { ACCENT } else { FOREGROUND })
             .with_weight(FontWeight::Bold)
@@ -284,7 +314,7 @@ fn paint_row(
     paint_text(
         scene,
         &metrics(node),
-        Point::new(x + 18.0, row.origin.y + 28.0),
+        Point::new(label_origin.x, row.origin.y + 28.0),
         (width - 18.0).max(0.0),
         TextStyle::new(11.0, FOREGROUND)
             .with_family(FontFamily::Monospace)
@@ -293,7 +323,7 @@ fn paint_row(
     paint_text(
         scene,
         &source(node),
-        Point::new(x + 18.0, row.origin.y + 48.0),
+        Point::new(label_origin.x, row.origin.y + 48.0),
         (width - 18.0).max(0.0),
         TextStyle::new(10.0, MUTED)
             .with_family(FontFamily::Monospace)
@@ -371,45 +401,6 @@ fn paint_padding(scene: &mut UiScene, node: &crate::ui::InspectionNode) {
             scene.draw_rect(PaintRect::new(bounds, Color::rgba(238, 147, 54, 92)));
         }
     }
-}
-
-fn metrics(node: &crate::ui::InspectionNode) -> String {
-    let mut value = format!("size {:.0} × {:.0}", node.width(), node.height());
-    if let Some(padding) = node.padding() {
-        value.push_str(&format!(
-            "   padding {:.0} {:.0} {:.0} {:.0}",
-            padding.top, padding.right, padding.bottom, padding.left
-        ));
-    }
-    if let Some(gap) = node.gap() {
-        value.push_str(&format!("   gap {gap:.0}"));
-    }
-    if let Some(radii) = node.corner_radii() {
-        value.push_str(&format!("   radius {:.0}", radii.top_left));
-    }
-    value
-}
-
-fn source(node: &crate::ui::InspectionNode) -> String {
-    if node.source_file().is_empty() || node.source_line() == 0 {
-        return "source unavailable".to_owned();
-    }
-    let file = node
-        .source_file()
-        .rsplit('/')
-        .next()
-        .unwrap_or(node.source_file());
-    format!("{file}:{}  ·  layer {}", node.source_line(), node.layer())
-}
-
-fn paint_text(scene: &mut UiScene, text: &str, origin: Point, width: f32, style: TextStyle) {
-    if width <= 0.0 {
-        return;
-    }
-    scene.draw_text(
-        TextBlock::new(text, origin, Size::new(width, style.line_height()), style)
-            .with_wrap(TextBlockWrap::None),
-    );
 }
 
 #[cfg(test)]

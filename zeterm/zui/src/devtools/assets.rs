@@ -21,3 +21,9 @@ pub(crate) const ANCESTOR: Icon = Icon::new(
     IconId::new("zui-devtools-ancestor"),
     IconDefinition::symbolic(include_bytes!("assets/chevron-right.svg")),
 );
+
+/// Disclosure glyph used for an expanded branch in the Inspector tree.
+pub(crate) const EXPANDED: Icon = Icon::new(
+    IconId::new("zui-devtools-expanded"),
+    IconDefinition::symbolic(include_bytes!("assets/chevron-down.svg")),
+);

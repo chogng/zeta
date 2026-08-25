@@ -96,7 +96,12 @@ fn separates_multicolor_artwork_into_symbolic_mask_and_fixed_color_pixels() {
 
 #[test]
 fn built_in_devtools_icons_rasterize_as_symbolic_assets() {
-    for icon in [assets::PICK, assets::CLOSE, assets::ANCESTOR] {
+    for icon in [
+        assets::PICK,
+        assets::CLOSE,
+        assets::ANCESTOR,
+        assets::EXPANDED,
+    ] {
         let raster = rasterize_icon(icon, 16, 16).expect("built-in DevTools SVG should parse");
 
         assert!(

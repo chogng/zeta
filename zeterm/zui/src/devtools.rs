@@ -14,6 +14,9 @@ use crate::window::WindowMetrics;
 pub(crate) mod assets;
 mod inspection;
 pub(crate) mod view;
+mod view_state;
+mod view_text;
+mod view_tree;
 
 pub use inspection::DevToolsHandle;
 pub use inspection::InspectionSelection;

@@ -6,6 +6,7 @@ use crate::internal::ActiveEventLoop;
 use crate::ui::Point;
 use crate::ui::Rect;
 use crate::window::MouseButton;
+use crate::window::MouseScrollDelta;
 use crate::window::PhysicalPosition;
 use crate::window::WindowChrome;
 use crate::window::WindowEvent;
@@ -231,6 +232,19 @@ where
                 state: ElementState::Released,
                 button: MouseButton::Left,
             } => self.handle_devtools_click(window, owner),
+            WindowEvent::MouseWheel { delta } => {
+                let amount = match delta {
+                    MouseScrollDelta::LineDelta(_, y) => *y * 0.5 * 90.0,
+                    MouseScrollDelta::PixelDelta(position) => position.y as f32,
+                };
+                let Some(owner_runtime) = self.windows.get(&owner) else {
+                    return;
+                };
+                owner_runtime.handle().devtools().scroll_by(-amount);
+                if let Some(runtime) = self.windows.get(&window) {
+                    runtime.handle().request_redraw();
+                }
+            }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(runtime) = self.windows.get(&window) {
                     runtime.handle().request_redraw();
@@ -271,15 +285,28 @@ where
                 self.commands.push(WindowCommand::Close(window));
             }
             None => {
-                if let Some(selection) = devtools.selection()
-                    && let Some(index) =
-                        crate::devtools::view::row_index_at(bounds, point, selection.path().len())
-                {
-                    devtools.select_index(index);
-                    owner_runtime.handle().request_redraw();
-                    if let Some(runtime) = self.windows.get(&window) {
-                        runtime.handle().request_redraw();
+                let Some(frame) = devtools.inspection() else {
+                    return;
+                };
+                match crate::devtools::view::tree_hit_at(bounds, point, &frame, &devtools) {
+                    Some(crate::devtools::view::TreeHit::Toggle(id)) => {
+                        devtools.toggle_node_expansion(id);
+                        if let Some(runtime) = self.windows.get(&window) {
+                            runtime.handle().request_redraw();
+                        }
                     }
+                    Some(crate::devtools::view::TreeHit::Select(id)) => {
+                        if let Some(selection) =
+                            crate::devtools::InspectionSelection::from_node(&frame, id)
+                        {
+                            devtools.select(Some(selection));
+                            owner_runtime.handle().request_redraw();
+                            if let Some(runtime) = self.windows.get(&window) {
+                                runtime.handle().request_redraw();
+                            }
+                        }
+                    }
+                    None => {}
                 }
             }
         }

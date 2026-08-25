@@ -4,6 +4,7 @@ use std::sync::Mutex;
 
 use super::DevToolsRequest;
 use super::DevToolsRequestSender;
+use super::view_state::DevToolsViewState;
 use crate::ui::foundation::Point;
 use crate::ui::presentation::InspectionFrame;
 use crate::ui::presentation::InspectionNode;
@@ -204,6 +205,7 @@ impl InspectorState {
 pub struct DevToolsHandle {
     state: Arc<Mutex<InspectorState>>,
     inspection: Arc<Mutex<Option<InspectionFrame>>>,
+    view: Arc<Mutex<DevToolsViewState>>,
     request_sender: Option<DevToolsRequestSender>,
     owner: Option<WindowId>,
 }
@@ -214,6 +216,7 @@ impl fmt::Debug for DevToolsHandle {
             .debug_struct("DevToolsHandle")
             .field("state", &self.state)
             .field("inspection", &self.inspection)
+            .field("view", &self.view)
             .field("owner", &self.owner)
             .finish_non_exhaustive()
     }
@@ -231,6 +234,7 @@ impl DevToolsHandle {
         Self {
             state: Arc::new(Mutex::new(InspectorState::default())),
             inspection: Arc::new(Mutex::new(None)),
+            view: Arc::new(Mutex::new(DevToolsViewState::default())),
             request_sender: None,
             owner: None,
         }
@@ -240,6 +244,7 @@ impl DevToolsHandle {
         Self {
             state: Arc::new(Mutex::new(InspectorState::default())),
             inspection: Arc::new(Mutex::new(None)),
+            view: Arc::new(Mutex::new(DevToolsViewState::default())),
             request_sender: Some(request_sender),
             owner: Some(owner),
         }
@@ -268,6 +273,7 @@ impl DevToolsHandle {
             .lock()
             .expect("devtools inspection lock")
             .take();
+        self.reset_view();
         self.request_open(true);
     }
 
@@ -283,6 +289,7 @@ impl DevToolsHandle {
             .lock()
             .expect("devtools inspection lock")
             .take();
+        self.reset_view();
     }
 
     /// Toggles the DevTools session and returns whether it is now open.
@@ -293,6 +300,7 @@ impl DevToolsHandle {
                 .lock()
                 .expect("devtools inspection lock")
                 .take();
+            self.reset_view();
         }
         self.request_open(is_open);
         is_open
@@ -312,6 +320,7 @@ impl DevToolsHandle {
                 .lock()
                 .expect("devtools inspection lock")
                 .take();
+            self.reset_view();
             self.request_open(false);
         }
         closed
@@ -327,6 +336,7 @@ impl DevToolsHandle {
 
     /// Updates the transient hovered selection while picking.
     pub fn set_hovered(&self, selection: Option<InspectionSelection>) {
+        self.reveal_selection(selection.as_ref());
         self.state
             .lock()
             .expect("devtools state lock")
@@ -335,6 +345,7 @@ impl DevToolsHandle {
 
     /// Locks a selection and stops pointer picking.
     pub fn select(&self, selection: Option<InspectionSelection>) {
+        self.reveal_selection(selection.as_ref());
         self.state
             .lock()
             .expect("devtools state lock")
@@ -343,10 +354,15 @@ impl DevToolsHandle {
 
     /// Retargets the current selection to one of its ancestor rows.
     pub fn select_index(&self, index: usize) -> bool {
-        self.state
+        let selected = self
+            .state
             .lock()
             .expect("devtools state lock")
-            .select_index(index)
+            .select_index(index);
+        if selected {
+            self.reveal_selection(self.selection().as_ref());
+        }
+        selected
     }
 
     /// Returns the locked selection, if any.
@@ -378,8 +394,64 @@ impl DevToolsHandle {
     /// Replaces the live inspection frame while this session is open.
     pub(crate) fn set_inspection(&self, frame: InspectionFrame) {
         if self.is_open() {
+            self.view
+                .lock()
+                .expect("devtools view lock")
+                .retain_nodes(&frame);
             *self.inspection.lock().expect("devtools inspection lock") = Some(frame);
         }
+    }
+
+    pub(crate) fn is_collapsed(&self, id: InspectionNodeId) -> bool {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .is_collapsed(id)
+    }
+
+    pub(crate) fn toggle_node_expansion(&self, id: InspectionNodeId) {
+        self.view.lock().expect("devtools view lock").toggle(id);
+    }
+
+    pub(crate) fn scroll_offset(&self) -> f32 {
+        self.view.lock().expect("devtools view lock").scroll_offset
+    }
+
+    pub(crate) fn scroll_by(&self, delta: f32) {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .scroll_by(delta);
+    }
+
+    pub(crate) fn set_scroll_offset(&self, offset: f32) {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .set_scroll_offset(offset);
+    }
+
+    pub(crate) fn ensure_row_visible(
+        &self,
+        row_index: usize,
+        row_height: f32,
+        viewport_height: f32,
+    ) {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .ensure_visible(row_index, row_height, viewport_height);
+    }
+
+    fn reset_view(&self) {
+        self.view.lock().expect("devtools view lock").reset();
+    }
+
+    fn reveal_selection(&self, selection: Option<&InspectionSelection>) {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .reveal_selection(selection);
     }
 
     /// Resolves and stores the node currently under `point` while picking.
