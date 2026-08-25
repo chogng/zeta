@@ -5,7 +5,9 @@ use std::path::PathBuf;
 
 const MAX_PRODUCTION_MODULE_LINES: usize = 500;
 const CAPABILITY_DIRECTORIES: &[&str] = &[
+    "accessibility",
     "app",
+    "devtools",
     "distribution",
     "input",
     "render",
@@ -121,6 +123,10 @@ fn every_public_capability_has_a_matching_source_root() {
         let path = source_root.join(format!("{capability}.rs"));
         if !path.is_file() {
             missing.push(format!("missing {}", path.display()));
+        }
+        let directory = source_root.join(capability);
+        if !directory.is_dir() {
+            missing.push(format!("missing {}", directory.display()));
         }
         if !facade.contains(&format!("pub mod {capability};")) {
             missing.push(format!("lib.rs does not declare `pub mod {capability};`"));
@@ -240,6 +246,39 @@ fn native_dependencies_stay_with_their_capability_owners() {
         {
             violations.push(format!(
                 "{} imports winit outside app/input/window integration",
+                path.display()
+            ));
+        }
+        if source.contains("ashpd::") && !relative.starts_with("services/global_shortcut/") {
+            violations.push(format!(
+                "{} imports ashpd outside the global-shortcut owner",
+                path.display()
+            ));
+        }
+        if (source.contains("gtk::") || source.contains("tray_icon::"))
+            && relative != "services/tray.rs"
+            && !relative.starts_with("services/tray/")
+        {
+            violations.push(format!(
+                "{} imports GTK/tray-icon outside the tray owner",
+                path.display()
+            ));
+        }
+        if source.contains("muda::")
+            && relative != "services/menu.rs"
+            && !relative.starts_with("services/menu/")
+        {
+            violations.push(format!(
+                "{} imports muda outside the menu owner",
+                path.display()
+            ));
+        }
+        if source.contains("windows_sys::")
+            && relative != "services/menu/windows.rs"
+            && !relative.starts_with("services/process/sandbox/windows/")
+        {
+            violations.push(format!(
+                "{} imports Win32 APIs outside audited service owners",
                 path.display()
             ));
         }

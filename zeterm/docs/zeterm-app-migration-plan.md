@@ -14,9 +14,9 @@ Native UI 的 crate 从共享 workspace 中分离。
 | 读者关心的对象 | 当前路径 | 目标 owner | 迁移状态 |
 | --- | --- | --- | --- |
 | `zeterm` binary 与产品事件语义 | `zeta-rs/native` | `zeterm/` | 已实现 `zui::App` |
-| 通用 application/window runtime | `zeta-rs/native` 的历史宿主 glue | public `zeterm/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 application/platform/renderer modules 隔离 |
+| 通用 application/window runtime | `zeta-rs/native` 的历史宿主 glue | public `zeterm/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离 |
 | `zeterm` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeterm/ui::layout` + `zeterm/composer` + `zeterm/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
-| 通用 icon asset contract | 旧 Native icon types | `zeterm/zui::foundation::icon` | 已收入单一 `zui` crate；产品 catalog 保留在 `zeterm/icons` |
+| 通用 icon asset contract | 旧 Native icon types | `zeterm/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `zeterm/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `zeterm/zui` | zeterm-owned crates in root workspace | 已迁入 zeterm |
 | Button、Tree、List、Editor/Sidebar presentation | `zeterm/ui`、`editor`、`agent-sidebar` | zeterm-owned crates in root workspace | 已迁入 zeterm |
 | Renderer、wgpu、winit | 历史 `zeterm/renderer`、`wgpu`、`winit` | private `zeterm/zui` modules | 已收入单一 `zui` crate |
@@ -37,7 +37,7 @@ zeta/
 │   ├── Cargo.toml              # zeterm application package
 │   ├── README.md
 │   ├── src/                    # zeterm product host and composition root
-│   ├── zui/                    # complete public framework; private core/platform/renderer modules
+│   ├── zui/                    # complete public framework; capability-owned internal directories
 │   ├── composer/               # zeterm Composer state, input, interaction and geometry
 │   ├── zui-demo/               # product-independent framework smoke host
 │   ├── ui/                     # native-only reusable components
@@ -86,7 +86,7 @@ zeta-rs ───────→ no zeterm/desktop product host
 
 ### 阶段二：分离 Native UI workspace（核心迁移已完成）
 
-- [x] 将 Native UI crates 迁入 `zeterm/`，再把 core/icon/renderer/wgpu/winit 职责收敛为单一 public `zui` crate 的私有模块；
+- [x] 将 Native UI crates 迁入 `zeterm/`，再把 icon/UI/runtime/wgpu/winit 职责收敛为单一 public `zui` crate 的同名能力目录；
 - [x] 保留 `zeta-editor-core`、`zeta-syntax` 等纯 Rust core 在 `zeta-rs`，将 `zeta-editor` presentation 迁入 zeterm；
 - [x] 将 `zeta-agent-sidebar`、Native settings UI 和 Native keybinding UI 迁入 zeterm-side crates；
 - [x] 将 Markdown presentation crate 迁入 zeterm-side crates，Theme manifest/resolver 保留在 shared backend；
@@ -139,8 +139,8 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
       geometry 抽到 `zeta-composer`；Native 只保留 Thread/catalog adapter、提交 effect 与 scene paint；
 - [ ] 将更多 Shell/Session domain composition 按 owner 分批抽到产品领域 crate；不把产品
       state、command 或平台事件下沉到 `zui`；
-- [x] 将 `zui` 保持为一个对外 crate，内部使用 foundation/layout/text/presentation/runtime/application/
-      platform/renderer modules 维持边界，降低跨 crate API churn 并支持其他 app 直接依赖。
+- [x] 将 `zui` 保持为一个对外 crate，内部使用 `app/window/input/ui/runtime/render/services`
+      等同名能力目录维持边界，降低跨 crate API churn 并支持其他 app 直接依赖。
 
 ### 当前审计结论（2026-08-03）
 

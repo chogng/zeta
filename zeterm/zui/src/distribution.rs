@@ -15,6 +15,7 @@ mod copy;
 mod installer;
 mod linux;
 mod macos;
+mod signing;
 mod windows;
 
 pub use installer::InstallerBuilder;
@@ -26,6 +27,19 @@ pub use installer::InstallerTarget;
 pub use installer::InstallerTool;
 pub use installer::InstallerToolError;
 pub use installer::SystemInstallerTool;
+pub use signing::ArtifactSigner;
+pub use signing::LinuxSigning;
+pub use signing::MacOsApplicationSigning;
+pub use signing::MacOsPackageSigning;
+pub use signing::SigningCommand;
+pub use signing::SigningConfigError;
+pub use signing::SigningError;
+pub use signing::SigningOutput;
+pub use signing::SigningPlan;
+pub use signing::SigningTool;
+pub use signing::SigningToolError;
+pub use signing::SystemSigningTool;
+pub use signing::WindowsSigning;
 
 /// Validated reverse-DNS application identifier.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -71,6 +85,7 @@ pub struct BundleManifest {
     pub icon: Option<PathBuf>,
     pub resources: Vec<BundleResource>,
     pub protocols: Vec<ProtocolScheme>,
+    pub windows_appcontainer_runner: Option<PathBuf>,
 }
 
 impl BundleManifest {
@@ -91,6 +106,7 @@ impl BundleManifest {
             icon: None,
             resources: Vec::new(),
             protocols: Vec::new(),
+            windows_appcontainer_runner: None,
         })
     }
 
@@ -119,6 +135,7 @@ impl BundleManifest {
                     .map_err(|source| BundleManifestError::InvalidProtocol(source.to_string()))?,
             );
         }
+        manifest.windows_appcontainer_runner = raw.windows_appcontainer_runner;
         Ok(manifest)
     }
 
@@ -137,6 +154,11 @@ impl BundleManifest {
             if resource.source.is_relative() {
                 resource.source = directory.join(&resource.source);
             }
+        }
+        if let Some(runner) = &mut self.windows_appcontainer_runner
+            && runner.is_relative()
+        {
+            *runner = directory.join(&*runner);
         }
         self
     }
@@ -158,6 +180,12 @@ impl BundleManifest {
         if !self.protocols.contains(&protocol) {
             self.protocols.push(protocol);
         }
+        self
+    }
+
+    /// Includes the helper required by the built-in Windows AppContainer process backend.
+    pub fn with_windows_appcontainer_runner(mut self, runner: impl Into<PathBuf>) -> Self {
+        self.windows_appcontainer_runner = Some(runner.into());
         self
     }
 }
@@ -190,6 +218,7 @@ pub struct BundleOutput {
     pub root: PathBuf,
     pub executable: PathBuf,
     pub protocol_manifest: PathBuf,
+    pub helpers: Vec<PathBuf>,
 }
 
 /// Stateless deterministic bundle generator.
@@ -282,6 +311,8 @@ struct RawBundleManifest {
     resources: Vec<RawBundleResource>,
     #[serde(default)]
     protocols: Vec<String>,
+    #[serde(default)]
+    windows_appcontainer_runner: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -310,6 +341,15 @@ fn validate_inputs(manifest: &BundleManifest) -> Result<(), BundleError> {
     }
     if manifest.icon.as_ref().is_some_and(|icon| !icon.is_file()) {
         return Err(BundleError::message("configured icon is not a file"));
+    }
+    if manifest
+        .windows_appcontainer_runner
+        .as_ref()
+        .is_some_and(|runner| !runner.is_file())
+    {
+        return Err(BundleError::message(
+            "configured Windows AppContainer runner is not a file",
+        ));
     }
     for resource in &manifest.resources {
         if !resource.source.exists() {

@@ -6,6 +6,9 @@ use std::sync::Arc;
 
 use super::SystemServiceError;
 
+#[cfg(target_os = "windows")]
+mod windows;
+
 /// Stable application-owned identity for one actionable native menu item.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct MenuItemId(String);
@@ -25,7 +28,7 @@ impl MenuItemId {
         &self.0
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn from_native(value: &str) -> Self {
         Self(value.to_owned())
     }
@@ -126,6 +129,18 @@ pub trait MenuService {
 
     /// Installs or clears the runtime event callback.
     fn set_event_handler(&mut self, handler: Option<MenuEventHandler>);
+
+    /// Attaches the current application menu to a newly opened window on platforms with
+    /// per-window native menu ownership.
+    fn attach_window(
+        &mut self,
+        _window: crate::window::WindowHandle,
+    ) -> Result<(), SystemServiceError> {
+        Ok(())
+    }
+
+    /// Detaches native menu resources before a runtime-owned window is destroyed.
+    fn detach_window(&mut self, _window: crate::window::WindowId) {}
 }
 
 /// Cloneable main-thread capability for configuring the application menu.
@@ -149,6 +164,17 @@ impl MenuHandle {
     pub(crate) fn set_event_handler(&self, handler: Option<MenuEventHandler>) {
         self.service.borrow_mut().set_event_handler(handler);
     }
+
+    pub(crate) fn attach_window(
+        &self,
+        window: crate::window::WindowHandle,
+    ) -> Result<(), SystemServiceError> {
+        self.service.borrow_mut().attach_window(window)
+    }
+
+    pub(crate) fn detach_window(&self, window: crate::window::WindowId) {
+        self.service.borrow_mut().detach_window(window);
+    }
 }
 
 /// Default native application-menu backend.
@@ -156,6 +182,10 @@ impl MenuHandle {
 pub struct SystemMenu {
     #[cfg(target_os = "macos")]
     menu: Option<muda::Menu>,
+    #[cfg(target_os = "windows")]
+    menu: Option<muda::Menu>,
+    #[cfg(target_os = "windows")]
+    windows: std::collections::HashMap<crate::window::WindowId, isize>,
 }
 
 impl MenuService for SystemMenu {
@@ -167,7 +197,28 @@ impl MenuService for SystemMenu {
             self.menu = Some(menu);
             Ok(())
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        {
+            if let Some(previous) = self.menu.take() {
+                for hwnd in self.windows.values().copied() {
+                    let _ = windows::remove(&previous, hwnd);
+                }
+            }
+            let menu = build_native_menu(model)?;
+            let mut attached = Vec::new();
+            for hwnd in self.windows.values().copied() {
+                if let Err(source) = windows::attach(&menu, hwnd) {
+                    for hwnd in attached {
+                        let _ = windows::remove(&menu, hwnd);
+                    }
+                    return Err(source);
+                }
+                attached.push(hwnd);
+            }
+            self.menu = Some(menu);
+            Ok(())
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = model;
             Err(SystemServiceError::unsupported("native application menu"))
@@ -175,7 +226,7 @@ impl MenuService for SystemMenu {
     }
 
     fn set_event_handler(&mut self, handler: Option<MenuEventHandler>) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         {
             muda::MenuEvent::set_event_handler(handler.map(|handler| {
                 move |event: muda::MenuEvent| {
@@ -183,12 +234,54 @@ impl MenuService for SystemMenu {
                 }
             }));
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         let _ = handler;
+    }
+
+    fn attach_window(
+        &mut self,
+        window: crate::window::WindowHandle,
+    ) -> Result<(), SystemServiceError> {
+        #[cfg(target_os = "windows")]
+        {
+            let id = window.id().ok_or_else(|| {
+                SystemServiceError::backend(
+                    "native application menu",
+                    std::io::Error::other("menu target window is no longer live"),
+                )
+            })?;
+            if self.windows.contains_key(&id) {
+                return Ok(());
+            }
+            let hwnd = window.native_hwnd().ok_or_else(|| {
+                SystemServiceError::backend(
+                    "native application menu",
+                    std::io::Error::other("window does not expose a Win32 HWND"),
+                )
+            })?;
+            if let Some(menu) = &self.menu {
+                windows::attach(menu, hwnd)?;
+            }
+            self.windows.insert(id, hwnd);
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = window;
+        Ok(())
+    }
+
+    fn detach_window(&mut self, window: crate::window::WindowId) {
+        #[cfg(target_os = "windows")]
+        if let Some(hwnd) = self.windows.remove(&window)
+            && let Some(menu) = &self.menu
+        {
+            let _ = windows::remove(menu, hwnd);
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = window;
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(super) fn build_native_menu(model: MenuModel) -> Result<muda::Menu, SystemServiceError> {
     let menu = muda::Menu::new();
     for group in model.groups {
@@ -199,7 +292,7 @@ pub(super) fn build_native_menu(model: MenuModel) -> Result<muda::Menu, SystemSe
     Ok(menu)
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn build_submenu(group: MenuGroup) -> Result<muda::Submenu, SystemServiceError> {
     let submenu = muda::Submenu::with_id(group.id.as_str(), group.label, group.enabled);
     for entry in group.entries {

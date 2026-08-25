@@ -1,8 +1,9 @@
+#![cfg(target_os = "macos")]
+
 use cosmic_text::{Attrs, Buffer, Family, Metrics, Shaping, SwashCache};
 
 use super::new_font_system;
 
-#[cfg(target_os = "macos")]
 #[test]
 fn excludes_the_macos_bitmap_face_that_swash_cannot_rasterize() {
     let font_system = new_font_system();
@@ -15,7 +16,6 @@ fn excludes_the_macos_bitmap_face_that_swash_cannot_rasterize() {
     );
 }
 
-#[cfg(target_os = "macos")]
 #[test]
 fn shapes_and_rasterizes_multilingual_fallback_glyphs() {
     let mut font_system = new_font_system();

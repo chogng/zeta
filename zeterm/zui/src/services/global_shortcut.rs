@@ -8,6 +8,10 @@ use std::sync::Mutex;
 
 use super::SystemServiceError;
 
+#[cfg(any(target_os = "linux", all(test, target_os = "macos")))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod portal;
+
 const GLOBAL_SHORTCUT_SERVICE: &str = "global shortcut";
 
 /// Stable application-owned identity for one registered global shortcut.
@@ -165,6 +169,11 @@ pub struct SystemGlobalShortcuts {
     manager: Option<global_hotkey::GlobalHotKeyManager>,
     registrations: HashMap<GlobalShortcutId, global_hotkey::hotkey::HotKey>,
     event_ids: Arc<Mutex<HashMap<u32, GlobalShortcutId>>>,
+    handler: Arc<Mutex<Option<GlobalShortcutEventHandler>>>,
+    #[cfg(target_os = "linux")]
+    portal: Option<portal::PortalGlobalShortcuts>,
+    #[cfg(target_os = "linux")]
+    portal_registrations: HashMap<GlobalShortcutId, GlobalShortcut>,
 }
 
 impl SystemGlobalShortcuts {
@@ -177,10 +186,41 @@ impl SystemGlobalShortcuts {
         }
         Ok(self.manager.as_ref().expect("shortcut manager initialized"))
     }
+
+    #[cfg(target_os = "linux")]
+    fn portal(&mut self) -> Result<&portal::PortalGlobalShortcuts, SystemServiceError> {
+        if self.portal.is_none() {
+            self.portal = Some(portal::PortalGlobalShortcuts::new(self.handler.clone())?);
+        }
+        Ok(self.portal.as_ref().expect("shortcut portal initialized"))
+    }
 }
 
 impl GlobalShortcutService for SystemGlobalShortcuts {
     fn register(&mut self, shortcut: GlobalShortcut) -> Result<(), SystemServiceError> {
+        #[cfg(target_os = "linux")]
+        if portal::is_wayland_session() {
+            if self.portal_registrations.contains_key(&shortcut.id) {
+                return Err(shortcut_exists_error(shortcut.id.as_str()));
+            }
+            if self
+                .portal_registrations
+                .values()
+                .any(|registered| registered.accelerator == shortcut.accelerator)
+            {
+                return Err(accelerator_exists_error(shortcut.accelerator.as_str()));
+            }
+            let mut registrations = self
+                .portal_registrations
+                .values()
+                .cloned()
+                .collect::<Vec<_>>();
+            registrations.push(shortcut.clone());
+            self.portal()?.replace(registrations)?;
+            self.portal_registrations
+                .insert(shortcut.id.clone(), shortcut);
+            return Ok(());
+        }
         if self.registrations.contains_key(&shortcut.id) {
             return Err(shortcut_exists_error(shortcut.id.as_str()));
         }
@@ -208,6 +248,21 @@ impl GlobalShortcutService for SystemGlobalShortcuts {
     }
 
     fn unregister(&mut self, id: &GlobalShortcutId) -> Result<(), SystemServiceError> {
+        #[cfg(target_os = "linux")]
+        if portal::is_wayland_session() {
+            if !self.portal_registrations.contains_key(id) {
+                return Ok(());
+            }
+            let registrations = self
+                .portal_registrations
+                .iter()
+                .filter(|(registered_id, _)| *registered_id != id)
+                .map(|(_, shortcut)| shortcut.clone())
+                .collect::<Vec<_>>();
+            self.portal()?.replace(registrations)?;
+            self.portal_registrations.remove(id);
+            return Ok(());
+        }
         let Some(native) = self.registrations.remove(id) else {
             return Ok(());
         };
@@ -224,6 +279,14 @@ impl GlobalShortcutService for SystemGlobalShortcuts {
     }
 
     fn unregister_all(&mut self) -> Result<(), SystemServiceError> {
+        #[cfg(target_os = "linux")]
+        if portal::is_wayland_session() {
+            if let Some(portal) = &self.portal {
+                portal.replace(Vec::new())?;
+            }
+            self.portal_registrations.clear();
+            return Ok(());
+        }
         let registrations = std::mem::take(&mut self.registrations);
         if let Some(manager) = &self.manager {
             let hotkeys = registrations.values().copied().collect::<Vec<_>>();
@@ -239,15 +302,25 @@ impl GlobalShortcutService for SystemGlobalShortcuts {
     }
 
     fn set_event_handler(&mut self, handler: Option<GlobalShortcutEventHandler>) {
+        *self.handler.lock().expect("global shortcut handler lock") = handler;
+        #[cfg(target_os = "linux")]
+        if portal::is_wayland_session() {
+            return;
+        }
         let event_ids = self.event_ids.clone();
-        global_hotkey::GlobalHotKeyEvent::set_event_handler(handler.map(|handler| {
+        let handler = self.handler.clone();
+        global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(
             move |event: global_hotkey::GlobalHotKeyEvent| {
                 let id = event_ids
                     .lock()
                     .expect("global shortcut registry lock")
                     .get(&event.id)
                     .cloned();
-                if let Some(id) = id {
+                let handler = handler
+                    .lock()
+                    .expect("global shortcut handler lock")
+                    .clone();
+                if let (Some(id), Some(handler)) = (id, handler) {
                     handler(GlobalShortcutEvent {
                         id,
                         state: match event.state {
@@ -256,8 +329,8 @@ impl GlobalShortcutService for SystemGlobalShortcuts {
                         },
                     });
                 }
-            }
-        }));
+            },
+        ));
     }
 }
 

@@ -8,6 +8,9 @@ use std::path::PathBuf;
 
 use super::ProcessCommand;
 
+#[cfg(target_os = "windows")]
+mod windows;
+
 /// Filesystem authority granted to one sandboxed child.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessFileSystemAccess {
@@ -166,29 +169,44 @@ pub trait ProcessSandbox: Send + Sync {
     ) -> Result<PreparedProcessCommand, ProcessSandboxError>;
 }
 
-/// Built-in macOS Seatbelt or Linux Bubblewrap adapter.
+/// Built-in macOS Seatbelt, Linux Bubblewrap, or Windows AppContainer adapter.
 #[derive(Clone, Debug)]
 pub struct PlatformProcessSandbox {
     #[cfg(target_os = "linux")]
     bubblewrap: PathBuf,
+    #[cfg(target_os = "windows")]
+    appcontainer_runner: PathBuf,
 }
 
 impl PlatformProcessSandbox {
-    /// Uses native Seatbelt on macOS and the supplied Bubblewrap executable on Linux.
-    pub fn new(bubblewrap: impl Into<PathBuf>) -> Self {
+    /// Uses a supplied platform helper: Bubblewrap on Linux or the packaged AppContainer runner
+    /// on Windows. macOS always uses the system Seatbelt executable.
+    pub fn new(platform_helper: impl Into<PathBuf>) -> Self {
         #[cfg(target_os = "linux")]
-        return Self {
-            bubblewrap: bubblewrap.into(),
-        };
-        #[cfg(not(target_os = "linux"))]
-        let _ = bubblewrap.into();
-        #[allow(unreachable_code)]
-        Self {}
+        {
+            Self {
+                bubblewrap: platform_helper.into(),
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            Self {
+                appcontainer_runner: platform_helper.into(),
+            }
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        {
+            let _ = platform_helper.into();
+            Self {}
+        }
     }
 }
 
 impl Default for PlatformProcessSandbox {
     fn default() -> Self {
+        #[cfg(target_os = "windows")]
+        return Self::new(windows::default_runner_path());
+        #[cfg(not(target_os = "windows"))]
         Self::new("bwrap")
     }
 }
@@ -213,13 +231,30 @@ impl ProcessSandbox for PlatformProcessSandbox {
             working_directory,
         ));
         #[cfg(target_os = "windows")]
-        return Err(ProcessSandboxError::message(
-            "the built-in Windows AppContainer helper is not installed; inject a Windows sandbox backend",
-        ));
+        return windows::prepare(
+            &self.appcontainer_runner,
+            command,
+            policy,
+            working_directory,
+        );
         #[allow(unreachable_code)]
         Err(ProcessSandboxError::message(
             "no strict process sandbox is available on this platform",
         ))
+    }
+}
+
+/// Entry point for the packaged Windows AppContainer helper.
+#[doc(hidden)]
+pub fn appcontainer_runner_main() -> ! {
+    #[cfg(target_os = "windows")]
+    {
+        windows::runner_main()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("zui-appcontainer-runner is only available on Windows");
+        std::process::exit(1)
     }
 }
 

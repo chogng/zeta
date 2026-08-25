@@ -253,5 +253,5 @@ const fn map_role(role: AccessibilityRole) -> Role {
 }
 
 #[cfg(test)]
-#[path = "accessibility_tests.rs"]
+#[path = "accessibility/tests.rs"]
 mod tests;

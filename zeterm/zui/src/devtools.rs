@@ -227,5 +227,5 @@ struct DiagnosticsState {
 }
 
 #[cfg(test)]
-#[path = "devtools_tests.rs"]
+#[path = "devtools/tests.rs"]
 mod tests;

@@ -57,6 +57,7 @@ fn build_inside(manifest: &BundleManifest, root: &Path) -> Result<BundleOutput, 
         root: root.to_path_buf(),
         executable,
         protocol_manifest,
+        helpers: Vec::new(),
     })
 }
 

@@ -1,5 +1,7 @@
 use winit::event;
 
+use std::path::PathBuf;
+
 use crate::input::KeyEvent;
 use crate::input::Modifiers;
 use crate::input::ModifiersState;
@@ -148,6 +150,9 @@ pub enum WindowEvent {
     MouseWheel {
         delta: MouseScrollDelta,
     },
+    FileHovered(PathBuf),
+    FileHoverCancelled,
+    FileDropped(PathBuf),
     Occluded(bool),
     RedrawRequested,
     Other,
@@ -186,6 +191,9 @@ impl WindowEvent {
             event::WindowEvent::MouseWheel { delta, .. } => Self::MouseWheel {
                 delta: MouseScrollDelta::from_native(delta),
             },
+            event::WindowEvent::HoveredFile(path) => Self::FileHovered(path),
+            event::WindowEvent::HoveredFileCancelled => Self::FileHoverCancelled,
+            event::WindowEvent::DroppedFile(path) => Self::FileDropped(path),
             event::WindowEvent::Occluded(occluded) => Self::Occluded(occluded),
             event::WindowEvent::RedrawRequested => Self::RedrawRequested,
             _ => Self::Other,

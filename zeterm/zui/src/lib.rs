@@ -3,6 +3,8 @@
 //! Public capability modules are also the physical source owners. Native adapters and backend
 //! glue remain private, while product state and reusable product components stay outside ZUI.
 
+#![deny(unsafe_code)]
+
 #[cfg(feature = "native")]
 pub mod accessibility;
 #[cfg(feature = "native")]

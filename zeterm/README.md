@@ -4,7 +4,7 @@
 
 `zeterm` 是与 `zeta` Electron Desktop 和 `zeta code` TUI 同级的纯 Rust Desktop 产品入口，在发布边界导出为 `zeterm`。三条产品线的宿主边界见 [`docs/product-lines.md`](../docs/product-lines.md)。
 
-产品按照“提高 Agent 完成代码变更闭环的能力”选择底层 capability，并只为结果、影响、风险和用户介入提供最小 Human Surface；纯只读内部查询不自动产生 GUI。单一公共 `zui` crate 统一提供 application/window lifecycle、renderer、事件与平台能力，并在 crate 内按 foundation/application/platform/renderer 等私有模块隔离。产品实现 `zui::app::App`，在原生窗口中组合 `zeta-ui` 与 Agent ThreadTimeline、Agent/Shell Composer。
+产品按照“提高 Agent 完成代码变更闭环的能力”选择底层 capability，并只为结果、影响、风险和用户介入提供最小 Human Surface；纯只读内部查询不自动产生 GUI。单一公共 `zui` crate 统一提供 application/window lifecycle、renderer、事件与平台能力，并在 crate 内按 `app/window/input/ui/runtime/render/services` 等同名能力目录隔离。产品实现 `zui::app::App`，在原生窗口中组合 `zeta-ui` 与 Agent ThreadTimeline、Agent/Shell Composer。
 启动时 `zeta-theme` 从共享 design-token manifest、`zeterm` 默认主题入口与 device-local 用户主题生成不可变 snapshot；
 `shell_style` 将其适配为 Shell、CodeEditor、MultiDiffEditor、scrollbar 与 terminal ANSI palette。
 `zeta-ui::layout` 拥有 Root/Inspector/Terminal Workspace 的 pane topology；`zeta-composer` 拥有 Composer
@@ -106,9 +106,9 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | `zeterm` 发布名与用户可见显示 | `PRODUCT_DISPLAY_NAME` / Cargo `[[bin]]` | ✅ |
 | 产品窗口标题、初始尺寸与 event meaning | `zeterm::NativeApp` | ✅；实现 `zui::app::App` |
 | Application lifecycle、window registry、renderer initialization 与 event routing | `zui` | 委托 |
-| Event loop 与 native window adapter | `zui` private `platform` module | 委托；`WindowHandle` 不延长 runtime window lifecycle |
+| Event loop 与 native window adapter | `zui::app` + private `window` integration | 委托；`WindowHandle` 不延长 runtime window lifecycle |
 | 后端无关 render、resize、scale 与 frame outcome | `zui::render::Renderer` | 委托；`zui` 保存 renderer trait object |
-| GPU surface、pipeline、atlas、shader、present 与 retry | `zui` private `renderer/wgpu` module | 委托；`zui::render::WgpuRendererFactory` 是默认 backend composition |
+| GPU surface、pipeline、atlas、shader、present 与 retry | `zui` private `render/wgpu` module | 委托；`zui::render::WgpuRendererFactory` 是默认 backend composition |
 | Element、Rect/image/icon/text scene、检查快照与字体测量 | `zui` backend-neutral modules | 委托；产品不接触具体 GPU API |
 | Shell product layout 与 scene composition | `zeta-ui::layout` + `zeta-composer` + `shell_scene` / `composer_panel` | 部分抽取；`zeta-ui::layout` 拥有 root/workspace pane geometry，`zeta-composer` 是 Composer 状态与几何的单一 owner，Native 仍拥有 scene composition |
 | Native frame assembly | `ShellPresentation::frame` | ✅；由单一 `zui::ui::UiFrame<InteractionFrame>` owner 管理 |
@@ -147,7 +147,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | 平台无关快捷键模型、规则顺序与冲突解析 | [`zeta-keybinding`](../zeta-rs/keybinding/README.md) | 委托 |
 | 命中、hover/press/capture、focus、键盘导航、cursor 与 accessibility semantics | `zui` | 委托 |
 | accessibility semantics → 平台屏幕阅读器 | `zui` private AccessKit adapter | 委托；现有 tree/focus/action 随 `present_scene` 发布 |
-| Transparent native chrome 与窗口拖动 adapter | `zui` private `platform` module | 委托 |
+| Transparent native chrome 与窗口拖动 adapter | `zui` private `window/chrome` integration | 委托 |
 | ANSI parser、terminal grid 与 BlockList | `zeta-terminal::TerminalCore` | 委托 |
 | 默认 shell PTY、output/exit event、write 与 resize | `terminal_session::TerminalSession` | ✅；Local 使用本地 PTY，Remote 使用 App Server `terminal/*` 协议；两者都在后台 worker 创建和轮询 |
 | Session Tab 到 terminal runtime 的一对一 binding、活动/非活动 runtime 切换 | `terminal_workspace::TerminalWorkspace` | ✅；Local/Remote 共用 pending key、乱序 ready 和非活动 runtime 管理，不拥有 App Server Session/Thread authority |
@@ -172,7 +172,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 依赖方向：
 
 ```text
-zeterm → zui public facade → private foundation/application/platform/renderer modules
+zeterm → zui::{app, window, input, ui, runtime, services, render}
             → zeta-ui → zui
             → zeta-commands
             → zeta-keybinding
@@ -543,7 +543,7 @@ integration；其他支持 shell 目前不能可靠报告每条命令的完成�
 DEC/query/mouse family。内部语义树、统一 focus 与 AccessKit publication 已具备，但读屏器平台
 smoke coverage 仍需补充。alternate screen 已具备基础 direct
 key/IME commit/clipboard 和请求式 mouse input，但
-尚不能据此声明完整 TUI compatibility。这些后续纵切不应进入 `zui` 的 platform 或 GPU modules。
+尚不能据此声明完整 TUI compatibility。这些后续纵切不应进入 `zui` 的 window/input 或 GPU modules。
 布局检查模式当前覆盖所有 Component 和拥有独立 box ownership 的 composition surface；尚不是完整
 retained widget tree，也不支持运行时编辑样式、跨 frame 选择 identity、面板滚动或远程协议。
 Sessions 搜索区域当前真实链路

@@ -16,9 +16,19 @@ zeterm_rust_library(
         "src/render/wgpu/ui_renderer/icon.wgsl",
         "src/render/wgpu/ui_renderer/image.wgsl",
         "src/render/wgpu/ui_renderer/rect.wgsl",
+        "tools/zui_appcontainer_runner.rs",
         "tools/zui_packager.rs",
     ],
     unit_tests = True,
+)
+
+rust_binary(
+    name = "zui-appcontainer-runner",
+    crate_name = "zui_appcontainer_runner",
+    crate_root = "tools/zui_appcontainer_runner.rs",
+    deps = [":zui"],
+    edition = "2024",
+    srcs = ["tools/zui_appcontainer_runner.rs"],
 )
 
 rust_binary(

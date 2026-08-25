@@ -11,14 +11,14 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 
 ```text
 winit keyboard / IME event
-  → private zui platform forwarding
+  → private zui window/input forwarding
   → zeterm/zeterm focus and event routing
   ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui InputBox
   └─ multiline   → zeta-editor CodeEditorDocument / CodeEditorViewport → CodeEditor
   → zui UiScene
 ```
 
-`zui` 的 backend-neutral modules 不依赖 `zeta-ui`、winit 或 GPU；public facade 统一导出平台事件并由私有 platform module 组合 adapter。`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
+`zui` 的 backend-neutral `ui`/`runtime` modules 不依赖 `zeta-ui`、winit 或 GPU；`zui::window` 与 `zui::input` 统一导出 ZUI-owned 事件，并在各自 owner 内组合 private native adapter。`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
 
@@ -36,7 +36,7 @@ shaping geometry 和真实平台接入可以分别测试。
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
-| 原生 keyboard/IME event 与候选框 API | `zui` private `platform` / `winit` | 委托 |
+| 原生 keyboard/IME event 与候选框 API | `zui::input` + private `window` native adapter | 委托 |
 | Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeterm/src/main.rs::NativeApp` | ✅ |
 | Composer committed text、selection、IME state 与 multiline viewport | `zeta-composer::ComposerInput` + `zeta-editor::CodeEditorDocument` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
