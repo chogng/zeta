@@ -1,5 +1,6 @@
 import { ObjectTreeModel, type ObjectTreeElement, type ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { TreeVisibility } from "../../../../base/browser/ui/tree/tree.js";
+import { PreferencesSearchQuery } from "./preferencesSearch.js";
 
 export interface SettingsTreeItem<T> {
 	readonly kind: "item";
@@ -25,8 +26,7 @@ export type SettingsTreeNode<T> = ObjectTreeElement<SettingsTreeElement<T>>;
 export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>> {
 	private navigationScopeIds: ReadonlySet<string> | undefined;
 	private navigationTargetId: string | undefined;
-	private queryTerms: readonly string[] = [];
-	private _query = "";
+	private searchQuery = new PreferencesSearchQuery("");
 
 	constructor() {
 		super({ identityProvider: { getId: (node) => node.id } });
@@ -34,7 +34,7 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 	}
 
 	get query(): string {
-		return this._query;
+		return this.searchQuery.text;
 	}
 
 	get navigationTarget(): string | undefined {
@@ -58,11 +58,10 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		this.refreshNavigationScope();
 	}
 
-	setQuery(query: string): void {
-		const normalized = normalizeSearchText(query);
-		if (normalized === this._query) return;
-		this._query = normalized;
-		this.queryTerms = normalized ? normalized.split(/\s+/u) : [];
+	setQuery(query: string | PreferencesSearchQuery): void {
+		const next = typeof query === "string" ? new PreferencesSearchQuery(query) : query;
+		if (next.text === this.searchQuery.text) return;
+		this.searchQuery = next;
 		this.refilter();
 	}
 
@@ -101,10 +100,9 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 
 	private filterNode(node: SettingsTreeElement<T>): boolean | TreeVisibility {
 		if (this.navigationScopeIds && !this.navigationScopeIds.has(node.id)) return false;
-		if (this.queryTerms.length === 0) return TreeVisibility.Visible;
+		if (this.searchQuery.isEmpty) return TreeVisibility.Visible;
 		if (node.kind === "group") return TreeVisibility.Recurse;
-		const text = normalizeSearchText([node.title, node.description, ...(node.keywords ?? [])].join(" "));
-		return this.queryTerms.every((term) => text.includes(term));
+		return this.searchQuery.matches(node);
 	}
 }
 
@@ -148,8 +146,4 @@ function asNonCollapsibleSettingsTree<T>(nodes: readonly SettingsTreeNode<T>[]):
 		collapsible: false,
 		children: asNonCollapsibleSettingsTree(node.children ?? []),
 	}));
-}
-
-function normalizeSearchText(value: string): string {
-	return value.trim().toLocaleLowerCase();
 }

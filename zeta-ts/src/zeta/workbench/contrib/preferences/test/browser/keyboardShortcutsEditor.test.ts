@@ -19,7 +19,8 @@ for (const [name, value] of Object.entries({
 }
 
 const { Keybinding, logicalKey } = await import('../../../../../base/common/keybindings.js');
-const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
+const { h } = await import('../../../../../base/browser/dom.js');
+const { DisposableOwner, DisposableStore } = await import('../../../../../base/common/lifecycle.js');
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
@@ -37,6 +38,7 @@ const { KeybindingsResourceContribution } = await import('../../../../../workben
 const { WorkbenchKeybindingsResourceService } = await import('../../../../../workbench/services/keybinding/browser/keybindingsResourceService.js');
 const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = await import('../../../../../workbench/services/preferences/browser/keybindingsEditorInput.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
+const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -73,6 +75,12 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	}));
 	const registry = new EditorPaneRegistry();
 	registry.register({
+		id: 'test.preferences',
+		name: 'Preferences',
+		canOpen: input => isPreferencesEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => new TestPreferencesEditor(),
+	});
+	registry.register({
 		id: KeyboardShortcutsEditorId,
 		name: 'Keyboard Shortcuts',
 		canOpen: input => isKeyboardShortcutsEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
@@ -92,11 +100,14 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	}));
 	const editorService = new BrowserEditorService(editor);
 	const preferences = disposables.add(new PreferencesService(() => editorService));
-	preferences.openSettings('general');
+	await preferences.openSettings();
+	const modalHost = ownerDocument.querySelector<HTMLElement>('.zeta-modal-editor-host');
+	assert.ok(modalHost);
+	assert.equal(modalHost.hidden, false);
 
 	await preferences.openKeybindings();
 	await preferences.openKeybindings();
-	assert.equal(preferences.isSettingsOpen, false);
+	assert.equal(modalHost.hidden, true);
 	assert.equal(editor.activeGroup.inputs.length, 1);
 	assert.equal(editor.activeInput?.resource.toString(), createKeyboardShortcutsEditorInput().resource.toString());
 	assert.equal(ownerDocument.querySelector('.zeta-tab-label')?.textContent, 'Keyboard Shortcuts');
@@ -156,4 +167,21 @@ function findButton(container: ParentNode, label: string): HTMLButtonElement {
 
 function nextTurn(): Promise<void> {
 	return new Promise(resolve => globalThis.setTimeout(resolve, 0));
+}
+
+class TestPreferencesEditor extends DisposableOwner {
+	readonly id = 'test.preferences';
+	private element: HTMLElement | undefined;
+
+	create(parent: HTMLElement): void {
+		this.element = h(parent.ownerDocument, 'div');
+		this.element.tabIndex = -1;
+		parent.append(this.element);
+	}
+
+	async setInput(): Promise<void> {}
+	clearInput(): void {}
+	layout(): void {}
+	setVisible(): void {}
+	focus(): void { this.element?.focus(); }
 }

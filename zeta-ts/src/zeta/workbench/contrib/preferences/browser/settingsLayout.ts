@@ -1,19 +1,24 @@
-import type { ISetting, ISettingsEditorModel, ISettingsGroup, ISettingsSection, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
+import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 
 export interface SettingsGroupDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
-	readonly patterns: readonly RegExp[];
+	readonly settings: readonly string[];
 }
 
-export interface SettingsSectionDescriptor {
+export interface SettingsCategoryDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
 	readonly presentation: SettingsPresentation;
 	readonly groups: readonly SettingsGroupDescriptor[];
+}
+
+export interface SettingsLayoutCategory {
+	readonly id: string;
+	readonly groups: readonly ISettingsGroup[];
 }
 
 /**
@@ -22,7 +27,7 @@ export interface SettingsSectionDescriptor {
  * Configuration owners declare editable metadata in the Configuration
  * Registry. Preferences owns only where those registered settings appear.
  */
-export const SettingsNavigation = [
+export const SettingsCategories = [
 	{
 		id: 'general',
 		label: 'General',
@@ -33,13 +38,13 @@ export const SettingsNavigation = [
 				id: 'accessibility',
 				label: 'Accessibility',
 				description: 'Adjust screen-reader behavior, motion, transparency, and link visibility.',
-				patterns: [/^accessibility\./u, /^editor\.accessibilitySupport$/u, /^workbench\.reduce(?:Motion|Transparency)$/u],
+				settings: ['accessibility.*', 'editor.accessibilitySupport', 'workbench.reduceMotion', 'workbench.reduceTransparency'],
 			},
 			{
 				id: 'interaction',
 				label: 'Interaction',
 				description: 'Tune hover feedback and resize handles.',
-				patterns: [/^workbench\.(?:hover|sash)\./u],
+				settings: ['workbench.hover.*', 'workbench.sash.*'],
 			},
 		],
 	},
@@ -53,7 +58,7 @@ export const SettingsNavigation = [
 				id: 'theme',
 				label: 'Color theme',
 				description: 'Choose the colors used by the Workbench.',
-				patterns: [/^workbench\.colorTheme$/u],
+				settings: ['workbench.colorTheme'],
 			},
 		],
 	},
@@ -67,85 +72,79 @@ export const SettingsNavigation = [
 				id: 'selection',
 				label: 'Editor selection',
 				description: 'Choose which editor opens for new documents.',
-				patterns: [/^workbench\.editor\./u],
+				settings: ['workbench.editor.*'],
 			},
 			{
 				id: 'typography',
 				label: 'Typography',
 				description: 'Configure editor fonts and line spacing.',
-				patterns: [/^editor\.(?:fontFamily|fontSize|fontLigatures|lineHeight)$/u],
+				settings: ['editor.fontFamily', 'editor.fontSize', 'editor.fontLigatures', 'editor.lineHeight'],
 			},
 			{
 				id: 'display',
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
-				patterns: [/^editor\.(?:wordWrap|lineNumbers|guides\..+|bracketPairColorization\..+|stickyScroll\..+|highlightActiveLine|unicodeHighlights)$/u],
+				settings: ['editor.wordWrap', 'editor.lineNumbers', 'editor.guides.*', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.highlightActiveLine', 'editor.unicodeHighlights'],
 			},
 			{
 				id: 'minimap',
 				label: 'Minimap',
 				description: 'Configure the editor document overview.',
-				patterns: [/^editor\.minimap\./u],
+				settings: ['editor.minimap.*'],
 			},
 			{
 				id: 'editing',
 				label: 'Editing',
 				description: 'Configure indentation and save-time editing behavior.',
-				patterns: [/^editor\.(?:indentation|tabSize|formatOnSave)$/u],
+				settings: ['editor.indentation', 'editor.tabSize', 'editor.formatOnSave'],
 			},
 			{
 				id: 'find',
 				label: 'Find and replace',
 				description: 'Set defaults for searches inside the active editor.',
-				patterns: [/^editor\.find\./u],
+				settings: ['editor.find.*'],
 			},
 			{
 				id: 'code-intelligence',
 				label: 'Code intelligence',
 				description: 'Configure completions, hints, and provider annotations.',
-				patterns: [/^editor\.(?:suggest\.|inlineSuggest\.|parameterHints\.|inlayHints\.|codeLens$)/u],
+				settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens'],
 			},
 			{
 				id: 'workspace-search',
 				label: 'Workspace search',
 				description: 'Set defaults for searches across workspace files.',
-				patterns: [/^search\./u],
+				settings: ['search.*'],
 			},
 			{
 				id: 'diff',
 				label: 'Diff editor',
 				description: 'Configure how differences are displayed and navigated.',
-				patterns: [/^diffEditor\./u],
+				settings: ['diffEditor.*'],
 			},
 			{
 				id: 'files',
 				label: 'Files',
 				description: 'Configure file editing and save behavior.',
-				patterns: [/^files\./u],
+				settings: ['files.*'],
 			},
 		],
 	},
-] as const satisfies readonly SettingsSectionDescriptor[];
-
-export const SettingsSections: readonly SettingsSectionDescriptor[] = SettingsNavigation;
-
-export function getSettingsSection(id: string): SettingsSectionDescriptor {
-	return SettingsSections.find(section => section.id === id) ?? SettingsSections[0];
-}
+] as const satisfies readonly SettingsCategoryDescriptor[];
 
 /** Projects registered configuration settings through the canonical layout. */
-export function createSettingsSections(settings: readonly ISetting[]): readonly ISettingsSection[] {
+export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
 	const remaining = new Map(settings.map(setting => [setting.id, setting]));
-	const sections = SettingsSections.map(section => ({
-		sectionId: section.id,
-		groups: section.groups.map(group => {
-			const matches = [...remaining.values()].filter(setting => group.patterns.some(pattern => pattern.test(setting.id)));
+	const categories = SettingsCategories.map(category => ({
+		id: category.id,
+		groups: category.groups.map(group => {
+			const matches = [...remaining.values()].filter(setting => group.settings.some(pattern => matchesSettingId(setting.id, pattern)));
 			for (const setting of matches) remaining.delete(setting.id);
 			return {
 				id: group.id,
 				title: group.label,
 				description: group.description,
-				settings: matches.map(setting => ({ ...setting, presentation: section.presentation })),
+				settings: matches.map(setting => ({ ...setting, presentation: category.presentation })),
 			};
 		}).filter(group => group.settings.length > 0),
 	}));
@@ -154,20 +153,20 @@ export function createSettingsSections(settings: readonly ISetting[]): readonly 
 		const ids = [...remaining.keys()].sort().join(', ');
 		throw new Error(`Registered settings are missing from settingsLayout.ts: ${ids}`);
 	}
-	return sections;
+	return categories;
 }
 
 /** Projects declarative groups into a validated tree with stable Settings IDs. */
 export class SettingsLayout {
 	public readonly nodes: readonly SettingsTreeNode<ISetting>[];
 
-	constructor(sectionId: string, groups: readonly ISettingsGroup[]) {
-		assertSettingsLayoutId('section ID', sectionId);
+	constructor(tocId: string, groups: readonly ISettingsGroup[]) {
+		assertSettingsLayoutId('TOC ID', tocId);
 		const nodeIds = new Set<string>();
 		this.nodes = groups.map(group => {
 			assertSettingsLayoutId('group ID', group.id);
 			assertSettingsLayoutText(`group '${group.id}' title`, group.title);
-			const groupId = `${sectionId}.group.${group.id}`;
+			const groupId = `${tocId}.group.${group.id}`;
 			addSettingsLayoutId(nodeIds, groupId, 'group');
 			return {
 				element: {
@@ -196,20 +195,25 @@ export class SettingsLayout {
 	}
 }
 
-export function settingsRootNodes(model: ISettingsEditorModel): readonly SettingsTreeNode<ISetting>[] {
-	return SettingsSections.map(section => ({
+export function settingsRootNodes(categories: readonly SettingsLayoutCategory[]): readonly SettingsTreeNode<ISetting>[] {
+	return SettingsCategories.map(category => ({
 		element: {
 			kind: 'group',
-			id: section.id,
-			title: section.label,
-			description: section.description,
+			id: category.id,
+			title: category.label,
+			description: category.description,
 		},
-		children: new SettingsLayout(section.id, model.getSectionGroups(section.id)).nodes,
+		children: new SettingsLayout(category.id, categories.find(candidate => candidate.id === category.id)?.groups ?? []).nodes,
 	}));
 }
 
 function assertSettingsLayoutText(label: string, value: string): void {
 	if (!value.trim()) throw new TypeError(`Settings layout ${label} must not be empty`);
+}
+
+function matchesSettingId(settingId: string, pattern: string): boolean {
+	const source = pattern.split('*').map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('.*');
+	return new RegExp(`^${source}$`, 'u').test(settingId);
 }
 
 function assertSettingsLayoutId(label: string, value: string): void {

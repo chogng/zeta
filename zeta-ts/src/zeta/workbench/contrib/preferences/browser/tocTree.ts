@@ -4,8 +4,8 @@ import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectT
 import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
-import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
-import { SettingsLayout, SettingsNavigation, type SettingsSectionDescriptor } from './settingsLayout.js';
+import type { ISetting } from '../../../services/preferences/common/preferences.js';
+import { SettingsCategories, SettingsLayout, type SettingsCategoryDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
 
 export interface SettingsTOCTarget {
@@ -16,35 +16,36 @@ export interface SettingsTOCTarget {
 }
 
 export type SettingsTOCEntry =
-	| { readonly kind: 'section'; readonly id: string; readonly section: SettingsSectionDescriptor }
-	| { readonly kind: 'target'; readonly id: string; readonly section: SettingsSectionDescriptor; readonly target: SettingsTOCTarget };
+	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor }
+	| { readonly kind: 'target'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly target: SettingsTOCTarget };
 
 export interface TOCTreeOptions {
 	readonly ariaLabel: string;
-	readonly sectionLabel: (section: SettingsSectionDescriptor) => string;
-	readonly sectionDescription: (section: SettingsSectionDescriptor) => string;
+	readonly categoryLabel: (category: SettingsCategoryDescriptor) => string;
+	readonly categoryDescription: (category: SettingsCategoryDescriptor) => string;
 }
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly settingsModel: ISettingsEditorModel) {}
+	constructor(private readonly layout: readonly SettingsLayoutCategory[]) {}
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
-		return SettingsNavigation.map(section => this.sectionElement(section));
+		return SettingsCategories.map(category => this.categoryElement(category));
 	}
 
-	private sectionElement(section: SettingsSectionDescriptor): ObjectTreeElement<SettingsTOCEntry> {
-		const targets = new SettingsLayout(section.id, this.settingsModel.getSectionGroups(section.id)).nodes.map(node => ({
+	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> {
+		const groups = this.layout.find(candidate => candidate.id === category.id)?.groups ?? [];
+		const targets = new SettingsLayout(category.id, groups).nodes.map(node => ({
 			id: node.element.id,
 			label: node.element.title,
 			targetId: node.element.id,
 			keywords: tocSearchKeywords(node),
 		}));
 		const children = targets.map((target): ObjectTreeElement<SettingsTOCEntry> => ({
-			element: { kind: 'target', id: target.id, section, target },
+			element: { kind: 'target', id: target.id, category, target },
 		}));
 		return {
-			element: { kind: 'section', id: section.id, section },
+			element: { kind: 'category', id: category.id, category },
 			children,
 			collapsible: children.length > 0,
 			collapsed: children.length > 0,
@@ -141,16 +142,16 @@ export class TOCTree extends DisposableOwner {
 	}
 
 	private keyboardLabel(entry: SettingsTOCEntry): string {
-		if (entry.kind === 'section') return `${this.options.sectionLabel(entry.section)} ${this.options.sectionDescription(entry.section)}`;
+		if (entry.kind === 'category') return `${this.options.categoryLabel(entry.category)} ${this.options.categoryDescription(entry.category)}`;
 		return [entry.target.label, ...(entry.target.keywords ?? [])].join(' ');
 	}
 
 	private renderEntry(document: Document, entry: SettingsTOCEntry): HTMLElement {
 		const label = h(document, 'span');
 		label.className = 'zeta-settings-navigation-label';
-		if (entry.kind === 'section') label.dataset.settingsSectionId = entry.section.id;
+		if (entry.kind === 'category') label.dataset.settingsCategoryId = entry.category.id;
 		else label.dataset.settingsTargetId = entry.target.targetId;
-		label.textContent = entry.kind === 'section' ? this.options.sectionLabel(entry.section) : entry.target.label;
+		label.textContent = entry.kind === 'category' ? this.options.categoryLabel(entry.category) : entry.target.label;
 		return label;
 	}
 }

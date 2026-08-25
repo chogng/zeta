@@ -21,7 +21,7 @@ export interface EditorOpenOptions extends EditorActivationOptions {
 }
 
 /** The editor group selected by a resource-navigation request. */
-export type EditorOpenTarget = "activeGroup" | "sideGroup";
+export type EditorOpenTarget = "activeGroup" | "sideGroup" | "modalGroup";
 
 /** Resource-oriented editor operations available to Workbench contributions. */
 export interface IEditorService {

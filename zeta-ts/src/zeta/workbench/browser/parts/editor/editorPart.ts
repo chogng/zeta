@@ -37,6 +37,7 @@ import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contr
 import { ActiveEditorContext } from "../../../common/contextkeys.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";
+import { ModalEditorPart } from "./modalEditorPart.js";
 
 export { EditorOpenSupersededError } from "./editorGroup.js";
 
@@ -101,6 +102,7 @@ export interface IEditorPartOptions {
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
 	private readonly splitView: SplitView;
+	private readonly modalEditor: ModalEditorPart;
 	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "onDidChangeActiveEditor" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
 	private _activeGroup: EditorGroup;
@@ -169,8 +171,42 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const initial = this.createGroup();
 		this._groups.push(initial);
 		this._activeGroup = initial.group;
-		this.updateActiveEditorContext();
 		this.splitView.addView(initial.view);
+		this.modalEditor = this.own(new ModalEditorPart({
+			container,
+			registry: this.groupOptions.registry,
+			paneCreationOptions: {
+				configurationService: options.configurationService,
+				contextKeyService: options.contextKeyService,
+				keybindingService: options.keybindingService,
+				keybindingsResourceService: options.keybindingsResourceService,
+				keyboardLayoutService: options.keyboardLayoutService,
+				fileService: options.fileService,
+				textFileService: options.textFileService,
+				textMateService: options.textMateService,
+				languageFeaturesService: options.languageFeaturesService,
+				diffApi: options.diffApi,
+				instantiationService: options.instantiationService,
+				syntaxApi: options.syntaxApi,
+				languageDiagnosticsService: options.languageDiagnosticsService,
+				documentCollaborationApi: options.documentCollaborationApi,
+				serverEvents: options.serverEvents,
+				workingCopyService: options.workingCopyService,
+				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
+				onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
+				createLineGutterDecorations: options.createLineGutterDecorations,
+				createDecorationSources: options.createDecorationSources,
+				...(options.titleActions ? {
+					actionServices: {
+						menuService: options.titleActions.menuService,
+						contextMenuProvider: options.titleActions.contextMenuProvider,
+						contextKeyService: options.contextKeyService,
+					},
+				} : {}),
+			},
+		}));
+		this.own(this.modalEditor.onDidRequestClose(input => this.closeEditor(input)));
+		this.updateActiveEditorContext();
 		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
 	}
 
@@ -183,14 +219,22 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	get activeInput(): EditorInput | undefined {
+		if (this.modalEditor.isVisible) return this.modalEditor.activeInput;
 		return this._activeGroup.activeInput;
 	}
 
 	get activePane(): IEditorPane | undefined {
+		if (this.modalEditor.isVisible) return this.modalEditor.activePane;
 		return this._activeGroup.activePane;
 	}
 
 	async openEditor(input: EditorInput, options: EditorOpenOptions = {}, target: EditorOpenTarget = "activeGroup"): Promise<IEditorPane> {
+		if (target === "modalGroup") {
+			const pane = await this.modalEditor.openEditor(input, options);
+			this.updateActiveEditorContext();
+			return pane;
+		}
+		this.closeActiveModalEditor();
 		if (target === "activeGroup") return this._activeGroup.openEditor(input, options);
 		const source = this._activeGroup;
 		const { host, created } = this.resolveSideGroup(source);
@@ -210,10 +254,18 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	activateEditor(input: EditorInput): IEditorPane {
+		if (this.modalEditor.activeInput?.resource.toString() === input.resource.toString()) {
+			this.modalEditor.focus();
+			return this.modalEditor.activePane!;
+		}
 		return this._activeGroup.activateEditor(input);
 	}
 
 	closeEditor(input: EditorInput): void {
+		if (this.modalEditor.closeEditor(input)) {
+			this.updateActiveEditorContext();
+			return;
+		}
 		this._activeGroup.closeEditor(input);
 	}
 
@@ -231,6 +283,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	setContent(content: Element): void {
+		this.closeActiveModalEditor();
 		this._activeGroup.setContent(content);
 	}
 
@@ -261,7 +314,17 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 	}
 
 	focus(): void {
+		if (this.modalEditor.isVisible) {
+			this.modalEditor.focus();
+			return;
+		}
 		this._activeGroup.focus();
+	}
+
+	private closeActiveModalEditor(): void {
+		const input = this.modalEditor.activeInput;
+		if (!input || !this.modalEditor.closeEditor(input)) return;
+		this.updateActiveEditorContext();
 	}
 
 	private async saveEditor(group: IEditorGroup, input: EditorInput, pane: IEditorPane): Promise<boolean> {

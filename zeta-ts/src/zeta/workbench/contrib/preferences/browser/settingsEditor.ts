@@ -1,0 +1,228 @@
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { h } from '../../../../base/browser/dom.js';
+import type { IDimension } from '../../../../base/browser/geometry.js';
+import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
+import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
+import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/preferencesModels.js';
+import type { IPreferencesEditorPane } from './preferencesEditorRegistry.js';
+import { PreferencesRenderer } from './preferencesRenderers.js';
+import { PreferencesSearchQuery } from './preferencesSearch.js';
+import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
+import { SettingsTree } from './settingsTree.js';
+import { SettingsTreeModel } from './settingsTreeModels.js';
+import { TOCTree, TOCTreeModel, type SettingsTOCEntry } from './tocTree.js';
+
+export const SettingsEditorPaneId = 'workbench.preferences.settings';
+
+/** Owns the Configuration Registry-backed Settings navigation and setting widgets. */
+export class SettingsEditorPane extends DisposableOwner implements IPreferencesEditorPane {
+	private readonly content: HTMLElement;
+	private readonly contentDescription: HTMLParagraphElement;
+	private readonly contentHeading: HTMLHeadingElement;
+	private readonly contentScrollable: ScrollableElement;
+	private readonly contentStatus: HTMLParagraphElement;
+	private readonly element: HTMLDivElement;
+	private readonly localizationService: ILocalizationService;
+	private readonly navigationEmpty: HTMLParagraphElement;
+	private readonly navigationScrollable: ScrollableElement;
+	private readonly settingsModel: ISettingsEditorModel;
+	private readonly settingsTree: SettingsTree<ISetting>;
+	private readonly tocTree: TOCTree;
+	private readonly treeModel: SettingsTreeModel<ISetting>;
+	private activeCategory: SettingsCategoryDescriptor;
+	private activeNavigationTarget: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined;
+
+	constructor(
+		container: HTMLElement,
+		clipboardService: IClipboardService,
+		configurationService: IConfigurationService,
+		contextMenuProvider: IContextMenuProvider,
+		contextViewProvider: IContextViewProvider,
+		localizationService: ILocalizationService,
+	) {
+		super();
+		this.localizationService = localizationService;
+		this.settingsModel = this.own(new SettingsEditorModel(new DefaultSettings().all));
+		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
+		const preferencesRenderer = this.own(new PreferencesRenderer(container, {
+			clipboardService,
+			configurationService,
+			contextMenuProvider,
+			contextViewProvider,
+			onStatus: this.settingsModel.reportStatus,
+		}));
+
+		const ownerDocument = container.ownerDocument;
+		this.element = h(ownerDocument, 'div');
+		this.element.className = 'zeta-settings-layout';
+
+		const navigation = h(ownerDocument, 'nav');
+		navigation.className = 'zeta-settings-sidebar';
+		navigation.setAttribute('aria-label', 'Settings categories');
+		this.navigationScrollable = this.own(new ScrollableElement(navigation, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
+		this.navigationScrollable.element.classList.add('zeta-settings-sidebar-scrollable');
+		this.tocTree = this.own(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout), {
+			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
+			categoryLabel: category => this.localizedCategoryLabel(category),
+			categoryDescription: category => this.localizedCategoryDescription(category),
+		}));
+		this.navigationEmpty = h(ownerDocument, 'p');
+		this.navigationEmpty.className = 'zeta-settings-navigation-empty';
+		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
+		this.navigationEmpty.setAttribute('role', 'status');
+		this.navigationEmpty.hidden = true;
+		this.navigationScrollable.append(this.navigationEmpty);
+
+		this.content = h(ownerDocument, 'main');
+		this.content.className = 'zeta-settings-page';
+		this.content.dataset.settingsContainer = '';
+		this.content.tabIndex = -1;
+		this.contentScrollable = this.own(new ScrollableElement(this.content, {
+			direction: 'vertical',
+			vertical: 'auto',
+			tabIndex: -1,
+			wheel: { consume: 'when-scrolling' },
+		}));
+		this.contentScrollable.element.classList.add('zeta-settings-page-scrollable');
+		const contentInner = h(ownerDocument, 'div');
+		contentInner.className = 'zeta-settings-page-inner';
+		this.contentHeading = h(ownerDocument, 'h3');
+		this.contentHeading.id = `zeta-settings-category-${nextSettingsEditorId++}`;
+		this.content.setAttribute('aria-labelledby', this.contentHeading.id);
+		this.contentDescription = h(ownerDocument, 'p');
+		this.contentDescription.className = 'zeta-settings-description';
+		const settingsContent = h(ownerDocument, 'div');
+		settingsContent.className = 'zeta-settings-content';
+		settingsContent.dataset.settingsContent = '';
+		this.contentStatus = h(ownerDocument, 'p');
+		this.contentStatus.className = 'zeta-configuration-settings-status';
+		this.contentStatus.setAttribute('role', 'status');
+		this.contentStatus.setAttribute('aria-live', 'polite');
+		this.contentStatus.hidden = true;
+		contentInner.append(this.contentHeading, this.contentDescription, settingsContent, this.contentStatus);
+		this.contentScrollable.append(contentInner);
+		this.content.append(this.contentScrollable.element);
+		this.element.append(navigation, this.content);
+
+		const initialCategory = SettingsCategories[0];
+		if (!initialCategory) throw new Error('Settings requires at least one category');
+		this.activeCategory = initialCategory;
+		this.treeModel = this.own(new SettingsTreeModel<ISetting>());
+		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
+		this.treeModel.setNavigationTarget(initialCategory.id);
+		this.settingsTree = this.own(new SettingsTree(settingsContent, {
+			model: this.treeModel,
+			rootClassName: 'zeta-settings-content-tree',
+			groupClassName: 'zeta-configuration-settings-group zeta-settings-content-group',
+			groupDescriptionClassName: 'zeta-configuration-settings-group-description',
+			itemsClassName: 'zeta-configuration-settings-list',
+			renderItem: item => preferencesRenderer.render(item.value),
+			updateItem: item => preferencesRenderer.update(item.value),
+			disposeItem: item => preferencesRenderer.disposeSetting(item.id),
+		}));
+		this.renderCategory(initialCategory);
+
+		this.own(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		this.own(this.settingsModel.onDidChangeStatus(status => {
+			this.contentStatus.textContent = status.message;
+			this.contentStatus.classList.toggle('is-error', status.isError);
+			this.contentStatus.hidden = !status.message;
+		}));
+		this.own(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
+		this.own(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
+			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
+		}));
+		this.defer(() => this.element.remove());
+	}
+
+	getDomNode(): HTMLElement {
+		return this.element;
+	}
+
+	layout(_dimension: IDimension): void {
+		this.navigationScrollable.layout();
+		this.contentScrollable.layout();
+	}
+
+	search(text: string): void {
+		const query = new PreferencesSearchQuery(text);
+		this.tocTree.setFindPattern(query.text);
+		this.treeModel.setQuery(query);
+		this.navigationScrollable.scrollTo(0, 0);
+		this.navigationScrollable.layout();
+	}
+
+	focus(): void {
+		this.tocTree.domFocus();
+	}
+
+	private renderCategory(category: SettingsCategoryDescriptor, entry?: Extract<SettingsTOCEntry, { readonly kind: 'target' }>): void {
+		this.activeCategory = category;
+		const navigationId = entry?.id ?? category.id;
+		this.tocTree.expandTo(navigationId);
+		this.tocTree.setSelection([navigationId]);
+		this.content.dataset.activeSettingsCategory = category.id;
+		this.showNavigationTarget(category, entry);
+	}
+
+	private openNavigationEntry(entry: SettingsTOCEntry): void {
+		if (entry.kind === 'category') {
+			this.renderCategory(entry.category);
+			return;
+		}
+		this.renderCategory(entry.category, entry);
+	}
+
+	private showNavigationTarget(
+		category: SettingsCategoryDescriptor,
+		entry: Extract<SettingsTOCEntry, { readonly kind: 'target' }> | undefined,
+	): void {
+		const targetId = entry?.target.targetId ?? category.id;
+		const target = this.treeModel.getGroup(targetId);
+		if (!target) throw new RangeError(`Settings layout does not expose navigation target '${targetId}'`);
+		this.settingsTree.setNavigationTarget(targetId);
+		this.activeNavigationTarget = entry;
+		this.content.classList.toggle('has-navigation-target', entry !== undefined);
+		if (entry) this.content.dataset.activeSettingsTarget = entry.target.targetId;
+		else delete this.content.dataset.activeSettingsTarget;
+		this.contentHeading.textContent = entry ? target.title : this.localizedCategoryLabel(category);
+		this.contentDescription.textContent = entry ? target.description : this.localizedCategoryDescription(category);
+		this.contentScrollable.scrollTo(0, 0);
+		this.contentScrollable.layout();
+	}
+
+	private updateLocalizedChrome(): void {
+		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
+		this.tocTree.rerender();
+		if (this.activeNavigationTarget) {
+			this.contentHeading.textContent = this.activeNavigationTarget.target.label;
+			return;
+		}
+		this.contentHeading.textContent = this.localizedCategoryLabel(this.activeCategory);
+		this.contentDescription.textContent = this.localizedCategoryDescription(this.activeCategory);
+	}
+
+	private localized(key: string, fallback: string): string {
+		return this.localizationService.translate('zeta.settings', key, fallback);
+	}
+
+	private localizedCategoryLabel(category: SettingsCategoryDescriptor): string {
+		return this.localized(`categories.${category.id}.label`, category.label);
+	}
+
+	private localizedCategoryDescription(category: SettingsCategoryDescriptor): string {
+		return this.localized(`categories.${category.id}.description`, category.description);
+	}
+}
+
+let nextSettingsEditorId = 1;

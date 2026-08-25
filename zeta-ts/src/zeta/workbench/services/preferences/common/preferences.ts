@@ -69,11 +69,6 @@ export interface ISettingsGroup {
 	readonly settings: readonly ISetting[];
 }
 
-export interface ISettingsSection {
-	readonly sectionId: string;
-	readonly groups: readonly ISettingsGroup[];
-}
-
 export interface SettingsStatus {
 	readonly message: string;
 	readonly isError: boolean;
@@ -81,22 +76,13 @@ export interface SettingsStatus {
 
 export interface ISettingsEditorModel extends IDisposable {
 	readonly onDidChangeStatus: Event<SettingsStatus>;
-	readonly sectionIds: readonly string[];
+	readonly settings: readonly ISetting[];
 	readonly reportStatus: (message: string, isError: boolean) => void;
-
-	hasSection(sectionId: string): boolean;
-	getSectionGroups(sectionId: string): readonly ISettingsGroup[];
 }
 
 /** Workbench-level entry point for opening Preferences surfaces. */
 export interface IPreferencesService {
-	readonly onDidChangeSettingsVisibility: Event<boolean>;
-	readonly onDidChangeSettingsSection: Event<string>;
-	readonly isSettingsOpen: boolean;
-	readonly activeSettingsSectionId: string;
-
-	openSettings(sectionId?: string): void;
-	closeSettings(): void;
+	openSettings(): Promise<void>;
 	openKeybindings(): Promise<void>;
 }
 

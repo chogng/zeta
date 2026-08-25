@@ -2,7 +2,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
-import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ISettingsGroup, ISettingsSection, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
+import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
 
 export interface SettingState<T> {
 	readonly id: string;
@@ -143,33 +143,22 @@ function registeredSetting(key: IConfigurationKey<unknown>, schema: IConfigurati
 
 /** Owns the immutable Settings projection and transient editor status. */
 export class SettingsEditorModel extends DisposableOwner implements ISettingsEditorModel {
-	private readonly sections = new Map<string, ISettingsSection>();
 	private readonly statusEmitter = this.own(new Emitter<SettingsStatus>());
 
 	public readonly onDidChangeStatus = this.statusEmitter.event;
+	public readonly settings: readonly ISetting[];
 
 	public readonly reportStatus = (message: string, isError: boolean): void => {
 		this.statusEmitter.fire({ message, isError });
 	};
 
-	public get sectionIds(): readonly string[] {
-		return [...this.sections.keys()];
-	}
-
-	constructor(sections: readonly ISettingsSection[]) {
+	constructor(settings: readonly ISetting[]) {
 		super();
-		for (const section of sections) {
-			if (!section.sectionId) throw new TypeError('Settings section IDs must not be empty');
-			if (this.sections.has(section.sectionId)) throw new Error(`Settings section is already registered: ${section.sectionId}`);
-			this.sections.set(section.sectionId, section);
+		const ids = new Set<string>();
+		for (const setting of settings) {
+			if (ids.has(setting.id)) throw new Error(`Setting is already registered: ${setting.id}`);
+			ids.add(setting.id);
 		}
-	}
-
-	public hasSection(sectionId: string): boolean {
-		return this.sections.has(sectionId);
-	}
-
-	public getSectionGroups(sectionId: string): readonly ISettingsGroup[] {
-		return this.sections.get(sectionId)?.groups ?? [];
+		this.settings = Object.freeze([...settings]);
 	}
 }

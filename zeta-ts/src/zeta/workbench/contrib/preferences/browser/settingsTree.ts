@@ -147,13 +147,13 @@ export class SettingsTree<T> extends DisposableOwner {
 		description.className = `zeta-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 		const items = h(document, "div");
 		items.className = this.options.itemsClassName;
-		const sectionId = settingsSectionId(node);
+		const rootId = settingsRootId(node);
 		if (!node.parent || node.parent.element === undefined) {
-			element.classList.add("is-section-root", `zeta-${sectionId}-settings`, "zeta-configuration-settings");
+			element.classList.add("is-settings-root", `zeta-${rootId}-settings`, "zeta-configuration-settings");
 		} else {
-			element.classList.add(`zeta-${sectionId}-settings-group`);
-			description.classList.add(`zeta-${sectionId}-settings-group-description`);
-			items.classList.add(`zeta-${sectionId}-settings-list`);
+			element.classList.add(`zeta-${rootId}-settings-group`);
+			description.classList.add(`zeta-${rootId}-settings-group-description`);
+			items.classList.add(`zeta-${rootId}-settings-list`);
 		}
 		element.append(heading, description, items);
 		return { kind: "group", element, heading, description, items, group };
@@ -165,7 +165,7 @@ export class SettingsTree<T> extends DisposableOwner {
 	}
 }
 
-function settingsSectionId<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): string {
+function settingsRootId<T>(node: ObjectTreeNode<SettingsTreeElement<T>>): string {
 	let current = node;
 	while (current.parent?.element !== undefined) current = current.parent;
 	return current.element.id;

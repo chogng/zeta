@@ -31,8 +31,8 @@ registerAction2(class OpenSettingsAction extends Action2 {
 		});
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IPreferencesService).openSettings();
+	override run(accessor: ServicesAccessor): Promise<void> {
+		return accessor.get(IPreferencesService).openSettings();
 	}
 });
 

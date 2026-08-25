@@ -145,7 +145,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		registry: new WorkbenchViewRegistry(),
 	});
 	const services = new ServiceCollection();
-	using preferences: PreferencesService = new BrowserPreferencesService();
+	let preferencesEditorTarget: string | undefined;
+	using preferences: PreferencesService = new BrowserPreferencesService(() => ({
+		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
+		focusActiveEditor() {},
+	}));
 	services.set(IPreferencesService, preferences);
 	services.set(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
@@ -288,8 +292,7 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		],
 	);
 	await chatActions[3]?.run();
-	assert.equal(preferences.isSettingsOpen, true);
-	assert.equal(preferences.activeSettingsSectionId, "general");
+	assert.equal(preferencesEditorTarget, "modalGroup");
 	const tabs = tablist?.querySelectorAll<HTMLButtonElement>("[role='tab']");
 	assert.equal(tabs?.length, 2);
 	assert.deepEqual(

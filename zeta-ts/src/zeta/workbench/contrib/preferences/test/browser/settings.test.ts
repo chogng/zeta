@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../../../base/common/actions.js';
-import type { IContextMenuProvider } from '../../../../../base/browser/contextmenu.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextMenu.js';
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
@@ -38,7 +38,12 @@ const { h } = await import('../../../../../base/browser/dom.js');
 const { noEvent } = await import('../../../../../base/common/event.js');
 const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
+const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
+const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configurationService.js');
+const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextMenu.js');
+const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
+const { InstantiationService, ServiceCollection, SyncDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
@@ -48,11 +53,20 @@ const { WorkbenchThemesRegistry } = await import('../../../../../workbench/commo
 const { EditorSelectionConfiguration } = await import('../../../../../workbench/common/editorSelectionConfiguration.js');
 const { CodeEditorConfiguration } = await import('../../../../../workbench/contrib/codeEditor/common/editorConfiguration.js');
 const { WorkspaceSearchConfiguration } = await import('../../../../../workbench/contrib/search/common/searchConfiguration.js');
-const { PreferencesEditor } = await import('../../../../../workbench/contrib/preferences/browser/preferencesEditor.js');
-const { createSettingsSections, SettingsLayout, SettingsSections } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
+const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
+const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
+const { EditorPaneRegistry } = await import('../../../../../workbench/browser/parts/editor/editorRegistry.js');
+const { PreferencesEditor, PreferencesEditorId } = await import('../../../../../workbench/contrib/preferences/browser/preferencesEditor.js');
+const { PreferencesEditorPaneRegistry } = await import('../../../../../workbench/contrib/preferences/browser/preferencesEditorRegistry.js');
+const { PreferencesSearchQuery } = await import('../../../../../workbench/contrib/preferences/browser/preferencesSearch.js');
+const { createSettingsLayout, SettingsCategories, SettingsLayout } = await import('../../../../../workbench/contrib/preferences/browser/settingsLayout.js');
+const { SettingsEditorPane, SettingsEditorPaneId } = await import('../../../../../workbench/contrib/preferences/browser/settingsEditor.js');
 const { SettingsTree } = await import('../../../../../workbench/contrib/preferences/browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../../../../workbench/contrib/preferences/browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
+const { BrowserEditorService } = await import('../../../../../workbench/services/editor/browser/browserEditorService.js');
+const { ILocalizationService: LocalizationServiceId } = await import('../../../../../workbench/services/localization/common/localizationService.js');
+const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
 const { DefaultSettings, SettingsEditorModel } = await import('../../../../../workbench/services/preferences/common/preferencesModels.js');
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
 
@@ -88,20 +102,20 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 });
 
-test('settingsLayout is the single projection from registered settings to sections', () => {
+test('settingsLayout is the single projection from registered settings to categories', () => {
 	const defaults = new DefaultSettings();
-	const sections = createSettingsSections(defaults.all);
-	const model = new SettingsEditorModel(sections);
+	const layout = createSettingsLayout(defaults.all);
+	const model = new SettingsEditorModel(defaults.all);
 
-	assert.deepEqual(SettingsSections.map(section => section.id), ['general', 'appearance', 'editor']);
-	assert.deepEqual(model.sectionIds, ['general', 'appearance', 'editor']);
-	assert.equal(findSettingSection(sections, AccessibilityConfiguration.underlineLinks.key), 'general');
-	assert.equal(findSettingSection(sections, HoverConfiguration.delay.key), 'general');
-	assert.equal(findSettingSection(sections, SashConfiguration.size.key), 'general');
-	assert.equal(findSettingSection(sections, WorkbenchConfiguration.colorTheme.key), 'appearance');
-	assert.equal(findSettingSection(sections, EditorSelectionConfiguration.defaultNewDocumentEditor.key), 'editor');
-	assert.equal(findSettingSection(sections, CodeEditorConfiguration.fontFamily.key), 'editor');
-	assert.equal(findSettingSection(sections, WorkspaceSearchConfiguration.maxResults.key), 'editor');
+	assert.deepEqual(SettingsCategories.map(category => category.id), ['general', 'appearance', 'editor']);
+	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
+	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks.key), 'general');
+	assert.equal(findSettingCategory(layout, HoverConfiguration.delay.key), 'general');
+	assert.equal(findSettingCategory(layout, SashConfiguration.size.key), 'general');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme.key), 'appearance');
+	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor.key), 'editor');
+	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily.key), 'editor');
+	assert.equal(findSettingCategory(layout, WorkspaceSearchConfiguration.maxResults.key), 'editor');
 	assert.equal(defaults.all.every(setting => ['boolean', 'number', 'select', 'text'].includes(setting.valueType)), true);
 	const themeSetting = defaults.get(WorkbenchConfiguration.colorTheme);
 	assert.equal(themeSetting.valueType, 'select');
@@ -135,13 +149,28 @@ test('SettingsLayout validates stable configuration identities', () => {
 		description: '',
 		settings: [fontFamily, fontFamily],
 	}]), /Duplicate Settings setting ID/);
-	assert.throws(() => new SettingsLayout('', []), /section ID must not be empty/);
+	assert.throws(() => new SettingsLayout('', []), /TOC ID must not be empty/);
 	assert.throws(() => new SettingsLayout('editor', [{
 		id: 'typography',
 		title: 'Typography',
 		description: '',
 		settings: [{ ...fontFamily, id: 'editor.font\0Family' }],
 	}]), /must not contain control characters/);
+});
+
+test('Preferences search normalizes pasted setting syntax and matches complete metadata terms', () => {
+	const query = new PreferencesSearchQuery('  "Editor.Font: Family"  ');
+
+	assert.equal(query.text, 'editor.font family');
+	assert.equal(query.matches({
+		title: 'Font family',
+		description: 'Configure the editor font.',
+		keywords: ['editor.fontFamily'],
+	}), true);
+	assert.equal(query.matches({
+		title: 'Font size',
+		description: 'Configure the editor font size.',
+	}), false);
 });
 
 test('Settings tree preserves item identity while filtering and updating', () => {
@@ -208,33 +237,52 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 			return Promise.resolve();
 		},
 	};
-	const contextMenuProvider: IContextMenuProvider = {
+	const contextMenuProvider: ContextMenuService = {
+		onDidShowContextMenu: noEvent,
+		onDidHideContextMenu: noEvent,
 		showContextMenu: options => {
-			menuActions = options.actions;
+			menuActions = 'actions' in options ? options.actions : [];
 		},
+		hideContextMenu() {},
 	};
-	const preferences = disposables.add(new PreferencesService());
 	const configuration = disposables.add(new WorkbenchConfigurationService());
-	disposables.add(new PreferencesEditor({
-		clipboardService,
-		configurationService: configuration,
-		container: root,
-		contextMenuProvider,
-		contextViewProvider: disposables.add(new BrowserContextViewService(root)),
-		localizationService,
-		preferencesService: preferences,
+	const contextView = disposables.add(new BrowserContextViewService(root));
+	const services = new ServiceCollection();
+	services.set(ClipboardServiceId, clipboardService);
+	services.set(ConfigurationServiceId, configuration);
+	services.set(IContextMenuService, contextMenuProvider);
+	services.set(IContextViewService, contextView);
+	services.set(LocalizationServiceId, localizationService);
+	const instantiationService = new InstantiationService(services);
+	const preferencesPanes = disposables.add(new PreferencesEditorPaneRegistry());
+	disposables.add(preferencesPanes.registerPreferencesEditorPane({
+		id: SettingsEditorPaneId,
+		title: 'Settings',
+		order: 1,
+		ctorDescriptor: new SyncDescriptor(SettingsEditorPane, {
+			serviceDependencies: [ClipboardServiceId, ConfigurationServiceId, IContextMenuService, IContextViewService, LocalizationServiceId],
+		}),
 	}));
+	const editorPanes = new EditorPaneRegistry();
+	disposables.add(editorPanes.register({
+		id: PreferencesEditorId,
+		name: 'Preferences',
+		canOpen: input => isPreferencesEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => new PreferencesEditor(instantiationService, localizationService, preferencesPanes),
+	}));
+	const editor = disposables.add(new EditorPart(root, { registry: editorPanes, instantiationService }));
+	const preferences = disposables.add(new PreferencesService(() => new BrowserEditorService(editor)));
 
-	preferences.openSettings();
+	await preferences.openSettings();
 	const host = root.querySelector<HTMLElement>('.zeta-modal-editor-host');
 	assert.ok(host);
 	assert.equal(host.hidden, false);
 	assert.equal(root.querySelector('.zeta-modal-editor')?.getAttribute('role'), 'dialog');
 	assert.deepEqual(
-		[...root.querySelectorAll<HTMLElement>('[data-settings-section-id]')].map(element => element.dataset.settingsSectionId),
+		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
 		['general', 'appearance', 'editor'],
 	);
-	assert.equal(root.querySelector('[data-settings-section-id="models"]'), null);
+	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks.key}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay.key}"]`));
 
@@ -253,14 +301,25 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 
 	root.querySelector<HTMLButtonElement>(`[data-settings-item-id="${HoverConfiguration.delay.key}"] .zeta-setting-item-actions-trigger`)?.click();
 	const copyAction = menuActions.find(action => action.id === 'settings.copySettingId');
+	const resetAction = menuActions.find(action => action.id === 'settings.resetSetting');
 	assert.ok(copyAction);
+	assert.ok(resetAction);
 	await copyAction.run();
 	assert.deepEqual(copied, [HoverConfiguration.delay.key]);
+	await resetAction.run();
+	assert.equal(configuration.getValue(HoverConfiguration.delay), HoverConfiguration.delay.defaultValue);
 
-	preferences.openSettings('editor');
-	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsSection, 'editor');
+	root.querySelector<HTMLElement>('[data-settings-category-id="editor"]')?.click();
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor');
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
+	assert.ok(root.querySelector(`[data-configuration-key="${EditorSelectionConfiguration.defaultNewDocumentEditor.key}"]`));
 	assert.equal(root.querySelector('[data-settings-item-id^="models.item."]'), null);
+	const fontFamily = root.querySelector<HTMLInputElement>(`[data-configuration-key="${CodeEditorConfiguration.fontFamily.key}"]`);
+	assert.ok(fontFamily);
+	fontFamily.value = 'Fira Code';
+	fontFamily.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
+	await nextTurn();
+	assert.equal(configuration.getValue(CodeEditorConfiguration.fontFamily), 'Fira Code');
 
 	const search = root.querySelector<HTMLInputElement>('.zeta-settings-search input');
 	assert.ok(search);
@@ -268,14 +327,20 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length, 1);
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
+	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily.key}"]`), fontFamily);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
+	assert.equal(root.querySelector('.zeta-settings-navigation-tree')?.contains(ownerDocument.activeElement), true);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+	assert.equal(search.value, '');
+	assert.ok(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length > 1);
 
-	preferences.closeSettings();
+	root.querySelector<HTMLButtonElement>('.zeta-modal-editor-close')?.click();
 	assert.equal(host.hidden, true);
 	assert.equal(ownerDocument.activeElement, trigger);
 });
 
-function findSettingSection(sections: ReturnType<typeof createSettingsSections>, settingId: string): string | undefined {
-	return sections.find(section => section.groups.some(group => group.settings.some(setting => setting.id === settingId)))?.sectionId;
+function findSettingCategory(layout: ReturnType<typeof createSettingsLayout>, settingId: string): string | undefined {
+	return layout.find(category => category.groups.some(group => group.settings.some(setting => setting.id === settingId)))?.id;
 }
 
 async function nextTurn(): Promise<void> {

@@ -1,123 +1,254 @@
-import "./media/modalEditorPart.css";
-import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../../../base/browser/dom.js";
-import { focusFirst, restoreFocus, trapTabFocus } from "../../../../base/browser/focus.js";
-import { Button } from "../../../../base/browser/ui/button/button.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import './media/modalEditorPart.css';
+import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
+import { focusFirst, restoreFocus, trapTabFocus } from '../../../../base/browser/focus.js';
+import { Dimension, type IDimension } from '../../../../base/browser/geometry.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { DisposableMap, DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
+import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
+import { EditorOpenSupersededError } from './editorGroup.js';
+import { type EditorPaneCreationOptions, type IEditorPane, EditorPaneVisibility } from './editorPane.js';
+import { EditorPaneRegistry } from './editorRegistry.js';
+import { editorInputKey } from './editorTabsControl.js';
 
 export interface ModalEditorPartOptions {
 	readonly container: HTMLElement;
-	readonly title: string;
-	readonly content: HTMLElement;
-	readonly focusContent: () => void;
+	readonly registry: EditorPaneRegistry;
+	readonly paneCreationOptions: Omit<EditorPaneCreationOptions, 'input'>;
+}
+
+interface ModalEditorEntry {
+	readonly input: EditorInput;
+	readonly instance: ModalEditorPaneInstance;
 }
 
 let nextModalEditorId = 1;
 
-/**
- * Hosts one complex editor surface above the Workbench.
- *
- * The hosted editor owns its content and navigation. This Part owns modal
- * presentation, its compact header, close requests, and focus containment.
- */
+/** Owns the single Editor Pane presented above the Workbench. */
 export class ModalEditorPart extends DisposableOwner {
-	readonly domNode: HTMLElement;
-	readonly onDidRequestClose: Event<void>;
-	private readonly host: HTMLDivElement;
-	private readonly focusContent: () => void;
-	private readonly _onDidRequestClose = this.own(new Emitter<void>());
+	public readonly domNode: HTMLElement;
+	public readonly onDidRequestClose: Event<EditorInput>;
+
+	private readonly active = this.own(new DisposableSlot<ModalEditorPaneInstance>());
+	private readonly closeButton: Button;
+	private readonly contentDomNode: HTMLDivElement;
+	private readonly hostDomNode: HTMLDivElement;
+	private readonly pending = this.own(new DisposableMap<number, ModalEditorPaneInstance>());
+	private readonly requestCloseEmitter = this.own(new Emitter<EditorInput>());
+	private readonly titleDomNode: HTMLHeadingElement;
+	private currentEntry: ModalEditorEntry | undefined;
+	private dimension: IDimension = Dimension.Zero;
 	private focusToRestore: HTMLElement | undefined;
+	private openSequence = 0;
 	private visible = false;
 
-	constructor(options: ModalEditorPartOptions) {
+	constructor(private readonly options: ModalEditorPartOptions) {
 		super();
-		this.focusContent = options.focusContent;
 		const ownerDocument = options.container.ownerDocument;
-		this.host = h(ownerDocument, "div");
-		this.host.className = "zeta-modal-editor-host";
-		this.host.hidden = true;
+		this.hostDomNode = h(ownerDocument, 'div');
+		this.hostDomNode.className = 'zeta-modal-editor-host';
+		this.hostDomNode.hidden = true;
 
-		this.domNode = h(ownerDocument, "section");
-		this.domNode.className = "zeta-modal-editor";
+		this.domNode = h(ownerDocument, 'section');
+		this.domNode.className = 'zeta-modal-editor';
 		this.domNode.tabIndex = -1;
-		this.domNode.setAttribute("role", "dialog");
-		this.domNode.setAttribute("aria-modal", "true");
+		this.domNode.setAttribute('role', 'dialog');
+		this.domNode.setAttribute('aria-modal', 'true');
 
-		const header = h(ownerDocument, "header");
-		header.className = "zeta-modal-editor-header";
-		const heading = h(ownerDocument, "h2");
-		heading.className = "zeta-modal-editor-title";
-		heading.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
-		heading.textContent = options.title;
-		this.domNode.setAttribute("aria-labelledby", heading.id);
-		const closeButton = this.own(new Button(header, {
-			label: `Close ${options.title}`,
-			title: `Close ${options.title}`,
+		const headerDomNode = h(ownerDocument, 'header');
+		headerDomNode.className = 'zeta-modal-editor-header';
+		this.titleDomNode = h(ownerDocument, 'h2');
+		this.titleDomNode.className = 'zeta-modal-editor-title';
+		this.titleDomNode.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
+		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
+		this.closeButton = this.own(new Button(headerDomNode, {
+			label: 'Close editor',
 			icon: lxiconsLibrary.close,
 			onClick: () => this.requestClose(),
 		}));
-		closeButton.toggleClassName("zeta-modal-editor-close", true);
-		header.append(heading, closeButton.domNode);
+		this.closeButton.toggleClassName('zeta-modal-editor-close', true);
+		headerDomNode.append(this.titleDomNode, this.closeButton.domNode);
 
-		const content = h(ownerDocument, "div");
-		content.className = "zeta-modal-editor-content";
-		content.append(options.content);
-		this.domNode.append(header, content);
-		this.host.append(this.domNode);
-		options.container.append(this.host);
+		this.contentDomNode = h(ownerDocument, 'div');
+		this.contentDomNode.className = 'zeta-modal-editor-content';
+		this.domNode.append(headerDomNode, this.contentDomNode);
+		this.hostDomNode.append(this.domNode);
+		options.container.append(this.hostDomNode);
 
-		this.onDidRequestClose = this._onDidRequestClose.event;
+		this.onDidRequestClose = this.requestCloseEmitter.event;
+		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
 		this.own(trapTabFocus(this.domNode));
-		this.own(addDisposableListener(this.host, "mousedown", (event: MouseEvent) => {
-			if (event.target !== this.host) return;
+		this.own(addDisposableListener(this.hostDomNode, 'mousedown', event => {
+			if (event.target !== this.hostDomNode) return;
 			stopEvent(event);
 			this.requestClose();
 		}));
-		this.own(addDisposableListener(this.domNode, "keydown", (event: KeyboardEvent) => {
-			if (event.defaultPrevented || event.isComposing || event.key !== "Escape") return;
+		this.own(addDisposableListener(this.domNode, 'keydown', event => {
+			if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
 			stopEvent(event);
 			this.requestClose();
 		}));
 		this.defer(() => {
 			this.hide();
-			this.host.remove();
+			this.hostDomNode.remove();
 		});
 	}
 
-	get isVisible(): boolean {
+	public get activeInput(): EditorInput | undefined {
+		return this.currentEntry?.input;
+	}
+
+	public get activePane(): IEditorPane | undefined {
+		return this.active.value?.pane;
+	}
+
+	public get isVisible(): boolean {
 		return this.visible;
 	}
 
-	show(): void {
-		if (this.visible) {
-			this.focusEditorContent();
-			return;
+	public async openEditor(input: EditorInput, openOptions: EditorOpenOptions = {}): Promise<IEditorPane> {
+		const descriptor = this.options.registry.resolve(input, openOptions);
+		if (this.currentEntry && editorInputKey(this.currentEntry.input) === editorInputKey(input) && this.currentEntry.instance.pane.id === descriptor.id) {
+			this.currentEntry = { input, instance: this.currentEntry.instance };
+			this.updateTitle(input);
+			this.show(openOptions.preserveFocus === true);
+			return this.currentEntry.instance.pane;
 		}
-		const activeElement = this.domNode.ownerDocument.activeElement;
-		this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
-		this.visible = true;
-		this.host.hidden = false;
+
+		const sequence = ++this.openSequence;
+		this.cancelPendingOpen();
+		const pane = descriptor.create({ ...this.options.paneCreationOptions, input });
+		if (pane.id !== descriptor.id) {
+			pane.dispose();
+			throw new TypeError(`Editor pane factory '${descriptor.id}' created '${pane.id}'`);
+		}
+		const instance = new ModalEditorPaneInstance(this.contentDomNode, pane);
+		this.pending.set(sequence, instance);
+		try {
+			pane.create(instance.domNode);
+			instance.setVisible(EditorPaneVisibility.Hidden);
+			await pane.setInput(input, instance.signal);
+		} catch (error) {
+			this.pending.deleteAndDispose(sequence);
+			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
+			throw error;
+		}
+		if (sequence !== this.openSequence) {
+			this.pending.deleteAndDispose(sequence);
+			throw new EditorOpenSupersededError(input);
+		}
+		const committed = this.pending.deleteAndLeak(sequence);
+		if (!committed) throw new EditorOpenSupersededError(input);
+		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+		this.active.replace(committed);
+		this.currentEntry = { input, instance: committed };
+		this.contentDomNode.replaceChildren(committed.domNode);
+		this.updateTitle(input);
+		this.show(openOptions.preserveFocus === true);
+		return pane;
+	}
+
+	public closeEditor(input: EditorInput): boolean {
+		if (!this.currentEntry || editorInputKey(this.currentEntry.input) !== editorInputKey(input)) return false;
+		this.openSequence += 1;
+		this.cancelPendingOpen();
+		this.hide();
+		this.currentEntry = undefined;
+		this.active.clear();
+		this.contentDomNode.replaceChildren();
+		this.titleDomNode.textContent = '';
+		return true;
+	}
+
+	public focus(): void {
+		if (!this.visible) return;
 		this.focusEditorContent();
 	}
 
-	hide(): void {
+	private cancelPendingOpen(): void {
+		for (const [sequence] of this.pending) this.pending.deleteAndDispose(sequence);
+	}
+
+	private focusEditorContent(): void {
+		this.activePane?.focus();
+		if (this.domNode.contains(this.domNode.ownerDocument.activeElement)) return;
+		if (!focusFirst(this.domNode)) this.domNode.focus();
+	}
+
+	private hide(): void {
 		if (!this.visible) return;
 		this.visible = false;
-		this.host.hidden = true;
+		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
+		this.hostDomNode.hidden = true;
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
 		if (focusToRestore) restoreFocus(focusToRestore);
 	}
 
-	private focusEditorContent(): void {
-		this.focusContent();
-		if (!this.domNode.contains(this.domNode.ownerDocument.activeElement)) {
-			if (!focusFirst(this.domNode)) this.domNode.focus();
-		}
+	private layout(dimension: IDimension): void {
+		this.dimension = new Dimension(dimension.width, dimension.height);
+		this.activePane?.layout(this.dimension);
 	}
 
 	private requestClose(): void {
-		this._onDidRequestClose.fire();
+		const input = this.activeInput;
+		if (input) this.requestCloseEmitter.fire(input);
 	}
+
+	private show(preserveFocus: boolean): void {
+		if (!this.visible) {
+			const activeElement = this.domNode.ownerDocument.activeElement;
+			this.focusToRestore = isHTMLElement(activeElement) ? activeElement : undefined;
+			this.visible = true;
+			this.hostDomNode.hidden = false;
+			this.active.value?.setVisible(EditorPaneVisibility.Visible);
+			this.activePane?.layout(this.dimension);
+		}
+		if (!preserveFocus) this.focusEditorContent();
+	}
+
+	private updateTitle(input: EditorInput): void {
+		const title = editorInputLabel(input);
+		this.titleDomNode.textContent = title;
+		const closeLabel = `Close ${title}`;
+		this.closeButton.label = closeLabel;
+		this.closeButton.setTitle(closeLabel);
+		this.closeButton.domNode.setAttribute('aria-label', closeLabel);
+	}
+}
+
+class ModalEditorPaneInstance extends DisposableOwner {
+	public readonly domNode: HTMLDivElement;
+	public readonly signal: AbortSignal;
+
+	constructor(container: HTMLElement, public readonly pane: IEditorPane) {
+		super();
+		const ownerDocument = container.ownerDocument;
+		const AbortControllerConstructor = ownerDocument.defaultView?.AbortController ?? AbortController;
+		const abortController = new AbortControllerConstructor();
+		this.signal = abortController.signal;
+		this.domNode = h(ownerDocument, 'div');
+		this.domNode.className = 'zeta-modal-editor-pane-host';
+		this.domNode.hidden = true;
+		container.append(this.domNode);
+		this.defer(() => this.domNode.remove());
+		this.own(pane);
+		this.defer(() => pane.clearInput());
+		this.defer(() => pane.setVisible(EditorPaneVisibility.Hidden));
+		this.defer(() => abortController.abort());
+	}
+
+	public setVisible(visibility: EditorPaneVisibility): void {
+		this.domNode.hidden = visibility === EditorPaneVisibility.Hidden;
+		this.pane.setVisible(visibility);
+	}
+}
+
+function editorInputLabel(input: Pick<EditorInput, 'resource' | 'label'>): string {
+	if (input.label?.trim()) return input.label;
+	const path = decodeURIComponent(input.resource.path).replace(/\/+$/u, '');
+	const separator = path.lastIndexOf('/');
+	return path.slice(separator + 1) || input.resource.toString();
 }
