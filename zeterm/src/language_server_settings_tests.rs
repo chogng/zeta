@@ -11,7 +11,7 @@ use zeta_language_service::LanguageServerState;
 use zeta_ui::SwitchSelection;
 use zeta_ui::TextInputCommand;
 use zeta_ui::{CaretVisibility, Rect, TextInputLayoutEngine};
-use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 use super::{
     LANGUAGE_SERVER_EXECUTABLE_INPUT, LANGUAGE_SERVER_SETTINGS_SAVE, LANGUAGE_SERVER_SWITCH,

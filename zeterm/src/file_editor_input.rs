@@ -3,7 +3,7 @@ use std::{ops::Range, time::Instant};
 use zeta_editor::{CodeEditorCommand, CodeEditorPosition, CodeEditorSelectionMode};
 use zeta_language_service::LanguageRequestKind;
 use zeta_ui::TextInputCompositionEvent;
-use zeta_winit::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
+use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 
 use crate::NativeApp;
 use crate::file_editor_auto_scroll::{FileEditorAutoScrollDirection, FileEditorAutoScrollState};
@@ -505,7 +505,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn activate_file_editor_element(&mut self, id: zui::ElementId) -> bool {
+    pub(super) fn activate_file_editor_element(&mut self, id: zui::ui::ElementId) -> bool {
         if let Some(index) = file_editor_close_index(id, 0..self.file_editor_host.tabs().len()) {
             self.file_editor_host.select(index);
             match self.file_editor_host.request_close_active() {
@@ -640,7 +640,7 @@ impl NativeApp {
             .file_editor_host
             .active()
             .and_then(|tab| tab.document().selected_text())
-            && let Err(error) = write_clipboard_text(text.to_owned())
+            && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
         {
             eprintln!("could not copy file editor text: {error}");
         }
@@ -651,7 +651,7 @@ impl NativeApp {
         if !self.ui_dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
             return false;
         }
-        let text = match read_clipboard_text() {
+        let text = match read_clipboard_text(&self.clipboard) {
             Ok(text) => text,
             Err(error) => {
                 eprintln!("could not paste file editor text: {error}");

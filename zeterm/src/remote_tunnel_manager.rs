@@ -7,7 +7,7 @@ use zeta_ui::ScrollState;
 use zeta_ui::TextInput;
 use zeta_ui::TextInputCommand;
 use zeta_ui::TextInputCompositionEvent;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::remote_tunnel_process::RemoteTunnelUpdate;

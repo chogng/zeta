@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use tokio::runtime::Runtime;
 use zeta_terminal::{GridSize, TerminalCore};
 use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_process};
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::agent_session_target::AgentSessionTarget;
@@ -98,7 +98,7 @@ impl TerminalSession {
     pub(crate) fn spawn_async(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         target: AgentSessionTarget,
     ) -> Result<()> {
         session_switch_trace::event(
@@ -130,7 +130,7 @@ impl TerminalSession {
     pub(crate) fn spawn(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         target: AgentSessionTarget,
     ) -> Result<Self> {
         let _trace = session_switch_trace::Span::new(None, "terminal-session-spawn");
@@ -152,7 +152,7 @@ impl TerminalSession {
     fn spawn_local(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
     ) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -247,7 +247,7 @@ fn spawn_event_forwarders(
     runtime: &Runtime,
     spawned: SpawnedProcess,
     key: TerminalSessionKey,
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
     suppress_until: Option<&'static [u8]>,
 ) -> Arc<ProcessHandle> {
     let SpawnedProcess {

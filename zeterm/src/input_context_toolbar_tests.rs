@@ -3,7 +3,7 @@ use crate::shell_interaction::ContextAction;
 use crate::shell_style::SHELL_PALETTE;
 use crate::workspace_context::WorkspaceContext;
 use zeta_ui::{Component, Point, Rect, TextInputLayoutEngine, UiScene};
-use zui::{InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn toolbar_projects_four_real_context_values_as_action_buttons() {

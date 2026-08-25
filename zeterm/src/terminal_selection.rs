@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
 use unicode_width::UnicodeWidthChar;
 use zeta_terminal::{ScreenBuffer, TerminalMousePosition};
 use zeta_ui::{Color, PaintRect, Rect, UiScene};
-use zeta_winit::ElementState;
+use zui::input::ElementState;
+use zui::services::{ClipboardError, ClipboardHandle};
 
 use crate::NativeApp;
 use crate::terminal_projection::visible_text_lines;
@@ -182,7 +182,7 @@ impl NativeApp {
         let Some(text) = self.terminal_selection.selected_text(&lines) else {
             return false;
         };
-        if let Err(error) = write_clipboard_text(text) {
+        if let Err(error) = write_clipboard_text(&self.clipboard, text) {
             eprintln!("could not copy terminal selection: {error}");
         }
         true
@@ -244,30 +244,15 @@ fn position_key(position: TerminalMousePosition) -> (u16, u16) {
     (position.row(), position.col())
 }
 
-#[cfg(not(target_os = "android"))]
-pub(crate) fn write_clipboard_text(text: String) -> Result<()> {
-    let mut clipboard = arboard::Clipboard::new().context("system clipboard is unavailable")?;
-    clipboard
-        .set_text(text)
-        .context("system clipboard rejected terminal text")
+pub(crate) fn write_clipboard_text(
+    clipboard: &ClipboardHandle,
+    text: String,
+) -> Result<(), ClipboardError> {
+    clipboard.write_text(text)
 }
 
-#[cfg(target_os = "android")]
-pub(crate) fn write_clipboard_text(_text: String) -> Result<()> {
-    anyhow::bail!("terminal text copy is unsupported on Android")
-}
-
-#[cfg(not(target_os = "android"))]
-pub(crate) fn read_clipboard_text() -> Result<String> {
-    let mut clipboard = arboard::Clipboard::new().context("system clipboard is unavailable")?;
-    clipboard
-        .get_text()
-        .context("system clipboard does not contain text")
-}
-
-#[cfg(target_os = "android")]
-pub(crate) fn read_clipboard_text() -> Result<String> {
-    anyhow::bail!("terminal text paste is unsupported on Android")
+pub(crate) fn read_clipboard_text(clipboard: &ClipboardHandle) -> Result<String, ClipboardError> {
+    clipboard.read_text()
 }
 
 #[cfg(test)]

@@ -1,152 +1,265 @@
+use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 const MAX_PRODUCTION_MODULE_LINES: usize = 500;
+const CAPABILITY_DIRECTORIES: &[&str] = &[
+    "app",
+    "distribution",
+    "input",
+    "render",
+    "runtime",
+    "services",
+    "testing",
+    "ui",
+    "window",
+];
+const CAPABILITY_ROOTS: &[&str] = &[
+    "accessibility",
+    "app",
+    "devtools",
+    "distribution",
+    "input",
+    "render",
+    "runtime",
+    "services",
+    "testing",
+    "ui",
+    "window",
+];
+const ROOT_SOURCE_FILES: &[&str] = &[
+    "accessibility.rs",
+    "app.rs",
+    "architecture_tests.rs",
+    "devtools.rs",
+    "distribution.rs",
+    "input.rs",
+    "internal.rs",
+    "lib.rs",
+    "prelude.rs",
+    "render.rs",
+    "runtime.rs",
+    "services.rs",
+    "task.rs",
+    "testing.rs",
+    "ui.rs",
+    "window.rs",
+];
 
 struct LayerRule {
-    directory: &'static str,
+    path: &'static str,
     allowed_crate_paths: &'static [&'static str],
+    excluded_files: &'static [&'static str],
 }
 
 const LAYER_RULES: &[LayerRule] = &[
     LayerRule {
-        directory: "foundation",
+        path: "ui/foundation",
         allowed_crate_paths: &[],
+        excluded_files: &[],
     },
     LayerRule {
-        directory: "layout",
-        allowed_crate_paths: &["crate::foundation::"],
+        path: "ui/layout",
+        allowed_crate_paths: &["crate::ui::foundation::"],
+        excluded_files: &[],
     },
     LayerRule {
-        directory: "text",
-        allowed_crate_paths: &["crate::foundation::", "crate::text::"],
+        path: "ui/text",
+        allowed_crate_paths: &["crate::ui::foundation::", "crate::ui::text::"],
+        excluded_files: &[],
     },
     LayerRule {
-        directory: "presentation",
-        allowed_crate_paths: &["crate::foundation::", "crate::text::"],
+        path: "ui/presentation",
+        allowed_crate_paths: &["crate::ui::foundation::", "crate::ui::text::"],
+        excluded_files: &[],
     },
     LayerRule {
-        directory: "runtime",
-        allowed_crate_paths: &["crate::foundation::"],
+        path: "runtime",
+        allowed_crate_paths: &["crate::ui::foundation::"],
+        excluded_files: &["task.rs", "timer.rs"],
     },
 ];
 
 #[test]
-fn framework_sources_are_physically_partitioned_by_layer() {
+fn framework_sources_are_physically_partitioned_by_capability() {
     let source_root = source_root();
     let mut unexpected = Vec::new();
     for entry in fs::read_dir(&source_root).expect("zui source root should be readable") {
         let path = entry.expect("zui source entry should be readable").path();
-        if path.is_dir() {
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("");
-            if !LAYER_RULES.iter().any(|rule| rule.directory == name) {
-                unexpected.push(path.display().to_string());
-            }
-            continue;
-        }
         let name = path
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("");
-        if !["architecture_tests.rs", "lib.rs", "renderer_support.rs"].contains(&name) {
+        if path.is_dir() {
+            if !CAPABILITY_DIRECTORIES.contains(&name) {
+                unexpected.push(path.display().to_string());
+            }
+        } else if !ROOT_SOURCE_FILES.contains(&name) && !name.ends_with("_tests.rs") {
+            unexpected.push(path.display().to_string());
+        }
+    }
+    for path in all_files(&source_root) {
+        if path.file_name().and_then(|name| name.to_str()) == Some("mod.rs") {
             unexpected.push(path.display().to_string());
         }
     }
     assert!(
         unexpected.is_empty(),
-        "zui source must live in a declared framework layer; unexpected paths:\n{}",
+        "zui source must use capability roots and file-based module roots; unexpected paths:\n{}",
         unexpected.join("\n")
     );
 }
 
 #[test]
-fn framework_layers_only_depend_in_the_declared_direction() {
+fn every_public_capability_has_a_matching_source_root() {
+    let source_root = source_root();
+    let facade =
+        fs::read_to_string(source_root.join("lib.rs")).expect("zui facade should be readable");
+    let mut missing = Vec::new();
+    for capability in CAPABILITY_ROOTS {
+        let path = source_root.join(format!("{capability}.rs"));
+        if !path.is_file() {
+            missing.push(format!("missing {}", path.display()));
+        }
+        if !facade.contains(&format!("pub mod {capability};")) {
+            missing.push(format!("lib.rs does not declare `pub mod {capability};`"));
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "public ZUI capabilities must be backed by same-named physical module roots:\n{}",
+        missing.join("\n")
+    );
+}
+
+#[test]
+fn backend_neutral_layers_only_depend_in_the_declared_direction() {
     let source_root = source_root();
     let mut violations = Vec::new();
     for rule in LAYER_RULES {
-        for path in production_rust_files(&source_root.join(rule.directory)) {
+        for path in production_rust_files(&source_root.join(rule.path)) {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            if rule.excluded_files.contains(&name) {
+                continue;
+            }
             let source = fs::read_to_string(&path).expect("zui source should be readable");
             for (index, line) in source.lines().enumerate() {
                 let Some(crate_path) = line.find("crate::").map(|offset| &line[offset..]) else {
                     continue;
                 };
-                if line.trim_start().starts_with("//") {
-                    continue;
-                }
-                if rule
-                    .allowed_crate_paths
-                    .iter()
-                    .any(|allowed| crate_path.starts_with(allowed))
+                if line.trim_start().starts_with("//")
+                    || rule
+                        .allowed_crate_paths
+                        .iter()
+                        .any(|allowed| crate_path.starts_with(allowed))
                 {
                     continue;
                 }
                 violations.push(format!(
-                    "{}:{} crosses the {} layer boundary with `{}`",
+                    "{}:{} crosses the {} boundary with `{}`",
                     path.display(),
                     index + 1,
-                    rule.directory,
+                    rule.path,
                     line.trim()
                 ));
             }
         }
     }
-
-    let renderer_support = source_root.join("renderer_support.rs");
-    let source = fs::read_to_string(&renderer_support).expect("renderer bridge should be readable");
-    for (index, line) in source.lines().enumerate() {
-        let Some(crate_path) = line.find("crate::").map(|offset| &line[offset..]) else {
-            continue;
-        };
-        if line.trim_start().starts_with("//") || crate_path.starts_with("crate::text::") {
-            continue;
-        }
-        violations.push(format!(
-            "{}:{} renderer bridge may only consume text contracts: `{}`",
-            renderer_support.display(),
-            index + 1,
-            line.trim()
-        ));
-    }
-
     assert!(
         violations.is_empty(),
-        "zui internal dependencies must flow foundation → layout/text → presentation, while runtime stays presentation-independent:\n{}",
+        "backend-neutral dependencies must flow foundation → layout/text → presentation while core runtime remains presentation-independent:\n{}",
         violations.join("\n")
     );
 }
 
 #[test]
-fn framework_layers_do_not_absorb_platform_or_product_owners() {
+fn backend_neutral_sources_do_not_absorb_native_or_product_owners() {
     let source_root = source_root();
     let forbidden = [
         "accesskit::",
+        "accesskit_platform::",
         "wgpu::",
         "winit::",
-        "zeta_native",
+        "zeta_icons::",
         "zeta_ui::",
+        "zeterm::",
     ];
     let mut violations = Vec::new();
-    for path in production_rust_files(&source_root) {
-        let source = fs::read_to_string(&path).expect("zui source should be readable");
-        for token in forbidden {
-            if source.contains(token) {
-                violations.push(format!("{} contains `{token}`", path.display()));
+    for root in ["ui", "runtime"] {
+        for path in production_rust_files(&source_root.join(root)) {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("");
+            if root == "runtime" && ["task.rs", "timer.rs"].contains(&name) {
+                continue;
             }
+            scan_file_forbidden(&path, &forbidden, &mut violations);
         }
     }
     assert!(
         violations.is_empty(),
-        "platform adapters, graphics backends, components, and product state must remain above zui:\n{}",
+        "backend-neutral ZUI capabilities must not import native adapters or product owners:\n{}",
         violations.join("\n")
     );
 }
 
 #[test]
-fn production_modules_stay_small_and_the_root_facade_stays_explicit() {
+fn native_dependencies_stay_with_their_capability_owners() {
+    let source_root = source_root();
+    let mut violations = Vec::new();
+    for path in production_rust_files(&source_root) {
+        let relative = path
+            .strip_prefix(&source_root)
+            .expect("zui source should remain below its root")
+            .to_string_lossy();
+        let source = fs::read_to_string(&path).expect("zui source should be readable");
+        let imports_wgpu = source
+            .match_indices("wgpu::")
+            .any(|(offset, _)| !source[..offset].ends_with("crate::render::"));
+        if imports_wgpu && !relative.starts_with("render/wgpu/") {
+            violations.push(format!(
+                "{} imports wgpu outside render/wgpu",
+                path.display()
+            ));
+        }
+        if source.contains("winit::")
+            && ![
+                "app/native_host.rs",
+                "input/keyboard.rs",
+                "internal.rs",
+                "window/chrome.rs",
+                "window/event.rs",
+                "window/native.rs",
+            ]
+            .contains(&relative.as_ref())
+        {
+            violations.push(format!(
+                "{} imports winit outside app/input/window integration",
+                path.display()
+            ));
+        }
+        if (source.contains("zeta_icons::")
+            || source.contains("zeta_ui::")
+            || source.contains("zeterm::"))
+            && relative != "architecture_tests.rs"
+        {
+            violations.push(format!("{} imports a product owner", path.display()));
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "native and product dependencies must remain with their declared capability owners:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn production_modules_stay_small() {
     let source_root = source_root();
     let mut oversized = Vec::new();
     for path in production_rust_files(&source_root) {
@@ -158,36 +271,124 @@ fn production_modules_stay_small_and_the_root_facade_stays_explicit() {
     }
     assert!(
         oversized.is_empty(),
-        "zui production modules must stay under {MAX_PRODUCTION_MODULE_LINES} lines; extract an owned submodule instead of extending:\n{}",
+        "zui production modules must stay under {MAX_PRODUCTION_MODULE_LINES} lines:\n{}",
         oversized.join("\n")
     );
+}
 
-    let facade =
-        fs::read_to_string(source_root.join("lib.rs")).expect("zui facade should be readable");
+#[test]
+fn public_capability_roots_hide_native_backend_types() {
+    let source_root = source_root();
+    let forbidden = [
+        "pub use accesskit::",
+        "pub use wgpu::",
+        "pub use winit::",
+        "pub mod internal",
+        "pub mod wgpu",
+    ];
+    let mut violations = Vec::new();
+    for name in CAPABILITY_ROOTS
+        .iter()
+        .map(|name| format!("{name}.rs"))
+        .chain(["lib.rs".to_owned()])
+    {
+        let path = source_root.join(name);
+        let source = fs::read_to_string(&path).expect("public module root should be readable");
+        for token in forbidden {
+            if source.contains(token) {
+                violations.push(format!("{} exposes `{token}`", path.display()));
+            }
+        }
+    }
     assert!(
-        !facade.lines().any(|line| line.contains("::*;")),
-        "zui's public facade must explicitly export every supported contract"
+        violations.is_empty(),
+        "public capability roots must hide native backend types:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn legacy_facade_and_technical_layer_roots_do_not_return() {
+    let source_root = source_root();
+    let legacy_paths = [
+        "api.rs",
+        "application",
+        "core.rs",
+        "foundation",
+        "layout",
+        "packaging",
+        "platform",
+        "presentation",
+        "renderer",
+        "renderer_support.rs",
+        "testkit",
+        "text",
+    ];
+    let present = legacy_paths
+        .iter()
+        .map(|path| source_root.join(path))
+        .filter(|path| path.exists())
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        present.is_empty(),
+        "legacy facade and technical-layer roots must not return:\n{}",
+        present.join("\n")
     );
 }
 
 fn source_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    let cargo_source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    if cargo_source_root.is_dir() {
+        return cargo_source_root;
+    }
+
+    let workspace = env::var("TEST_WORKSPACE").unwrap_or_else(|_| "_main".to_owned());
+    for runfiles_variable in ["RUNFILES_DIR", "TEST_SRCDIR"] {
+        let Ok(runfiles_root) = env::var(runfiles_variable) else {
+            continue;
+        };
+        let source_root = Path::new(&runfiles_root)
+            .join(&workspace)
+            .join("zeterm/zui/src");
+        if source_root.is_dir() {
+            return source_root;
+        }
+    }
+
+    cargo_source_root
+}
+
+fn scan_file_forbidden(path: &Path, forbidden: &[&str], violations: &mut Vec<String>) {
+    let source = fs::read_to_string(path).expect("zui source should be readable");
+    for token in forbidden {
+        if source.contains(token) {
+            violations.push(format!("{} contains `{token}`", path.display()));
+        }
+    }
 }
 
 fn production_rust_files(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    visit_rust_files(root, &mut files);
+    visit_files(root, &mut files);
     files.retain(|path| {
-        !path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with("_tests.rs") || name == "architecture_tests.rs")
+        path.extension().and_then(|extension| extension.to_str()) == Some("rs")
+            && !path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with("_tests.rs") || name == "architecture_tests.rs")
     });
     files.sort();
     files
 }
 
-fn visit_rust_files(root: &Path, files: &mut Vec<PathBuf>) {
+fn all_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    visit_files(root, &mut files);
+    files
+}
+
+fn visit_files(root: &Path, files: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(root).unwrap_or_else(|error| {
         panic!(
             "could not read zui source directory {}: {error}",
@@ -196,8 +397,8 @@ fn visit_rust_files(root: &Path, files: &mut Vec<PathBuf>) {
     }) {
         let path = entry.expect("zui source entry should be readable").path();
         if path.is_dir() {
-            visit_rust_files(&path, files);
-        } else if path.extension().and_then(|extension| extension.to_str()) == Some("rs") {
+            visit_files(&path, files);
+        } else {
             files.push(path);
         }
     }

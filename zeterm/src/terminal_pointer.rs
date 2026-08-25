@@ -3,7 +3,7 @@ use zeta_terminal::{
     MouseModifiers, MouseTrackingMode, ScreenBuffer, TerminalCore, TerminalMouseButton,
     TerminalMouseButtonState, TerminalMouseEvent, TerminalMousePosition,
 };
-use zeta_winit::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
+use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 use crate::NativeApp;
 use crate::shell_scene::terminal_mouse_position_for_viewport;

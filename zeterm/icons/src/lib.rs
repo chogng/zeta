@@ -4,10 +4,10 @@ mod generated;
 mod library;
 
 pub use library::{ALL_ICONS, icons};
-pub use zeta_icon::Icon;
-pub use zeta_icon::IconDefinition;
-pub use zeta_icon::IconId;
-pub use zeta_icon::IconRendering;
+pub use zui::ui::Icon;
+pub use zui::ui::IconDefinition;
+pub use zui::ui::IconId;
+pub use zui::ui::IconRendering;
 
 /// Resolves a product icon from the explicit semantic library.
 pub fn icon_by_id(id: &str) -> Option<Icon> {

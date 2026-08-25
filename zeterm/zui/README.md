@@ -1,174 +1,209 @@
-# `zui`
+# `zui` 开发文档
 
-> 本 README 是 `zui` crate 的实现权威文档。跨 crate 的渲染所有权、后端替换边界和长期演进由
-> [`docs/rendering-architecture.md`](../docs/rendering-architecture.md) 维护；通用组件的实现由
-> [`zeta-ui`](../ui/README.md) 维护。Native split host 的渐进式弃用边界由
-> [`docs/native-deprecation-plan.md`](../docs/native-deprecation-plan.md) 维护。
+`zui` 是 Rust 桌面应用唯一需要依赖的原生 UI framework crate。它拥有 UI 内核、Application 与多窗口生命周期、任务和定时器、平台事件归一化、系统服务、托盘和全局快捷键、协议 URL、资源与隔离进程、OS accessibility、应用分发工具、渲染器契约、默认 wgpu 后端与确定性 testing；这些职责在同一 crate 内按能力目录隔离，不通过 sibling crate 暴露替代入口。
 
-`zui` 是后端无关的原生 UI 框架。它把声明式 `Element` 解析为一次 `ComputedElement`，用同一份
-计算几何驱动组件绘制与检查快照，并把最终 `UiScene` 交给 renderer。它还提供后端无关的交互帧、
-稳定控件身份和 pointer/focus 分发语义。它不提供 Button、ActionBar 等组件，也不调用窗口 API、
-映射产品命令或保存产品状态。
+产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。`zeta-ui` 在它之上提供可复用组件和 zeterm pane topology；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
 
-## 1. 边界与依赖方向
+## 1. Crate 边界
 
-| 能力 | Owner | 状态 |
+| 能力 | 规范公共入口 | 内部 owner |
 | --- | --- | --- |
-| Element row/column、fixed/fill、padding、gap 与 radius | `zui` | ✅ |
-| `ComputedElement` 与每帧 `InspectionFrame` | `zui` | ✅ |
-| geometry、paint/image/icon/text scene primitive | `zui` | ✅ |
-| Renderer-independent icon asset contract | `zeta-icon`（由 `zui` facade re-export） | 委托 |
-| Scene 稳定前缀 checkpoint 与 volatile fragment 原地替换 | `zui` | ✅；host 决定 retained boundary |
-| Retained fragment lifecycle、animation cleanup 与 deadline report | `zui::RetainedRuntime` / `zui::RetainedFragmentRegistry` | ✅；host 应用 scene/interaction cleanup |
-| Backend-neutral scalar animation、stable property key、deadline 与 advance contract | `zui::AnimationRegistry` / `zui::ScalarAnimation` | ✅；host 提供时间、调度唤醒和重绘 |
-| Split/Grid、text shaping 与单行 text input 基座 | `zui` | ✅ |
-| Button、ActionBar、TabList、ContextView 等组件 | `zeta-ui` | 委托 |
-| GPU execution 与 surface lifecycle | `zeta-renderer` / backend crate | 委托 |
-| 命中、pointer capture、focus、键盘导航、cursor 与 accessibility snapshot | `zui` | ✅ |
-| 平台事件转换、cursor/accessibility 发布与产品命令映射 | product host / platform adapter | 委托 |
+| Geometry、Element、layout、text、scene、inspection | `zui::ui` | `ui/foundation` / `ui/layout` / `ui/text` / `ui/presentation` |
+| Interaction、animation、deadline、retained lifecycle | `zui::runtime`，并由 `zui::ui` 聚合常用类型 | `runtime` |
+| Application、多窗口 lifecycle、退出策略与跨线程投递 | `zui::app` | `app` |
+| 后台任务、作用域取消与 event-loop timer | `zui::runtime`；`zui::task` 是兼容入口 | `runtime/task.rs` / `runtime/timer.rs` |
+| Window、event、theme、cursor 与 chrome capability | `zui::window` | `window` |
+| Keyboard、pointer 与 IME | `zui::input` | `input`；pointer/IME 事件由 `window/event.rs` 统一拥有 |
+| Clipboard、dialog、opener、notification、menu、tray 与 global shortcut | `zui::services` | `services` |
+| Packaged resource 与 shell-free child process | `zui::services` | `services/resource.rs` / `services/process.rs` |
+| Signed update check、staging 与 installer handoff | `zui::services` | `services/update.rs` |
+| Custom protocol URL 启动与转发 | `zui::app::ProtocolScheme` / `App::open_url` | `app/protocol.rs` / `app/runtime_event.rs` |
+| Bundle、协议声明与 native installer | `zui::distribution` / `zui-packager` | `distribution` |
+| Bounded runtime trace 与 live snapshot | `zui::devtools` | `devtools.rs` |
+| OS accessibility tree 与 action 回流 | `zui::accessibility` / `App::accessibility_action` | `accessibility.rs` |
+| Renderer、factory 与 presentation target | `zui::render` | `render` |
+| 默认 GPU composition | `zui::app::Application::run` | private `render/wgpu` |
+| 常用最小导入 | `zui::prelude` | `prelude.rs` |
+| 手动时钟、确定性 lifecycle/timer 与 headless renderer | `zui::testing`；`zui::testkit` 是兼容别名 | `testing` |
+| Button、List、ContextMenu 与产品 pane topology | 不属于 `zui` | `zeta-ui` / 产品 crate |
 
-允许的依赖方向是 `zeta-ui → zui → zeta-icon`、`zeta-renderer → zui` 和
-`backend → zeta-renderer + zui`。`zui` 不得依赖这些上层 crate。出现 `wgpu::*`、产品 identity、
-组件样式或 host reducer，意味着 ownership 已经漂移。
+`src/lib.rs` 只声明这些同名能力模块，不再通过 `api.rs` 拼装第二套目录。根级类型导出、`zui::task` 和 `zui::testkit` 暂时作为现有消费者兼容入口保留；新代码使用上表的规范入口。
 
-### 内部分层
+## 2. 平台抽象
 
-`lib.rs` 只是显式公共 facade，不承载实现。内部依赖固定为：
+公共 API 不导出 `winit::WindowEvent`、`winit::WindowAttributes`、`winit::EventLoopProxy`、`winit::WindowId` 或 concrete window。`window/event.rs` 与 `input/keyboard.rs` 在各自 owner 内把 winit 事件转换为 ZUI 自有的 `zui::window::WindowEvent`、`zui::input::KeyEvent`、`ModifiersState`、`Ime` 和 pointer value；应用只处理转换后的稳定语义。
 
-| 层 | 物理目录 | 可以依赖 | 明确不拥有 |
-| --- | --- | --- | --- |
-| 基础值 | `foundation/` | 无 | layout、scene、interaction、平台类型 |
-| 几何算法 | `layout/` | `foundation` | Element、paint、产品 Pane 状态 |
-| 文本内核 | `text/` | `foundation`、自身子模块 | scene、组件 chrome、IME 平台 lifecycle |
-| 呈现组合 | `presentation/` | `foundation`、`text` | 跨帧 focus/capture、窗口事件、产品 reducer |
-| 框架运行时 | `runtime/` | `foundation` | scene、component、text、产品 command |
-| Renderer bridge | `renderer_support.rs` | `text` | scene mutation、GPU backend、平台 surface |
+未形成 ZUI 语义的平台事件转换为 `WindowEvent::Other`。redraw 由 Application runtime 单独分派给 `App::redraw`；resize 和 scale factor 在调用产品 callback 前同步到 renderer 与 `WindowMetrics`。
 
-`presentation` 与 `runtime` 是并列层：product host 负责把一帧 `UiScene`、`InteractionFrame` 和
-`FrameScheduler` 组合起来，任何一侧都不得反向获得另一侧。内部实现必须通过 canonical layer path
-引用依赖，不能经由 crate root re-export 绕过层次。生产模块上限为 500 行；新增职责应进入所属层的
-新私有模块。
+`zui::window::WindowOptions` 只表达 ZUI 支持的窗口策略，不接受完整 native attribute bag。`WindowHandle` 是 non-owning capability：framework registry 始终拥有实际 window 与 renderer，产品可以请求 redraw、修改 cursor/title/theme/IME 或发起 window drag，但不能延长 native window 生命周期。
 
-## 2. 文件与接口地图
+`zui::render::RenderWindow` 是传给自定义 `RendererFactory` 的 opaque presentation target。第三方图形后端通过标准 `raw_window_handle::HasWindowHandle` 和 `HasDisplayHandle` 读取 surface capability，不获得 winit 类型或 Application runtime ownership。
 
-| Symbol | 可见性 | 精确职责 |
-| --- | --- | --- |
-| `Component` | public | 要求组件声明 `ComponentElement`，并允许绘制消费同一次 computed geometry |
-| `Element` / `ElementStyle` | public | 保存 authored direction、length、padding、gap、radius 和 child tree |
-| `ComponentElement::compute` | public | 在 host bounds 内解析 immutable `ComputedElement` |
-| `compute_element` / `resolved_padding` / `child_bounds` | private | 分配 fixed/fill 主轴空间、裁剪 box 并生成准确 gap regions |
-| `UiScene::draw_component` | public | compute 一次、自动注册检查节点，再调用 `paint_element`；适用于不需要交互 sink 的 scene-only 组合 |
-| `ComponentContext` / `UiFrame` | public | 在同一 frame 中携带 inspection parent、interaction sink 与显式时钟，组合子组件并声明 modal scope |
-| `UiFrame::draw_component` / `with_context` / `with_element` / `with_clip` | public | canonical frame composition；低层 host paint 也必须留在 frame 的 scoped closure 内 |
-| `ComponentContext::with_component` | public | 在一个组件根下交错自定义 paint 与子组件，同时保持 scene inspection parent、interaction parent 和 animation binding |
-| `UiFrame::with_animation_bindings` / `draw_component_with_animation_bindings` | public | 将 retained `AnimationBinding` scoped 到一帧组件组合；组件不直接依赖 runtime registry |
-| `presentation::inspection::node_for_element` | crate-private | 单向把 `ComputedElement` 投影为 inspection metadata；Element 层不反向依赖 inspection |
-| `presentation::component` 中的 `impl UiScene::draw_component` | public binding | 把 Component 接入 scene；scene 核心不依赖 Component trait |
-| `UiScene::with_element` | public | 让 content closure 与 overlay 进入相同 compute/inspection 管线 |
-| `UiScene::with_current_layer_element` / `with_inspection_node` | private | 绑定 scene layer、inspection parent 与声明源码位置 |
-| `UiScene::checkpoint` / `restore` | public | 保留 scene primitive/layer/inspection 稳定前缀，并复用分配原地替换后续 fragment |
-| `UiScene::with_fragment` / `replace_fragment` / `remove_fragment` | public | 以稳定 `ElementId` 管理 terminal retained fragment，并在移除时恢复 scene/inspection prefix |
-| `FrameScheduler::request` / `take` | public | 合并平台帧之间的失效请求，并由 host 在一次 redraw 中消费最高级别的工作 |
-| `FrameDeadlineSet::include` / `next_deadline` | public | 聚合组件、动画和异步轮询的最早单调 deadline；不接触平台 event loop |
-| `ScalarAnimation::transition_to` / `advance` | public | 插值一个后端无关的标量值，支持 retarget、easing、deadline 与 snap/cancel |
-| `AnimationRegistry::transition_to` / `advance` | public | 按 `ElementId + AnimationProperty` 保留跨帧 track，聚合 changed keys、fragment IDs、失效等级与 deadline |
-| `RetainedFragmentRegistry::mount` / `begin_exit` / `advance` | public | 保留稳定 fragment lifecycle，取消退出、按显式时钟生成到期 cleanup IDs，并投影局部失效 |
-| `RetainedRuntime::mount` / `begin_exit` / `advance` | public | 聚合 fragment lifecycle 与 animation tracks；fragment 到期或 unmount 时自动清理其 animation tracks |
-| `InteractionFrame::register` / `checkpoint` / `restore` | public | 记录一帧的绘制顺序、交互节点与 modal scope，并与 retained scene prefix 对齐 |
-| `InteractionSink::register` / `set_modal_root` | public | 为 presentation 组合提供后端无关的交互节点与 modal boundary；runtime frame 承担实际保留和分派 |
-| `UiDispatch` | public | 跨 frame 保存 hover、press/capture、focus 与窗口激活状态，只产生无效请求和 `UiIntent` |
-| `UiNode` / `ElementId` / `AccessibilityNode` | public | 分别表达当前帧控件语义（含交互失效等级）、跨帧稳定 identity 与不可变 accessibility snapshot；不分配产品 identity 或发布平台 API |
-| `InspectionFrame::register` | crate-private | 建立单帧 identity、parent、layer 和命中顺序 |
-| `scene::batching::batches` | private | 保留跨 primitive 的真实插入顺序并合并连续同类 range |
-| `font::new_font_system` / `font::mapping` | private | 固定 layout 与 renderer 共享的 locale/fallback/font mapping policy |
-| `renderer_support` | public backend bridge | 只向 renderer adapter 暴露共享 shaping policy |
-
-## 3. 执行路径与不变量
+## 3. 物理目录与依赖方向
 
 ```text
-UiScene::draw_component
-  → Component::element
-  → ComponentElement::compute
-  → compute_element
-  → presentation::inspection::node_for_element
-  → InspectionFrame::register
-  → Component::paint_element(same ComputedElement)
-  → UiScene primitives
-  → SceneBatch
-  → zeta-renderer::Renderer
+src/
+├── app.rs + app/                    Application、context、lifecycle、protocol、event loop
+├── window.rs + window/              window value、event、chrome、native owner、runtime registry
+├── input.rs + input/                keyboard 与输入契约
+├── ui.rs + ui/                      foundation、layout、text、presentation
+├── runtime.rs + runtime/            interaction、animation、retained、task、timer
+├── render.rs + render/              renderer contract、factory、private wgpu backend
+├── services.rs + services/          可注入系统能力及默认实现
+├── accessibility.rs                 ZUI 语义到 AccessKit 的映射
+├── distribution.rs + distribution/ bundle 与 installer tooling
+├── testing.rs + testing/            deterministic runtime 与 headless renderer
+├── devtools.rs                      bounded diagnostics
+├── prelude.rs                       最小常用导入
+├── task.rs                          旧 `zui::task` 兼容入口
+└── internal.rs                      crate-private native integration bridge
 ```
 
-新宿主的 canonical 入口是 `UiFrame::draw_component`：它让 scene、inspection、interaction 和 frame clock
-由一个 frame owner 进入同一次组合。需要自定义低层 paint 与子组件交错时，使用
-`ComponentContext::with_component`；需要无交互的低层 element closure 时才使用 `with_element`，让
-`ComponentContext` 继续拥有同一个 frame。
-旧的 `UiScene::draw_component_with_interaction`、`UiFrame::parts_mut` 和 `UiFrame::into_parts` 已删除，
-不得重新引入平行的 scene/interaction 输出接口。
+| 模块 | 负责 | 禁止 |
+| --- | --- | --- |
+| `ui/foundation` | dependency-free value types、identity、geometry、color、icon asset | window、GPU、component 或产品状态 |
+| `ui/layout` | 通用 Split/Grid geometry 与 resize constraints | pane 产品语义、窗口状态、绘制 |
+| `ui/text` | font catalog、shaping、logical text/input geometry 与 editing | window event、GPU glyph atlas |
+| `ui/presentation` | Element、computed layout、paint primitive、inspection 与 immutable ordered scene | event loop、surface、输入分发 |
+| `runtime` | interaction、animation、deadline、frame invalidation 与 retained fragment lifecycle | presentation/renderer ownership、产品 reducer |
+| `render` | backend-neutral renderer contract 与 factory | 产品状态、输入分发、accessibility owner |
+| `render/wgpu` | physical conversion、pipeline、atlas、shader、surface recovery 与 present | 产品状态、layout、interaction/accessibility |
+| `window` / `input` | winit adapter、native window owner、ZUI event conversion 与 live capability | scene、产品状态 |
+| `app` | App callbacks、window registry、event-loop orchestration 与退出策略 | 产品领域状态、具体组件 |
+| `services` | 可注入系统服务、进程隔离与更新 | 产品状态、发布凭证 |
+| `distribution` | bundle layout、OS protocol metadata、installer plan 与 direct tool invocation | 签名密钥、发布凭证、产品更新策略 |
+| `testing` | 手动 clock、headless window/renderer、确定性 event/timer queue | native event loop、真实系统服务、产品断言逻辑 |
 
-`Element` tree 每帧解析，不持有跨帧 identity。`InspectionNodeId` 只能在当前 `UiScene` 生命周期内使用；
-选中状态如果要跨帧保存，必须由 host 建立自己的稳定 identity。Padding 色块使用 clamp 后的 resolved
-值，Inspector 同时可读取原始 `ElementStyle`。Gap 由 layout 生成实际矩形，不允许 Inspector 猜测。
-`element` 不引用 `inspection`，`scene` 不引用 `Component`；这两个单向绑定分别由
-`presentation::inspection` 和 `presentation::component` 承担，禁止重新引入双向模块依赖。
+能力根文件负责模块声明和规范 re-export，具体状态与算法进入同名目录。`internal.rs` 只能连接 crate-private native 类型，不能重新成为 `platform` 式的综合 owner；若新增代码找不到清晰能力目录，应先修正 ownership。
 
-`FrameScheduler` 只合并 `Render < Fragment < Rebuild` 帧请求，不调用窗口 API，也不决定产品状态如何变化。
-`Fragment` 表示由 host 划定的任意 presentation fragment，不表示 Overlay、Picker 或其他产品拓扑。Host 在收到
-`FrameSchedule::RequestFrame` 时唤醒平台，在 redraw 开始时通过 `take` 消费工作；同步完成了等价重建时
-必须调用 `clear`，避免下一帧重复执行。
+## 4. Feature 边界
 
-`SceneCheckpoint` 是当前 retained presentation 的最小边界：它记录 primitive、composition layer 与
-inspection prefix，`restore` 后 host 可以只重建 volatile fragment，并复用 Scene Vec capacity。它不提供
-跨 scene identity，也不自动判断 dirty subtree；checkpoint 必须由创建它的同一 `UiScene` 消费。
+| Feature | 提供 | 适用场景 |
+| --- | --- | --- |
+| 无 feature | backend-neutral UI、layout、text、scene、runtime 与 `Renderer` | 组件 crate、headless tests、替代 host |
+| `native` | Application、task/timer、system services、accessibility、distribution tooling、testing、ZUI-owned input/window contracts 与 private native adapter | 自定义 renderer 的原生应用及 runtime tests |
+| `wgpu`（default） | `native` + 默认 wgpu renderer composition | 开箱即用的桌面应用 |
 
-`RetainedRuntime` 是跨帧 retained state 的通用 owner；其内部的 `RetainedFragmentRegistry` 管理 fragment
-lifecycle，`AnimationRegistry` 管理属性 track。Host 在当前组合出现稳定
-identity 时调用 `mount`；重复调用表示 update，不会重置 retained state。组件离开当前组合时调用
-`begin_exit`，退出期间不能重新注册 interaction 或 inspection 节点；`advance` 到达 deadline 后返回
-cleanup IDs，并自动移除这些 identity 的 animation tracks。Host 必须用这些 ID 调用
-`UiScene::remove_fragment`，并恢复配对的 `InteractionFrameCheckpoint`；如果 fragment 不是 terminal，则
-退回 `FrameInvalidation::Rebuild`，不能静默破坏后续 paint order。
+组件库使用 `zui = { default-features = false }`。需要原生 Application runtime 但不使用默认 GPU backend 的 host 使用 `features = ["native"]`。普通桌面产品启用默认 feature。
 
-Overlay Element 会创建高于当前 layer 的 scene layer，并在闭包返回后恢复调用者的 layer 与 clip。
-panic recovery 不是当前 contract；组件 paint panic 会中断本帧构建。
+## 5. Application 执行路径
 
-交互沿同一份 layout bounds 运行：host 在 scene 构建时注册 `UiNode`，平台事件进入 `UiDispatch`，
-其返回的 `UiIntent` 再由 host 映射为产品状态转换。`zui` 不接受 callback registry，也不执行
-window drag、菜单、Session 或 editor command。
+```text
+zui::app::Application::run
+  → 创建 typed event loop、AppProxy、task/timer runtime 与 injectable services
+  → zui::app::App::resumed
+      → AppContext::open_window
+          → private window::NativeWindow
+          → 首次显示前创建 private AccessKit adapter
+          → RendererFactory::create(RenderWindow)
+          → window runtime registry
+  → private winit WindowEvent
+      → window::WindowEvent::from_native
+      → framework 同步 physical extent 与 scale factor
+      → App::window_event / App::redraw
+      → WindowContext::present_scene(scene, accessibility)
+          → 同步 OS accessibility tree
+          → dyn Renderer::render_scene
+          → RenderOutcome::Retry 时重新请求 redraw
+  → exiting
+      → 取消 application/window scoped work
+      → 释放每个 window 的 accessibility、renderer 与 native resources
+```
 
-## 4. 集成义务
+`ApplicationHandle::proxy` 返回 `AppProxy<T>`，worker 可以通过 `send_event` 唤醒主线程。event loop 已退出时返回包含原事件的 `AppDisconnected<T>`；Application 启动或运行失败返回不泄漏 winit 类型的 `ApplicationRunError`。`ApplicationExit` 分离最终产品状态与 runtime 内记录的 fatal `ApplicationError`。
 
-- 组件调用者使用 `UiScene::draw_component`，不能直接调用 `Component::paint`。
-- 拥有自定义 paint 与子组件的 surface 使用 `ComponentContext::with_component`；无交互 scene-only
-  closure 才使用 `UiScene::with_element`。
-- Renderer 只消费 `UiScene`，不得获得 Component、interaction 或 accessibility frame。
-- 使用同一份绘制 bounds 注册 `UiNode`，不能另行估算命中区域；动态对象在仍表示同一对象时保持
-  `ElementId`。
-- retained fragment 的 mount/update/unmount 必须由 `RetainedRuntime` 记录；退出 fragment
-  不得继续出现在当前 interaction 或 inspector snapshot 中。
-- 处理 `RetainedRuntimeAdvanceReport::fragment().removed_ids` 时，scene 和 interaction checkpoint 必须
-  在同一 cleanup 路径收敛；动画 track 由 runtime 自动清理，不能只删 paint 而留下可交互或可检查的 ghost node。
-- product host 将 `UiIntent` 映射为 command，并由 platform adapter 发布 cursor 与 accessibility
-  snapshot；`zui` 不建立第二套业务 reducer 或平台 adapter。
-- `zeta-ui` 可以兼容 re-export `zui` API，但 renderer 必须直接依赖 `zui`，避免基础协议由组件 crate
-  反向拥有。
+默认 `Application::run` 使用私有 wgpu backend。测试或第三方 backend 实现公开的 `Renderer` 与 `RendererFactory`，再使用 `Application::run_with_renderer` 或 `ApplicationBuilder::with_renderer` 注入；组件与产品 scene 构造不改变。Clipboard、file dialog、opener、notification、menu、tray、global shortcut、resource 与 process 都能通过 builder 注入替代实现。
 
-## 5. 测试与修改影响
+`BackgroundExecutor` 把 `Send` future 放到命名 worker thread 执行，并把完成值投递回 `App::user_event`。`TaskScope::Window` 在窗口关闭时取消，application scope 在退出时取消；丢弃 `Task` 也会取消，显式 `detach` 才保留。`TimerScheduler` 使用 native event loop deadline，不为每个 timer 创建线程；相同 deadline 按稳定 ID 顺序投递，窗口关闭与 application 退出会清理对应 scope。
 
-运行 `cargo test -p zui` 验证 Element layout、inspection、scene batching、font/text layout、text input、
-Split/Grid、interaction 与 primitive contract。修改以下边界时还需同步验证：
+## 6. 系统服务与 accessibility
 
-- `architecture_tests` 验证物理分层、canonical dependency path、500 行模块上限、显式 root export，
-  以及平台、GPU、组件和产品依赖禁令；
+产品从 `ApplicationHandle::services`、`AppContext::services` 或 `WindowContext::services` 获取 typed capability，不依赖具体 backend crate。`ApplicationBuilder::with_file_dialogs`、`with_opener`、`with_notifications` 和 `with_menus` 用于测试替身或产品定制；URL 与 menu identity 在进入 backend 前已转换成 ZUI-owned value。
 
-- scene primitive 或 batch ordering：`zeta-renderer` 与全部 backend；
-- font/text contract：`zeta-wgpu`、`zeta-ui`、`zeta-editor`、`zeta-markdown`；
-- Element/Component contract：`zeta-ui`、`zeterm-keybinding-ui`、`zeta-editor` 与 native 架构审计；
-- geometry/layout/interaction contract：native root/split/grid tests。
+Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut event 都是 ZUI-owned value。默认 tray backend 支持 macOS/Windows；Linux 产品可注入带 GTK/AppIndicator 的 backend，核心 crate 不强制组件消费者链接 GTK。默认 global shortcut backend 支持 macOS、Windows 与 X11，Wayland portal 仍需独立 backend。
 
-## 6. 当前限制与扩展点
+`ResourcePath` 拒绝绝对路径和父目录穿越，`SystemResourceLocator` 识别 macOS bundle 的 `Contents/Resources` 与 executable sibling `resources`。`ProcessCommand` 从不调用 shell、保留参数边界、可清空继承环境，并由 `ChildProcess` 默认执行 terminate-on-drop。显式 `ProcessSandboxPolicy` 分别表达文件系统与网络权限；默认 backend 在 macOS 使用 Seatbelt、在 Linux 使用 Bubblewrap，受限策略如果无法建立对应 backend 就返回错误，`SystemProcesses` 还会拒绝任何试图返回 `Unrestricted` 的降级实现。Windows AppContainer 通过 `ProcessSandbox` 扩展点注入，当前 crate 不携带需要安装和 ACL 管理的 helper。
 
-当前具备帧级失效合并、host 划定的 Scene/interaction prefix checkpoint、terminal fragment 移除、
-`RetainedRuntime`、`RetainedFragmentRegistry`、`AnimationBinding` 和通用 pointer/focus 语义，但没有自动子树级
-dirty propagation、跨帧 layout cache、style cascade、运行时样式编辑、path primitive、disabled/live-region/
-text-selection accessibility semantics 或平台 accessibility adapter。产品级 exit retention 仍需各 fragment
-明确保留内容、退出目标和 reduced-motion policy；GPU backend 变化不应改变 `zui` public contract。
+`ApplicationBuilder::with_protocol_scheme` 只接收显式允许 scheme 的启动参数，`AppProxy::send_open_url` 用于 single-instance 或平台 bridge 转发后续 URL，最终统一进入 `App::open_url`。`BundleBuilder` 把相同的 `ProtocolScheme` 写入 macOS `Info.plist`、Linux desktop MIME handler 或 Windows 注册脚本；WiX installer 定义把 Windows scheme 写入每用户 registry。runtime 只处理启动语义，不能代替安装时的系统注册。
+
+`SignedHttpUpdater` 对 manifest 的原始 payload 执行 strict Ed25519 verification，再按目标平台选择 artifact；下载完成后必须通过 manifest 中的 SHA-256 才能原子进入 staging。`UpdateInstaller` 只接收已经验证的 `StagedUpdate`，默认 backend 交给操作系统打开 installer，也可注入企业部署或测试实现。HTTP check/download 是阻塞服务，产品通过 `BackgroundExecutor` 调用，不能阻塞 UI callback。
+
+`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、menu、tray、shortcut、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。snapshot 不持有 native window、renderer 或产品状态。
+
+`InteractionFrame::accessibility_nodes` 是语义树的唯一来源。`WindowContext::present_scene` 在绘制同一帧时把该快照映射为 AccessKit tree；adapter 在窗口第一次可见前创建。OS 请求的 Focus/Click 转换成 `AccessibilityActionKind::{Focus, Activate}` 并回到 `App::accessibility_action`，产品继续通过现有 `UiDispatch` 与 reducer 处理，不产生第二套控件身份。renderer 仍只消费 `UiScene`，不拥有 accessibility。
+
+## 7. 分发工具链
+
+`BundleManifest` 是 library API 与 `zui-packager` CLI 的共同输入。JSON 中的 executable、icon 和 resource source 相对于 manifest 文件目录解析；`ResourcePath` 继续约束 bundle 内 destination。生成器只接受普通文件和目录，拒绝输入 symlink、路径穿越和既有输出，因此失败重试不会覆盖发布目录。
+
+| 目标 | Bundle 产物 | 协议声明 | Installer backend |
+| --- | --- | --- | --- |
+| macOS | `<name>.app` | `Contents/Info.plist` 的 `CFBundleURLTypes` | `/usr/bin/pkgbuild` 生成 `.pkg` |
+| Linux | `<name>.AppDir`，含 `AppRun` | 根 `.desktop` 与 `usr/share/applications` MIME handler | `appimagetool` 生成 `.AppImage` |
+| Windows | `<name>-windows` | 显式 `register-protocols.ps1` | WiX 4 `.wxs` + `wix build` 生成每用户 `.msi` |
+
+最小 manifest 见 [`examples/bundle-manifest.json`](examples/bundle-manifest.json)。`bundle` 只生成可检查的目录；`installer` 先生成同一 bundle，再直接执行当前目标的外部工具，不经过 shell：
+
+```bash
+cargo run -p zui --bin zui-packager -- bundle zeterm/zui/examples/bundle-manifest.json dist macos
+cargo run -p zui --bin zui-packager -- installer zeterm/zui/examples/bundle-manifest.json dist macos
+```
+
+`InstallerBuilder::prepare` 可让发布系统先检查 `InstallerPlan`，`InstallerBuilder::execute` 再通过可注入 `InstallerTool` 执行。默认 `SystemInstallerTool` 保留原始 argv，并要求工具成功后声明的 artifact 确实存在。ZUI 不拥有 Apple/Windows 签名身份、notarization 凭证、AppImage signing key 或发布渠道；发布流水线必须在 installer 生成后完成签名与平台验收。
+
+## 8. Testing
+
+`zui::testing::TestRuntime` 不创建窗口或系统事件循环。测试显式选择起始 `Instant`，再驱动 resume、open/close、redraw、typed event、scoped timer 与 exit；`advance` 不 sleep，并按 deadline/ID 稳定投递。`HeadlessRenderer` 实现正式 `Renderer` contract，记录 target 配置和完整 immutable scene；`TestWindow` 同时保存最近的 accessibility snapshot。`zui::testkit` 只是迁移期兼容别名。
+
+这套工具验证 runtime policy 和 presentation 输出，但不会伪装真实 OS 行为。窗口 chrome、系统 dialog、VoiceOver/Narrator/Orca 集成和 GPU surface recovery 仍需对应平台 smoke/integration test。
+
+## 9. Scene 与 renderer 不变量
+
+- 所有 geometry、font size 和 scene primitive 使用 logical UI pixels，DPI 转换只发生在 renderer；
+- `UiScene` 保存 clip、composition layer 和跨 primitive 类型的精确 back-to-front 顺序；
+- renderer 只消费 immutable `UiScene`，不得接收 interaction/accessibility frame；
+- component 只产生 Element 与 scene primitive，不接受 device、queue、surface 或 render pass；
+- backend 不重新解释产品 layout、component identity、focus 或 command；
+- component/Application API 不暴露 `wgpu::*` 或 `winit::*` 对象；
+- 新 backend-specific 能力只有形成稳定的跨后端语义后才能进入 `Renderer` contract。
+
+## 10. 修改规则
+
+- **新 public API**：放入同名能力根文件和目录，同时决定是否需要根级兼容导出；不能恢复 `api.rs` 聚合 façade 或 flat-only API。
+- **新平台事件**：先在 `window` 或 `input` 定义 ZUI-owned value，再在同一 owner 内完成 private native conversion；产品不能匹配 winit variant。
+- **新窗口能力**：由 `WindowOptions` 或 `WindowHandle` 暴露，不得让产品持有 native window owner。
+- **新系统能力**：先在 `services` 定义可注入的 ZUI-owned trait/value，再把具体 crate 限制在该能力的默认 backend。
+- **新 bundle/installer 格式**：扩展 `zui::distribution` contract 与 `distribution` owner，保持 CLI 与 library 使用同一 manifest；签名凭证不能进入源码或 runtime service。
+- **新 accessibility 语义**：扩展 `AccessibilityNode` 与 AccessKit mapper；不得让 component 或产品依赖 AccessKit。
+- **新 primitive 或 batch ordering**：先修改 `ui/presentation` contract，再同步所有 renderer。
+- **新 layout 算法**：放入 `ui/layout`，输入必须是 caller-owned state，输出必须是 immutable geometry。
+- **新 renderer**：实现 public trait，通过 factory 注入；默认 backend 实现保持 private。
+- **新通用组件**：放入 `zeta-ui`；产品专属 surface/state 留在产品 crate。
+- **新 icon artwork/语义目录**：放入 `zeta-icons`，通用 icon value contract 只在 `ui/foundation/icon` 演进。
+- **文件规模**：production Rust module 不超过 500 行，超过时按单一职责拆出 owned submodule。
+
+`architecture_tests.rs` 固定能力目录、同名 public root、backend-neutral dependency direction、native dependency owner、无 `mod.rs`、500 行上限、旧技术层目录不得回流，以及 public API 不导出 native backend type。修改 ownership 时同步这些测试与本文。
+
+## 11. 当前能力与剩余边界
+
+当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、tray/global shortcut、resource/process、严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer tooling、bounded diagnostics/devtools、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
+
+这使 `zui` 具备 Electron 类框架的核心职责边界，但不等于 Electron 兼容层。当前限制包括：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖当前有真实消费者的策略；menu 的默认 native 安装目前只在 macOS 完整实现；Linux tray 与 Wayland global shortcut 需要平台 backend；drag-and-drop 尚未提供；Windows strict sandbox 需要注入带 helper/ACL 管理的 AppContainer backend；bundle 与 installer 尚未集成 code signing、notarization 和真实三平台发布 CI。当前 devtools 是结构化 runtime diagnostics，不是 Chromium 式 DOM/CSS/JavaScript debugger。
+
+后续能力继续采用同一准则：先形成 ZUI-owned contract 和可注入测试替身，再接具体平台 backend。资源打包、安装器、自动更新与开发工具属于 SDK/tooling 层，不能把产品组件或产品状态收进 `zui`。
+
+## 12. 验证
+
+```bash
+cargo check -p zui --no-default-features
+cargo check -p zui --no-default-features --features native
+cargo test -p zui --no-default-features --features native --lib
+cargo clippy -p zui --no-default-features --features native --all-targets -- -D warnings
+cargo check -p zui --no-default-features --features native --bin zui-packager
+bazel test //zeterm/zui:zui-unit-tests
+cargo test -p zeta-ui
+cargo check -p zui-demo --features native --bin zui-native-demo
+cargo test -p zeterm
+```
+
+`zui-demo` 是不依赖终端、App Server 或产品 icon catalog 的最小宿主，用来验证 public namespaces、scene contract、renderer 替换和默认 native Application composition。其 native binary 还覆盖双窗口、task/timer、menu 与 accessibility publication。

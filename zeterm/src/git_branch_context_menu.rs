@@ -6,7 +6,7 @@ use zeta_ui::{
     InputBoxState, InteractionRegion, Rect, SearchBox, Size, TextInput, TextInputCommand,
     TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
 };
-use zui::{
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

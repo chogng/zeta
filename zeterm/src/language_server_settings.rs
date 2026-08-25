@@ -7,7 +7,7 @@ use zeta_ui::{
     InputBox, InputBoxState, InteractionRegion, PaintRect, Rect, Switch, SwitchState, TextBlock,
     TextInputLayoutEngine, TextStyle, UiScene,
 };
-use zui::{
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, AnimationEasing, AnimationKey, AnimationProperty,
     CursorFeedback, DispatchInvalidation, ElementId, FocusBehavior, FrameInvalidation,
     NavigationAxis, NavigationGroupId, NodeAction, ScalarAnimationSpec, UiDispatch, UiNode,
@@ -30,7 +30,7 @@ use presentation::{
 
 const SETTINGS_SCOPE: u32 = 8;
 pub(crate) use zeta_settings::SETTINGS_CLOSE as LANGUAGE_SERVER_SETTINGS_CLOSE;
-pub(crate) use zeta_settings::SETTINGS_PAGE as LANGUAGE_SERVER_SETTINGS;
+pub(crate) const LANGUAGE_SERVER_SETTINGS: ElementId = ElementId::scoped(SETTINGS_SCOPE, 1);
 pub(crate) use zeta_settings::SETTINGS_RESET as LANGUAGE_SERVER_SETTINGS_RESET;
 pub(crate) use zeta_settings::SETTINGS_SAVE as LANGUAGE_SERVER_SETTINGS_SAVE;
 pub(crate) const LANGUAGE_SERVER_MODE_AUTOMATIC: ElementId = ElementId::scoped(SETTINGS_SCOPE, 4);

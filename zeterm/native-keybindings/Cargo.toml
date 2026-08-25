@@ -14,7 +14,7 @@ path = "src/lib.rs"
 serde_json = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-utils-path = { workspace = true }
-zeta-winit = { workspace = true }
+zui = { workspace = true, features = ["native"] }
 
 [lints]
 workspace = true

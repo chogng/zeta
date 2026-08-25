@@ -1,6 +1,6 @@
 use super::{IconLabel, IconLabelStyle};
 use crate::{Color, Component, Rect, TextStyle, UiScene};
-use zui::{Icon, IconDefinition, IconId};
+use zui::ui::{Icon, IconDefinition, IconId};
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("label"),

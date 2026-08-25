@@ -43,21 +43,47 @@ use workspace_surface::WorkspaceSurface;
 use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
-use zeta_layout::{InspectorPane, LogicalViewport, RootLayout};
 use zeta_protocol::SessionId;
-use zeta_renderer::{RenderOutcome, RenderTargetSize, Renderer};
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
+use zeta_ui::layout::InspectorPane;
+use zeta_ui::layout::LogicalViewport;
+use zeta_ui::layout::RootLayout;
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
-use zeta_winit::{
-    ActiveEventLoop, ApplicationHandler, ControlFlow, CursorIcon, ElementState, LogicalSize,
-    ModifiersState, MouseButton, NativeWindow, PhysicalExtent, Theme, WindowAttributes,
-    WindowChrome, WindowControlInsets, WindowEvent, WindowId, run_application_with_user_events,
-};
-use zui::FrameDeadlineSet;
-use zui::{CursorFeedback, DispatchInvalidation, DispatchOutcome, ElementId, UiDispatch, UiIntent};
-use zui::{FrameInvalidation, FrameSchedule, FrameScheduler, RetainedRuntime};
+use zui::app::AccessibilityAction;
+use zui::app::AccessibilityActionKind;
+use zui::app::App;
+use zui::app::AppContext;
+use zui::app::Application;
+use zui::app::ApplicationError;
+use zui::app::ApplicationHandle;
+use zui::app::ControlFlow;
+use zui::app::WindowContext;
+use zui::input::ElementState;
+use zui::input::ModifiersState;
+use zui::input::MouseButton;
+use zui::services::ClipboardHandle;
+use zui::ui::CursorFeedback;
+use zui::ui::DispatchInvalidation;
+use zui::ui::DispatchOutcome;
+use zui::ui::ElementId;
+use zui::ui::FrameDeadlineSet;
+use zui::ui::FrameInvalidation;
+use zui::ui::FrameSchedule;
+use zui::ui::FrameScheduler;
+use zui::ui::RetainedRuntime;
+use zui::ui::UiDispatch;
+use zui::ui::UiIntent;
+use zui::window::CursorIcon;
+use zui::window::LogicalSize;
+use zui::window::PhysicalExtent;
+use zui::window::Theme;
+use zui::window::WindowChrome;
+use zui::window::WindowControlInsets;
+use zui::window::WindowEvent;
+use zui::window::WindowHandle;
+use zui::window::WindowOptions;
 
 mod agent_session;
 mod agent_session_target;
@@ -124,7 +150,6 @@ mod remote_tunnel_manager_input;
 mod remote_tunnel_manager_view;
 mod remote_tunnel_process;
 mod remote_tunnel_readiness;
-mod renderer_backend;
 mod session_canvas;
 mod session_context_menu;
 mod session_search;
@@ -209,16 +234,19 @@ fn main() -> ExitCode {
         eprintln!("{error}");
         return ExitCode::FAILURE;
     }
-    let application = match run_application_with_user_events(move |event_proxy| {
-        NativeApp::new(event_proxy, launch)
-    }) {
-        Ok(application) => application,
-        Err(error) => {
-            eprintln!("failed to run the native event loop: {error}");
-            return ExitCode::FAILURE;
-        }
-    };
-    if application.failed {
+    let application_exit =
+        match Application::run(move |event_proxy| NativeApp::new(event_proxy, launch)) {
+            Ok(application_exit) => application_exit,
+            Err(error) => {
+                eprintln!("failed to run the native event loop: {error}");
+                return ExitCode::FAILURE;
+            }
+        };
+    let (application, runtime_error) = application_exit.into_parts();
+    if let Some(error) = runtime_error.as_ref() {
+        eprintln!("{PRODUCT_DISPLAY_NAME} runtime failed: {error}");
+    }
+    if application.failed || runtime_error.is_some() {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
@@ -226,9 +254,7 @@ fn main() -> ExitCode {
 }
 
 struct NativeApp {
-    window_id: Option<WindowId>,
-    window: Option<NativeWindow>,
-    renderer: Option<Box<dyn Renderer>>,
+    window: Option<WindowHandle>,
     presentation: Option<ShellPresentation>,
     frame_scheduler: FrameScheduler,
     retained_runtime: RetainedRuntime,
@@ -263,7 +289,8 @@ struct NativeApp {
     text_layout: TextInputLayoutEngine,
     caret_blink: CaretBlinkController,
     code_editor_style: CodeEditorStyle,
-    event_proxy: zeta_winit::EventLoopProxy<NativeEvent>,
+    event_proxy: zui::app::AppProxy<NativeEvent>,
+    clipboard: ClipboardHandle,
     cursor_position: Option<Point>,
     command_registry: command_dispatch::NativeCommandRegistry,
     terminal_pointer: TerminalPointer,
@@ -286,7 +313,9 @@ struct NativeApp {
 }
 
 impl NativeApp {
-    fn new(event_proxy: zeta_winit::EventLoopProxy<NativeEvent>, launch: ZetermLaunch) -> Self {
+    fn new(application: ApplicationHandle<NativeEvent>, launch: ZetermLaunch) -> Self {
+        let event_proxy = application.proxy();
+        let clipboard = application.clipboard();
         let local_workspace_context = WorkspaceContext::capture_current();
         let agent_session_target =
             launch.agent_session_target(local_workspace_context.working_directory());
@@ -326,9 +355,7 @@ impl NativeApp {
             )
         };
         Self {
-            window_id: None,
             window: None,
-            renderer: None,
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
@@ -364,6 +391,7 @@ impl NativeApp {
             caret_blink: CaretBlinkController::default(),
             code_editor_style: CodeEditorStyle::light(),
             event_proxy,
+            clipboard,
             cursor_position: None,
             command_registry: command_dispatch::builtin_command_registry(),
             terminal_pointer: TerminalPointer::default(),
@@ -413,13 +441,12 @@ impl NativeApp {
             .set_editor_style(palette.multi_diff_editor_style());
     }
 
-    fn fail(&mut self, event_loop: &ActiveEventLoop, message: impl std::fmt::Display) {
+    fn fail(&mut self, message: impl std::fmt::Display) {
         eprintln!("{PRODUCT_DISPLAY_NAME} failed: {message}");
         self.failed = true;
-        event_loop.exit();
     }
 
-    fn redraw(&mut self, event_loop: &ActiveEventLoop) {
+    fn redraw_frame(&mut self, context: &mut WindowContext<'_, NativeEvent>) {
         let _trace = session_switch_trace::Span::frame("redraw");
         let now = Instant::now();
         let retained_report = self.retained_runtime.advance(now);
@@ -458,14 +485,12 @@ impl NativeApp {
             return;
         };
         debug_assert!(!presentation.accessibility_nodes.is_empty());
-        let Some(renderer) = self.renderer.as_mut() else {
-            return;
-        };
         let _render_trace = session_switch_trace::Span::frame("renderer.render_scene");
-        match renderer.render_scene(presentation.scene()) {
-            Ok(RenderOutcome::Presented | RenderOutcome::Skipped) => {}
-            Ok(RenderOutcome::Retry) => self.request_redraw(),
-            Err(error) => self.fail(event_loop, error),
+        if let Err(error) =
+            context.present_scene(presentation.scene(), &presentation.accessibility_nodes)
+        {
+            self.fail(&error);
+            context.exit_with_error(ApplicationError::product("zeterm frame rendering", error));
         }
     }
 
@@ -574,7 +599,7 @@ impl NativeApp {
         let window_control_insets = self
             .window
             .as_ref()
-            .map(NativeWindow::window_control_insets)
+            .map(WindowHandle::window_control_insets)
             .unwrap_or(WindowControlInsets::NONE);
         let mut presentation = with_shell_presentation_model(
             self,
@@ -663,7 +688,7 @@ impl NativeApp {
         let window_control_insets = self
             .window
             .as_ref()
-            .map(NativeWindow::window_control_insets)
+            .map(WindowHandle::window_control_insets)
             .unwrap_or(WindowControlInsets::NONE);
         let Some(mut presentation) = self.presentation.take() else {
             self.rebuild_presentation();
@@ -672,14 +697,8 @@ impl NativeApp {
         let rebuilt = with_shell_presentation_model(
             self,
             window_control_insets,
-            |model, text_layout, animation_bindings| {
-                rebuild_shell_overlays(
-                    &mut presentation,
-                    viewport,
-                    model,
-                    text_layout,
-                    Some(animation_bindings),
-                )
+            |model, text_layout, _animation_bindings| {
+                rebuild_shell_overlays(&mut presentation, viewport, model, text_layout)
             },
         );
         if !rebuilt {
@@ -875,7 +894,7 @@ impl NativeApp {
         }
     }
 
-    fn activate_shell_element(&mut self, id: zui::ElementId) {
+    fn activate_shell_element(&mut self, id: zui::ui::ElementId) {
         if self.activate_language_server_settings_element(id) {
             return;
         }
@@ -1159,7 +1178,7 @@ fn with_shell_presentation_model<R>(
     operation: impl FnOnce(
         ShellPresentationModel<'_>,
         &mut TextInputLayoutEngine,
-        &mut dyn zui::AnimationBinding,
+        &mut dyn zui::ui::AnimationBinding,
     ) -> R,
 ) -> R {
     let NativeApp {
@@ -1339,27 +1358,25 @@ fn handle_terminal_event(
     app.rebuild_presentation_on_next_redraw();
 }
 
-impl ApplicationHandler<NativeEvent> for NativeApp {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.renderer.is_some() {
+impl App<NativeEvent> for NativeApp {
+    fn resumed(&mut self, context: &mut AppContext<'_, NativeEvent>) {
+        if self.window.is_some() {
             self.request_redraw();
             return;
         }
 
-        let attributes = WindowAttributes::default()
-            .with_title(PRODUCT_DISPLAY_NAME)
-            .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT));
-        let window = match NativeWindow::create(
-            event_loop,
-            attributes,
-            WindowChrome::ContentUnderTitlebar,
-        ) {
-            Ok(window) => window,
+        let options = WindowOptions::new(PRODUCT_DISPLAY_NAME)
+            .with_inner_size(LogicalSize::new(INITIAL_WIDTH, INITIAL_HEIGHT))
+            .with_chrome(WindowChrome::ContentUnderTitlebar);
+        let opened_window = match context.open_window(options) {
+            Ok(opened_window) => opened_window,
             Err(error) => {
-                self.fail(event_loop, error);
+                self.fail(&error);
+                context.exit_with_error(error);
                 return;
             }
         };
+        let window = opened_window.handle();
         let system_scheme = match window.theme() {
             Some(Theme::Dark) => ColorScheme::Dark,
             Some(Theme::Light) | None => ColorScheme::Light,
@@ -1371,9 +1388,8 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 ColorScheme::Light | ColorScheme::HighContrastLight => Theme::Light,
             }),
         );
-        self.window_id = Some(window.id());
-        self.physical_extent = window.inner_extent();
-        self.scale_factor = window.scale_factor();
+        self.physical_extent = opened_window.metrics().physical_extent();
+        self.scale_factor = opened_window.metrics().scale_factor();
         let terminal_size = terminal_grid_size_for_viewport(
             self.logical_viewport(),
             ScreenBuffer::Primary,
@@ -1381,7 +1397,8 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             self.agent_sidebar,
         );
         if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
-            self.fail(event_loop, error);
+            self.fail(error);
+            context.exit();
             return;
         }
         if self.agent_session_target.is_remote()
@@ -1389,7 +1406,8 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 .language_service
                 .start_remote(self.event_proxy.clone(), self.agent_session_target.clone())
         {
-            self.fail(event_loop, error);
+            self.fail(error);
+            context.exit();
             return;
         }
         self.agent_session = match AgentSession::spawn(
@@ -1398,55 +1416,34 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
         ) {
             Ok(session) => Some(session),
             Err(error) => {
-                self.fail(event_loop, error);
+                self.fail(error);
+                context.exit();
                 return;
             }
         };
-        self.window = Some(window.clone());
+        self.window = Some(window);
         self.rebuild_presentation();
         self.sync_input_focus();
-        let renderer = match renderer_backend::create(window) {
-            Ok(renderer) => renderer,
-            Err(error) => {
-                self.fail(event_loop, error);
-                return;
-            }
-        };
-        self.renderer = Some(renderer);
         self.request_redraw();
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        if self.window_id != Some(window_id) {
+    fn window_event(&mut self, context: &mut WindowContext<'_, NativeEvent>, event: WindowEvent) {
+        if self.window.as_ref().and_then(WindowHandle::id) != Some(context.id()) {
             return;
         }
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::CloseRequested => context.exit(),
             WindowEvent::Resized(size) => {
                 self.terminal_selection.clear();
                 self.physical_extent = PhysicalExtent::new(size.width, size.height);
                 self.layout_inspector.window_resized(self.window_viewport());
                 self.rebuild_presentation();
-                if let Some(renderer) = self.renderer.as_mut() {
-                    renderer.resize(RenderTargetSize::new(
-                        self.physical_extent.width,
-                        self.physical_extent.height,
-                    ));
-                }
                 self.request_redraw();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.terminal_selection.clear();
                 self.scale_factor = scale_factor;
                 self.rebuild_presentation();
-                if let Some(renderer) = self.renderer.as_mut() {
-                    renderer.set_scale_factor(scale_factor);
-                }
                 self.request_redraw();
             }
             WindowEvent::ThemeChanged(theme) => {
@@ -1515,12 +1512,37 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
                 self.request_redraw();
             }
             WindowEvent::Occluded(true) => {}
-            WindowEvent::RedrawRequested => self.redraw(event_loop),
             _ => {}
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: NativeEvent) {
+    fn redraw(&mut self, context: &mut WindowContext<'_, NativeEvent>) {
+        self.redraw_frame(context);
+    }
+
+    fn accessibility_action(
+        &mut self,
+        _context: &mut AppContext<'_, NativeEvent>,
+        action: AccessibilityAction,
+    ) {
+        if self.window.as_ref().and_then(WindowHandle::id) != Some(action.window()) {
+            return;
+        }
+        let Some(presentation) = self.presentation.as_ref() else {
+            return;
+        };
+        let outcome = match action.kind() {
+            AccessibilityActionKind::Focus => self
+                .ui_dispatch
+                .focus_element(presentation.interaction_frame(), action.target()),
+            AccessibilityActionKind::Activate => self
+                .ui_dispatch
+                .activate_element(presentation.interaction_frame(), action.target()),
+        };
+        self.apply_dispatch_outcome(outcome);
+    }
+
+    fn user_event(&mut self, _context: &mut AppContext<'_, NativeEvent>, event: NativeEvent) {
         match event {
             NativeEvent::Agent(event) => {
                 self.handle_agent_session_event(event);
@@ -1612,7 +1634,7 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, context: &mut AppContext<'_, NativeEvent>) {
         let now = Instant::now();
         self.keybindings.advance_chord(now);
         self.advance_keyboard_shortcuts(now);
@@ -1668,6 +1690,6 @@ impl ApplicationHandler<NativeEvent> for NativeApp {
             Some(deadline) => ControlFlow::WaitUntil(deadline),
             None => ControlFlow::Wait,
         };
-        event_loop.set_control_flow(control_flow);
+        context.set_control_flow(control_flow);
     }
 }

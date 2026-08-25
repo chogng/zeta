@@ -8,7 +8,7 @@ use crate::NodeAction;
 use crate::Rect;
 use crate::UiDispatch;
 use crate::UiFrame;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 const ROOT: ElementId = ElementId::scoped(120, 1);
 const CHILD: ElementId = ElementId::scoped(120, 2);

@@ -9,7 +9,7 @@ mod scm;
 mod style;
 
 mod shell_interaction {
-    use zui::ElementId;
+    use zui::ui::ElementId;
 
     pub const AGENT_SIDEBAR: ElementId = ElementId::scoped(1, 23);
     pub const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
@@ -97,7 +97,7 @@ mod workspace_context {
 
 use std::path::PathBuf;
 
-use zui::ElementId;
+use zui::ui::ElementId;
 
 pub use files::DirectoryEntry;
 pub use files::DirectoryEntryKind;

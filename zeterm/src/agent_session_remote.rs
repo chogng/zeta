@@ -4,7 +4,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::Duration;
 use std::time::Instant;
 
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use super::AGENT_UNAVAILABLE_COMMAND_ERROR;
 use super::AgentSessionCommand;
@@ -24,7 +24,7 @@ const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
 /// connection that reached the normal event loop starts a fresh recovery window on a later loss.
 /// Terminal runtimes use their separate PTY reconnect lease.
 pub(super) fn run_with_recovery(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     target: &AgentSessionTarget,
     available: &AtomicBool,
@@ -93,7 +93,7 @@ pub(super) fn run_with_recovery(
 }
 
 fn wait_for_reconnect(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     delay: Duration,
 ) -> anyhow::Result<bool> {

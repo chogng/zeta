@@ -2,7 +2,7 @@ use crate::{
     Color, Component, ComponentElement, ComputedElement, Element, ElementLength, PaintRect, Point,
     Rect, Size, UiScene,
 };
-use zui::Icon;
+use zui::ui::Icon;
 
 use super::{Button, ButtonSelection, ButtonState, ButtonStyle};
 

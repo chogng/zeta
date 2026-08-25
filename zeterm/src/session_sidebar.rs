@@ -1,17 +1,19 @@
 use crate::NativeApp;
 use crate::shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE;
-use zeta_ui::{
-    Point, Rect, SplitViewLayout, SplitViewLayoutPriority, SplitViewOrientation, SplitViewPane,
-    SplitViewResizeSnapshot,
-};
-use zeta_winit::ElementState;
-use zui::DispatchInvalidation;
+use zeta_ui::Point;
+use zeta_ui::Rect;
+use zeta_ui::SplitViewResizeSnapshot;
+use zeta_ui::layout::SessionSidebarLayout;
+use zeta_ui::layout::SessionSidebarLayoutSpec;
+use zeta_ui::layout::SidebarVisibility;
+use zui::input::ElementState;
+use zui::ui::DispatchInvalidation;
 
 const DEFAULT_WIDTH: f32 = 200.0;
 const MINIMUM_WIDTH: f32 = 160.0;
 const MAXIMUM_WIDTH: f32 = 480.0;
 const MINIMUM_MAIN_WIDTH: f32 = 240.0;
-const SIDEBAR_PANE_INDEX: usize = 0;
+const SESSION_PANE_INDEX: usize = 0;
 const MAIN_PANE_INDEX: usize = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -88,27 +90,26 @@ impl SessionSidebarState {
     pub(crate) fn visible_width(self, viewport_width: f32) -> Option<f32> {
         let bounds = self
             .layout(Rect::from_xywh(0.0, 0.0, viewport_width, 1.0))
-            .pane_bounds(SIDEBAR_PANE_INDEX)?;
+            .sessions_bounds()?;
         (bounds.size.width > 0.0).then_some(bounds.size.width)
     }
 
-    pub(crate) fn layout(self, bounds: Rect) -> SplitViewLayout {
-        let sidebar_is_visible =
-            self.is_expanded() && bounds.size.width >= MINIMUM_WIDTH + MINIMUM_MAIN_WIDTH;
-        let sidebar = SplitViewPane::new(self.preferred_width, MINIMUM_WIDTH, MAXIMUM_WIDTH);
-        let sidebar = if sidebar_is_visible {
-            sidebar
-        } else {
-            sidebar.hidden()
-        };
-        let main_preferred_width = if sidebar_is_visible {
-            (bounds.size.width - self.preferred_width).max(0.0)
-        } else {
-            bounds.size.width
-        };
-        let main = SplitViewPane::new(main_preferred_width, MINIMUM_MAIN_WIDTH, f32::INFINITY)
-            .with_priority(SplitViewLayoutPriority::High);
-        SplitViewLayout::new(bounds, SplitViewOrientation::Horizontal, &[sidebar, main])
+    pub(crate) fn layout(self, bounds: Rect) -> SessionSidebarLayout {
+        self.layout_spec().for_bounds(bounds)
+    }
+
+    fn layout_spec(self) -> SessionSidebarLayoutSpec {
+        SessionSidebarLayoutSpec::new(
+            if self.is_expanded() {
+                SidebarVisibility::Expanded
+            } else {
+                SidebarVisibility::Collapsed
+            },
+            self.preferred_width,
+            MINIMUM_WIDTH,
+            MAXIMUM_WIDTH,
+            MINIMUM_MAIN_WIDTH,
+        )
     }
 
     fn start_resizing(&mut self, viewport_width: f32, pointer_x: f32) -> bool {
@@ -116,10 +117,9 @@ impl SessionSidebarState {
             return false;
         }
         let layout = self.layout(Rect::from_xywh(0.0, 0.0, viewport_width, 1.0));
-        let Some(sash) = layout.sash(0) else {
+        let Some(snapshot) = layout.resize_snapshot() else {
             return false;
         };
-        let snapshot = sash.resize_snapshot();
         self.resize = Some(SessionSidebarResize {
             pointer_origin: pointer_x,
             snapshot,
@@ -133,7 +133,7 @@ impl SessionSidebarState {
             return false;
         };
         let next = resize.snapshot.resize(pointer_x - resize.pointer_origin);
-        debug_assert_eq!(next.previous_index(), SIDEBAR_PANE_INDEX);
+        debug_assert_eq!(next.previous_index(), SESSION_PANE_INDEX);
         debug_assert_eq!(next.next_index(), MAIN_PANE_INDEX);
         if next.previous_size() == resize.current_size {
             return false;

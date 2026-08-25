@@ -5,19 +5,19 @@ use zeta_remote_connections::RemoteConnectionCatalog;
 use zeta_ui::Point;
 use zeta_ui::ScrollCommand;
 use zeta_ui::ScrollDelta;
-use zeta_winit::ElementState;
-use zeta_winit::Key;
-use zeta_winit::KeyEvent;
-use zeta_winit::MouseButton;
-use zeta_winit::MouseScrollDelta;
-use zeta_winit::NamedKey;
-use zui::DispatchInvalidation;
-use zui::DispatchOutcome;
-use zui::ElementId;
-use zui::FocusDirection;
-use zui::InteractionFrame;
-use zui::NavigationAxis;
-use zui::UiDispatch;
+use zui::input::ElementState;
+use zui::input::Key;
+use zui::input::KeyEvent;
+use zui::input::MouseButton;
+use zui::input::MouseScrollDelta;
+use zui::input::NamedKey;
+use zui::ui::DispatchInvalidation;
+use zui::ui::DispatchOutcome;
+use zui::ui::ElementId;
+use zui::ui::FocusDirection;
+use zui::ui::InteractionFrame;
+use zui::ui::NavigationAxis;
+use zui::ui::UiDispatch;
 
 use crate::NativeApp;
 use crate::remote_connection_picker::REMOTE_CONNECTION_ITEM_HEIGHT;
@@ -248,7 +248,7 @@ impl NativeApp {
                     if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("c") =>
                 {
                     if let Some(text) = self.remote_connection_picker.selected_search_text()
-                        && let Err(error) = write_clipboard_text(text.into())
+                        && let Err(error) = write_clipboard_text(&self.clipboard, text.into())
                     {
                         eprintln!("could not copy Remote connection search text: {error}");
                     }
@@ -256,7 +256,7 @@ impl NativeApp {
                 Key::Character(text)
                     if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("v") =>
                 {
-                    match read_clipboard_text() {
+                    match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
                             .remote_connection_picker
                             .apply_search(zeta_ui::TextInputCommand::Insert(text)),
@@ -386,7 +386,7 @@ impl NativeApp {
     }
 }
 
-fn is_shortcut(modifiers: zeta_winit::ModifiersState) -> bool {
+fn is_shortcut(modifiers: zui::input::ModifiersState) -> bool {
     modifiers.control_key() || modifiers.super_key()
 }
 

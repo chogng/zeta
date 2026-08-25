@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::foundation::AnimationBinding;
-use crate::foundation::AnimationEasing;
-use crate::foundation::AnimationKey;
-use crate::foundation::ElementId;
-use crate::foundation::FrameInvalidation;
-use crate::foundation::ScalarAnimationSpec;
+use crate::ui::foundation::AnimationBinding;
+use crate::ui::foundation::AnimationEasing;
+use crate::ui::foundation::AnimationKey;
+use crate::ui::foundation::ElementId;
+use crate::ui::foundation::FrameInvalidation;
+use crate::ui::foundation::ScalarAnimationSpec;
 
 use super::frame_scheduler::FrameSchedule;
 use super::frame_scheduler::FrameScheduler;
@@ -319,15 +319,7 @@ impl AnimationRegistry {
         spec: ScalarAnimationSpec,
         now: Instant,
     ) -> f32 {
-        self.transition_to(
-            key,
-            initial,
-            target,
-            spec.duration(),
-            spec.easing(),
-            spec.invalidation(),
-            now,
-        )
+        self.transition_to(key, initial, target, spec, now)
     }
 
     /// Creates or retargets a scalar track and returns its current sampled value.
@@ -339,17 +331,17 @@ impl AnimationRegistry {
         key: AnimationKey,
         initial: f32,
         target: f32,
-        duration: Duration,
-        easing: AnimationEasing,
-        invalidation: FrameInvalidation,
+        spec: ScalarAnimationSpec,
         now: Instant,
     ) -> f32 {
         let track = self
             .tracks
             .entry(key)
-            .or_insert_with(|| AnimationTrack::new(initial, invalidation));
-        track.invalidation = invalidation;
-        track.animation.transition_to(target, duration, easing, now);
+            .or_insert_with(|| AnimationTrack::new(initial, spec.invalidation()));
+        track.invalidation = spec.invalidation();
+        track
+            .animation
+            .transition_to(target, spec.duration(), spec.easing(), now);
         track.animation.value()
     }
 

@@ -5,7 +5,7 @@ use crate::shell_interaction::COMPOSER;
 use crate::shell_style::SHELL_PALETTE;
 use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_ui::{CaretVisibility, Rect, TextInputCommand, TextInputLayoutEngine};
-use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn branch_menu_places_the_current_branch_first_and_marks_it() {

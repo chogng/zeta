@@ -11,7 +11,7 @@ zeta-editor = { workspace = true }
 zeta-file-search = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-ui = { workspace = true }
-zui = { workspace = true }
+zui = { workspace = true, default-features = false }
 
 [lints]
 workspace = true

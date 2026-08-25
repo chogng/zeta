@@ -14,7 +14,7 @@ side effects, focus changes, IME lifecycle, and redraws.
 
 | Concern | Owner | Boundary |
 | --- | --- | --- |
-| Logical/physical event normalization | `input` | Consumes `zeta-winit` events and returns generic keybinding values. |
+| Logical/physical event normalization | `input` | Consumes public `zui` platform events and returns generic keybinding values. |
 | Pending chord, timeout, blocker, and command resolution | `Keybindings<C>` | Uses the host-supplied catalog; does not execute commands. |
 | User resource file size, polling and atomic writes | `KeybindingsResource<C>` | Owns one JSON file and preserves the last valid rule set on rejected updates. |
 | User JSON shape, platform override and duplicate validation | `zeta-keybinding::user` | Compiles in-memory bytes through host command/condition callbacks; performs no file I/O. |
@@ -24,7 +24,7 @@ side effects, focus changes, IME lifecycle, and redraws.
 ## Execution path
 
 ```text
-zeta-winit event
+zui platform event
   → recording_chord / Keybindings::resolve
   → KeybindingCatalog context predicate
   → NoMatch / Pending / Command / Blocked

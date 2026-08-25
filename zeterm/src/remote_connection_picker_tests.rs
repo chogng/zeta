@@ -7,10 +7,10 @@ use zeta_ui::CaretVisibility;
 use zeta_ui::Rect;
 use zeta_ui::TextInputCommand;
 use zeta_ui::TextInputLayoutEngine;
-use zui::AccessibilityRole;
-use zui::InteractionFrame;
-use zui::UiDispatch;
-use zui::UiFrame;
+use zui::ui::AccessibilityRole;
+use zui::ui::InteractionFrame;
+use zui::ui::UiDispatch;
+use zui::ui::UiFrame;
 
 use super::RemoteConnectionPicker;
 use super::RemoteConnectionPickerAction;

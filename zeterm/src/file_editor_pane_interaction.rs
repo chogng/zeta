@@ -6,7 +6,7 @@ use crate::file_editor_search::FileEditorSearchMode;
 use crate::shell_interaction::{file_editor_close_id, file_editor_fold_id, file_editor_tab_id};
 use zeta_ui::InteractionRegion;
 use zeta_ui::Rect;
-use zui::{
+use zui::ui::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId,
     FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction,
 };

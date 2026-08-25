@@ -11,7 +11,7 @@ use zeta_ui::{
 use crate::shell_interaction::{COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
 use crate::shell_style::ShellPalette;
 use crate::workspace_context::WorkspaceContext;
-use zui::{
+use zui::ui::{
     AccessibilityRole, CursorFeedback, FocusBehavior, NavigationAxis, NavigationGroupId,
     NodeAction, UiDispatch, UiNode,
 };

@@ -7,8 +7,8 @@ use crate::shell_interaction::{
 use crate::shell_style::SHELL_PALETTE;
 use zeta_icons::icons;
 use zeta_ui::{Color, Component, Point, Rect, UiScene};
-use zeta_winit::WindowControlInsets;
-use zui::{InteractionFrame, UiDispatch, UiFrame, UiIntent};
+use zui::ui::{InteractionFrame, UiDispatch, UiFrame, UiIntent};
+use zui::window::WindowControlInsets;
 
 #[test]
 fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
@@ -57,7 +57,7 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
     dispatch.pointer_moved(Point::new(83.0, 16.0), frame.interaction());
     assert_eq!(
         dispatch.press_primary(frame.interaction()).invalidation,
-        zui::DispatchInvalidation::Paint
+        zui::ui::DispatchInvalidation::Paint
     );
     assert!(dispatch.is_pressed(SESSION_SIDEBAR_TOGGLE));
     assert_eq!(
@@ -80,7 +80,7 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
     dispatch.pointer_moved(Point::new(859.0, 16.0), frame.interaction());
     assert_eq!(
         dispatch.press_primary(frame.interaction()).invalidation,
-        zui::DispatchInvalidation::Paint
+        zui::ui::DispatchInvalidation::Paint
     );
     assert!(dispatch.is_pressed(AGENT_SIDEBAR_TOGGLE));
     assert_eq!(

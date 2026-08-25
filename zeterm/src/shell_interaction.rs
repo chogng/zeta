@@ -1,5 +1,5 @@
 use std::ops::Range;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 #[cfg(test)]
 pub(crate) use zeta_agent_sidebar::AGENT_CHANGES;

@@ -1,13 +1,15 @@
 """Bazel definitions for the zeterm application workspace."""
 
-load("@crates//:defs.bzl", "all_crate_deps")
+load("@crates//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
 
 def zeterm_rust_library(
         name,
         crate_name,
         package_name,
+        crate_features = [],
         data = [],
+        source_files = [],
         target_compatible_with = [],
         unit_tests = False):
     """Defines a zeterm-owned Cargo library with metadata-derived dependencies.
@@ -17,7 +19,9 @@ def zeterm_rust_library(
     """
     rust_library(
         name = name,
+        aliases = aliases(package_name = package_name),
         crate_name = crate_name,
+        crate_features = crate_features,
         compile_data = data,
         deps = all_crate_deps(package_name = package_name),
         edition = "2024",
@@ -33,6 +37,7 @@ def zeterm_rust_library(
         rust_test(
             name = name + "-unit-tests",
             crate = ":" + name,
+            crate_features = crate_features,
             data = data,
             deps = all_crate_deps(
                 package_name = package_name,
@@ -47,7 +52,7 @@ def zeterm_rust_library(
         srcs = native.glob([
             "src/**/*.rs",
             "Cargo.toml",
-        ]),
+        ]) + source_files,
         visibility = ["//visibility:public"],
     )
 

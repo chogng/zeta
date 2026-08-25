@@ -1,5 +1,5 @@
-use crate::foundation::ElementId;
-use crate::foundation::FrameInvalidation;
+use crate::ui::foundation::ElementId;
+use crate::ui::foundation::FrameInvalidation;
 
 /// Whether a host must wake its platform event loop after scheduling frame work.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,9 +30,10 @@ impl FrameScheduler {
         } else {
             FrameSchedule::RequestFrame
         };
-        if invalidation == FrameInvalidation::Rebuild {
-            self.fragment_ids = None;
-        } else if invalidation == FrameInvalidation::Fragment {
+        if matches!(
+            invalidation,
+            FrameInvalidation::Rebuild | FrameInvalidation::Fragment
+        ) {
             self.fragment_ids = None;
         }
         self.pending = Some(

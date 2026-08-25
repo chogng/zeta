@@ -2,7 +2,7 @@ use zeta_ui::{
     Component, ComponentContext, ComponentElement, Element, IconLabel, IconLabelStyle, ListView,
     PaintRect, Rect, TextBlock, TextStyle, UiScene,
 };
-use zui::{AccessibilityRole, ComputedElement, UiDispatch, UiNode};
+use zui::ui::{AccessibilityRole, ComputedElement, UiDispatch, UiNode};
 
 use super::FILE_LIST_ROW_HEIGHT;
 use super::FilesState;
@@ -14,7 +14,7 @@ use super::tree_view::file_row_state;
 
 use zeta_ui::Color;
 use zeta_ui::ScrollViewStyle;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 pub const EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
 pub(super) const HORIZONTAL_PADDING: f32 = 10.0;
@@ -273,8 +273,8 @@ fn search_result_label(bounds: Rect, label: &str, style: &FilesPaneStyle) -> Ico
     )
 }
 
-fn search_result_element_id(index: usize) -> zui::ElementId {
-    zui::ElementId::scoped(
+fn search_result_element_id(index: usize) -> zui::ui::ElementId {
+    zui::ui::ElementId::scoped(
         SEARCH_RESULT_SCOPE,
         u32::try_from(index).unwrap_or(u32::MAX).saturating_add(1),
     )

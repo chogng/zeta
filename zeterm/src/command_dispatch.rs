@@ -1,7 +1,7 @@
 use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
 use zeta_commands::ZetermCommandId;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 use crate::NativeApp;
 use crate::session_switch_trace;

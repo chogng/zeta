@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
-use zui::AnimationEasing;
-use zui::ScalarAnimation;
+use zui::ui::AnimationEasing;
+use zui::ui::ScalarAnimation;
 
 const DEFAULT_HOLD_DURATION: Duration = Duration::from_millis(700);
 const DEFAULT_FADE_IN_DURATION: Duration = Duration::from_millis(120);

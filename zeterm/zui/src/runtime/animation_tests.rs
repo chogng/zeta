@@ -11,6 +11,7 @@ use super::AnimationRegistry;
 use super::FrameInvalidation;
 use super::FrameScheduler;
 use super::ScalarAnimation;
+use super::ScalarAnimationSpec;
 
 const FRAME: Duration = Duration::from_millis(16);
 const DURATION: Duration = Duration::from_millis(100);
@@ -19,6 +20,16 @@ const SECOND_ELEMENT: ElementId = ElementId::scoped(8, 2);
 const OPACITY: AnimationKey = AnimationKey::new(ELEMENT, AnimationProperty::Opacity);
 const TRANSLATE_X: AnimationKey = AnimationKey::new(ELEMENT, AnimationProperty::TranslateX);
 const SECOND_OPACITY: AnimationKey = AnimationKey::new(SECOND_ELEMENT, AnimationProperty::Opacity);
+const FRAGMENT_TRANSITION: ScalarAnimationSpec = ScalarAnimationSpec::new(
+    DURATION,
+    AnimationEasing::Linear,
+    FrameInvalidation::Fragment,
+);
+const REBUILD_TRANSITION: ScalarAnimationSpec = ScalarAnimationSpec::new(
+    DURATION,
+    AnimationEasing::Linear,
+    FrameInvalidation::Rebuild,
+);
 
 #[test]
 fn scalar_animation_interpolates_and_schedules_frames() {
@@ -141,15 +152,7 @@ fn animation_registry_preserves_a_track_when_a_component_rebuilds() {
     let mut registry = AnimationRegistry::default();
 
     assert_eq!(
-        registry.transition_to(
-            OPACITY,
-            0.0,
-            1.0,
-            DURATION,
-            AnimationEasing::Linear,
-            FrameInvalidation::Fragment,
-            now,
-        ),
+        registry.transition_to(OPACITY, 0.0, 1.0, FRAGMENT_TRANSITION, now,),
         0.0
     );
     registry.advance(now + Duration::from_millis(40));
@@ -159,9 +162,7 @@ fn animation_registry_preserves_a_track_when_a_component_rebuilds() {
         OPACITY,
         99.0,
         0.0,
-        DURATION,
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
+        FRAGMENT_TRANSITION,
         now + Duration::from_millis(40),
     );
 
@@ -173,24 +174,8 @@ fn animation_registry_preserves_a_track_when_a_component_rebuilds() {
 fn animation_report_aggregates_fragment_ids_and_schedules_one_frame() {
     let now = Instant::now();
     let mut registry = AnimationRegistry::default();
-    registry.transition_to(
-        OPACITY,
-        0.0,
-        1.0,
-        DURATION,
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
-        now,
-    );
-    registry.transition_to(
-        SECOND_OPACITY,
-        0.0,
-        1.0,
-        DURATION,
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
-        now,
-    );
+    registry.transition_to(OPACITY, 0.0, 1.0, FRAGMENT_TRANSITION, now);
+    registry.transition_to(SECOND_OPACITY, 0.0, 1.0, FRAGMENT_TRANSITION, now);
 
     let report = registry.advance(now + FRAME);
 
@@ -218,24 +203,8 @@ fn animation_report_aggregates_fragment_ids_and_schedules_one_frame() {
 fn animation_report_promotes_layout_work_and_element_removal_cleans_all_tracks() {
     let now = Instant::now();
     let mut registry = AnimationRegistry::default();
-    registry.transition_to(
-        OPACITY,
-        0.0,
-        1.0,
-        DURATION,
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
-        now,
-    );
-    registry.transition_to(
-        TRANSLATE_X,
-        0.0,
-        20.0,
-        DURATION,
-        AnimationEasing::Linear,
-        FrameInvalidation::Rebuild,
-        now,
-    );
+    registry.transition_to(OPACITY, 0.0, 1.0, FRAGMENT_TRANSITION, now);
+    registry.transition_to(TRANSLATE_X, 0.0, 20.0, REBUILD_TRANSITION, now);
 
     let report = registry.advance(now + FRAME);
 

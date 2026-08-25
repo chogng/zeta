@@ -3,7 +3,7 @@ use super::{
     interaction_preferred_height, interaction_selection_scroll_command,
 };
 use zeta_ui::ScrollCommand;
-use zui::{Rect, Size};
+use zui::ui::{Rect, Size};
 
 #[test]
 fn interaction_expands_panel_upward_and_preserves_fixed_composer_rows() {

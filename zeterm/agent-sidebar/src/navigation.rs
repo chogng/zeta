@@ -3,7 +3,7 @@ use zeta_ui::{
     ButtonSelection, ButtonState, Component, ComponentContext, ComponentElement, ComputedElement,
     Element, InteractionRegion, Rect, Size, UiScene,
 };
-use zui::{
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };

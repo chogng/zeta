@@ -6,11 +6,10 @@ use zeta_keybinding::LogicalKey;
 use zeta_keybinding::Modifiers;
 use zeta_keybinding::PhysicalKey;
 use zeta_keybinding::ShortcutModifiers;
-use zeta_winit::Key;
-use zeta_winit::KeyEvent;
-use zeta_winit::ModifiersState;
-use zeta_winit::NamedKey;
-use zeta_winit::PhysicalKey as WinitPhysicalKey;
+use zui::input::Key;
+use zui::input::KeyEvent;
+use zui::input::ModifiersState;
+use zui::input::NamedKey;
 
 pub(crate) fn key_stroke(event: &KeyEvent, modifiers: ModifiersState) -> Option<KeyStroke> {
     let logical_key = match &event.logical_key {
@@ -21,9 +20,9 @@ pub(crate) fn key_stroke(event: &KeyEvent, modifiers: ModifiersState) -> Option<
         }
         Key::Unidentified(_) => None,
     }?;
-    let physical_key = match event.physical_key {
-        WinitPhysicalKey::Code(code) => PhysicalKey::new(format!("{code:?}")),
-        WinitPhysicalKey::Unidentified(_) => None,
+    let physical_key = match &event.physical_key {
+        zui::input::PhysicalKey::Code(code) => PhysicalKey::new(format!("{code:?}")),
+        zui::input::PhysicalKey::Unidentified(_) => None,
     };
     Some(KeyStroke::new(
         logical_key,

@@ -1,5 +1,5 @@
 use super::{FileEditorInputState, FileEditorPrompt};
-use zeta_winit::{MouseScrollDelta, PhysicalPosition};
+use zui::input::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
 fn diagnostic_hover_state_invalidates_only_when_the_hit_range_changes() {

@@ -1,9 +1,5 @@
 //! Minimal host proving that the reusable UI stack can run without zeterm product state.
 
-use zeta_renderer::RenderOutcome;
-use zeta_renderer::RenderTargetSize;
-use zeta_renderer::Renderer;
-use zeta_renderer::RendererError;
 use zeta_ui::ActionBar;
 use zeta_ui::ActionBarButton;
 use zeta_ui::ActionBarItem;
@@ -16,12 +12,17 @@ use zeta_ui::Color;
 use zeta_ui::Edges;
 use zeta_ui::Size;
 use zeta_ui::TextStyle;
-use zui::Icon;
-use zui::IconDefinition;
-use zui::IconId;
-use zui::InteractionFrame;
-use zui::UiFrame;
-use zui::UiScene;
+use zui::render::RenderOutcome;
+use zui::render::RenderTargetSize;
+use zui::render::Renderer;
+use zui::render::RendererError;
+use zui::ui::Icon;
+use zui::ui::IconDefinition;
+use zui::ui::IconId;
+use zui::ui::InteractionFrame;
+use zui::ui::Rect;
+use zui::ui::UiFrame;
+use zui::ui::UiScene;
 
 const DEMO_ICON: Icon = Icon::new(
     IconId::new("demo-square"),
@@ -76,7 +77,7 @@ pub fn build_demo_frame() -> UiFrame<InteractionFrame> {
     .with_icon_size(14.0)
     .with_content_gap(6.0);
     let action_bar = ActionBar::new(
-        zui::Rect::from_xywh(16.0, 16.0, 220.0, 32.0),
+        Rect::from_xywh(16.0, 16.0, 220.0, 32.0),
         ActionBarOrientation::Horizontal,
         vec![ActionBarItem::Button(ActionBarButton::icon_and_label(
             DEMO_ICON,

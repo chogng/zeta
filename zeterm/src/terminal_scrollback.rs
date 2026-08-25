@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use zeta_ui::{ScrollCommand, ScrollDelta, ScrollbarController, ScrollbarPresentation};
-use zeta_winit::MouseScrollDelta;
+use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;
 use crate::shell_interaction::{AGENT_EXPLORER_PANE, MULTI_DIFF_EDITOR};

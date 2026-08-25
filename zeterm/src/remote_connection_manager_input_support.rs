@@ -1,7 +1,7 @@
 use zeta_ui::ScrollCommand;
 use zeta_ui::ScrollDelta;
-use zeta_winit::MouseScrollDelta;
-use zui::ElementId;
+use zui::input::MouseScrollDelta;
+use zui::ui::ElementId;
 
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;

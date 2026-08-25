@@ -25,7 +25,7 @@ pub use interaction_pane::ComposerInteractionPaneState;
 
 use zeta_ui::ScrollCommand;
 use zeta_ui::VirtualListLayout;
-use zui::{Rect, Size};
+use zui::ui::{Rect, Size};
 
 const PANEL_HORIZONTAL_INSET: f32 = 24.0;
 const PANEL_TOP_INSET: f32 = 8.0;

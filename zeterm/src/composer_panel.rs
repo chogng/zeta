@@ -12,7 +12,7 @@ use zeta_ui::{
     InteractionRegion, KeycapSequence, KeycapStyle, ListView, PaintRect, Point, Rect, ScrollState,
     Size, TextBlock, TextInputLayoutEngine, TextStyle,
 };
-use zui::{
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, NodeAction,
     UiDispatch,
 };

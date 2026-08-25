@@ -9,7 +9,7 @@ use zeta_keybinding::serialize_key_sequence;
 use zeta_ui::{Color, Point, Rect, UiScene};
 use zeterm_keybinding_ui::KeyboardShortcuts;
 use zeterm_keybinding_ui::paint_chord_hint;
-use zui::{InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn recording_collects_chords_and_commits_after_the_quiet_period() {

@@ -5,7 +5,7 @@ use anyhow::Context;
 use anyhow::Result;
 use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use crate::agent_session_target::AgentSessionTarget;
 use crate::native_event::NativeEvent;
@@ -21,7 +21,7 @@ use crate::terminal_session::TerminalSessionReady;
 /// layer assigns a process-local key first and binds it to the authoritative `SessionId` later.
 /// It keeps inactive PTYs alive while the host renders another Session Tab.
 pub(crate) struct TerminalWorkspace {
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
     target: AgentSessionTarget,
     state: TerminalWorkspaceState,
     active: Option<(TerminalSessionKey, TerminalSession)>,
@@ -201,10 +201,7 @@ pub(crate) enum TerminalReadyOutcome {
 }
 
 impl TerminalWorkspace {
-    pub(crate) fn new(
-        event_proxy: EventLoopProxy<NativeEvent>,
-        target: AgentSessionTarget,
-    ) -> Self {
+    pub(crate) fn new(event_proxy: AppProxy<NativeEvent>, target: AgentSessionTarget) -> Self {
         Self {
             event_proxy,
             target,

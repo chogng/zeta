@@ -1,16 +1,14 @@
 # `zeta-ui`
 
-> 本 README 是可复用 native UI 组件的当前实现说明。Element、scene、inspection、font 与基础
+> 本 README 是 zeterm 产品 UI composition 与可复用 native UI 组件的当前实现说明。Element、scene、inspection、font 与基础
 > layout contract 由 [`zui`](../zui/README.md) 维护；跨 crate 渲染边界见
 > [`docs/rendering-architecture.md`](../docs/rendering-architecture.md)，
-> 后端接口与 wgpu 实现分别见 [`zeta-renderer`](../renderer/README.md) 和
-> [`zeta-wgpu`](../wgpu/README.md)；native 文本输入的跨 crate ownership 见
+> renderer contract 与私有 wgpu 实现见 [`zui`](../zui/README.md)；native 文本输入的跨 crate ownership 见
 > [`docs/native-text-input.md`](../docs/native-text-input.md)；product icon system 见
 > [`docs/icons.md`](../../docs/icons.md)。`Keycap` 的快捷键产品组合由
 > [`zeterm-keybinding-ui`](../keybinding-ui/README.md) 拥有。
 
-`zeta-ui` 基于 `zui` 提供 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、
-TabList、Keycap、Sash、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
+`zeta-ui` 基于 `zui` 提供 zeterm 的 Root/Inspector、Sessions Part 和 Terminal Workspace/Agent Sidebar pane topology，以及 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
 让现有产品代码可以渐进迁移 import；这只是兼容入口，不表示本 crate 拥有 framework contract。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
@@ -23,24 +21,26 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Switch track、thumb、on/off 与交互状态 presentation | `zeta-ui::Switch` | ✅；值、输入路由和 accessibility 归 host |
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
-| 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；产品 topology/state 归 host |
+| 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
+| Root/Inspector、Sessions Part 与 Terminal Workspace/Agent Sidebar topology | `zeta-ui::layout` | ✅；只拥有 Part/Pane geometry，Workbench item state 与 scene composition 归 host |
+| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-agent-sidebar` / `zeta-editor` | 委托；各 crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
 | Sash 命中几何与 hover/active 反馈线 | `zeta-ui::Sash` | ✅；pointer capture、identity 与 resize transition 归 host |
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
 | 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
 | 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
-| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `zui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
+| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
 | 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
 | 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
 | Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
 | 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
-| Renderer-independent icon identity、SVG definition 与 rendering mode | `zeta-icon` | 委托 |
+| Renderer-independent icon identity、SVG definition 与 rendering mode | `zui::{Icon,IconDefinition}` | 委托 |
 | 非 component 单行编辑基座与 shaping | `zui::{TextInput,TextInputLayoutEngine}` | 委托 |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
 | 带左侧语义图标的单行搜索框 composition | `SearchBox` | ✅；过滤策略与输入状态仍归 host |
 | Scene primitive、ordered batch、text layout 与 font catalog | `zui` | 委托；Markdown 语义归 `zeta-markdown` |
 | shaping 与 renderer-compatible text measurement | `zui` → `cosmic-text` | 委托 |
-| 后端无关 frame execution contract | `zeta-renderer::Renderer` | ❌ |
-| GPU pipeline、atlas、shader、surface 与 present | `zeta-wgpu::WgpuRenderer` | ❌ |
+| 后端无关 frame execution contract | `zui::render::Renderer` | ❌；由 framework 拥有 |
+| GPU pipeline、atlas、shader、surface 与 present | private `zui::renderer/wgpu` | ❌ |
 | Focus、input routing 与 accessibility semantics | `zui` + product host | ❌；Button 只消费 host 投影的 focused presentation |
 
 依赖方向：
@@ -48,18 +48,17 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 ```text
 product host → zeta-ui
 zeta-ui → zui
-product host → zeta-renderer → zui
-product host → selected backend → zeta-renderer + zui
+product → zui public facade → private framework modules
 
-zeta-ui → zui → zeta-icon
-product catalog → zeta-icon
+zeta-ui → zui::Icon
+product catalog → zui::Icon
 zui(macOS font catalog) → coretext-rs → CoreText
 
-zeta-ui -X→ wgpu / Metal / Vulkan / zeta-winit
+zeta-ui -X→ wgpu / Metal / Vulkan / winit
 zeta-ui -X→ App Server / workspace / product state
 ```
 
-`zeta-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zeta-icon::Icon`，因此本 crate
+`zeta-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zui::Icon`，因此本 crate
 不需要依赖 zeterm 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
@@ -100,6 +99,7 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
+| `layout::{SessionSidebarLayoutSpec,SessionSidebarLayout}` | public | 解析 Sessions Part 与 main Part 的 split geometry；不拥有 session state、active identity、resize lifecycle 或 scene composition |
 
 `Color` 的 RGB channel 是 sRGB、alpha 为 straight alpha。`Point`、`Size`、font size 与 line
 height 都使用 logical UI pixels；只有 renderer backend 可以执行 logical-to-physical 转换。
@@ -145,13 +145,12 @@ host
           └─ InputBox → rect/text primitives
   → UiScene::draw_rect / UiScene::draw_image / UiScene::draw_icon / UiScene::draw_text
   → UiScene::batches (layer order + exact cross-kind paint order)
-  → zeta_renderer::Renderer::render_scene
+  → zui::render::Renderer::render_scene
       → selected backend
 ```
 
 `UiScene` 是本 crate 依赖的 `zui` 输出边界；组件只通过 `zui::Component` 写入它，不拥有 scene
-协议。当前 wgpu 如何消费这些数据由
-[`zeta-wgpu`](../wgpu/README.md) 说明；替换规则由
+协议。当前 wgpu 如何消费这些数据和替换规则由 [`zui`](../zui/README.md) 与
 [`docs/rendering-architecture.md`](../docs/rendering-architecture.md) 统一定义。
 
 ## 4. 字体与 CoreText
@@ -182,7 +181,7 @@ CoreGraphics raster 或原生 typographic metrics 已经成为绘制事实。
 - scene 保存 logical geometry 和显式 clip/layer，不执行 GPU capability 或 atlas 校验；
 - 不换行的 code/input row 必须选择 `TextBlockWrap::None`，不能依赖 renderer 默认断行；
 - primitive validation、raster、atlas、scale factor 与 surface failure 属于具体 renderer backend；
-- backend-neutral outcome 与 error wrapping 属于 `zeta-renderer`。
+- backend-neutral outcome 与 error wrapping 属于 `zui::render::Renderer` contract。
 
 Host 必须先根据当前 logical layout 构造完整 `UiScene`，再把同一帧的 physical extent 与 scale
 factor 交给 renderer。不要预先把 text coordinates 乘 DPI，否则会发生二次缩放。
@@ -195,7 +194,7 @@ radius 与 Element 声明位置写入检查快照。Caller 必须使用 `UiScene
 由它在当前 nested clip 内自动注册 inspection parent 并同步 paint；这不引入 retained component
 instance、隐式 identity 或 lifecycle。`Button` 拥有 control 内部 padding 和 state-specific
 background selection，并把 icon/text placement 委托给 `IconLabel`；`Button::icon` 保留不参与
-绘制的 accessible label，供 host 的后续 accessibility adapter 使用。Files pane 同样把文件行
+绘制的 accessible label，供 host 的 ZUI accessibility adapter 使用。Files pane 同样把文件行
 的 icon/text 几何委托给 `IconLabel`，但由 product host 先选择具体 semantic file icon。Caller
 必须显式提供
 `ButtonState`、`ButtonStyle`、bounds 与具体 content constructor。`ButtonState::Focused`
@@ -302,7 +301,7 @@ validation 测试属于具体 backend crate。
 
 - 扩展 text style/span、path、rect/clip、font 或 scene：修改 `zui`、backend 与其 canonical README，
   再检查本 crate 的组件和 `zeta-markdown` projection；
-- 更换 shaping backend：保持 `zui::UiScene` 平台无关，并更新字体语义与 backend bridge；
+- 更换 shaping backend：保持 `zui::ui::UiScene` 平台无关，并更新字体语义与 backend bridge；
 - 修改 DPI 转换、shader、atlas 或 glyph raster：只修改具体 backend，不向组件暴露实现类型；
 - 新增拥有 box geometry 的组件：实现必需的 `Component::element` 与需要时的 `paint_element`，让
   `ComputedElement` 同时驱动 paint/hit-test/inspection，并在 sibling test 中验证 computed geometry；
@@ -318,7 +317,7 @@ validation 测试属于具体 backend crate。
   检查路径。纯 layout projection 和 primitive helper 仍不制造节点，检查器也不会从裸 scene
   primitives 反推 ownership；
 - `Button` 当前支持 resting、hovered、focused、pressed、disabled、selected、icon-only 与
-  leading icon，但尚无独立 focus ring、trailing content 或真实 accessibility adapter；
+  leading icon，但尚无独立 focus ring、trailing content 或额外的 component-specific accessibility action；
 - `ActionBar` 当前支持 horizontal/vertical Button 与 Separator、同源 item bounds 和 hit-test，
   但尚无 roving focus、keyboard navigation、overflow 或 custom representation；
 - `Dropdown` 当前只支持单列 label item、固定 item size、单项 selection 与非虚拟化滚动；icon、
@@ -332,14 +331,14 @@ validation 测试属于具体 backend crate。
   lifecycle/interaction 由 host 与 `zui` 组合；
 - `ScrollView` 当前提供 overlay scrollbar 的同源 paint/hit/track-page/thumb-drag geometry，
   `ScrollbarController` 提供 hover/active/fade presentation；平台事件接线、pointer capture、
-  滚动惯性、overscroll 和 accessibility adapter 仍由 host/dispatch 扩展；
+  滚动惯性、overscroll 和 scroll-specific accessibility action 仍由 host/dispatch 扩展；
 - `ListView` 支持固定和可变 item extent，但不测量 item 内容；caller 必须在高度改变时重建
   layout。稳定 item identity、selection、键盘导航、滚动锚定、focus anchor 与 Tree
   flatten/expand semantics 仍由 composed control 或后续专用组件拥有；
 - `TreeView` 只消费 host-flattened visible nodes；异步 child loading、展开状态持久化、稳定节点
   identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
 - `Sash` 当前只拥有 presentation geometry，没有 pointer capture、keyboard resize 或
-  accessibility adapter；这些交互由 host 与 `zui` 组合；
+  accessibility resize action；这些交互由 host 与 `zui` 组合；
 - `InputBox` 消费显式 blink phase，但没有 mouse caret hit testing、drag selection 或
   disabled/read-only presentation；
 - native 当前使用 `CaretBlinkController::default` 的 530ms half-period，尚未读取系统 caret

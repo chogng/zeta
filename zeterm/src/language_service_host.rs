@@ -27,7 +27,7 @@ use zeta_language_service::{
     LanguageRequestKind, LanguageServerState, LanguageService, LanguageServiceConfiguration,
     LanguageServiceDocument, LanguageServiceEvent, LanguageServiceEventSink,
 };
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use self::remote::protocol_document;
 use self::remote::protocol_location_kind;
@@ -38,7 +38,7 @@ use crate::file_editor_host::{FileEditorHost, FileEditorTab};
 use crate::native_event::NativeEvent;
 
 struct NativeLanguageServiceEventSink {
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
 }
 
 impl LanguageServiceEventSink for NativeLanguageServiceEventSink {
@@ -63,14 +63,14 @@ pub(crate) struct NativeLanguageService {
     definitions: Option<LanguageLocations>,
     request_error: Option<String>,
     pending_requests: PendingLanguageRequests,
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
 }
 
 impl NativeLanguageService {
     /// Creates the host adapter without starting a local language-server process.
     ///
     /// Creates a Remote adapter before the shared Agent connection becomes available.
-    pub(crate) fn remote(workspace_root: &Path, event_proxy: EventLoopProxy<NativeEvent>) -> Self {
+    pub(crate) fn remote(workspace_root: &Path, event_proxy: AppProxy<NativeEvent>) -> Self {
         Self {
             service: None,
             remote: None,
@@ -90,7 +90,7 @@ impl NativeLanguageService {
         }
     }
 
-    pub(crate) fn start(workspace_root: &Path, event_proxy: EventLoopProxy<NativeEvent>) -> Self {
+    pub(crate) fn start(workspace_root: &Path, event_proxy: AppProxy<NativeEvent>) -> Self {
         // Persisted configuration is the canonical owner of language-server enablement. Keep the
         // local service disabled until that configuration arrives instead of briefly launching
         // every executable discovered on PATH.
@@ -130,7 +130,7 @@ impl NativeLanguageService {
 
     pub(crate) fn start_remote(
         &mut self,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         target: AgentSessionTarget,
     ) -> anyhow::Result<()> {
         self.attach_remote(RemoteLanguageSession::spawn(event_proxy, target)?);

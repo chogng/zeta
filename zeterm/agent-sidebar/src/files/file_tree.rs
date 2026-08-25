@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use zeta_ui::TreeItem;
 use zeta_ui::TreeItemExpansion;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 use super::DirectoryEntry;
 use super::DirectoryEntryKind;

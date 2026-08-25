@@ -2,7 +2,7 @@ use super::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
     ActionBarStyle,
 };
-use zui::{Icon, IconDefinition, IconId};
+use zui::ui::{Icon, IconDefinition, IconId};
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("action"),

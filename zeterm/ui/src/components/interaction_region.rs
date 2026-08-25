@@ -1,7 +1,7 @@
 use crate::{
     Component, ComponentContext, ComponentElement, ComputedElement, Element, Rect, UiScene,
 };
-use zui::{
+use zui::ui::{
     AccessibilityExpansion, AccessibilityRole, AccessibilitySelection, CursorFeedback,
     DispatchInvalidation, ElementId, FocusBehavior, NavigationAxis, NavigationGroupId, NodeAction,
     UiNode,

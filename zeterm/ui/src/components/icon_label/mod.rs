@@ -2,7 +2,7 @@ use crate::{
     Color, Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle,
     UiScene,
 };
-use zui::Icon;
+use zui::ui::Icon;
 
 /// Presentation metrics and colors for an icon followed by a single text label.
 #[derive(Clone, Debug, PartialEq)]

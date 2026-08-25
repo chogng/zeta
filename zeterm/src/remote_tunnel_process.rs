@@ -13,7 +13,7 @@ use zeta_remote::SshHost;
 use zeta_remote_connections::SshTunnel;
 use zeta_remote_connections::SshTunnelOptions;
 use zeta_remote_connections::select_available_loopback_port;
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use crate::native_event::NativeEvent;
 use crate::remote_tunnel_readiness::RemoteTunnelStartup;
@@ -106,7 +106,7 @@ impl RemoteTunnelHost {
     pub(crate) fn start(
         &mut self,
         remote_port: NonZeroU16,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
     ) -> Result<u32, String> {
         let process = spawn_remote_tunnel(self.target.clone(), remote_port, move |event| {
             let _ = event_proxy.send_event(NativeEvent::RemoteTunnel(event));

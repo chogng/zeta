@@ -7,11 +7,12 @@ use zeta_terminal::TerminalCore;
 use zeta_terminal::TerminalKey;
 use zeta_ui::TextInputCommand;
 use zeta_ui::TextInputSelectionMode;
-use zeta_winit::ElementState;
-use zeta_winit::Key;
-use zeta_winit::KeyEvent;
-use zeta_winit::ModifiersState;
-use zeta_winit::NamedKey;
+use zui::input::ElementState;
+use zui::input::Key;
+use zui::input::KeyEvent;
+use zui::input::ModifiersState;
+use zui::input::NamedKey;
+use zui::services::ClipboardHandle;
 
 use crate::NativeApp;
 use crate::keybindings::{
@@ -27,7 +28,7 @@ use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_composer::{ComposerInteractionActivation, SelectionDirection};
 use zeta_composer::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
-use zui::{FocusDirection, NavigationAxis};
+use zui::ui::{FocusDirection, NavigationAxis};
 
 impl NativeApp {
     pub(super) fn keyboard_input(&mut self, event: KeyEvent) {
@@ -435,7 +436,7 @@ impl NativeApp {
         let Some(text) = self.composer.input().selected_text() else {
             return false;
         };
-        if let Err(error) = write_clipboard_text(text.to_string()) {
+        if let Err(error) = write_clipboard_text(&self.clipboard, text.to_string()) {
             eprintln!("could not copy command text: {error}");
         }
         true
@@ -445,7 +446,7 @@ impl NativeApp {
         if self.composer.interaction().is_model_picker_visible() {
             return;
         }
-        let text = match read_clipboard_text() {
+        let text = match read_clipboard_text(&self.clipboard) {
             Ok(text) => text,
             Err(error) => {
                 eprintln!("could not paste clipboard text: {error}");
@@ -460,7 +461,7 @@ impl NativeApp {
         let Some(terminal) = self.active_terminal() else {
             return false;
         };
-        let text = match read_clipboard_text() {
+        let text = match read_clipboard_text(&self.clipboard) {
             Ok(text) => text,
             Err(error) => {
                 eprintln!("could not paste clipboard text: {error}");
@@ -515,7 +516,7 @@ impl NativeApp {
     pub(super) fn copy_keybinding_target(&mut self) {
         if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
             if let Some(text) = self.language_server_settings.selected_search_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy settings search text: {error}");
             }
@@ -526,7 +527,7 @@ impl NativeApp {
             .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
         {
             if let Some(text) = self.language_server_settings.selected_executable_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy language server executable path: {error}");
             }
@@ -534,7 +535,7 @@ impl NativeApp {
         }
         if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
             if let Some(text) = self.session_search.selected_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy session search text: {error}");
             }
@@ -542,7 +543,7 @@ impl NativeApp {
         }
         if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
             if let Some(text) = self.agent_sidebar_workspace.selected_file_search_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file search text: {error}");
             }
@@ -550,7 +551,7 @@ impl NativeApp {
         }
         if self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT) {
             if let Some(text) = self.file_editor_search.selected_query_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file editor find text: {error}");
             }
@@ -558,7 +559,7 @@ impl NativeApp {
         }
         if self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT) {
             if let Some(text) = self.file_editor_search.selected_replacement_text()
-                && let Err(error) = write_clipboard_text(text.to_owned())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file editor replacement text: {error}");
             }
@@ -575,7 +576,9 @@ impl NativeApp {
 
     pub(super) fn paste_keybinding_target(&mut self) {
         if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
-            let Some(text) = clipboard_text("could not paste settings search text") else {
+            let Some(text) =
+                clipboard_text(&self.clipboard, "could not paste settings search text")
+            else {
                 return;
             };
             self.language_server_settings
@@ -588,8 +591,10 @@ impl NativeApp {
             .ui_dispatch
             .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
         {
-            let Some(text) = clipboard_text("could not paste language server executable path")
-            else {
+            let Some(text) = clipboard_text(
+                &self.clipboard,
+                "could not paste language server executable path",
+            ) else {
                 return;
             };
             self.language_server_settings
@@ -599,7 +604,8 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
-            let Some(text) = clipboard_text("could not paste session search text") else {
+            let Some(text) = clipboard_text(&self.clipboard, "could not paste session search text")
+            else {
                 return;
             };
             self.session_search.apply(TextInputCommand::Insert(text));
@@ -607,7 +613,8 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
-            let Some(text) = clipboard_text("could not paste file search text") else {
+            let Some(text) = clipboard_text(&self.clipboard, "could not paste file search text")
+            else {
                 return;
             };
             self.agent_sidebar_workspace
@@ -616,7 +623,9 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT) {
-            let Some(text) = clipboard_text("could not paste file editor find text") else {
+            let Some(text) =
+                clipboard_text(&self.clipboard, "could not paste file editor find text")
+            else {
                 return;
             };
             self.file_editor_search
@@ -629,7 +638,10 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT) {
-            let Some(text) = clipboard_text("could not paste file editor replacement text") else {
+            let Some(text) = clipboard_text(
+                &self.clipboard,
+                "could not paste file editor replacement text",
+            ) else {
                 return;
             };
             self.file_editor_search
@@ -658,8 +670,8 @@ impl NativeApp {
     }
 }
 
-fn clipboard_text(error_context: &str) -> Option<String> {
-    match read_clipboard_text() {
+fn clipboard_text(clipboard: &ClipboardHandle, error_context: &str) -> Option<String> {
+    match read_clipboard_text(clipboard) {
         Ok(text) => Some(text),
         Err(error) => {
             eprintln!("{error_context}: {error}");

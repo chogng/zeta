@@ -3,7 +3,7 @@ use crate::{
     CaretVisibility, Color, Component, InputBoxState, InputBoxStateColors, InputBoxStyle, Rect,
     TextInput, TextInputLayoutEngine, TextStyle, UiScene,
 };
-use zui::{Icon, IconDefinition, IconId};
+use zui::ui::{Icon, IconDefinition, IconId};
 
 const TEST_ICON: Icon = Icon::new(
     IconId::new("search"),

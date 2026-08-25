@@ -1,7 +1,31 @@
 load("//zeterm:defs.bzl", "zeterm_rust_library")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 zeterm_rust_library(
     name = "zui",
     crate_name = "zui",
+    crate_features = [
+        "native",
+        "wgpu",
+    ],
     package_name = "zeterm/zui",
+    data = [":zui_sources"],
+    source_files = [
+        "README.md",
+        "examples/bundle-manifest.json",
+        "src/render/wgpu/ui_renderer/icon.wgsl",
+        "src/render/wgpu/ui_renderer/image.wgsl",
+        "src/render/wgpu/ui_renderer/rect.wgsl",
+        "tools/zui_packager.rs",
+    ],
+    unit_tests = True,
+)
+
+rust_binary(
+    name = "zui-packager",
+    crate_name = "zui_packager",
+    crate_root = "tools/zui_packager.rs",
+    deps = [":zui"],
+    edition = "2024",
+    srcs = ["tools/zui_packager.rs"],
 )

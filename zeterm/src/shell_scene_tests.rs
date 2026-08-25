@@ -641,7 +641,10 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
     assert_eq!(add_session.role, AccessibilityRole::Button);
     assert_eq!(add_session.label, "Add new session");
     assert_eq!(session_tab.role, AccessibilityRole::Tab);
-    assert_eq!(session_tab.selection, zui::AccessibilitySelection::Selected);
+    assert_eq!(
+        session_tab.selection,
+        zui::ui::AccessibilitySelection::Selected
+    );
     assert_eq!(resize_handle.role, AccessibilityRole::Separator);
     assert_eq!(resize_handle.label, "Resize sessions sidebar");
     assert_eq!(resize_handle.value.as_deref(), Some("200 pixels"));
@@ -1185,7 +1188,6 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
             ..closed_model
         },
         &mut text_layout,
-        None,
     ));
     assert!(
         presentation
@@ -1200,7 +1202,6 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         viewport(),
         closed_model,
         &mut text_layout,
-        None,
     ));
     assert_eq!(*presentation.scene(), base_scene);
     assert_eq!(*presentation.interaction_frame(), base_interactions);

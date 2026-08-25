@@ -4,17 +4,17 @@ use zeta_ui::Point;
 use zeta_ui::ScrollCommand;
 use zeta_ui::ScrollDelta;
 use zeta_ui::TextInputCommand;
-use zeta_winit::ElementState;
-use zeta_winit::Key;
-use zeta_winit::KeyEvent;
-use zeta_winit::MouseButton;
-use zeta_winit::MouseScrollDelta;
-use zeta_winit::NamedKey;
-use zui::DispatchInvalidation;
-use zui::DispatchOutcome;
-use zui::ElementId;
-use zui::FocusDirection;
-use zui::NavigationAxis;
+use zui::input::ElementState;
+use zui::input::Key;
+use zui::input::KeyEvent;
+use zui::input::MouseButton;
+use zui::input::MouseScrollDelta;
+use zui::input::NamedKey;
+use zui::ui::DispatchInvalidation;
+use zui::ui::DispatchOutcome;
+use zui::ui::ElementId;
+use zui::ui::FocusDirection;
+use zui::ui::NavigationAxis;
 
 use crate::NativeApp;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_ITEM_HEIGHT;
@@ -291,14 +291,14 @@ impl NativeApp {
         };
         if shortcut && text.eq_ignore_ascii_case("c") {
             if let Some(text) = self.remote_tunnel_manager.selected_remote_port_text()
-                && let Err(error) = write_clipboard_text(text.into())
+                && let Err(error) = write_clipboard_text(&self.clipboard, text.into())
             {
                 eprintln!("could not copy Remote tunnel port: {error}");
             }
             return true;
         }
         if shortcut && text.eq_ignore_ascii_case("v") {
-            match read_clipboard_text() {
+            match read_clipboard_text(&self.clipboard) {
                 Ok(text) => self
                     .remote_tunnel_manager
                     .apply_remote_port(TextInputCommand::Insert(text)),

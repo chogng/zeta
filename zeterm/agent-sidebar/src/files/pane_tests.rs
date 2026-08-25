@@ -1,7 +1,7 @@
 use super::{EXPLORER_PANE, FilesPane, FilesPaneStyle};
 use crate::{DirectoryEntry, FilesState};
 use zeta_ui::{Color, Component, Point, Rect, ScrollViewStyle, ScrollbarStyle, UiScene};
-use zui::{AccessibilityRole, DispatchInvalidation, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{AccessibilityRole, DispatchInvalidation, InteractionFrame, UiDispatch, UiFrame};
 
 fn style() -> FilesPaneStyle {
     FilesPaneStyle {
@@ -30,7 +30,7 @@ fn large_file_tree_only_paints_and_registers_visible_rows() {
     let pane = FilesPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );
@@ -44,7 +44,7 @@ fn large_file_tree_only_paints_and_registers_visible_rows() {
         .iter()
         .filter(|node| node.role == AccessibilityRole::TreeItem)
         .collect::<Vec<_>>();
-    assert_eq!(list.parent, Some(zui::ElementId::scoped(1, 23)));
+    assert_eq!(list.parent, Some(zui::ui::ElementId::scoped(1, 23)));
     assert_eq!(list.role, AccessibilityRole::Tree);
     assert_eq!(items.len(), 5);
     assert!(items.iter().all(|item| item.parent == Some(EXPLORER_PANE)));
@@ -75,7 +75,7 @@ fn expanded_directory_paints_an_indented_child_as_a_tree_item() {
     let pane = FilesPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );
@@ -104,7 +104,7 @@ fn file_tree_exposes_nested_component_inspection_nodes() {
     let pane = FilesPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );
@@ -166,7 +166,7 @@ fn shared_file_tree_composition_joins_inspection_and_interaction_by_element_id()
     let pane = FilesPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 100.0),
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );
@@ -216,7 +216,7 @@ fn hovering_an_unselected_file_row_paints_the_hover_background() {
         let pane = FilesPane::new(
             bounds,
             &files,
-            zui::ElementId::scoped(1, 23),
+            zui::ui::ElementId::scoped(1, 23),
             &style,
             &dispatch,
         );
@@ -242,7 +242,7 @@ fn hovering_an_unselected_file_row_paints_the_hover_background() {
     let pane = FilesPane::new(
         bounds,
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );
@@ -270,7 +270,7 @@ fn hovering_a_selected_file_row_keeps_the_selected_background() {
         let pane = FilesPane::new(
             bounds,
             &files,
-            zui::ElementId::scoped(1, 23),
+            zui::ui::ElementId::scoped(1, 23),
             &style,
             &dispatch,
         );
@@ -293,7 +293,7 @@ fn hovering_a_selected_file_row_keeps_the_selected_background() {
     let pane = FilesPane::new(
         bounds,
         &files,
-        zui::ElementId::scoped(1, 23),
+        zui::ui::ElementId::scoped(1, 23),
         &style,
         &dispatch,
     );

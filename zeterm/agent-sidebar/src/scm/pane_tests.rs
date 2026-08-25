@@ -5,7 +5,7 @@ use crate::shell_interaction::{AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_
 use crate::shell_style::SHELL_PALETTE;
 use zeta_diff::DiffDocument;
 use zeta_ui::{Color, Component, Rect, UiScene};
-use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 fn document(original: &str, modified: &str) -> DiffDocument {
     DiffDocument::from_text(original, modified).unwrap()

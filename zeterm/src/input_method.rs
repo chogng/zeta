@@ -2,7 +2,8 @@ use std::time::Instant;
 
 use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
 use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
-use zeta_winit::{Ime, ImeCursorArea};
+use zui::input::Ime;
+use zui::window::ImeCursorArea;
 
 use crate::NativeApp;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;

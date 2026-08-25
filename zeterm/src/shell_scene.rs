@@ -68,23 +68,23 @@ use zeta_agent_sidebar::ScmLayout;
 use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
 use zeta_editor::CodeEditorStyle;
-use zeta_layout::TerminalWorkspaceLayout;
 use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
 use zeta_settings::SettingsPageMode;
 use zeta_settings::SettingsPageSection;
-use zeta_winit::WindowControlInsets;
-use zui::{
+use zeta_ui::layout::TerminalWorkspaceLayout;
+use zui::ui::{
     AccessibilityNode, AccessibilityRole, ComponentContext, CursorFeedback, ElementId,
     InteractionFrame, InteractionFrameCheckpoint, UiDispatch, UiFrame,
 };
+use zui::window::WindowControlInsets;
 
 const TERMINAL_CELL_WIDTH: f32 = 8.0;
 const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
 
-pub(crate) use zeta_layout::LogicalViewport;
+pub(crate) use zeta_ui::layout::LogicalViewport;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
@@ -149,14 +149,10 @@ impl ShellLayout {
         let titlebar = Rect::from_xywh(0.0, 0.0, viewport.width, TITLEBAR_HEIGHT);
         let body_height = viewport.height - titlebar.size.height;
         let body = Rect::from_xywh(0.0, titlebar.bottom(), viewport.width, body_height);
-        let body_split = session_sidebar.layout(body);
-        let session_sidebar = body_split
-            .pane_bounds(0)
-            .filter(|bounds| !bounds.is_empty());
-        let remaining = body_split
-            .pane_bounds(1)
-            .expect("Sessions split must retain its main pane");
-        let session_sidebar_sash_track = body_split.sash(0).map(|sash| sash.track_bounds());
+        let sessions_layout = session_sidebar.layout(body);
+        let session_sidebar = sessions_layout.sessions_bounds();
+        let remaining = sessions_layout.main_bounds();
+        let session_sidebar_sash_track = sessions_layout.sash_track();
         let terminal_workspace =
             TerminalWorkspaceLayout::for_bounds(remaining, agent_sidebar.layout_spec());
         let main = terminal_workspace.active_pane_bounds();
@@ -419,7 +415,7 @@ pub(crate) fn build_shell_presentation_with_animation_bindings(
     viewport: LogicalViewport,
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    animation_bindings: &mut dyn zui::AnimationBinding,
+    animation_bindings: &mut dyn zui::ui::AnimationBinding,
 ) -> ShellPresentation {
     build_shell_presentation_with_bindings(viewport, model, text_layout, Some(animation_bindings))
 }
@@ -428,7 +424,7 @@ fn build_shell_presentation_with_bindings(
     viewport: LogicalViewport,
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    mut animation_bindings: Option<&mut dyn zui::AnimationBinding>,
+    mut animation_bindings: Option<&mut dyn zui::ui::AnimationBinding>,
 ) -> ShellPresentation {
     let palette = model.palette;
     let mut frame = UiFrame::<InteractionFrame>::new(palette.background);
@@ -664,14 +660,7 @@ fn build_shell_presentation_with_bindings(
         interaction: frame.interaction().checkpoint(),
         ime_cursor_area,
     };
-    let overlay = draw_shell_overlays(
-        &mut frame,
-        viewport,
-        &model,
-        text_layout,
-        ime_cursor_area,
-        animation_bindings,
-    );
+    let overlay = draw_shell_overlays(&mut frame, viewport, &model, text_layout, ime_cursor_area);
     let accessibility_nodes = frame.interaction().accessibility_nodes(model.dispatch);
     ShellPresentation {
         frame,
@@ -697,7 +686,6 @@ pub(crate) fn rebuild_shell_overlays(
     viewport: LogicalViewport,
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    animation_bindings: Option<&mut dyn zui::AnimationBinding>,
 ) -> bool {
     let Some(base) = presentation.base_checkpoint.clone() else {
         return false;
@@ -712,7 +700,6 @@ pub(crate) fn rebuild_shell_overlays(
         &model,
         text_layout,
         base.ime_cursor_area,
-        animation_bindings,
     );
     presentation.accessibility_nodes = presentation
         .interaction_frame()
@@ -764,7 +751,6 @@ fn draw_shell_overlays(
     model: &ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
     mut ime_cursor_area: Option<Rect>,
-    animation_bindings: Option<&mut dyn zui::AnimationBinding>,
 ) -> ShellOverlayPresentation {
     let palette = model.palette;
     let mut workspace_path_picker_scroll_metrics = None;

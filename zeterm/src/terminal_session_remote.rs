@@ -29,7 +29,7 @@ use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 use zeta_terminal::GridSize;
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use crate::native_event::NativeEvent;
 use crate::terminal_session::TerminalSessionEvent;
@@ -59,7 +59,7 @@ impl RemoteTerminalBackend {
     pub(super) fn spawn(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         connection: SshAppServerConnectionOptions,
     ) -> Result<Self> {
         let session = connection
@@ -162,7 +162,7 @@ fn run_remote_terminal(
     key: TerminalSessionKey,
     mut state: RemoteTerminalState,
     commands: Receiver<RemoteTerminalCommand>,
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
     cancelled: Arc<AtomicBool>,
 ) {
     loop {
@@ -363,7 +363,7 @@ fn remote_terminal_client_info() -> ClientInfo {
 
 fn send_remote_terminal_output(
     key: TerminalSessionKey,
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     output: Vec<u8>,
 ) {
     let _ = event_proxy.send_event(
@@ -371,7 +371,7 @@ fn send_remote_terminal_output(
     );
 }
 
-fn send_remote_terminal_exit(key: TerminalSessionKey, event_proxy: &EventLoopProxy<NativeEvent>) {
+fn send_remote_terminal_exit(key: TerminalSessionKey, event_proxy: &AppProxy<NativeEvent>) {
     let _ = event_proxy.send_event(
         TerminalSessionEventEnvelope::new(key, TerminalSessionEvent::Exited(-1)).into(),
     );

@@ -10,9 +10,10 @@ applyTo: "zeta-rs/native/**,zeterm/**"
 Route new capability to its long-term owner:
 
 - backend-independent frame, layout, paint, inspection, interaction, animation, invalidation, and retained lifecycle contracts belong in `zeterm/zui`;
-- reusable UI components belong in `zeterm/ui` (the `zeta-ui` crate);
+- reusable application/window lifecycle, renderer initialization, platform capability, event-loop, and multi-window orchestration belong to the single public `zeterm/zui` crate; its foundation/layout/text/presentation/runtime/application/platform/renderer modules are private implementation boundaries, not sibling crates or alternative entry points;
+- reusable UI components and zeterm product pane topology belong in `zeterm/ui` (the `zeta-ui` crate); generic layout algorithms remain in `zeterm/zui`;
 - file, SCM, editor, terminal, and other domain behavior belongs in its domain crate;
-- `zeterm` owns product state mapping, platform event adaptation, renderer composition, and the native product host.
+- `zeterm` owns product state mapping, product event meaning, scene construction, and the native product entry point; it consumes platform events and rendering only through public `zui` contracts.
 
 Changes in `zeta-rs/native` are limited to compatibility needed to remove or migrate old implementation, thin mapping from platform/product state into canonical lower APIs, and minimal wiring required to keep the existing host running. An exception must name the long-term owner, migration endpoint, and deletion condition.
 

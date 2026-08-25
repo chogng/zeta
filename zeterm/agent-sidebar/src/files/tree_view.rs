@@ -16,16 +16,16 @@ use zeta_ui::TreeItemLayout;
 use zeta_ui::TreeView;
 use zeta_ui::TreeViewStyle;
 use zeta_ui::UiScene;
-use zui::AccessibilityExpansion;
-use zui::AccessibilityRole;
-use zui::ComputedElement;
-use zui::CursorFeedback;
-use zui::ElementId;
-use zui::FocusBehavior;
-use zui::NavigationAxis;
-use zui::NavigationGroupId;
-use zui::NodeAction;
-use zui::UiDispatch;
+use zui::ui::AccessibilityExpansion;
+use zui::ui::AccessibilityRole;
+use zui::ui::ComputedElement;
+use zui::ui::CursorFeedback;
+use zui::ui::ElementId;
+use zui::ui::FocusBehavior;
+use zui::ui::NavigationAxis;
+use zui::ui::NavigationGroupId;
+use zui::ui::NodeAction;
+use zui::ui::UiDispatch;
 
 use super::FILE_LIST_ROW_HEIGHT;
 use super::FilesState;
@@ -179,7 +179,7 @@ impl Component for FilesTreeItem<'_> {
             .with_inspection_label(self.label)
     }
 
-    fn interaction_node(&self, element: &ComputedElement) -> Option<zui::UiNode> {
+    fn interaction_node(&self, element: &ComputedElement) -> Option<zui::ui::UiNode> {
         if !self.interactive {
             return None;
         }
@@ -189,7 +189,7 @@ impl Component for FilesTreeItem<'_> {
             TreeItemExpansion::Expanded => AccessibilityExpansion::Expanded,
         };
         Some(
-            zui::UiNode::new(
+            zui::ui::UiNode::new(
                 self.element,
                 element.bounds(),
                 AccessibilityRole::TreeItem,
@@ -205,9 +205,9 @@ impl Component for FilesTreeItem<'_> {
             .with_level(self.layout.item().depth() + 1)
             .with_expansion(expansion)
             .with_selection(if self.selected {
-                zui::AccessibilitySelection::Selected
+                zui::ui::AccessibilitySelection::Selected
             } else {
-                zui::AccessibilitySelection::Unselected
+                zui::ui::AccessibilitySelection::Unselected
             }),
         )
     }

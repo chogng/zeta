@@ -1,9 +1,9 @@
 use super::draw_info_bar;
-use zeta_composer::ComposerRoute;
 use crate::shell_interaction::COMPOSER_INFO_BAR;
 use crate::shell_style::SHELL_PALETTE;
+use zeta_composer::ComposerRoute;
 use zeta_ui::{Color, Rect};
-use zui::{InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn info_bar_paints_agent_and_shell_triggers_as_keycaps() {

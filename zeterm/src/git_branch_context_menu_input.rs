@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use zeta_ui::Point;
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
-use zui::{
+use zui::input::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zui::ui::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
 };
@@ -197,7 +197,7 @@ impl NativeApp {
                     if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("c") =>
                 {
                     if let Some(text) = self.git_branch_context_menu.selected_search_text()
-                        && let Err(error) = write_clipboard_text(text.to_string())
+                        && let Err(error) = write_clipboard_text(&self.clipboard, text.to_string())
                     {
                         eprintln!("could not copy Git branch search text: {error}");
                     }
@@ -205,7 +205,7 @@ impl NativeApp {
                 Key::Character(text)
                     if is_shortcut(self.modifiers) && text.eq_ignore_ascii_case("v") =>
                 {
-                    match read_clipboard_text() {
+                    match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
                             .git_branch_context_menu
                             .apply_search(zeta_ui::TextInputCommand::Insert(text)),
@@ -324,7 +324,7 @@ impl NativeApp {
     }
 }
 
-fn is_shortcut(modifiers: zeta_winit::ModifiersState) -> bool {
+fn is_shortcut(modifiers: zui::input::ModifiersState) -> bool {
     modifiers.control_key() || modifiers.super_key()
 }
 

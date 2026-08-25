@@ -6,3 +6,12 @@ zeterm_rust_binary(
     crate_root = "src/main.rs",
     package_name = "zeterm/zui-demo",
 )
+
+filegroup(
+    name = "zui_demo_sources",
+    srcs = glob([
+        "src/**/*.rs",
+        "Cargo.toml",
+    ]),
+    visibility = ["//visibility:public"],
+)

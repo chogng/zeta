@@ -45,7 +45,7 @@ use zeta_protocol::{
 use zeta_text_file::{
     TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSaveRequest, TextFileSnapshot,
 };
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use crate::NativeApp;
 use crate::agent_session_target::AgentSessionTarget;
@@ -209,7 +209,7 @@ pub(crate) struct AgentSession {
 
 impl AgentSession {
     pub(crate) fn spawn(
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         target: AgentSessionTarget,
     ) -> Result<Self> {
         let (commands, command_receiver) = mpsc::sync_channel(COMMAND_QUEUE_CAPACITY);
@@ -423,7 +423,7 @@ impl Drop for AgentSession {
 }
 
 fn run_agent_session(
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
     commands: Receiver<AgentSessionCommand>,
     target: AgentSessionTarget,
     available: Arc<AtomicBool>,
@@ -436,7 +436,7 @@ fn run_agent_session(
 }
 
 fn run_agent_session_inner(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     target: &AgentSessionTarget,
     available: &AtomicBool,
@@ -467,7 +467,7 @@ fn run_agent_session_inner(
 }
 
 fn run_agent_session_connection(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     target: &AgentSessionTarget,
     preferred_session_id: Option<&SessionId>,
@@ -535,7 +535,7 @@ fn run_agent_session_connection(
 }
 
 fn drive_agent_session(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
@@ -1098,7 +1098,7 @@ fn active_thread_projection<'a>(
 }
 
 fn publish_subscription(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     subscription: &SessionSubscribeResult,
     thread_id: &ThreadId,
     switch_id: Option<SwitchId>,
@@ -1248,7 +1248,7 @@ fn prepare_workspace_reconnect(
 }
 
 fn publish_git_projection(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     client: &mut AppServerRequestHandle,
 ) -> Result<()> {
     send_event(
@@ -1258,7 +1258,7 @@ fn publish_git_projection(
 }
 
 fn publish_configuration(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     client: &mut AppServerRequestHandle,
 ) -> Result<()> {
     let configuration = client.read_config().map_err(client_error)?;
@@ -1283,7 +1283,7 @@ fn git_is_unavailable(error: &ClientError) -> bool {
     )
 }
 
-fn send_event(event_proxy: &EventLoopProxy<NativeEvent>, event: AgentSessionEvent) -> Result<()> {
+fn send_event(event_proxy: &AppProxy<NativeEvent>, event: AgentSessionEvent) -> Result<()> {
     event_proxy
         .send_event(event.into())
         .map_err(|_| anyhow!("native event loop is unavailable"))
@@ -1611,7 +1611,7 @@ impl NativeApp {
         }
     }
 
-    pub(crate) fn load_file_tree_directory(&mut self, element: zui::ElementId, path: PathBuf) {
+    pub(crate) fn load_file_tree_directory(&mut self, element: zui::ui::ElementId, path: PathBuf) {
         let Some(session) = self.agent_session.as_ref() else {
             return;
         };

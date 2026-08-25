@@ -16,7 +16,7 @@ use zeta_ui::TextInputCommand;
 use zeta_ui::TextInputCompositionEvent;
 use zeta_ui::TreeItem;
 use zeta_ui::VirtualListLayout;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 use crate::AgentSidebarAction;
 

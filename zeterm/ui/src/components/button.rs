@@ -2,7 +2,7 @@ use crate::{
     Border, Color, Component, ComponentElement, CornerRadii, Edges, Element, PaintIcon, PaintRect,
     Point, Rect, TextBlock, TextStyle, UiScene,
 };
-use zui::Icon;
+use zui::ui::Icon;
 
 use super::icon_label::{IconLabel, IconLabelStyle};
 

@@ -1,4 +1,4 @@
-use zui::{Icon, IconDefinition, IconId};
+use zui::ui::{Icon, IconDefinition, IconId};
 
 use super::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
 use crate::{Border, Color, CornerRadii, Edges, FontWeight, Rect, TextStyle, UiScene};

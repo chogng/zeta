@@ -13,17 +13,12 @@ EXPECTED_ZETERM_MEMBERS = {
     "zeterm/commands",
     "zeterm/composer",
     "zeterm/editor",
-    "zeterm/icon",
     "zeterm/icons",
     "zeterm/keybinding-ui",
-    "zeterm/layout",
     "zeterm/markdown",
     "zeterm/native-keybindings",
-    "zeterm/renderer",
     "zeterm/settings",
     "zeterm/ui",
-    "zeterm/wgpu",
-    "zeterm/winit",
     "zeterm/zui",
     "zeterm/zui-demo",
 }
@@ -39,6 +34,14 @@ RETIRED_PRODUCT_PATHS = {
     "zeta-rs/ui",
     "zeta-rs/wgpu",
     "zeta-rs/winit",
+}
+
+RETIRED_ZUI_SIBLING_PATHS = {
+    "zeterm/icon",
+    "zeterm/renderer",
+    "zeterm/wgpu",
+    "zeterm/winit",
+    "zeterm/zui-core",
 }
 
 RETIRED_UI_PACKAGE_NAMES = {
@@ -148,6 +151,15 @@ def main() -> int:
     )
     if retired_paths:
         fail(f"retired Native UI paths still exist: {retired_paths}")
+
+    retired_zui_siblings = sorted(
+        path for path in RETIRED_ZUI_SIBLING_PATHS if (repository_root / path).exists()
+    )
+    if retired_zui_siblings:
+        fail(
+            "zui implementation responsibilities escaped into sibling crates: "
+            f"{retired_zui_siblings}"
+        )
 
     for manifest_text in (root_manifest, zeterm_manifest):
         if "zeta-rs/native" in manifest_text or "zeta-native" in manifest_text:

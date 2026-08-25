@@ -1,12 +1,12 @@
 use crate::NativeApp;
 use crate::shell_interaction::AGENT_SIDEBAR_RESIZE_HANDLE;
 use crate::shell_scene::agent_sidebar_resize_snapshot_for_viewport;
-use zeta_layout::SidebarLayoutSpec;
-use zeta_layout::SidebarVisibility;
 use zeta_ui::Point;
 use zeta_ui::SplitViewResizeSnapshot;
-use zeta_winit::ElementState;
-use zui::DispatchInvalidation;
+use zeta_ui::layout::SidebarLayoutSpec;
+use zeta_ui::layout::SidebarVisibility;
+use zui::input::ElementState;
+use zui::ui::DispatchInvalidation;
 
 const DEFAULT_WIDTH: f32 = 520.0;
 const MINIMUM_WIDTH: f32 = 360.0;

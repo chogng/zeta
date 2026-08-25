@@ -18,7 +18,7 @@ use crate::shell_interaction::{
     MAIN_SURFACE,
 };
 use crate::shell_style::ShellPalette;
-use zui::{AccessibilityRole, UiNode};
+use zui::ui::{AccessibilityRole, UiNode};
 
 #[path = "file_editor_pane_interaction.rs"]
 mod interaction;
@@ -72,7 +72,7 @@ struct FileEditorNotice<'a> {
 /// Native file-tab and document presentation over a retained [`FileEditorHost`].
 pub(crate) struct FileEditorPane<'a> {
     bounds: Rect,
-    parent: zui::ElementId,
+    parent: zui::ui::ElementId,
     host: &'a FileEditorHost,
     editor_style: CodeEditorStyle,
     palette: ShellPalette,
@@ -117,7 +117,7 @@ impl<'a> FileEditorPane<'a> {
         }
     }
 
-    pub(crate) const fn with_parent(mut self, parent: zui::ElementId) -> Self {
+    pub(crate) const fn with_parent(mut self, parent: zui::ui::ElementId) -> Self {
         self.parent = parent;
         self
     }
@@ -176,7 +176,7 @@ impl<'a> FileEditorPane<'a> {
         mut self,
         search: &FileEditorSearchState,
         text_layout: &mut TextInputLayoutEngine,
-        dispatch: &zui::UiDispatch,
+        dispatch: &zui::ui::UiDispatch,
         caret_visibility: CaretVisibility,
     ) -> Self {
         self.search_mode = search.mode();
@@ -221,7 +221,7 @@ impl<'a> FileEditorPane<'a> {
         )
     }
 
-    pub(crate) fn search_caret_bounds(&self, focused: zui::ElementId) -> Option<Rect> {
+    pub(crate) fn search_caret_bounds(&self, focused: zui::ui::ElementId) -> Option<Rect> {
         match focused {
             FILE_EDITOR_FIND_INPUT => self.search_query.as_ref()?.caret_bounds(),
             FILE_EDITOR_REPLACE_INPUT => self.search_replacement.as_ref()?.caret_bounds(),
@@ -679,8 +679,8 @@ impl Component for FileEditorPane<'_> {
 }
 
 fn input_state(
-    dispatch: &zui::UiDispatch,
-    element: zui::ElementId,
+    dispatch: &zui::ui::UiDispatch,
+    element: zui::ui::ElementId,
     caret_visibility: CaretVisibility,
 ) -> InputBoxState {
     if dispatch.is_focused(element) {

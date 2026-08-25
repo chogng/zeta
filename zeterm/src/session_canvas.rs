@@ -15,8 +15,8 @@ use zeta_ui::Size;
 use zeta_ui::TextBlock;
 use zeta_ui::TextStyle;
 use zeta_ui::UiScene;
-use zui::AccessibilityRole;
-use zui::UiNode;
+use zui::ui::AccessibilityRole;
+use zui::ui::UiNode;
 
 use crate::shell_interaction::MAIN_SURFACE;
 use crate::shell_interaction::SESSION_HEADER;

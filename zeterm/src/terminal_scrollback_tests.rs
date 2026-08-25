@@ -5,7 +5,7 @@ use super::{
     multi_diff_scroll_pixels,
 };
 use zeta_ui::{ScrollCommand, ScrollDelta};
-use zeta_winit::{MouseScrollDelta, PhysicalPosition};
+use zui::input::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
 fn line_wheel_moves_within_the_available_history() {

@@ -14,7 +14,7 @@ use zeta_ui::Size;
 use zeta_ui::TextInput;
 use zeta_ui::TextInputCommand;
 use zeta_ui::TextInputCompositionEvent;
-use zui::ElementId;
+use zui::ui::ElementId;
 
 use crate::workspace_context::WorkspaceContext;
 use zeta_agent_sidebar::ScrollbarPointerOutcome;

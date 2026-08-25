@@ -4,8 +4,8 @@ use zeta_ui::{
     ContextViewPlacement, CornerRadii, Edges, Element, InteractionRegion, Point, Rect, Size,
     TextStyle, UiScene,
 };
-use zeta_winit::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
-use zui::{
+use zui::input::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, DispatchInvalidation,
     DispatchOutcome, ElementId, FocusBehavior, FocusDirection, InteractionFrame, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,

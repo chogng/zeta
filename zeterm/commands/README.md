@@ -20,7 +20,7 @@ items, keyboard shortcuts, and future command-palette entries converge on a
 | Keybinding context and platform defaults | `zeterm/src/keybindings.rs` |
 | Built-in handler registration and product state | `zeterm/src/command_dispatch.rs` |
 
-This crate must remain independent of `NativeApp`, `zui`, `zeta-winit`,
+This crate must remain independent of `NativeApp`, `zui` and native platform events,
 terminal state, workspace state, and the keybinding runtime. A command request
 is a stable product intent; it is not a domain state machine or a replacement
 for typed Session, Editor, Terminal, or App Server APIs.

@@ -115,7 +115,7 @@ impl ZetermCommandId {
             Self::Save => "Save",
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
-            Self::OpenLanguageServerSettings => "Language server settings",
+            Self::OpenLanguageServerSettings => "Settings",
             Self::ManageRemoteTunnels => "Manage Remote tunnels",
             Self::ToggleSessionSidebar => "Toggle session sidebar",
             Self::ToggleAgentSidebar => "Toggle agent sidebar",

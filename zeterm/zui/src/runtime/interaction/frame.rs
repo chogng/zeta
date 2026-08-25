@@ -1,12 +1,13 @@
-use crate::foundation::InteractionSink;
-use crate::foundation::Point;
-use crate::foundation::Rect;
+use crate::ui::foundation::InteractionSink;
+use crate::ui::foundation::Point;
+use crate::ui::foundation::Rect;
 
 use super::AccessibilityExpansion;
 use super::AccessibilityRole;
 use super::AccessibilitySelection;
 use super::ElementId;
 use super::FocusBehavior;
+use super::NodeAction;
 use super::UiDispatch;
 use super::types::UiNode;
 
@@ -131,6 +132,7 @@ impl InteractionFrame {
                 focusable: self.is_in_active_scope(node.id())
                     && node.focus_behavior() == FocusBehavior::TabStop,
                 focused: self.is_in_active_scope(node.id()) && dispatch.is_focused(node.id()),
+                action: node.action(),
             })
             .collect()
     }
@@ -156,6 +158,7 @@ pub struct AccessibilityNode {
     pub bounds: Rect,
     pub focusable: bool,
     pub focused: bool,
+    pub action: NodeAction,
     pub selection: AccessibilitySelection,
     pub level: Option<usize>,
     pub expansion: AccessibilityExpansion,

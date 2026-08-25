@@ -114,17 +114,12 @@ members = [
     "zeterm/commands",
     "zeterm/composer",
     "zeterm/editor",
-    "zeterm/icon",
     "zeterm/icons",
     "zeterm/keybinding-ui",
-    "zeterm/layout",
     "zeterm/markdown",
     "zeterm/native-keybindings",
-    "zeterm/renderer",
     "zeterm/settings",
     "zeterm/ui",
-    "zeterm/wgpu",
-    "zeterm/winit",
     "zeterm/zui",
     "zeterm/zui-demo",
 ]
@@ -138,6 +133,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+accesskit = "0.24.0"
+accesskit-platform = { package = "accesskit_winit", version = "0.32.2" }
 anyhow = "1"
 ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }
@@ -152,8 +149,10 @@ clap = "4"
 cosmic-text = "0.19.0"
 difflib = "0.4"
 dunce = "1"
+ed25519-dalek = "3.0.0"
 getrandom = "0.2"
 futures = "0.3"
+global-hotkey = "0.8.0"
 glyphon = "0.12.0"
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
@@ -169,6 +168,7 @@ notify = { version = "8.2.0", default-features = false, features = ["macos_fseve
 nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faabb4e5c6d81d946a5e35a90f87347ee" }
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 pollster = "1.0.1"
+open = "5.4.1"
 portable-pty = "0.9.0"
 pkg-config = "0.3"
 pretty_assertions = "1"
@@ -209,7 +209,11 @@ tokio-rustls = "0.26.4"
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 thiserror = "2"
 tempfile = "3"
+tray-icon = { version = "0.24.2", default-features = false }
 tar = "0.4"
+raw-window-handle = "0.6.2"
+rfd = "0.17.2"
+muda = { version = "0.19.3", default-features = false }
 tough = { version = "0.24", features = ["http"] }
 tokenizers = { version = "0.23.1", default-features = false, features = ["fancy-regex"] }
 toml = "0.9"
@@ -275,7 +279,6 @@ zeta-tool-executor = { path = "zeta-rs/tool-executor" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
 zeta-icons = { path = "zeterm/icons" }
-zeta-icon = { path = "zeterm/icon" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
@@ -294,7 +297,6 @@ zeta-keyring-store = { path = "zeta-rs/keyring-store" }
 zeta-kimi = { path = "zeta-rs/kimi" }
 zeta-keybinding = { path = "zeta-rs/keybinding" }
 zeta-composer = { path = "zeterm/composer" }
-zeta-layout = { path = "zeterm/layout" }
 zeta-keybindings-host = { path = "zeterm/native-keybindings" }
 zeterm-keybinding-ui = { path = "zeterm/keybinding-ui" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
@@ -318,7 +320,6 @@ zeta-protocol = { path = "zeta-rs/protocol" }
 zeta-remote = { path = "zeta-rs/remote" }
 zeta-remote-connections = { path = "zeta-rs/remote-connections" }
 zeta-remote-server = { path = "zeta-rs/remote-server" }
-zeta-renderer = { path = "zeterm/renderer" }
 zeta-rollout = { path = "zeta-rs/rollout" }
 zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
 zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
@@ -351,11 +352,9 @@ zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
 zeta-pdf = { path = "zeta-rs/utils/pdf" }
 zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
-zeta-wgpu = { path = "zeterm/wgpu" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
-zeta-winit = { path = "zeterm/winit" }
 zeta-workspace = { path = "zeta-rs/workspace" }
-zui = { path = "zeterm/zui" }
+zui = { path = "zeterm/zui", default-features = false }
 
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.

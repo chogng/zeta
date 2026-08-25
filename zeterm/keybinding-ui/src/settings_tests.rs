@@ -2,10 +2,10 @@ use zeta_ui::Color;
 use zeta_ui::Point;
 use zeta_ui::Rect;
 use zeta_ui::UiScene;
-use zui::ElementId;
-use zui::InteractionFrame;
-use zui::UiDispatch;
-use zui::UiFrame;
+use zui::ui::ElementId;
+use zui::ui::InteractionFrame;
+use zui::ui::UiDispatch;
+use zui::ui::UiFrame;
 
 use super::KeyboardShortcutRow;
 use super::KeyboardShortcuts;

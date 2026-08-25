@@ -1,6 +1,6 @@
 # `zeterm`：Agent Terminal 布局
 
-> 状态：Proposed product layout。本文是 `zeterm` 主窗口信息架构、会话流、检查界面、响应式行为与渐进迁移的 canonical owner。Agent 能力、机器反馈和人类观测原则见 [`native-agent-console.md`](native-agent-console.md)；PTY、grid、screen mode 与 Terminal protocol 兼容性见 [`native-terminal-ui.md`](native-terminal-ui.md)；通用 Pane geometry contract 见 [`zeta-layout` README](../layout/README.md)。
+> 状态：Proposed product layout。本文是 `zeterm` 主窗口信息架构、会话流、检查界面、响应式行为与渐进迁移的 canonical owner。Agent 能力、机器反馈和人类观测原则见 [`native-agent-console.md`](native-agent-console.md)；PTY、grid、screen mode 与 Terminal protocol 兼容性见 [`native-terminal-ui.md`](native-terminal-ui.md)；产品 Pane geometry contract 见 [`zeta-ui` README](../ui/README.md)。
 
 ## 快速理解
 
@@ -256,7 +256,7 @@ Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Termina
 6. 把 Terminal Surface 兼容路由映射为 Flow/Interactive/Maximized presentation，保留 alternate screen、IME、selection、mouse mode、resize 和 PTY identity contract。
 7. 接入 responsive takeover、return stack、布局持久化和跨尺寸测试后，再移除 `WorkspaceSurfaceKind` 兼容枚举。
 
-每个阶段继续使用 `zui` 的单一 frame、interaction、focus、retained lifecycle 和 inspection contract，使用 `zeta-layout` 或共享 UI 组件表达通用几何；`zeterm` 只拥有产品布局状态和 scene composition。
+每个阶段继续使用 `zui` 的单一 frame、interaction、focus、retained lifecycle 和 inspection contract，使用 `zeta-ui::layout` 或共享 UI 组件表达产品几何；`zeterm` 只拥有产品布局状态和 scene composition。
 
 ## 验收标准
 

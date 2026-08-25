@@ -28,61 +28,110 @@ fn product_composition_uses_scene_draw_component() {
 }
 
 #[test]
-fn zui_contract_does_not_depend_on_a_gpu_backend_or_component_crate() {
+fn zui_backend_neutral_modules_remain_platform_independent() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let zui_root = workspace.join("zui");
-    let manifest =
-        fs::read_to_string(zui_root.join("Cargo.toml")).expect("zui manifest should be readable");
-    for forbidden in ["wgpu", "glyphon", "zeta-ui"] {
-        assert!(
-            !manifest
-                .lines()
-                .any(|line| line.trim_start().starts_with(forbidden)),
-            "zui must not depend on {forbidden}; components and GPU dependencies belong above the framework"
-        );
-    }
-
+    let zui_root = workspace.join("zui").join("src");
     let mut violations = Vec::new();
-    visit_rust_sources(&zui_root.join("src"), &mut |path, source| {
-        if is_test_source(path) {
-            return;
-        }
-        for forbidden in ["wgpu::", "glyphon::", "zeta_ui::"] {
-            if source.contains(forbidden) {
-                violations.push(format!("{} contains `{forbidden}`", path.display()));
+    for module in [
+        "ui/foundation",
+        "ui/layout",
+        "ui/text",
+        "ui/presentation",
+        "runtime",
+    ] {
+        visit_rust_sources(&zui_root.join(module), &mut |path, source| {
+            if is_test_source(path) {
+                return;
             }
-        }
-    });
+            for forbidden in ["wgpu::", "winit::", "glyphon::", "zeta_ui::"] {
+                if source.contains(forbidden) {
+                    violations.push(format!("{} contains `{forbidden}`", path.display()));
+                }
+            }
+        });
+    }
     assert!(
         violations.is_empty(),
-        "zui source must remain graphics-backend neutral:\n{}",
+        "zui backend-neutral modules must remain independent from platform and graphics APIs:\n{}",
         violations.join("\n")
     );
 }
 
 #[test]
-fn component_and_renderer_crates_depend_on_zui_in_the_forward_direction() {
+fn public_zui_facade_owns_native_framework_composition() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for crate_name in ["ui", "renderer", "wgpu"] {
-        let manifest = fs::read_to_string(workspace.join(crate_name).join("Cargo.toml"))
-            .unwrap_or_else(|error| panic!("could not read {crate_name} manifest: {error}"));
+    let manifest = fs::read_to_string(workspace.join("zui").join("Cargo.toml"))
+        .expect("zui manifest should be readable");
+    for required in ["glyphon =", "wgpu =", "winit ="] {
         assert!(
             manifest
                 .lines()
-                .any(|line| line.trim_start().starts_with("zui =")),
-            "{crate_name} must depend directly on zui"
+                .any(|line| line.trim_start().starts_with(required)),
+            "zui must directly own its {required} implementation dependency"
         );
     }
-    for crate_name in ["renderer", "wgpu"] {
-        let manifest = fs::read_to_string(workspace.join(crate_name).join("Cargo.toml"))
-            .unwrap_or_else(|error| panic!("could not read {crate_name} manifest: {error}"));
+    for forbidden in ["zeta-ui =", "zeta-terminal =", "zeta-app-server"] {
         assert!(
             !manifest
                 .lines()
-                .any(|line| line.trim_start().starts_with("zeta-ui =")),
-            "{crate_name} must not obtain framework contracts through the component crate"
+                .any(|line| line.trim_start().starts_with(forbidden)),
+            "zui must not depend on product capability {forbidden}"
         );
     }
+}
+
+#[test]
+fn components_depend_on_zui_while_backends_stay_internal_modules() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let ui_manifest = fs::read_to_string(workspace.join("ui").join("Cargo.toml"))
+        .expect("ui manifest should be readable");
+    assert!(
+        ui_manifest
+            .lines()
+            .any(|line| line.trim_start().starts_with("zui =")),
+        "components must consume the public zui facade"
+    );
+    for retired_crate in ["icon", "renderer", "wgpu", "winit", "zui-core"] {
+        assert!(
+            !workspace.join(retired_crate).exists(),
+            "{retired_crate} must remain an internal zui module rather than a sibling crate"
+        );
+    }
+    for module in [
+        "app", "input", "render", "runtime", "services", "ui", "window",
+    ] {
+        assert!(
+            workspace.join("zui").join("src").join(module).is_dir(),
+            "zui must physically own its {module} module"
+        );
+    }
+    for module in [
+        "accessibility.rs",
+        "app.rs",
+        "input.rs",
+        "render.rs",
+        "runtime.rs",
+        "services.rs",
+        "testing.rs",
+        "ui.rs",
+        "window.rs",
+    ] {
+        assert!(
+            workspace.join("zui").join("src").join(module).is_file(),
+            "zui must expose the physical capability root {module}"
+        );
+    }
+
+    let ui_facade = fs::read_to_string(workspace.join("ui").join("src").join("lib.rs"))
+        .expect("zeta-ui facade should be readable");
+    assert!(
+        ui_facade.contains("pub use zui::ui::*;"),
+        "zeta-ui must expose only zui's backend-neutral UI capability"
+    );
+    assert!(
+        !ui_facade.contains("pub use zui::*;"),
+        "zeta-ui must not flatten application, renderer, service, or window capabilities"
+    );
 }
 
 #[test]
@@ -116,20 +165,44 @@ fn component_crate_remains_graphics_backend_neutral() {
 }
 
 #[test]
+fn product_uses_only_zui_for_native_framework_hosting() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let product_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
+        .expect("zeterm manifest should be readable");
+    assert!(
+        product_manifest
+            .lines()
+            .any(|line| line.trim_start().starts_with("zui =")),
+        "zeterm must consume the complete zui framework"
+    );
+    for forbidden in [
+        "zui-app =",
+        "zui-core =",
+        "zeta-icon =",
+        "zeta-renderer =",
+        "zeta-wgpu =",
+        "zeta-winit =",
+    ] {
+        assert!(
+            !product_manifest
+                .lines()
+                .any(|line| line.trim_start().starts_with(forbidden)),
+            "zeterm must obtain {forbidden} through zui rather than depending on an implementation layer"
+        );
+    }
+    assert!(
+        !workspace.join("app").exists(),
+        "the retired zeterm/app ownership layer must not return"
+    );
+}
+
+#[test]
 fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let backend_root = workspace.join("wgpu");
-    let manifest = fs::read_to_string(backend_root.join("Cargo.toml"))
-        .expect("zeta-wgpu manifest should be readable");
-    assert!(
-        !manifest.lines().any(|line| ["accesskit"]
-            .iter()
-            .any(|dependency| line.trim_start().starts_with(dependency))),
-        "zeta-wgpu must consume only paint scenes; interaction and accessibility stay in the host presentation"
-    );
+    let backend_root = workspace.join("zui/src/render/wgpu");
 
     let mut violations = Vec::new();
-    visit_rust_sources(&backend_root.join("src"), &mut |path, source| {
+    visit_rust_sources(&backend_root, &mut |path, source| {
         for forbidden in ["InteractionFrame", "AccessibilityNode"] {
             if source.contains(forbidden) {
                 violations.push(format!("{} contains `{forbidden}`", path.display()));
@@ -211,7 +284,7 @@ fn production_components_do_not_reintroduce_manual_component_inspection() {
 #[test]
 fn production_composition_does_not_register_inspection_nodes_directly() {
     let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let registration_owner = workspace_root.join("zui/src/presentation/scene.rs");
+    let registration_owner = workspace_root.join("zui/src/ui/presentation/scene.rs");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
         visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
@@ -232,6 +305,40 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
     assert!(
         violations.is_empty(),
         "Product composition must declare Element style and let zui register inspection nodes:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn zui_consumers_use_capability_oriented_namespaces() {
+    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let zui_root = workspace_root.join("zui");
+    let mut violations = Vec::new();
+    for crate_root in workspace_crate_roots(workspace_root) {
+        if crate_root == zui_root {
+            continue;
+        }
+        visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
+            if is_test_source(path) {
+                return;
+            }
+            for (offset, _) in source.match_indices("zui::") {
+                let capability = &source[offset + "zui::".len()..];
+                if capability.chars().next().is_some_and(char::is_uppercase) {
+                    violations.push(
+                        path.strip_prefix(workspace_root)
+                            .unwrap_or(path)
+                            .display()
+                            .to_string(),
+                    );
+                    break;
+                }
+            }
+        });
+    }
+    assert!(
+        violations.is_empty(),
+        "ZUI consumers must import app, input, render, services, ui, or window capabilities instead of flat root aliases:\n{}",
         violations.join("\n")
     );
 }

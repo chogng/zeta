@@ -1,6 +1,6 @@
 use super::{PointerInput, TerminalPointer};
 use zeta_terminal::{GridSize, TerminalCore, TerminalMousePosition};
-use zeta_winit::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
+use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 const FIRST: TerminalMousePosition = TerminalMousePosition::new(2, 4);
 const SECOND: TerminalMousePosition = TerminalMousePosition::new(3, 5);

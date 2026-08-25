@@ -1,5 +1,5 @@
 use super::ThreadTimelineScroll;
-use zeta_winit::{MouseScrollDelta, PhysicalPosition};
+use zui::input::{MouseScrollDelta, PhysicalPosition};
 
 #[test]
 fn timeline_scroll_uses_bottom_relative_line_offsets() {

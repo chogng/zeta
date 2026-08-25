@@ -3,8 +3,7 @@
 > 状态：Current。
 > 本文拥有 Native 单行控件与多行代码编辑器输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
 > 修改路径分别由 [`zeterm`](../README.md)、
-> [`zui`](../zui/README.md)、[`zeta-ui`](../ui/README.md) 和
-> [`zeta-winit`](../winit/README.md) 说明。
+> [`zui`](../zui/README.md) 和 [`zeta-ui`](../ui/README.md) 说明。
 
 ## 快速理解
 
@@ -12,14 +11,14 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 
 ```text
 winit keyboard / IME event
-  → zeta-winit platform forwarding
+  → private zui platform forwarding
   → zeterm/zeterm focus and event routing
   ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui InputBox
   └─ multiline   → zeta-editor CodeEditorDocument / CodeEditorViewport → CodeEditor
   → zui UiScene
 ```
 
-`zui` 不依赖 `zeta-ui` 或 `zeta-winit`；`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
+`zui` 的 backend-neutral modules 不依赖 `zeta-ui`、winit 或 GPU；public facade 统一导出平台事件并由私有 platform module 组合 adapter。`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
 
@@ -29,7 +28,7 @@ shaping geometry 和真实平台接入可以分别测试。
 | 中文、日文等输入法预编辑与提交 | ✅ | Native 路由 + 当前输入模型 |
 | 选择、退格和字素级移动 | ✅ | `TextInput` 或 `CodeEditorDocument` |
 | 文件编辑器鼠标放置光标、拖选与越界自动滚动 | ✅ | Native pointer/timer adapter + `CodeEditor` hit-test |
-| 文件编辑器剪贴板、撤销和重做 | ✅ | Native clipboard adapter + `CodeEditorDocument` |
+| 文件编辑器剪贴板、撤销和重做 | ✅ | `zui::ClipboardHandle` + `CodeEditorDocument` |
 | 文件编辑器查找/替换与自动缩进 | ✅ | Native find widget + `CodeEditorDocument` search/indent contracts |
 | 多行编辑与 viewport soft wrap | ✅ | `zeta-editor::CodeEditorDocument` / editor-owned visual projection |
 
@@ -37,7 +36,7 @@ shaping geometry 和真实平台接入可以分别测试。
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
-| 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
+| 原生 keyboard/IME event 与候选框 API | `zui` private `platform` / `winit` | 委托 |
 | Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeterm/src/main.rs::NativeApp` | ✅ |
 | Composer committed text、selection、IME state 与 multiline viewport | `zeta-composer::ComposerInput` + `zeta-editor::CodeEditorDocument` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
@@ -48,7 +47,7 @@ shaping geometry 和真实平台接入可以分别测试。
 | Blink deadline scheduling 与 redraw | `zeterm/src/main.rs::NativeApp` | ✅ |
 | 文件 Editor mouse caret、drag selection、clipboard 与 viewport | `file_editor_input` + `zeta-editor` | ✅ |
 | 文件 Editor undo/redo 与 vertical navigation | `zeta-editor::CodeEditorDocument` | ✅ |
-| 平台 accessibility adapter | 尚无完整 owner | 尚未完成 |
+| 平台 accessibility adapter | `zui` private AccessKit adapter | 委托；TextInput 现有 value/focus 随 frame 发布 |
 
 `TextInput` 是非 component 基座：拥有编辑状态、composition 和 shaping contract，但不实现
 `Component`，也不拥有边框、背景、placeholder 或 hover/focus 视觉。`InputBox` 才是
@@ -95,7 +94,7 @@ WindowEvent::Ime(Commit)
   → composition clears
   → rebuild, reposition candidate area, redraw
 
-ApplicationHandler::about_to_wait
+zui::App::about_to_wait
   → CaretBlinkController::advance
   → rebuild only when the visible phase changes
   → ControlFlow::WaitUntil(next blink deadline)
@@ -117,7 +116,8 @@ ApplicationHandler::about_to_wait
 单行控件支持键盘插入、grapheme-safe 左右移动与删除、Shift selection、Home/End、Select All、
 IME composition 和 caret blink；其 mouse selection、clipboard、undo/redo 与 password variant
 仍未完成。文件 Editor 另外支持多行 navigation、pointer caret/drag、clipboard、undo/redo、结构
-折叠、find/replace、自动缩进、soft wrap、垂直 viewport 和拖选越界自动滚动，但尚无平台 accessibility adapter。
+折叠、find/replace、自动缩进、soft wrap、垂直 viewport 和拖选越界自动滚动。平台 accessibility
+由 `zui` 发布现有语义树；更完整的 selection/edit action 与各平台读屏 smoke coverage 仍需补充。
 
 两类输入必须继续消费各自 owner 的同源 hit-test/layout，不能在 Native 另建字符宽度估算。
 `TextInput` 基座留在 `zui`，输入框 chrome 留在 `zeta-ui`；多行文档、命令和可见行投影留在
@@ -130,4 +130,4 @@ IME composition 和 caret blink；其 mouse selection、clipboard、undo/redo �
 - render component 不执行产品命令；
 - composition 与 committed text 保持可区分；
 - cursor/selection geometry 与实际 shaping 使用同一文本语义；
-- 产品领域状态不得下沉到 `zui`、`zeta-ui` 或 `zeta-winit`。
+- 产品领域状态不得下沉到 `zui` 或 `zeta-ui`。

@@ -2,7 +2,7 @@ use super::{SessionSidebarToolbar, TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT};
 use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
-use zui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
 fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
@@ -84,6 +84,6 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
         dispatch
             .release_primary(add_session_point, frame.interaction())
             .intent,
-        Some(zui::UiIntent::Activate(ADD_SESSION))
+        Some(zui::ui::UiIntent::Activate(ADD_SESSION))
     );
 }

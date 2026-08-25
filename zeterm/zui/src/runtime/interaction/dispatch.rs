@@ -1,4 +1,4 @@
-use crate::foundation::Point;
+use crate::ui::foundation::Point;
 
 use super::CursorFeedback;
 use super::DispatchInvalidation;
@@ -380,6 +380,19 @@ impl UiDispatch {
         match frame.node(target) {
             Some(node) if node.action() == NodeAction::Activate => {
                 DispatchOutcome::with_intent(UiIntent::Activate(target), node.invalidation())
+            }
+            Some(_) | None => DispatchOutcome::default(),
+        }
+    }
+
+    /// Activates one accessible element when it remains actionable in the current frame.
+    pub fn activate_element(&self, frame: &InteractionFrame, id: ElementId) -> DispatchOutcome {
+        if !frame.is_in_active_scope(id) {
+            return DispatchOutcome::default();
+        }
+        match frame.node(id) {
+            Some(node) if node.action() == NodeAction::Activate => {
+                DispatchOutcome::with_intent(UiIntent::Activate(id), node.invalidation())
             }
             Some(_) | None => DispatchOutcome::default(),
         }

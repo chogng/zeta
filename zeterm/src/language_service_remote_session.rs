@@ -29,7 +29,7 @@ use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use zeta_language_service::LanguageRequestKind;
-use zeta_winit::EventLoopProxy;
+use zui::app::AppProxy;
 
 use super::remote::RemoteLanguageEvent;
 use crate::agent_session_target::AgentSessionTarget;
@@ -108,7 +108,7 @@ pub(crate) struct RemoteLanguageSession {
 
 impl RemoteLanguageSession {
     pub(crate) fn spawn(
-        event_proxy: EventLoopProxy<NativeEvent>,
+        event_proxy: AppProxy<NativeEvent>,
         target: AgentSessionTarget,
     ) -> Result<Self> {
         if !target.is_remote() {
@@ -188,7 +188,7 @@ impl Drop for RemoteLanguageSession {
 }
 
 fn run_remote_language_session(
-    event_proxy: EventLoopProxy<NativeEvent>,
+    event_proxy: AppProxy<NativeEvent>,
     commands: Receiver<RemoteLanguageCommand>,
     target: AgentSessionTarget,
     available: Arc<AtomicBool>,
@@ -244,7 +244,7 @@ fn run_remote_language_session(
 }
 
 fn run_connection(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     target: &AgentSessionTarget,
     available: &AtomicBool,
@@ -266,7 +266,7 @@ fn run_connection(
 }
 
 fn drive_connection(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
@@ -311,7 +311,7 @@ fn drive_connection(
 }
 
 fn drive_command(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     client: &mut AppServerRequestHandle,
     command: RemoteLanguageCommand,
 ) -> Result<()> {
@@ -395,7 +395,7 @@ fn drive_command(
 }
 
 fn document_failure(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     path: PathBuf,
     operation: &'static str,
     error: ClientError,
@@ -414,7 +414,7 @@ fn document_failure(
 }
 
 fn request_failure(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     request_id: u64,
     kind: LanguageRequestKind,
     path: PathBuf,
@@ -435,7 +435,7 @@ fn request_failure(
 }
 
 fn wait_for_reconnect(
-    event_proxy: &EventLoopProxy<NativeEvent>,
+    event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     delay: Duration,
     closing: &AtomicBool,
@@ -525,7 +525,7 @@ fn reconnect_delay(attempt: usize) -> Duration {
     (INITIAL_RECONNECT_DELAY * multiplier).min(MAX_RECONNECT_DELAY)
 }
 
-fn send_event(event_proxy: &EventLoopProxy<NativeEvent>, event: RemoteLanguageEvent) -> Result<()> {
+fn send_event(event_proxy: &AppProxy<NativeEvent>, event: RemoteLanguageEvent) -> Result<()> {
     event_proxy
         .send_event(NativeEvent::RemoteLanguage(event))
         .map_err(|_| NativeEventLoopUnavailable.into())

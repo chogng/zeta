@@ -12,8 +12,8 @@ use crate::shell_interaction::{
     AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW,
 };
 use crate::shell_style::ShellPalette;
-use zeta_winit::WindowControlInsets;
-use zui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
+use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
+use zui::window::WindowControlInsets;
 
 pub(crate) const TITLEBAR_HEIGHT: f32 = 32.0;
 const TITLEBAR_ACTION_GAP: f32 = 8.0;

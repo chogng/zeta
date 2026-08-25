@@ -11,7 +11,7 @@ name = "zeta_ui"
 path = "src/lib.rs"
 
 [dependencies]
-zui = { workspace = true }
+zui = { workspace = true, default-features = false }
 
 [lints]
 workspace = true

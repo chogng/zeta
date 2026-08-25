@@ -1,4 +1,4 @@
-use zeta_winit::MouseScrollDelta;
+use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;
 use crate::shell_interaction::THREAD_TIMELINE;

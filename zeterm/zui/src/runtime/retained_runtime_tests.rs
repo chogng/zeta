@@ -8,6 +8,7 @@ use crate::ElementId;
 use crate::FrameInvalidation;
 use crate::RetainedFragmentMount;
 use crate::RetainedRuntime;
+use crate::ScalarAnimationSpec;
 
 const FRAGMENT: ElementId = ElementId::scoped(73, 1);
 const OPACITY: AnimationKey = AnimationKey::new(FRAGMENT, AnimationProperty::Opacity);
@@ -21,9 +22,11 @@ fn expired_fragment_cleanup_removes_all_owned_animation_tracks() {
         OPACITY,
         0.0,
         1.0,
-        Duration::from_millis(100),
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
+        ScalarAnimationSpec::new(
+            Duration::from_millis(100),
+            AnimationEasing::Linear,
+            FrameInvalidation::Fragment,
+        ),
         now,
     );
     runtime.begin_exit(FRAGMENT, now).unwrap();
@@ -47,9 +50,11 @@ fn reentering_a_fragment_preserves_its_animation_continuity() {
         OPACITY,
         0.0,
         1.0,
-        Duration::from_millis(200),
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
+        ScalarAnimationSpec::new(
+            Duration::from_millis(200),
+            AnimationEasing::Linear,
+            FrameInvalidation::Fragment,
+        ),
         now,
     );
     runtime.begin_exit(FRAGMENT, remove_at).unwrap();
@@ -71,9 +76,11 @@ fn immediate_unmount_reports_and_cleans_owned_tracks() {
         OPACITY,
         0.0,
         1.0,
-        Duration::from_millis(100),
-        AnimationEasing::Linear,
-        FrameInvalidation::Fragment,
+        ScalarAnimationSpec::new(
+            Duration::from_millis(100),
+            AnimationEasing::Linear,
+            FrameInvalidation::Fragment,
+        ),
         now,
     );
 

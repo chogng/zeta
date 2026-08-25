@@ -1,6 +1,6 @@
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
-use zeta_winit::{ElementState, Key, KeyEvent, NamedKey};
-use zui::ElementId;
+use zui::input::{ElementState, Key, KeyEvent, NamedKey};
+use zui::ui::ElementId;
 
 use crate::NativeApp;
 use crate::language_server_settings::{

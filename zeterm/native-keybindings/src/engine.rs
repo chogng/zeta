@@ -9,8 +9,8 @@ use zeta_keybinding::KeySequence;
 use zeta_keybinding::KeyStroke;
 use zeta_keybinding::KeybindingResolver;
 use zeta_keybinding::ResolveResult;
-use zeta_winit::KeyEvent;
-use zeta_winit::ModifiersState;
+use zui::input::KeyEvent;
+use zui::input::ModifiersState;
 
 use crate::catalog::KeybindingCatalog;
 use crate::input::key_stroke;

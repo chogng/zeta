@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use crate::foundation::ElementId;
+use crate::ui::foundation::ElementId;
 
 use super::animation::AnimationAdvanceReport;
 use super::animation::AnimationRegistry;

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::time::Instant;
 
-use crate::foundation::ElementId;
+use crate::ui::foundation::ElementId;
 
 use super::frame_scheduler::FrameSchedule;
 use super::frame_scheduler::FrameScheduler;
@@ -77,7 +77,7 @@ impl RetainedFragmentAdvanceReport {
     ///
     /// The host should call this after removing the corresponding scene fragments. If a scene
     /// fragment cannot be removed locally because it is not terminal, the host must request a
-    /// full [`super::frame_scheduler::FrameInvalidation::Rebuild`] instead.
+    /// full [`crate::ui::FrameInvalidation::Rebuild`] instead.
     pub fn schedule(&self, scheduler: &mut FrameScheduler) -> Option<FrameSchedule> {
         let mut schedule = None;
         for id in &self.removed_ids {

@@ -29,11 +29,9 @@ zeta-input-classifier = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-keybindings-host = { workspace = true }
 zeterm-keybinding-ui = { workspace = true }
-zeta-layout = { workspace = true }
 zeta-language-server-catalog = { workspace = true }
 zeta-language-service = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-renderer = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
 zeta-settings = { workspace = true }
@@ -47,12 +45,7 @@ zeta-composer = { workspace = true }
 zeta-ui = { workspace = true }
 zeta-utils-path = { workspace = true }
 zeta-utils-pty = { workspace = true }
-zeta-wgpu = { workspace = true }
-zeta-winit = { workspace = true }
-zui = { workspace = true }
-
-[target.'cfg(not(target_os = "android"))'.dependencies]
-arboard = { workspace = true }
+zui = { workspace = true, features = ["wgpu"] }
 
 [lints]
 workspace = true
