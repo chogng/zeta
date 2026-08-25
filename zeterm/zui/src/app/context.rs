@@ -3,6 +3,7 @@ use std::future::Future;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::devtools::DevToolsHandle;
 use crate::internal::ActiveEventLoop;
 use crate::internal::ControlFlow;
 use crate::render::RenderOutcome;
@@ -19,7 +20,6 @@ use super::ClipboardHandle;
 use super::DiagnosticsHandle;
 use super::OpenedWindow;
 use super::RendererFactory;
-use super::SceneDiagnostics;
 use super::Services;
 use super::Task;
 use super::TaskScope;
@@ -249,6 +249,31 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.runtime.handle()
     }
 
+    /// Returns the shared DevTools session capability for this window.
+    pub fn devtools(&self) -> DevToolsHandle {
+        self.runtime.handle().devtools()
+    }
+
+    /// Opens DevTools for this window and schedules a frame for the host presentation.
+    pub fn open_devtools(&self) {
+        self.runtime.handle().open_devtools();
+    }
+
+    /// Closes DevTools for this window and schedules a frame for the host presentation.
+    pub fn close_devtools(&self) {
+        self.runtime.handle().close_devtools();
+    }
+
+    /// Toggles DevTools for this window and returns whether it is now open.
+    pub fn toggle_devtools(&self) -> bool {
+        self.runtime.handle().toggle_devtools()
+    }
+
+    /// Returns whether DevTools is currently open for this window.
+    pub fn is_devtools_open(&self) -> bool {
+        self.runtime.handle().is_devtools_open()
+    }
+
     /// Schedules another frame for this window.
     pub fn request_redraw(&self) {
         self.runtime.handle().request_redraw();
@@ -275,7 +300,7 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.diagnostics.present(
             self.id(),
             self.metrics(),
-            SceneDiagnostics::from_scene(scene, 0),
+            self.diagnostics.scene_diagnostics(scene, 0),
             outcome,
         );
         Ok(outcome)
@@ -292,7 +317,8 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.diagnostics.present(
             self.id(),
             self.metrics(),
-            SceneDiagnostics::from_scene(scene, accessibility.len()),
+            self.diagnostics
+                .scene_diagnostics(scene, accessibility.len()),
             outcome,
         );
         Ok(outcome)

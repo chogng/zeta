@@ -15,6 +15,8 @@ use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 use winit::window::WindowAttributes;
 
+use crate::devtools::DevToolsHandle;
+
 use super::Theme;
 use super::WindowChrome;
 use super::WindowControlInsets;
@@ -202,6 +204,7 @@ pub(crate) struct NativeWindow {
     #[cfg(feature = "wgpu")]
     display_handle: OwnedDisplayHandle,
     chrome: WindowChrome,
+    devtools: DevToolsHandle,
 }
 
 /// Non-owning platform capability for updating a live native window.
@@ -212,6 +215,7 @@ pub(crate) struct NativeWindow {
 pub struct WindowHandle {
     window: Weak<Window>,
     chrome: WindowChrome,
+    devtools: DevToolsHandle,
 }
 
 impl WindowHandle {
@@ -227,6 +231,35 @@ impl WindowHandle {
         if let Some(window) = self.window.upgrade() {
             window.request_redraw();
         }
+    }
+
+    /// Returns the shared DevTools session capability for this window.
+    pub fn devtools(&self) -> DevToolsHandle {
+        self.devtools.clone()
+    }
+
+    /// Opens DevTools for this window and schedules a frame for the host presentation.
+    pub fn open_devtools(&self) {
+        self.devtools.open();
+        self.request_redraw();
+    }
+
+    /// Closes DevTools for this window and schedules a frame for the host presentation.
+    pub fn close_devtools(&self) {
+        self.devtools.close();
+        self.request_redraw();
+    }
+
+    /// Toggles DevTools for this window and returns whether it is now open.
+    pub fn toggle_devtools(&self) -> bool {
+        let is_open = self.devtools.toggle();
+        self.request_redraw();
+        is_open
+    }
+
+    /// Returns whether DevTools is currently open for this window.
+    pub fn is_devtools_open(&self) -> bool {
+        self.devtools.is_open()
     }
 
     /// Begins a platform window drag when the runtime still owns the window.
@@ -337,6 +370,7 @@ impl NativeWindow {
             #[cfg(feature = "wgpu")]
             display_handle: event_loop.owned_display_handle(),
             chrome,
+            devtools: DevToolsHandle::new(),
         })
     }
 
@@ -350,6 +384,7 @@ impl NativeWindow {
         WindowHandle {
             window: Arc::downgrade(&self.window),
             chrome: self.chrome,
+            devtools: self.devtools.clone(),
         }
     }
 

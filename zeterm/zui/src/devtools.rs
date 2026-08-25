@@ -6,9 +6,16 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::render::RenderOutcome;
+use crate::ui::presentation::InspectionFrame;
 use crate::ui::presentation::UiScene;
 use crate::window::WindowId;
 use crate::window::WindowMetrics;
+
+mod inspection;
+
+pub use inspection::DevToolsHandle;
+pub use inspection::InspectionSelection;
+pub use inspection::InspectorState;
 
 /// Runtime transition captured by the bounded ZUI diagnostic trace.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,8 +46,12 @@ pub struct DiagnosticEvent {
     pub kind: DiagnosticEventKind,
 }
 
-/// Cheap structural summary of the most recently submitted UI scene.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// Structural summary of the most recently submitted UI scene.
+///
+/// When diagnostics inspection retention is enabled, `inspection` contains a copy of the
+/// scene's complete per-frame inspection hierarchy. It is omitted by default so applications
+/// that only need counters do not copy every inspection node on every frame.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SceneDiagnostics {
     pub rectangles: usize,
     pub icons: usize,
@@ -48,10 +59,15 @@ pub struct SceneDiagnostics {
     pub text_blocks: usize,
     pub batches: usize,
     pub accessibility_nodes: usize,
+    pub inspection: Option<InspectionFrame>,
 }
 
 impl SceneDiagnostics {
-    pub(crate) fn from_scene(scene: &UiScene, accessibility_nodes: usize) -> Self {
+    pub(crate) fn from_scene(
+        scene: &UiScene,
+        accessibility_nodes: usize,
+        retain_inspection: bool,
+    ) -> Self {
         Self {
             rectangles: scene.rects().len(),
             icons: scene.icons().len(),
@@ -59,6 +75,7 @@ impl SceneDiagnostics {
             text_blocks: scene.text_blocks().len(),
             batches: scene.batches().count(),
             accessibility_nodes,
+            inspection: retain_inspection.then(|| scene.inspection().clone()),
         }
     }
 }
@@ -90,12 +107,18 @@ pub trait DiagnosticsSink: Send + Sync {
 
 #[derive(Clone)]
 pub struct DiagnosticsHandle {
+    retain_inspection: bool,
     state: Arc<Mutex<DiagnosticsState>>,
 }
 
 impl DiagnosticsHandle {
-    pub(crate) fn new(capacity: usize, sink: Option<Arc<dyn DiagnosticsSink>>) -> Self {
+    pub(crate) fn new(
+        capacity: usize,
+        sink: Option<Arc<dyn DiagnosticsSink>>,
+        retain_inspection: bool,
+    ) -> Self {
         Self {
+            retain_inspection,
             state: Arc::new(Mutex::new(DiagnosticsState {
                 started: Instant::now(),
                 capacity,
@@ -126,6 +149,14 @@ impl DiagnosticsHandle {
     /// Removes trace history without changing live runtime state.
     pub fn clear_events(&self) {
         self.state.lock().expect("diagnostics lock").events.clear();
+    }
+
+    pub(crate) fn scene_diagnostics(
+        &self,
+        scene: &UiScene,
+        accessibility_nodes: usize,
+    ) -> SceneDiagnostics {
+        SceneDiagnostics::from_scene(scene, accessibility_nodes, self.retain_inspection)
     }
 
     pub(crate) fn record(&self, kind: DiagnosticEventKind) {

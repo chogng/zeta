@@ -1,6 +1,9 @@
 use zeta_ui::{Border, Color, CornerRadii, InspectionNode, PaintRect, Point, Rect, UiScene};
+use zui::devtools::DevToolsHandle;
+use zui::devtools::InspectionSelection;
 use zui::input::{ElementState, Key, KeyEvent, ModifiersState, MouseButton, NamedKey};
 use zui::window::LogicalSize;
+use zui::window::WindowHandle;
 
 use crate::NativeApp;
 use crate::shell_scene::LogicalViewport;
@@ -16,56 +19,28 @@ const ANCESTOR_OUTLINE_COLOR: Color = Color::rgba(116, 92, 217, 150);
 const PADDING_COLOR: Color = Color::rgba(238, 147, 54, 92);
 const GAP_COLOR: Color = Color::rgba(45, 184, 164, 112);
 
-#[derive(Clone, Debug, PartialEq)]
-pub(super) struct InspectionSelection {
-    pub(super) path: Vec<InspectionNode>,
-    selected_index: usize,
-}
-
-impl InspectionSelection {
-    fn new(path: Vec<InspectionNode>) -> Self {
-        let selected_index = path.len().saturating_sub(1);
-        Self {
-            path,
-            selected_index,
-        }
-    }
-
-    fn target(&self) -> Option<&InspectionNode> {
-        self.path.get(self.selected_index)
-    }
-
-    const fn selected_index(&self) -> usize {
-        self.selected_index
-    }
-
-    fn select_index(&mut self, index: usize) -> bool {
-        if index >= self.path.len() {
-            return false;
-        }
-        self.selected_index = index;
-        true
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub(crate) struct LayoutInspector {
-    enabled: bool,
-    picking: bool,
+    devtools: DevToolsHandle,
     content_width: Option<f32>,
     product_bounds: Option<Rect>,
     panel_bounds: Option<Rect>,
-    hovered: Option<InspectionSelection>,
-    locked: Option<InspectionSelection>,
 }
 
 impl LayoutInspector {
-    pub(crate) const fn is_enabled(&self) -> bool {
-        self.enabled
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.devtools.is_open()
     }
 
-    pub(crate) const fn is_picking(&self) -> bool {
-        self.enabled && self.picking
+    pub(crate) fn is_picking(&self) -> bool {
+        self.devtools.is_picking()
+    }
+
+    pub(crate) fn attach_devtools(&mut self, devtools: DevToolsHandle) {
+        if self.devtools.is_open() {
+            devtools.open();
+        }
+        self.devtools = devtools;
     }
 
     pub(crate) fn content_viewport(&self, window_viewport: LogicalViewport) -> LogicalViewport {
@@ -80,14 +55,14 @@ impl LayoutInspector {
     }
 
     pub(crate) fn pointer_is_over_panel(&self, pointer: Option<Point>) -> bool {
-        self.enabled
+        self.devtools.is_open()
             && self
                 .panel_bounds
                 .is_some_and(|bounds| pointer.is_some_and(|point| bounds.contains(point)))
     }
 
     pub(crate) fn uses_panel_action_cursor(&self, pointer: Option<Point>) -> bool {
-        if !self.enabled {
+        if !self.devtools.is_open() {
             return false;
         }
         let Some(point) = pointer else {
@@ -100,74 +75,52 @@ impl LayoutInspector {
         let Some(content_width) = self.content_width else {
             return;
         };
-        if !self.enabled && window_viewport.width <= content_width + 0.5 {
+        if !self.devtools.is_open() && window_viewport.width <= content_width + 0.5 {
             self.content_width = None;
         }
     }
 
     fn open(&mut self, content_width: f32) {
-        self.enabled = true;
-        self.picking = false;
+        self.devtools.open();
         self.content_width = Some(content_width);
         self.product_bounds = None;
         self.panel_bounds = None;
-        self.hovered = None;
-        self.locked = None;
     }
 
     fn close(&mut self) -> Option<f32> {
-        self.enabled = false;
-        self.picking = false;
+        self.devtools.close();
         self.product_bounds = None;
         self.panel_bounds = None;
-        self.hovered = None;
-        self.locked = None;
         self.content_width
     }
 
     fn stop_picking_or_close(&mut self) -> Option<f32> {
-        if self.picking {
-            self.picking = false;
-            None
-        } else {
+        if self.devtools.stop_picking_or_close() {
             self.close()
+        } else {
+            None
         }
     }
 
     fn toggle_picking(&mut self) {
-        if self.picking {
-            self.picking = false;
-        } else {
-            self.picking = true;
-            self.locked = None;
-        }
+        self.devtools.toggle_picking();
     }
 
     fn select(&mut self, target: Option<InspectionSelection>) {
-        self.locked = target;
-        self.picking = false;
+        self.devtools.select(target);
     }
 
     fn select_panel_row(&mut self, point: Point) -> bool {
         let Some(index) = self.panel_row_at(point) else {
             return false;
         };
-        let Some(mut selection) = self.locked.as_ref().or(self.hovered.as_ref()).cloned() else {
-            return false;
-        };
-        if !selection.select_index(index) {
-            return false;
-        }
-        self.locked = Some(selection);
-        self.hovered = None;
-        self.picking = false;
-        true
+        self.devtools.select_index(index)
     }
 
     fn panel_row_at(&self, point: Point) -> Option<usize> {
         let panel_bounds = self.panel_bounds?;
-        let selection = self.locked.as_ref().or(self.hovered.as_ref())?;
-        panel::row_index_at(panel_bounds, point, selection.path.len())
+        let selection = self.devtools.selection()?;
+        panel::row_index_at(panel_bounds, point, selection.path().len())
     }
 
     fn toolbar_action_at(&self, point: Point) -> Option<inspector_toolbar::InspectorToolbarAction> {
@@ -187,39 +140,47 @@ impl LayoutInspector {
     ) {
         self.product_bounds = Some(root_layout.product_bounds());
         self.panel_bounds = root_layout.inspector_bounds();
-        if !self.enabled {
+        if !self.devtools.is_open() {
             return;
         }
-        if self.picking
-            && self.locked.is_none()
-            && let Some(point) =
-                pointer.filter(|point| root_layout.product_bounds().contains(*point))
-        {
-            self.hovered = selection_at(scene, point);
+        if self.devtools.is_picking() && self.devtools.locked_selection().is_none() {
+            let selection = pointer
+                .filter(|point| root_layout.product_bounds().contains(*point))
+                .and_then(|point| selection_at(scene, point));
+            self.devtools.set_hovered(selection);
         }
-        let selection = self.locked.as_ref().or(self.hovered.as_ref());
+        let selection = self.devtools.selection();
         if let Some(panel_bounds) = root_layout.inspector_bounds() {
             scene.draw_component(&panel::InspectorPanel::new(
                 panel_bounds,
-                selection,
+                selection.as_ref(),
                 panel::PanelState {
-                    picking: self.picking,
+                    picking: self.devtools.is_picking(),
                     pointer,
                 },
             ));
         }
         scene.with_overlay(|scene| {
-            if let Some(selection) = selection {
+            if let Some(selection) = selection.as_ref() {
                 paint_selection(scene, selection);
             }
         });
+    }
+
+    #[cfg(test)]
+    fn selection(&self) -> Option<InspectionSelection> {
+        self.devtools.selection()
     }
 }
 
 impl NativeApp {
     pub(super) fn route_layout_inspector_keyboard(&mut self, event: &KeyEvent) -> bool {
         if is_toggle_shortcut(event, self.modifiers) {
-            if self.layout_inspector.is_enabled() {
+            let is_open = self
+                .window
+                .as_ref()
+                .is_some_and(WindowHandle::toggle_devtools);
+            if !is_open {
                 if let Some(content_width) = self.layout_inspector.close() {
                     self.request_layout_inspector_window_width(content_width);
                 }
@@ -343,15 +304,7 @@ impl NativeApp {
 }
 
 fn selection_at(scene: &UiScene, point: Point) -> Option<InspectionSelection> {
-    let target = scene.inspection().target_at(point)?;
-    Some(InspectionSelection::new(
-        scene
-            .inspection()
-            .ancestry(target.id())
-            .into_iter()
-            .cloned()
-            .collect(),
-    ))
+    InspectionSelection::at(scene.inspection(), point)
 }
 
 fn is_toggle_shortcut(event: &KeyEvent, modifiers: ModifiersState) -> bool {
@@ -376,7 +329,7 @@ fn paint_selection(scene: &mut UiScene, selection: &InspectionSelection) {
     paint_padding(scene, target);
     paint_gap(scene, target);
     for (index, node) in selection
-        .path
+        .path()
         .iter()
         .take(selection.selected_index() + 1)
         .enumerate()

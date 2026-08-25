@@ -41,6 +41,7 @@ pub struct ApplicationBuilder {
     launch_urls: Vec<ProtocolUrl>,
     diagnostics_capacity: usize,
     diagnostics_sink: Option<Arc<dyn DiagnosticsSink>>,
+    retain_diagnostics_inspection: bool,
 }
 
 impl ApplicationBuilder {
@@ -54,6 +55,7 @@ impl ApplicationBuilder {
             launch_urls: Vec::new(),
             diagnostics_capacity: 512,
             diagnostics_sink: None,
+            retain_diagnostics_inspection: false,
         }
     }
 
@@ -142,6 +144,15 @@ impl ApplicationBuilder {
         self
     }
 
+    /// Retains the latest scene's complete inspection hierarchy in diagnostics snapshots.
+    ///
+    /// This is opt-in because copying inspection nodes on every presented frame has a measurable
+    /// cost for applications that only need runtime counters and event traces.
+    pub const fn with_diagnostics_inspection(mut self) -> Self {
+        self.retain_diagnostics_inspection = true;
+        self
+    }
+
     /// Selects whether closing the last window exits the event loop automatically.
     pub const fn with_exit_policy(mut self, exit_policy: ExitPolicy) -> Self {
         self.exit_policy = exit_policy;
@@ -174,7 +185,11 @@ impl ApplicationBuilder {
         let services = self.services;
         let exit_policy = self.exit_policy;
         let mut launch_urls = self.launch_urls;
-        let diagnostics = DiagnosticsHandle::new(self.diagnostics_capacity, self.diagnostics_sink);
+        let diagnostics = DiagnosticsHandle::new(
+            self.diagnostics_capacity,
+            self.diagnostics_sink,
+            self.retain_diagnostics_inspection,
+        );
         launch_urls.extend(protocol::urls_from_arguments(
             &self.protocol_schemes,
             std::env::args_os().skip(1),

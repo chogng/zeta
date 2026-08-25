@@ -4,7 +4,7 @@ use zeta_ui::{
     TextStyle, UiScene,
 };
 
-use super::InspectionSelection;
+use zui::devtools::InspectionSelection;
 
 const ROW_BACKGROUND: Color = Color::rgba(35, 131, 226, 24);
 const ROW_HOVER_BACKGROUND: Color = Color::rgba(35, 35, 42, 10);
@@ -73,7 +73,7 @@ impl Component for InspectorContent<'_> {
                 );
                 return;
             };
-            for (depth, node) in selection.path.iter().enumerate() {
+            for (depth, node) in selection.path().iter().enumerate() {
                 let y = self.bounds.origin.y + depth as f32 * ROW_HEIGHT;
                 if y >= self.bounds.bottom() {
                     break;

@@ -128,7 +128,7 @@ Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut
 
 `SignedHttpUpdater` 对 manifest 的原始 payload 执行 strict Ed25519 verification，再按目标平台选择 artifact；下载完成后必须通过 manifest 中的 SHA-256 才能原子进入 staging。`UpdateInstaller` 只接收已经验证的 `StagedUpdate`，默认 backend 交给操作系统打开 installer，也可注入企业部署或测试实现。HTTP check/download 是阻塞服务，产品通过 `BackgroundExecutor` 调用，不能阻塞 UI callback。
 
-`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、menu、tray、shortcut、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。snapshot 不持有 native window、renderer 或产品状态。
+`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、menu、tray、shortcut、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。调用 `ApplicationBuilder::with_diagnostics_inspection` 后，最近一帧的完整 `InspectionFrame` 也会保留在 `SceneDiagnostics` 中；默认关闭以避免每帧复制节点。每个 runtime window 都提供共享的 `DevToolsHandle`，因此产品可以直接调用 `WindowContext::{open_devtools, close_devtools, toggle_devtools}` 或 `WindowHandle` 上的同名方法；快捷键、工具栏和其他 host 入口不会再各自维护 inspector 状态。`InspectionSelection`、`InspectorState` 与 `DevToolsHandle` 是 product-neutral 的会话状态，面板布局、快捷键绑定、窗口扩展和视觉样式仍由产品 host 拥有。snapshot 不持有 native window、renderer 或产品状态。
 
 `InteractionFrame::accessibility_nodes` 是语义树的唯一来源。`WindowContext::present_scene` 在绘制同一帧时把该快照映射为 AccessKit tree；adapter 在窗口第一次可见前创建。OS 请求的 Focus/Click 转换成 `AccessibilityActionKind::{Focus, Activate}` 并回到 `App::accessibility_action`，产品继续通过现有 `UiDispatch` 与 reducer 处理，不产生第二套控件身份。renderer 仍只消费 `UiScene`，不拥有 accessibility。
 
@@ -197,7 +197,7 @@ ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发�
 
 ## 11. 当前能力与剩余边界
 
-当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy/文件拖放 contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、三平台 tray/global shortcut、resource/process、三平台严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、三平台发布 workflow、bounded diagnostics/devtools、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
+当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy/文件拖放 contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、三平台 tray/global shortcut、resource/process、三平台严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、三平台发布 workflow、bounded diagnostics/devtools、窗口级直接 DevTools 调用与可复用 inspector session state、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
 
 这使 `zui` 具备 Electron 类原生应用 framework 的完整核心职责边界，但不等于 Electron 兼容层。仍然明确保留的边界是：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖已有真实消费者的策略；Linux application menu 还没有可依附 winit window 的 GTK native menubar（tray menu 已完整支持）；Windows AppContainer 只接受能够无降级表达的权限组合；真实 tray、portal、accessibility、签名账户与 OS 安装验收仍由对应平台 CI/smoke test 负责。当前 devtools 是 native scene/runtime 的结构化 diagnostics，不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger。
 

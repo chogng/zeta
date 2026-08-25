@@ -197,6 +197,7 @@ impl App<DemoEvent> for DemoApp {
 fn main() -> ExitCode {
     let exit = match Application::builder()
         .with_protocol_scheme(ProtocolScheme::new("zui-demo").unwrap())
+        .with_diagnostics_inspection()
         .run::<DemoEvent, _, _>(|_| DemoApp::default())
     {
         Ok(exit) => exit,

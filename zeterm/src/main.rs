@@ -1377,6 +1377,7 @@ impl App<NativeEvent> for NativeApp {
             }
         };
         let window = opened_window.handle();
+        self.layout_inspector.attach_devtools(window.devtools());
         let system_scheme = match window.theme() {
             Some(Theme::Dark) => ColorScheme::Dark,
             Some(Theme::Light) | None => ColorScheme::Light,

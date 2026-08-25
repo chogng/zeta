@@ -3,6 +3,7 @@ use crate::shell_scene::LogicalViewport;
 use zeta_icons::icons;
 use zeta_ui::layout::{InspectorPane, RootLayout};
 use zeta_ui::{Color, CornerRadii, Edges, Element, InspectionNode, Point, Rect, UiScene};
+use zui::devtools::InspectionSelection;
 
 #[test]
 fn decoration_paints_the_full_ancestry_in_the_added_panel() {
@@ -169,14 +170,10 @@ fn selecting_a_component_stops_picking_and_retains_the_selection() {
     inspector.select(super::selection_at(&scene, Point::new(20.0, 20.0)));
 
     assert!(!inspector.is_picking());
-    assert_eq!(
-        inspector
-            .locked
-            .as_ref()
-            .and_then(|selection| selection.target())
-            .map(InspectionNode::name),
-        Some("Toolbar")
-    );
+    let selected_name = inspector
+        .selection()
+        .and_then(|selection| selection.target().map(|node| node.name().to_owned()));
+    assert_eq!(selected_name.as_deref(), Some("Toolbar"));
 }
 
 #[test]
@@ -203,24 +200,25 @@ fn panel_rows_retarget_the_selection_without_discarding_descendants() {
     assert!(inspector.uses_panel_action_cursor(Some(Point::new(420.0, 70.0))));
     assert!(inspector.select_panel_row(Point::new(420.0, 70.0)));
 
-    let selection = inspector.locked.as_ref().expect("selection remains locked");
-    assert_eq!(selection.path.len(), 2);
+    let selection = inspector.selection().expect("selection remains locked");
+    assert_eq!(selection.path().len(), 2);
     assert_eq!(
         selection.target().map(InspectionNode::name),
         Some("ComposerPanel")
     );
     let mut overlay = UiScene::new(Color::TRANSPARENT);
-    super::paint_selection(&mut overlay, selection);
+    super::paint_selection(&mut overlay, &selection);
     assert_eq!(overlay.rects().len(), 1);
 }
 
 #[test]
 fn selection_paints_exact_gap_regions_with_the_gap_color() {
     let gap_bounds = Rect::from_xywh(24.0, 0.0, 6.0, 24.0);
-    let selection = super::InspectionSelection::new(vec![
+    let selection = InspectionSelection::from_path(vec![
         InspectionNode::new("ActionBar", Rect::from_xywh(0.0, 0.0, 100.0, 24.0))
             .with_gap_geometry(6.0, vec![gap_bounds]),
-    ]);
+    ])
+    .expect("selection path should not be empty");
     let mut overlay = UiScene::new(Color::TRANSPARENT);
 
     super::paint_selection(&mut overlay, &selection);

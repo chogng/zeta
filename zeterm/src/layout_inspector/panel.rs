@@ -2,9 +2,9 @@ use zeta_ui::{
     Border, Color, Component, ComponentElement, Edges, Element, PaintRect, Point, Rect, UiScene,
 };
 
-use super::InspectionSelection;
 use super::inspector_content::{InspectorContent, InspectorContentState};
 use super::inspector_toolbar::{InspectorToolbar, InspectorToolbarAction, InspectorToolbarState};
+use zui::devtools::InspectionSelection;
 
 const PANEL_BACKGROUND: Color = Color::rgb(248, 248, 250);
 const PANEL_BORDER: Color = Color::rgb(218, 218, 224);
@@ -83,7 +83,7 @@ impl Component for InspectorPanel<'_> {
                 InspectorContent::row_index_at(
                     content_bounds,
                     point,
-                    self.selection.map_or(0, |selection| selection.path.len()),
+                    self.selection.map_or(0, |selection| selection.path().len()),
                 )
             });
             scene.draw_component(&InspectorContent::new(
