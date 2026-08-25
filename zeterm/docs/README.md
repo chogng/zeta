@@ -16,8 +16,8 @@
 | Terminal Surface、PTY、grid 与兼容性 | [`native-terminal-ui.md`](native-terminal-ui.md) | `zeta-terminal` + `zeterm` terminal host |
 | 键盘、IME、caret 与输入路由 | [`native-text-input.md`](native-text-input.md) | `zui` / `zeta-ui` / `zeterm` adapter |
 | 稳定产品命令身份、请求与注册式执行 | [`native-terminal-ui.md`](native-terminal-ui.md) + [`zeta-commands`](../commands/README.md) | `ZetermCommandId` + `CommandRequest` + `CommandRegistry` |
-| UI scene 到 GPU 的依赖方向 | [`rendering-architecture.md`](rendering-architecture.md) | public `zui` → private renderer modules |
-| 通用 application/window、renderer 与平台能力 | [`zui`](../zui/README.md) | 单一 `zui` crate，内部按 application/platform/renderer/core modules 隔离 |
+| UI scene 到 GPU 的依赖方向 | [`rendering-architecture.md`](rendering-architecture.md) | `zui::ui` → `zui::render` contract → private `render/wgpu` |
+| 通用 application/window、renderer 与平台能力 | [`zui`](../zui/README.md) | 单一 `zui` crate，内部按 `app/window/input/ui/runtime/render/services` 能力目录隔离 |
 | 通用 icon asset 与产品 icon catalog 的边界 | [`rendering-architecture.md`](rendering-architecture.md) + [`zui`](../zui/README.md) | `zui::Icon` contract + optional `zeta-icons` catalog |
 | 产品 Pane topology 与 resize projection | [`zeta-ui`](../ui/README.md) | `zeta-ui::layout` + host state adapter |
 | Composer state、input、routing、interaction 与 panel/list geometry | [`zeta-composer`](../composer/README.md) | `zeta-composer` + Native product/scene adapter |

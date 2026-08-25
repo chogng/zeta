@@ -440,6 +440,8 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
     let mut unpacked_size =
         append_archive_file(&mut builder, "zeta-package.json", &metadata, 0o644);
     unpacked_size += append_archive_file(&mut builder, "bin/zeta-server", b"zeta-server", 0o755);
+    unpacked_size +=
+        append_archive_file(&mut builder, "bin/zeta-app-server-daemon", b"daemon", 0o755);
     unpacked_size += append_archive_file(&mut builder, "zeta-path/rg", b"rg", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "zeta-resources/node/bin/node", b"node", 0o755);

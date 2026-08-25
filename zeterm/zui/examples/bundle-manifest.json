@@ -2,7 +2,8 @@
   "name": "My App",
   "identifier": "com.example.my-app",
   "version": "1.0.0",
-  "executable": "../../target/release/my-app",
+  "executable": "../../../.build/cargo/release/my-app",
+  "windows_appcontainer_runner": "../../../.build/cargo/release/zui-appcontainer-runner.exe",
   "icon": "assets/my-app.png",
   "resources": [
     {

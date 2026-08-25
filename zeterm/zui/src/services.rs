@@ -73,6 +73,8 @@ pub use process::ProcessSandboxPolicy;
 pub use process::ProcessService;
 pub use process::ProcessStdio;
 pub use process::SystemProcesses;
+#[doc(hidden)]
+pub use process::appcontainer_runner_main;
 pub use resource::ResourceHandle;
 pub use resource::ResourcePath;
 pub use resource::ResourcePathError;

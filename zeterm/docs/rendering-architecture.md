@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | 组件如何绘制矩形、文字、图标和图片？ | 向 `zui::ui::UiScene` 写入 backend-neutral primitive | ❌ |
 | 谁执行一帧？ | `zui::app::WindowContext` 调用 `dyn zui::render::Renderer` | ❌ |
-| 谁接触 GPU 对象？ | 仅 `zui` 私有 `renderer/wgpu` 或注入的替代 backend | 不适用 |
+| 谁接触 GPU 对象？ | 仅 `zui` 私有 `render/wgpu` 或注入的替代 backend | 不适用 |
 | 当前默认后端是什么？ | `zui::render::WgpuRendererFactory` 选择私有 wgpu 实现 | 不适用 |
 | 可以增加 raw Metal/Vulkan backend 吗？ | ✅，实现 public `Renderer` 与 `RendererFactory` 后注入 | ❌ |
 
@@ -25,7 +25,7 @@ flowchart LR
     E --> S["zui::ui::UiScene"]
     I --> S
     S --> R["zui::render::Renderer"]
-    R --> W["private zui renderer/wgpu"]
+    R --> W["private zui render/wgpu"]
     R -. "可注入" .-> M["future Metal renderer"]
     R -. "可注入" .-> V["future Vulkan renderer"]
 ```
@@ -35,11 +35,11 @@ flowchart LR
 | 层 | 决定什么 | 明确禁止 |
 | --- | --- | --- |
 | Component / product | 状态、声明式 Element、primitive 顺序、clip 与 overlay | GPU handle、shader、backend feature、手写检查元数据 |
-| `zui::foundation/layout/text/presentation/runtime` | logical UI contract、scene、interaction 与 retained runtime | window、具体 GPU API、产品状态 |
+| `zui::ui` / `zui::runtime` | logical UI contract、scene、interaction 与 retained runtime | window、具体 GPU API、产品状态 |
 | `zui::render::Renderer` contract | target size、frame outcome、统一 backend error 与 frame execution | surface、window、pipeline、atlas |
-| private `zui::renderer/wgpu` | physical conversion、batch execution、resource cache、shader、submit、present | 产品 layout、identity、input、accessibility |
-| private `zui::platform` | native window、event loop、keyboard/IME、chrome capability | scene、GPU pipeline、产品 reducer |
-| private `zui::application` | backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件 |
+| private `zui::render/wgpu` | physical conversion、batch execution、resource cache、shader、submit、present | 产品 layout、identity、input、accessibility |
+| `zui::window` / `zui::input` private native integration | native window、keyboard/IME、chrome capability | scene、GPU pipeline、产品 reducer |
+| `zui::app` | event loop、backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件 |
 | `zeta-ui` | Button、ActionBar、TabList、ContextView 与产品 pane geometry | scene/backend ownership、产品状态 |
 | Product | Session、PTY、App Server、command 与 authoritative state transition | 直接依赖内部 platform/GPU 实现 |
 
@@ -79,7 +79,7 @@ wgpu 在 macOS、Linux 和 Windows 上本身可选择 Metal、Vulkan 或 DX12。
 - product 和 component crate 不依赖 wgpu/winit，也不存在可绕过 `zui` 的内部 sibling crate；
 - backend-specific 优化不能污染 scene API，除非能定义稳定的跨后端语义。
 
-`zui::architecture_tests` 固定内部 layer direction、platform/renderer/application 隔离、显式 facade 和
+`zui::architecture_tests` 固定内部 layer direction、同名 capability owner、native dependency 归属和
 500 行模块上限；product 的 `component_composition_tests` 固定 `zeta-ui → zui`、旧 sibling crate
 不可恢复，以及 GPU 不拥有 interaction/accessibility。
 

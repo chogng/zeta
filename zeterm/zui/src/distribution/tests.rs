@@ -3,6 +3,7 @@ use std::sync::Mutex;
 
 use super::AppIdentifier;
 use super::AppVersion;
+use super::ArtifactSigner;
 use super::BundleBuilder;
 use super::BundleManifest;
 use super::BundleResource;
@@ -12,8 +13,15 @@ use super::InstallerCommand;
 use super::InstallerTarget;
 use super::InstallerTool;
 use super::InstallerToolError;
+use super::LinuxSigning;
+use super::MacOsApplicationSigning;
+use super::MacOsPackageSigning;
 use super::ProtocolScheme;
 use super::ResourcePath;
+use super::SigningCommand;
+use super::SigningTool;
+use super::SigningToolError;
+use super::WindowsSigning;
 
 fn manifest(directory: &std::path::Path) -> BundleManifest {
     let executable = directory.join("demo-bin");
@@ -56,6 +64,24 @@ fn platform_layouts_emit_protocol_manifests_and_executables() {
             }
         }
     }
+}
+
+#[test]
+fn windows_bundle_places_the_appcontainer_runner_beside_the_application() {
+    let directory = tempfile::tempdir().unwrap();
+    let runner = directory.path().join("runner.exe");
+    fs::write(&runner, b"runner").unwrap();
+    let manifest = manifest(directory.path()).with_windows_appcontainer_runner(&runner);
+
+    let output =
+        BundleBuilder::build(&manifest, BundleTarget::WindowsPortable, directory.path()).unwrap();
+
+    assert_eq!(output.helpers.len(), 1);
+    assert_eq!(
+        output.helpers[0].file_name().unwrap(),
+        "zui-appcontainer-runner.exe"
+    );
+    assert_eq!(fs::read(&output.helpers[0]).unwrap(), b"runner");
 }
 
 #[test]
@@ -225,6 +251,100 @@ fn injected_installer_tool_must_create_a_new_declared_artifact() {
     );
 }
 
+#[test]
+fn signing_plans_use_platform_verification_and_notarization_tools() {
+    let mac_app = ArtifactSigner::macos_application(
+        "/release/Demo.app",
+        &MacOsApplicationSigning::new("Developer ID Application: Example").unwrap(),
+    );
+    assert_eq!(
+        mac_app.commands[0].program,
+        std::path::Path::new("/usr/bin/codesign")
+    );
+    assert!(mac_app.commands[0].arguments.contains(&"runtime".into()));
+    assert!(mac_app.commands[1].arguments.contains(&"--strict".into()));
+
+    let mac_package = ArtifactSigner::macos_package(
+        "/release/Demo.pkg",
+        &MacOsPackageSigning::new("Developer ID Installer: Example", "ci-notary").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        mac_package.artifact,
+        std::path::Path::new("/release/Demo-signed.pkg")
+    );
+    assert!(mac_package.commands.iter().any(|command| {
+        command.program == std::path::Path::new("/usr/bin/xcrun")
+            && command.arguments.contains(&"notarytool".into())
+    }));
+    assert!(
+        mac_package
+            .commands
+            .iter()
+            .any(|command| { command.program == std::path::Path::new("/usr/sbin/spctl") })
+    );
+
+    let windows = ArtifactSigner::windows(
+        "C:\\release\\Demo.msi",
+        &WindowsSigning::new(
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "https://timestamp.example.com",
+        )
+        .unwrap(),
+    );
+    assert!(windows.commands[0].arguments.contains(&"/fd".into()));
+    assert!(windows.commands[0].arguments.contains(&"/td".into()));
+    assert!(windows.commands[1].arguments.contains(&"verify".into()));
+
+    let linux = ArtifactSigner::linux_appimage(
+        "/release/Demo.AppImage",
+        &LinuxSigning::new("release@example.com").unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        linux.auxiliary_artifacts,
+        [std::path::PathBuf::from("/release/Demo.AppImage.asc")]
+    );
+    assert!(linux.commands[1].arguments.contains(&"--verify".into()));
+}
+
+#[test]
+fn signing_configuration_rejects_ambiguous_or_weak_windows_identity() {
+    assert!(WindowsSigning::new("not a thumbprint", "https://timestamp.example.com").is_err());
+    assert!(WindowsSigning::new("0011", "https://timestamp.example.com").is_err());
+    assert!(
+        WindowsSigning::new(
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "http://timestamp.example.com"
+        )
+        .is_err()
+    );
+    assert!(WindowsSigning::new("00112233445566778899AABBCCDDEEFF00112233", "https://").is_err());
+    assert!(MacOsApplicationSigning::new(" ").is_err());
+    assert!(LinuxSigning::new("").is_err());
+}
+
+#[test]
+fn signing_execution_runs_the_complete_plan_and_requires_a_new_output() {
+    let directory = tempfile::tempdir().unwrap();
+    let package = directory.path().join("Demo.pkg");
+    fs::write(&package, b"unsigned package").unwrap();
+    let config = MacOsPackageSigning::new("Developer ID Installer: Example", "ci-notary").unwrap();
+    let plan = ArtifactSigner::macos_package(&package, &config).unwrap();
+    let tool = SigningArtifactTool {
+        artifact: plan.artifact.clone(),
+        commands: Mutex::new(Vec::new()),
+    };
+
+    let output = ArtifactSigner::execute(plan, &tool).unwrap();
+
+    assert_eq!(output.artifact, tool.artifact);
+    assert_eq!(tool.commands.lock().unwrap().len(), 5);
+    let second_plan = ArtifactSigner::macos_package(&package, &config).unwrap();
+    assert!(ArtifactSigner::execute(second_plan, &tool).is_err());
+    assert_eq!(tool.commands.lock().unwrap().len(), 5);
+}
+
 struct ArtifactTool {
     artifact: std::path::PathBuf,
     commands: Mutex<Vec<InstallerCommand>>,
@@ -235,5 +355,18 @@ impl InstallerTool for ArtifactTool {
         self.commands.lock().unwrap().push(command.clone());
         fs::write(&self.artifact, b"installer")
             .map_err(|error| InstallerToolError::message(error.to_string()))
+    }
+}
+
+struct SigningArtifactTool {
+    artifact: std::path::PathBuf,
+    commands: Mutex<Vec<SigningCommand>>,
+}
+
+impl SigningTool for SigningArtifactTool {
+    fn run(&self, command: &SigningCommand) -> Result<(), SigningToolError> {
+        self.commands.lock().unwrap().push(command.clone());
+        fs::write(&self.artifact, b"signed artifact")
+            .map_err(|error| SigningToolError::message(error.to_string()))
     }
 }

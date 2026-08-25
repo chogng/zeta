@@ -108,8 +108,13 @@ impl App<DemoEvent> for DemoApp {
     }
 
     fn window_event(&mut self, context: &mut WindowContext<'_, DemoEvent>, event: WindowEvent) {
-        if matches!(event, WindowEvent::CloseRequested) {
-            context.close();
+        match event {
+            WindowEvent::CloseRequested => context.close(),
+            WindowEvent::FileDropped(path) => {
+                let title = format!("zui app demo · dropped {}", path.display());
+                context.window_handle().set_title(&title);
+            }
+            _ => {}
         }
     }
 

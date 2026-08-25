@@ -164,6 +164,7 @@ where
                     }
                 }
                 WindowCommand::Close(window) => {
+                    self.services.menus().detach_window(window);
                     if self.windows.remove(&window).is_some() {
                         closed_window = true;
                         self.background.cancel_window(window);

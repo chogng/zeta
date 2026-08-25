@@ -123,7 +123,7 @@ Workbench Navigation 当前使用可折叠、可通过右边界 Sash 调整宽�
 | 平台 accessibility publication | `zui` private AccessKit adapter | 已发布现有 tree/focus/selection/expansion 并回流 Focus/Click；平台读屏 smoke coverage 仍需补充 |
 | alternate-screen direct input | `zeterm/src/terminal_input` + `input_method` + `TerminalCore` | 仅在 TUI 接管期间编码 key/IME/paste 并写入 PTY |
 | shell command completion boundary | `zeterm/src/terminal_session` bootstrap + `zeta-terminal::TerminalCore` | 当前 zsh 使用 OSC 133 `D`；其他 shell 只有基础 prompt/echo suppression |
-| Rect、icon、text scene 与 GPU draw | `zui` presentation / private GPU renderer | 不拥有 Session、PTY、窗口布局或产品 reducer |
+| Rect、icon、text scene 与 GPU draw | `zui::ui` / private `zui::render/wgpu` | 不拥有 Session、PTY、窗口布局或产品 reducer |
 
 `zeterm/zeterm` 可以保存活动 Tab、hover、focus、scroll position 等可丢弃 presentation state，但
 Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runtime。
@@ -277,7 +277,7 @@ Agent Sidebar 默认宽度为 320 logical pixels，可在 240–560px 范围内�
 480px 时，即使显隐状态为展开也会临时隐藏。右侧 Sash 拖动触发同一条 Shell bounds →
 terminal grid → PTY resize 链路，不能绕过这条 Terminal Workspace 最小宽度约束。
 
-窗口控件占位由 `zui` 私有 platform chrome adapter 统一拥有，不属于通用 `ActionBar` 样式。
+窗口控件占位由 `zui::window` 的 private chrome adapter 统一拥有，不属于通用 `ActionBar` 样式。
 macOS 当前使用集中且受测试的 70 logical pixel policy；由于 `winit` 尚无安全的 system button
 geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩展点，不能描述为当前
 能力，也不能在 `titlebar::Titlebar` 再引入平台常量。实现契约见

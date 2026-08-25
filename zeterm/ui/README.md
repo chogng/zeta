@@ -40,7 +40,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Scene primitive、ordered batch、text layout 与 font catalog | `zui` | 委托；Markdown 语义归 `zeta-markdown` |
 | shaping 与 renderer-compatible text measurement | `zui` → `cosmic-text` | 委托 |
 | 后端无关 frame execution contract | `zui::render::Renderer` | ❌；由 framework 拥有 |
-| GPU pipeline、atlas、shader、surface 与 present | private `zui::renderer/wgpu` | ❌ |
+| GPU pipeline、atlas、shader、surface 与 present | private `zui::render/wgpu` | ❌ |
 | Focus、input routing 与 accessibility semantics | `zui` + product host | ❌；Button 只消费 host 投影的 focused presentation |
 
 依赖方向：

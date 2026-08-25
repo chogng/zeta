@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -7,6 +8,9 @@ use std::sync::Arc;
 
 use super::MenuModel;
 use super::SystemServiceError;
+
+#[cfg(target_os = "linux")]
+mod linux;
 
 const TRAY_SERVICE: &str = "system tray";
 
@@ -29,7 +33,7 @@ impl TrayId {
         &self.0
     }
 
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     fn from_native(value: &str) -> Self {
         Self(value.to_owned())
     }
@@ -247,11 +251,15 @@ impl TrayHandle {
     }
 }
 
-/// Default native tray backend for macOS and Windows.
+/// Default native tray backend for Linux, macOS, and Windows.
 #[derive(Default)]
 pub struct SystemTray {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     icons: HashMap<TrayId, tray_icon::TrayIcon>,
+    #[cfg(target_os = "linux")]
+    runtime: Option<linux::LinuxTrayRuntime>,
+    #[cfg(target_os = "linux")]
+    handler: Arc<std::sync::Mutex<Option<TrayEventHandler>>>,
 }
 
 impl TrayService for SystemTray {
@@ -287,7 +295,11 @@ impl TrayService for SystemTray {
             self.icons.insert(options.id, icon);
             Ok(())
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "linux")]
+        {
+            self.linux_runtime()?.create(options)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = options;
             Err(SystemServiceError::unsupported(TRAY_SERVICE))
@@ -297,7 +309,11 @@ impl TrayService for SystemTray {
     fn remove(&mut self, id: &TrayId) {
         #[cfg(any(target_os = "macos", target_os = "windows"))]
         self.icons.remove(id);
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "linux")]
+        if let Some(runtime) = &self.runtime {
+            runtime.remove(id);
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         let _ = id;
     }
 
@@ -308,7 +324,11 @@ impl TrayService for SystemTray {
             icon.set_visible(visible)
                 .map_err(|source| SystemServiceError::backend(TRAY_SERVICE, source))
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "linux")]
+        {
+            self.linux_runtime()?.set_visible(id, visible)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = (id, visible);
             Err(SystemServiceError::unsupported(TRAY_SERVICE))
@@ -322,7 +342,11 @@ impl TrayService for SystemTray {
             icon.set_menu(Some(Box::new(super::menu::build_native_menu(menu)?)));
             Ok(())
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "linux")]
+        {
+            self.linux_runtime()?.set_menu(id, menu)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         {
             let _ = (id, menu);
             Err(SystemServiceError::unsupported(TRAY_SERVICE))
@@ -334,12 +358,29 @@ impl TrayService for SystemTray {
         tray_icon::TrayIconEvent::set_event_handler(
             handler.map(|handler| move |event| handler(TrayEvent::from_native(event))),
         );
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(target_os = "linux")]
+        {
+            *self.handler.lock().expect("Linux tray handler lock") = handler;
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         let _ = handler;
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "linux")]
+impl SystemTray {
+    fn linux_runtime(&mut self) -> Result<&linux::LinuxTrayRuntime, SystemServiceError> {
+        if self.runtime.is_none() {
+            self.runtime = Some(linux::LinuxTrayRuntime::new(self.handler.clone())?);
+        }
+        Ok(self
+            .runtime
+            .as_ref()
+            .expect("Linux tray runtime initialized"))
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 impl TrayEvent {
     fn from_native(event: tray_icon::TrayIconEvent) -> Self {
         use tray_icon::TrayIconEvent;
@@ -406,7 +447,7 @@ impl TrayEvent {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn tray_button(button: tray_icon::MouseButton) -> TrayMouseButton {
     match button {
         tray_icon::MouseButton::Left => TrayMouseButton::Left,

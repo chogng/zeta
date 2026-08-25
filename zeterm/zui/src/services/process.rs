@@ -21,6 +21,8 @@ pub use sandbox::ProcessSandbox;
 pub use sandbox::ProcessSandboxError;
 pub use sandbox::ProcessSandboxKind;
 pub use sandbox::ProcessSandboxPolicy;
+#[doc(hidden)]
+pub use sandbox::appcontainer_runner_main;
 
 /// Stable operating-system identity for one spawned child process.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

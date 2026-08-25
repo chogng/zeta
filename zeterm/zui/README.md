@@ -12,7 +12,7 @@
 | Interaction、animation、deadline、retained lifecycle | `zui::runtime`，并由 `zui::ui` 聚合常用类型 | `runtime` |
 | Application、多窗口 lifecycle、退出策略与跨线程投递 | `zui::app` | `app` |
 | 后台任务、作用域取消与 event-loop timer | `zui::runtime`；`zui::task` 是兼容入口 | `runtime/task.rs` / `runtime/timer.rs` |
-| Window、event、theme、cursor 与 chrome capability | `zui::window` | `window` |
+| Window、event、theme、cursor、文件拖放与 chrome capability | `zui::window` | `window` |
 | Keyboard、pointer 与 IME | `zui::input` | `input`；pointer/IME 事件由 `window/event.rs` 统一拥有 |
 | Clipboard、dialog、opener、notification、menu、tray 与 global shortcut | `zui::services` | `services` |
 | Packaged resource 与 shell-free child process | `zui::services` | `services/resource.rs` / `services/process.rs` |
@@ -50,10 +50,10 @@ src/
 ├── runtime.rs + runtime/            interaction、animation、retained、task、timer
 ├── render.rs + render/              renderer contract、factory、private wgpu backend
 ├── services.rs + services/          可注入系统能力及默认实现
-├── accessibility.rs                 ZUI 语义到 AccessKit 的映射
-├── distribution.rs + distribution/ bundle 与 installer tooling
+├── accessibility.rs + accessibility/ ZUI 语义到 AccessKit 的映射
+├── distribution.rs + distribution/ bundle、installer、签名与 notarization tooling
 ├── testing.rs + testing/            deterministic runtime 与 headless renderer
-├── devtools.rs                      bounded diagnostics
+├── devtools.rs + devtools/           bounded diagnostics
 ├── prelude.rs                       最小常用导入
 ├── task.rs                          旧 `zui::task` 兼容入口
 └── internal.rs                      crate-private native integration bridge
@@ -118,11 +118,11 @@ zui::app::Application::run
 
 ## 6. 系统服务与 accessibility
 
-产品从 `ApplicationHandle::services`、`AppContext::services` 或 `WindowContext::services` 获取 typed capability，不依赖具体 backend crate。`ApplicationBuilder::with_file_dialogs`、`with_opener`、`with_notifications` 和 `with_menus` 用于测试替身或产品定制；URL 与 menu identity 在进入 backend 前已转换成 ZUI-owned value。
+产品从 `ApplicationHandle::services`、`AppContext::services` 或 `WindowContext::services` 获取 typed capability，不依赖具体 backend crate。`ApplicationBuilder::with_file_dialogs`、`with_opener`、`with_notifications` 和 `with_menus` 用于测试替身或产品定制；URL 与 menu identity 在进入 backend 前已转换成 ZUI-owned value。native file hover、hover cancel 和 drop 由 `zui::window::WindowEvent` 直接携带平台路径，不要求产品接触 winit。
 
-Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut event 都是 ZUI-owned value。默认 tray backend 支持 macOS/Windows；Linux 产品可注入带 GTK/AppIndicator 的 backend，核心 crate 不强制组件消费者链接 GTK。默认 global shortcut backend 支持 macOS、Windows 与 X11，Wayland portal 仍需独立 backend。
+Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut event 都是 ZUI-owned value。启用 `native` 时，默认 tray backend 在 macOS/Windows 直接运行，在 Linux 由专用 GTK/AppIndicator 线程拥有 native tray；默认 global shortcut backend 在 macOS、Windows 与 X11 使用 native hotkey，在 Wayland 自动切换到 XDG GlobalShortcuts portal。portal 缺失、用户拒绝或只接受部分注册时均返回错误，不会静默降级成应用内快捷键。
 
-`ResourcePath` 拒绝绝对路径和父目录穿越，`SystemResourceLocator` 识别 macOS bundle 的 `Contents/Resources` 与 executable sibling `resources`。`ProcessCommand` 从不调用 shell、保留参数边界、可清空继承环境，并由 `ChildProcess` 默认执行 terminate-on-drop。显式 `ProcessSandboxPolicy` 分别表达文件系统与网络权限；默认 backend 在 macOS 使用 Seatbelt、在 Linux 使用 Bubblewrap，受限策略如果无法建立对应 backend 就返回错误，`SystemProcesses` 还会拒绝任何试图返回 `Unrestricted` 的降级实现。Windows AppContainer 通过 `ProcessSandbox` 扩展点注入，当前 crate 不携带需要安装和 ACL 管理的 helper。
+`ResourcePath` 拒绝绝对路径和父目录穿越，`SystemResourceLocator` 识别 macOS bundle 的 `Contents/Resources` 与 executable sibling `resources`。`ProcessCommand` 从不调用 shell、保留参数边界、可清空继承环境，并由 `ChildProcess` 默认执行 terminate-on-drop。显式 `ProcessSandboxPolicy` 分别表达文件系统与网络权限；默认 backend 在 macOS 使用 Seatbelt、在 Linux 使用 Bubblewrap、在 Windows 通过随 bundle 安装的 `zui-appcontainer-runner.exe` 创建 AppContainer、ACL 与受 job object 约束的 child。受限策略如果无法建立对应 backend 就返回错误，`SystemProcesses` 也拒绝任何试图返回 `Unrestricted` 的降级实现。Windows 默认 backend 支持“只读文件系统 + 禁网”和“工作目录可写 + 禁网”；AppContainer 无法诚实表达的权限组合会 fail closed，产品仍可注入更严格的企业 backend。
 
 `ApplicationBuilder::with_protocol_scheme` 只接收显式允许 scheme 的启动参数，`AppProxy::send_open_url` 用于 single-instance 或平台 bridge 转发后续 URL，最终统一进入 `App::open_url`。`BundleBuilder` 把相同的 `ProtocolScheme` 写入 macOS `Info.plist`、Linux desktop MIME handler 或 Windows 注册脚本；WiX installer 定义把 Windows scheme 写入每用户 registry。runtime 只处理启动语义，不能代替安装时的系统注册。
 
@@ -140,16 +140,27 @@ Tray identity、RGBA artwork、pointer event、shortcut accelerator 和 shortcut
 | --- | --- | --- | --- |
 | macOS | `<name>.app` | `Contents/Info.plist` 的 `CFBundleURLTypes` | `/usr/bin/pkgbuild` 生成 `.pkg` |
 | Linux | `<name>.AppDir`，含 `AppRun` | 根 `.desktop` 与 `usr/share/applications` MIME handler | `appimagetool` 生成 `.AppImage` |
-| Windows | `<name>-windows` | 显式 `register-protocols.ps1` | WiX 4 `.wxs` + `wix build` 生成每用户 `.msi` |
+| Windows | `<name>-windows`，含可选 AppContainer runner | 显式 `register-protocols.ps1` | WiX 4 `.wxs` + `wix build` 生成每用户 `.msi` |
 
-最小 manifest 见 [`examples/bundle-manifest.json`](examples/bundle-manifest.json)。`bundle` 只生成可检查的目录；`installer` 先生成同一 bundle，再直接执行当前目标的外部工具，不经过 shell：
+最小 manifest 见 [`examples/bundle-manifest.json`](examples/bundle-manifest.json)。Windows 产品若使用默认严格 sandbox，必须设置 `windows_appcontainer_runner`；packager 会验证并复制 helper。`bundle` 只生成可检查的目录；`installer` 先生成同一 bundle，再直接执行当前目标的外部工具，不经过 shell；`release` 在 installer 之后执行平台签名与验收：
 
 ```bash
 cargo run -p zui --bin zui-packager -- bundle zeterm/zui/examples/bundle-manifest.json dist macos
 cargo run -p zui --bin zui-packager -- installer zeterm/zui/examples/bundle-manifest.json dist macos
+cargo run -p zui --bin zui-packager -- release zeterm/zui/examples/bundle-manifest.json dist macos
 ```
 
-`InstallerBuilder::prepare` 可让发布系统先检查 `InstallerPlan`，`InstallerBuilder::execute` 再通过可注入 `InstallerTool` 执行。默认 `SystemInstallerTool` 保留原始 argv，并要求工具成功后声明的 artifact 确实存在。ZUI 不拥有 Apple/Windows 签名身份、notarization 凭证、AppImage signing key 或发布渠道；发布流水线必须在 installer 生成后完成签名与平台验收。
+`InstallerBuilder::prepare` 可让发布系统先检查 `InstallerPlan`，`InstallerBuilder::execute` 再通过可注入 `InstallerTool` 执行。`ArtifactSigner` 同样把 signing plan 与 execution 分开，并通过可注入 `SigningTool` 保留确定性测试入口。默认实现不经过 shell，要求每条命令成功、声明的产物存在，并在完成后运行平台验证：macOS 使用 hardened-runtime codesign、`productsign`、`notarytool --wait`、stapling 与 Gatekeeper 验收；Windows 使用 SignTool 的 SHA-256 Authenticode、RFC 3161 timestamp 与 verify；Linux 生成并验证 armored GPG detached signature。
+
+仓库的 `.github/workflows/zui-distribution.yml` 在三平台 PR/main 构建 unsigned installer，在 `zui-v*` tag 导入临时凭证、调用 `release`、上传平台产物并创建 GitHub Release。凭证只从 Actions secrets 注入，不进入 manifest 或源码：
+
+| 平台 | `zui-packager release` 环境变量 | CI secret |
+| --- | --- | --- |
+| macOS | `ZUI_MACOS_APPLICATION_IDENTITY`、`ZUI_MACOS_INSTALLER_IDENTITY`、`ZUI_MACOS_NOTARY_PROFILE` | `ZUI_MACOS_CERTIFICATE_P12_BASE64`、`ZUI_MACOS_CERTIFICATE_PASSWORD`、`ZUI_MACOS_APPLICATION_IDENTITY`、`ZUI_MACOS_INSTALLER_IDENTITY`、`ZUI_MACOS_NOTARY_APPLE_ID`、`ZUI_MACOS_NOTARY_TEAM_ID`、`ZUI_MACOS_NOTARY_PASSWORD` |
+| Windows | `ZUI_WINDOWS_CERTIFICATE_SHA1`、`ZUI_WINDOWS_TIMESTAMP_URL` | `ZUI_WINDOWS_CERTIFICATE_PFX_BASE64`、`ZUI_WINDOWS_CERTIFICATE_PASSWORD` |
+| Linux | `ZUI_LINUX_GPG_KEY_ID` | `ZUI_LINUX_GPG_PRIVATE_KEY_BASE64`、`ZUI_LINUX_GPG_KEY_ID` |
+
+ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发布权限；缺少任何 tag-release 凭证会直接失败。
 
 ## 8. Testing
 
@@ -186,9 +197,9 @@ cargo run -p zui --bin zui-packager -- installer zeterm/zui/examples/bundle-mani
 
 ## 11. 当前能力与剩余边界
 
-当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、tray/global shortcut、resource/process、严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer tooling、bounded diagnostics/devtools、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
+当前已实现单 crate 分发、能力目录与公共命名空间一一对应、ZUI-owned event/window/proxy/文件拖放 contract、多窗口 lifecycle 与退出策略、默认 wgpu backend、renderer/service injection、scoped task/timer、三平台 tray/global shortcut、resource/process、三平台严格 sandbox policy、signed updater、protocol URL lifecycle、bundle/installer/signing/notarization tooling、三平台发布 workflow、bounded diagnostics/devtools、AccessKit publication/action routing，以及 deterministic testing/headless renderer。`zui-native-demo` 是第二个独立 App consumer，持续编译双窗口、任务、定时器、menu、tray、global shortcut、protocol URL、diagnostics 与 accessibility 路径。
 
-这使 `zui` 具备 Electron 类框架的核心职责边界，但不等于 Electron 兼容层。当前限制包括：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖当前有真实消费者的策略；menu 的默认 native 安装目前只在 macOS 完整实现；Linux tray 与 Wayland global shortcut 需要平台 backend；drag-and-drop 尚未提供；Windows strict sandbox 需要注入带 helper/ACL 管理的 AppContainer backend；bundle 与 installer 尚未集成 code signing、notarization 和真实三平台发布 CI。当前 devtools 是结构化 runtime diagnostics，不是 Chromium 式 DOM/CSS/JavaScript debugger。
+这使 `zui` 具备 Electron 类原生应用 framework 的完整核心职责边界，但不等于 Electron 兼容层。仍然明确保留的边界是：root compatibility exports 尚未进入正式移除周期；未知平台事件只保留 `WindowEvent::Other`；`WindowOptions` 只覆盖已有真实消费者的策略；Linux application menu 还没有可依附 winit window 的 GTK native menubar（tray menu 已完整支持）；Windows AppContainer 只接受能够无降级表达的权限组合；真实 tray、portal、accessibility、签名账户与 OS 安装验收仍由对应平台 CI/smoke test 负责。当前 devtools 是 native scene/runtime 的结构化 diagnostics，不提供也不计划伪装 Chromium DOM/CSS/JavaScript debugger。
 
 后续能力继续采用同一准则：先形成 ZUI-owned contract 和可注入测试替身，再接具体平台 backend。资源打包、安装器、自动更新与开发工具属于 SDK/tooling 层，不能把产品组件或产品状态收进 `zui`。
 
@@ -199,7 +210,8 @@ cargo check -p zui --no-default-features
 cargo check -p zui --no-default-features --features native
 cargo test -p zui --no-default-features --features native --lib
 cargo clippy -p zui --no-default-features --features native --all-targets -- -D warnings
-cargo check -p zui --no-default-features --features native --bin zui-packager
+cargo check -p zui --no-default-features --features native --bins
+cargo check -p zui --no-default-features --features native --target x86_64-pc-windows-gnu --lib --bins
 bazel test //zeterm/zui:zui-unit-tests
 cargo test -p zeta-ui
 cargo check -p zui-demo --features native --bin zui-native-demo

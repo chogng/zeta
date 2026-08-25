@@ -23,6 +23,13 @@ fn build_inside(manifest: &BundleManifest, root: &Path) -> Result<BundleOutput, 
     };
     let executable = root.join(&executable_name);
     copy::copy_file(&manifest.executable, &executable)?;
+    let helpers = if let Some(runner) = &manifest.windows_appcontainer_runner {
+        let destination = root.join("zui-appcontainer-runner.exe");
+        copy::copy_file(runner, &destination)?;
+        vec![destination]
+    } else {
+        Vec::new()
+    };
     copy::copy_resources(manifest, &root.join("resources"))?;
     let mut registry = format!(
         "$exe = Join-Path $PSScriptRoot '{}'
@@ -41,5 +48,6 @@ fn build_inside(manifest: &BundleManifest, root: &Path) -> Result<BundleOutput, 
         root: root.to_path_buf(),
         executable,
         protocol_manifest,
+        helpers,
     })
 }

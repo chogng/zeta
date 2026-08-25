@@ -306,6 +306,16 @@ impl WindowHandle {
     pub fn window_control_insets(&self) -> WindowControlInsets {
         window_control_insets(self.chrome)
     }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn native_hwnd(&self) -> Option<isize> {
+        let window = self.window.upgrade()?;
+        let handle = window.window_handle().ok()?;
+        match handle.as_raw() {
+            raw_window_handle::RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
+            _ => None,
+        }
+    }
 }
 
 impl NativeWindow {

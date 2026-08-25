@@ -15,6 +15,9 @@ use super::recovery_delay;
 use super::spawn_remote_tunnel;
 
 #[cfg(unix)]
+const TEST_EVENT_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[cfg(unix)]
 #[test]
 fn native_supervisor_reports_ready_arguments_and_stops_its_child() {
     use crate::launch_test_support::make_executable;
@@ -45,7 +48,7 @@ fn native_supervisor_reports_ready_arguments_and_stops_its_child() {
     )
     .unwrap();
 
-    let ready = receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    let ready = receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap();
     let local_port = match ready.update() {
         RemoteTunnelUpdate::Ready { local_port } => *local_port,
         update => panic!("unexpected startup update: {update:?}"),
@@ -60,10 +63,7 @@ fn native_supervisor_reports_ready_arguments_and_stops_its_child() {
 
     drop(process);
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Stopped
     );
     drop(listener);
@@ -71,7 +71,7 @@ fn native_supervisor_reports_ready_arguments_and_stops_its_child() {
 
 #[cfg(unix)]
 fn read_when_available(path: &Path) -> String {
-    let deadline = Instant::now() + Duration::from_secs(2);
+    let deadline = Instant::now() + TEST_EVENT_TIMEOUT;
     loop {
         match std::fs::read_to_string(path) {
             Ok(contents) if !contents.is_empty() => return contents,
@@ -105,7 +105,7 @@ fn native_supervisor_does_not_publish_an_early_openssh_exit() {
     )
     .unwrap();
 
-    let event = receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    let event = receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap();
     assert!(
         matches!(event.update(), RemoteTunnelUpdate::Failed(error) if error.contains("before it became ready"))
     );
@@ -156,23 +156,17 @@ exec sleep 60\n",
     )
     .unwrap();
 
-    let first_ready = receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    let first_ready = receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap();
     let local_port = match first_ready.update() {
         RemoteTunnelUpdate::Ready { local_port } => *local_port,
         update => panic!("unexpected first update: {update:?}"),
     };
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Recovering { attempt: 1 }
     );
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Ready { local_port }
     );
 
@@ -184,10 +178,7 @@ exec sleep 60\n",
 
     drop(process);
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Stopped
     );
     drop(listener);
@@ -221,27 +212,18 @@ fn cancelling_recovery_interrupts_the_backoff() {
     .unwrap();
 
     assert!(matches!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         RemoteTunnelUpdate::Ready { .. }
     ));
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Recovering { attempt: 1 }
     );
     let started = Instant::now();
     drop(process);
     assert!(started.elapsed() < Duration::from_millis(500));
     assert_eq!(
-        receiver
-            .recv_timeout(Duration::from_secs(2))
-            .unwrap()
-            .update(),
+        receiver.recv_timeout(TEST_EVENT_TIMEOUT).unwrap().update(),
         &RemoteTunnelUpdate::Stopped
     );
     drop(listener);

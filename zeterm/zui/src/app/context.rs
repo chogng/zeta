@@ -94,6 +94,12 @@ impl<'a, T: 'static> AppContext<'a, T> {
             options,
         )?;
         let opened = runtime.opened_window();
+        self.services
+            .menus()
+            .attach_window(opened.handle())
+            .map_err(|source| {
+                ApplicationError::product("native application menu attachment", source)
+            })?;
         self.windows.insert(opened.id(), runtime);
         self.diagnostics.open_window(opened.id(), opened.metrics());
         self.commands.push(WindowCommand::Opened(opened.id()));

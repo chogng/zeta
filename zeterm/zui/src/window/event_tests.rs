@@ -48,3 +48,21 @@ fn native_window_events_are_normalized_before_application_dispatch() {
     );
     assert_eq!(format!("{unknown_key:?}"), "AudioVolumeUp");
 }
+
+#[test]
+fn native_file_drag_events_preserve_the_platform_path() {
+    let path = std::path::PathBuf::from("/workspace/dropped.txt");
+
+    assert_eq!(
+        WindowEvent::from_native(winit::event::WindowEvent::HoveredFile(path.clone())),
+        WindowEvent::FileHovered(path.clone())
+    );
+    assert_eq!(
+        WindowEvent::from_native(winit::event::WindowEvent::DroppedFile(path.clone())),
+        WindowEvent::FileDropped(path)
+    );
+    assert_eq!(
+        WindowEvent::from_native(winit::event::WindowEvent::HoveredFileCancelled),
+        WindowEvent::FileHoverCancelled
+    );
+}
