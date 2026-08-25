@@ -8,6 +8,7 @@ import {
 } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { CancellationError } from "../../base/common/cancellation.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
@@ -128,7 +129,8 @@ import { IWorkspaceSearchService } from "../../platform/search/common/search.js"
 import { BrowserWorkspaceSearchService } from "../../platform/search/browser/searchService.js";
 import type { WorkbenchPart } from "./part.js";
 import { AuxiliarybarPart } from "./parts/auxiliarybar/auxiliarybarPart.js";
-import { EditorPart, IEditorPart } from "./parts/editor/editorPart.js";
+import { EditorPart, IEditorPart, type IEditorPartOptions } from "./parts/editor/editorPart.js";
+import { EditorParts, IEditorPartsService } from "./parts/editor/editorParts.js";
 import { EditorPanes } from './parts/editor/editorRegistry.js';
 import { PanelPart } from "./parts/panel/panelPart.js";
 import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
@@ -139,6 +141,7 @@ import type {
 import { PaneComposite } from "./parts/views/paneComposite.js";
 import { WorkbenchWindow } from "./window.js";
 import { TerminalService } from "../services/terminal/browser/terminalService.js";
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from "../services/auxiliaryWindow/browser/auxiliaryWindowService.js";
 import { ITerminalService } from "../services/terminal/common/terminal.js";
 import { ITextFileService, TextFileService } from "../services/textfile/common/textFileService.js";
 import { ITextMateService } from "../services/textMate/common/textMateService.js";
@@ -206,6 +209,7 @@ import { IOutputService } from "../services/output/common/outputService.js";
 import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
 import { BrowserEditorService } from "../services/editor/browser/browserEditorService.js";
 import { IEditorService } from "../services/editor/common/editorService.js";
+import { IEditorStateService } from "../services/editor/common/editorState.js";
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
@@ -286,7 +290,7 @@ export class Workbench extends DisposableOwner {
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
 	private readonly storage: BrowserStorageService;
-	private readonly editor: EditorPart;
+	private readonly editor: IEditorPartsService;
 	private readonly workbenchLayout: WorkbenchLayout;
 	private readonly workingCopyBackups: IndexedDbWorkingCopyBackupService;
 	private readonly workingCopyBackupTracker: WorkingCopyBackupTracker;
@@ -594,7 +598,7 @@ export class Workbench extends DisposableOwner {
 				onOpen: () => recentWorkspaces.openWorkspace(project.root),
 			} : {}),
 		}));
-		const editor = this.own(new EditorPart(workbenchRoot, {
+		const editorOptions: IEditorPartOptions = {
 			configurationService: configuration,
 			contextKeyService: contextKeys,
 			keybindingService: keybindings,
@@ -612,6 +616,7 @@ export class Workbench extends DisposableOwner {
 			documentCollaborationApi: api.documentCollaboration,
 			serverEvents: api.events,
 			workingCopyService,
+			dialogService,
 			bulkEditService,
 			createLineGutterDecorations: resource => createEditorLineGutterDecorations(resource, services),
 			createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, diffApi: api.diff, model, resource }),
@@ -636,10 +641,27 @@ export class Workbench extends DisposableOwner {
 					connectViaSsh: () => commands.executeCommand(ConnectToRemoteCommandId),
 				},
 			},
+		};
+		const editor = this.own(new EditorPart(workbenchRoot, editorOptions));
+		const auxiliaryWindows = this.own(new BrowserAuxiliaryWindowService(ownerWindow));
+		services.set(IAuxiliaryWindowService, auxiliaryWindows);
+		const editorParts = this.own(new EditorParts(editor, auxiliaryWindows, container => {
+			const contextKeyService = contextKeys.createScoped(container);
+			return {
+				part: new EditorPart(container, {
+					...editorOptions,
+					contextKeyService,
+					welcomeVisible: false,
+				}),
+				resources: [contextKeyService],
+			};
 		}));
-		this.own(bindEditorContextKeys(contextKeys, editor, EditorPanes, languageFeaturesService));
-		services.set(IEditorPart, editor);
-		services.set(IEditorService, new BrowserEditorService(editor));
+		services.set(IEditorPartsService, editorParts);
+		this.own(bindEditorContextKeys(contextKeys, editorParts, EditorPanes, languageFeaturesService));
+		services.set(IEditorPart, editorParts);
+		const editorService = new BrowserEditorService(editorParts);
+		services.set(IEditorService, editorService);
+		services.set(IEditorStateService, editorService);
 		const openSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -701,7 +723,7 @@ export class Workbench extends DisposableOwner {
 				menuId: MenuId.PanelTitle,
 			},
 		}));
-		this.editor = editor;
+		this.editor = editorParts;
 		this.own(recentWorkspaces.onDidChange(() => {
 			editor.setWelcomeRecentProjects(welcomeRecentProjects());
 		}));
@@ -868,7 +890,7 @@ export class Workbench extends DisposableOwner {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: EditorPart, contributions: WorkbenchContributionHost): Promise<void> {
+	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, contributions: WorkbenchContributionHost): Promise<void> {
 		await Promise.allSettled(extensionReady);
 		if (this.isDisposed) return;
 		await this.restoreWorkingCopyBackups(backups, editor);
@@ -877,7 +899,7 @@ export class Workbench extends DisposableOwner {
 		this.own(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
 	}
 
-	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: EditorPart): Promise<void> {
+	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
 		try { pending = await backups.list(); }
 		catch (error) { this.logService.error("workingCopy", "Failed to list working-copy backups", error); return; }
@@ -908,9 +930,7 @@ export class Workbench extends DisposableOwner {
 	private async doUpdateWorkspace(workspace: IWorkspace): Promise<void> {
 		if (this.workspaceContext.getWorkspace().id === workspace.id) return;
 		await this.workingCopyBackupTracker.flush();
-		for (const group of this.editor.groups) {
-			for (const input of [...group.inputs]) group.closeEditor(input);
-		}
+		if (!await this.editor.closeAllEditors({ reason: "reset" })) throw new CancellationError("Workspace switch was cancelled");
 		await this.workingCopyBackupTracker.flush();
 		this.workingCopyBackups.switchWorkspace(workspace.id);
 		await this.storage.flush(WillSaveStateReason.WORKSPACE_CHANGE);
