@@ -1,5 +1,5 @@
-use super::TaskCanvasLayout;
-use super::TaskHeader;
+use super::SessionCanvasLayout;
+use super::SessionHeader;
 use crate::shell_style::SHELL_PALETTE;
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
@@ -8,10 +8,10 @@ use zeta_ui::Rect;
 use zeta_ui::UiScene;
 
 #[test]
-fn task_canvas_reserves_a_stable_header_above_the_timeline() {
+fn session_canvas_reserves_a_stable_header_above_the_thread_timeline() {
     let output = Rect::from_xywh(200.0, 32.0, 600.0, 500.0);
 
-    let layout = TaskCanvasLayout::for_output(output);
+    let layout = SessionCanvasLayout::for_output(output);
 
     assert_eq!(layout.header(), Rect::from_xywh(200.0, 32.0, 600.0, 64.0));
     assert_eq!(
@@ -21,11 +21,12 @@ fn task_canvas_reserves_a_stable_header_above_the_timeline() {
 }
 
 #[test]
-fn empty_task_header_shows_ready_workspace_context() {
+fn empty_session_header_shows_ready_workspace_context() {
     let projection = ThreadProjection::default();
     let workspace = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
-    let header = TaskHeader::new(
+    let header = SessionHeader::new(
         Rect::from_xywh(0.0, 0.0, 700.0, 64.0),
+        "",
         &projection,
         &workspace,
         SHELL_PALETTE,
@@ -39,7 +40,7 @@ fn empty_task_header_shows_ready_workspace_context() {
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    assert!(text.contains(&"New task"));
+    assert!(text.contains(&"New session"));
     assert!(text.contains(&"Ready"));
     assert!(
         text.iter()

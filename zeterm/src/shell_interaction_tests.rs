@@ -1,8 +1,9 @@
 use super::{
-    ADD_SESSION, AGENT_CHANGES, AGENT_FILES, AgentSidebarPaneAction, CONTEXT_DIFF,
-    CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY, ContextAction,
-    SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR,
-    SESSION_SIDEBAR_TOOLBAR, SessionContextMenuAction, session_tab_id, session_tab_index,
+    ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_FILE_SEARCH_INPUT, AGENT_FILES,
+    AgentSidebarPaneAction, CONTEXT_DIFF, CONTEXT_GIT_BRANCH, CONTEXT_LOCATION,
+    CONTEXT_WORKING_DIRECTORY, ContextAction, SESSION_CONTEXT_MENU, SESSION_HEADER,
+    SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR, SESSION_SIDEBAR_TOOLBAR, SESSION_TAB_LIST,
+    SessionContextMenuAction, session_tab_id, session_tab_index,
 };
 
 #[test]
@@ -71,6 +72,26 @@ fn session_tab_identities_are_unique_and_round_trip_to_their_indices() {
     for (index, id) in ids.into_iter().enumerate() {
         assert_eq!(session_tab_index(id, 0..4), Some(index));
     }
+}
+
+#[test]
+fn session_identity_namespace_does_not_overlap_agent_sidebar_elements() {
+    let session_ids = [
+        SESSION_TAB_LIST,
+        ACTIVE_SESSION_TAB,
+        SESSION_HEADER,
+        session_tab_id(1),
+    ];
+    let agent_sidebar_ids = [
+        AGENT_FILE_SEARCH_INPUT,
+        zeta_agent_sidebar::AGENT_FILES_TOOLBAR,
+    ];
+
+    assert!(
+        session_ids
+            .into_iter()
+            .all(|session| !agent_sidebar_ids.contains(&session))
+    );
 }
 
 #[test]

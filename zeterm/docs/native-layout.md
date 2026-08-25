@@ -4,7 +4,7 @@
 
 ## 快速理解
 
-`zeterm` 采用 Terminal-first 的 Agent 工作区：当前 Workspace、Terminal session 和 Agent conversation 组成同一个会话上下文，Shell command、PTY 输出、用户消息、Agent 回复和可检查结果沿同一条会话流出现。用户不先进入任务仪表盘，也不在 Terminal、Chat 和 Editor 三个互相独立的产品之间切换；Diff、Editor、Diagnostics 和 Files 只在需要检查或接管时临时打开。
+`zeterm` 采用 Terminal-first 的 Agent 工作区：当前 Workspace、Terminal session 和 Agent conversation 组成同一个会话上下文，Shell command、PTY 输出、用户消息、Agent 回复和可检查结果沿同一条会话流出现。用户不先进入独立工作仪表盘，也不在 Terminal、Chat 和 Editor 三个互相独立的产品之间切换；Diff、Editor、Diagnostics 和 Files 只在需要检查或接管时临时打开。
 
 | 用户正在做什么 | 默认界面 | 与 Terminal 的关系 | 临时界面 |
 | --- | --- | --- | --- |
@@ -19,10 +19,10 @@
 
 ## 布局决策
 
-主窗口的产品根节点是当前 Agent Terminal session，而不是 Task Canvas、文件树、Editor 或独立 Chat 页面。
+主窗口的产品根节点是当前 Agent Terminal session，而不是额外的工作容器、文件树、Editor 或独立 Chat 页面。
 
 - **Terminal 是默认工作区**：primary screen 的命令块、输出和输入构成主界面；完整 terminal protocol 在同一位置接管，不从抽屉弹出第二个 Terminal。
-- **Conversation 依附当前会话**：Agent 消息与当前 Workspace、runtime、branch、PTY 和最近执行证据关联，不形成脱离执行环境的任务仪表盘。
+- **Conversation 依附当前会话**：Agent 消息与当前 Workspace、runtime、branch、PTY 和最近执行证据关联，不形成脱离执行环境的第二套工作仪表盘。
 - **一个时间顺序**：用户消息、Agent 回复、direct Shell Turn、用户 Terminal command 和重要结果按 typed identity 投影到同一会话流；视觉统一不等于复制或合并各 domain authority。
 - **一个共享 Composer**：输入可以明确选择 Agent 或 Shell，也可以使用现有自动路由；切换路由不切换页面。
 - **检查界面按需出现**：Diff、Editor、Diagnostics、Tests、Files 和 Search 是临时检查对象，不是常驻右栏的功能标签集合。
@@ -33,7 +33,7 @@
 
 ## 主窗口结构
 
-默认宽屏布局没有常驻 Task Navigator、Files tree、Changes sidebar 或 Terminal Drawer。只有用户正在检查 artifact 时，右侧才出现一个检查界面。
+默认宽屏布局没有独立工作项导航、常驻 Files tree、Changes sidebar 或 Terminal Drawer。只有用户正在检查 artifact 时，右侧才出现一个检查界面。
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -141,7 +141,7 @@ Agent 路由可以引用当前 selection、最近 command、active inspection ta
 
 ### Session switcher
 
-Session 代表一组可恢复的工作上下文，而不是单独的“任务卡片”。切换 Session 必须一起恢复 active Thread、Workspace、Terminal session、会话流 scroll、Composer draft 和当前检查对象。
+Session 代表一组可恢复的工作上下文，也是用户切换工作的唯一顶层单位。切换 Session 必须一起恢复 active Thread、Workspace、Terminal session、会话流 scroll、Composer draft 和当前检查对象。
 
 Session switcher 默认收在 Top Bar；只有用户主动打开或会话状态需要介入时才出现列表。列表行显示标题、Workspace、Local/Remote、运行或等待状态以及未检查修改，不混入 Files、Git tree 或 Agent 内部步骤。
 
@@ -244,12 +244,12 @@ enum TerminalPresentation {
 
 ## 当前实现与迁移顺序
 
-Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Terminal` 兼容路由：Agent ThreadTimeline 与 fixed Composer、独立 Terminal Surface、Session sidebar，以及 Files/Changes/File Editor 右侧区域已经存在。当前代码中的 Task Header 和右侧 Inspector 只是过渡实现，不代表本文目标布局；Terminal 仍未成为承载 Agent conversation 与 command blocks 的统一会话流。
+Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Terminal` 兼容路由：Agent ThreadTimeline 与 fixed Composer、独立 Terminal Surface、Session sidebar，以及 Files/Changes/File Editor 右侧区域已经存在。当前代码中的固定 Session Header 和右侧 Inspector 只是过渡实现，不代表本文目标布局；Terminal 仍未成为承载 Agent conversation 与 command blocks 的统一会话流。
 
 迁移按以下顺序进行：
 
 1. 定义 typed Session Flow projection，把 Thread item、direct Shell Turn、Terminal command block 和 canonical evidence 映射到一个时间序列，不从 Markdown 或 terminal text 猜测状态。
-2. 让 primary Terminal block flow 成为默认主区域，把 Agent message 和 result block 插入同一 Session Flow；移除固定 Task Header 与 Outcome Dashboard 方向。
+2. 让 primary Terminal block flow 成为默认主区域，把 Agent message 和 result block 插入同一 Session Flow；移除重复展示当前会话的固定 Header 与 Outcome Dashboard 方向。
 3. 让共享 Composer 的 Agent/Shell submission 在同一会话流创建对应 block，并明确 context attachment、runtime 和 command authority。
 4. 将 Session sidebar 收敛为 Top Bar switcher/临时列表；保留多 Session identity、PTY binding 和恢复状态，不保留默认占宽的导航列。
 5. 将 Files、Changes、Editor、Diagnostics 和 Tests 收敛为单 active Inspection Surface；删除常驻功能 tab strip 和默认右栏假设。
@@ -260,7 +260,7 @@ Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Termina
 
 ## 验收标准
 
-- 启动单 Session 时，主窗口主要显示 Terminal/Agent 会话流，不显示空白 Task Canvas 或常驻 Session 列。
+- 启动单 Session 时，主窗口主要显示 Terminal/Agent 会话流，不显示空白工作仪表盘或常驻 Session 列。
 - Shell command、用户消息、Agent 回复、修改和验证沿同一时间顺序可追溯，但各自仍引用 canonical identity。
 - Agent 可以引用当前 Workspace、runtime、recent command 和显式 Terminal range；UI 显示实际附带的 context。
 - Agent 内部只读查询和后台 command 不自动打开面板，也不伪造成用户 Terminal history。
@@ -272,7 +272,7 @@ Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Termina
 
 ## 不包含的目标
 
-- 不实现 Task Navigator、固定 Task Header、Current/Found/Changed/Verified Dashboard 或 Terminal Drawer。
+- 不实现独立工作项导航、固定 Session 状态 Header、Current/Found/Changed/Verified Dashboard 或 Terminal Drawer。
 - 不把 Agent Chat 做成脱离当前 Workspace、runtime 和 Terminal evidence 的独立页面。
 - 不把不同 domain 的原始文本拼成一份新的 canonical transcript。
 - 不建立常驻 Files、Changes、Tests、Diagnostics sidebar 或 VS Code 风格 Activity Bar。

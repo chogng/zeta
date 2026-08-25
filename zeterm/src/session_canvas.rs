@@ -19,29 +19,29 @@ use zui::AccessibilityRole;
 use zui::UiNode;
 
 use crate::shell_interaction::MAIN_SURFACE;
-use crate::shell_interaction::TASK_HEADER;
+use crate::shell_interaction::SESSION_HEADER;
 use crate::shell_style::ShellPalette;
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
 
-const TASK_HEADER_HEIGHT: f32 = 64.0;
-const TASK_HEADER_HORIZONTAL_PADDING: f32 = 20.0;
-const TASK_HEADER_TOP_PADDING: f32 = 10.0;
-const TASK_TITLE_LINE_HEIGHT: f32 = 22.0;
-const TASK_METADATA_LINE_HEIGHT: f32 = 18.0;
+const SESSION_HEADER_HEIGHT: f32 = 64.0;
+const SESSION_HEADER_HORIZONTAL_PADDING: f32 = 20.0;
+const SESSION_HEADER_TOP_PADDING: f32 = 10.0;
+const SESSION_TITLE_LINE_HEIGHT: f32 = 22.0;
+const SESSION_METADATA_LINE_HEIGHT: f32 = 18.0;
 const STATUS_HORIZONTAL_PADDING: f32 = 10.0;
 const STATUS_HEIGHT: f32 = 24.0;
 
-/// Product-owned geometry for the stable task header and scrollable evidence timeline.
+/// Product-owned geometry for the stable Session header and scrollable Thread timeline.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct TaskCanvasLayout {
+pub(crate) struct SessionCanvasLayout {
     header: Rect,
     timeline: Rect,
 }
 
-impl TaskCanvasLayout {
+impl SessionCanvasLayout {
     pub(crate) fn for_output(output: Rect) -> Self {
-        let header_height = TASK_HEADER_HEIGHT.min(output.size.height.max(0.0));
+        let header_height = SESSION_HEADER_HEIGHT.min(output.size.height.max(0.0));
         Self {
             header: Rect::from_xywh(
                 output.origin.x,
@@ -67,23 +67,26 @@ impl TaskCanvasLayout {
     }
 }
 
-/// Stable outcome-oriented header for the current Agent task.
-pub(crate) struct TaskHeader<'a> {
+/// Stable outcome-oriented header for the current Agent Session.
+pub(crate) struct SessionHeader<'a> {
     bounds: Rect,
+    title: &'a str,
     projection: &'a ThreadProjection,
     workspace: &'a WorkspaceContext,
     palette: ShellPalette,
 }
 
-impl<'a> TaskHeader<'a> {
+impl<'a> SessionHeader<'a> {
     pub(crate) const fn new(
         bounds: Rect,
+        title: &'a str,
         projection: &'a ThreadProjection,
         workspace: &'a WorkspaceContext,
         palette: ShellPalette,
     ) -> Self {
         Self {
             bounds,
+            title,
             projection,
             workspace,
             palette,
@@ -91,11 +94,9 @@ impl<'a> TaskHeader<'a> {
     }
 
     fn title(&self) -> &str {
-        self.projection
-            .thread()
-            .map(|thread| thread.title.as_str())
-            .filter(|title| !title.is_empty())
-            .unwrap_or("New task")
+        (!self.title.is_empty())
+            .then_some(self.title)
+            .unwrap_or("New session")
     }
 
     fn metadata(&self) -> String {
@@ -108,50 +109,50 @@ impl<'a> TaskHeader<'a> {
         )
     }
 
-    fn status(&self) -> TaskStatus {
+    fn status(&self) -> SessionActivity {
         let Some(thread) = self.projection.thread() else {
-            return TaskStatus::Ready;
+            return SessionActivity::Ready;
         };
         if thread.status == ThreadStatus::Archived {
-            return TaskStatus::Archived;
+            return SessionActivity::Archived;
         }
         match thread.turns.last().map(|turn| turn.status) {
-            None => TaskStatus::Ready,
-            Some(TurnStatus::Created | TurnStatus::Running) => TaskStatus::Working,
+            None => SessionActivity::Ready,
+            Some(TurnStatus::Created | TurnStatus::Running) => SessionActivity::Working,
             Some(
                 TurnStatus::WaitingForApproval
                 | TurnStatus::WaitingForUserInput
                 | TurnStatus::WaitingForCapability,
-            ) => TaskStatus::NeedsAttention,
-            Some(TurnStatus::Cancelling) => TaskStatus::Stopping,
-            Some(TurnStatus::Completed) => TaskStatus::Completed,
-            Some(TurnStatus::Failed) => TaskStatus::Failed,
-            Some(TurnStatus::Interrupted) => TaskStatus::Interrupted,
+            ) => SessionActivity::NeedsAttention,
+            Some(TurnStatus::Cancelling) => SessionActivity::Stopping,
+            Some(TurnStatus::Completed) => SessionActivity::Completed,
+            Some(TurnStatus::Failed) => SessionActivity::Failed,
+            Some(TurnStatus::Interrupted) => SessionActivity::Interrupted,
         }
     }
 
-    fn status_bounds(&self, status: TaskStatus) -> Rect {
+    fn status_bounds(&self, status: SessionActivity) -> Rect {
         let width = status.label().chars().count() as f32 * 7.0 + STATUS_HORIZONTAL_PADDING * 2.0;
         Rect::from_xywh(
-            self.bounds.right() - TASK_HEADER_HORIZONTAL_PADDING - width,
-            self.bounds.origin.y + TASK_HEADER_TOP_PADDING,
+            self.bounds.right() - SESSION_HEADER_HORIZONTAL_PADDING - width,
+            self.bounds.origin.y + SESSION_HEADER_TOP_PADDING,
             width,
             STATUS_HEIGHT,
         )
     }
 }
 
-impl Component for TaskHeader<'_> {
+impl Component for SessionHeader<'_> {
     fn element(&self) -> ComponentElement {
-        Element::leaf("TaskHeader")
+        Element::leaf("SessionHeader")
             .in_bounds(self.bounds)
-            .with_identity(TASK_HEADER)
+            .with_identity(SESSION_HEADER)
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
-                TASK_HEADER,
+                SESSION_HEADER,
                 element.bounds(),
                 AccessibilityRole::Group,
                 format!("{} · {}", self.title(), self.status().label()),
@@ -170,32 +171,32 @@ impl Component for TaskHeader<'_> {
         let status = self.status();
         let status_bounds = self.status_bounds(status);
         let title_width = (status_bounds.origin.x
-            - TASK_HEADER_HORIZONTAL_PADDING
-            - (self.bounds.origin.x + TASK_HEADER_HORIZONTAL_PADDING))
+            - SESSION_HEADER_HORIZONTAL_PADDING
+            - (self.bounds.origin.x + SESSION_HEADER_HORIZONTAL_PADDING))
             .max(1.0);
         scene.draw_text(TextBlock::new(
             self.title(),
             Point::new(
-                self.bounds.origin.x + TASK_HEADER_HORIZONTAL_PADDING,
-                self.bounds.origin.y + TASK_HEADER_TOP_PADDING,
+                self.bounds.origin.x + SESSION_HEADER_HORIZONTAL_PADDING,
+                self.bounds.origin.y + SESSION_HEADER_TOP_PADDING,
             ),
-            Size::new(title_width, TASK_TITLE_LINE_HEIGHT),
+            Size::new(title_width, SESSION_TITLE_LINE_HEIGHT),
             TextStyle::new(15.0, self.palette.text)
                 .with_weight(FontWeight::Bold)
-                .with_line_height(TASK_TITLE_LINE_HEIGHT),
+                .with_line_height(SESSION_TITLE_LINE_HEIGHT),
         ));
         scene.draw_text(TextBlock::new(
             self.metadata(),
             Point::new(
-                self.bounds.origin.x + TASK_HEADER_HORIZONTAL_PADDING,
-                self.bounds.origin.y + TASK_HEADER_TOP_PADDING + TASK_TITLE_LINE_HEIGHT,
+                self.bounds.origin.x + SESSION_HEADER_HORIZONTAL_PADDING,
+                self.bounds.origin.y + SESSION_HEADER_TOP_PADDING + SESSION_TITLE_LINE_HEIGHT,
             ),
             Size::new(
-                (self.bounds.size.width - TASK_HEADER_HORIZONTAL_PADDING * 2.0).max(1.0),
-                TASK_METADATA_LINE_HEIGHT,
+                (self.bounds.size.width - SESSION_HEADER_HORIZONTAL_PADDING * 2.0).max(1.0),
+                SESSION_METADATA_LINE_HEIGHT,
             ),
             TextStyle::new(11.0, self.palette.text_muted)
-                .with_line_height(TASK_METADATA_LINE_HEIGHT),
+                .with_line_height(SESSION_METADATA_LINE_HEIGHT),
         ));
         scene.draw_rect(
             PaintRect::new(status_bounds, self.palette.surface_raised)
@@ -219,7 +220,7 @@ impl Component for TaskHeader<'_> {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TaskStatus {
+enum SessionActivity {
     Ready,
     Working,
     NeedsAttention,
@@ -230,7 +231,7 @@ enum TaskStatus {
     Archived,
 }
 
-impl TaskStatus {
+impl SessionActivity {
     const fn label(self) -> &'static str {
         match self {
             Self::Ready => "Ready",
@@ -256,5 +257,5 @@ impl TaskStatus {
 }
 
 #[cfg(test)]
-#[path = "task_canvas_tests.rs"]
+#[path = "session_canvas_tests.rs"]
 mod tests;

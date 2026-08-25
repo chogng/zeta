@@ -6,7 +6,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Canonical product-level container for a task and its Thread topology.
+/// Canonical user-visible work container and its Thread topology.
 ///
 /// A Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.
 /// Each Thread remains an independent ordering, persistence, and execution boundary.

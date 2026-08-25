@@ -34,6 +34,8 @@ use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_manager_view::RemoteTunnelManager;
+use crate::session_canvas::SessionCanvasLayout;
+use crate::session_canvas::SessionHeader;
 use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session_search::SessionSearch;
 use crate::session_sidebar::SessionSidebarState;
@@ -46,8 +48,6 @@ use crate::shell_interaction::{
     TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::ShellPalette;
-use crate::task_canvas::TaskCanvasLayout;
-use crate::task_canvas::TaskHeader;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
@@ -92,8 +92,8 @@ struct ShellLayout {
     agent_sidebar_resize_snapshot: Option<SplitViewResizeSnapshot>,
     main: Rect,
     output: Rect,
-    task_header: Rect,
-    task_timeline: Rect,
+    session_header: Rect,
+    thread_timeline: Rect,
     composer_panel_layout: ComposerPanelLayout,
     composer_panel: Rect,
     composer_info_bar: Rect,
@@ -165,7 +165,7 @@ impl ShellLayout {
             preferred_interaction_height,
         );
         let output = composer_panel.output();
-        let task_canvas = TaskCanvasLayout::for_output(output);
+        let session_canvas = SessionCanvasLayout::for_output(output);
         Some(Self {
             titlebar,
             session_sidebar,
@@ -175,8 +175,8 @@ impl ShellLayout {
             agent_sidebar_resize_snapshot,
             main,
             output,
-            task_header: task_canvas.header(),
-            task_timeline: task_canvas.timeline(),
+            session_header: session_canvas.header(),
+            thread_timeline: session_canvas.timeline(),
             composer_panel_layout: composer_panel,
             composer_panel: composer_panel.panel(),
             composer_info_bar: composer_panel.info_bar(),
@@ -375,6 +375,7 @@ struct FileEditorPresentationView<'a> {
 struct MainPresentationView<'a> {
     terminal: TerminalView<'a>,
     workspace_surface: WorkspaceSurfaceKind,
+    session_title: &'a str,
     thread_projection: &'a ThreadProjection,
     thread_timeline_scroll_offset: usize,
     composer: ComposerPanelView<'a>,
@@ -453,6 +454,12 @@ fn build_shell_presentation_with_bindings(
             .map(|thread| thread.title.as_str())
             .unwrap_or(PRODUCT_DISPLAY_NAME)
     };
+    let session_title = model
+        .session_tabs
+        .iter()
+        .find(|tab| tab.id() == model.selected_session_tab)
+        .map(SessionTabState::title)
+        .unwrap_or("New session");
     let titlebar = Titlebar::new(
         layout.titlebar,
         palette,
@@ -557,6 +564,7 @@ fn build_shell_presentation_with_bindings(
                     selection: model.terminal_selection,
                 },
                 workspace_surface: model.workspace_surface,
+                session_title,
                 thread_projection: model.thread_projection,
                 thread_timeline_scroll_offset: model.thread_timeline_scroll_offset,
                 composer: ComposerPanelView {
@@ -1280,7 +1288,7 @@ fn draw_main(
         AccessibilityRole::Group,
         match view.workspace_surface {
             WorkspaceSurfaceKind::Agent => "Agent workspace",
-            WorkspaceSurfaceKind::Editor => "Agent task with file inspector",
+            WorkspaceSurfaceKind::Editor => "Agent session with file inspector",
             WorkspaceSurfaceKind::Terminal => "Interactive terminal",
         },
     )
@@ -1313,8 +1321,9 @@ fn draw_main(
                 });
             }
             WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
-                context.draw_component(&TaskHeader::new(
-                    layout.task_header,
+                context.draw_component(&SessionHeader::new(
+                    layout.session_header,
+                    view.session_title,
                     view.thread_projection,
                     view.composer.context,
                     palette,
@@ -1322,7 +1331,7 @@ fn draw_main(
                 let timeline_region = InteractionRegion::new(
                     "ThreadTimeline",
                     THREAD_TIMELINE,
-                    layout.task_timeline,
+                    layout.thread_timeline,
                     AccessibilityRole::Group,
                     "Agent Thread timeline",
                 )
@@ -1330,7 +1339,7 @@ fn draw_main(
                 .with_cursor(CursorFeedback::Text);
                 context.with_component(&timeline_region, |context, _| {
                     context.draw_component(&ThreadTimeline::new(
-                        layout.task_timeline,
+                        layout.thread_timeline,
                         view.thread_projection,
                         view.thread_timeline_scroll_offset,
                         palette,

@@ -8,11 +8,12 @@ use crate::shell_style::SHELL_PALETTE;
 use zeta_protocol::{Session, SessionId, SessionStatus};
 use zeta_ui::{Color, Component, CornerRadii, FontWeight, Point, Rect, UiScene};
 use zui::{
-    AccessibilityRole, AccessibilitySelection, ElementId, InteractionFrame, UiDispatch, UiFrame,
-    UiIntent,
+    AccessibilityRole, AccessibilitySelection, InteractionFrame, UiDispatch, UiFrame, UiIntent,
 };
 
-const SECOND_SESSION_TAB: ElementId = ElementId::scoped(1, 16);
+fn second_session_tab() -> zui::ElementId {
+    session_tab_id(1)
+}
 
 fn session(id: &str, title: &str) -> Session {
     Session {
@@ -80,7 +81,7 @@ fn session_tabs_render_status_and_two_line_information_with_selected_semantics()
     let tabs = [
         SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Thinking"),
         SessionTab::new(
-            SECOND_SESSION_TAB,
+            second_session_tab(),
             "Review terminal navigation",
             "~/Desktop/another-workspace-with-a-long-name",
             "Planning",
@@ -131,7 +132,7 @@ fn session_tabs_render_status_and_two_line_information_with_selected_semantics()
     assert!(tab.focusable);
     let second_tab = nodes
         .iter()
-        .find(|node| node.id == SECOND_SESSION_TAB)
+        .find(|node| node.id == second_session_tab())
         .unwrap();
     assert_eq!(second_tab.selection, AccessibilitySelection::Unselected);
     assert_eq!(
@@ -167,7 +168,7 @@ fn hovering_an_unselected_tab_uses_the_same_light_gray_highlight() {
     let mut dispatch = UiDispatch::default();
     let tabs = [
         SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
-        SessionTab::new(SECOND_SESSION_TAB, "Second", "~/Desktop/second", "Active"),
+        SessionTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
     ];
     let resting = SessionTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
@@ -202,7 +203,7 @@ fn clicking_an_unselected_tab_emits_its_stable_activation_intent() {
     let mut dispatch = UiDispatch::default();
     let tabs = [
         SessionTab::new(ACTIVE_SESSION_TAB, "zeterm", "~/Desktop/zeta", "Active"),
-        SessionTab::new(SECOND_SESSION_TAB, "Second", "~/Desktop/second", "Active"),
+        SessionTab::new(second_session_tab(), "Second", "~/Desktop/second", "Active"),
     ];
     let list = SessionTabList::new(
         Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
@@ -220,5 +221,8 @@ fn clicking_an_unselected_tab_emits_its_stable_activation_intent() {
     dispatch.press_primary(frame.interaction());
     let outcome = dispatch.release_primary(point, frame.interaction());
 
-    assert_eq!(outcome.intent, Some(UiIntent::Activate(SECOND_SESSION_TAB)));
+    assert_eq!(
+        outcome.intent,
+        Some(UiIntent::Activate(second_session_tab()))
+    );
 }

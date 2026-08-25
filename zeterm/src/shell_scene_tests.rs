@@ -22,8 +22,8 @@ use crate::shell_interaction::{
     AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
     AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR,
     COMPOSER_PANEL, ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
-    MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
-    TASK_HEADER, THREAD_TIMELINE, TITLEBAR,
+    MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER, SESSION_SEARCH_INPUT,
+    SESSION_SIDEBAR_RESIZE_HANDLE, THREAD_TIMELINE, TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
@@ -318,7 +318,7 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
 }
 
 #[test]
-fn editor_surface_mounts_the_active_file_in_the_inspector_beside_the_task_canvas() {
+fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
@@ -398,7 +398,7 @@ fn editor_surface_mounts_the_active_file_in_the_inspector_beside_the_task_canvas
             .iter()
             .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(AGENT_SIDEBAR))
     );
-    for id in [TASK_HEADER, COMPOSER, THREAD_TIMELINE] {
+    for id in [SESSION_HEADER, COMPOSER, THREAD_TIMELINE] {
         assert!(
             presentation
                 .accessibility_nodes
@@ -411,7 +411,7 @@ fn editor_surface_mounts_the_active_file_in_the_inspector_beside_the_task_canvas
             .scene()
             .text_blocks()
             .iter()
-            .any(|block| block.text() == "New task")
+            .any(|block| block.text() == "New session")
     );
     assert!(
         presentation

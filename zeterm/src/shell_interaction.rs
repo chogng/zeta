@@ -22,6 +22,7 @@ pub(crate) use zeta_agent_sidebar::MULTI_DIFF_EDITOR;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
+const SESSION_SCOPE: u32 = 14;
 
 pub(crate) const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
 pub(crate) const TITLEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2);
@@ -36,8 +37,8 @@ pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 
 pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
 pub(crate) const SESSION_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
 pub(crate) const SESSION_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
-pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE, 14);
-pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SHELL_SCOPE, 15);
+pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SESSION_SCOPE, 1);
+pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SESSION_SCOPE, 2);
 pub(crate) const SESSION_SIDEBAR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
 pub(crate) const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(SHELL_SCOPE, 17);
 const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(SHELL_SCOPE, 18);
@@ -60,7 +61,7 @@ pub(crate) const FILE_EDITOR_FIND_INPUT: ElementId = ElementId::scoped(SHELL_SCO
 pub(crate) const FILE_EDITOR_REPLACE_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 48);
 pub(crate) const FILE_EDITOR_SEARCH_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 49);
 pub(crate) const LANGUAGE_SERVER_SETTINGS_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 50);
-pub(crate) const TASK_HEADER: ElementId = ElementId::scoped(SHELL_SCOPE, 39);
+pub(crate) const SESSION_HEADER: ElementId = ElementId::scoped(SESSION_SCOPE, 3);
 pub(crate) const FILE_EDITOR_NOTICE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 1);
 const FILE_EDITOR_RELOAD: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 2);
 const FILE_EDITOR_OVERWRITE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 3);
@@ -72,7 +73,7 @@ const FILE_EDITOR_FIND_NEXT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SC
 const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 9);
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
-const FIRST_SESSION_TAB: u32 = 52;
+const FIRST_SESSION_TAB: u32 = 100;
 const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 const FIRST_FILE_EDITOR_TAB: u32 = 200;
 const FIRST_FILE_EDITOR_FOLD: u32 = 1_000;
@@ -97,7 +98,7 @@ pub(crate) fn session_tab_id(index: usize) -> ElementId {
     if index == 0 {
         return ACTIVE_SESSION_TAB;
     }
-    dynamic_element_id(FIRST_SESSION_TAB, index - 1, "session tab")
+    dynamic_element_id_in_scope(SESSION_SCOPE, FIRST_SESSION_TAB, index - 1, "session tab")
 }
 
 pub(crate) fn session_tab_index(id: ElementId, mut mounted: Range<usize>) -> Option<usize> {
@@ -129,11 +130,15 @@ pub(crate) fn file_editor_fold_index(id: ElementId, mut mounted: Range<usize>) -
 }
 
 fn dynamic_element_id(first: u32, index: usize, label: &str) -> ElementId {
+    dynamic_element_id_in_scope(SHELL_SCOPE, first, index, label)
+}
+
+fn dynamic_element_id_in_scope(scope: u32, first: u32, index: usize, label: &str) -> ElementId {
     let local = u32::try_from(index)
         .ok()
         .and_then(|index| first.checked_add(index))
         .unwrap_or_else(|| panic!("{label} index must fit its element scope"));
-    ElementId::scoped(SHELL_SCOPE, local)
+    ElementId::scoped(scope, local)
 }
 
 fn file_editor_action_element_id(first: u32, index: usize, label: &str) -> ElementId {
