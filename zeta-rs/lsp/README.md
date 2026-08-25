@@ -15,7 +15,7 @@
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
 | `LanguageServerClient` | initialize 后的单服务器 session、类型化请求、文档同步、transport-close 事实和关闭 | server discovery、共享进程、重启策略 |
-| `LanguageServerCommand` / `LanguageServerEnvironmentPolicy` | 保存宿主已经解析的 program、args、cwd，并明确选择继承或清空环境 | 验证 executable trust、安装或 sandbox |
+| `LanguageServerCommand` / `LanguageServerEnvironmentPolicy` | 保存宿主已经解析的 canonical program、参数、工作目录和环境策略；Unix 可独立保留代理程序依赖的 `argv[0]` 调用名 | 验证可执行文件信任、安装或沙箱策略 |
 | `LanguageServerOptions` | client identity、workspace、capability、initialize options、host 和 deadline | 读取产品配置 |
 | `LanguageServerInitialization` | 冻结 server info、初始 capability、position encoding 和 document sync policy | 把随后动态注册伪装成 initialize 快照 |
 | `LanguageServerHost` | 快速接收事件，并按顺序回答 `workspace/configuration`，消费 progress/message/log 事件 | 直接修改 UI 或阻塞协议 driver |
@@ -126,11 +126,7 @@ cargo clippy --manifest-path Cargo.toml -p zeta-lsp --all-targets -- -D warnings
 bazel test //zeta-rs/lsp:lsp-unit-tests
 ```
 
-`client_tests.rs` 使用真实内存双工 transport 覆盖 initialize/initialized、UTF-8 position
-encoding、`workspace/configuration`、诊断、open/change/save/close、typed hover、timeout
-cancellation、意外 transport close、shutdown/exit 和 framing validation。`router_tests.rs` 另外覆盖 route validation、
-stale editor revision、全文更新、replacement replay、incarnation reset、save/close 与多 client
-shutdown，以及断连 route retirement 后从 authoritative snapshot 重新注册和重放。
+`command_tests.rs` 使用子进程验证 canonical program 与 Unix `argv[0]` 调用名可以独立保留。`client_tests.rs` 使用真实内存双工 transport 覆盖 initialize/initialized、UTF-8 position encoding、`workspace/configuration`、诊断、open/change/save/close、typed hover、timeout cancellation、意外 transport close、shutdown/exit 和 framing validation。`router_tests.rs` 另外覆盖 route validation、stale editor revision、全文更新、replacement replay、incarnation reset、save/close 与多 client shutdown，以及断连 route retirement 后从 authoritative snapshot 重新注册和重放。
 
 修改 framing limit 或 envelope classification 时同步更新 transport tests；修改 capability
 advertisement 时同步检查服务端 request handler；修改 document policy 时同步检查版本顺序和

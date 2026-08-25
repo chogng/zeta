@@ -89,6 +89,38 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
 }
 
 #[test]
+fn start_replaces_a_daemon_from_a_different_executable_identity() {
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("profile");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&workspace).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        Some(workspace),
+        WorkspaceTrustSource::HostConfiguration,
+        None,
+    );
+    let packaged = Path::new(env!("CARGO_BIN_EXE_zeta-app-server-daemon"));
+    let first_executable = root.path().join("daemon-first");
+    let second_executable = root.path().join("daemon-second");
+    std::fs::hard_link(packaged, &first_executable).unwrap();
+    std::fs::hard_link(packaged, &second_executable).unwrap();
+    let cleanup = StopOnDrop {
+        options: options.clone(),
+        executable: &second_executable,
+    };
+
+    let first = run_lifecycle(LifecycleCommand::Start, options.clone(), &first_executable).unwrap();
+    let replacement = run_lifecycle(LifecycleCommand::Start, options, &second_executable).unwrap();
+
+    assert_eq!(first.status, LifecycleStatus::Started);
+    assert_eq!(replacement.status, LifecycleStatus::Restarted);
+    assert_ne!(replacement.instance_id, first.instance_id);
+    drop(cleanup);
+}
+
+#[test]
 fn concurrent_starts_publish_one_process_generation() {
     let root = tempfile::tempdir().unwrap();
     let profile = root.path().join("profile");

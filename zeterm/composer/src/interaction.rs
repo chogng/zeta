@@ -1,9 +1,10 @@
-use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_protocol::ModelRef;
 use zeta_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandCatalogError,
     SlashCommandDefinition, SlashCommandsState,
 };
+
+use crate::ComposerRoute;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum InteractionItemAction {
@@ -13,20 +14,28 @@ enum InteractionItemAction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ComposerInteractionItem {
+pub struct ComposerInteractionItem {
     label: String,
     description: String,
     action: InteractionItemAction,
 }
 
 impl ComposerInteractionItem {
-    pub(crate) fn label(&self) -> &str {
+    pub fn label(&self) -> &str {
         &self.label
     }
 
-    pub(crate) fn description(&self) -> &str {
+    pub fn description(&self) -> &str {
         &self.description
     }
+}
+
+/// Composer-facing model option normalized from the product's model catalog.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComposerModelOption {
+    pub label: String,
+    pub description: String,
+    pub model: ModelRef,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,20 +61,20 @@ impl ModelPickerState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SelectionDirection {
+pub enum SelectionDirection {
     Previous,
     Next,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerInteractionActivation {
+pub enum ComposerInteractionActivation {
     ComposerText(String),
     Model(ModelRef),
     ViewChanged,
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct ComposerInteractionView<'a> {
+pub struct ComposerInteractionView<'a> {
     title: &'static str,
     items: &'a [ComposerInteractionItem],
     selected: usize,
@@ -73,19 +82,19 @@ pub(crate) struct ComposerInteractionView<'a> {
 }
 
 impl<'a> ComposerInteractionView<'a> {
-    pub(crate) const fn title(self) -> &'static str {
+    pub const fn title(self) -> &'static str {
         self.title
     }
 
-    pub(crate) const fn items(self) -> &'a [ComposerInteractionItem] {
+    pub const fn items(self) -> &'a [ComposerInteractionItem] {
         self.items
     }
 
-    pub(crate) const fn selected(self) -> usize {
+    pub const fn selected(self) -> usize {
         self.selected
     }
 
-    pub(crate) const fn can_go_back(self) -> bool {
+    pub const fn can_go_back(self) -> bool {
         self.can_go_back
     }
 }
@@ -96,7 +105,7 @@ impl<'a> ComposerInteractionView<'a> {
 /// primitives; this model only owns Slash command and model-picker domain state and exposes an
 /// immutable render view.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct ComposerInteractionModel {
+pub struct ComposerInteractionModel {
     slash_commands: SlashCommandsState,
     slash_items: Vec<ComposerInteractionItem>,
     models: Vec<ComposerInteractionItem>,
@@ -104,7 +113,7 @@ pub(crate) struct ComposerInteractionModel {
 }
 
 impl ComposerInteractionModel {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let catalog = SlashCommandCatalog::with_local_and_server([model_command()], [])
             .expect("the native /model command is valid");
         Self {
@@ -113,28 +122,28 @@ impl ComposerInteractionModel {
         }
     }
 
-    pub(crate) fn set_catalog(
+    pub fn set_catalog(
         &mut self,
         slash_commands: Vec<SlashCommandDefinition>,
-        models: Vec<ModelCatalogEntry>,
+        models: Vec<ComposerModelOption>,
     ) -> Result<(), SlashCommandCatalogError> {
         let catalog =
             SlashCommandCatalog::with_local_and_server([model_command()], slash_commands)?;
         self.slash_commands.set_catalog(catalog);
         self.models = models
             .into_iter()
-            .map(|entry| ComposerInteractionItem {
-                label: entry.display_name,
-                description: format!("{}/{}", entry.model.provider, entry.model.model),
-                action: InteractionItemAction::SelectModel(entry.model),
+            .map(|option| ComposerInteractionItem {
+                label: option.label,
+                description: option.description,
+                action: InteractionItemAction::SelectModel(option.model),
             })
             .collect();
         self.refresh_slash_items();
         Ok(())
     }
 
-    pub(crate) fn sync_for_composer(&mut self, text: &str, agent_mode: bool) {
-        if !agent_mode {
+    pub fn sync_for_composer(&mut self, text: &str, route: ComposerRoute) {
+        if route != ComposerRoute::Agent {
             self.close();
             return;
         }
@@ -145,15 +154,15 @@ impl ComposerInteractionModel {
         self.refresh_slash_items();
     }
 
-    pub(crate) fn is_visible(&self) -> bool {
+    pub fn is_visible(&self) -> bool {
         self.model_picker.is_some() || self.slash_commands.view().is_some()
     }
 
-    pub(crate) fn is_model_picker_visible(&self) -> bool {
+    pub fn is_model_picker_visible(&self) -> bool {
         self.model_picker.is_some()
     }
 
-    pub(crate) fn view(&self) -> Option<ComposerInteractionView<'_>> {
+    pub fn view(&self) -> Option<ComposerInteractionView<'_>> {
         if let Some(view) = &self.model_picker {
             return Some(ComposerInteractionView {
                 title: "Select model",
@@ -171,7 +180,7 @@ impl ComposerInteractionModel {
         })
     }
 
-    pub(crate) fn move_selection(&mut self, direction: SelectionDirection) {
+    pub fn move_selection(&mut self, direction: SelectionDirection) {
         if let Some(view) = &mut self.model_picker {
             view.move_selection(direction);
             return;
@@ -182,7 +191,7 @@ impl ComposerInteractionModel {
         }
     }
 
-    pub(crate) fn select_item(&mut self, index: usize) -> bool {
+    pub fn select_item(&mut self, index: usize) -> bool {
         if let Some(view) = &mut self.model_picker {
             if index >= view.items.len() {
                 return false;
@@ -193,7 +202,7 @@ impl ComposerInteractionModel {
         self.slash_commands.select(index)
     }
 
-    pub(crate) fn activate_selected(&mut self) -> Option<ComposerInteractionActivation> {
+    pub fn activate_selected(&mut self) -> Option<ComposerInteractionActivation> {
         if let Some(view) = &self.model_picker {
             let action = view.items.get(view.selected)?.action.clone();
             let InteractionItemAction::SelectModel(model) = action else {
@@ -214,7 +223,7 @@ impl ComposerInteractionModel {
         ))
     }
 
-    pub(crate) fn complete_selected_slash(&mut self) -> Option<String> {
+    pub fn complete_selected_slash(&mut self) -> Option<String> {
         if self.model_picker.is_some() {
             return None;
         }
@@ -223,7 +232,7 @@ impl ComposerInteractionModel {
         Some(completion.replacement)
     }
 
-    pub(crate) fn dismiss(&mut self, _composer_text: &str) -> bool {
+    pub fn dismiss(&mut self, _composer_text: &str) -> bool {
         if self.model_picker.take().is_some() {
             return true;
         }
@@ -272,5 +281,5 @@ fn model_command() -> SlashCommandDefinition {
 }
 
 #[cfg(test)]
-#[path = "composer_interaction_tests.rs"]
+#[path = "interaction_tests.rs"]
 mod tests;

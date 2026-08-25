@@ -16,15 +16,25 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         title: "Agent".to_owned(),
         status: ThreadStatus::Active,
         sequence: 5,
+        usage: Default::default(),
         turns: vec![Turn {
             turn_id: TurnId::new("turn").unwrap(),
             status: TurnStatus::Completed,
             model: None,
+            resource_budget: None,
+            tool_profile: None,
+            usage: Default::default(),
             items: vec![
                 ThreadItem::UserMessage {
                     item_id: ItemId::new("user").unwrap(),
                     turn_id: TurnId::new("turn").unwrap(),
                     text: "run the tests".to_owned(),
+                },
+                ThreadItem::UserContext {
+                    item_id: ItemId::new("context").unwrap(),
+                    turn_id: TurnId::new("turn").unwrap(),
+                    name: "README selection".to_owned(),
+                    content: "selected content".to_owned(),
                 },
                 ThreadItem::ToolCall {
                     item_id: ItemId::new("call-item").unwrap(),
@@ -43,6 +53,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
                     is_error: false,
                 },
             ],
+            plan: None,
             pending_interaction: None,
             error: None,
         }],
@@ -59,6 +70,8 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         vec![
             "You",
             "run the tests",
+            "You · Context",
+            "README selection",
             "Tool · shell-command",
             "$ cargo test",
             "42 passed"

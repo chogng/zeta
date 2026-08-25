@@ -1,4 +1,10 @@
+use zeta_composer::ComposerInput;
+use zeta_composer::ComposerInputFocus;
+use zeta_composer::ComposerInteractionModel;
+use zeta_composer::ComposerInteractionPaneState;
+use zeta_composer::ComposerInteractionView;
 use zeta_composer::ComposerPanelLayout;
+use zeta_composer::ComposerRoute;
 use zeta_composer::INTERACTION_ROW_HEIGHT;
 use zeta_composer::interaction_list_bounds;
 use zeta_ui::{
@@ -11,10 +17,6 @@ use zui::{
     UiDispatch,
 };
 
-use crate::agent_composer::ComposerMode;
-use crate::composer_editor::{ComposerEditor, ComposerEditorFocus};
-use crate::composer_interaction::{ComposerInteractionModel, ComposerInteractionView};
-use crate::composer_interaction_pane::ComposerInteractionPaneState;
 use crate::input_context_toolbar::InputContextToolbar;
 use crate::shell_interaction::{
     COMPOSER, COMPOSER_INFO_BAR, COMPOSER_INTERACTION, COMPOSER_PANEL, MAIN_SURFACE,
@@ -31,10 +33,10 @@ const INTERACTION_TEXT_INSET: f32 = 10.0;
 #[derive(Clone, Copy)]
 pub(crate) struct ComposerPanelView<'a> {
     pub(crate) context: &'a WorkspaceContext,
-    pub(crate) editor: &'a ComposerEditor,
+    pub(crate) editor: &'a ComposerInput,
     pub(crate) interaction: &'a ComposerInteractionModel,
     pub(crate) interaction_pane: &'a ComposerInteractionPaneState,
-    pub(crate) mode: ComposerMode,
+    pub(crate) route: ComposerRoute,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
 }
@@ -69,7 +71,7 @@ pub(crate) fn draw_composer_panel(
                 palette,
             );
         }
-        draw_info_bar(context, layout.info_bar(), view.mode, palette);
+        draw_info_bar(context, layout.info_bar(), view.route, palette);
         context.scene_mut().draw_rect(PaintRect::new(
             layout.info_editor_separator(),
             palette.border,
@@ -88,13 +90,13 @@ pub(crate) fn draw_composer_panel(
             .with_value(view.editor.text()),
         );
         let editor_focus = if view.dispatch.is_focused(COMPOSER) {
-            ComposerEditorFocus::Focused(view.caret_visibility)
+            ComposerInputFocus::Focused(view.caret_visibility)
         } else {
-            ComposerEditorFocus::Blurred
+            ComposerInputFocus::Blurred
         };
-        let placeholder = match view.mode {
-            ComposerMode::Agent => "Ask Zeta anything…",
-            ComposerMode::Shell => "Enter a shell command…",
+        let placeholder = match view.route {
+            ComposerRoute::Agent => "Ask Zeta anything…",
+            ComposerRoute::Shell => "Enter a shell command…",
         };
         let editor = view.editor.view(
             layout.editor(),
@@ -107,7 +109,6 @@ pub(crate) fn draw_composer_panel(
         let toolbar = InputContextToolbar::new(
             layout.toolbar(),
             view.context,
-            view.mode,
             palette,
             text_layout,
             view.dispatch,
@@ -120,12 +121,12 @@ pub(crate) fn draw_composer_panel(
 fn draw_info_bar(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
-    mode: ComposerMode,
+    route: ComposerRoute,
     palette: ShellPalette,
 ) {
-    let (accessibility_label, keycaps, label) = match mode {
-        ComposerMode::Agent => ("/ for commands", vec![vec!["/".to_owned()]], "for commands"),
-        ComposerMode::Shell => (
+    let (accessibility_label, keycaps, label) = match route {
+        ComposerRoute::Agent => ("/ for commands", vec![vec!["/".to_owned()]], "for commands"),
+        ComposerRoute::Shell => (
             "Up and Down for command history",
             vec![vec!["↑".to_owned(), "↓".to_owned()]],
             "for command history",

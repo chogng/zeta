@@ -12,7 +12,7 @@
 | Symbol | 职责 | 接入要求 |
 | --- | --- | --- |
 | `InputClassifier` | 持有工作目录和 PATH 快照，执行整条分类管线 | 一个 Composer 持有一个实例；工作区切换时调用 `set_working_directory` |
-| `InputClassificationContext` | 提供 `current_route` 和 `InputConversation` | 只用于自动模式；显式模式必须优先 |
+| `InputClassificationContext` | 提供 `current_route` 和 `InputConversation` | 每次输入变化时提供当前分类路由和会话位置 |
 | `InputConversation` | 区分普通输入与 Agent 回复后的短追问 | Agent Turn 完成后设为 `AgentFollowUp`，新提交或失败后复位 |
 | `InputHistoryEntry` | 提供按时间排序的 Shell 命令和 Agent prompt | Snapshot 必须按 Turn 顺序重建；command-not-found 不进入 Shell 历史 |
 | `InputClassification` | 返回路由、置信度与决策来源 | 置信度只用于诊断，不得作为执行授权 |
@@ -20,7 +20,7 @@
 | `shell_completions` / `shell_completion_snapshot` | 从分类器持有的同一 Shell context 返回补全项；snapshot 另含当前 token 的精确匹配状态 | UI 可投影结果，但不能建立第二套 parser/registry |
 | `replace_shell_aliases` / `set_shell_path_entries` | 更新宿主提供的 Shell 环境快照 | 只能传入当前执行环境的事实；不得猜测 alias |
 
-Zeterm 只把 `InputRoute` 映射为 Composer 模式，并把真实 Turn 生命周期投影成
+Zeterm 只把 `InputRoute` 映射为 Composer 路由，并把真实 Turn 生命周期投影成
 `InputConversation` 和按顺序排列的 `InputHistoryEntry`。Shell parser、相似度计算、PATH/manifest
 检查和 fallback 不再属于产品宿主。
 
@@ -83,16 +83,16 @@ command-overlap 是为 Zeta 独立整理的集合。TextBlob 许可文本位于
 
 模型和 tokenizer 通过 `include_bytes!` 固定进二进制，不在运行时下载。`EmbeddedClassifier` 是
 模型、tokenizer 和 CPU device 的唯一 owner。模型或 tokenizer 初始化失败会直接启用完整
-`HeuristicFallback`；初始化成功后的编码、推理或输出校验错误返回 `CurrentRouteFallback`，保留用户
-正在使用的模式；Candle panic 会被隔离，并在当前进程永久改走 `HeuristicFallback`。官方
+`HeuristicFallback`；初始化成功后的编码、推理或输出校验错误返回 `CurrentRouteFallback`，保留当前
+路由；Candle panic 会被隔离，并在当前进程永久改走 `HeuristicFallback`。官方
 `candle-onnx` 的构建脚本需要系统 `protoc`，产品运行时不需要。
 
 更新模型时必须一起更新 ONNX、tokenizer、`metadata.json`、摘要常量、标签解释、温度和概率基线
 测试，不能只替换其中一个文件。
 
-## 内部 owner 与修改影响
+## 内部所有者与修改影响
 
-- `classifier::classify_with_model` 固定决策顺序与失败分支；改动会影响所有自动模式消费者。
+- `classifier::classify_with_model` 固定决策顺序与失败分支；改动会影响所有路由消费者。
 - `history::InputHistory` 拥有 0.9 相似度门槛和“最新匹配胜出”语义；宿主只提供有序事实。
 - `shell::ShellContext` 只适配 `zeta-shell-completion::ShellCompletionEngine` 与 classifier 阈值；parser、
   command registry 和 completion 不得移回本 crate 或 Zeterm。
@@ -116,7 +116,7 @@ cargo clippy -p zeta-input-classifier --all-targets -- -D warnings
 
 测试覆盖 parser、历史冲突、严格 token 阈值、工作区命令、自然语言词典、follow-up、普通模型错误、模型 panic、
 模型路由样例、资产 SHA 和 Candle FP32 概率基线。当前模型仍可能误判自由措辞，例如
-`chmod 755 是什么意思`；用户显式选择始终覆盖自动分类。
+`chmod 755 是什么意思`；普通推理错误保留当前路由，输入继续变化时由宿主再次分类。
 
 `InputClassifier::classify` 是同步调用；`start_background_warmup` 只提前解码模型和 tokenizer。
 当前 Zeterm 在编辑变更时直接调用分类，并从同一个 `InputClassifier` 请求 Shell completion；候选由

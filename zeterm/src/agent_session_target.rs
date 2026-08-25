@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use zeta_app_server_client::AppServerSession;
 use zeta_app_server_client::StdioAppServerCommand;
 use zeta_app_server_client::local_profile_root;
+use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::common::WorkspaceTrustHostCapability;
@@ -106,11 +107,14 @@ impl AgentSessionTarget {
         };
         match self {
             Self::Local { workspace_root } => {
+                let executable = std::env::current_exe()
+                    .map_err(|error| anyhow!("could not resolve zeterm executable: {error}"))?;
+                let daemon_executable = development_daemon_executable(&executable);
                 let command = local_app_server_command(
-                    std::env::current_exe()
-                        .map_err(|error| anyhow!("could not resolve zeterm executable: {error}"))?,
+                    executable,
                     local_profile_root(),
                     workspace_root,
+                    daemon_executable,
                 );
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
                     .map_err(|error| anyhow!(error.to_string()))
@@ -126,15 +130,30 @@ pub(super) fn local_app_server_command(
     executable: PathBuf,
     profile_root: PathBuf,
     workspace_root: &Path,
+    daemon_executable: Option<PathBuf>,
 ) -> StdioAppServerCommand {
-    StdioAppServerCommand::new(executable)
+    let command = StdioAppServerCommand::new(executable)
         .with_argument("app-server")
         .with_argument("connect")
         .with_environment_variable("ZETA_PROFILE_ROOT", profile_root.into_os_string())
         .with_environment_variable(
             "ZETA_WORKSPACE_ROOT",
             workspace_root.as_os_str().to_os_string(),
-        )
+        );
+    match daemon_executable {
+        Some(daemon_executable) => {
+            command.with_environment_variable(DAEMON_PATH_ENV, daemon_executable.into_os_string())
+        }
+        None => command,
+    }
+}
+
+fn development_daemon_executable(zeterm_executable: &Path) -> Option<PathBuf> {
+    if cfg!(debug_assertions) && std::env::var_os(DAEMON_PATH_ENV).is_none() {
+        Some(zeterm_executable.to_path_buf())
+    } else {
+        None
+    }
 }
 
 fn local_client_capabilities() -> ClientCapabilities {

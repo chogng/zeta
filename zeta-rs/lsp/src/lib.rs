@@ -41,6 +41,10 @@ pub use router::{
 #[path = "client_tests.rs"]
 mod tests;
 
+#[cfg(all(test, unix))]
+#[path = "command_tests.rs"]
+mod command_tests;
+
 #[cfg(test)]
 #[path = "router_tests.rs"]
 mod router_tests;

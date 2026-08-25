@@ -23,7 +23,6 @@ pub(crate) struct ThreadProjection {
     thread: Option<Thread>,
     transient_items: BTreeMap<ItemId, ThreadItem>,
     transient_tool_outputs: BTreeMap<ToolCallId, TransientToolOutput>,
-    plan: Option<PlanUpdate>,
     stream_cursor: Option<StreamCursor>,
 }
 
@@ -38,7 +37,7 @@ impl ThreadProjection {
     }
 
     pub(crate) fn plan(&self) -> Option<&PlanUpdate> {
-        self.plan.as_ref()
+        self.thread.as_ref()?.turns.last()?.plan.as_ref()
     }
 
     pub(crate) fn items(&self) -> impl Iterator<Item = &ThreadItem> {
@@ -97,10 +96,6 @@ impl ThreadProjection {
                     ThreadProjectionUpdate::ResubscribeRequired
                 }
             }
-            ThreadUpdate::PlanUpdated { plan, .. } => {
-                self.plan = Some(plan);
-                ThreadProjectionUpdate::Applied
-            }
             ThreadUpdate::ToolOutputDelta {
                 tool_call_id,
                 stream,
@@ -137,7 +132,6 @@ impl ThreadProjection {
     fn clear_transient(&mut self) {
         self.transient_items.clear();
         self.transient_tool_outputs.clear();
-        self.plan = None;
         self.stream_cursor = None;
     }
 }

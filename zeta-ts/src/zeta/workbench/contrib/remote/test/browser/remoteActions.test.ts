@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import type { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
+import { DialogResult, type IDialogService, type IPromptDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IConfirmationDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IMessageDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -120,6 +120,8 @@ class TestDialogService implements IDialogService {
 		this.confirmations.push(options);
 		return true;
 	}
+
+	async prompt(_options: IPromptDialogOptions): Promise<DialogResult> { return DialogResult.Cancel; }
 }
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

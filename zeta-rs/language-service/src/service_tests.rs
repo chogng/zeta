@@ -368,6 +368,20 @@ fn bounded_restart_policy_enters_crash_loop_after_exactly_its_retry_budget() {
             .count(),
         2
     );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(
+                event,
+                LanguageServiceEvent::ServerMessage {
+                    server,
+                    source: LanguageServerMessageSource::Service,
+                    ..
+                } if server == "missing-rust"
+            ))
+            .count(),
+        2
+    );
     service.shutdown().expect("shutdown");
 }
 
@@ -456,6 +470,13 @@ async fn transport_close_during_starting_cannot_become_a_false_ready_server() {
         .handle_protocol_event(
             server.clone(),
             1,
+            LanguageServerEvent::ServerStderr("startup details".into()),
+        )
+        .await;
+    supervisor
+        .handle_protocol_event(
+            server.clone(),
+            1,
             LanguageServerEvent::TransportClosed {
                 message: "closed immediately after initialized".into(),
             },
@@ -466,6 +487,15 @@ async fn transport_close_during_starting_cannot_become_a_false_ready_server() {
         supervisor.servers.get(&server).map(|server| server.phase),
         Some(ManagedServerPhase::Terminal)
     );
+    assert!(sink.snapshot().iter().any(|event| matches!(
+        event,
+        LanguageServiceEvent::ServerMessage {
+            server,
+            source: LanguageServerMessageSource::Stderr,
+            message,
+            ..
+        } if server == "early-exit-rust" && message == "startup details"
+    )));
     assert!(sink.snapshot().iter().any(|event| matches!(
         event,
         LanguageServiceEvent::ServerStateChanged {

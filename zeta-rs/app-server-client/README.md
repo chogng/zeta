@@ -81,6 +81,8 @@ Brokered stdio host 在创建 `AppServerSession` 之前由 `zeta-app-server-daem
 Workspace composition 可用；`AppServerSession::start_stdio` 仍必须为实际产品连接执行自己的
 initialize，不能复用或信任 lifecycle probe 的连接状态。
 
+`AppServerSession::start_stdio` 保留 child stdout 作为 JSONL transport，并继承 host stderr；因此 command resolution、daemon startup 或 readiness 失败会直接保留具体诊断，而不会退化成只有 `process output closed` 的无上下文 EOF。
+
 Typed method 当前同步等待该 request 的 completion，但实际 dispatch 位于独立 driver。
 Notification 不依附 request completion；consumer 不得对 session handle 调用
 `drain_notifications()`。

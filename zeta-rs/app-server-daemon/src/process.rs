@@ -27,6 +27,7 @@ use sha2::Digest;
 use sha2::Sha256;
 
 use crate::ConnectionOptions;
+use crate::DAEMON_PROCESS_ARGUMENT;
 use crate::endpoint::EndpointPaths;
 
 const MAX_PID_RECORD_BYTES: u64 = 16 * 1024;
@@ -45,6 +46,21 @@ pub(crate) struct ProcessRecord {
     pub(crate) instance_id: String,
     pub(crate) process_start_identity: Option<String>,
     pub(crate) daemon_version: String,
+    #[serde(default)]
+    pub(crate) executable_identity: Option<ExecutableIdentity>,
+}
+
+/// Stable-enough identity for detecting a daemon executable replaced by a development rebuild.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ExecutableIdentity {
+    canonical_path: PathBuf,
+    length: u64,
+    modified_nanos: Option<u128>,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
 }
 
 impl ProcessRecord {
@@ -67,8 +83,36 @@ impl ProcessRecord {
             instance_id: format!("{:x}", digest.finalize()),
             process_start_identity,
             daemon_version: env!("CARGO_PKG_VERSION").into(),
+            executable_identity: Some(executable_identity(
+                &std::env::current_exe().map_err(io_error)?,
+            )?),
         })
     }
+}
+
+pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, String> {
+    let canonical_path = dunce::canonicalize(path).map_err(io_error)?;
+    let metadata = fs::metadata(&canonical_path).map_err(io_error)?;
+    let modified_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos());
+    #[cfg(unix)]
+    let (device, inode) = {
+        use std::os::unix::fs::MetadataExt;
+
+        (metadata.dev(), metadata.ino())
+    };
+    Ok(ExecutableIdentity {
+        canonical_path,
+        length: metadata.len(),
+        modified_nanos,
+        #[cfg(unix)]
+        device,
+        #[cfg(unix)]
+        inode,
+    })
 }
 
 pub(crate) struct ProcessRecordGuard {
@@ -152,6 +196,7 @@ pub(crate) fn spawn_daemon(
     let error_log = log.try_clone().map_err(io_error)?;
     let mut command = Command::new(daemon_executable);
     command
+        .arg(DAEMON_PROCESS_ARGUMENT)
         .env(PROFILE_ROOT_ENV, options.profile_root())
         .env_remove(WORKSPACE_ROOT_ENV)
         .env_remove(WORKSPACE_TRUST_SOURCE_ENV)

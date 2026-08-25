@@ -1,39 +1,25 @@
 # zeterm：Terminal compatibility 结构与演进
 
-> 状态：Compatibility。Agent-first 产品结构、Thread authority、统一 Composer 与 direct Shell
-> Turn 以 [`native-agent-console.md`](native-agent-console.md) 为 canonical。本文只维护独立
-> Terminal Surface、PTY、grid、screen mode、selection 与 terminal protocol 的兼容性边界；
-> 下文仍出现的 terminal-first 产品描述属于历史实现记录，不再代表当前主界面。
+> 状态：Compatibility。Agent 开发能力、Thread authority、统一 Composer 与 direct Shell Turn 以 [`native-agent-console.md`](native-agent-console.md) 为 canonical；Agent Terminal 会话流、按需检查、最大化与主窗口组合由 [`native-layout.md`](native-layout.md) 拥有。本文只维护 Terminal Surface、PTY、grid、screen mode、selection 与 terminal protocol 的兼容性边界。
 
-> 本文是 `zeterm` terminal compatibility 和分阶段演进的 canonical 文档。
-> 三条公开产品线与宿主边界见 [`product-lines.md`](../../docs/product-lines.md)；本文只负责 `zeterm`
-> 的纯 Rust Desktop 终端实现。
-> 当前源码所有权、调用路径和测试入口见
-> [`zeterm` README](../README.md)；terminal grid 与 BlockList 的实现契约见
-> [`zeta-terminal` README](../../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate
-> 所有权见 [`native-text-input.md`](native-text-input.md)；原生窗口 chrome 与控件占位的实现
-> 契约见 [`zeta-winit` README](../winit/README.md)。
+> 本文是 `zeterm` terminal compatibility 和分阶段演进的 canonical 文档。三条公开产品线与宿主边界见 [`product-lines.md`](../../docs/product-lines.md)；本文只负责 `zeterm` 的纯 Rust Desktop 终端实现。当前源码所有权、调用路径和测试入口见 [`zeterm` README](../README.md)；terminal grid 与 BlockList 的实现契约见 [`zeta-terminal` README](../../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate 所有权见 [`native-text-input.md`](native-text-input.md)；原生窗口 chrome 与控件占位的实现契约见 [`zeta-winit` README](../winit/README.md)。
 
 ## 快速理解
 
-`zeterm` 的产品根节点是一块完整的现代终端界面，不是由 Sidebar、Panel、Editor 等通用
-Workbench Part 拼装出来的 IDE 外壳。Top Bar、Session 导航和附加操作都服务于终端会话；活动
-终端始终占据窗口的主要内容区域。
+Terminal session 是 `zeterm` 主窗口的执行上下文和交互基座，但 PTY transcript 不是 Thread authority。默认布局把 Terminal command block、用户消息和 Agent response 投影到同一会话流；普通有界命令继续使用 durable Shell Turn 或 execution result，只有 terminal protocol、持续输入或用户直接接管需要时才在原位置进入完整 grid。底层拥有 PTY capability 不要求用户观察 Agent 的每次后台命令。
 
-当前视觉采用浅色扁平界面：Top Bar、Block 输出画布与底部输入面板只用背景层级和一像素
-分隔线建立结构，不使用悬浮卡片、厚描边或大圆角。未接入真实状态的搜索、Agent、Git 和
-Session action 不以静态装饰出现。
+当前视觉采用浅色扁平界面：Top Bar、Block 输出画布与底部输入面板只用背景层级和一像素分隔线建立结构，不使用悬浮卡片、厚描边或大圆角。未接入真实状态的搜索、Agent、Git 和 Session action 不以静态装饰出现。
 
 | 用户场景 | 界面行为 | 当前状态 | 深入阅读 |
 | --- | --- | --- | --- |
-| 打开 `zeterm` | 启动默认 shell；主屏上方显示 Block 输出，底部固定显示命令编辑器 | 最小 PTY/BlockList 纵切已实现 | [当前实现](#4-当前实现) |
-| 输入 shell 命令 | 键盘、IME 和 paste 先编辑底部 composer；Enter 才建立 Block 并把完整命令写入 PTY | 单行 Block Input Editor 已实现 | [当前实现](#4-当前实现) |
+| 打开 `zeterm` | 目标布局默认进入绑定 Workspace、Thread 与 Terminal session 的统一会话流 | 部分具备；Agent ThreadTimeline、共享 Composer 和独立 Terminal Surface 已接入，统一会话流尚未完成 | [当前实现](#4-当前实现) |
+| 输入有界 shell 命令 | Composer 提交 direct Shell Turn，结果进入 Thread 并可恢复 | durable Shell Turn 已实现 | [`native-agent-console.md`](native-agent-console.md) |
 | 使用 `vim`、`top` 等交互式 TUI | alternate screen 临时接管 Terminal Workspace，切回 primary 后恢复 BlockList 与底部输入 | 部分具备；scroll region、常见 query 与主流 mouse modes 已接通 | [当前实现](#4-当前实现) |
 | 浏览较早的主屏输出 | 在终端内容区滚轮上翻 Block transcript 或 cell history，新输出不抢走当前阅读位置 | 会话内有界回滚已实现；跨重启持久化尚无 | [当前实现](#4-当前实现) |
 | 复制或粘贴终端文本 | 主屏优先复制 composer selection，再复制 Block 输出 selection；macOS 使用 Cmd+C/V，Windows/Linux 的 alternate terminal 使用 Ctrl+Shift+C/V | 快捷键已通过统一 command resolver；未加 Shift 的 terminal Ctrl+C 继续透传 | [当前实现](#4-当前实现) |
 | 自定义快捷键 | 按 `Cmd/Ctrl+,` 打开设置并点击命令录制，或编辑 `<ZETA_PROFILE_ROOT>/keybindings.json` | 最多四段 Chord；设置写入采用原子替换，错误更新保留上一份有效规则并显示诊断 | [当前实现](#4-当前实现) |
 | 查看当前会话导航 | Top Bar 按钮展开垂直 Session TabList；拖动右边界可调整宽度 | App Server Session Tab 的创建、投影和切换已实现；不显示 fixture | [当前实现](#4-当前实现) |
-| 浏览工作区文件或变更 | Top Bar 按钮展开右栏；Changes / Files 切换单一 Pane，Files 可刷新 Git 状态或模糊搜索 | 根目录、上游领先/落后数和文本 MultiDiff 已接入 | [当前实现](#4-当前实现) |
+| 浏览工作区文件或变更 | 当前实现由 Top Bar 展开右栏；目标布局改为从相关 block 打开单一临时检查对象 | 根目录、上游领先/落后数和文本 MultiDiff 已接入；检查界面收敛尚未完成 | [当前实现](#4-当前实现) |
 | 操作当前会话 | 右键 Session Tab，在锚点附近打开 Pin、Close、Rename、Fork 菜单 | 菜单呈现、定位、关闭和键盘交互已实现；四项 mutation 尚未执行 | [当前实现](#4-当前实现) |
 | 切换多个会话 | 在同一垂直 TabList 选择另一个 App Server Session | 已实现；每个 Session Tab 绑定并保留一个独立本地 PTY | [当前实现](#4-当前实现) |
 | 在 macOS 使用 Top Bar | 左侧 action 避开系统红绿灯占位并保留组件间距 | 70px host 占位 + 8px Titlebar 间距已实现 | [尺寸语义](#5-尺寸语义) |
@@ -212,8 +198,8 @@ Config/Session/Thread authority。每条规则必须包含 `key` 和 `command`�
 | modifier | `primary`、`ctrl`、`meta`、`alt`、`shift` | 重复 modifier，或 `primary` 与显式 `ctrl`/`meta` 组合时拒绝整份资源 |
 | key identity | 逻辑键名或 `[PhysicalCode]` | 空键、单个 Chord 多键、超过四段时拒绝整份资源 |
 | `when` 语法 | 省略表示 always；支持 `!`、`&&`、`||`、括号、`==`、`!=`、布尔值与字符串值 | 语法错误或未知 context key 时拒绝整份资源 |
-| context key | `textInputFocus`、`terminalFocus`、`agentSurfaceVisible`、`terminalSurfaceVisible`、`sessionSidebarVisible`、`agentSidebarVisible`、`fileSearchVisible`、`composerMode` | 布尔 key 参与真假组合；`composerMode` 可与字符串比较 |
-| command | Copy/Paste、composer mode、左右 sidebar、Changes/Files、Refresh、File Search 与打开快捷键设置的当前稳定 command ID | 未知或尚未执行真实 transition 的 command ID 拒绝整份资源 |
+| context key | `textInputFocus`、`terminalFocus`、`agentSurfaceVisible`、`terminalSurfaceVisible`、`sessionSidebarVisible`、`agentSidebarVisible`、`fileSearchVisible`、`composerRoute` | 布尔 key 参与真假组合；`composerRoute` 可与 `agent` 或 `shell` 比较 |
+| command | Copy/Paste、左右 sidebar、Changes/Files、Refresh、File Search 与打开快捷键设置的当前稳定 command ID | 未知或尚未执行真实 transition 的 command ID 拒绝整份资源 |
 | 更新 | 每秒比较资源内容，完整编译后替换 Builtin + User rule set | 文件过大、读取失败、JSON 错误、未知字段或任一规则无效时继续使用上一份完整规则 |
 
 设置页使用深灰色 keycap 分别呈现 modifier 和按键字符；同一 Chord 紧密排列，多段 Chord 使用
@@ -225,8 +211,7 @@ Config/Session/Thread authority。每条规则必须包含 `key` 和 `command`�
 当前可绑定的 command ID 为：
 
 - `editor.action.clipboardCopyAction`、`editor.action.clipboardPasteAction`；
-- `workbench.action.toggleComposerMode`、`workbench.action.toggleSideBar`、
-  `workbench.action.toggleAuxiliaryBar`；
+- `workbench.action.toggleSideBar`、`workbench.action.toggleAuxiliaryBar`；
 - `workbench.action.showAgentChanges`、`workbench.action.showAgentFiles`；
 - `workbench.action.refreshAgentFiles`、`workbench.action.toggleAgentFileSearch`；
 - `workbench.action.pickExecutionLocation`、`workbench.action.manageRemoteTunnels`；
@@ -316,8 +301,7 @@ geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩�
 - file tree、tabs、chat 和 editor 接入时复用 `zui`：各组件只注册稳定 identity、
   父子关系、语义和 intent，业务模型仍由各自 owner 保存；
 - 接入 AccessKit 或平台原生 accessibility adapter，直接发布现有语义树与 focus identity；
-- 让 root layout 继续只决定 Top Bar、可选 Session Navigation 和 Terminal Workspace 的外部
-  bounds，并把单轴约束委托给 `SplitViewLayout`；
+- 让 root layout 收敛为 Top Bar、Agent Terminal 会话流和单一临时检查对象；Session 列表改为按需打开，通用单轴约束继续委托给 `SplitViewLayout`；
 - 保持 `zeta-ui` presentation-only，不把 Session 或 terminal reducer 下沉到组件层。
 
 ### 6.2 Terminal Pane 分屏

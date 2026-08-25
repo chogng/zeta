@@ -1280,7 +1280,8 @@ impl Supervisor {
             (ManagedServerPhase::Ready, LanguageServerEvent::DynamicCapabilitiesChanged(_)) => {
                 self.emit_server_capabilities(&server, server_epoch)
             }
-            (ManagedServerPhase::Ready, LanguageServerEvent::ServerStderr(message)) => self
+            (ManagedServerPhase::Starting, LanguageServerEvent::ServerStderr(message))
+            | (ManagedServerPhase::Ready, LanguageServerEvent::ServerStderr(message)) => self
                 .emit_server_message(
                     server,
                     MessageType::LOG,

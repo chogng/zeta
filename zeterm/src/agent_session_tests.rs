@@ -148,6 +148,7 @@ fn subscription_snapshot_does_not_replay_history_as_live_thread_updates() {
         title: "First terminal".to_owned(),
         status: ThreadStatus::Active,
         sequence: 1,
+        usage: Default::default(),
         turns: Vec::new(),
     };
     let historical_update = ThreadUpdateEnvelope {
@@ -181,6 +182,7 @@ fn subscription_snapshot_does_not_replay_history_as_live_thread_updates() {
             thread,
             updates: vec![historical_update],
         }],
+        agent_tree: Default::default(),
     };
 
     let event = snapshot_event_from_subscription(&subscription, &thread_id, None).unwrap();
@@ -189,15 +191,22 @@ fn subscription_snapshot_does_not_replay_history_as_live_thread_updates() {
 
 #[test]
 fn shell_completion_sources_refresh_only_for_relevant_workspace_changes() {
-    assert!(shell_completion_sources_changed(&FsChanged::RescanRequired));
+    assert!(shell_completion_sources_changed(
+        &FsChanged::RescanRequired {
+            workspace_folder_id: None,
+        }
+    ));
     assert!(shell_completion_sources_changed(&FsChanged::PathsChanged {
+        workspace_folder_id: None,
         paths: vec![PathBuf::from("frontend/package.json")],
     }));
     assert!(shell_completion_sources_changed(&FsChanged::PathsChanged {
+        workspace_folder_id: None,
         paths: vec![PathBuf::from("Justfile")],
     }));
     assert!(!shell_completion_sources_changed(
         &FsChanged::PathsChanged {
+            workspace_folder_id: None,
             paths: vec![PathBuf::from("src/main.rs")],
         }
     ));

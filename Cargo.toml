@@ -360,6 +360,31 @@ zui = { path = "zeterm/zui" }
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.
 debug = "limited"
+opt-level = 1
+
+[profile.dev.package.zeterm]
+# Keep the native product's unwind metadata below macOS compact-unwind encoding limits.
+opt-level = "s"
+
+[profile.dev.package.zeta-app-server]
+# The embedded App Server dominates native unwind metadata in development builds.
+opt-level = "s"
+
+[profile.dev.package.zeta-app-server-client]
+# Keep the brokered client small enough to coexist with the native product graph.
+opt-level = "s"
+
+[profile.test.package."*"]
+# Large integration-test dependency graphs otherwise exceed macOS compact-unwind limits.
+opt-level = 1
+
+[profile.test.package.zeta-app-server]
+# Large App Server test binaries otherwise exceed macOS compact-unwind encoding limits.
+opt-level = "s"
+
+[profile.test.package.zeta-app-server-client]
+# Keep client integration tests debuggable while reducing generated unwind metadata.
+opt-level = "s"
 
 [profile.dev-small]
 inherits = "dev"

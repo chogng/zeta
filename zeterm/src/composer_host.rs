@@ -1,4 +1,7 @@
 use serde_json::Value;
+use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
+use zeta_composer::Composer;
+use zeta_composer::ComposerModelOption;
 use zeta_input_classifier::InputConversation;
 use zeta_input_classifier::InputHistoryEntry;
 use zeta_protocol::Thread;
@@ -7,10 +10,20 @@ use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::TurnStatus;
 
-use crate::agent_composer::AgentComposer;
+/// Normalizes transport-owned model catalog entries into the Composer feature contract.
+pub(crate) fn composer_model_options(entries: Vec<ModelCatalogEntry>) -> Vec<ComposerModelOption> {
+    entries
+        .into_iter()
+        .map(|entry| ComposerModelOption {
+            description: format!("{}/{}", entry.model.provider, entry.model.model),
+            label: entry.display_name,
+            model: entry.model,
+        })
+        .collect()
+}
 
 /// Projects canonical Thread state into the classifier's product-neutral context.
-pub(crate) fn synchronize_composer_classifier(composer: &mut AgentComposer, thread: &Thread) {
+pub(crate) fn synchronize_composer_classifier(composer: &mut Composer, thread: &Thread) {
     composer.replace_classification_history(classification_history_for_thread(thread));
     let Some(turn) = thread.turns.last() else {
         composer.synchronize_conversation(InputConversation::Standalone);
@@ -38,7 +51,7 @@ pub(crate) fn synchronize_composer_classifier(composer: &mut AgentComposer, thre
 }
 
 /// Applies transient and committed Turn events that change follow-up interpretation.
-pub(crate) fn update_composer_classifier(composer: &mut AgentComposer, update: &ThreadUpdate) {
+pub(crate) fn update_composer_classifier(composer: &mut Composer, update: &ThreadUpdate) {
     match update {
         ThreadUpdate::ItemStarted {
             item: ThreadItem::AgentMessage { .. },
@@ -124,5 +137,5 @@ fn turn_command_was_not_found(items: &[ThreadItem]) -> bool {
 }
 
 #[cfg(test)]
-#[path = "composer_classification_tests.rs"]
+#[path = "composer_host_tests.rs"]
 mod tests;

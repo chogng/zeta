@@ -14,7 +14,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | 读者关心的对象 | 当前路径 | 目标 owner | 迁移状态 |
 | --- | --- | --- | --- |
 | `zeterm` binary、窗口生命周期、平台事件 | `zeta-rs/native` | `zeterm/` | 阶段一迁移 |
-| `zeterm` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeterm/layout` + `zeterm/composer` + `zeterm/src` | Root/Workspace 与 Composer panel/list geometry 已抽取，Shell/Composer state/scene composition 仍在宿主 |
+| `zeterm` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeterm/layout` + `zeterm/composer` + `zeterm/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
 | 通用 icon asset contract | 旧 Native icon types | `zeterm/icon` (`zeta-icon`) | 已完成；产品 catalog 保留在 `zeterm/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `zeterm/zui` | zeterm-owned crates in root workspace | 已迁入 zeterm |
 | Button、Tree、List、Editor/Sidebar presentation | `zeterm/ui`、`editor`、`agent-sidebar` | zeterm-owned crates in root workspace | 已迁入 zeterm |
@@ -39,7 +39,7 @@ zeta/
 │   ├── zui/                    # backend-neutral native UI framework crate
 │   ├── icon/                   # renderer-independent icon asset contract
 │   ├── layout/                 # zeterm product pane topology
-│   ├── composer/               # zeterm Composer panel/list geometry
+│   ├── composer/               # zeterm Composer state, input, interaction and geometry
 │   ├── zui-demo/               # product-independent framework smoke host
 │   ├── ui/                     # native-only reusable components
 │   ├── renderer/               # native rendering crate
@@ -139,9 +139,9 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
       `AgentSidebarState` 为 `SidebarLayoutSpec`；
 - [x] 建立 `zui-demo`，只依赖 `zui`、`zeta-ui` 和 `zeta-renderer`，以 recording backend 验证通用
       组件可脱离 zeterm product host 组合；
-- [x] 将 Composer panel、interaction list 与 selection scroll geometry 抽到 `zeta-composer`；Native
-      只投影 item count、preferred height 与 scene/state adapter；
-- [ ] 将更多 Shell/Composer/Session domain composition 按 owner 分批抽到产品领域 crate；不把产品
+- [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list
+      geometry 抽到 `zeta-composer`；Native 只保留 Thread/catalog adapter、提交 effect 与 scene paint；
+- [ ] 将更多 Shell/Session domain composition 按 owner 分批抽到产品领域 crate；不把产品
       state、command 或平台事件下沉到 `zui`；
 - [ ] 在拥有第二个真实宿主前，不拆分 `zui` 的内部 foundation/layout/presentation/runtime 为更多
       独立 crate；先保持单一 framework contract，降低跨 crate API churn。

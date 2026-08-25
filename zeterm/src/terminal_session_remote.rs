@@ -74,6 +74,7 @@ impl RemoteTerminalBackend {
         let mut client = session.client();
         let created = client
             .terminal_create(TerminalCreateParams {
+                workspace_folder_id: None,
                 rows: size.rows(),
                 cols: size.cols(),
                 profile: TerminalProfileSelection::Default,
@@ -190,6 +191,7 @@ fn run_remote_terminal(
         }
 
         let read = match state.client.terminal_read(TerminalReadParams {
+            workspace_folder_id: None,
             terminal_id: state.terminal_id.clone(),
             after_sequence: state.output_sequence,
             after_command_sequence: state.command_sequence,
@@ -262,6 +264,7 @@ fn handle_remote_terminal_command(
             if state
                 .client
                 .terminal_write(TerminalWriteParams {
+                    workspace_folder_id: None,
                     terminal_id: state.terminal_id.clone(),
                     data,
                 })
@@ -278,6 +281,7 @@ fn handle_remote_terminal_command(
             if state
                 .client
                 .terminal_resize(TerminalResizeParams {
+                    workspace_folder_id: None,
                     terminal_id: state.terminal_id.clone(),
                     rows: size.rows(),
                     cols: size.cols(),
@@ -313,6 +317,7 @@ impl RemoteTerminalState {
                 Ok(session) => {
                     let mut client = session.client();
                     match client.terminal_attach(TerminalAttachParams {
+                        workspace_folder_id: None,
                         terminal_id: self.terminal_id.clone(),
                         reconnect_token: self.reconnect.reconnect_token.clone(),
                         rows: self.size.rows(),
@@ -340,6 +345,7 @@ impl RemoteTerminalState {
 
     fn close(&mut self) {
         let _ = self.client.terminal_close(TerminalCloseParams {
+            workspace_folder_id: None,
             terminal_id: self.terminal_id.clone(),
         });
         if let Some(session) = self.session.take() {

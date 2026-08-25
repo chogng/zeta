@@ -91,7 +91,10 @@ impl NativeLanguageService {
     }
 
     pub(crate) fn start(workspace_root: &Path, event_proxy: EventLoopProxy<NativeEvent>) -> Self {
-        let catalog = LanguageServerCatalog::default();
+        // Persisted configuration is the canonical owner of language-server enablement. Keep the
+        // local service disabled until that configuration arrives instead of briefly launching
+        // every executable discovered on PATH.
+        let catalog = LanguageServerCatalog::disabled();
         let install_context = InstallContext::current();
         let events = Arc::new(NativeLanguageServiceEventSink {
             event_proxy: event_proxy.clone(),

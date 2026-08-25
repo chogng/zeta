@@ -126,7 +126,7 @@ impl NativeApp {
         match target {
             InputMethodTarget::Disabled => {}
             InputMethodTarget::Composer => {
-                if self.composer_interaction.is_model_picker_visible() {
+                if self.composer.interaction().is_model_picker_visible() {
                     return;
                 }
                 let Some(composition) = text_input_composition_event(event) else {

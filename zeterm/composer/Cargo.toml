@@ -11,6 +11,10 @@ name = "zeta_composer"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-editor = { workspace = true }
+zeta-input-classifier = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-slash-commands = { workspace = true }
 zeta-ui = { workspace = true }
 zui = { workspace = true }
 

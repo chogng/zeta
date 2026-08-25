@@ -153,6 +153,16 @@ pub struct LanguageServerCatalog {
 }
 
 impl LanguageServerCatalog {
+    /// Creates a catalog that cannot resolve a server until persisted configuration enables one.
+    pub fn disabled() -> Self {
+        Self {
+            rust_analyzer: LanguageServerPreference::disabled(),
+            json_language_server: LanguageServerPreference::disabled(),
+            bash_language_server: LanguageServerPreference::disabled(),
+            typescript_language_server: LanguageServerPreference::disabled(),
+        }
+    }
+
     pub fn new(rust_analyzer: LanguageServerPreference) -> Self {
         Self {
             rust_analyzer,
@@ -267,15 +277,19 @@ impl LanguageServerCatalog {
         let Some(executable) = executable else {
             return Ok(LanguageServerCatalogState::ExecutableUnavailable);
         };
-        let command = LanguageServerCommand::new(executable.clone())
+        let command = LanguageServerCommand::new(executable.canonical.clone())
             .with_arguments(builtin.arguments)
             .with_current_dir(workspace_root.to_path_buf());
+        #[cfg(unix)]
+        let command = command.with_argv0(executable.argv0);
         definitions.push(LanguageServerDefinition::new(
             builtin.identity,
             builtin.language_ids.iter().copied(),
             command,
         )?);
-        Ok(LanguageServerCatalogState::Resolved { executable })
+        Ok(LanguageServerCatalogState::Resolved {
+            executable: executable.canonical,
+        })
     }
 }
 
@@ -330,13 +344,25 @@ impl BuiltinServer {
     }
 }
 
-fn valid_executable(path: &Path) -> Option<PathBuf> {
+struct ValidatedExecutable {
+    canonical: PathBuf,
+    #[cfg(unix)]
+    argv0: PathBuf,
+}
+
+fn valid_executable(path: &Path) -> Option<ValidatedExecutable> {
     let canonical = fs::canonicalize(path).ok()?;
     let metadata = fs::metadata(&canonical).ok()?;
     if !metadata.is_file() || !has_executable_permission(&metadata) {
         return None;
     }
-    Some(canonical)
+    #[cfg(unix)]
+    let argv0 = std::path::absolute(path).ok()?;
+    Some(ValidatedExecutable {
+        canonical,
+        #[cfg(unix)]
+        argv0,
+    })
 }
 
 #[cfg(unix)]

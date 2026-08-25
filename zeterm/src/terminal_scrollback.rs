@@ -169,13 +169,14 @@ impl NativeApp {
             return true;
         };
         let item_count = self
-            .composer_interaction
+            .composer
+            .interaction()
             .view()
             .map(|view| view.items().len())
             .unwrap_or(0);
         let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
         let content = zeta_composer::interaction_content_size(viewport, item_count);
-        if self.composer_interaction_pane.apply_scroll(
+        if self.composer.interaction_pane_mut().apply_scroll(
             composer_interaction_scroll_command(delta),
             viewport.size,
             content,

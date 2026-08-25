@@ -102,11 +102,12 @@ fn update_for_another_thread_is_ignored() {
     let mut envelope = update(
         4,
         1,
-        ThreadUpdate::PlanUpdated {
+        ThreadUpdate::ItemStarted {
             turn_id: turn_id(),
-            plan: zeta_protocol::PlanUpdate {
-                explanation: None,
-                steps: Vec::new(),
+            item: ThreadItem::AgentMessage {
+                item_id: item_id("other-stream"),
+                turn_id: turn_id(),
+                text: "ignored".to_owned(),
             },
         },
     );
@@ -116,7 +117,26 @@ fn update_for_another_thread_is_ignored() {
         projection.apply_update(envelope),
         ThreadProjectionUpdate::Ignored
     );
-    assert!(projection.plan().is_none());
+    assert_eq!(projection.items().count(), 1);
+}
+
+#[test]
+fn snapshot_exposes_the_latest_durable_plan() {
+    let mut thread = thread_snapshot(4);
+    thread.turns[0].plan = Some(zeta_protocol::PlanUpdate {
+        explanation: Some("Check the durable state".to_owned()),
+        steps: Vec::new(),
+    });
+    let mut projection = ThreadProjection::default();
+
+    projection.replace_snapshot(thread);
+
+    assert_eq!(
+        projection
+            .plan()
+            .and_then(|plan| plan.explanation.as_deref()),
+        Some("Check the durable state")
+    );
 }
 
 #[test]
@@ -161,6 +181,7 @@ fn thread_snapshot(sequence: u64) -> Thread {
         title: "Agent thread".to_owned(),
         status: ThreadStatus::Active,
         sequence,
+        usage: Default::default(),
         turns: vec![Turn {
             turn_id: turn_id(),
             status: TurnStatus::Running,
@@ -168,11 +189,15 @@ fn thread_snapshot(sequence: u64) -> Thread {
                 provider: ProviderId::new("test").unwrap(),
                 model: ModelId::new("test-model").unwrap(),
             }),
+            resource_budget: None,
+            tool_profile: None,
+            usage: Default::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: item_id("question"),
                 turn_id: turn_id(),
                 text: "question".to_owned(),
             }],
+            plan: None,
             pending_interaction: None,
             error: None,
         }],

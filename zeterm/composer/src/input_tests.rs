@@ -1,11 +1,10 @@
-use super::{ComposerEditor, ComposerEditorFocus};
-use crate::shell_style::SHELL_PALETTE;
+use super::{ComposerInput, ComposerInputFocus};
 use zeta_editor::{CodeEditorCommand, CodeEditorLanguage};
 use zeta_ui::{CaretVisibility, Color, Component, Rect, UiScene};
 
 #[test]
 fn compact_editor_grows_until_eight_visible_rows() {
-    let mut editor = ComposerEditor::default();
+    let mut editor = ComposerInput::default();
     assert_eq!(editor.preferred_height(), 44.0);
 
     editor.apply(CodeEditorCommand::Insert("one\ntwo\nthree".to_owned()));
@@ -24,7 +23,7 @@ fn compact_editor_grows_until_eight_visible_rows() {
 
 #[test]
 fn page_navigation_uses_the_composer_visible_row_cap() {
-    let mut editor = ComposerEditor::default();
+    let mut editor = ComposerInput::default();
     editor.set_text(
         (0..10)
             .map(|row| row.to_string())
@@ -42,13 +41,13 @@ fn page_navigation_uses_the_composer_visible_row_cap() {
 
 #[test]
 fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
-    let editor = ComposerEditor::default();
+    let editor = ComposerInput::default();
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
     let mut scene = UiScene::new(Color::WHITE);
     let blurred = editor.view(
         bounds,
         "Ask Zeta anything…",
-        ComposerEditorFocus::Blurred,
+        ComposerInputFocus::Blurred,
         Color::rgb(126, 126, 132),
     );
 
@@ -64,7 +63,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
     let focused = editor.view(
         bounds,
         "Ask Zeta anything…",
-        ComposerEditorFocus::Focused(CaretVisibility::Visible),
+        ComposerInputFocus::Focused(CaretVisibility::Visible),
         Color::rgb(126, 126, 132),
     );
     assert!(focused.caret_bounds().is_some());
@@ -72,7 +71,7 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
 
 #[test]
 fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
-    let mut editor = ComposerEditor::default();
+    let mut editor = ComposerInput::default();
     editor.set_text("just zeterm-dev");
     editor.set_language(CodeEditorLanguage::Shell);
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
@@ -82,7 +81,7 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
         .view(
             bounds,
             "",
-            ComposerEditorFocus::Blurred,
+            ComposerInputFocus::Blurred,
             Color::rgb(126, 126, 132),
         )
         .paint(&mut scene);
@@ -92,7 +91,7 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
         .iter()
         .find(|block| block.text() == "just")
         .expect("syntax command token should be painted");
-    assert_eq!(command.style().color(), SHELL_PALETTE.accent);
+    assert_eq!(command.style().color(), Color::rgb(15, 110, 96));
     assert!(
         scene
             .text_blocks()
@@ -103,7 +102,7 @@ fn shell_highlighting_projects_syntax_tokens_into_code_editor() {
 
 #[test]
 fn focused_composer_projects_ghost_text_without_committing_it() {
-    let mut editor = ComposerEditor::default();
+    let mut editor = ComposerInput::default();
     editor.set_text("git ch");
     editor.show_ghost_text("eckout".to_owned());
     let bounds = Rect::from_xywh(0.0, 0.0, 320.0, editor.preferred_height());
@@ -113,7 +112,7 @@ fn focused_composer_projects_ghost_text_without_committing_it() {
         .view(
             bounds,
             "",
-            ComposerEditorFocus::Focused(CaretVisibility::Visible),
+            ComposerInputFocus::Focused(CaretVisibility::Visible),
             Color::rgb(126, 126, 132),
         )
         .paint(&mut scene);
@@ -131,7 +130,7 @@ fn focused_composer_projects_ghost_text_without_committing_it() {
         .view(
             bounds,
             "",
-            ComposerEditorFocus::Blurred,
+            ComposerInputFocus::Blurred,
             Color::rgb(126, 126, 132),
         )
         .paint(&mut blurred_scene);

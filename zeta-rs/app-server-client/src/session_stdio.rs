@@ -129,7 +129,7 @@ pub(super) fn start(
         .envs(command.environment().iter().cloned())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+        .stderr(Stdio::inherit());
     for name in command.removed_environment() {
         process_command.env_remove(name);
     }

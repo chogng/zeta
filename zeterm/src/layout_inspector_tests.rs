@@ -186,7 +186,7 @@ fn panel_rows_retarget_the_selection_without_discarding_descendants() {
         Element::leaf("ComposerPanel").in_bounds(Rect::from_xywh(0.0, 0.0, 300.0, 100.0)),
         |scene, _| {
             scene.with_element(
-                Element::leaf("ComposerEditor").in_bounds(Rect::from_xywh(10.0, 10.0, 280.0, 60.0)),
+                Element::leaf("ComposerInput").in_bounds(Rect::from_xywh(10.0, 10.0, 280.0, 60.0)),
                 |_, _| {},
             );
         },

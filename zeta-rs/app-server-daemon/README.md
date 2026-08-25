@@ -42,6 +42,8 @@ prelude 发起真实 `initialize`，并精确校验 `zeta-app-server` identity �
 控制响应还必须与私有 runtime directory 中的 PID/instance record 一致，避免把未知 endpoint 当成
 受管理进程。
 
+进程记录同时保存实际 daemon executable 的 canonical path、文件元数据和 Unix file identity；`start` 发现当前受管理进程来自旧构建或另一 executable 时，会先协作停止旧 generation，再从调用方当前选择的 executable 启动并重新执行 initialize/schema probe。产品 executable 也可通过内部 daemon-process argument 承载同一 authority loop，供开发构建避免复用未被 Cargo 重建的旁路 binary。
+
 `stop` 先通过控制 socket 请求 daemon 停止接收新数据连接，并给现有连接和 Terminal 一个有界
 grace window；超过窗口后 daemon 自身关闭剩余连接、移除 endpoint/process record 并结束专用
 进程，避免 Workspace runtime 的后台线程把 lifecycle 无限拖住。Unix 上若 daemon 连这一控制路径

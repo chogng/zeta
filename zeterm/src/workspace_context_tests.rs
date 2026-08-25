@@ -173,6 +173,7 @@ fn switching_branch_refreshes_the_repository_projection() {
 
     client
         .switch_git_branch(GitBranchSwitchParams {
+            repository_id: None,
             name: topic.name().into(),
         })
         .unwrap();

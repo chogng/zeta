@@ -20,8 +20,8 @@ fn pane_scrolls_from_only_viewport_and_content_geometry() {
 fn pane_reveals_arbitrary_mounted_content_bounds() {
     let mut pane = ComposerInteractionPaneState::default();
 
-    assert!(pane.ensure_visible(
-        Rect::from_xywh(0.0, 238.0, 300.0, 34.0),
+    assert!(pane.apply_scroll(
+        ScrollCommand::EnsureVisible(Rect::from_xywh(0.0, 238.0, 300.0, 34.0)),
         Size::new(300.0, 102.0),
         Size::new(300.0, 340.0),
     ));

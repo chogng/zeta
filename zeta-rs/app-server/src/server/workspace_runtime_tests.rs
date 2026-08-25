@@ -126,7 +126,7 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
             .iter()
             .any(|definition| definition.name.as_str() == "browser_open")
     );
-    let Ok(first_file_system) = server.file_system_service() else {
+    let Ok(first_file_system) = server.file_system_service_for(None) else {
         panic!("first file system should be installed");
     };
     assert_eq!(
@@ -135,7 +135,7 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
             .unwrap(),
         b"first"
     );
-    let Ok(first_search) = server.workspace_search_service() else {
+    let Ok(first_search) = server.workspace_search_service_for(None) else {
         panic!("first search service should be installed");
     };
     let Ok(first_terminals) = server.terminal_service() else {
@@ -148,7 +148,7 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
     server
         .commit_trusted_workspace_runtime(second.authorization(), test_local_tools(), host)
         .unwrap();
-    let Ok(second_file_system) = server.file_system_service() else {
+    let Ok(second_file_system) = server.file_system_service_for(None) else {
         panic!("second file system should be installed");
     };
     assert_eq!(
@@ -162,7 +162,7 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
             .read_file(Path::new("first.txt"), 1024)
             .is_err()
     );
-    let Ok(second_search) = server.workspace_search_service() else {
+    let Ok(second_search) = server.workspace_search_service_for(None) else {
         panic!("second search service should be installed");
     };
     let Ok(second_terminals) = server.terminal_service() else {
@@ -606,11 +606,11 @@ fn restricted_workspace_installs_only_non_executable_services() {
         server.switch_local_workspace_root(workspace.path.clone()),
         Ok(workspace.root().canonical_path().to_path_buf())
     );
-    assert!(server.file_system_service().is_ok());
+    assert!(server.file_system_service_for(None).is_ok());
     assert!(server.code_index_service().is_ok());
     assert!(server.cloud_code_index_service().is_err());
     assert!(server.git_runtime_service().is_ok());
-    assert!(server.workspace_search_service().is_err());
+    assert!(server.workspace_search_service_for(None).is_err());
     assert!(server.terminal_service().is_err());
     server
         .local_workspace_host
@@ -772,7 +772,7 @@ fn user_config_trust_is_resolved_for_each_client_requested_root() {
         server.switch_local_workspace_root(workspace.path.clone()),
         Ok(root.canonical_path().to_path_buf())
     );
-    assert!(server.file_system_service().is_ok());
+    assert!(server.file_system_service_for(None).is_ok());
     assert!(server.terminal_service().is_err());
 
     config
@@ -792,7 +792,7 @@ fn user_config_trust_is_resolved_for_each_client_requested_root() {
         Ok(root.canonical_path().to_path_buf())
     );
     assert!(server.git_runtime_service().is_ok());
-    assert!(server.workspace_search_service().is_ok());
+    assert!(server.workspace_search_service_for(None).is_ok());
     assert!(server.terminal_service().is_ok());
 }
 
@@ -812,7 +812,7 @@ fn user_config_trust_promotion_reactivates_an_active_restricted_workspace() {
         .switch_local_workspace_root(workspace.path.clone())
         .unwrap();
     assert!(server.terminal_service().is_err());
-    assert!(server.workspace_search_service().is_err());
+    assert!(server.workspace_search_service_for(None).is_err());
 
     let trusted = config
         .apply(ConfigCommandRequest {
@@ -828,7 +828,7 @@ fn user_config_trust_promotion_reactivates_an_active_restricted_workspace() {
     assert!(server.reconcile_active_workspace_trust().is_ok());
 
     assert!(server.terminal_service().is_ok());
-    assert!(server.workspace_search_service().is_ok());
+    assert!(server.workspace_search_service_for(None).is_ok());
     assert_eq!(trusted.revision.get(), 1);
 }
 
@@ -914,7 +914,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .reconcile_user_trust(&config.read_snapshot().unwrap().values)
         .unwrap();
 
-    let Ok(file_system) = server.file_system_service() else {
+    let Ok(file_system) = server.file_system_service_for(None) else {
         panic!("restricted filesystem should remain installed after trust revocation");
     };
     assert_eq!(
@@ -925,7 +925,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     );
     assert!(server.code_index_service().is_ok());
     assert!(server.git_runtime_service().is_ok());
-    assert!(server.workspace_search_service().is_err());
+    assert!(server.workspace_search_service_for(None).is_err());
     assert!(server.terminal_service().is_err());
     assert_eq!(
         server
@@ -1178,7 +1178,7 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
         server.switch_local_workspace_root(second.path.clone()),
         Err(WorkspaceRuntimeError::Busy)
     );
-    let Ok(file_system) = server.file_system_service() else {
+    let Ok(file_system) = server.file_system_service_for(None) else {
         panic!("first Workspace file system should remain installed");
     };
     assert_eq!(

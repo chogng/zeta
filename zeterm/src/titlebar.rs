@@ -98,9 +98,9 @@ impl Titlebar {
             icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
         };
         let agent_toggle_label = if agent_sidebar.is_expanded() {
-            "Collapse agent sidebar"
+            "Collapse inspector"
         } else {
-            "Expand agent sidebar"
+            "Expand inspector"
         };
         let agent_toggle_icon = if agent_sidebar.is_expanded() {
             icons::LAYOUT_SIDEBAR_RIGHT

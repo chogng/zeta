@@ -61,6 +61,7 @@ fn decodes_git_status_changed_notification() {
             "method": "git/statusChanged",
             "params": {
                 "status": {
+                    "repositoryId": "repository-root",
                     "streamInstanceId": "git_stream_1",
                     "workspacePath": "/workspace",
                     "revision": 7,
@@ -92,6 +93,7 @@ fn decodes_git_status_changed_notification() {
     let ServerNotification::GitStatusChanged(changed) = notification else {
         panic!("expected git status notification");
     };
+    assert_eq!(changed.status.repository_id, "repository-root");
     assert_eq!(changed.status.stream_instance_id.as_str(), "git_stream_1");
     assert_eq!(changed.status.revision, 7);
     assert!(matches!(
@@ -182,6 +184,7 @@ fn decodes_file_system_changed_notification() {
     assert_eq!(
         notification,
         ServerNotification::FsChanged(FsChanged::PathsChanged {
+            workspace_folder_id: None,
             paths: vec!["src/lib.rs".into(), "README.md".into()],
         })
     );
@@ -211,6 +214,7 @@ fn decodes_language_diagnostics_notification() {
     assert_eq!(
         notification,
         ServerNotification::LanguageDiagnostics(LanguageDiagnosticsNotification {
+            workspace_folder_id: None,
             path: "src/main.rs".into(),
             revision: 2,
             diagnostics: vec![LanguageCodeActionDiagnosticDto {

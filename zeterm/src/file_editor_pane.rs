@@ -72,6 +72,7 @@ struct FileEditorNotice<'a> {
 /// Native file-tab and document presentation over a retained [`FileEditorHost`].
 pub(crate) struct FileEditorPane<'a> {
     bounds: Rect,
+    parent: zui::ElementId,
     host: &'a FileEditorHost,
     editor_style: CodeEditorStyle,
     palette: ShellPalette,
@@ -98,6 +99,7 @@ impl<'a> FileEditorPane<'a> {
     ) -> Self {
         Self {
             bounds,
+            parent: MAIN_SURFACE,
             host,
             editor_style,
             palette,
@@ -113,6 +115,11 @@ impl<'a> FileEditorPane<'a> {
             completion_selection: 0,
             pointer_position: None,
         }
+    }
+
+    pub(crate) const fn with_parent(mut self, parent: zui::ElementId) -> Self {
+        self.parent = parent;
+        self
     }
 
     pub(crate) const fn with_prompt(mut self, prompt: FileEditorPrompt) -> Self {
@@ -455,7 +462,7 @@ impl Component for FileEditorPane<'_> {
                 AccessibilityRole::Group,
                 "File editor",
             )
-            .with_parent(MAIN_SURFACE),
+            .with_parent(self.parent),
         )
     }
 

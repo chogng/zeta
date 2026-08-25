@@ -8,10 +8,10 @@ use zeta_ui::SplitViewResizeSnapshot;
 use zeta_winit::ElementState;
 use zui::DispatchInvalidation;
 
-const DEFAULT_WIDTH: f32 = 320.0;
-const MINIMUM_WIDTH: f32 = 240.0;
-const MAXIMUM_WIDTH: f32 = 560.0;
-const MINIMUM_MAIN_WIDTH: f32 = 240.0;
+const DEFAULT_WIDTH: f32 = 520.0;
+const MINIMUM_WIDTH: f32 = 360.0;
+const MAXIMUM_WIDTH: f32 = 800.0;
+const MINIMUM_MAIN_WIDTH: f32 = 400.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 enum AgentSidebarVisibility {

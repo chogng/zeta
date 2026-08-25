@@ -127,6 +127,7 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
 
     let result = client
         .read_directory(FsReadDirectoryParams {
+            workspace_folder_id: None,
             path: "nested".into(),
         })
         .unwrap();
@@ -177,6 +178,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
         r#"{"jsonrpc":"2.0","id":5,"result":null}"#.into(),
     ])));
     let document = LanguageDocumentDto {
+        workspace_folder_id: None,
         path: "src/main.rs".into(),
         language_id: "rust".into(),
         revision: 7,
@@ -216,6 +218,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
         .unwrap();
     client
         .close_language_document(LanguageCloseParams {
+            workspace_folder_id: None,
             path: document.path,
         })
         .unwrap();
@@ -238,6 +241,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
 
     let created = client
         .terminal_create(TerminalCreateParams {
+            workspace_folder_id: None,
             rows: 24,
             cols: 80,
             profile: TerminalProfileSelection::Default,
@@ -247,6 +251,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     assert_eq!(created.terminal_id, "terminal-1");
     let attached = client
         .terminal_attach(TerminalAttachParams {
+            workspace_folder_id: None,
             terminal_id: created.terminal_id.clone(),
             reconnect_token: created.reconnect.unwrap().reconnect_token,
             rows: 24,
@@ -256,12 +261,14 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     assert_eq!(attached.reconnect.reconnect_token, "b".repeat(64));
     client
         .terminal_write(TerminalWriteParams {
+            workspace_folder_id: None,
             terminal_id: created.terminal_id.clone(),
             data: "echo ready\n".into(),
         })
         .unwrap();
     client
         .terminal_resize(TerminalResizeParams {
+            workspace_folder_id: None,
             terminal_id: created.terminal_id.clone(),
             rows: 30,
             cols: 100,
@@ -269,6 +276,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
         .unwrap();
     let read = client
         .terminal_read(TerminalReadParams {
+            workspace_folder_id: None,
             terminal_id: created.terminal_id.clone(),
             after_sequence: 0,
             after_command_sequence: 0,
@@ -279,6 +287,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     client
         .terminal_close(
             zeta_app_server_protocol::protocol::terminal::TerminalCloseParams {
+                workspace_folder_id: None,
                 terminal_id: created.terminal_id,
             },
         )
@@ -296,21 +305,25 @@ fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
 
     let read = client
         .read_file(FsReadFileParams {
+            workspace_folder_id: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let binary = client
         .read_binary_file(FsReadBinaryFileParams {
+            workspace_folder_id: None,
             path: "paper.pdf".into(),
         })
         .unwrap();
     let metadata = client
         .get_file_metadata(FsGetMetadataParams {
+            workspace_folder_id: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let written = client
         .write_file(FsWriteFileParams {
+            workspace_folder_id: None,
             path: "src/main.rs".into(),
             content: "fn main() { }\n".into(),
             expected_revision: None,
@@ -365,6 +378,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             request: SessionRequest::StartTurn {
                 thread_id: thread.thread_id.clone(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 input: vec![
                     InputItem::Text {
                         text: "hello".into(),

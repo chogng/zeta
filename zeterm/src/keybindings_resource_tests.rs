@@ -15,7 +15,7 @@ fn compiles_platform_overrides_chords_and_blockers() {
                 "key": "ctrl+k ctrl+c",
                 "mac": "primary+k primary+c",
                 "command": "workbench.action.toggleSideBar",
-                "when": "textInputFocus && composerMode == 'agent'"
+                "when": "textInputFocus && composerRoute == 'agent'"
             },
             {
                 "key": "ctrl+v",
@@ -48,7 +48,7 @@ fn exact_duplicate_contexts_produce_a_non_fatal_conflict_diagnostic() {
 }
 
 #[test]
-fn rejects_unknown_commands_and_fields() {
+fn rejects_unknown_commands_fields_and_context_keys() {
     assert!(
         compile_user_bindings(
             br#"[{"key":"ctrl+x","command":"missing.command"}]"#,
@@ -66,6 +66,13 @@ fn rejects_unknown_commands_and_fields() {
     assert!(
         compile_user_bindings(
             br#"[{"key":"ctrl+x","mac":42,"command":null}]"#,
+            HostPlatform::Linux
+        )
+        .is_err()
+    );
+    assert!(
+        compile_user_bindings(
+            br#"[{"key":"ctrl+x","command":null,"when":"composerMode == 'agent'"}]"#,
             HostPlatform::Linux
         )
         .is_err()

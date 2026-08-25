@@ -66,6 +66,8 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 `.cargo/config.toml` 把默认 Cargo `target-dir` 固定为 `.build/cargo`；显式 `CARGO_TARGET_DIR` 仍可覆盖它。`.bazelrc` 只把工作区便捷链接放入 `.build/`，Bazel 自己的输出用户根仍由 Bazel 管理。
 
+根 Cargo profile 在 `dev` 与 `test` 中对完整依赖图使用轻量优化，并对 `zeterm`、`zeta-app-server` 与 `zeta-app-server-client` 的超大最终链接单元使用 size optimization；debug assertions、各 profile 既有的调试信息与增量编译仍然保留。该配置把 macOS 产物的 `__eh_frame` 控制在 compact-unwind 的 16 MiB 编码上限内，不能用关闭 `linker_messages` 代替。
+
 ## 构建源码与仓库脚本边界
 
 `build/` 沿用 VS Code 的机制分类，而不是按产品复制工具链。只为已经存在的构建职责创建目录：

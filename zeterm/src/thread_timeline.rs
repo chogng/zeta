@@ -136,6 +136,10 @@ fn project_lines(projection: &ThreadProjection) -> Vec<TimelineLine> {
                 push_section(&mut lines, "You", TimelineLineKind::UserLabel);
                 push_text(&mut lines, text, TimelineLineKind::UserMessage);
             }
+            ThreadItem::UserContext { name, .. } => {
+                push_section(&mut lines, "You · Context", TimelineLineKind::UserLabel);
+                push_text(&mut lines, name, TimelineLineKind::UserMessage);
+            }
             ThreadItem::UserImage { url, .. } => {
                 push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
                 push_text(&mut lines, url, TimelineLineKind::UserMessage);

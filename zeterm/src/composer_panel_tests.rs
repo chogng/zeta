@@ -1,5 +1,5 @@
 use super::draw_info_bar;
-use crate::agent_composer::ComposerMode;
+use zeta_composer::ComposerRoute;
 use crate::shell_interaction::COMPOSER_INFO_BAR;
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{Color, Rect};
@@ -9,15 +9,15 @@ use zui::{InteractionFrame, UiDispatch, UiFrame};
 fn info_bar_paints_agent_and_shell_triggers_as_keycaps() {
     let bounds = Rect::from_xywh(10.0, 20.0, 400.0, 24.0);
 
-    for (mode, keys, label, accessibility_label) in [
+    for (route, keys, label, accessibility_label) in [
         (
-            ComposerMode::Agent,
+            ComposerRoute::Agent,
             &["/"][..],
             "for commands",
             "/ for commands",
         ),
         (
-            ComposerMode::Shell,
+            ComposerRoute::Shell,
             &["↑", "↓"][..],
             "for command history",
             "Up and Down for command history",
@@ -25,7 +25,7 @@ fn info_bar_paints_agent_and_shell_triggers_as_keycaps() {
     ] {
         let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
 
-        frame.with_context(|context| draw_info_bar(context, bounds, mode, SHELL_PALETTE));
+        frame.with_context(|context| draw_info_bar(context, bounds, route, SHELL_PALETTE));
         let scene = frame.scene();
 
         assert_eq!(scene.rects().len(), keys.len());

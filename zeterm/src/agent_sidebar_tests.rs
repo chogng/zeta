@@ -50,7 +50,7 @@ fn resizing_clamps_the_sidebar_and_persists_across_visibility() {
         Rect::from_xywh(0.0, 0.0, 1_000.0, 1.0),
         SplitViewOrientation::Horizontal,
         &[
-            SplitViewPane::new(680.0, MINIMUM_MAIN_WIDTH, f32::INFINITY)
+            SplitViewPane::new(480.0, MINIMUM_MAIN_WIDTH, f32::INFINITY)
                 .with_priority(SplitViewLayoutPriority::High),
             sidebar.layout_spec().pane_sizing(1_000.0),
         ],
@@ -59,7 +59,7 @@ fn resizing_clamps_the_sidebar_and_persists_across_visibility() {
         .sash(0)
         .expect("expanded sidebar should expose a sash");
 
-    assert!(sidebar.start_resizing(snapshot.resize_snapshot(), 680.0));
+    assert!(sidebar.start_resizing(snapshot.resize_snapshot(), 480.0));
     assert!(sidebar.resize_to(760.0));
     assert!(sidebar.finish_resizing());
     assert_eq!(sidebar.layout_spec().preferred_width(), MINIMUM_WIDTH);
@@ -70,18 +70,18 @@ fn resizing_clamps_the_sidebar_and_persists_across_visibility() {
     assert!(sidebar.layout_spec().is_visible_for(1_000.0));
 
     let layout = SplitViewLayout::new(
-        Rect::from_xywh(0.0, 0.0, 1_000.0, 1.0),
+        Rect::from_xywh(0.0, 0.0, 1_200.0, 1.0),
         SplitViewOrientation::Horizontal,
         &[
-            SplitViewPane::new(440.0, MINIMUM_MAIN_WIDTH, f32::INFINITY)
+            SplitViewPane::new(840.0, MINIMUM_MAIN_WIDTH, f32::INFINITY)
                 .with_priority(SplitViewLayoutPriority::High),
-            sidebar.layout_spec().pane_sizing(1_000.0),
+            sidebar.layout_spec().pane_sizing(1_200.0),
         ],
     );
     let snapshot = layout
         .sash(0)
         .expect("expanded sidebar should expose a sash");
-    assert!(sidebar.start_resizing(snapshot.resize_snapshot(), 760.0));
+    assert!(sidebar.start_resizing(snapshot.resize_snapshot(), 840.0));
     assert!(sidebar.resize_to(200.0));
     assert!(sidebar.finish_resizing());
     assert_eq!(sidebar.layout_spec().preferred_width(), MAXIMUM_WIDTH);

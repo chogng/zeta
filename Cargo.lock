@@ -9804,6 +9804,10 @@ version = "0.1.0"
 name = "zeta-composer"
 version = "0.1.0"
 dependencies = [
+ "zeta-editor",
+ "zeta-input-classifier",
+ "zeta-protocol",
+ "zeta-slash-commands",
  "zeta-ui",
  "zui",
 ]
@@ -10917,6 +10921,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "zeta-agent-sidebar",
  "zeta-app-server-client",
+ "zeta-app-server-daemon",
  "zeta-app-server-protocol",
  "zeta-commands",
  "zeta-composer",

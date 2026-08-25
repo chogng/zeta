@@ -1,9 +1,27 @@
-//! Product-level composer geometry for zeterm.
+//! Product-level Composer state, editing, interaction, and geometry for zeterm.
 //!
-//! This crate owns the pure layout and list-measurement contracts for the command composer. It
-//! does not own composer text, interaction items, product state, scene painting, or platform
-//! event routing. A host projects its product state into item counts and preferred heights, then
-//! consumes the resolved geometry while retaining the actual editor and interaction state.
+//! The crate owns Composer-local text editing, automatic Agent/Shell routing, completion,
+//! interaction state, and layout. The zeterm host retains Thread/catalog adaptation, submission
+//! side effects, scene painting, workspace chrome, and platform event routing.
+
+mod composer;
+mod input;
+mod interaction;
+mod interaction_pane;
+
+pub use composer::Composer;
+pub use composer::ComposerRoute;
+pub use composer::ComposerSubmission;
+pub use input::ComposerInput;
+pub use input::ComposerInputFocus;
+pub use input::ComposerInputView;
+pub use interaction::ComposerInteractionActivation;
+pub use interaction::ComposerInteractionItem;
+pub use interaction::ComposerInteractionModel;
+pub use interaction::ComposerInteractionView;
+pub use interaction::ComposerModelOption;
+pub use interaction::SelectionDirection;
+pub use interaction_pane::ComposerInteractionPaneState;
 
 use zeta_ui::ScrollCommand;
 use zeta_ui::VirtualListLayout;
@@ -54,18 +72,22 @@ impl ComposerPanelLayout {
             + PANEL_SECTION_GAP
             + TOOLBAR_HEIGHT
             + PANEL_BOTTOM_INSET;
-        let requested_interaction_gap = (preferred_interaction_height > 0.0)
-            .then_some(PANEL_SECTION_GAP)
-            .unwrap_or(0.0);
+        let requested_interaction_gap = if preferred_interaction_height > 0.0 {
+            PANEL_SECTION_GAP
+        } else {
+            0.0
+        };
         let maximum_interaction_height =
             (main.size.height - base_height - requested_interaction_gap - MIN_OUTPUT_HEIGHT)
                 .max(0.0);
         let interaction_height = preferred_interaction_height
             .max(0.0)
             .min(maximum_interaction_height);
-        let interaction_gap = (interaction_height > 0.0)
-            .then_some(PANEL_SECTION_GAP)
-            .unwrap_or(0.0);
+        let interaction_gap = if interaction_height > 0.0 {
+            PANEL_SECTION_GAP
+        } else {
+            0.0
+        };
         let panel_height = base_height + interaction_height + interaction_gap;
         let panel = Rect::from_xywh(
             main.origin.x,

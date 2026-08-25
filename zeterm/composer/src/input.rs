@@ -29,21 +29,21 @@ const PLACEHOLDER_HORIZONTAL_INSET: f32 = 12.0;
 
 /// Focus projection used by the compact composer editor.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum ComposerEditorFocus {
+pub enum ComposerInputFocus {
     #[default]
     Blurred,
     Focused(CaretVisibility),
 }
 
 /// Product-owned multiline document and retained viewport for the Agent composer.
-pub(crate) struct ComposerEditor {
+pub struct ComposerInput {
     document: CodeEditorDocument,
     viewport: CodeEditorViewport,
     style: CodeEditorStyle,
     ghost_text: Option<String>,
 }
 
-impl Default for ComposerEditor {
+impl Default for ComposerInput {
     fn default() -> Self {
         Self {
             document: CodeEditorDocument::from_text(""),
@@ -54,12 +54,12 @@ impl Default for ComposerEditor {
     }
 }
 
-impl ComposerEditor {
-    pub(crate) fn text(&self) -> &str {
+impl ComposerInput {
+    pub fn text(&self) -> &str {
         self.document.text()
     }
 
-    pub(crate) fn selected_text(&self) -> Option<&str> {
+    pub fn selected_text(&self) -> Option<&str> {
         self.document.selected_text()
     }
 
@@ -76,6 +76,11 @@ impl ComposerEditor {
         self.ghost_text.as_deref()
     }
 
+    #[cfg(test)]
+    pub(crate) fn language(&self) -> CodeEditorLanguage {
+        self.document.language()
+    }
+
     pub(crate) fn row_count(&self) -> usize {
         self.document.row_count()
     }
@@ -84,7 +89,7 @@ impl ComposerEditor {
         self.row_count().clamp(1, MAX_VISIBLE_ROWS)
     }
 
-    pub(crate) fn preferred_height(&self) -> f32 {
+    pub fn preferred_height(&self) -> f32 {
         (self.visible_row_count() as f32 * CodeEditor::row_height()).max(MIN_EDITOR_HEIGHT)
     }
 
@@ -181,16 +186,16 @@ impl ComposerEditor {
         true
     }
 
-    pub(crate) fn view<'a>(
+    pub fn view<'a>(
         &'a self,
         bounds: Rect,
         placeholder: &'a str,
-        focus: ComposerEditorFocus,
+        focus: ComposerInputFocus,
         placeholder_color: Color,
-    ) -> ComposerEditorView<'a> {
-        ComposerEditorView {
+    ) -> ComposerInputView<'a> {
+        ComposerInputView {
             bounds,
-            editor: self,
+            input: self,
             placeholder,
             focus,
             placeholder_color,
@@ -219,43 +224,43 @@ impl ComposerEditor {
 }
 
 /// Compact CodeEditor projection with Agent-composer placeholder semantics.
-pub(crate) struct ComposerEditorView<'a> {
+pub struct ComposerInputView<'a> {
     bounds: Rect,
-    editor: &'a ComposerEditor,
+    input: &'a ComposerInput,
     placeholder: &'a str,
-    focus: ComposerEditorFocus,
+    focus: ComposerInputFocus,
     placeholder_color: Color,
 }
 
-impl ComposerEditorView<'_> {
-    pub(crate) fn caret_bounds(&self) -> Option<Rect> {
-        let ComposerEditorFocus::Focused(CaretVisibility::Visible) = self.focus else {
+impl ComposerInputView<'_> {
+    pub fn caret_bounds(&self) -> Option<Rect> {
+        let ComposerInputFocus::Focused(CaretVisibility::Visible) = self.focus else {
             return None;
         };
-        self.editor
+        self.input
             .code_editor(self.bounds, CaretVisibility::Visible)
             .caret_bounds()
     }
 }
 
-impl Component for ComposerEditorView<'_> {
+impl Component for ComposerInputView<'_> {
     fn element(&self) -> ComponentElement {
-        Element::leaf("ComposerEditor").in_bounds(self.bounds)
+        Element::leaf("ComposerInput").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {
         let caret_visibility = match self.focus {
-            ComposerEditorFocus::Blurred => CaretVisibility::Hidden,
-            ComposerEditorFocus::Focused(visibility) => visibility,
+            ComposerInputFocus::Blurred => CaretVisibility::Hidden,
+            ComposerInputFocus::Focused(visibility) => visibility,
         };
-        let mut editor = self.editor.code_editor(self.bounds, caret_visibility);
-        if matches!(self.focus, ComposerEditorFocus::Focused(_))
-            && let Some(ghost_text) = self.editor.ghost_text.as_deref()
+        let mut editor = self.input.code_editor(self.bounds, caret_visibility);
+        if matches!(self.focus, ComposerInputFocus::Focused(_))
+            && let Some(ghost_text) = self.input.ghost_text.as_deref()
         {
             editor = editor.with_ghost_text(ghost_text);
         }
         scene.draw_component(&editor);
-        if self.editor.text().is_empty() {
+        if self.input.text().is_empty() {
             scene.with_clip(self.bounds, |scene| {
                 scene.draw_text(TextBlock::new(
                     self.placeholder,
@@ -277,5 +282,5 @@ impl Component for ComposerEditorView<'_> {
 }
 
 #[cfg(test)]
-#[path = "composer_editor_tests.rs"]
+#[path = "input_tests.rs"]
 mod tests;

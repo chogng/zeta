@@ -10,7 +10,6 @@ pub enum ZetermCommandId {
     Copy,
     Paste,
     Save,
-    ToggleComposerMode,
     ToggleTerminalSurface,
     OpenKeyboardShortcuts,
     OpenLanguageServerSettings,
@@ -35,11 +34,10 @@ pub enum ZetermCommandId {
 
 impl ZetermCommandId {
     /// Commands that can currently be assigned a user keybinding.
-    pub const BINDABLE: [Self; 15] = [
+    pub const BINDABLE: [Self; 14] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
-        Self::ToggleComposerMode,
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::OpenLanguageServerSettings,
@@ -54,11 +52,10 @@ impl ZetermCommandId {
     ];
 
     /// Every command known to the product command catalog.
-    pub const ALL: [Self; 24] = [
+    pub const ALL: [Self; 23] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
-        Self::ToggleComposerMode,
         Self::ToggleTerminalSurface,
         Self::OpenKeyboardShortcuts,
         Self::OpenLanguageServerSettings,
@@ -87,7 +84,6 @@ impl ZetermCommandId {
             Self::Copy => "editor.action.clipboardCopyAction",
             Self::Paste => "editor.action.clipboardPasteAction",
             Self::Save => "workbench.action.files.save",
-            Self::ToggleComposerMode => "workbench.action.toggleComposerMode",
             Self::ToggleTerminalSurface => "workbench.action.toggleTerminal",
             Self::OpenKeyboardShortcuts => "workbench.action.openKeyboardShortcuts",
             Self::OpenLanguageServerSettings => "workbench.action.openLanguageServerSettings",
@@ -117,7 +113,6 @@ impl ZetermCommandId {
             Self::Copy => "Copy",
             Self::Paste => "Paste",
             Self::Save => "Save",
-            Self::ToggleComposerMode => "Toggle composer mode",
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
             Self::OpenLanguageServerSettings => "Language server settings",

@@ -8,8 +8,7 @@ use zeta_ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::agent_composer::ComposerMode;
-use crate::shell_interaction::{COMPOSER_MODE, COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
+use crate::shell_interaction::{COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};
 use crate::shell_style::ShellPalette;
 use crate::workspace_context::WorkspaceContext;
 use zui::{
@@ -35,27 +34,21 @@ impl InputContextToolbar {
     pub(crate) fn new(
         bounds: Rect,
         context: &WorkspaceContext,
-        mode: ComposerMode,
         palette: ShellPalette,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
         let labels = [
-            match mode {
-                ComposerMode::Agent => "Agent".to_owned(),
-                ComposerMode::Shell => "Shell".to_owned(),
-            },
             context.location_label().to_string(),
             context.working_directory_label().to_string(),
             context.git_branch_label().to_string(),
             context.diff_summary_label(),
         ];
         let accessibility_labels = vec![
-            format!("Composer mode: {}", labels[0]),
-            format!("Environment: {}", labels[1]),
-            format!("Working directory: {}", labels[2]),
-            format!("Git branch: {}", labels[3]),
-            format!("Workspace {}", labels[4]),
+            format!("Environment: {}", labels[0]),
+            format!("Working directory: {}", labels[1]),
+            format!("Git branch: {}", labels[2]),
+            format!("Workspace {}", labels[3]),
         ];
         let natural_text_style =
             TextStyle::new(TOOLBAR_FONT_SIZE, palette.accent).with_line_height(TOOLBAR_LINE_HEIGHT);
@@ -88,35 +81,30 @@ impl InputContextToolbar {
                     .with_main_axis_extent(item_widths[index] * scale),
             )
         };
-        let mode_icon = match mode {
-            ComposerMode::Agent => icons::AGENT,
-            ComposerMode::Shell => icons::LOCAL,
-        };
         let items = vec![
-            item(COMPOSER_MODE, mode_icon, labels[0].clone(), 0),
             item(
                 ContextAction::ALL[0].element_id(),
                 icons::LOCAL,
-                labels[1].clone(),
-                1,
+                labels[0].clone(),
+                0,
             ),
             item(
                 ContextAction::ALL[1].element_id(),
                 icons::WORKING_DIRECTORY,
-                labels[2].clone(),
-                2,
+                labels[1].clone(),
+                1,
             ),
             item(
                 ContextAction::ALL[2].element_id(),
                 icons::GIT_BRANCH,
-                labels[3].clone(),
-                3,
+                labels[2].clone(),
+                2,
             ),
             item(
                 ContextAction::ALL[3].element_id(),
                 icons::DIFF,
-                labels[4].clone(),
-                4,
+                labels[3].clone(),
+                3,
             ),
         ];
         Self {
@@ -138,31 +126,15 @@ impl InputContextToolbar {
     fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
         let navigation_group = NavigationGroupId::new(CONTEXT_TOOLBAR);
         let mut regions = Vec::new();
-        if let Some(bounds) = self.action_bar.interactive_item_bounds(0) {
-            regions.push(
-                InteractionRegion::new(
-                    "ComposerModeButton",
-                    COMPOSER_MODE,
-                    bounds,
-                    AccessibilityRole::Button,
-                    self.accessibility_labels[0].clone(),
-                )
-                .with_cursor(CursorFeedback::Pointer)
-                .with_focus(FocusBehavior::TabStop)
-                .with_action(NodeAction::Activate)
-                .with_navigation(navigation_group, NavigationAxis::Horizontal),
-            );
-        }
         for (index, action) in ContextAction::ALL.into_iter().enumerate() {
-            let item_index = index + 1;
-            if let Some(bounds) = self.action_bar.interactive_item_bounds(item_index) {
+            if let Some(bounds) = self.action_bar.interactive_item_bounds(index) {
                 regions.push(
                     InteractionRegion::new(
                         "InputContextAction",
                         action.element_id(),
                         bounds,
                         AccessibilityRole::Button,
-                        self.accessibility_labels[item_index].clone(),
+                        self.accessibility_labels[index].clone(),
                     )
                     .with_cursor(CursorFeedback::Pointer)
                     .with_focus(FocusBehavior::TabStop)

@@ -4,12 +4,8 @@ use super::{
     terminal_mouse_position_for_viewport,
 };
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
 use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
-use crate::composer_editor::ComposerEditor;
-use crate::composer_interaction::ComposerInteractionModel;
-use crate::composer_interaction_pane::ComposerInteractionPaneState;
 use crate::file_editor_host::FileEditorHost;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
@@ -24,16 +20,17 @@ use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
     AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
-    AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_MODE,
+    AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR,
     COMPOSER_PANEL, ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
     MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_RESIZE_HANDLE,
-    THREAD_TIMELINE, TITLEBAR,
+    TASK_HEADER, THREAD_TIMELINE, TITLEBAR,
 };
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
+use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -129,9 +126,7 @@ fn presentation_with_workspace(
     agent_sidebar_workspace: &AgentSidebarWorkspace,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
-    let composer = ComposerEditor::default();
-    let composer_interaction = ComposerInteractionModel::new();
-    let composer_interaction_pane = ComposerInteractionPaneState::default();
+    let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
@@ -165,9 +160,6 @@ fn presentation_with_workspace(
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &composer_interaction,
-            composer_interaction_pane: &composer_interaction_pane,
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
@@ -220,9 +212,6 @@ fn presentation_with_workspace(
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &composer_interaction,
-            composer_interaction_pane: &composer_interaction_pane,
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
@@ -329,10 +318,8 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
 }
 
 #[test]
-fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
-    let composer = ComposerEditor::default();
-    let composer_interaction = ComposerInteractionModel::new();
-    let composer_interaction_pane = ComposerInteractionPaneState::default();
+fn editor_surface_mounts_the_active_file_in_the_inspector_beside_the_task_canvas() {
+    let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
@@ -372,16 +359,13 @@ fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &composer_interaction,
-            composer_interaction_pane: &composer_interaction_pane,
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
-            agent_sidebar: AgentSidebarState::default(),
+            agent_sidebar: AgentSidebarState::expanded(),
             agent_sidebar_workspace: &agent_sidebar_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
@@ -412,7 +396,22 @@ fn editor_surface_mounts_the_active_file_without_agent_composer_or_timeline() {
         presentation
             .accessibility_nodes
             .iter()
-            .all(|node| node.id != COMPOSER && node.id != THREAD_TIMELINE)
+            .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(AGENT_SIDEBAR))
+    );
+    for id in [TASK_HEADER, COMPOSER, THREAD_TIMELINE] {
+        assert!(
+            presentation
+                .accessibility_nodes
+                .iter()
+                .any(|node| node.id == id)
+        );
+    }
+    assert!(
+        presentation
+            .scene()
+            .text_blocks()
+            .iter()
+            .any(|block| block.text() == "New task")
     );
     assert!(
         presentation
@@ -475,13 +474,14 @@ fn primary_presentation_uses_a_flat_light_surface() {
         info_editor_separator.fill(),
         crate::shell_style::SHELL_PALETTE.border
     );
-    assert!(
-        presentation
-            .scene()
-            .rects()
-            .iter()
-            .all(|rect| rect.corner_radii().top_left <= 4.0)
-    );
+    let intentional_pills = presentation
+        .scene()
+        .rects()
+        .iter()
+        .filter(|rect| rect.corner_radii().top_left > 4.0)
+        .collect::<Vec<_>>();
+    assert_eq!(intentional_pills.len(), 1);
+    assert_eq!(intentional_pills[0].bounds().size.height, 24.0);
 }
 
 #[test]
@@ -497,9 +497,10 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     assert!(!visible_text.contains(&"zeterm"));
     assert!(!visible_text.contains(&"Starting shell…"));
     assert!(visible_text.contains(&"Ask Zeta anything…"));
-    assert!(visible_text.contains(&"Agent"));
+    assert!(visible_text.contains(&"Local"));
+    assert!(!visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
-    assert_eq!(presentation.scene().icons().len(), 8);
+    assert_eq!(presentation.scene().icons().len(), 7);
 }
 
 #[test]
@@ -606,7 +607,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
 
 #[test]
 fn session_search_filters_tabs_by_session_name() {
-    let composer = ComposerEditor::default();
+    let composer = Composer::default();
     let mut session_search = SessionSearch::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
@@ -638,9 +639,6 @@ fn session_search_filters_tabs_by_session_name() {
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &ComposerInteractionModel::new(),
-            composer_interaction_pane: &ComposerInteractionPaneState::default(),
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
@@ -722,43 +720,43 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
 
     assert_eq!(
         layout.agent_sidebar,
-        Some(zeta_ui::Rect::from_xywh(680.0, 32.0, 320.0, 668.0))
+        Some(zeta_ui::Rect::from_xywh(480.0, 32.0, 520.0, 668.0))
     );
     assert_eq!(
         layout.main,
-        zeta_ui::Rect::from_xywh(0.0, 32.0, 680.0, 668.0)
+        zeta_ui::Rect::from_xywh(0.0, 32.0, 480.0, 668.0)
     );
     assert_eq!(sidebar.role, AccessibilityRole::Group);
-    assert_eq!(sidebar.label, "Agent sidebar");
+    assert_eq!(sidebar.label, "Workspace inspector");
     assert_eq!(explorer.parent, Some(AGENT_SIDEBAR));
     assert_eq!(explorer.label, "Files");
     assert_eq!(navigation.role, AccessibilityRole::Toolbar);
-    assert_eq!(toolbar.label, "Agent sidebar toolbar");
+    assert_eq!(toolbar.label, "Workspace inspector toolbar");
     assert_eq!(resize_handle.role, AccessibilityRole::Separator);
-    assert_eq!(resize_handle.label, "Resize agent sidebar");
-    assert_eq!(resize_handle.value.as_deref(), Some("680 pixels"));
+    assert_eq!(resize_handle.label, "Resize inspector");
+    assert_eq!(resize_handle.value.as_deref(), Some("480 pixels"));
     assert_eq!(
         resize_handle.bounds,
-        zeta_ui::Rect::from_xywh(676.0, 32.0, 8.0, 668.0)
+        zeta_ui::Rect::from_xywh(476.0, 32.0, 8.0, 668.0)
     );
     let mut resize_dispatch = UiDispatch::default();
-    resize_dispatch.pointer_moved(Point::new(680.0, 100.0), &presentation.interaction_frame());
+    resize_dispatch.pointer_moved(Point::new(480.0, 100.0), &presentation.interaction_frame());
     assert_eq!(
         resize_dispatch.pointer_feedback(&presentation.interaction_frame()),
         CursorFeedback::ResizeHorizontal
     );
     assert_eq!(
         toolbar.bounds,
-        zeta_ui::Rect::from_xywh(680.0, 32.0, 320.0, 36.0)
+        zeta_ui::Rect::from_xywh(480.0, 32.0, 520.0, 36.0)
     );
     assert_eq!(
         navigation.bounds,
-        zeta_ui::Rect::from_xywh(680.0, 32.0, 128.0, 36.0)
+        zeta_ui::Rect::from_xywh(480.0, 32.0, 128.0, 36.0)
     );
     assert_eq!(navigation.parent, Some(AGENT_SIDEBAR_TOOLBAR));
     assert_eq!(
         explorer.bounds,
-        zeta_ui::Rect::from_xywh(680.0, 68.0, 320.0, 632.0)
+        zeta_ui::Rect::from_xywh(480.0, 68.0, 520.0, 632.0)
     );
     for id in [
         AGENT_CHANGES,
@@ -807,13 +805,13 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
             agent_sidebar,
         )
         .cols(),
-        79
+        54
     );
 }
 
 #[test]
 fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_actions() {
-    let composer = ComposerEditor::default();
+    let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let mut agent_workspace = AgentSidebarWorkspace::default();
@@ -845,9 +843,6 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &ComposerInteractionModel::new(),
-            composer_interaction_pane: &ComposerInteractionPaneState::default(),
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,
@@ -1033,9 +1028,7 @@ fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
 
 #[test]
 fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
-    let composer = ComposerEditor::default();
-    let composer_interaction = ComposerInteractionModel::new();
-    let composer_interaction_pane = ComposerInteractionPaneState::default();
+    let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let agent_sidebar_workspace = AgentSidebarWorkspace::default();
@@ -1070,9 +1063,6 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         thread_timeline_scroll_offset: 0,
         workspace_context: &workspace_context,
         composer: &composer,
-        composer_interaction: &composer_interaction,
-        composer_interaction_pane: &composer_interaction_pane,
-        composer_mode: ComposerMode::Agent,
         session_search: &session_search,
         session_tabs: &[],
         selected_session_tab: ACTIVE_SESSION_TAB,
@@ -1174,7 +1164,7 @@ fn titlebar_drags_the_window_and_composer_is_a_registered_input_region() {
 }
 
 #[test]
-fn context_toolbar_registers_button_geometry_below_the_composer_editor() {
+fn context_toolbar_starts_with_environment_below_the_composer_editor() {
     let presentation = presentation(None, 0);
     let mut dispatch = UiDispatch::default();
 
@@ -1188,7 +1178,7 @@ fn context_toolbar_registers_button_geometry_below_the_composer_editor() {
         presentation
             .interaction_frame()
             .target_at(Point::new(40.0, 676.0)),
-        Some(COMPOSER_MODE)
+        Some(ContextAction::Location.element_id())
     );
     assert_eq!(
         dispatch.pointer_feedback(&presentation.interaction_frame()),
@@ -1200,12 +1190,12 @@ fn context_toolbar_registers_button_geometry_below_the_composer_editor() {
             .invalidation,
         DispatchInvalidation::Paint
     );
-    assert!(dispatch.is_pressed(COMPOSER_MODE));
+    assert!(dispatch.is_pressed(ContextAction::Location.element_id()));
 }
 
 #[test]
 fn compact_viewport_uses_bounded_fallback_scene() {
-    let composer = ComposerEditor::default();
+    let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
@@ -1238,9 +1228,6 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             thread_timeline_scroll_offset: 0,
             workspace_context: &workspace_context,
             composer: &composer,
-            composer_interaction: &ComposerInteractionModel::new(),
-            composer_interaction_pane: &ComposerInteractionPaneState::default(),
-            composer_mode: ComposerMode::Agent,
             session_search: &session_search,
             session_tabs: &[],
             selected_session_tab: ACTIVE_SESSION_TAB,

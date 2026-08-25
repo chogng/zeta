@@ -23,6 +23,8 @@ pub enum LanguageServerEnvironmentPolicy {
 #[derive(Clone, Debug)]
 pub struct LanguageServerCommand {
     program: OsString,
+    #[cfg(unix)]
+    argv0: Option<OsString>,
     arguments: Vec<OsString>,
     environment: BTreeMap<OsString, OsString>,
     environment_policy: LanguageServerEnvironmentPolicy,
@@ -33,6 +35,8 @@ impl LanguageServerCommand {
     pub fn new(program: impl Into<OsString>) -> Self {
         Self {
             program: program.into(),
+            #[cfg(unix)]
+            argv0: None,
             arguments: Vec::new(),
             environment: BTreeMap::new(),
             environment_policy: LanguageServerEnvironmentPolicy::Inherit,
@@ -74,6 +78,16 @@ impl LanguageServerCommand {
         self
     }
 
+    /// Preserves the executable invocation name independently from its resolved program path.
+    ///
+    /// Unix proxy executables such as rustup dispatch from `argv[0]`, while the program path can
+    /// remain canonical and immutable after catalog validation.
+    #[cfg(unix)]
+    pub fn with_argv0(mut self, argv0: impl Into<OsString>) -> Self {
+        self.argv0 = Some(argv0.into());
+        self
+    }
+
     pub fn program(&self) -> &OsStr {
         &self.program
     }
@@ -94,8 +108,17 @@ impl LanguageServerCommand {
         self.current_dir.as_deref()
     }
 
+    #[cfg(unix)]
+    pub fn argv0(&self) -> Option<&OsStr> {
+        self.argv0.as_deref()
+    }
+
     pub(crate) fn into_tokio_command(self) -> tokio::process::Command {
         let mut command = tokio::process::Command::new(self.program);
+        #[cfg(unix)]
+        if let Some(argv0) = self.argv0 {
+            command.arg0(argv0);
+        }
         if self.environment_policy == LanguageServerEnvironmentPolicy::Clear {
             command.env_clear();
         }

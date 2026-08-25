@@ -147,12 +147,12 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
         target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleSessionSidebar),
         when: NativeBindingCondition::Expression(
             ContextExpression::parse(
-                "agentSurfaceVisible && composerMode == 'agent' && !fileSearchVisible",
+                "agentSurfaceVisible && composerRoute == 'agent' && !fileSearchVisible",
             )
             .expect("condition"),
         ),
         when_source: Some(
-            "agentSurfaceVisible && composerMode == 'agent' && !fileSearchVisible".to_owned(),
+            "agentSurfaceVisible && composerRoute == 'agent' && !fileSearchVisible".to_owned(),
         ),
     }]);
     let context = &NativeKeybindingContext::from_facts(NativeKeybindingFacts {
@@ -161,7 +161,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
         session_sidebar_visible: false,
         agent_sidebar_visible: false,
         file_search_visible: false,
-        composer_mode: "agent",
+        composer_route: "agent",
     });
 
     assert_eq!(

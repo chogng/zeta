@@ -49,8 +49,9 @@ use zeta_winit::EventLoopProxy;
 
 use crate::NativeApp;
 use crate::agent_session_target::AgentSessionTarget;
-use crate::composer_classification::synchronize_composer_classifier;
-use crate::composer_classification::update_composer_classifier;
+use crate::composer_host::composer_model_options;
+use crate::composer_host::synchronize_composer_classifier;
+use crate::composer_host::update_composer_classifier;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace::{self, SwitchId};
 use crate::session_tab_list::SessionTabUpsert;
@@ -683,7 +684,10 @@ fn drive_agent_session(
                 }
                 Ok(AgentSessionCommand::ReadDirectory { path, response }) => {
                     let result = client
-                        .read_directory(FsReadDirectoryParams { path })
+                        .read_directory(FsReadDirectoryParams {
+                            workspace_folder_id: None,
+                            path,
+                        })
                         .map(|result| result.entries)
                         .map_err(|error| error.to_string());
                     let _ = response.send(result);
@@ -801,15 +805,24 @@ fn drive_agent_session(
 fn read_file(client: &mut AppServerRequestHandle, path: PathBuf) -> Result<TextFileSnapshot> {
     for _ in 0..FILE_SNAPSHOT_READ_ATTEMPTS {
         let before = client
-            .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+            .get_file_metadata(FsGetMetadataParams {
+                workspace_folder_id: None,
+                path: path.clone(),
+            })
             .map(disk_version)
             .map_err(client_error)?;
         let content = client
-            .read_file(FsReadFileParams { path: path.clone() })
+            .read_file(FsReadFileParams {
+                workspace_folder_id: None,
+                path: path.clone(),
+            })
             .map_err(client_error)?
             .content;
         let after = client
-            .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+            .get_file_metadata(FsGetMetadataParams {
+                workspace_folder_id: None,
+                path: path.clone(),
+            })
             .map(disk_version)
             .map_err(client_error)?;
         if before == after {
@@ -828,7 +841,10 @@ fn write_file(
 ) -> Result<TextFileDiskVersion> {
     let (path, content, expected_version) = request.into_parts();
     let current = client
-        .get_file_metadata(FsGetMetadataParams { path: path.clone() })
+        .get_file_metadata(FsGetMetadataParams {
+            workspace_folder_id: None,
+            path: path.clone(),
+        })
         .map_err(client_error)?;
     let current = disk_version(current);
     if current != expected_version {
@@ -842,6 +858,7 @@ fn write_file(
     }
     client
         .write_file(FsWriteFileParams {
+            workspace_folder_id: None,
             path,
             content,
             expected_revision: None,
@@ -1136,6 +1153,7 @@ fn submit_agent_message(
             request: SessionRequest::StartTurn {
                 thread_id: active.thread_id.clone(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                resource_budget: None,
                 input: vec![InputItem::Text { text }],
             },
         })
@@ -1206,7 +1224,10 @@ fn switch_git_branch(
     name: String,
 ) -> Result<GitTextDiffResult> {
     client
-        .switch_git_branch(GitBranchSwitchParams { name })
+        .switch_git_branch(GitBranchSwitchParams {
+            repository_id: None,
+            name,
+        })
         .map_err(client_error)?;
     read_git_projection(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
 }
@@ -1447,8 +1468,9 @@ impl NativeApp {
                 models,
             } => {
                 if let Err(error) = self
-                    .composer_interaction
-                    .set_catalog(slash_commands, models)
+                    .composer
+                    .interaction_mut()
+                    .set_catalog(slash_commands, composer_model_options(models))
                 {
                     eprintln!("could not install Slash Commands catalog: {error}");
                 }
@@ -1526,8 +1548,8 @@ impl NativeApp {
 
 fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
     match changed {
-        FsChanged::RescanRequired => true,
-        FsChanged::PathsChanged { paths } => paths.iter().any(|path| {
+        FsChanged::RescanRequired { .. } => true,
+        FsChanged::PathsChanged { paths, .. } => paths.iter().any(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
                 .is_some_and(|name| {
@@ -1605,6 +1627,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
+                self.agent_sidebar.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
@@ -1639,6 +1662,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
+                self.agent_sidebar.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
@@ -1694,14 +1718,14 @@ impl NativeApp {
 
     fn refresh_open_files_from_app_server(&mut self, changed: &FsChanged) {
         let paths = match changed {
-            FsChanged::PathsChanged { paths } => self
+            FsChanged::PathsChanged { paths, .. } => self
                 .file_editor_host
                 .tabs()
                 .iter()
                 .filter(|tab| paths.iter().any(|path| path == tab.path()))
                 .map(|tab| tab.path().to_path_buf())
                 .collect::<Vec<_>>(),
-            FsChanged::RescanRequired => self
+            FsChanged::RescanRequired { .. } => self
                 .file_editor_host
                 .tabs()
                 .iter()

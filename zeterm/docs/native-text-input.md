@@ -39,6 +39,7 @@ shaping geometry 和真实平台接入可以分别测试。
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zeta-winit` / `winit` | 委托 |
 | Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `zeterm/src/main.rs::NativeApp` | ✅ |
+| Composer committed text、selection、IME state 与 multiline viewport | `zeta-composer::ComposerInput` + `zeta-editor::CodeEditorDocument` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
 | Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |

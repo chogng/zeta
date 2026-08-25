@@ -1926,10 +1926,6 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodeIndexUnavailable))
     }
 
-    pub(super) fn file_system_service(&self) -> Result<Arc<dyn WorkspaceFileSystem>, RpcError> {
-        self.file_system_service_for(None)
-    }
-
     pub(super) fn file_system_service_for(
         &self,
         workspace_folder_id: Option<&str>,
@@ -1983,10 +1979,6 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))
     }
 
-    pub(super) fn workspace_search_service(&self) -> Result<Arc<SearchService>, RpcError> {
-        self.workspace_search_service_for(None)
-    }
-
     pub(super) fn workspace_search_service_for(
         &self,
         workspace_folder_id: Option<&str>,
@@ -2035,16 +2027,6 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))
     }
 
-    pub(super) fn configured_terminal_service(
-        &self,
-    ) -> Option<Arc<crate::terminal_service::TerminalService>> {
-        self.workspace_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .terminals
-            .clone()
-    }
-
     pub(super) fn configured_terminal_services(
         &self,
     ) -> Vec<Arc<crate::terminal_service::TerminalService>> {
@@ -2067,12 +2049,6 @@ impl AppServer {
         services
     }
 
-    pub(super) fn debug_adapter_service(
-        &self,
-    ) -> Result<Arc<crate::debug_service::DebugAdapterService>, RpcError> {
-        self.debug_adapter_service_for(None)
-    }
-
     pub(super) fn debug_adapter_service_for(
         &self,
         workspace_folder_id: Option<&str>,
@@ -2092,16 +2068,6 @@ impl AppServer {
             .debug_adapters
             .clone()
             .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable))
-    }
-
-    pub(super) fn configured_debug_adapter_service(
-        &self,
-    ) -> Option<Arc<crate::debug_service::DebugAdapterService>> {
-        self.workspace_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .debug_adapters
-            .clone()
     }
 
     pub(super) fn configured_debug_adapter_services(

@@ -150,12 +150,16 @@ impl Supervisor {
         server_epoch: u64,
         message: String,
     ) {
+        let current = self.servers.get(name).is_some_and(|server| {
+            server.epoch == server_epoch && server.phase == ManagedServerPhase::Starting
+        });
+        if !current {
+            return;
+        }
         let Some(server) = self.servers.get_mut(name) else {
             return;
         };
-        if server.epoch != server_epoch || server.phase != ManagedServerPhase::Starting {
-            return;
-        }
+        let failure_message = message.clone();
         let decision =
             server
                 .restart
@@ -183,6 +187,13 @@ impl Supervisor {
                 retry_after,
             } => {
                 server.phase = ManagedServerPhase::BackingOff;
+                self.emit(LanguageServiceEvent::ServerMessage {
+                    server: name.to_string(),
+                    severity: LanguageServerMessageSeverity::Error,
+                    source: LanguageServerMessageSource::Service,
+                    show: false,
+                    message: failure_message,
+                });
                 self.emit_server_state(
                     name,
                     LanguageServerState::BackingOff {

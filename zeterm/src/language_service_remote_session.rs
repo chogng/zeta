@@ -324,7 +324,10 @@ fn drive_command(
             }
         }
         RemoteLanguageCommand::Close(path) => {
-            match client.close_language_document(LanguageCloseParams { path: path.clone() }) {
+            match client.close_language_document(LanguageCloseParams {
+                workspace_folder_id: None,
+                path: path.clone(),
+            }) {
                 Ok(()) => Ok(()),
                 Err(error) => document_failure(event_proxy, path, "close", error),
             }

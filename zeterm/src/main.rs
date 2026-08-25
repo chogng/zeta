@@ -1,7 +1,6 @@
 use std::process::ExitCode;
 use std::time::Instant;
 
-use agent_composer::AgentComposer;
 use agent_session::AgentSession;
 use agent_session_target::AgentSessionTarget;
 use agent_sidebar::AgentSidebarState;
@@ -41,6 +40,7 @@ use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
 use zeta_agent_sidebar::AgentSidebarAction;
+use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
 use zeta_layout::{InspectorPane, LogicalViewport, RootLayout};
 use zeta_protocol::SessionId;
@@ -57,7 +57,6 @@ use zui::FrameDeadlineSet;
 use zui::{CursorFeedback, DispatchInvalidation, DispatchOutcome, ElementId, UiDispatch, UiIntent};
 use zui::{FrameInvalidation, FrameSchedule, FrameScheduler, RetainedRuntime};
 
-mod agent_composer;
 mod agent_session;
 mod agent_session_target;
 #[cfg(test)]
@@ -69,10 +68,7 @@ mod command_dispatch;
 #[cfg(test)]
 #[path = "component_composition_tests.rs"]
 mod component_composition_tests;
-mod composer_classification;
-mod composer_editor;
-mod composer_interaction;
-mod composer_interaction_pane;
+mod composer_host;
 mod composer_panel;
 mod file_editor_auto_scroll;
 mod file_editor_diagnostics;
@@ -136,6 +132,7 @@ mod session_tab_list;
 mod shell_interaction;
 mod shell_scene;
 mod shell_style;
+mod task_canvas;
 mod terminal_blocks;
 mod terminal_input;
 mod terminal_output_scroll_view;
@@ -156,11 +153,23 @@ mod workspace_surface;
 
 pub(crate) const PRODUCT_DISPLAY_NAME: &str = "zeterm";
 const DEFAULT_THEME_ENTRY: &str = "zeterm";
-const INITIAL_WIDTH: f64 = 1_000.0;
-const INITIAL_HEIGHT: f64 = 700.0;
+const INITIAL_WIDTH: f64 = 1_280.0;
+const INITIAL_HEIGHT: f64 = 800.0;
 
 fn main() -> ExitCode {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == zeta_app_server_daemon::DAEMON_PROCESS_ARGUMENT)
+    {
+        return match zeta_app_server_daemon::run_from_environment(arguments) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("zeterm App Server daemon: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if arguments
         .first()
         .is_some_and(|command| command == "app-server")
@@ -245,9 +254,7 @@ struct NativeApp {
     workspace_surface: WorkspaceSurface,
     terminal_workspace: TerminalWorkspace,
     workspace_context: WorkspaceContext,
-    composer: AgentComposer,
-    composer_interaction: composer_interaction::ComposerInteractionModel,
-    composer_interaction_pane: composer_interaction_pane::ComposerInteractionPaneState,
+    composer: Composer,
     text_layout: TextInputLayoutEngine,
     caret_blink: CaretBlinkController,
     code_editor_style: CodeEditorStyle,
@@ -300,7 +307,7 @@ impl NativeApp {
         {
             eprintln!("{error}");
         }
-        let composer = AgentComposer::for_working_directory(workspace_context.working_directory());
+        let composer = Composer::for_working_directory(workspace_context.working_directory());
         let language_service = if launch.is_remote() {
             language_service_host::NativeLanguageService::remote(
                 workspace_context.working_directory(),
@@ -346,9 +353,6 @@ impl NativeApp {
             terminal_workspace: TerminalWorkspace::new(event_proxy.clone(), agent_session_target),
             composer,
             workspace_context,
-            composer_interaction: composer_interaction::ComposerInteractionModel::new(),
-            composer_interaction_pane:
-                composer_interaction_pane::ComposerInteractionPaneState::default(),
             text_layout: TextInputLayoutEngine::new(),
             caret_blink: CaretBlinkController::default(),
             code_editor_style: CodeEditorStyle::light(),
@@ -395,7 +399,7 @@ impl NativeApp {
         self.palette = palette;
         self.theme_scheme = loaded.snapshot.color_scheme();
         self.theme_follows_system = loaded.follows_system;
-        self.composer.set_editor_style(editor_style.clone());
+        self.composer.set_input_style(editor_style.clone());
         self.code_editor_style = editor_style;
         self.agent_sidebar_workspace
             .set_editor_style(palette.multi_diff_editor_style());
@@ -871,7 +875,8 @@ impl NativeApp {
             return;
         }
         let interaction_item_count = self
-            .composer_interaction
+            .composer
+            .interaction()
             .view()
             .map(|view| view.items().len())
             .unwrap_or(0);
@@ -1156,8 +1161,6 @@ fn with_shell_presentation_model<R>(
         thread_timeline_scroll,
         workspace_context,
         composer,
-        composer_interaction,
-        composer_interaction_pane,
         session_search,
         session_tabs,
         selected_session_tab,
@@ -1209,10 +1212,7 @@ fn with_shell_presentation_model<R>(
             thread_projection,
             thread_timeline_scroll_offset: thread_timeline_scroll.offset(),
             workspace_context,
-            composer: composer.editor(),
-            composer_interaction,
-            composer_interaction_pane,
-            composer_mode: composer.mode(),
+            composer,
             session_search,
             session_tabs,
             selected_session_tab: *selected_session_tab,

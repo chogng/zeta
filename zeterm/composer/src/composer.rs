@@ -17,26 +17,21 @@ use zeta_ui::Point;
 use zeta_ui::Rect;
 use zeta_ui::TextInputCompositionEvent;
 
-use crate::composer_editor::ComposerEditor;
+use crate::ComposerInput;
+use crate::ComposerInteractionModel;
+use crate::ComposerInteractionPaneState;
 
-/// Explicit submission mode for the shared Agent Console composer.
+/// Current classifier-selected submission route for the shared Agent Console composer.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum ComposerMode {
+pub enum ComposerRoute {
     #[default]
     Agent,
     Shell,
 }
 
-pub(crate) enum ComposerSubmission {
+pub enum ComposerSubmission {
     AgentMessage(String),
     ShellCommand(String),
-}
-
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-enum ComposerModeSelection {
-    #[default]
-    Automatic,
-    Explicit,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -51,11 +46,12 @@ struct ShellGhostSuggestion {
     edit: CodeEditorTextEdit,
 }
 
-/// Host-owned editor shared by Agent messages and direct Shell commands.
-pub(crate) struct AgentComposer {
-    editor: ComposerEditor,
-    mode: ComposerMode,
-    mode_selection: ComposerModeSelection,
+/// Composer-owned input, routing, history, and completion state shared by Agent and Shell input.
+pub struct Composer {
+    input: ComposerInput,
+    interaction: ComposerInteractionModel,
+    interaction_pane: ComposerInteractionPaneState,
+    route: ComposerRoute,
     classifier: InputClassifier,
     conversation: InputConversation,
     agent_response: AgentResponseState,
@@ -66,19 +62,20 @@ pub(crate) struct AgentComposer {
     dismissed_shell_suggestion_input: Option<String>,
 }
 
-impl Default for AgentComposer {
+impl Default for Composer {
     fn default() -> Self {
         Self::for_working_directory(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
     }
 }
 
-impl AgentComposer {
-    pub(crate) fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
+impl Composer {
+    pub fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
         zeta_input_classifier::start_background_warmup();
         Self {
-            editor: ComposerEditor::default(),
-            mode: ComposerMode::Agent,
-            mode_selection: ComposerModeSelection::Automatic,
+            input: ComposerInput::default(),
+            interaction: ComposerInteractionModel::new(),
+            interaction_pane: ComposerInteractionPaneState::default(),
+            route: ComposerRoute::Agent,
             classifier: InputClassifier::for_working_directory(working_directory),
             conversation: InputConversation::Standalone,
             agent_response: AgentResponseState::None,
@@ -90,89 +87,86 @@ impl AgentComposer {
         }
     }
 
-    pub(crate) const fn editor(&self) -> &ComposerEditor {
-        &self.editor
+    pub const fn input(&self) -> &ComposerInput {
+        &self.input
     }
 
-    pub(crate) const fn mode(&self) -> ComposerMode {
-        self.mode
+    pub const fn interaction(&self) -> &ComposerInteractionModel {
+        &self.interaction
     }
 
-    pub(crate) fn set_mode(&mut self, mode: ComposerMode) {
-        self.mode = mode;
-        self.mode_selection = ComposerModeSelection::Explicit;
-        self.editor.cancel_composition();
-        self.leave_shell_history();
-        self.refresh_editor_language();
-        self.dismissed_shell_suggestion_input = None;
-        self.refresh_shell_suggestion();
+    pub fn interaction_mut(&mut self) -> &mut ComposerInteractionModel {
+        &mut self.interaction
     }
 
-    pub(crate) fn toggle_mode(&mut self) {
-        self.set_mode(match self.mode {
-            ComposerMode::Agent => ComposerMode::Shell,
-            ComposerMode::Shell => ComposerMode::Agent,
-        });
+    pub const fn interaction_pane(&self) -> &ComposerInteractionPaneState {
+        &self.interaction_pane
     }
 
-    pub(crate) fn submission(&self) -> Option<ComposerSubmission> {
-        (!self.editor.text().trim().is_empty()).then(|| match self.mode {
-            ComposerMode::Agent => ComposerSubmission::AgentMessage(self.editor.text().to_owned()),
-            ComposerMode::Shell => ComposerSubmission::ShellCommand(self.editor.text().to_owned()),
+    pub fn interaction_pane_mut(&mut self) -> &mut ComposerInteractionPaneState {
+        &mut self.interaction_pane
+    }
+
+    pub const fn route(&self) -> ComposerRoute {
+        self.route
+    }
+
+    pub fn submission(&self) -> Option<ComposerSubmission> {
+        (!self.input.text().trim().is_empty()).then(|| match self.route {
+            ComposerRoute::Agent => ComposerSubmission::AgentMessage(self.input.text().to_owned()),
+            ComposerRoute::Shell => ComposerSubmission::ShellCommand(self.input.text().to_owned()),
         })
     }
 
-    pub(crate) fn set_text(&mut self, text: impl Into<String>) {
+    pub fn set_text(&mut self, text: impl Into<String>) {
         self.leave_shell_history();
-        self.editor.set_text(text);
-        self.refresh_automatic_mode();
+        self.input.set_text(text);
+        self.refresh_classification();
     }
 
-    pub(crate) fn set_working_directory(&mut self, working_directory: &Path) {
+    pub fn set_working_directory(&mut self, working_directory: &Path) {
         self.classifier.set_working_directory(working_directory);
-        self.refresh_automatic_mode();
+        self.refresh_classification();
     }
 
-    pub(crate) fn refresh_shell_workspace(&mut self) {
+    pub fn refresh_shell_workspace(&mut self) {
         self.classifier.refresh_shell_workspace();
-        self.refresh_automatic_mode();
+        self.refresh_classification();
     }
 
-    pub(crate) fn has_shell_suggestion(&self) -> bool {
+    pub fn has_shell_suggestion(&self) -> bool {
         self.shell_suggestion.is_some()
     }
 
-    pub(crate) fn accept_shell_suggestion(&mut self) -> bool {
+    pub fn accept_shell_suggestion(&mut self) -> bool {
         let Some(suggestion) = self.shell_suggestion.take() else {
             return false;
         };
         self.leave_shell_history();
         self.dismissed_shell_suggestion_input = None;
-        let applied = self.editor.apply_text_edit(suggestion.edit);
-        self.refresh_automatic_mode();
+        let applied = self.input.apply_text_edit(suggestion.edit);
+        self.refresh_classification();
         applied
     }
 
-    pub(crate) fn dismiss_shell_suggestion(&mut self) -> bool {
+    pub fn dismiss_shell_suggestion(&mut self) -> bool {
         if self.shell_suggestion.take().is_none() {
             return false;
         }
-        self.dismissed_shell_suggestion_input = Some(self.editor.text().to_owned());
-        self.editor.hide_ghost_text();
+        self.dismissed_shell_suggestion_input = Some(self.input.text().to_owned());
+        self.input.hide_ghost_text();
         true
     }
 
     fn shell_completion_snapshot(&self) -> Option<ShellCompletionSnapshot> {
-        let text = self.editor.text();
-        let cursor = self.editor.cursor();
+        let text = self.input.text();
+        let cursor = self.input.cursor();
         if cursor != text.len()
             || text.trim().is_empty()
             || text.trim_start().starts_with('/')
-            || self.editor.selected_text().is_some()
-            || self.editor.has_active_composition()
-            || (self.mode_selection == ComposerModeSelection::Explicit
-                && self.mode == ComposerMode::Agent)
-            || (self.mode == ComposerMode::Agent
+            || self.input.selected_text().is_some()
+            || self.input.has_active_composition()
+            || (self.route == ComposerRoute::Agent
                 && text[..cursor]
                     .chars()
                     .next_back()
@@ -183,67 +177,67 @@ impl AgentComposer {
         Some(self.classifier.shell_completion_snapshot(text, cursor))
     }
 
-    pub(crate) fn mark_agent_message_submitted(&mut self, text: &str) {
+    pub fn mark_agent_message_submitted(&mut self, text: &str) {
         self.classifier
             .record_submission(InputHistoryEntry::agent(text));
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::Pending;
     }
 
-    pub(crate) fn mark_shell_command_submitted(&mut self, command: &str) {
+    pub fn mark_shell_command_submitted(&mut self, command: &str) {
         self.classifier
             .record_submission(InputHistoryEntry::shell(command));
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::None;
     }
 
-    pub(crate) fn replace_classification_history(
+    pub fn replace_classification_history(
         &mut self,
         entries: impl IntoIterator<Item = InputHistoryEntry>,
     ) {
         self.classifier.replace_history(entries);
     }
 
-    pub(crate) fn mark_agent_response_started(&mut self) {
+    pub fn mark_agent_response_started(&mut self) {
         self.conversation = InputConversation::Standalone;
         self.agent_response = AgentResponseState::Pending;
-        self.refresh_automatic_mode();
+        self.refresh_classification();
     }
 
-    pub(crate) fn mark_agent_turn_completed(&mut self) {
+    pub fn mark_agent_turn_completed(&mut self) {
         if self.agent_response == AgentResponseState::Pending {
             self.conversation = InputConversation::AgentFollowUp;
             self.agent_response = AgentResponseState::None;
-            self.refresh_automatic_mode();
+            self.refresh_classification();
         }
     }
 
-    pub(crate) fn mark_agent_turn_ended_without_response(&mut self) {
+    pub fn mark_agent_turn_ended_without_response(&mut self) {
         self.agent_response = AgentResponseState::None;
     }
 
-    pub(crate) fn synchronize_conversation(&mut self, conversation: InputConversation) {
+    pub fn synchronize_conversation(&mut self, conversation: InputConversation) {
         self.conversation = conversation;
         self.agent_response = AgentResponseState::None;
-        self.refresh_automatic_mode();
+        self.refresh_classification();
     }
 
-    pub(crate) fn set_editor_style(&mut self, style: CodeEditorStyle) {
-        self.editor.set_style(style);
+    pub fn set_input_style(&mut self, style: CodeEditorStyle) {
+        self.input.set_style(style);
     }
 
-    pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
-        if self.mode == ComposerMode::Shell {
+    pub fn apply(&mut self, command: CodeEditorCommand) {
+        if self.route == ComposerRoute::Shell {
             match command {
                 CodeEditorCommand::MoveUp(CodeEditorSelectionMode::Move)
-                    if self.editor.is_collapsed_at_first_row() =>
+                    if self.input.is_collapsed_at_first_row() =>
                 {
                     if self.older_shell_history() {
                         return;
                     }
                 }
                 CodeEditorCommand::MoveDown(CodeEditorSelectionMode::Move)
-                    if self.editor.is_collapsed_at_last_row() =>
+                    if self.input.is_collapsed_at_last_row() =>
                 {
                     if self.newer_shell_history() {
                         return;
@@ -252,46 +246,45 @@ impl AgentComposer {
                 _ => self.leave_shell_history(),
             }
         }
-        self.editor.apply(command);
-        self.refresh_automatic_mode();
+        self.input.apply(command);
+        self.refresh_classification();
     }
 
-    pub(crate) fn apply_composition(&mut self, event: TextInputCompositionEvent) {
+    pub fn apply_composition(&mut self, event: TextInputCompositionEvent) {
         self.leave_shell_history();
-        self.editor.apply_composition(event);
-        self.refresh_automatic_mode();
+        self.input.apply_composition(event);
+        self.refresh_classification();
     }
 
-    pub(crate) fn cancel_composition(&mut self) {
-        self.editor.cancel_composition();
+    pub fn cancel_composition(&mut self) {
+        self.input.cancel_composition();
         self.refresh_shell_suggestion();
     }
 
-    pub(crate) fn clear_after_submit(&mut self) {
-        if self.mode == ComposerMode::Shell {
-            let command = self.editor.text().to_owned();
+    pub fn clear_after_submit(&mut self) {
+        if self.route == ComposerRoute::Shell {
+            let command = self.input.text().to_owned();
             if self.shell_history.last() != Some(&command) {
                 self.shell_history.push(command);
             }
         }
-        self.editor.clear();
-        if self.mode_selection == ComposerModeSelection::Automatic {
-            self.mode = ComposerMode::Agent;
-        }
+        self.input.clear();
+        self.route = ComposerRoute::Agent;
         self.refresh_editor_language();
         self.leave_shell_history();
         self.dismissed_shell_suggestion_input = None;
         self.refresh_shell_suggestion();
+        self.refresh_interaction();
     }
 
-    pub(crate) fn move_caret_to_point(
+    pub fn move_caret_to_point(
         &mut self,
         bounds: Rect,
         point: Point,
         mode: CodeEditorSelectionMode,
     ) -> bool {
         self.leave_shell_history();
-        let moved = self.editor.move_caret_to_point(bounds, point, mode);
+        let moved = self.input.move_caret_to_point(bounds, point, mode);
         if moved {
             self.refresh_shell_suggestion();
         }
@@ -305,12 +298,12 @@ impl AgentComposer {
         let index = match self.shell_history_index {
             Some(index) => index.saturating_sub(1),
             None => {
-                self.shell_history_draft = Some(self.editor.text().to_owned());
+                self.shell_history_draft = Some(self.input.text().to_owned());
                 self.shell_history.len() - 1
             }
         };
         self.shell_history_index = Some(index);
-        self.editor.set_text(self.shell_history[index].clone());
+        self.input.set_text(self.shell_history[index].clone());
         self.refresh_editor_language();
         self.refresh_shell_suggestion();
         true
@@ -323,52 +316,51 @@ impl AgentComposer {
         if index + 1 < self.shell_history.len() {
             let next = index + 1;
             self.shell_history_index = Some(next);
-            self.editor.set_text(self.shell_history[next].clone());
+            self.input.set_text(self.shell_history[next].clone());
             self.refresh_editor_language();
             self.refresh_shell_suggestion();
         } else {
             let draft = self.shell_history_draft.take().unwrap_or_default();
             self.shell_history_index = None;
-            self.editor.set_text(draft);
+            self.input.set_text(draft);
             self.refresh_editor_language();
             self.refresh_shell_suggestion();
         }
         true
     }
 
-    fn refresh_automatic_mode(&mut self) {
-        if self.mode_selection == ComposerModeSelection::Automatic {
-            let text = self.editor.text();
-            self.mode = if text.trim_start().starts_with('/') {
-                ComposerMode::Agent
-            } else {
-                let current_route = match self.mode {
-                    ComposerMode::Agent => InputRoute::Agent,
-                    ComposerMode::Shell => InputRoute::Shell,
-                };
-                let context = InputClassificationContext::new(current_route, self.conversation);
-                match self.classifier.classify(text, context).route {
-                    InputRoute::Agent => ComposerMode::Agent,
-                    InputRoute::Shell => ComposerMode::Shell,
-                }
+    fn refresh_classification(&mut self) {
+        let text = self.input.text();
+        self.route = if text.trim_start().starts_with('/') {
+            ComposerRoute::Agent
+        } else {
+            let current_route = match self.route {
+                ComposerRoute::Agent => InputRoute::Agent,
+                ComposerRoute::Shell => InputRoute::Shell,
             };
-        }
+            let context = InputClassificationContext::new(current_route, self.conversation);
+            match self.classifier.classify(text, context).route {
+                InputRoute::Agent => ComposerRoute::Agent,
+                InputRoute::Shell => ComposerRoute::Shell,
+            }
+        };
         self.refresh_editor_language();
         self.refresh_shell_suggestion();
+        self.refresh_interaction();
     }
 
     fn refresh_editor_language(&mut self) {
-        self.editor.set_language(match self.mode {
-            ComposerMode::Agent => CodeEditorLanguage::PlainText,
-            ComposerMode::Shell => CodeEditorLanguage::Shell,
+        self.input.set_language(match self.route {
+            ComposerRoute::Agent => CodeEditorLanguage::PlainText,
+            ComposerRoute::Shell => CodeEditorLanguage::Shell,
         });
     }
 
     fn refresh_shell_suggestion(&mut self) {
-        let text = self.editor.text().to_owned();
+        let text = self.input.text().to_owned();
         if self.dismissed_shell_suggestion_input.as_deref() == Some(&text) {
             self.shell_suggestion = None;
-            self.editor.hide_ghost_text();
+            self.input.hide_ghost_text();
             return;
         }
         self.dismissed_shell_suggestion_input = None;
@@ -376,16 +368,25 @@ impl AgentComposer {
             .shell_completion_snapshot()
             .filter(|snapshot| !snapshot.has_exact_match())
             .and_then(|snapshot| {
-                shell_ghost_suggestion(&text, self.editor.cursor(), snapshot.into_completions())
+                shell_ghost_suggestion(&text, self.input.cursor(), snapshot.into_completions())
             });
         if let Some(suggestion) = &suggestion {
             let typed = &text[suggestion.edit.range.clone()];
             let ghost_text = suggestion.edit.new_text[typed.len()..].to_owned();
-            self.editor.show_ghost_text(ghost_text);
+            self.input.show_ghost_text(ghost_text);
         } else {
-            self.editor.hide_ghost_text();
+            self.input.hide_ghost_text();
         }
         self.shell_suggestion = suggestion;
+    }
+
+    fn refresh_interaction(&mut self) {
+        let was_visible = self.interaction.is_visible();
+        let text = self.input.text().to_owned();
+        self.interaction.sync_for_composer(&text, self.route);
+        if was_visible != self.interaction.is_visible() {
+            self.interaction_pane.reset();
+        }
     }
 
     fn leave_shell_history(&mut self) {
@@ -442,5 +443,5 @@ fn common_prefix_length(left: &str, right: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "agent_composer_tests.rs"]
+#[path = "composer_tests.rs"]
 mod tests;

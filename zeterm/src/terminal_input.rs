@@ -14,8 +14,6 @@ use zeta_winit::ModifiersState;
 use zeta_winit::NamedKey;
 
 use crate::NativeApp;
-use crate::agent_composer::{ComposerMode, ComposerSubmission};
-use crate::composer_interaction::{ComposerInteractionActivation, SelectionDirection};
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
@@ -26,6 +24,8 @@ use crate::shell_interaction::{
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use zeta_agent_sidebar::AgentSidebarAction;
+use zeta_composer::{ComposerInteractionActivation, SelectionDirection};
+use zeta_composer::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 use zui::{FocusDirection, NavigationAxis};
 
@@ -72,9 +72,9 @@ impl NativeApp {
             session_sidebar_visible: self.session_sidebar.is_expanded(),
             agent_sidebar_visible: self.agent_sidebar.is_expanded(),
             file_search_visible: self.agent_sidebar_workspace.search_visible(),
-            composer_mode: match self.composer.mode() {
-                ComposerMode::Agent => "agent",
-                ComposerMode::Shell => "shell",
+            composer_route: match self.composer.route() {
+                ComposerRoute::Agent => "agent",
+                ComposerRoute::Shell => "shell",
             },
         });
         match self.keybindings.resolve(&event, self.modifiers, &context) {
@@ -125,25 +125,28 @@ impl NativeApp {
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
-        if self.composer_interaction.is_visible() {
+        if self.composer.interaction().is_visible() {
             match event.logical_key {
                 Key::Named(NamedKey::ArrowUp) => {
-                    self.composer_interaction
+                    self.composer
+                        .interaction_mut()
                         .move_selection(SelectionDirection::Previous);
                     self.reveal_composer_interaction_selection();
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::ArrowDown) => {
-                    self.composer_interaction
+                    self.composer
+                        .interaction_mut()
                         .move_selection(SelectionDirection::Next);
                     self.reveal_composer_interaction_selection();
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::Enter) => {
-                    let activation = self.composer_interaction.activate_selected();
-                    if activation.is_none() && !self.composer_interaction.is_model_picker_visible()
+                    let activation = self.composer.interaction_mut().activate_selected();
+                    if activation.is_none()
+                        && !self.composer.interaction().is_model_picker_visible()
                     {
                         self.submit_composer();
                         return;
@@ -152,23 +155,23 @@ impl NativeApp {
                     return;
                 }
                 Key::Named(NamedKey::Tab) => {
-                    if let Some(completion) = self.composer_interaction.complete_selected_slash() {
+                    if let Some(completion) =
+                        self.composer.interaction_mut().complete_selected_slash()
+                    {
                         self.composer.set_text(completion);
                     }
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::Escape) => {
-                    if self
-                        .composer_interaction
-                        .dismiss(self.composer.editor().text())
-                    {
-                        self.composer_interaction_pane.reset();
+                    let text = self.composer.input().text().to_owned();
+                    if self.composer.interaction_mut().dismiss(&text) {
+                        self.composer.interaction_pane_mut().reset();
                     }
                     self.composer_changed();
                     return;
                 }
-                _ if self.composer_interaction.is_model_picker_visible() => return,
+                _ if self.composer.interaction().is_model_picker_visible() => return,
                 _ => {}
             }
         }
@@ -234,7 +237,7 @@ impl NativeApp {
         };
         let frame = presentation.interaction_frame();
         let outcome = if event.logical_key == Key::Named(NamedKey::Tab)
-            && !self.composer_interaction.is_visible()
+            && !self.composer.interaction().is_visible()
         {
             let direction = if self.modifiers.shift_key() {
                 FocusDirection::Previous
@@ -369,10 +372,10 @@ impl NativeApp {
     }
 
     pub(super) fn activate_composer_interaction_item(&mut self, index: usize) -> bool {
-        if !self.composer_interaction.select_item(index) {
+        if !self.composer.interaction_mut().select_item(index) {
             return false;
         }
-        let activation = self.composer_interaction.activate_selected();
+        let activation = self.composer.interaction_mut().activate_selected();
         self.apply_composer_interaction_activation(activation);
         true
     }
@@ -394,7 +397,7 @@ impl NativeApp {
                 self.composer.clear_after_submit();
             }
             Some(ComposerInteractionActivation::ViewChanged) => {
-                self.composer_interaction_pane.reset();
+                self.composer.interaction_pane_mut().reset();
             }
             None => {}
         }
@@ -402,7 +405,7 @@ impl NativeApp {
     }
 
     fn reveal_composer_interaction_selection(&mut self) {
-        let Some(view) = self.composer_interaction.view() else {
+        let Some(view) = self.composer.interaction().view() else {
             return;
         };
         let Some(interaction_bounds) = self.presentation.as_ref().and_then(|presentation| {
@@ -423,12 +426,13 @@ impl NativeApp {
         ) else {
             return;
         };
-        self.composer_interaction_pane
+        self.composer
+            .interaction_pane_mut()
             .apply_scroll(command, viewport.size, content);
     }
 
     pub(super) fn copy_composer_selection(&mut self) -> bool {
-        let Some(text) = self.composer.editor().selected_text() else {
+        let Some(text) = self.composer.input().selected_text() else {
             return false;
         };
         if let Err(error) = write_clipboard_text(text.to_string()) {
@@ -438,7 +442,7 @@ impl NativeApp {
     }
 
     pub(super) fn paste_into_composer(&mut self) {
-        if self.composer_interaction.is_model_picker_visible() {
+        if self.composer.interaction().is_model_picker_visible() {
             return;
         }
         let text = match read_clipboard_text() {
@@ -469,14 +473,7 @@ impl NativeApp {
     }
 
     pub(super) fn composer_changed(&mut self) {
-        let was_visible = self.composer_interaction.is_visible();
-        self.composer_interaction.sync_for_composer(
-            self.composer.editor().text(),
-            self.composer.mode() == ComposerMode::Agent,
-        );
-        if was_visible != self.composer_interaction.is_visible() {
-            self.composer_interaction_pane.reset();
-        } else {
+        if self.composer.interaction().is_visible() {
             self.reveal_composer_interaction_selection();
         }
         self.caret_blink.activity(Instant::now());

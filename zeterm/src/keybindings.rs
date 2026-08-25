@@ -43,7 +43,7 @@ pub(crate) struct NativeKeybindingFacts {
     pub(crate) session_sidebar_visible: bool,
     pub(crate) agent_sidebar_visible: bool,
     pub(crate) file_search_visible: bool,
-    pub(crate) composer_mode: &'static str,
+    pub(crate) composer_route: &'static str,
 }
 
 impl NativeKeybindingContext {
@@ -56,7 +56,7 @@ impl NativeKeybindingContext {
                 session_sidebar_visible: false,
                 agent_sidebar_visible: false,
                 file_search_visible: false,
-                composer_mode: "agent",
+                composer_route: "agent",
             },
         }
     }
@@ -70,7 +70,7 @@ impl NativeKeybindingContext {
                 session_sidebar_visible: false,
                 agent_sidebar_visible: false,
                 file_search_visible: false,
-                composer_mode: "agent",
+                composer_route: "agent",
             },
         }
     }
@@ -89,7 +89,7 @@ impl NativeKeybindingContext {
                 | "sessionSidebarVisible"
                 | "agentSidebarVisible"
                 | "fileSearchVisible"
-                | "composerMode"
+                | "composerRoute"
         )
     }
 
@@ -108,7 +108,7 @@ impl NativeKeybindingContext {
             }
             "agentSidebarVisible" => Some(ContextValue::Boolean(self.facts.agent_sidebar_visible)),
             "fileSearchVisible" => Some(ContextValue::Boolean(self.facts.file_search_visible)),
-            "composerMode" => Some(ContextValue::String(self.facts.composer_mode.to_owned())),
+            "composerRoute" => Some(ContextValue::String(self.facts.composer_route.to_owned())),
             _ => None,
         }
     }
@@ -207,8 +207,7 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
                 Chord::logical("s", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
-        ZetermCommandId::ToggleComposerMode
-        | ZetermCommandId::OpenLanguageServerSettings
+        ZetermCommandId::OpenLanguageServerSettings
         | ZetermCommandId::ManageRemoteTunnels
         | ZetermCommandId::ToggleSessionSidebar
         | ZetermCommandId::ToggleAgentSidebar

@@ -15,6 +15,10 @@ fn command_ids_are_unique_and_round_trip() {
 #[test]
 fn only_currently_supported_commands_are_bindable() {
     assert_eq!(
+        ZetermCommandId::from_id("workbench.action.toggleComposerMode"),
+        None
+    );
+    assert_eq!(
         ZetermCommandId::bindable_from_id("workbench.action.toggleSideBar"),
         Some(ZetermCommandId::ToggleSessionSidebar)
     );

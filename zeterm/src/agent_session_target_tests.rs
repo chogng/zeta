@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use crate::agent_session_target::AgentSessionTarget;
 use crate::agent_session_target::local_app_server_command;
+use zeta_app_server_client::StdioAppServerCommand;
+use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;
 use zeta_remote::RemoteWorkspacePath;
@@ -37,10 +39,24 @@ fn local_agent_target_connects_through_the_profile_workspace_broker() {
     let executable = PathBuf::from("/opt/zeta/zeterm");
     let profile = PathBuf::from("/profiles/zeta");
     let workspace = PathBuf::from("/workspaces/project");
-    let command = local_app_server_command(executable.clone(), profile, &workspace);
+    let command = local_app_server_command(
+        executable.clone(),
+        profile.clone(),
+        &workspace,
+        Some(executable.clone()),
+    );
 
     assert_eq!(command.executable(), executable);
     assert_eq!(command.arguments_as_strings(), ["app-server", "connect"]);
+    assert_eq!(
+        command,
+        StdioAppServerCommand::new("/opt/zeta/zeterm")
+            .with_argument("app-server")
+            .with_argument("connect")
+            .with_environment_variable("ZETA_PROFILE_ROOT", profile.into_os_string())
+            .with_environment_variable("ZETA_WORKSPACE_ROOT", "/workspaces/project")
+            .with_environment_variable(DAEMON_PATH_ENV, "/opt/zeta/zeterm"),
+    );
     assert_eq!(
         AgentSessionTarget::local(workspace)
             .with_workspace_root(Path::new("/workspaces/other"))

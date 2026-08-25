@@ -11,13 +11,9 @@ use zeterm_keybinding_ui::KeyboardShortcuts;
 use zeterm_keybinding_ui::paint_chord_hint;
 
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::agent_composer::ComposerMode;
 use crate::agent_sidebar::AgentSidebarState;
 use crate::agent_sidebar_workspace::AgentSidebarView;
 use crate::agent_sidebar_workspace::AgentSidebarWorkspace;
-use crate::composer_editor::ComposerEditor;
-use crate::composer_interaction::ComposerInteractionModel;
-use crate::composer_interaction_pane::ComposerInteractionPaneState;
 use crate::composer_panel::{ComposerPanelView, draw_composer_panel};
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
@@ -45,10 +41,13 @@ use crate::session_sidebar_toolbar::SessionSidebarToolbar;
 use crate::session_tab_list::{SessionTab, SessionTabList, SessionTabState};
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,
-    AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, MAIN_SURFACE, SESSION_SEARCH_INPUT,
-    SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
+    AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
+    MAIN_SURFACE, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE,
+    TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
 };
 use crate::shell_style::ShellPalette;
+use crate::task_canvas::TaskCanvasLayout;
+use crate::task_canvas::TaskHeader;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
@@ -64,6 +63,7 @@ use zeta_agent_sidebar::FilesLayout;
 use zeta_agent_sidebar::FilesPane;
 use zeta_agent_sidebar::FilesToolbar;
 use zeta_agent_sidebar::ScmLayout;
+use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
 use zeta_editor::CodeEditorStyle;
 use zeta_layout::TerminalWorkspaceLayout;
@@ -92,6 +92,8 @@ struct ShellLayout {
     agent_sidebar_resize_snapshot: Option<SplitViewResizeSnapshot>,
     main: Rect,
     output: Rect,
+    task_header: Rect,
+    task_timeline: Rect,
     composer_panel_layout: ComposerPanelLayout,
     composer_panel: Rect,
     composer_info_bar: Rect,
@@ -163,6 +165,7 @@ impl ShellLayout {
             preferred_interaction_height,
         );
         let output = composer_panel.output();
+        let task_canvas = TaskCanvasLayout::for_output(output);
         Some(Self {
             titlebar,
             session_sidebar,
@@ -172,6 +175,8 @@ impl ShellLayout {
             agent_sidebar_resize_snapshot,
             main,
             output,
+            task_header: task_canvas.header(),
+            task_timeline: task_canvas.timeline(),
             composer_panel_layout: composer_panel,
             composer_panel: composer_panel.panel(),
             composer_info_bar: composer_panel.info_bar(),
@@ -307,10 +312,7 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) thread_projection: &'a ThreadProjection,
     pub(crate) thread_timeline_scroll_offset: usize,
     pub(crate) workspace_context: &'a WorkspaceContext,
-    pub(crate) composer: &'a ComposerEditor,
-    pub(crate) composer_interaction: &'a ComposerInteractionModel,
-    pub(crate) composer_interaction_pane: &'a ComposerInteractionPaneState,
-    pub(crate) composer_mode: ComposerMode,
+    pub(crate) composer: &'a Composer,
     pub(crate) session_search: &'a SessionSearch,
     pub(crate) session_tabs: &'a [SessionTabState],
     pub(crate) selected_session_tab: ElementId,
@@ -376,7 +378,6 @@ struct MainPresentationView<'a> {
     thread_projection: &'a ThreadProjection,
     thread_timeline_scroll_offset: usize,
     composer: ComposerPanelView<'a>,
-    file_editor: FileEditorPresentationView<'a>,
 }
 
 #[cfg(test)]
@@ -416,8 +417,8 @@ fn build_shell_presentation_with_bindings(
         viewport,
         model.session_sidebar,
         model.agent_sidebar,
-        model.composer.preferred_height(),
-        model.composer_interaction.view().map_or(0.0, |view| {
+        model.composer.input().preferred_height(),
+        model.composer.interaction().view().map_or(0.0, |view| {
             zeta_composer::interaction_preferred_height(view.items().len())
         }),
     ) else {
@@ -482,10 +483,50 @@ fn build_shell_presentation_with_bindings(
     } else {
         None
     };
+    let mut file_editor_caret = None;
     let file_search_caret = if let Some(bounds) = layout.agent_sidebar {
-        match animation_bindings.as_deref_mut() {
-            Some(animation_bindings) => {
-                frame.with_animation_bindings(animation_bindings, |context| {
+        if model.workspace_surface == WorkspaceSurfaceKind::Editor {
+            file_editor_caret = frame.with_context(|context| {
+                draw_file_editor_inspector(
+                    context,
+                    bounds,
+                    FileEditorPresentationView {
+                        host: model.file_editor_host,
+                        prompt: model.file_editor_prompt,
+                        search: model.file_editor_search,
+                        diagnostics: model.file_editor_diagnostics,
+                        language_hover: model.language_hover,
+                        language_completions: model.language_completions,
+                        completion_selection: model.completion_selection,
+                        style: model.code_editor_style,
+                        caret_visibility: model.caret_visibility,
+                        dispatch: model.dispatch,
+                        pointer_position: model.pointer_position,
+                    },
+                    text_layout,
+                    palette,
+                )
+            });
+            None
+        } else {
+            match animation_bindings.as_deref_mut() {
+                Some(animation_bindings) => {
+                    frame.with_animation_bindings(animation_bindings, |context| {
+                        draw_agent_sidebar(
+                            context,
+                            bounds,
+                            AgentSidebarPresentationView {
+                                workspace: model.agent_sidebar_workspace,
+                                context: model.workspace_context,
+                                caret_visibility: model.caret_visibility,
+                                dispatch: model.dispatch,
+                            },
+                            text_layout,
+                            palette,
+                        )
+                    })
+                }
+                None => frame.with_context(|context| {
                     draw_agent_sidebar(
                         context,
                         bounds,
@@ -498,22 +539,8 @@ fn build_shell_presentation_with_bindings(
                         text_layout,
                         palette,
                     )
-                })
+                }),
             }
-            None => frame.with_context(|context| {
-                draw_agent_sidebar(
-                    context,
-                    bounds,
-                    AgentSidebarPresentationView {
-                        workspace: model.agent_sidebar_workspace,
-                        context: model.workspace_context,
-                        caret_visibility: model.caret_visibility,
-                        dispatch: model.dispatch,
-                    },
-                    text_layout,
-                    palette,
-                )
-            }),
         }
     } else {
         None
@@ -534,25 +561,12 @@ fn build_shell_presentation_with_bindings(
                 thread_timeline_scroll_offset: model.thread_timeline_scroll_offset,
                 composer: ComposerPanelView {
                     context: model.workspace_context,
-                    editor: model.composer,
-                    interaction: model.composer_interaction,
-                    interaction_pane: model.composer_interaction_pane,
-                    mode: model.composer_mode,
+                    editor: model.composer.input(),
+                    interaction: model.composer.interaction(),
+                    interaction_pane: model.composer.interaction_pane(),
+                    route: model.composer.route(),
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
-                },
-                file_editor: FileEditorPresentationView {
-                    host: model.file_editor_host,
-                    prompt: model.file_editor_prompt,
-                    search: model.file_editor_search,
-                    diagnostics: model.file_editor_diagnostics,
-                    language_hover: model.language_hover,
-                    language_completions: model.language_completions,
-                    completion_selection: model.completion_selection,
-                    style: model.code_editor_style,
-                    caret_visibility: model.caret_visibility,
-                    dispatch: model.dispatch,
-                    pointer_position: model.pointer_position,
                 },
             },
             palette,
@@ -573,7 +587,12 @@ fn build_shell_presentation_with_bindings(
             )
         });
     }
-    let ime_cursor_area = if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+    let ime_cursor_area = if model.dispatch.is_focused(FILE_EDITOR_DOCUMENT)
+        || model.dispatch.is_focused(FILE_EDITOR_FIND_INPUT)
+        || model.dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT)
+    {
+        file_editor_caret
+    } else if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
         file_search_caret
     } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
         session_search_caret
@@ -943,7 +962,7 @@ fn draw_agent_sidebar(
         AGENT_SIDEBAR,
         bounds,
         AccessibilityRole::Group,
-        "Agent sidebar",
+        "Workspace inspector",
     )
     .with_parent(WINDOW);
     let active_view = view.workspace.active_view();
@@ -962,7 +981,7 @@ fn draw_agent_sidebar(
             AGENT_SIDEBAR_TOOLBAR,
             toolbar_bounds,
             AccessibilityRole::Toolbar,
-            "Agent sidebar toolbar",
+            "Workspace inspector toolbar",
         )
         .with_parent(AGENT_SIDEBAR);
         let sidebar_style = palette.agent_sidebar_style();
@@ -1024,6 +1043,58 @@ fn draw_agent_sidebar(
             .is_focused(AGENT_FILE_SEARCH_INPUT)
             .then_some(search_caret.flatten())
             .flatten()
+    })
+}
+
+fn draw_file_editor_inspector(
+    context: &mut ComponentContext<'_, '_>,
+    bounds: Rect,
+    view: FileEditorPresentationView<'_>,
+    text_layout: &mut TextInputLayoutEngine,
+    palette: ShellPalette,
+) -> Option<Rect> {
+    let inspector = InteractionRegion::new(
+        "InspectorWorkbench",
+        AGENT_SIDEBAR,
+        bounds,
+        AccessibilityRole::Group,
+        "Inspector workbench · File editor",
+    )
+    .with_parent(WINDOW);
+    context.with_component(&inspector, |context, _| {
+        draw_agent_sidebar_surface(context.scene_mut(), bounds, palette);
+        let pane = FileEditorPane::new(
+            bounds,
+            view.host,
+            view.style.clone(),
+            palette,
+            if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+                view.caret_visibility
+            } else {
+                CaretVisibility::Hidden
+            },
+        )
+        .with_parent(AGENT_SIDEBAR)
+        .with_prompt(view.prompt)
+        .with_diagnostics(view.diagnostics)
+        .with_language_features(view.language_hover, view.language_completions)
+        .with_completion_selection(view.completion_selection)
+        .with_pointer_position(view.pointer_position)
+        .with_search(
+            view.search,
+            text_layout,
+            view.dispatch,
+            view.caret_visibility,
+        );
+        let ime_cursor_area = if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+            pane.caret_bounds()
+        } else {
+            view.dispatch
+                .focused()
+                .and_then(|focused| pane.search_caret_bounds(focused))
+        };
+        context.draw_component(&pane);
+        ime_cursor_area
     })
 }
 
@@ -1182,7 +1253,7 @@ fn draw_agent_sidebar_sash(
             AGENT_SIDEBAR_RESIZE_HANDLE,
             sash.interaction_bounds(),
             AccessibilityRole::Separator,
-            "Resize agent sidebar",
+            "Resize inspector",
         )
         .with_parent(WINDOW)
         .with_cursor(CursorFeedback::ResizeHorizontal)
@@ -1209,7 +1280,7 @@ fn draw_main(
         AccessibilityRole::Group,
         match view.workspace_surface {
             WorkspaceSurfaceKind::Agent => "Agent workspace",
-            WorkspaceSurfaceKind::Editor => "File editor workspace",
+            WorkspaceSurfaceKind::Editor => "Agent task with file inspector",
             WorkspaceSurfaceKind::Terminal => "Interactive terminal",
         },
     )
@@ -1241,11 +1312,17 @@ fn draw_main(
                     );
                 });
             }
-            WorkspaceSurfaceKind::Agent => {
+            WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
+                context.draw_component(&TaskHeader::new(
+                    layout.task_header,
+                    view.thread_projection,
+                    view.composer.context,
+                    palette,
+                ));
                 let timeline_region = InteractionRegion::new(
                     "ThreadTimeline",
                     THREAD_TIMELINE,
-                    layout.output,
+                    layout.task_timeline,
                     AccessibilityRole::Group,
                     "Agent Thread timeline",
                 )
@@ -1253,7 +1330,7 @@ fn draw_main(
                 .with_cursor(CursorFeedback::Text);
                 context.with_component(&timeline_region, |context, _| {
                     context.draw_component(&ThreadTimeline::new(
-                        layout.output,
+                        layout.task_timeline,
                         view.thread_projection,
                         view.thread_timeline_scroll_offset,
                         palette,
@@ -1266,44 +1343,6 @@ fn draw_main(
                     text_layout,
                     palette,
                 );
-            }
-            WorkspaceSurfaceKind::Editor => {
-                let caret_visibility = if view.file_editor.dispatch.is_focused(FILE_EDITOR_DOCUMENT)
-                {
-                    view.file_editor.caret_visibility
-                } else {
-                    CaretVisibility::Hidden
-                };
-                let pane = FileEditorPane::new(
-                    layout.main,
-                    view.file_editor.host,
-                    view.file_editor.style.clone(),
-                    palette,
-                    caret_visibility,
-                )
-                .with_prompt(view.file_editor.prompt)
-                .with_diagnostics(view.file_editor.diagnostics)
-                .with_language_features(
-                    view.file_editor.language_hover,
-                    view.file_editor.language_completions,
-                )
-                .with_completion_selection(view.file_editor.completion_selection)
-                .with_pointer_position(view.file_editor.pointer_position)
-                .with_search(
-                    view.file_editor.search,
-                    text_layout,
-                    view.file_editor.dispatch,
-                    view.file_editor.caret_visibility,
-                );
-                ime_cursor_area = if view.file_editor.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
-                    pane.caret_bounds()
-                } else {
-                    view.file_editor
-                        .dispatch
-                        .focused()
-                        .and_then(|focused| pane.search_caret_bounds(focused))
-                };
-                context.draw_component(&pane);
             }
         });
         match view.workspace_surface {

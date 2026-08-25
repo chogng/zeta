@@ -13,9 +13,6 @@ pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
 
 /// Converts native UI entry points into stable product command requests.
 pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandRequest> {
-    if id == shell_interaction::COMPOSER_MODE {
-        return Some(ZetermCommandId::ToggleComposerMode.into());
-    }
     if id == shell_interaction::SESSION_SIDEBAR_TOGGLE {
         return Some(ZetermCommandId::ToggleSessionSidebar.into());
     }
@@ -79,12 +76,6 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .expect("built-in command IDs must be unique");
     registry
         .register(ZetermCommandId::Save, execute_save)
-        .expect("built-in command IDs must be unique");
-    registry
-        .register(
-            ZetermCommandId::ToggleComposerMode,
-            execute_toggle_composer_mode,
-        )
         .expect("built-in command IDs must be unique");
     registry
         .register(
@@ -224,14 +215,6 @@ fn execute_save(app: &mut NativeApp, _request: &CommandRequest) {
     app.save_active_workspace_file();
 }
 
-fn execute_toggle_composer_mode(app: &mut NativeApp, _request: &CommandRequest) {
-    app.composer.toggle_mode();
-    app.composer_interaction.sync_for_composer(
-        app.composer.editor().text(),
-        app.composer.mode() == crate::agent_composer::ComposerMode::Agent,
-    );
-}
-
 fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandRequest) {
     app.workspace_surface.toggle_terminal();
     app.pending_focus = if app.workspace_surface.is_editor() {
@@ -291,6 +274,10 @@ fn execute_toggle_session_sidebar(app: &mut NativeApp, _request: &CommandRequest
 }
 
 fn execute_toggle_agent_sidebar(app: &mut NativeApp, _request: &CommandRequest) {
+    if app.workspace_surface.is_editor() && app.agent_sidebar.is_expanded() {
+        app.workspace_surface.show_agent();
+        app.pending_focus = Some(shell_interaction::COMPOSER);
+    }
     app.agent_sidebar.toggle();
 }
 
@@ -304,12 +291,14 @@ fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
+    app.workspace_surface.show_agent();
     app.agent_sidebar_workspace
         .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Changes);
     app.agent_sidebar.expand();
 }
 
 fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
+    app.workspace_surface.show_agent();
     app.agent_sidebar_workspace
         .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Files);
     app.agent_sidebar.expand();
@@ -372,6 +361,7 @@ fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
     }
     app.agent_sidebar_workspace
         .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Changes);
+    app.workspace_surface.show_agent();
     app.agent_sidebar.expand();
 }
 
