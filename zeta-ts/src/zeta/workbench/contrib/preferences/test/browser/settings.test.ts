@@ -107,7 +107,19 @@ test('settingsLayout is the single projection from registered settings to catego
 	const layout = createSettingsLayout(defaults.all);
 	const model = new SettingsEditorModel(defaults.all);
 
-	assert.deepEqual(SettingsCategories.map(category => category.id), ['general', 'appearance', 'editor']);
+	assert.deepEqual(SettingsCategories.map(category => category.id), [
+		'general',
+		'appearance',
+		'editor',
+		'agents',
+		'teams',
+		'agent-defaults',
+		'models',
+		'rules',
+		'skills',
+		'tools-and-mcps',
+		'hooks',
+	]);
 	assert.deepEqual(model.settings.map(setting => setting.id), defaults.all.map(setting => setting.id));
 	assert.equal(findSettingCategory(layout, AccessibilityConfiguration.underlineLinks.key), 'general');
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay.key), 'general');
@@ -282,6 +294,10 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		[...root.querySelectorAll<HTMLElement>('[data-settings-category-id]')].map(element => element.dataset.settingsCategoryId),
 		['general', 'appearance', 'editor'],
 	);
+	const agentsGroup = root.querySelector<HTMLElement>('[data-settings-group-id="agents"]');
+	assert.ok(agentsGroup);
+	assert.equal(agentsGroup.textContent, 'Agents');
+	assert.equal(agentsGroup.closest('.zeta-tree-row')?.getAttribute('aria-expanded'), 'false');
 	assert.equal(root.querySelector('[data-settings-category-id="models"]'), null);
 	assert.ok(root.querySelector(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks.key}"]`));
 	assert.ok(root.querySelector(`[data-settings-item-id="${HoverConfiguration.delay.key}"]`));
@@ -309,6 +325,32 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	await resetAction.run();
 	assert.equal(configuration.getValue(HoverConfiguration.delay), HoverConfiguration.delay.defaultValue);
 
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.zeta-tree-row')?.click();
+	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-expanded'), 'true');
+	assert.deepEqual(
+		['agents', 'teams', 'agent-defaults', 'models', 'rules', 'skills', 'tools-and-mcps', 'hooks']
+			.map(categoryId => root.querySelector<HTMLElement>(`[data-settings-category-id="${categoryId}"]`)?.textContent),
+		['My Agents', 'Teams', 'Defaults', 'Models', 'Rules', 'Skills', 'Tools & MCPs', 'Hooks'],
+	);
+	assert.equal(root.querySelector('[data-tree-id="general"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-category-id="teams"]')?.click();
+	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'teams');
+	assert.equal(root.querySelector('.zeta-settings-page h3')?.textContent, 'Teams');
+	assert.equal(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length, 0);
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.zeta-tree-row')?.click();
+	assert.equal(root.querySelector('[data-tree-id="group.agents"]')?.getAttribute('aria-selected'), 'true');
+	root.querySelector<HTMLElement>('[data-settings-group-id="agents"]')?.closest<HTMLElement>('.zeta-tree-row')?.click();
+	assert.equal(root.querySelector('[data-tree-id="teams"]')?.getAttribute('aria-selected'), 'true');
+
+	const search = root.querySelector<HTMLInputElement>('.zeta-settings-search input');
+	assert.ok(search);
+	search.value = 'subagent';
+	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	assert.equal(root.querySelector('[data-settings-category-id="agents"]')?.textContent, 'My Agents');
+	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
+	search.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape' }));
+	assert.equal(search.value, '');
+
 	root.querySelector<HTMLElement>('[data-settings-category-id="editor"]')?.click();
 	assert.equal(root.querySelector<HTMLElement>('[data-settings-container]')?.dataset.activeSettingsCategory, 'editor');
 	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
@@ -321,8 +363,6 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	await nextTurn();
 	assert.equal(configuration.getValue(CodeEditorConfiguration.fontFamily), 'Fira Code');
 
-	const search = root.querySelector<HTMLInputElement>('.zeta-settings-search input');
-	assert.ok(search);
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length, 1);

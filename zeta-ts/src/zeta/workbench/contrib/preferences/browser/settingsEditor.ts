@@ -12,10 +12,10 @@ import { DefaultSettings, SettingsEditorModel } from '../../../services/preferen
 import type { IPreferencesEditorPane } from './preferencesEditorRegistry.js';
 import { PreferencesRenderer } from './preferencesRenderers.js';
 import { PreferencesSearchQuery } from './preferencesSearch.js';
-import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
+import { createSettingsLayout, settingsRootNodes, SettingsCategories, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory } from './settingsLayout.js';
 import { SettingsTree } from './settingsTree.js';
 import { SettingsTreeModel } from './settingsTreeModels.js';
-import { TOCTree, TOCTreeModel, type SettingsTOCEntry } from './tocTree.js';
+import { TOCTree, TOCTreeModel, type SettingsTOCEntry, type SettingsTOCOpenEntry } from './tocTree.js';
 
 export const SettingsEditorPaneId = 'workbench.preferences.settings';
 
@@ -75,6 +75,8 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
 			categoryLabel: category => this.localizedCategoryLabel(category),
 			categoryDescription: category => this.localizedCategoryDescription(category),
+			groupLabel: group => this.localizedGroupLabel(group),
+			groupDescription: group => this.localizedGroupDescription(group),
 		}));
 		this.navigationEmpty = h(ownerDocument, 'p');
 		this.navigationEmpty.className = 'zeta-settings-navigation-empty';
@@ -142,6 +144,12 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		this.own(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
 			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
 		}));
+		this.own(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
+			if (element.kind !== 'group') return;
+			const containsActiveCategory = element.group.categories.some(category => category.id === this.activeCategory.id);
+			const activeId = this.activeNavigationTarget?.id ?? this.activeCategory.id;
+			this.tocTree.setSelection([containsActiveCategory && collapsed ? element.id : activeId]);
+		}));
 		this.defer(() => this.element.remove());
 	}
 
@@ -175,7 +183,7 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		this.showNavigationTarget(category, entry);
 	}
 
-	private openNavigationEntry(entry: SettingsTOCEntry): void {
+	private openNavigationEntry(entry: SettingsTOCOpenEntry): void {
 		if (entry.kind === 'category') {
 			this.renderCategory(entry.category);
 			return;
@@ -222,6 +230,14 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 
 	private localizedCategoryDescription(category: SettingsCategoryDescriptor): string {
 		return this.localized(`categories.${category.id}.description`, category.description);
+	}
+
+	private localizedGroupLabel(group: SettingsCategoryGroupDescriptor): string {
+		return this.localized(`groups.${group.id}.label`, group.label);
+	}
+
+	private localizedGroupDescription(group: SettingsCategoryGroupDescriptor): string {
+		return this.localized(`groups.${group.id}.description`, group.description);
 	}
 }
 

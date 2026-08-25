@@ -12,9 +12,19 @@ export interface SettingsCategoryDescriptor {
 	readonly id: string;
 	readonly label: string;
 	readonly description: string;
+	readonly keywords?: readonly string[];
 	readonly presentation: SettingsPresentation;
 	readonly groups: readonly SettingsGroupDescriptor[];
 }
+
+export interface SettingsCategoryGroupDescriptor {
+	readonly id: string;
+	readonly label: string;
+	readonly description: string;
+	readonly categories: readonly SettingsCategoryDescriptor[];
+}
+
+export type SettingsNavigationDescriptor = SettingsCategoryDescriptor | SettingsCategoryGroupDescriptor;
 
 export interface SettingsLayoutCategory {
 	readonly id: string;
@@ -27,7 +37,7 @@ export interface SettingsLayoutCategory {
  * Configuration owners declare editable metadata in the Configuration
  * Registry. Preferences owns only where those registered settings appear.
  */
-export const SettingsCategories = [
+export const SettingsNavigation = [
 	{
 		id: 'general',
 		label: 'General',
@@ -130,7 +140,81 @@ export const SettingsCategories = [
 			},
 		],
 	},
-] as const satisfies readonly SettingsCategoryDescriptor[];
+	{
+		id: 'agents',
+		label: 'Agents',
+		description: 'Create agents and teams, then configure their shared capabilities.',
+		categories: [
+			{
+				id: 'agents',
+				label: 'My Agents',
+				description: 'Manage reusable agents and their bounded subagent delegation.',
+				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'teams',
+				label: 'Teams',
+				description: 'Compose reusable multi-agent teams with explicit members, roles, and coordination.',
+				keywords: ['multi-agent', 'team mode', 'members', 'roles', 'coordination'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'agent-defaults',
+				label: 'Defaults',
+				description: 'Choose the default agent and shared execution behavior.',
+				keywords: ['default agent', 'default team', 'execution'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'models',
+				label: 'Models',
+				description: 'Choose models and configure model-specific behavior.',
+				keywords: ['model providers', 'inference'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'rules',
+				label: 'Rules',
+				description: 'Configure the instructions and rules agents follow.',
+				keywords: ['instructions', 'agent rules'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'skills',
+				label: 'Skills',
+				description: 'Manage reusable skills that agents can activate.',
+				keywords: ['agent skills', 'capabilities'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'tools-and-mcps',
+				label: 'Tools & MCPs',
+				description: 'Configure tools and Model Context Protocol connections.',
+				keywords: ['tools', 'mcp', 'model context protocol'],
+				presentation: 'general',
+				groups: [],
+			},
+			{
+				id: 'hooks',
+				label: 'Hooks',
+				description: 'Configure automated actions around agent workflow events.',
+				keywords: ['automation', 'workflow hooks'],
+				presentation: 'general',
+				groups: [],
+			},
+		],
+	},
+] as const satisfies readonly SettingsNavigationDescriptor[];
+
+export const SettingsCategories: readonly SettingsCategoryDescriptor[] = SettingsNavigation
+	.flatMap<SettingsCategoryDescriptor>(entry => 'categories' in entry ? entry.categories : [entry]);
 
 /** Projects registered configuration settings through the canonical layout. */
 export function createSettingsLayout(settings: readonly ISetting[]): readonly SettingsLayoutCategory[] {
