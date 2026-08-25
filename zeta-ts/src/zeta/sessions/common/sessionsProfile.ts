@@ -1,4 +1,4 @@
-import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 
 /**
  * Identity and navigation contract for one dedicated Sessions workbench.

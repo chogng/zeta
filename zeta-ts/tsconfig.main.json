@@ -9,14 +9,11 @@
     "generated/**/*.ts",
     "src/bootstrap.ts",
     "src/main.ts",
-    "src/main-code.ts",
-    "src/main-aca.ts",
     "src/zeta/base/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/common/**/*.ts",
     "src/zeta/base/parts/contextmenu/electron-main/**/*.ts",
+    "src/zeta/code/common/**/*.ts",
     "src/zeta/code/electron-main/**/*.ts",
-    "src/zeta/product/common/**/*.ts",
-    "src/zeta/product/node/**/*.ts",
     "src/zeta/platform/app-server/electron-main/**/*.ts",
     "src/zeta/platform/browser/common/**/*.ts",
     "src/zeta/platform/browser/electron-main/**/*.ts",
@@ -45,6 +42,7 @@
     "src/zeta/platform/workspace/electron-main/**/*.ts",
     "src/zeta/platform/workspaces/common/**/*.ts",
     "src/zeta/platform/workspaces/electron-main/**/*.ts",
-    "src/zeta/platform/workspaces/node/**/*.ts"
+    "src/zeta/platform/workspaces/node/**/*.ts",
+    "src/zeta/workbench/common/workbenchMode.ts"
   ]
 }

@@ -185,6 +185,18 @@ test('Preferences search normalizes pasted setting syntax and matches complete m
 	}), false);
 });
 
+test('Preferences search composes modified and setting ID filters', () => {
+	const modifiedIds = new Set(['editor.fontFamily']);
+	const query = new PreferencesSearchQuery('@modified @id:font editor', {
+		isModified: id => modifiedIds.has(id),
+	});
+
+	assert.equal(query.hasModifiedFilter, true);
+	assert.equal(query.matches({ id: 'editor.fontFamily', title: 'Font family', description: 'Editor typography.' }), true);
+	assert.equal(query.matches({ id: 'editor.fontSize', title: 'Font size', description: 'Editor typography.' }), false);
+	assert.equal(query.matches({ id: 'workbench.fontFamily', title: 'Font family', description: 'Workbench typography.' }), false);
+});
+
 test('Settings tree preserves item identity while filtering and updating', () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
@@ -243,6 +255,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 
 	const copied: string[] = [];
 	let menuActions: readonly IAction[] = [];
+	let hideMenu: ((didCancel: boolean) => void) | undefined;
 	const clipboardService: IClipboardService = {
 		writeText: value => {
 			copied.push(value);
@@ -254,6 +267,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		onDidHideContextMenu: noEvent,
 		showContextMenu: options => {
 			menuActions = 'actions' in options ? options.actions : [];
+			hideMenu = 'onHide' in options ? options.onHide : undefined;
 		},
 		hideContextMenu() {},
 	};
@@ -307,6 +321,9 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	underline.click();
 	await nextTurn();
 	assert.equal(configuration.getValue(AccessibilityConfiguration.underlineLinks), true);
+	const underlineIndicator = root.querySelector<HTMLElement>(`[data-settings-item-id="${AccessibilityConfiguration.underlineLinks.key}"] .zeta-settings-indicators`);
+	assert.equal(underlineIndicator?.textContent, 'Modified');
+	assert.equal(underlineIndicator?.getAttribute('aria-label'), 'Setting has been modified');
 
 	const hoverDelay = root.querySelector<HTMLInputElement>(`[data-configuration-key="${HoverConfiguration.delay.key}"]`);
 	assert.ok(hoverDelay);
@@ -362,6 +379,21 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	fontFamily.dispatchEvent(new browserEnvironment.window.Event('change', { bubbles: true }));
 	await nextTurn();
 	assert.equal(configuration.getValue(CodeEditorConfiguration.fontFamily), 'Fira Code');
+	root.querySelector<HTMLButtonElement>('.zeta-settings-search-filter')?.click();
+	const modifiedFilter = menuActions.find(action => action.id === 'settings.search.modified');
+	assert.ok(modifiedFilter);
+	await modifiedFilter.run();
+	hideMenu?.(false);
+	assert.equal(search.value, '@modified');
+	assert.ok(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily.key}"]`));
+	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontSize.key}"]`), null);
+	root.querySelector<HTMLButtonElement>('.zeta-settings-search-filter')?.click();
+	const clearFilters = menuActions.find(action => action.id === 'settings.search.clearFilters');
+	assert.ok(clearFilters);
+	assert.equal(clearFilters.enabled, true);
+	await clearFilters.run();
+	hideMenu?.(false);
+	assert.equal(search.value, '');
 
 	search.value = 'font family';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
@@ -375,6 +407,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	assert.ok(root.querySelectorAll('.zeta-settings-content-tree [data-settings-item-id]').length > 1);
 
 	root.querySelector<HTMLButtonElement>('.zeta-modal-editor-close')?.click();
+	await nextTurn();
 	assert.equal(host.hidden, true);
 	assert.equal(ownerDocument.activeElement, trigger);
 });

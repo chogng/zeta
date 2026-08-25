@@ -4,7 +4,7 @@ import type { ShutdownReason } from "../../platform/lifecycle/common/lifecycleSe
 import type {
 	IAnyWorkspaceIdentifier,
 } from "../../platform/workspace/common/workspace.js";
-import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import type { WorkbenchDefaultLayout } from "./layout.js";
 
 /**

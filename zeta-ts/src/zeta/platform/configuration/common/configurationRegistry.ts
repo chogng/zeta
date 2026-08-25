@@ -88,6 +88,10 @@ export class ConfigurationRegistry {
 		return [...this.configurations.values()];
 	}
 
+	getConfiguration(key: string): IRegisteredConfiguration | undefined {
+		return this.configurations.get(key);
+	}
+
 	owns<T>(key: IConfigurationKey<T>): boolean {
 		return this.configurations.get(key.key)?.key === key;
 	}

@@ -60,8 +60,12 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 
 	setQuery(query: string | PreferencesSearchQuery): void {
 		const next = typeof query === "string" ? new PreferencesSearchQuery(query) : query;
-		if (next.text === this.searchQuery.text) return;
+		if (next.key === this.searchQuery.key) return;
 		this.searchQuery = next;
+		this.refilter();
+	}
+
+	refreshQuery(): void {
 		this.refilter();
 	}
 

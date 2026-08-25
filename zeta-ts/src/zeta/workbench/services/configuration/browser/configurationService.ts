@@ -1,10 +1,12 @@
 import { Emitter } from "../../../../base/common/event.js";
+import { editJsonObjectProperty } from '../../../../base/common/json.js';
 import {
 	DisposableOwner,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
-import { emptyConfigurationDocument, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from "../../../../platform/configuration/common/configurationIpc.js";
+import { configurationValues, emptyConfigurationDocument, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from "../../../../platform/configuration/common/configurationIpc.js";
 import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
+import { ConfigurationResourceRevisionConflictError, type IConfigurationResourceService, type IConfigurationResourceSnapshot } from "../../../../platform/configuration/common/configurationResourceService.js";
 import {
 	type ConfigurationRegistry,
 	ConfigurationsRegistry,
@@ -24,12 +26,13 @@ export interface WorkbenchConfigurationServiceOptions {
  */
 export class WorkbenchConfigurationService
 	extends DisposableOwner
-	implements IConfigurationService {
+	implements IConfigurationService, IConfigurationResourceService {
 	private readonly api: IConfigurationApi | undefined;
 	private readonly registry: ConfigurationRegistry;
 	private readonly onError: (error: unknown) => void;
 	private readonly _onDidChangeConfiguration =
 		this.own(new Emitter<IConfigurationChangeEvent>());
+	private readonly resourceChangeEmitter = this.own(new Emitter<IConfigurationResourceSnapshot>());
 	private readonly values = new Map<IConfigurationKey<unknown>, unknown>();
 	private revision = 0;
 	private document = emptyConfigurationDocument();
@@ -38,6 +41,7 @@ export class WorkbenchConfigurationService
 
 	readonly onDidChangeConfiguration =
 		this._onDidChangeConfiguration.event;
+	readonly onDidChangeResource = this.resourceChangeEmitter.event;
 
 	constructor(options: WorkbenchConfigurationServiceOptions = {}) {
 		super();
@@ -76,16 +80,11 @@ export class WorkbenchConfigurationService
 		this.assertRegistered(key);
 		const serialized = key.serialize(value);
 		key.parse(serialized);
+		if (serialized === undefined) throw new TypeError(`Configuration key '${key.key}' did not serialize to JSON`);
 		if (this.api && !this.hasAuthoritativeSnapshot) {
 			await this.reload();
 		}
-		const document = validateConfigurationDocument({
-			version: 1,
-			values: {
-				...this.document.values,
-				[key.key]: serialized,
-			},
-		});
+		const document = validateConfigurationDocument({ version: 1, source: editJsonObjectProperty(this.document.source, key.key, serialized) });
 		await this.writeDocument(document);
 	}
 
@@ -94,20 +93,41 @@ export class WorkbenchConfigurationService
 		if (this.api && !this.hasAuthoritativeSnapshot) {
 			await this.reload();
 		}
-		const values: Record<string, unknown> = {
-			...this.document.values,
-		};
-		delete values[key.key];
-		await this.writeDocument(validateConfigurationDocument({
-			version: 1,
-			values,
-		}));
+		await this.writeDocument(validateConfigurationDocument({ version: 1, source: editJsonObjectProperty(this.document.source, key.key, undefined) }));
+	}
+
+	async read(): Promise<IConfigurationResourceSnapshot> {
+		if (this.api && !this.hasAuthoritativeSnapshot) await this.reload();
+		return this.resourceSnapshot();
+	}
+
+	async write(source: string, expectedRevision: number): Promise<IConfigurationResourceSnapshot> {
+		if (typeof source !== "string") throw new TypeError("Configuration resource source must be text");
+		if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+			throw new TypeError("Configuration resource revision must be a non-negative safe integer");
+		}
+		if (this.api && !this.hasAuthoritativeSnapshot) await this.reload();
+		if (expectedRevision !== this.revision) {
+			throw new ConfigurationResourceRevisionConflictError(expectedRevision, this.revision);
+		}
+		const document = this.parseResourceSource(source);
+		try {
+			await this.writeDocument(document, expectedRevision);
+		} catch (error) {
+			if (isRevisionConflict(error)) throw new ConfigurationResourceRevisionConflictError(expectedRevision, undefined);
+			throw error;
+		}
+		return this.resourceSnapshot();
 	}
 
 	private async writeDocument(
 		document: IConfigurationDocument,
+		expectedRevision = this.revision,
 	): Promise<void> {
 		if (!this.api) {
+			if (expectedRevision !== this.revision) {
+				throw new ConfigurationResourceRevisionConflictError(expectedRevision, this.revision);
+			}
 			this.acceptSnapshot({
 				revision: this.revision + 1,
 				document,
@@ -116,7 +136,7 @@ export class WorkbenchConfigurationService
 		}
 
 		const result = await this.api.update({
-			expectedRevision: this.revision,
+			expectedRevision,
 			document,
 		});
 		this.acceptSnapshot(validateConfigurationSnapshot(result));
@@ -168,6 +188,7 @@ export class WorkbenchConfigurationService
 		this.revision = snapshot.revision;
 		this.document = snapshot.document;
 		this.rebuildValues();
+		this.resourceChangeEmitter.fire(this.resourceSnapshot());
 		if (changedKeys.size === 0) return;
 		this._onDidChangeConfiguration.fire({
 			keys: changedKeys,
@@ -179,8 +200,9 @@ export class WorkbenchConfigurationService
 
 	private rebuildValues(): void {
 		this.values.clear();
+		const configuredValues = configurationValues(this.document);
 		for (const key of this.registry.getConfigurations()) {
-			const candidate = this.document.values[key.key];
+			const candidate = configuredValues[key.key];
 			if (candidate === undefined) {
 				this.values.set(key, key.defaultValue);
 				continue;
@@ -203,21 +225,57 @@ export class WorkbenchConfigurationService
 			throw new Error(`Unknown configuration key: ${key.key}`);
 		}
 	}
+
+	private parseResourceSource(source: string): IConfigurationDocument {
+		let document: IConfigurationDocument;
+		try {
+			document = validateConfigurationDocument({ version: 1, source });
+		} catch (error) {
+			throw new TypeError(`Settings JSONC is invalid: ${error instanceof Error ? error.message : String(error)}`);
+		}
+		const values = configurationValues(document);
+		let normalizedSource = source;
+		for (const [key, value] of Object.entries(values)) {
+			const configuration = this.registry.getConfiguration(key);
+			if (!configuration) continue;
+			try {
+				const normalized = configuration.key.serialize(configuration.key.parse(value));
+				if (normalized === undefined) throw new TypeError('serialized value is not JSON');
+				if (JSON.stringify(normalized) !== JSON.stringify(value)) normalizedSource = editJsonObjectProperty(normalizedSource, key, normalized);
+			} catch (error) {
+				throw new TypeError(`Invalid configuration value for '${key}': ${error instanceof Error ? error.message : String(error)}`);
+			}
+		}
+		return validateConfigurationDocument({ version: 1, source: normalizedSource });
+	}
+
+	private resourceSnapshot(): IConfigurationResourceSnapshot {
+		return Object.freeze({
+			source: this.document.source,
+			revision: this.revision,
+		});
+	}
+}
+
+function isRevisionConflict(error: unknown): boolean {
+	return error instanceof Error && /revision conflict/i.test(error.message);
 }
 
 function changedConfigurationKeys(
 	previous: IConfigurationDocument,
 	next: IConfigurationDocument,
 ): ReadonlySet<string> {
+	const previousValues = configurationValues(previous);
+	const nextValues = configurationValues(next);
 	const keys = new Set([
-		...Object.keys(previous.values),
-		...Object.keys(next.values),
+		...Object.keys(previousValues),
+		...Object.keys(nextValues),
 	]);
 	const changed = new Set<string>();
 	for (const key of keys) {
 		if (
-			JSON.stringify(previous.values[key]) !==
-				JSON.stringify(next.values[key])
+				JSON.stringify(previousValues[key]) !==
+				JSON.stringify(nextValues[key])
 		) {
 			changed.add(key);
 		}

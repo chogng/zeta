@@ -7,7 +7,7 @@ import {
 import { Emitter } from "../../base/common/event.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
-import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import type {
 	WorkbenchState,
 } from "../../platform/workspace/common/workspace.js";

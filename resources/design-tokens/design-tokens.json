@@ -2211,6 +2211,138 @@
       }
     },
     {
+      "id": "settings.headerForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-header-foreground",
+      "owner": "workbench.preferences",
+      "description": "Foreground for Settings editor section headers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "settings.headerBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-header-border",
+      "owner": "workbench.preferences",
+      "description": "Border below sticky Settings editor section headers.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      },
+      "values": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "settings.modifiedItemIndicator",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-modified-item-indicator",
+      "owner": "workbench.preferences",
+      "description": "Indicator for a setting changed from its default value.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#0c7d9d",
+        "light": "#2f7ead",
+        "high-contrast-dark": "#0c7d9d",
+        "high-contrast-light": "#2f7ead"
+      },
+      "values": {
+        "dark": "#0c7d9d",
+        "light": "#2f7ead",
+        "high-contrast-dark": "#0c7d9d",
+        "high-contrast-light": "#2f7ead"
+      }
+    },
+    {
+      "id": "settings.focusedRowBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-focused-row-background",
+      "owner": "workbench.preferences",
+      "description": "Background for a Settings row containing keyboard focus.",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        }
+      },
+      "values": {
+        "dark": "#2a2d2e99",
+        "light": "#e8e8e899",
+        "high-contrast-dark": "#2a2d2e99",
+        "high-contrast-light": "#e8e8e899"
+      }
+    },
+    {
+      "id": "settings.rowHoverBackground",
+      "kind": "color",
+      "cssVariable": "--zeta-settings-row-hover-background",
+      "owner": "workbench.preferences",
+      "description": "Background for a hovered Settings row.",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        }
+      },
+      "values": {
+        "dark": "#2a2d2e4d",
+        "light": "#e8e8e84d",
+        "high-contrast-dark": "#2a2d2e4d",
+        "high-contrast-light": "#e8e8e84d"
+      }
+    },
+    {
       "id": "sectionHeader.foreground",
       "kind": "color",
       "cssVariable": "--zeta-section-header-foreground",

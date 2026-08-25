@@ -7,7 +7,7 @@ import {
 	DisposableOwner,
 } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import { CancellationError } from "../../base/common/cancellation.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
@@ -29,6 +29,7 @@ import type {
 } from "../../platform/native/common/nativeHost.js";
 import { MenuId } from "../../platform/actions/common/actions.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
+import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { BrowserLayoutService } from "../../platform/layout/browser/layoutService.js";
@@ -49,6 +50,8 @@ import {
 import {
 	BrowserFileService,
 } from "../../platform/files/browser/fileService.js";
+import { MultiplexFileService } from "../../platform/files/browser/multiplexFileService.js";
+import { IFileSystemProviderService } from "../../platform/files/common/fileSystemProviderService.js";
 import {
 	IFileService,
 } from "../../platform/files/common/files.js";
@@ -341,7 +344,7 @@ export class Workbench extends DisposableOwner {
 		services.set(IWorkspaceContextService, workspaceContext);
 		const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
 		services.set(IWorkspaceTrustService, workspaceTrustService);
-		const fileService = new BrowserFileService({
+		const workspaceFileService = new BrowserFileService({
 			api: api.fs,
 			resourceApi: api.resource,
 			workspaceContextService: workspaceContext,
@@ -355,8 +358,10 @@ export class Workbench extends DisposableOwner {
 				};
 			},
 		});
-		this.own(fileService);
+		this.own(workspaceFileService);
+		const fileService = this.own(new MultiplexFileService(workspaceFileService));
 		services.set(IFileService, fileService);
+		services.set(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
 		services.set(ITextFileService, textFileService);
 		const untitledTextEditorService = this.own(new BrowserUntitledTextEditorService());
@@ -424,6 +429,7 @@ export class Workbench extends DisposableOwner {
 			api: configurationApi,
 		}));
 		services.set(IConfigurationService, configuration);
+		services.set(IConfigurationResourceService, configuration);
 		const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.set(IChatService, chatService);
 		services.set(IChatContextPickService, new ChatContextPickService());

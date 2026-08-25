@@ -263,8 +263,6 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 	const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.ts"), "utf8");
 	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
 	const electronAcademic = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/academic.ts"), "utf8");
-	const mainCode = readFileSync(resolve(editorRoot, "../code/electron-main/codeMain.ts"), "utf8");
-	const mainAcademic = readFileSync(resolve(editorRoot, "../code/electron-main/acaMain.ts"), "utf8");
 	const main = readFileSync(resolve(editorRoot, "../code/electron-main/main.ts"), "utf8");
 	const sharedElectronRenderer = readFileSync(resolve(editorRoot, "../platform/native/electron-browser/rendererApi.ts"), "utf8");
 	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");
@@ -274,8 +272,6 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 	assert.doesNotMatch(browserAcademic, /DebugAdapter|debugAdapter/u);
 	assert.match(electronCode, /createElectronDebugAdapterCapability/u);
 	assert.doesNotMatch(electronAcademic, /DebugAdapter|debugAdapter/u);
-	assert.match(mainCode, /debugAdapterIpcRoutes/u);
-	assert.match(mainAcademic, /debugAdapterIpcRoutes/u);
 	assert.match(main, /debugAdapterIpcRoutes/u);
 	for (const sharedHost of [sharedElectronRenderer, sharedDisconnectedRenderer, sharedConnectedRenderer, sharedElectronMain]) assert.doesNotMatch(sharedHost, /new (?:Electron|Disconnected|ViteDev)DebugAdapterProcessService|debugAdapterIpcRoutes/u);
 });

@@ -1,4 +1,4 @@
-import type { WorkbenchModeId } from '../../../../product/common/workbenchMode.js';
+import type { WorkbenchModeId } from '../../../common/workbenchMode.js';
 import type { IpcRoute } from '../../../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { validateWorkbenchModeId, WORKBENCH_MODE_SWITCH_CHANNEL } from '../common/workbenchModeService.js';
 

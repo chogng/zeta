@@ -1,5 +1,5 @@
 import { URI } from "../../base/common/uri.js";
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import { connectViteDevRendererApi, type ViteDevRendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";

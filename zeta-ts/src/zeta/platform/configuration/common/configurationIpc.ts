@@ -1,4 +1,5 @@
 import { type JsonValue, validateJsonValue } from "../../../base/common/jsonValue.js";
+import { parseJsonc } from '../../../base/common/jsonc.js';
 
 export const CONFIGURATION_READ_CHANNEL = "zeta:configuration:read";
 export const CONFIGURATION_UPDATE_CHANNEL = "zeta:configuration:update";
@@ -9,7 +10,7 @@ export type ConfigurationValue = JsonValue;
 /** Versioned Desktop configuration persisted by the host. */
 export interface IConfigurationDocument {
 	readonly version: 1;
-	readonly values: Readonly<Record<string, ConfigurationValue>>;
+	readonly source: string;
 }
 
 /** One host-authoritative configuration snapshot. */
@@ -36,20 +37,33 @@ export interface IConfigurationApi {
 }
 
 export function emptyConfigurationDocument(): IConfigurationDocument {
-	return { version: 1, values: {} };
+	return { version: 1, source: '{}\n' };
 }
 
 /** Validates an untrusted persisted configuration document. */
 export function validateConfigurationDocument(value: unknown): IConfigurationDocument {
-	const document = exactRecord(value, ["values", "version"]);
+	const document = exactRecord(value, ['source', 'version']);
 	if (document.version !== 1) throw new Error("configuration version must be 1");
-	const values = record(document.values, "values");
+	if (typeof document.source !== 'string') throw new Error('configuration source must be text');
+	if (document.source.length > 4 * 1024 * 1024) throw new Error('configuration source is too large');
+	configurationValues({ version: 1, source: document.source });
+	return { version: 1, source: document.source };
+}
+
+/** Parses the canonical JSONC source into a validated configuration-value projection. */
+export function configurationValues(document: IConfigurationDocument): Readonly<Record<string, ConfigurationValue>> {
+	const parsed = parseJsonc(document.source, 'configuration source');
+	return validateConfigurationValues(parsed);
+}
+
+function validateConfigurationValues(value: unknown): Readonly<Record<string, ConfigurationValue>> {
+	const values = record(value, 'configuration source');
 	const validated: Record<string, ConfigurationValue> = {};
 	for (const [key, candidate] of Object.entries(values)) {
 		if (!/^[A-Za-z][A-Za-z0-9.-]{0,127}$/.test(key)) throw new Error(`invalid configuration key: ${key}`);
-		validated[key] = validateJsonValue(candidate, { path: `values.${key}` });
+		validated[key] = validateJsonValue(candidate, { path: `configuration source.${key}` });
 	}
-	return { version: 1, values: validated };
+	return validated;
 }
 
 export function validateConfigurationSnapshot(value: unknown): IConfigurationSnapshot {

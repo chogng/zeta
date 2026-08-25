@@ -3,7 +3,7 @@ import { citationToolbarActions } from "../../../../editor/contrib/citation/brow
 import { createReferenceIndexPlugin } from "../../../../editor/contrib/citation/common/references.js";
 import { nodeViews as profileNodeViews } from "../../../../editor/contrib/academic/browser/nodeViews.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../editor/contrib/academic/common/schema.js";
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/documentTypes.js";
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../services/documentEditor/common/documentTypes.js";
 import type { EditorProfile } from "../../documentEditor/browser/editorProfile.js";
 import { DOCUMENT_EDITOR_ID } from "../../documentEditor/browser/documentEditorInput.js";
 

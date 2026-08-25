@@ -1,0 +1,62 @@
+import type { JsonSchema, JsonSchemaType } from '../../../base/common/jsonSchema.js';
+import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
+import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema } from './configurationRegistry.js';
+
+export const ConfigurationSchemaId = 'zeta://schemas/user-configuration';
+
+/** Projects registered typed configuration keys into the generic JSON schema vocabulary. */
+export function createConfigurationSchema(registry: ConfigurationRegistry = ConfigurationsRegistry): JsonSchema {
+	const properties: Record<string, JsonSchema> = {};
+	for (const configuration of registry.getRegisteredConfigurations()) {
+		const defaultValue = validateJsonValue(configuration.key.serialize(configuration.key.defaultValue), {
+			path: `configuration default ${configuration.key.key}`,
+		});
+		properties[configuration.key.key] = configurationPropertySchema(defaultValue, configuration.setting);
+	}
+	return Object.freeze({
+		id: ConfigurationSchemaId,
+		title: 'Zeta User Settings',
+		type: 'object',
+		properties: Object.freeze(properties),
+		additionalProperties: true,
+	});
+}
+
+function configurationPropertySchema(defaultValue: JsonValue, setting: IConfigurationSettingSchema | undefined): JsonSchema {
+	const schema: {
+		title?: string;
+		description?: string;
+		type: JsonSchemaType;
+		default: JsonValue;
+		minimum?: number;
+		maximum?: number;
+		enum?: readonly JsonValue[];
+		enumDescriptions?: readonly string[];
+	} = {
+		type: jsonSchemaType(defaultValue),
+		default: defaultValue,
+	};
+	if (!setting) return Object.freeze(schema);
+	schema.title = setting.title;
+	schema.description = setting.description;
+	if (setting.valueType === 'number') {
+		schema.minimum = setting.minimum;
+		schema.maximum = setting.maximum;
+	}
+	if (setting.valueType === 'select') {
+		schema.enum = Object.freeze([...setting.options.map(option => option.value)]);
+		schema.enumDescriptions = Object.freeze([...setting.options.map(option => option.label)]);
+	}
+	return Object.freeze(schema);
+}
+
+function jsonSchemaType(value: JsonValue): JsonSchemaType {
+	if (value === null) return 'null';
+	if (Array.isArray(value)) return 'array';
+	switch (typeof value) {
+		case 'boolean': return 'boolean';
+		case 'number': return 'number';
+		case 'string': return 'string';
+		case 'object': return 'object';
+	}
+}

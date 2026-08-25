@@ -11,7 +11,7 @@ import { TextFileSaveConflictError } from "../../textfile/common/textFileService
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/documentTypes.js";
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../common/documentTypes.js";
 
 export interface DocumentWorkingCopyOptions {
 	readonly resource: URI;

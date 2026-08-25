@@ -15,9 +15,12 @@ import type { IConfigurationService } from '../../../../platform/configuration/c
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/preferencesModels.js';
+import { SettingsSearchMenu } from './settingsSearchMenu.js';
+import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
 
 interface PreferencesSearchWidgetOptions {
 	readonly ariaControls: string;
+	readonly contextMenuProvider: IContextMenuProvider;
 	readonly localizationService: ILocalizationService;
 }
 
@@ -29,6 +32,7 @@ export class PreferencesSearchWidget extends DisposableOwner {
 
 	private readonly focusResultsEmitter = this.own(new Emitter<void>());
 	private readonly inputBox: InputBox;
+	private readonly searchMenu: SettingsSearchMenu;
 
 	constructor(container: HTMLElement, private readonly options: PreferencesSearchWidgetOptions) {
 		super();
@@ -43,7 +47,12 @@ export class PreferencesSearchWidget extends DisposableOwner {
 			ariaControls: options.ariaControls,
 		}));
 		this.inputBox.element.classList.add('zeta-settings-search-input');
-		this.domNode.append(this.inputBox.element);
+		this.searchMenu = this.own(new SettingsSearchMenu(this.domNode, {
+			getValue: () => this.inputBox.value,
+			setValue: value => { this.inputBox.value = value; },
+			focus: () => this.inputBox.focus(),
+			contextMenuProvider: options.contextMenuProvider,
+		}));
 		container.append(this.domNode);
 		this.onDidChange = this.inputBox.onDidChange;
 		this.onDidRequestFocusResults = this.focusResultsEmitter.event;
@@ -191,6 +200,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 
 	private readonly actions: SettingActions;
 	private readonly descriptionDomNode: HTMLSpanElement;
+	private readonly indicators: SettingsTreeIndicatorsLabel;
 	private readonly titleDomNode: HTMLSpanElement;
 
 	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, kind?: 'select' | 'toggle') {
@@ -210,7 +220,8 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.titleDomNode.className = `zeta-configuration-setting-title zeta-${this.presentation}-setting-title`;
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `zeta-configuration-setting-description zeta-${this.presentation}-setting-description`;
-		this.copyDomNode.append(this.titleDomNode, this.descriptionDomNode);
+		this.indicators = this.own(new SettingsTreeIndicatorsLabel(this.copyDomNode));
+		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
 		this.model = this.own(new SettingModel(binding));
@@ -240,8 +251,12 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	protected bindState(renderState: (state: SettingState<TValue>) => void): void {
-		this.own(this.model.onDidChange(renderState));
-		renderState(this.model.state);
+		const render = (state: SettingState<TValue>): void => {
+			this.indicators.update({ isModified: !state.isDefault, isPending: state.isPending });
+			renderState(state);
+		};
+		this.own(this.model.onDidChange(render));
+		render(this.model.state);
 	}
 
 	protected reportStatus(message: string, isError: boolean): void {

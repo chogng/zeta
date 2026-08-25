@@ -5,7 +5,7 @@ import {
 	DisposableTracker,
 	installDisposableTracker,
 } from "../../base/common/disposableTracker.js";
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import {
 	createElectronRendererApi,
 } from "../../platform/native/electron-browser/rendererApi.js";

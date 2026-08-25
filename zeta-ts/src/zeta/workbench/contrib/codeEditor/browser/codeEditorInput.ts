@@ -1,4 +1,4 @@
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../product/common/documentTypes.js";
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../services/documentEditor/common/documentTypes.js";
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";

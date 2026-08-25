@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { ZetaDesktopApplication } from "../../zeta-ts/src/zeta/product/common/product.js";
-import { WorkbenchModeRegistry } from "../../zeta-ts/src/zeta/product/common/workbenchMode.js";
+import { ZetaRendererDirectory } from "../../zeta-ts/src/zeta/code/common/application.js";
+import { WorkbenchModeRegistry } from "../../zeta-ts/src/zeta/workbench/common/workbenchMode.js";
 import { desktopBuildPath } from "../lib/paths.ts";
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
@@ -43,7 +43,7 @@ export default defineConfig(() => {
       strictPort: true,
     },
     build: {
-      outDir: desktopBuildPath(repositoryRoot, "renderer", ZetaDesktopApplication.rendererDirectory),
+      outDir: desktopBuildPath(repositoryRoot, "renderer", ZetaRendererDirectory),
       emptyOutDir: true,
       rollupOptions: {
         input: {

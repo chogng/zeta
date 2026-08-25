@@ -1,4 +1,4 @@
-import { WorkbenchModeId } from "../../../product/common/workbenchMode.js";
+import { WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
 import { codeSessionsProfile } from "../../../sessions/browser/code/codeSessionsProfile.js";
 import { startBrowserSessions } from "../../../sessions/browser/webSessions.js";
 

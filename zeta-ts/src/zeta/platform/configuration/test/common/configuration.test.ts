@@ -14,6 +14,7 @@ import {
 	type IConfigurationApi,
 	type IConfigurationSnapshot,
 	type IConfigurationUpdateRequest,
+	configurationValues,
 	validateConfigurationDocument,
 	validateConfigurationSnapshot,
 	validateConfigurationUpdateRequest,
@@ -24,6 +25,9 @@ import {
 import {
 	WorkbenchConfigurationService,
 } from "../../../../workbench/services/configuration/browser/configurationService.js";
+import {
+	ConfigurationResourceRevisionConflictError,
+} from "../../../../platform/configuration/common/configurationResourceService.js";
 
 test("configuration validators bound the complete wire document", () => {
 	assert.deepEqual(
@@ -31,32 +35,32 @@ test("configuration validators bound the complete wire document", () => {
 			revision: 2,
 			document: {
 				version: 1,
-				values: {
-					"editor.fontSize": 14,
-				},
+				source: '{ "editor.fontSize": 14 }\n',
 			},
 		}),
 		{
 			revision: 2,
 			document: {
 				version: 1,
-				values: {
-					"editor.fontSize": 14,
-				},
+				source: '{ "editor.fontSize": 14 }\n',
 			},
 		},
 	);
 	assert.throws(
 		() => validateConfigurationDocument({
 			version: 1,
-			values: { "__proto__.unsafe": true },
+			source: '{ "__proto__.unsafe": true }',
 		}),
 		/invalid configuration key/,
 	);
 	assert.throws(
+		() => validateConfigurationDocument({ version: 1, values: { 'editor.fontSize': 14 } }),
+		/configuration object must contain exactly: source, version/,
+	);
+	assert.throws(
 		() => validateConfigurationUpdateRequest({
 			expectedRevision: -1,
-			document: { version: 1, values: {} },
+			document: { version: 1, source: '{}' },
 		}),
 		/non-negative safe integer/,
 	);
@@ -76,9 +80,9 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 	});
 	const api = new TestConfigurationApi({
 		revision: 0,
-		document: {
-			version: 1,
-			values: { "editor.fontSize": 16 },
+			document: {
+				version: 1,
+				source: '{ "editor.fontSize": 16 }\n',
 		},
 	});
 	using service = new WorkbenchConfigurationService({
@@ -101,7 +105,7 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 		revision: 2,
 		document: {
 			version: 1,
-			values: { "editor.fontSize": 20 },
+			source: '{ "editor.fontSize": 20 }\n',
 		},
 	});
 	assert.equal(service.getValue(fontSize), 20);
@@ -112,6 +116,40 @@ test("workbench configuration resolves typed defaults and live snapshots", async
 		() => service.updateValue(fontSize, 4),
 		/font size/,
 	);
+});
+
+test("workbench configuration preserves editable JSONC source", async () => {
+	const registry = new ConfigurationRegistry();
+	const fontSize = registry.registerConfiguration({
+		key: "editor.fontSize",
+		defaultValue: 12,
+		parse(value): number {
+			if (!Number.isInteger(value) || (value as number) < 8) throw new TypeError("font size must be at least 8");
+			return value as number;
+		},
+	});
+	using service = new WorkbenchConfigurationService({ registry });
+	const observed: string[] = [];
+	using listener = service.onDidChangeResource(snapshot => observed.push(snapshot.source));
+
+	assert.deepEqual(await service.read(), { source: "{}\n", revision: 0 });
+	const source = `{
+		// Keep this user explanation.
+		"editor.fontSize": 16,
+		"extension.unregistered": true,
+	}\n`;
+	assert.deepEqual(await service.write(source, 0), {
+		source,
+		revision: 1,
+	});
+	assert.equal(service.getValue(fontSize), 16);
+	assert.deepEqual(observed, [source]);
+	await service.updateValue(fontSize, 18);
+	assert.match((await service.read()).source, /Keep this user explanation/u);
+	assert.match((await service.read()).source, /"editor\.fontSize": 18/u);
+	await assert.rejects(() => service.write('{ "editor.fontSize": 4 }', 2), /font size/);
+	await assert.rejects(() => service.write('{}', 0), ConfigurationResourceRevisionConflictError);
+	await assert.rejects(() => service.write('[]', 2), /must be an object/);
 });
 
 test("main configuration service persists atomic revisions", async (context) => {
@@ -126,16 +164,14 @@ test("main configuration service persists atomic revisions", async (context) => 
 		expectedRevision: 0,
 		document: {
 			version: 1,
-			values: {
-				"editor.fontSize": 14,
-			},
+			source: '{\n\t// persisted\n\t"editor.fontSize": 14,\n}\n',
 		},
 	});
 	assert.equal(updated.revision, 1);
 	await assert.rejects(
 		() => service.update({
-			expectedRevision: 0,
-			document: { version: 1, values: {} },
+				expectedRevision: 0,
+				document: { version: 1, source: '{}' },
 		}),
 		/revision conflict/,
 	);
@@ -145,6 +181,7 @@ test("main configuration service persists atomic revisions", async (context) => 
 		JSON.parse(await readFile(filePath, "utf8")),
 		updated.document,
 	);
+	assert.deepEqual(configurationValues(updated.document), { "editor.fontSize": 14 });
 	const reopened = await ConfigurationMainService.create({ filePath });
 	assert.deepEqual(reopened.read(), {
 		revision: 0,

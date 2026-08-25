@@ -8,18 +8,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
-	ConfigurationMainService,
-} from "../../../../platform/configuration/electron-main/configurationMainService.js";
-import {
 	type IKeybindingsResourceApi,
 	type IKeybindingsResourceSnapshot,
 	type IKeybindingsResourceUpdateRequest,
 	validateKeybindingsResource,
 	validateKeybindingsResourceSnapshot,
 } from "../../../../platform/keybinding/common/keybindingsResource.js";
-import {
-	migrateLegacyKeybindings,
-} from "../../../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
 import {
 	KeybindingsResourceMainService,
 } from "../../../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
@@ -149,49 +143,6 @@ test("main keybindings resource persists a standalone top-level array", async (c
 		bindings,
 	});
 	await reopened.close();
-});
-
-test("legacy configuration keybindings migrate into the standalone resource", async (context) => {
-	const directory = await mkdtemp(join(tmpdir(), "zeta-keybinding-migration-"));
-	context.after(async () => {
-		await rm(directory, { recursive: true, force: true });
-	});
-	const configuration = await ConfigurationMainService.create({
-		filePath: join(directory, "configuration.json"),
-	});
-	const keybindings = await KeybindingsResourceMainService.create({
-		filePath: join(directory, "keybindings.json"),
-	});
-	await configuration.update({
-		expectedRevision: 0,
-		document: {
-			version: 1,
-			values: {
-				"editor.fontSize": 14,
-				"keyboard.keybindings": [{
-					key: "primary+n",
-					command: "zeta.new",
-				}],
-			},
-		},
-	});
-
-	assert.equal(
-		await migrateLegacyKeybindings(configuration, keybindings),
-		true,
-	);
-	assert.deepEqual(keybindings.read().bindings, [{
-		key: "primary+n",
-		command: "zeta.new",
-	}]);
-	assert.deepEqual(configuration.read().document.values, {
-		"editor.fontSize": 14,
-	});
-
-	await Promise.all([
-		configuration.close(),
-		keybindings.close(),
-	]);
 });
 
 class TestKeybindingsResourceApi implements IKeybindingsResourceApi {

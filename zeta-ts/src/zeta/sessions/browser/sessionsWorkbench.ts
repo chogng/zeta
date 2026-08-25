@@ -1,7 +1,7 @@
 import "./media/sessionsWorkbench.css";
 import "./actions/sessionsChatActions.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
-import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";

@@ -1,7 +1,7 @@
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { ILifecycleService } from '../../../../platform/lifecycle/common/lifecycleService.js';
-import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../../product/common/workbenchMode.js';
+import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import type { IWorkbenchModeService, WorkbenchModeOption } from '../common/workbenchModeService.js';
 

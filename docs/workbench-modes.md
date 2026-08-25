@@ -52,7 +52,7 @@ flowchart TD
 | 模式定义 | `WorkbenchModeRegistry` | 唯一拥有模式 ID、显示名、存储命名空间和可选独立入口 |
 | 模式能力 | `modes/code` 或 `modes/academic` | 只在入口启动时注册，不支持运行中卸载 |
 | Workbench 布局与视图状态 | mode-specific `storageNamespace` | Code 与 Academic 分开恢复 |
-| 应用身份与 Chromium 数据 | `ZetaDesktopApplication` | 两个模式共享同一个安装和用户数据根 |
+| 应用身份与 Chromium 数据 | `code/common/application.ts` 与 Electron Main 应用路径 | 两个模式共享同一个安装和用户数据根 |
 
 URL 查询参数 `zeta-workbench-mode` 把 Main 已选择的窗口模式 ID 交给共享 Workbench 入口。入口根据它动态导入一个模式 bundle；查询参数不是用户配置的第二份 authority，持久默认值仍由配置服务拥有。
 

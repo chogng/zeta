@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import test from 'node:test';
-import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId, WorkbenchModeRegistry, withWorkbenchModeId } from '../../../product/common/workbenchMode.js';
-import { readPersistedWorkbenchModeId } from '../../../product/node/product.js';
+import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId, WorkbenchModeRegistry, withWorkbenchModeId } from '../../common/workbenchMode.js';
 
 test('Workbench mode registry is the complete owner of built-in definitions', () => {
 	assert.equal(WorkbenchModeRegistry.resolveModeId(undefined), WorkbenchModeId.Code);
@@ -28,18 +24,4 @@ test('Workbench mode URLs override the fallback without changing the renderer en
 
 test('Workbench mode registry rejects unknown ids', () => {
 	assert.throws(() => WorkbenchModeRegistry.resolveModeId('enterprise'), /Unknown Zeta Workbench mode 'enterprise'/);
-});
-
-test('persisted startup mode accepts only a registered id', () => {
-	const directory = mkdtempSync(join(tmpdir(), 'zeta-mode-'));
-	const filePath = join(directory, 'configuration.json');
-	try {
-		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Code);
-		writeFileSync(filePath, JSON.stringify({ version: 1, values: { 'workbench.mode': 'academic' } }));
-		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Academic);
-		writeFileSync(filePath, JSON.stringify({ version: 1, values: { 'workbench.mode': 'unknown' } }));
-		assert.equal(readPersistedWorkbenchModeId(filePath, WorkbenchModeId.Code), WorkbenchModeId.Code);
-	} finally {
-		rmSync(directory, { force: true, recursive: true });
-	}
 });

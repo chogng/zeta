@@ -7,8 +7,8 @@ import { isCancellationError } from "../../base/common/cancellation.js";
 import { DisposableOwner, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { DisposableTracker, installDisposableTracker } from "../../base/common/disposableTracker.js";
-import type { DesktopApplicationConfiguration } from "../../product/common/product.js";
-import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import { ZetaApplicationName } from '../common/application.js';
+import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";
 import { appServerIpcRoutes } from "../../platform/app-server/electron-main/app-server-ipc.js";
 import { buildAppServerEnvironment } from "../../platform/app-server/common/appServerEnvironment.js";
@@ -23,6 +23,8 @@ import { BrowserViewMainService } from "../../platform/browser/electron-main/bro
 import { BrowserAutomationMainService, registerBrowserAutomationHost } from "../../platform/browser/electron-main/browserAutomationMainService.js";
 import { BrowserTargetRegistry } from "../../platform/browser/electron-main/browserTargetRegistry.js";
 import { CONFIGURATION_CHANGED_CHANNEL } from "../../platform/configuration/common/configurationIpc.js";
+import { configurationValues } from '../../platform/configuration/common/configurationIpc.js';
+import { editJsonObjectProperty } from '../../base/common/json.js';
 import { ConfigurationMainService, configurationIpcRoutes } from "../../platform/configuration/electron-main/configurationMainService.js";
 import { nativeContextMenuIpcRoutes } from "../../platform/contextview/electron-main/contextMenuIpc.js";
 import { fileIpcRoutes } from "../../platform/files/electron-main/fileIpcRoutes.js";
@@ -46,7 +48,6 @@ import { ElectronClipboardService } from "../../platform/clipboard/electron-main
 import { ElectronOpenerService } from "../../platform/opener/electron-main/electronOpenerService.js";
 import { KEYBINDINGS_RESOURCE_CHANGED_CHANNEL } from "../../platform/keybinding/common/keybindingsResource.js";
 import { KeybindingsResourceMainService, keybindingsResourceIpcRoutes } from "../../platform/keybinding/electron-main/keybindingsResourceMainService.js";
-import { migrateLegacyKeybindings } from "../../platform/keybinding/electron-main/migrateLegacyKeybindings.js";
 import { NATIVE_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/nativeKeyboardLayout.js";
 import { NativeKeyboardLayoutMainService, nativeKeyboardLayoutIpcRoutes } from "../../platform/keyboardLayout/electron-main/nativeKeyboardLayoutMainService.js";
 import { USER_KEYBOARD_LAYOUT_CHANGED_CHANNEL } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
@@ -96,7 +97,6 @@ export type AppServerStartupMode = "required" | "disabled";
 export type ElectronMainIpcRouteContribution = (supervisor: AppServerSupervisor) => readonly IpcRoute<unknown, unknown>[];
 
 export interface ZetaApplicationOptions {
-	readonly application: DesktopApplicationConfiguration;
 	readonly initialModeId: WorkbenchModeId;
 	readonly rendererRoot: string;
 	/** Selects whether this Electron process starts the App Server before opening its window. */
@@ -139,7 +139,6 @@ interface PendingWindowLaunch {
  * Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown.
  */
 export class ZetaApplication extends DisposableOwner {
-	private readonly application: DesktopApplicationConfiguration;
 	private defaultModeId: WorkbenchModeId;
 	private readonly rendererRoot: string;
 	private readonly appServerStartupMode: AppServerStartupMode;
@@ -165,7 +164,6 @@ export class ZetaApplication extends DisposableOwner {
 		tracking: Disposable | undefined,
 	) {
 		super();
-		this.application = options.application;
 		this.defaultModeId = options.initialModeId;
 		this.rendererRoot = options.rendererRoot;
 		this.appServerStartupMode = options.appServerStartupMode;
@@ -277,7 +275,6 @@ export class ZetaApplication extends DisposableOwner {
 					console.error("Failed to process user keyboard layout", error);
 				},
 			});
-			await migrateLegacyKeybindings(configuration, keybindings);
 			this.persistentServices = { state, configuration, keybindings, userKeyboardLayout };
 		} catch (error) {
 			await Promise.all([
@@ -927,15 +924,12 @@ export class ZetaApplication extends DisposableOwner {
 	private async persistWorkbenchModeId(modeId: WorkbenchModeId): Promise<void> {
 		const configuration = this.services.configuration;
 		const snapshot = configuration.read();
-		if (snapshot.document.values[WorkbenchModeConfigurationKey] === modeId) return;
+		if (configurationValues(snapshot.document)[WorkbenchModeConfigurationKey] === modeId) return;
 		await configuration.update({
 			expectedRevision: snapshot.revision,
 			document: {
 				version: 1,
-				values: {
-					...snapshot.document.values,
-					[WorkbenchModeConfigurationKey]: modeId,
-				},
+				source: editJsonObjectProperty(snapshot.document.source, WorkbenchModeConfigurationKey, modeId),
 			},
 		});
 	}
@@ -946,7 +940,7 @@ export class ZetaApplication extends DisposableOwner {
 		const detail = error instanceof Error ? error.message : "The requested mode could not be loaded";
 		await dialog.showMessageBox(record.window, {
 			type: "error",
-			title: `${this.application.name} mode switch failed`,
+			title: `${ZetaApplicationName} mode switch failed`,
 			message: "The requested Workbench mode could not be loaded.",
 			detail: detail.slice(0, 8_000),
 			buttons: ["OK"],

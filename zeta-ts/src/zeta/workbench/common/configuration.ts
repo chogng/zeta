@@ -1,6 +1,6 @@
 import { ConfigurationsRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
-import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "../../product/common/workbenchMode.js";
+import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenchMode.js";
 import "../../platform/theme/common/themeConfiguration.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 

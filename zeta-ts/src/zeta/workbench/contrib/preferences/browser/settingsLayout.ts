@@ -94,7 +94,7 @@ export const SettingsNavigation = [
 				id: 'display',
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
-				settings: ['editor.wordWrap', 'editor.lineNumbers', 'editor.guides.*', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.highlightActiveLine', 'editor.unicodeHighlights'],
+				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.lineNumbers', 'editor.guides.*', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.highlightActiveLine', 'editor.unicodeHighlights'],
 			},
 			{
 				id: 'minimap',

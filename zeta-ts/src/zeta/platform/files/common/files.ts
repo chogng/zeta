@@ -91,5 +91,12 @@ export class FileNotFoundError extends Error {
 	}
 }
 
+export class FileOperationNotSupportedError extends Error {
+	constructor(readonly resource: URI, readonly operation: string) {
+		super(`File operation '${operation}' is not supported for ${resource.toString()}`);
+		this.name = "FileOperationNotSupportedError";
+	}
+}
+
 export const IFileService =
 	createServiceIdentifier<IFileService>("fileService");

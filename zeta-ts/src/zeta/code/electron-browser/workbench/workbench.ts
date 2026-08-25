@@ -1,5 +1,5 @@
 import "../../../workbench/workbench.desktop.main.js";
-import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../product/common/workbenchMode.js";
+import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId } from "../../../workbench/common/workbenchMode.js";
 
 declare const __ZETA_WORKBENCH_MODE__: WorkbenchModeId;
 

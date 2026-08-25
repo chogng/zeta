@@ -70,7 +70,7 @@
 
 .zeta-settings-page h3 {
   margin: 0 0 8px;
-  color: var(--zeta-foreground);
+  color: var(--zeta-settings-header-foreground);
   font-size: 22px;
   font-weight: 600;
 }
@@ -80,6 +80,7 @@
   z-index: 2;
   top: 0;
   background: var(--zeta-editor-background);
+  border-bottom: 1px solid var(--zeta-settings-header-border);
 }
 
 .zeta-settings-description {

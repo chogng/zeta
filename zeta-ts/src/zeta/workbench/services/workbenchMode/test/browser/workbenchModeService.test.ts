@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ILifecycleService, ShutdownReason } from '../../../../../platform/lifecycle/common/lifecycleService.js';
-import { WorkbenchModeId } from '../../../../../product/common/workbenchMode.js';
+import { WorkbenchModeId } from '../../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { WorkbenchModeService } from '../../browser/workbenchModeService.js';

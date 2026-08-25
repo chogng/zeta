@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { URI } from "../../../../../base/common/uri.js";
-import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../../product/common/documentTypes.js";
+import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../services/documentEditor/common/documentTypes.js";
 import { EditorPaneMatch } from "../../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput, matchCodeEditor } from "../../browser/codeEditorInput.js";
 import { DIFF_EDITOR_ID, createDiffEditorInput, matchDiffEditor } from "../../browser/diffEditorInput.js";

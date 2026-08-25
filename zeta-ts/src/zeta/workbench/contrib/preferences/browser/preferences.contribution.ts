@@ -5,11 +5,14 @@ import { IContextViewService } from '../../../../platform/contextview/browser/co
 import { SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { isPreferencesEditorInput } from '../../../services/preferences/common/preferencesEditorInput.js';
 import { PreferencesEditor, PreferencesEditorId } from './preferencesEditor.js';
 import { registerPreferencesEditorPane } from './preferencesEditorRegistry.js';
 import { SettingsEditorPane, SettingsEditorPaneId } from './settingsEditor.js';
+import { PreferencesContribution } from '../common/preferencesContribution.js';
+import '../common/settingsEditorColorRegistry.js';
 import './keyboardLayoutPicker.js';
 import './keyboardShortcutsEditor.contribution.js';
 import './preferencesActions.js';
@@ -38,3 +41,5 @@ registerEditorPane({
 		return new PreferencesEditor(options.instantiationService, options.instantiationService.get(ILocalizationService));
 	},
 });
+
+registerWorkbenchContribution(PreferencesContribution.ID, WorkbenchPhase.BlockStartup, accessor => PreferencesContribution.create(accessor));

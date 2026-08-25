@@ -38,8 +38,6 @@
     "src/zeta/platform/workspace/**/*.ts",
     "src/zeta/platform/workspaces/**/*.ts",
     "src/zeta/platform/webview/browser/**/*.ts",
-    "src/zeta/product/common/**/*.ts",
-    "src/zeta/product/node/**/*.ts",
     "src/zeta/workbench/services/statusbar/**/*.ts",
     "src/zeta/workbench/services/commands/**/*.ts",
     "src/zeta/workbench/services/configuration/**/*.ts",

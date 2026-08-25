@@ -15,6 +15,7 @@ import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/co
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageWorkspaceTrust } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
+import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostics.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
@@ -90,6 +91,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 	}
 
 	acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
+		const jsonDiagnostics = acquireJsonLanguageDiagnostics(resource, languageId, model, () => this.createPublisher(resource));
+		if (jsonDiagnostics) return jsonDiagnostics;
 		if (!isAppServerLanguageId(languageId)) return toDisposable(() => undefined);
 		const target = this.workspaceTarget(resource);
 		if (!target || model.largeFile.tooLargeForSynchronization) return toDisposable(() => undefined);

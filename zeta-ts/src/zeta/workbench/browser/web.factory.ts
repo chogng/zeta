@@ -4,7 +4,7 @@ import {
 	DisposableStore,
 	type IDisposable,
 } from "../../base/common/lifecycle.js";
-import type { WorkbenchModeId } from "../../product/common/workbenchMode.js";
+import type { WorkbenchModeId } from "../common/workbenchMode.js";
 import {
 	createDisconnectedRendererApi,
 } from "../../platform/app-server/browser/rendererApi.js";

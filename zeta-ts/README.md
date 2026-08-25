@@ -118,7 +118,7 @@ Renderer 类型检查前同步到 `generated/file-icons/`。TypeScript 直接从
 
 ## Electron 启动门禁
 
-Electron 的日常启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行 bootstrap，打包应用从共享 profile 的 `workbench.mode` 读取初始模式 ID，非打包应用允许 `ZETA_WORKBENCH_MODE` 覆盖，然后在 Electron `ready` 事件后启动应用，不在 ESM 顶层等待 `app.whenReady()`。`src/main-code.ts`、`src/main-aca.ts` 及 `ZETA_ELECTRON_MAIN` 仅保留给旧的静态入口兼容，不再作为开发命令的一部分。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免入口模块和 `ready` 生命周期互相等待。
+Electron 启动统一经过 `src/main.ts` 和 `code/electron-main/main.ts`；它们先执行 bootstrap，打包应用从共享 profile 的 `workbench.mode` 读取初始模式 ID，非打包应用允许 `ZETA_WORKBENCH_MODE` 覆盖，然后在 Electron `ready` 事件后启动应用，不在 ESM 顶层等待 `app.whenReady()`。应用运行后由 Workbench Mode Service 持久化模式选择，并通过带新 Mode URL 的窗口重载完成 Code/Academic 切换；Electron Main 不再按 Product 或静态 Mode 分派。`ZetaApplication.startupAfterReady()` 会断言 Electron 已进入 Ready，从结构上避免入口模块和 `ready` 生命周期互相等待。
 
 本地 Electron 调试使用统一命令：
 
@@ -235,10 +235,10 @@ opaque-origin sandbox iframe。解析器输出不能直接写入 DOM 或 iframe�
 
 Workbench 静态装配按 host 分层：`workbench.common.main.ts` 加载 Browser 与 Electron
 共享的 contribution，`workbench.web.main.ts` 与 `workbench.desktop.main.ts` 只加载各自
-host 的 adapter 和 contribution。产品入口在 host main 之外独立选择 editor bundle 与不可变的
+host 的 adapter 和 contribution。Mode 入口在 host main 之外独立选择 editor bundle 与不可变的
 `WorkbenchSession` 初始 composition；可选的专用 Sessions renderer 由
 `WorkbenchModeRegistry` 中的 `dedicatedSessions` 定义和模式自己的 `SessionsProfile` 装配。新增功能时不得从
-共享 `Workbench` 构造实现反向导入产品或 Sessions 入口。
+共享 `Workbench` 构造实现反向导入 Mode 或 Sessions 入口。
 
 Chat 的运行中普通文本 Send 由 `ChatPaneModel` 路由到生成协议中的 `steerTurn` Session operation；
 running 或交互等待期间输入工具栏同时显示 Send 与 Stop。Renderer 不自行排队或判定消息已生效，

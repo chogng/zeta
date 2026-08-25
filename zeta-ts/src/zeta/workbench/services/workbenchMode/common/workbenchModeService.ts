@@ -1,5 +1,5 @@
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../../product/common/workbenchMode.js';
+import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../common/workbenchMode.js';
 
 export const WORKBENCH_MODE_SWITCH_CHANNEL = 'zeta:workbench-mode:switch';
 

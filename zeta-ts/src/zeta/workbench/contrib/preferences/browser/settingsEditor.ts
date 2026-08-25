@@ -5,7 +5,7 @@ import type { IContextViewProvider } from '../../../../base/browser/ui/contextvi
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
+import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import type { ISetting, ISettingsEditorModel } from '../../../services/preferences/common/preferences.js';
 import { DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/preferencesModels.js';
@@ -26,6 +26,7 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 	private readonly contentHeading: HTMLHeadingElement;
 	private readonly contentScrollable: ScrollableElement;
 	private readonly contentStatus: HTMLParagraphElement;
+	private readonly configurationService: IConfigurationService;
 	private readonly element: HTMLDivElement;
 	private readonly localizationService: ILocalizationService;
 	private readonly navigationEmpty: HTMLParagraphElement;
@@ -46,6 +47,7 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		localizationService: ILocalizationService,
 	) {
 		super();
+		this.configurationService = configurationService;
 		this.localizationService = localizationService;
 		this.settingsModel = this.own(new SettingsEditorModel(new DefaultSettings().all));
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
@@ -135,6 +137,7 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		this.renderCategory(initialCategory);
 
 		this.own(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		this.own(configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
 		this.own(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
@@ -163,11 +166,18 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 	}
 
 	search(text: string): void {
-		const query = new PreferencesSearchQuery(text);
+		const query = new PreferencesSearchQuery(text, { isModified: id => this.isModified(id) });
 		this.tocTree.setFindPattern(query.text);
 		this.treeModel.setQuery(query);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
+	}
+
+	private isModified(id: string): boolean {
+		const setting = this.settingsModel.settings.find(candidate => candidate.id === id);
+		if (!setting) return false;
+		const key = setting.key as IConfigurationKey<unknown>;
+		return JSON.stringify(key.serialize(this.configurationService.getValue(key))) !== JSON.stringify(key.serialize(key.defaultValue));
 	}
 
 	focus(): void {
