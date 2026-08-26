@@ -4,14 +4,14 @@ use super::builtin_command_registry;
 use super::command_request_for_element;
 use crate::shell_interaction::{
     ADD_SESSION, AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_LOCATION,
-    CONTEXT_WORKING_DIRECTORY, SESSION_SIDEBAR_TOGGLE,
+    CONTEXT_WORKING_DIRECTORY, TAB_CONTAINER_TOGGLE,
 };
 
 #[test]
 fn element_entry_points_map_to_stable_product_commands() {
     assert_eq!(
-        command_request_for_element(SESSION_SIDEBAR_TOGGLE).map(|request| request.command_id()),
-        Some(ZetermCommandId::ToggleSessionSidebar)
+        command_request_for_element(TAB_CONTAINER_TOGGLE).map(|request| request.command_id()),
+        Some(ZetermCommandId::ToggleTabContainer)
     );
     assert_eq!(
         command_request_for_element(ADD_SESSION).map(|request| request.command_id()),
@@ -67,8 +67,8 @@ fn every_catalog_command_has_a_native_handler() {
 #[test]
 fn only_commands_with_current_execution_are_user_bindable() {
     assert_eq!(
-        ZetermCommandId::bindable_from_id("workbench.action.toggleSideBar"),
-        Some(ZetermCommandId::ToggleSessionSidebar)
+        ZetermCommandId::bindable_from_id("workbench.action.toggleTabContainer"),
+        Some(ZetermCommandId::ToggleTabContainer)
     );
     assert_eq!(
         ZetermCommandId::bindable_from_id("workbench.action.newSession"),

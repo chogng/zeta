@@ -24,7 +24,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_panes::WorkspacePaneAction;
 use zeta_composer::{ComposerInteractionActivation, SelectionDirection};
 use zeta_composer::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
@@ -73,9 +73,9 @@ impl NativeApp {
         let context = NativeKeybindingContext::from_facts(NativeKeybindingFacts {
             direct_terminal,
             terminal_surface_visible: self.workspace_surface.is_terminal(),
-            session_sidebar_visible: self.session_sidebar.is_expanded(),
-            agent_sidebar_visible: self.sidebar_part.is_expanded(),
-            file_search_visible: self.sidebar_pane_workspace.search_visible(),
+            tab_container_visible: self.tab_container.is_expanded(),
+            inspector_visible: self.inspector_part.is_expanded(),
+            file_search_visible: self.workspace_pane_host.search_visible(),
             composer_route: match self.composer.route() {
                 ComposerRoute::Agent => "agent",
                 ComposerRoute::Shell => "shell",
@@ -110,20 +110,20 @@ impl NativeApp {
     fn file_search_keyboard_input(&mut self, event: &KeyEvent) {
         if event.logical_key == Key::Named(NamedKey::Escape) {
             if self
-                .sidebar_pane_workspace
+                .workspace_pane_host
                 .file_search_input()
                 .text()
                 .is_empty()
             {
-                self.sidebar_pane_workspace.set_search_visible(false);
+                self.workspace_pane_host.set_search_visible(false);
             } else {
-                self.sidebar_pane_workspace.clear_file_search();
+                self.workspace_pane_host.clear_file_search();
             }
             self.file_search_changed();
             return;
         }
         if let Some(command) = text_input_command(event, self.modifiers) {
-            self.sidebar_pane_workspace.apply_file_search(command);
+            self.workspace_pane_host.apply_file_search(command);
             self.file_search_changed();
         }
     }
@@ -298,11 +298,11 @@ impl NativeApp {
             return false;
         };
         let navigation = match &event.logical_key {
-            Key::Named(NamedKey::ArrowRight) => self
-                .sidebar_pane_workspace
-                .navigate_file_tree_right(focused),
+            Key::Named(NamedKey::ArrowRight) => {
+                self.workspace_pane_host.navigate_file_tree_right(focused)
+            }
             Key::Named(NamedKey::ArrowLeft) => {
-                self.sidebar_pane_workspace.navigate_file_tree_left(focused)
+                self.workspace_pane_host.navigate_file_tree_left(focused)
             }
             _ => return false,
         };
@@ -310,12 +310,12 @@ impl NativeApp {
             return false;
         };
         match navigation {
-            AgentSidebarAction::Handled => {}
-            AgentSidebarAction::StateChanged => {
+            WorkspacePaneAction::Handled => {}
+            WorkspacePaneAction::StateChanged => {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            AgentSidebarAction::Focus(target) => {
+            WorkspacePaneAction::Focus(target) => {
                 let outcome = self
                     .presentation
                     .as_ref()
@@ -326,8 +326,8 @@ impl NativeApp {
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
             }
-            AgentSidebarAction::OpenFile { path } => self.open_workspace_file(path),
-            AgentSidebarAction::LoadChildren { element, path } => {
+            WorkspacePaneAction::OpenFile { path } => self.open_workspace_file(path),
+            WorkspacePaneAction::LoadChildren { element, path } => {
                 self.load_file_tree_directory(element, path);
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -543,7 +543,7 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
-            if let Some(text) = self.sidebar_pane_workspace.selected_file_search_text()
+            if let Some(text) = self.workspace_pane_host.selected_file_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file search text: {error}");
@@ -618,7 +618,7 @@ impl NativeApp {
             else {
                 return;
             };
-            self.sidebar_pane_workspace
+            self.workspace_pane_host
                 .apply_file_search(TextInputCommand::Insert(text));
             self.file_search_changed();
             return;

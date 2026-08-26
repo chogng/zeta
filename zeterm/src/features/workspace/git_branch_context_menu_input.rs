@@ -80,7 +80,7 @@ impl NativeApp {
                 };
                 self.workspace_context
                     .apply_git_projection(Some(&projection));
-                self.sidebar_pane_workspace
+                self.workspace_pane_host
                     .replace_workspace(&self.workspace_context);
                 self.refresh_files_from_app_server();
                 self.dismiss_git_branch_context_menu();

@@ -150,7 +150,7 @@ impl NativeApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.sidebar_pane_workspace
+                self.workspace_pane_host
                     .apply_file_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -317,7 +317,7 @@ impl NativeApp {
             self.session_search.cancel_composition();
         }
         if target != InputMethodTarget::FileSearch {
-            self.sidebar_pane_workspace.cancel_file_search_composition();
+            self.workspace_pane_host.cancel_file_search_composition();
         }
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_context_menu.cancel_search_composition();

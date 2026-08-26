@@ -284,8 +284,8 @@ fn native_app_state_is_private_to_the_app_composition_boundary() {
         "app/frame.rs",
         "app/interaction.rs",
         "app/runtime.rs",
-        "app/workbench.rs",
-        "workbench.rs",
+        "workbench_host/runtime.rs",
+        "workbench_host.rs",
     ] {
         let source = fs::read_to_string(source_root.join(relative_path))
             .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));

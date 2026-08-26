@@ -1,7 +1,7 @@
-//! Product-owned Sessions sidebar state and resize behavior.
+//! Native layout state and resize routing for the body-mounted Tab Container.
 
 use crate::NativeApp;
-use crate::shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE;
+use crate::shell_interaction::TAB_CONTAINER_RESIZE_HANDLE;
 use std::time::Instant;
 use zeta_ui::Point;
 use zeta_ui::Rect;
@@ -9,9 +9,9 @@ use zeta_ui::Resizable;
 use zeta_ui::SashOrientation;
 use zeta_ui::SashPointerPresence;
 use zeta_ui::SashState;
-use zeta_ui::layout::SessionSidebarLayout;
-use zeta_ui::layout::SessionSidebarLayoutSpec;
-use zeta_ui::layout::SidebarVisibility;
+use zeta_ui::layout::PartVisibility;
+use zeta_ui::layout::TabContainerLayout;
+use zeta_ui::layout::TabContainerLayoutSpec;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 
@@ -21,38 +21,38 @@ const MAXIMUM_WIDTH: f32 = 480.0;
 const MINIMUM_MAIN_WIDTH: f32 = 240.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum SessionSidebarVisibility {
+enum TabContainerVisibility {
     Collapsed,
     Expanded,
 }
 
-/// Runtime layout state for the Sessions sidebar.
+/// Runtime layout state for the resizable body-mounted Tab Container.
 ///
 /// The preferred width survives visibility changes and temporary viewport
 /// constraints. Pointer routing owns the resize lifecycle and the scene only
 /// consumes the effective width returned for its current viewport.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct SessionSidebarState {
-    visibility: SessionSidebarVisibility,
+pub(crate) struct TabContainerState {
+    visibility: TabContainerVisibility,
     preferred_width: f32,
     resizable: Resizable,
 }
 
-impl Default for SessionSidebarState {
+impl Default for TabContainerState {
     fn default() -> Self {
         Self {
-            visibility: SessionSidebarVisibility::Expanded,
+            visibility: TabContainerVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 }
 
-impl SessionSidebarState {
+impl TabContainerState {
     #[cfg(test)]
     pub(crate) const fn expanded() -> Self {
         Self {
-            visibility: SessionSidebarVisibility::Expanded,
+            visibility: TabContainerVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
         }
@@ -61,14 +61,14 @@ impl SessionSidebarState {
     #[cfg(test)]
     pub(crate) const fn collapsed() -> Self {
         Self {
-            visibility: SessionSidebarVisibility::Collapsed,
+            visibility: TabContainerVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 
     pub(crate) const fn is_expanded(self) -> bool {
-        matches!(self.visibility, SessionSidebarVisibility::Expanded)
+        matches!(self.visibility, TabContainerVisibility::Expanded)
     }
 
     pub(crate) const fn is_resizing(self) -> bool {
@@ -97,8 +97,8 @@ impl SessionSidebarState {
 
     pub(crate) fn toggle(&mut self) {
         self.visibility = match self.visibility {
-            SessionSidebarVisibility::Collapsed => SessionSidebarVisibility::Expanded,
-            SessionSidebarVisibility::Expanded => SessionSidebarVisibility::Collapsed,
+            TabContainerVisibility::Collapsed => TabContainerVisibility::Expanded,
+            TabContainerVisibility::Expanded => TabContainerVisibility::Collapsed,
         };
         self.resizable.cancel();
     }
@@ -107,20 +107,20 @@ impl SessionSidebarState {
     pub(crate) fn visible_width(self, viewport_width: f32) -> Option<f32> {
         let bounds = self
             .layout(Rect::from_xywh(0.0, 0.0, viewport_width, 1.0))
-            .sessions_bounds()?;
+            .tab_container_bounds()?;
         (bounds.size.width > 0.0).then_some(bounds.size.width)
     }
 
-    pub(crate) fn layout(self, bounds: Rect) -> SessionSidebarLayout {
+    pub(crate) fn layout(self, bounds: Rect) -> TabContainerLayout {
         self.layout_spec().for_bounds(bounds)
     }
 
-    pub(crate) fn layout_spec(self) -> SessionSidebarLayoutSpec {
-        SessionSidebarLayoutSpec::new(
+    pub(crate) fn layout_spec(self) -> TabContainerLayoutSpec {
+        TabContainerLayoutSpec::new(
             if self.is_expanded() {
-                SidebarVisibility::Expanded
+                PartVisibility::Expanded
             } else {
-                SidebarVisibility::Collapsed
+                PartVisibility::Collapsed
             },
             self.preferred_width,
             MINIMUM_WIDTH,
@@ -155,11 +155,11 @@ impl SessionSidebarState {
 }
 
 impl NativeApp {
-    pub(crate) fn route_session_sidebar_resize_move(&mut self, point: Point) -> bool {
-        if !self.session_sidebar.is_resizing() {
+    pub(crate) fn route_tab_container_resize_move(&mut self, point: Point) -> bool {
+        if !self.tab_container.is_resizing() {
             return false;
         }
-        if self.session_sidebar.resize_to(point) {
+        if self.tab_container.resize_to(point) {
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -168,7 +168,7 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn route_session_sidebar_resize_button(&mut self, state: ElementState) -> bool {
+    pub(crate) fn route_tab_container_resize_button(&mut self, state: ElementState) -> bool {
         let now = Instant::now();
         match state {
             ElementState::Pressed => {
@@ -177,21 +177,19 @@ impl NativeApp {
                 };
                 let over_handle = self.presentation.as_ref().is_some_and(|presentation| {
                     presentation.interaction_frame().target_at(point)
-                        == Some(SESSION_SIDEBAR_RESIZE_HANDLE)
+                        == Some(TAB_CONTAINER_RESIZE_HANDLE)
                 });
                 if !over_handle
-                    || !self.session_sidebar.start_resizing(
-                        self.logical_viewport().width,
-                        point,
-                        now,
-                    )
+                    || !self
+                        .tab_container
+                        .start_resizing(self.logical_viewport().width, point, now)
                 {
                     return false;
                 }
             }
             ElementState::Released => {
-                let presence = self.sash_pointer_presence(SESSION_SIDEBAR_RESIZE_HANDLE);
-                if !self.session_sidebar.finish_resizing(presence, now) {
+                let presence = self.sash_pointer_presence(TAB_CONTAINER_RESIZE_HANDLE);
+                if !self.tab_container.finish_resizing(presence, now) {
                     return false;
                 }
             }
@@ -214,8 +212,8 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn cancel_session_sidebar_resize(&mut self) {
-        if self.session_sidebar.cancel_resizing() {
+    pub(crate) fn cancel_tab_container_resize(&mut self) {
+        if self.tab_container.cancel_resizing() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();
@@ -224,5 +222,5 @@ impl NativeApp {
 }
 
 #[cfg(test)]
-#[path = "session_sidebar_tests.rs"]
+#[path = "tab_container_state_tests.rs"]
 mod tests;

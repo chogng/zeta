@@ -86,7 +86,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
     let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
     bindings.replace_user_bindings(vec![NativeUserBinding {
         keybinding: parse_key_sequence("ctrl+k ctrl+c").expect("chord"),
-        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleSessionSidebar),
+        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleTabContainer),
         when: NativeBindingCondition::Always,
         when_source: None,
     }]);
@@ -106,7 +106,7 @@ fn chord_completes_or_expires_as_one_consumed_interaction() {
             &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(100),
         ),
-        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleTabContainer)
     );
 
     assert_eq!(
@@ -144,7 +144,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
     let mut bindings = NativeKeybindings::for_platform(HostPlatform::Linux);
     bindings.replace_user_bindings(vec![NativeUserBinding {
         keybinding: parse_key_sequence("ctrl+k").expect("binding"),
-        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleSessionSidebar),
+        target: NativeUserBindingTarget::Command(ZetermCommandId::ToggleTabContainer),
         when: NativeBindingCondition::Expression(
             ContextExpression::parse(
                 "agentSurfaceVisible && composerRoute == 'agent' && !fileSearchVisible",
@@ -158,8 +158,8 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
     let context = &NativeKeybindingContext::from_facts(NativeKeybindingFacts {
         direct_terminal: false,
         terminal_surface_visible: false,
-        session_sidebar_visible: false,
-        agent_sidebar_visible: false,
+        tab_container_visible: false,
+        inspector_visible: false,
         file_search_visible: false,
         composer_route: "agent",
     });
@@ -170,7 +170,7 @@ fn native_context_exposes_boolean_and_string_facts_to_when_expressions() {
             context,
             Instant::now(),
         ),
-        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleTabContainer)
     );
 }
 

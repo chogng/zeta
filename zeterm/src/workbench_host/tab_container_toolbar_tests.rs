@@ -1,18 +1,18 @@
-//! Sessions sidebar toolbar projection tests.
+//! Body-mounted Tab Container toolbar projection tests.
 
-use super::{SessionSidebarToolbar, TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT};
-use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR};
+use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
+use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_ui::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
-fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
-    let sidebar_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
+fn toolbar_fills_the_container_row_with_search_and_add_action() {
+    let part_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
     let mut dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
-    let toolbar = SessionSidebarToolbar::new(
-        sidebar_bounds,
+    let toolbar = TabContainerToolbar::new(
+        part_bounds,
         &TextInput::new(),
         CaretVisibility::Visible,
         SHELL_PALETTE,
@@ -26,10 +26,7 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
     assert_eq!(toolbar.bounds.size.width, 220.0);
     assert_eq!(toolbar.bounds.size.height, TOOLBAR_HEIGHT);
     assert_eq!(
-        SessionSidebarToolbar::content_bounds(sidebar_bounds)
-            .origin
-            .y
-            - toolbar.bounds.bottom(),
+        TabContainerToolbar::content_bounds(part_bounds).origin.y - toolbar.bounds.bottom(),
         TOOLBAR_CONTENT_GAP
     );
     assert_eq!(scene.text_blocks()[0].text(), "Search sessions...");
@@ -44,7 +41,7 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec!["SessionSidebarToolbar", "SearchBox", "InputBox"]
+        vec!["TabContainerToolbar", "SearchBox", "InputBox"]
     );
     assert_eq!(scene.icons().len(), 2);
     assert!(
@@ -73,7 +70,7 @@ fn toolbar_fills_the_sidebar_row_with_search_and_add_action() {
     assert_eq!(
         nodes
             .iter()
-            .find(|node| node.id == SESSION_SIDEBAR_ACTION_BAR)
+            .find(|node| node.id == TAB_CONTAINER_ACTION_BAR)
             .unwrap()
             .role,
         AccessibilityRole::Toolbar

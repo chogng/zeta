@@ -19,8 +19,8 @@ fn only_currently_supported_commands_are_bindable() {
         None
     );
     assert_eq!(
-        ZetermCommandId::bindable_from_id("workbench.action.toggleSideBar"),
-        Some(ZetermCommandId::ToggleSessionSidebar)
+        ZetermCommandId::bindable_from_id("workbench.action.toggleTabContainer"),
+        Some(ZetermCommandId::ToggleTabContainer)
     );
     assert_eq!(
         ZetermCommandId::bindable_from_id("workbench.action.newSession"),

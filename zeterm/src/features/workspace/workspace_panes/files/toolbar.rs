@@ -13,9 +13,9 @@ use zui::ui::{
 use super::FilesState;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
-    AGENT_FILES_TOOLBAR, AGENT_SIDEBAR_TOOLBAR,
+    AGENT_FILES_TOOLBAR, WORKSPACE_PANE_TOOLBAR,
 };
-use crate::workspace_panes::AgentSidebarStyle;
+use crate::workspace_panes::WorkspacePaneStyle;
 
 const PADDING: f32 = 8.0;
 const ACTION_SIZE: f32 = 28.0;
@@ -37,7 +37,7 @@ impl FilesToolbar {
         files: &FilesState,
         upstream_distance: Option<(usize, usize)>,
         caret_visibility: CaretVisibility,
-        palette: AgentSidebarStyle,
+        palette: WorkspacePaneStyle,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
@@ -193,7 +193,7 @@ impl Component for FilesToolbar {
                 AccessibilityRole::Toolbar,
                 "Files toolbar",
             )
-            .with_parent(AGENT_SIDEBAR_TOOLBAR),
+            .with_parent(WORKSPACE_PANE_TOOLBAR),
         )
     }
 

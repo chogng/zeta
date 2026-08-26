@@ -7,7 +7,7 @@ use zui::ui::ElementId;
 
 use super::DirectoryEntry;
 use super::DirectoryEntryKind;
-use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_panes::WorkspacePaneAction;
 
 const FILE_TREE_SCOPE: u32 = 5;
 
@@ -92,11 +92,11 @@ impl FilesTree {
         self.selected.map(tree_element_id)
     }
 
-    pub(super) fn activate(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub(super) fn activate(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         let node = self.elements.get(&element).copied()?;
         self.selected = Some(node);
         if !self.nodes[node.0].directory {
-            return Some(AgentSidebarAction::OpenFile {
+            return Some(WorkspacePaneAction::OpenFile {
                 path: self.nodes[node.0].path.clone(),
             });
         }
@@ -105,50 +105,50 @@ impl FilesTree {
         } else if self.nodes[node.0].children_loaded {
             self.nodes[node.0].expanded = true;
         } else {
-            return Some(AgentSidebarAction::LoadChildren {
+            return Some(WorkspacePaneAction::LoadChildren {
                 element,
                 path: self.nodes[node.0].path.clone(),
             });
         }
         self.rebuild_visible();
-        Some(AgentSidebarAction::StateChanged)
+        Some(WorkspacePaneAction::StateChanged)
     }
 
-    pub(super) fn navigate_right(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub(super) fn navigate_right(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         let node = self.elements.get(&element).copied()?;
         if !self.nodes[node.0].directory {
-            return Some(AgentSidebarAction::Handled);
+            return Some(WorkspacePaneAction::Handled);
         }
         if !self.nodes[node.0].expanded {
             if self.nodes[node.0].children_loaded {
                 self.nodes[node.0].expanded = true;
                 self.rebuild_visible();
-                return Some(AgentSidebarAction::StateChanged);
+                return Some(WorkspacePaneAction::StateChanged);
             }
-            return Some(AgentSidebarAction::LoadChildren {
+            return Some(WorkspacePaneAction::LoadChildren {
                 element,
                 path: self.nodes[node.0].path.clone(),
             });
         }
         let Some(child) = self.nodes[node.0].children.first().copied() else {
-            return Some(AgentSidebarAction::Handled);
+            return Some(WorkspacePaneAction::Handled);
         };
         self.selected = Some(child);
-        Some(AgentSidebarAction::Focus(tree_element_id(child)))
+        Some(WorkspacePaneAction::Focus(tree_element_id(child)))
     }
 
-    pub(super) fn navigate_left(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub(super) fn navigate_left(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         let node = self.elements.get(&element).copied()?;
         if self.nodes[node.0].directory && self.nodes[node.0].expanded {
             self.nodes[node.0].expanded = false;
             self.rebuild_visible();
-            return Some(AgentSidebarAction::StateChanged);
+            return Some(WorkspacePaneAction::StateChanged);
         }
         let Some(parent) = self.nodes[node.0].parent else {
-            return Some(AgentSidebarAction::Handled);
+            return Some(WorkspacePaneAction::Handled);
         };
         self.selected = Some(parent);
-        Some(AgentSidebarAction::Focus(tree_element_id(parent)))
+        Some(WorkspacePaneAction::Focus(tree_element_id(parent)))
     }
 
     pub(super) fn complete_directory_load(

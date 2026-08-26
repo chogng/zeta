@@ -12,9 +12,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let NativeApp {
         palette,
         retained_runtime,
-        terminal_workspace,
-        pane_groups,
-        pane_host,
+        workbench_host,
         pane_view_states,
         active_pane: _,
         terminal_pane_resize,
@@ -26,12 +24,11 @@ pub(super) fn with_shell_presentation_model<R>(
         workspace_context,
         composer,
         session_search,
-        tab_inputs,
         caret_blink,
         ui_dispatch,
-        session_sidebar,
-        sidebar_part,
-        sidebar_pane_workspace,
+        tab_container,
+        inspector_part,
+        workspace_pane_host,
         file_editor_host,
         file_editor_input,
         file_editor_search,
@@ -54,34 +51,39 @@ pub(super) fn with_shell_presentation_model<R>(
         text_layout,
         ..
     } = app;
+    let crate::workbench_host::WorkbenchHost {
+        model: workbench,
+        pane_host,
+        terminal_workspace,
+    } = workbench_host;
     let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);
     let language_server_runtime_state =
         language_service.server_state(language_server_settings.selected_server().server_id());
-    let active_tab_input = tab_inputs.active_key();
-    let pane_group = active_tab_input.and_then(|key| pane_groups.get(key));
+    let active_tab_input = workbench.tab_part().active_tab_key();
+    let pane_group = active_tab_input.and_then(|key| workbench.pane_part(key));
     let active_pane = active_tab_input.and_then(|tab_key| {
-        let group = pane_groups.get(tab_key)?;
+        let layout = workbench.pane_part(tab_key)?;
         pane_host.mount(
             &PaneHostScope::Tab(tab_key.clone()),
-            group,
-            group.active_pane(),
+            layout,
+            layout.active_group(),
         )
     });
     let active_pane_id = active_pane.map(|mount| mount.pane_id());
     let terminal_panes = pane_group
-        .map(|group| {
+        .map(|layout| {
             let Some(tab_key) = active_tab_input else {
                 return Vec::new();
             };
-            group
-                .leaf_ids()
+            layout
+                .group_ids()
                 .into_iter()
                 .filter_map(|pane_id| {
                     let binding = (tab_key.clone(), pane_id);
                     let mount =
-                        pane_host.mount(&PaneHostScope::Tab(tab_key.clone()), group, pane_id)?;
+                        pane_host.mount(&PaneHostScope::Tab(tab_key.clone()), layout, pane_id)?;
                     let pane_id = mount.pane_id();
                     let kind = mount.kind();
                     let terminal_key = (kind == PaneInputKind::Terminal)
@@ -150,14 +152,14 @@ pub(super) fn with_shell_presentation_model<R>(
             workspace_context,
             composer,
             session_search,
-            tab_inputs: tab_inputs.inputs(),
+            tab_part: workbench.tab_part(),
             active_tab_input,
             caret_visibility: caret_blink.visibility(),
             dispatch: ui_dispatch,
-            session_sidebar: *session_sidebar,
-            sidebar_part: *sidebar_part,
-            sidebar_pane_workspace,
-            session_context_menu: *session_context_menu,
+            tab_container: *tab_container,
+            inspector_part: *inspector_part,
+            workspace_pane_host,
+            session_context_menu: session_context_menu.clone(),
             git_branch_context_menu,
             workspace_path_picker,
             remote_connection_picker,

@@ -210,7 +210,7 @@ impl NativeApp {
         else {
             return false;
         };
-        let changed = self.sidebar_pane_workspace.scroll_multi_diff(
+        let changed = self.workspace_pane_host.scroll_multi_diff(
             multi_diff_scroll_pixels(delta),
             viewport,
             std::time::Instant::now(),
@@ -245,7 +245,7 @@ impl NativeApp {
             return false;
         };
         let changed = self
-            .sidebar_pane_workspace
+            .workspace_pane_host
             .scroll_file_list(file_list_scroll_pixels(delta), viewport);
         if changed {
             self.rebuild_presentation_on_next_redraw();

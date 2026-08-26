@@ -142,6 +142,9 @@ fn reject_disconnected_command(command: AgentSessionCommand) -> bool {
         AgentSessionCommand::ActivateSession { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }
+        AgentSessionCommand::StopSession { response, .. } => {
+            let _ = response.send(disconnected_command_error());
+        }
         AgentSessionCommand::ConfigureLanguageServer { response, .. } => {
             let _ = response.send(disconnected_command_error());
         }

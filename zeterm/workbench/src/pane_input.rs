@@ -4,10 +4,10 @@ use std::path::PathBuf;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 
-/// Product content kind that can be mounted into one Pane.
+/// Product content kind that can be mounted into one PaneGroup input.
 ///
 /// The kind is independent from layout identity. A [`PaneId`](crate::PaneId) identifies a leaf
-/// in a [`PaneGroup`](crate::PaneGroup); this value identifies what the leaf is showing.
+/// in a [`PaneGroup`](crate::PaneGroup); this value identifies what the group is showing.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PaneInputKind {
     /// A terminal compatibility surface described by one product-level Session.

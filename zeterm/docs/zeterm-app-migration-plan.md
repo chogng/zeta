@@ -19,7 +19,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | `zeterm` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeterm/ui::layout` + `zeterm/composer` + `zeterm/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
 | 通用 icon asset contract | 旧 Native icon types | `zeterm/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `zeterm/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `zeterm/zui` | zeterm-owned crates in root workspace | 已迁入 zeterm |
-| Button、Tree、List、Editor/Sidebar presentation | `zeterm/ui`、`editor`、`agent-sidebar` | zeterm-owned crates in root workspace | 已迁入 zeterm |
+| Button、Tree、List、Editor/Workspace pane presentation | `zeterm/ui`、`editor`、`features/workspace` | zeterm-owned modules and crates in root workspace | 已迁入 zeterm |
 | Renderer、wgpu、winit | 历史 `zeterm/renderer`、`wgpu`、`winit` | private `zeterm/zui` modules | 已收入单一 `zui` crate |
 | App Server、Core、Protocol、Session、File/Git、Diff、Terminal model | `zeta-rs/*` | `zeta-rs` | 保留 |
 | 纯 Rust editor transaction、syntax、language service | `zeta-rs/editor-core`、`syntax`、`language-service` | `zeta-rs` | 保留；presentation 与底层分离 |
@@ -89,7 +89,7 @@ zeta-rs ───────→ no zeterm/desktop product host
 
 - [x] 将 Native UI crates 迁入 `zeterm/`，再把 icon/UI/runtime/wgpu/winit 职责收敛为单一 public `zui` crate 的同名能力目录；
 - [x] 保留 `zeta-editor-core`、`zeta-syntax` 等纯 Rust core 在 `zeta-rs`，将 `zeta-editor` presentation 迁入 zeterm；
-- [x] 将 `zeta-agent-sidebar`、Native settings UI 和 Native keybinding UI 迁入 zeterm-side crates；
+- [x] 将 Files/SCM workspace panes、Native settings UI 和 Native keybinding UI 迁入 zeterm-side modules/crates；
 - [x] 将 Markdown presentation crate 迁入 zeterm-side crates，Theme manifest/resolver 保留在 shared backend；
 - [x] 保证 `zeta-rs` backend crates 不再直接依赖 Native UI crate。
 
@@ -133,7 +133,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
 - [x] 将 `IconId`、SVG definition 和 rendering mode 收入 `zui` 通用 contract；`zeta-icons`
       只保留可选的 zeterm product catalog，`zui`/`zeta-ui` 不依赖该 catalog；
 - [x] 将 Root/Inspector 和 Terminal Workspace 的 pane topology 收敛到 `zeta-ui::layout`，Native 只投影
-      `SidebarPartState` 为 `SidebarLayoutSpec`；
+      `InspectorPartState` 为 `InspectorLayoutSpec`；
 - [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui`，以 recording backend 验证通用
       组件可脱离 zeterm product host 组合；
 - [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list
@@ -158,7 +158,7 @@ boundary CI 均已通过。
 - 不复制 `zeta-rs/native` 形成第二个并行宿主；迁移必须保持单一运行入口。
 - 不在旧 Native 中修建新功能；若迁移过程中发现缺少通用能力，先在正确的下层 owner 实现，再由
   zeterm 做最小接线。
-- 不把 `zeterm/editor`、`zeterm/agent-sidebar` 等 presentation crate 直接误判为 shared backend；
+- 不把 `zeterm/editor` 或 `zeterm/src/features/workspace` 等 presentation owner 直接误判为 shared backend；
   先按“headless model/core”和“Native presentation”拆分。
 - 不让 `zeterm` 类型、产品命令、窗口事件或布局类型进入 `zeta-rs`。
 - 每个迁移阶段都必须保留 deterministic unit tests 和至少一个产品 targeted test；测试失败时先区分

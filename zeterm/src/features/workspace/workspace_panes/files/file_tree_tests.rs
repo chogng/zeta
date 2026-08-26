@@ -2,7 +2,7 @@
 
 use super::DirectoryEntry;
 use super::FilesTree;
-use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_panes::WorkspacePaneAction;
 use zeta_ui::TreeItemExpansion;
 
 #[test]
@@ -20,7 +20,7 @@ fn directory_activation_loads_once_and_preserves_child_identity() {
     );
     assert_eq!(
         tree.activate(directory),
-        Some(AgentSidebarAction::LoadChildren {
+        Some(WorkspacePaneAction::LoadChildren {
             element: directory,
             path: "src".into()
         })
@@ -31,16 +31,16 @@ fn directory_activation_loads_once_and_preserves_child_identity() {
     let child = tree.row(1).unwrap().entry().element_id();
     assert_eq!(
         tree.activate(directory),
-        Some(AgentSidebarAction::StateChanged)
+        Some(WorkspacePaneAction::StateChanged)
     );
     assert_eq!(
         tree.activate(directory),
-        Some(AgentSidebarAction::StateChanged)
+        Some(WorkspacePaneAction::StateChanged)
     );
     assert_eq!(tree.row(1).unwrap().entry().element_id(), child);
     assert_eq!(
         tree.navigate_right(directory),
-        Some(AgentSidebarAction::Focus(child))
+        Some(WorkspacePaneAction::Focus(child))
     );
     assert_eq!(tree.selected_element(), Some(child));
 }
@@ -53,7 +53,7 @@ fn files_are_opened_without_an_unnecessary_directory_load() {
     let file = tree.row(0).unwrap().entry().element_id();
     assert_eq!(
         tree.activate(file),
-        Some(AgentSidebarAction::OpenFile {
+        Some(WorkspacePaneAction::OpenFile {
             path: "alpha.txt".into()
         })
     );

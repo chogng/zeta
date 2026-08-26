@@ -5,28 +5,28 @@ use zui::ui::SplitViewOrientation;
 use zui::ui::SplitViewPane;
 use zui::ui::SplitViewResizeSnapshot;
 
-use super::SidebarVisibility;
+use super::PartVisibility;
 
-const SESSION_PANE_INDEX: usize = 0;
+const TAB_PART_PANE_INDEX: usize = 0;
 const MAIN_PANE_INDEX: usize = 1;
 
-/// Host-neutral sizing policy for the Sessions Part.
+/// Host-neutral sizing policy for the body-mounted Tab Container.
 ///
 /// The host retains visibility, preferred width, and resize state; this value only projects that
 /// state into one frame's split geometry.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SessionSidebarLayoutSpec {
-    visibility: SidebarVisibility,
+pub struct TabContainerLayoutSpec {
+    visibility: PartVisibility,
     preferred_width: f32,
     minimum_width: f32,
     maximum_width: f32,
     minimum_main_width: f32,
 }
 
-impl SessionSidebarLayoutSpec {
-    /// Creates a sizing policy for the Sessions Part.
+impl TabContainerLayoutSpec {
+    /// Creates a sizing policy for the body-mounted Tab Container.
     pub const fn new(
-        visibility: SidebarVisibility,
+        visibility: PartVisibility,
         preferred_width: f32,
         minimum_width: f32,
         maximum_width: f32,
@@ -41,23 +41,23 @@ impl SessionSidebarLayoutSpec {
         }
     }
 
-    /// Returns whether the Sessions Part can be displayed without violating the main minimum.
+    /// Returns whether the Tab Container can be displayed without violating the main minimum.
     pub const fn is_visible_for(self, available_width: f32) -> bool {
-        matches!(self.visibility, SidebarVisibility::Expanded)
+        matches!(self.visibility, PartVisibility::Expanded)
             && available_width >= self.minimum_width + self.minimum_main_width
     }
 
-    /// Resolves the Sessions Part and main Part bounds for one host viewport.
-    pub fn for_bounds(self, bounds: Rect) -> SessionSidebarLayout {
-        let sidebar_is_visible = self.is_visible_for(bounds.size.width);
-        let sidebar =
+    /// Resolves the Tab Container and main Part bounds for one host viewport.
+    pub fn for_bounds(self, bounds: Rect) -> TabContainerLayout {
+        let tab_part_is_visible = self.is_visible_for(bounds.size.width);
+        let tab_part =
             SplitViewPane::new(self.preferred_width, self.minimum_width, self.maximum_width);
-        let sidebar = if sidebar_is_visible {
-            sidebar
+        let tab_part = if tab_part_is_visible {
+            tab_part
         } else {
-            sidebar.hidden()
+            tab_part.hidden()
         };
-        let main_preferred_width = if sidebar_is_visible {
+        let main_preferred_width = if tab_part_is_visible {
             (bounds.size.width - self.preferred_width).max(0.0)
         } else {
             bounds.size.width
@@ -65,16 +65,16 @@ impl SessionSidebarLayoutSpec {
         let main = SplitViewPane::new(main_preferred_width, self.minimum_main_width, f32::INFINITY)
             .with_priority(SplitViewLayoutPriority::High);
         let layout =
-            SplitViewLayout::new(bounds, SplitViewOrientation::Horizontal, &[sidebar, main]);
-        let sessions_bounds = layout
-            .pane_bounds(SESSION_PANE_INDEX)
+            SplitViewLayout::new(bounds, SplitViewOrientation::Horizontal, &[tab_part, main]);
+        let tab_container_bounds = layout
+            .pane_bounds(TAB_PART_PANE_INDEX)
             .filter(|bounds| !bounds.is_empty());
         let main_bounds = layout
             .pane_bounds(MAIN_PANE_INDEX)
-            .expect("Sessions split must retain its main pane");
+            .expect("Tab Container split must retain its main pane");
         let sash = layout.sash(0);
-        SessionSidebarLayout {
-            sessions_bounds,
+        TabContainerLayout {
+            tab_container_bounds,
             main_bounds,
             sash_track: sash.map(|sash| sash.track_bounds()),
             resize_snapshot: sash.map(|sash| sash.resize_snapshot()),
@@ -82,22 +82,22 @@ impl SessionSidebarLayoutSpec {
     }
 }
 
-/// Resolved Sessions Part and main Part geometry for one frame.
+/// Resolved Tab Container and main Part geometry for one frame.
 ///
-/// This type owns only bounds and resize geometry. The host retains session state, active
+/// This type owns only bounds and resize geometry. The host retains Tab input state, active
 /// identity, interaction semantics, and scene composition.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SessionSidebarLayout {
-    sessions_bounds: Option<Rect>,
+pub struct TabContainerLayout {
+    tab_container_bounds: Option<Rect>,
     main_bounds: Rect,
     sash_track: Option<Rect>,
     resize_snapshot: Option<SplitViewResizeSnapshot>,
 }
 
-impl SessionSidebarLayout {
-    /// Returns the optional Sessions Part bounds.
-    pub const fn sessions_bounds(self) -> Option<Rect> {
-        self.sessions_bounds
+impl TabContainerLayout {
+    /// Returns the optional body-mounted Tab Container bounds.
+    pub const fn tab_container_bounds(self) -> Option<Rect> {
+        self.tab_container_bounds
     }
 
     /// Returns the main Part bounds.
@@ -105,17 +105,17 @@ impl SessionSidebarLayout {
         self.main_bounds
     }
 
-    /// Returns the sash track used to paint and hit-test the Sessions divider.
+    /// Returns the sash track used to paint and hit-test the Tab Container divider.
     pub const fn sash_track(self) -> Option<Rect> {
         self.sash_track
     }
 
-    /// Returns the resize snapshot matching the resolved Sessions sash.
+    /// Returns the resize snapshot matching the resolved Tab Container sash.
     pub const fn resize_snapshot(self) -> Option<SplitViewResizeSnapshot> {
         self.resize_snapshot
     }
 }
 
 #[cfg(test)]
-#[path = "session_workspace_tests.rs"]
+#[path = "tab_container_tests.rs"]
 mod tests;

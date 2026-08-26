@@ -1,29 +1,34 @@
 use std::ops::Range;
+use zeta_workbench::TabGroupId;
 use zui::ui::ElementId;
 
-use crate::pane_group::PaneId;
+use crate::workbench_host::PaneId;
 
-pub(crate) const AGENT_SIDEBAR: ElementId = ElementId::scoped(1, 23);
+pub(crate) const WORKSPACE_PANE: ElementId = ElementId::scoped(1, 23);
 pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
 pub(crate) const AGENT_EDITOR_PANE: ElementId = ElementId::scoped(1, 29);
 pub(crate) const MULTI_DIFF_EDITOR: ElementId = ElementId::scoped(1, 30);
 pub(crate) const MULTI_DIFF_SCROLLBAR: ElementId = ElementId::scoped(1, 31);
-pub(crate) const AGENT_SIDEBAR_NAVIGATION: ElementId = ElementId::scoped(1, 32);
+pub(crate) const WORKSPACE_PANE_NAVIGATION: ElementId = ElementId::scoped(1, 32);
 pub(crate) const AGENT_CHANGES: ElementId = ElementId::scoped(1, 33);
 pub(crate) const AGENT_FILES: ElementId = ElementId::scoped(1, 34);
-pub(crate) const AGENT_SIDEBAR_TOOLBAR: ElementId = ElementId::scoped(1, 35);
+pub(crate) const WORKSPACE_PANE_TOOLBAR: ElementId = ElementId::scoped(1, 35);
 pub(crate) const AGENT_FILES_ACTION_BAR: ElementId = ElementId::scoped(1, 36);
 pub(crate) const AGENT_FILES_REFRESH: ElementId = ElementId::scoped(1, 37);
 pub(crate) const AGENT_FILES_SEARCH: ElementId = ElementId::scoped(1, 38);
 pub(crate) const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(1, 39);
 pub(crate) const AGENT_FILES_TOOLBAR: ElementId = ElementId::scoped(1, 52);
 
-pub(crate) use crate::workspace_panes::AgentSidebarPaneAction;
+pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
-const SESSION_SCOPE: u32 = 14;
+const TAB_CONTAINER_SCOPE: u32 = 14;
 const TERMINAL_PANE_SCOPE: u32 = 15;
+const SESSION_CONTENT_SCOPE: u32 = 16;
+const TITLEBAR_TAB_SCOPE: u32 = 17;
+const TAB_CONTAINER_GROUP_SCOPE: u32 = 18;
+const TITLEBAR_TAB_GROUP_SCOPE: u32 = 19;
 
 pub(crate) const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
 pub(crate) const TITLEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2);
@@ -36,22 +41,27 @@ pub(crate) const CONTEXT_LOCATION: ElementId = ElementId::scoped(SHELL_SCOPE, 8)
 pub(crate) const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(SHELL_SCOPE, 9);
 pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 10);
 pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
-pub(crate) const SESSION_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
-pub(crate) const SESSION_SIDEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
-pub(crate) const SESSION_TAB_LIST: ElementId = ElementId::scoped(SESSION_SCOPE, 1);
-pub(crate) const ACTIVE_SESSION_TAB: ElementId = ElementId::scoped(SESSION_SCOPE, 2);
-pub(crate) const SETTINGS_WORKBENCH_TAB: ElementId = ElementId::scoped(SESSION_SCOPE, 4);
-pub(crate) const SESSION_SIDEBAR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
+pub(crate) const TAB_CONTAINER_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
+pub(crate) const TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
+pub(crate) const TAB_CONTAINER_LIST: ElementId = ElementId::scoped(TAB_CONTAINER_GROUP_SCOPE, 1);
+pub(crate) const FIRST_TAB_CONTAINER_SESSION_TAB: ElementId =
+    ElementId::scoped(TAB_CONTAINER_SCOPE, 2);
+pub(crate) const TAB_CONTAINER_SETTINGS_TAB: ElementId = ElementId::scoped(TAB_CONTAINER_SCOPE, 4);
+pub(crate) const TITLEBAR_TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 53);
+pub(crate) const TITLEBAR_TAB_LIST: ElementId = ElementId::scoped(TITLEBAR_TAB_GROUP_SCOPE, 1);
+pub(crate) const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
+pub(crate) const TITLEBAR_SETTINGS_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 4);
+pub(crate) const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
 pub(crate) const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(SHELL_SCOPE, 17);
 const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(SHELL_SCOPE, 18);
 const SESSION_CONTEXT_MENU_CLOSE: ElementId = ElementId::scoped(SHELL_SCOPE, 19);
 const SESSION_CONTEXT_MENU_RENAME: ElementId = ElementId::scoped(SHELL_SCOPE, 20);
 const SESSION_CONTEXT_MENU_FORK: ElementId = ElementId::scoped(SHELL_SCOPE, 21);
-pub(crate) const AGENT_SIDEBAR_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
-pub(crate) const AGENT_SIDEBAR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 51);
-pub(crate) const SESSION_SIDEBAR_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
+pub(crate) const WORKSPACE_PANE_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
+pub(crate) const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 51);
+pub(crate) const TAB_CONTAINER_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
 pub(crate) const SESSION_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 25);
-pub(crate) const SESSION_SIDEBAR_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 26);
+pub(crate) const TAB_CONTAINER_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 26);
 pub(crate) const ADD_SESSION: ElementId = ElementId::scoped(SHELL_SCOPE, 27);
 pub(crate) const THREAD_TIMELINE: ElementId = ElementId::scoped(SHELL_SCOPE, 40);
 pub(crate) const COMPOSER_INTERACTION: ElementId = ElementId::scoped(SHELL_SCOPE, 42);
@@ -62,8 +72,7 @@ pub(crate) const FILE_EDITOR_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE
 pub(crate) const FILE_EDITOR_FIND_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 47);
 pub(crate) const FILE_EDITOR_REPLACE_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 48);
 pub(crate) const FILE_EDITOR_SEARCH_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 49);
-pub(crate) const LANGUAGE_SERVER_SETTINGS_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 50);
-pub(crate) const SESSION_HEADER: ElementId = ElementId::scoped(SESSION_SCOPE, 3);
+pub(crate) const SESSION_HEADER: ElementId = ElementId::scoped(SESSION_CONTENT_SCOPE, 1);
 pub(crate) const FILE_EDITOR_NOTICE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 1);
 const FILE_EDITOR_RELOAD: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 2);
 const FILE_EDITOR_OVERWRITE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 3);
@@ -100,13 +109,51 @@ pub(crate) fn composer_interaction_item_index(
 
 pub(crate) fn session_tab_id(index: usize) -> ElementId {
     if index == 0 {
-        return ACTIVE_SESSION_TAB;
+        return FIRST_TAB_CONTAINER_SESSION_TAB;
     }
-    dynamic_element_id_in_scope(SESSION_SCOPE, FIRST_SESSION_TAB, index - 1, "session tab")
+    dynamic_element_id_in_scope(
+        TAB_CONTAINER_SCOPE,
+        FIRST_SESSION_TAB,
+        index - 1,
+        "session tab",
+    )
 }
 
-pub(crate) fn session_tab_index(id: ElementId, mut mounted: Range<usize>) -> Option<usize> {
-    mounted.find(|index| session_tab_id(*index) == id)
+pub(crate) fn titlebar_session_tab_id(index: usize) -> ElementId {
+    if index == 0 {
+        return FIRST_TITLEBAR_SESSION_TAB;
+    }
+    dynamic_element_id_in_scope(
+        TITLEBAR_TAB_SCOPE,
+        FIRST_SESSION_TAB,
+        index - 1,
+        "titlebar session tab",
+    )
+}
+
+pub(crate) fn tab_group_list_id(group: TabGroupId) -> ElementId {
+    if group == TabGroupId::DEFAULT {
+        return TAB_CONTAINER_LIST;
+    }
+    tab_group_element_id(TAB_CONTAINER_GROUP_SCOPE, group, "tab group list")
+}
+
+pub(crate) fn titlebar_tab_group_list_id(group: TabGroupId) -> ElementId {
+    if group == TabGroupId::DEFAULT {
+        return TITLEBAR_TAB_LIST;
+    }
+    tab_group_element_id(TITLEBAR_TAB_GROUP_SCOPE, group, "titlebar tab group list")
+}
+
+pub(crate) fn session_tab_index(id: ElementId, mounted: Range<usize>) -> Option<usize> {
+    mounted
+        .clone()
+        .find(|index| session_tab_id(*index) == id)
+        .or_else(|| {
+            mounted
+                .into_iter()
+                .find(|index| titlebar_session_tab_id(*index) == id)
+        })
 }
 
 pub(crate) fn terminal_pane_id(pane: PaneId) -> ElementId {
@@ -117,7 +164,7 @@ pub(crate) fn terminal_pane_id(pane: PaneId) -> ElementId {
     ElementId::scoped(TERMINAL_PANE_SCOPE, local)
 }
 
-pub(crate) fn terminal_pane_sash_id(split: crate::pane_group::PaneSplitId) -> ElementId {
+pub(crate) fn terminal_pane_sash_id(split: crate::workbench_host::PaneSplitId) -> ElementId {
     let local = u32::try_from(split.value())
         .ok()
         .and_then(|value| FIRST_TERMINAL_PANE_SASH.checked_add(value))
@@ -158,6 +205,12 @@ fn dynamic_element_id_in_scope(scope: u32, first: u32, index: usize, label: &str
         .ok()
         .and_then(|index| first.checked_add(index))
         .unwrap_or_else(|| panic!("{label} index must fit its element scope"));
+    ElementId::scoped(scope, local)
+}
+
+fn tab_group_element_id(scope: u32, group: TabGroupId, label: &str) -> ElementId {
+    let local = u32::try_from(group.value())
+        .unwrap_or_else(|_| panic!("{label} identity must fit its element scope"));
     ElementId::scoped(scope, local)
 }
 

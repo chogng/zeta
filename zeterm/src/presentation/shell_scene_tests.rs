@@ -9,29 +9,26 @@ use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::KeyboardShortcutsState;
 use crate::language_server_settings::LanguageServerSettingsState;
-use crate::pane_group::{PaneGroup, PaneSplitDirection};
-use crate::pane_host::{PaneHost, PaneHostScope};
-use crate::pane_input::{PaneBinding, PaneInput};
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::session::session_context_menu::SessionContextMenuState;
 use crate::session::session_search::SessionSearch;
-use crate::session::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
-    AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
-    AGENT_SIDEBAR_RESIZE_HANDLE, AGENT_SIDEBAR_TOOLBAR, COMPOSER, COMPOSER_INFO_BAR,
-    COMPOSER_PANEL, ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
-    MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER, SESSION_SEARCH_INPUT,
-    SESSION_SIDEBAR_RESIZE_HANDLE, SETTINGS_WORKBENCH_TAB, THREAD_TIMELINE, TITLEBAR,
+    ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
+    AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL,
+    ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
+    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER,
+    SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_TAB, THREAD_TIMELINE,
+    TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
 };
-use crate::sidebar_pane_workspace::SidebarPaneWorkspace;
-use crate::sidebar_part::SidebarPartState;
-use crate::tab_input::TabInput;
-use crate::tab_input::TabInputKey;
 use crate::thread_projection::ThreadProjection;
+use crate::workbench_host::{InspectorPartState, TabContainerState, TabInputKey, TabPart};
+use crate::workbench_host::{
+    PaneBinding, PaneHost, PaneHostScope, PaneInput, PanePart, PaneSplitDirection,
+};
 use crate::workspace_context::WorkspaceContext;
+use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
@@ -56,13 +53,13 @@ fn viewport() -> LogicalViewport {
 }
 
 #[test]
-fn sidebar_part_outer_border_is_owned_by_native_shell() {
+fn inspector_part_outer_border_is_owned_by_native_shell() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
     let mut scene = UiScene::new(crate::shell_style::SHELL_PALETTE.background);
 
-    super::draw_sidebar_part_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
+    super::draw_inspector_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
 
-    let frame = scene.rects().first().copied().expect("sidebar frame");
+    let frame = scene.rects().first().copied().expect("Inspector frame");
     assert_eq!(frame.bounds(), bounds);
     assert_eq!(frame.fill(), Color::TRANSPARENT);
     assert_eq!(frame.border().widths(), Edges::new(0.0, 0.0, 0.0, 1.0));
@@ -80,15 +77,15 @@ fn presentation_with_dispatch(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
 ) -> (ShellPresentation, UiDispatch) {
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let mut dispatch = UiDispatch::default();
     let presentation = presentation_with_workspace(
         terminal,
         scroll_offset,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
         SessionContextMenuState::default(),
-        &sidebar_pane_workspace,
+        &workspace_pane_host,
         &mut dispatch,
     );
     (presentation, dispatch)
@@ -103,50 +100,50 @@ fn accessibility_nodes(
         .accessibility_nodes(dispatch)
 }
 
-fn presentation_with_sidebar(
+fn presentation_with_tab_container(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-    session_sidebar: SessionSidebarState,
+    tab_container: TabContainerState,
 ) -> ShellPresentation {
-    presentation_with_sidebar_and_menu(
+    presentation_with_tab_container_and_menu(
         terminal,
         scroll_offset,
-        session_sidebar,
+        tab_container,
         SessionContextMenuState::default(),
     )
 }
 
-fn presentation_with_sidebar_and_menu(
+fn presentation_with_tab_container_and_menu(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-    session_sidebar: SessionSidebarState,
+    tab_container: TabContainerState,
     session_context_menu: SessionContextMenuState,
 ) -> ShellPresentation {
-    presentation_with_sidebars_and_menu(
+    presentation_with_parts_and_menu(
         terminal,
         scroll_offset,
-        session_sidebar,
-        SidebarPartState::default(),
+        tab_container,
+        InspectorPartState::default(),
         session_context_menu,
     )
 }
 
-fn presentation_with_sidebars_and_menu(
+fn presentation_with_parts_and_menu(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
     session_context_menu: SessionContextMenuState,
 ) -> ShellPresentation {
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let mut dispatch = UiDispatch::default();
     presentation_with_workspace(
         terminal,
         scroll_offset,
-        session_sidebar,
-        sidebar_part,
+        tab_container,
+        inspector_part,
         session_context_menu,
-        &sidebar_pane_workspace,
+        &workspace_pane_host,
         &mut dispatch,
     )
 }
@@ -154,19 +151,19 @@ fn presentation_with_sidebars_and_menu(
 fn presentation_with_workspace(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
     session_context_menu: SessionContextMenuState,
-    sidebar_pane_workspace: &SidebarPaneWorkspace,
+    workspace_pane_host: &WorkspacePaneHost,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
     presentation_with_active_tab_input(
         terminal,
         scroll_offset,
-        session_sidebar,
-        sidebar_part,
+        tab_container,
+        inspector_part,
         session_context_menu,
-        sidebar_pane_workspace,
+        workspace_pane_host,
         dispatch,
         None,
     )
@@ -175,10 +172,10 @@ fn presentation_with_workspace(
 fn presentation_with_active_tab_input(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
     session_context_menu: SessionContextMenuState,
-    sidebar_pane_workspace: &SidebarPaneWorkspace,
+    workspace_pane_host: &WorkspacePaneHost,
     dispatch: &mut UiDispatch,
     active_tab_input: Option<TabInputKey>,
 ) -> ShellPresentation {
@@ -193,11 +190,13 @@ fn presentation_with_active_tab_input(
         zeta_protocol::SessionId::new("workspace-pane-session")
             .expect("test session ID is non-empty"),
     );
-    let workspace_pane_enabled = sidebar_part.is_expanded() && active_tab_input.is_none();
-    let sidebar_part = workspace_pane_enabled
-        .then(SidebarPartState::default)
-        .unwrap_or(sidebar_part);
-    let workspace_pane_group = PaneGroup::new();
+    let workspace_pane_enabled = inspector_part.is_expanded() && active_tab_input.is_none();
+    let inspector_part = workspace_pane_enabled
+        .then(InspectorPartState::default)
+        .unwrap_or(inspector_part);
+    let workspace_pane_group = PanePart::with_input(PaneInput::files(
+        workspace_context.working_directory().to_path_buf(),
+    ));
     let mut pane_host = PaneHost::new();
     if workspace_pane_enabled {
         pane_host.insert(
@@ -205,9 +204,7 @@ fn presentation_with_active_tab_input(
                 PaneHostScope::Tab(workspace_tab_key.clone()),
                 workspace_pane_group.root_pane(),
             ),
-            PaneBinding::new(PaneInput::files(
-                workspace_context.working_directory().to_path_buf(),
-            )),
+            PaneBinding::new(),
         );
     }
     let workspace_pane = workspace_pane_enabled.then(|| {
@@ -223,10 +220,7 @@ fn presentation_with_active_tab_input(
         .as_ref()
         .or(workspace_pane_enabled.then_some(&workspace_tab_key));
     let pane_group = workspace_pane_enabled.then_some(&workspace_pane_group);
-    let tab_inputs = active_tab_input
-        .is_some_and(|input| input.is_settings())
-        .then(|| vec![TabInput::from_settings()])
-        .unwrap_or_default();
+    let tab_part = TabPart::default();
     let initial = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
@@ -259,14 +253,14 @@ fn presentation_with_active_tab_input(
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &tab_inputs,
+            tab_part: &tab_part,
             active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
-            session_sidebar,
-            sidebar_part,
-            sidebar_pane_workspace,
-            session_context_menu,
+            tab_container,
+            inspector_part,
+            workspace_pane_host,
+            session_context_menu: session_context_menu.clone(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
@@ -318,13 +312,13 @@ fn presentation_with_active_tab_input(
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &tab_inputs,
+            tab_part: &tab_part,
             active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
-            session_sidebar,
-            sidebar_part,
-            sidebar_pane_workspace,
+            tab_container,
+            inspector_part,
+            workspace_pane_host,
             session_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -347,16 +341,16 @@ fn presentation_with_active_tab_input(
 }
 
 #[test]
-fn settings_tab_input_renders_settings_and_selects_the_sidebar_entry() {
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
+    let workspace_pane_host = WorkspacePaneHost::default();
     let mut dispatch = UiDispatch::default();
     let presentation = presentation_with_active_tab_input(
         None,
         0,
-        SessionSidebarState::expanded(),
-        SidebarPartState::default(),
+        TabContainerState::expanded(),
+        InspectorPartState::default(),
         SessionContextMenuState::default(),
-        &sidebar_pane_workspace,
+        &workspace_pane_host,
         &mut dispatch,
         Some(TabInputKey::Settings),
     );
@@ -378,14 +372,14 @@ fn settings_tab_input_renders_settings_and_selects_the_sidebar_entry() {
     );
     let node = accessibility_nodes
         .iter()
-        .find(|node| node.id == SETTINGS_WORKBENCH_TAB)
+        .find(|node| node.id == TAB_CONTAINER_SETTINGS_TAB)
         .expect("settings workbench item should be mounted");
     assert_eq!(node.selection, zui::ui::AccessibilitySelection::Selected);
 }
 
 #[test]
-fn expanded_sidebar_part_file_row_hover_rebuilds_with_the_hover_background() {
-    let mut workspace = SidebarPaneWorkspace::default();
+fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
+    let mut workspace = WorkspacePaneHost::default();
     workspace.refresh_files(vec![
         FsReadDirectoryEntry {
             name: "alpha.txt".into(),
@@ -400,8 +394,8 @@ fn expanded_sidebar_part_file_row_hover_rebuilds_with_the_hover_background() {
     let initial = presentation_with_workspace(
         None,
         0,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::expanded(),
+        TabContainerState::collapsed(),
+        InspectorPartState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
         &mut dispatch,
@@ -427,8 +421,8 @@ fn expanded_sidebar_part_file_row_hover_rebuilds_with_the_hover_background() {
     let hovered = presentation_with_workspace(
         None,
         0,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::expanded(),
+        TabContainerState::collapsed(),
+        InspectorPartState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
         &mut dispatch,
@@ -445,8 +439,8 @@ fn expanded_sidebar_part_file_row_hover_rebuilds_with_the_hover_background() {
 fn primary_layout_keeps_output_above_a_bottom_composer() {
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
     )
     .unwrap();
 
@@ -466,8 +460,9 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
 fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
+    let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let thread_projection = ThreadProjection::default();
     let mut file_editor_host = FileEditorHost::default();
     file_editor_host.open(TextFileSnapshot::new(
@@ -509,13 +504,13 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &[],
+            tab_part: &tab_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::collapsed(),
-            sidebar_part: SidebarPartState::expanded(),
-            sidebar_pane_workspace: &sidebar_pane_workspace,
+            tab_container: TabContainerState::collapsed(),
+            inspector_part: InspectorPartState::expanded(),
+            workspace_pane_host: &workspace_pane_host,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -543,7 +538,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     assert!(
         accessibility_nodes
             .iter()
-            .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(AGENT_SIDEBAR))
+            .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(WORKSPACE_PANE))
     );
     for id in [SESSION_HEADER, COMPOSER, THREAD_TIMELINE] {
         assert!(accessibility_nodes.iter().any(|node| node.id == id));
@@ -568,8 +563,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
 fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
     let layout = ShellLayout::for_viewport_with_composer_height(
         viewport(),
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
         160.0,
     )
     .unwrap();
@@ -591,8 +586,8 @@ fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
 fn primary_presentation_uses_a_flat_light_surface() {
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
     )
     .unwrap();
     let presentation = presentation(None, 0);
@@ -646,14 +641,14 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
 }
 
 #[test]
-fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() {
+fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab() {
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::expanded(),
-        SidebarPartState::default(),
+        TabContainerState::expanded(),
+        InspectorPartState::default(),
     )
     .unwrap();
-    let presentation = presentation_with_sidebar(None, 0, SessionSidebarState::expanded());
+    let presentation = presentation_with_tab_container(None, 0, TabContainerState::expanded());
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let visible_text = presentation
         .scene()
@@ -663,11 +658,11 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
         .collect::<Vec<_>>();
     let session_tab = accessibility_nodes
         .iter()
-        .find(|node| node.id == crate::shell_interaction::ACTIVE_SESSION_TAB)
+        .find(|node| node.id == crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB)
         .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
-        .find(|node| node.id == SESSION_SIDEBAR_RESIZE_HANDLE)
+        .find(|node| node.id == TAB_CONTAINER_RESIZE_HANDLE)
         .unwrap();
     let search = accessibility_nodes
         .iter()
@@ -679,7 +674,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
         .unwrap();
     let mut dispatch = UiDispatch::default();
 
-    assert_eq!(layout.session_sidebar().unwrap().size.width, 200.0);
+    assert_eq!(layout.tab_container().unwrap().size.width, 200.0);
     assert_eq!(layout.main().origin.x, 200.0);
     assert_eq!(layout.composer.origin.x, 224.0);
     assert!(visible_text.contains(&"Search sessions..."));
@@ -696,12 +691,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
             .iter()
             .map(|node| node.name())
             .collect::<Vec<_>>(),
-        vec![
-            "SessionSidebar",
-            "SessionSidebarToolbar",
-            "SearchBox",
-            "InputBox"
-        ]
+        vec!["TabContainerToolbar", "SearchBox", "InputBox"]
     );
     assert_eq!(search.role, AccessibilityRole::TextInput);
     assert_eq!(add_session.role, AccessibilityRole::Button);
@@ -712,13 +702,13 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
         zui::ui::AccessibilitySelection::Selected
     );
     assert_eq!(resize_handle.role, AccessibilityRole::Separator);
-    assert_eq!(resize_handle.label, "Resize sessions sidebar");
+    assert_eq!(resize_handle.label, "Resize tabs");
     assert_eq!(resize_handle.value.as_deref(), Some("200 pixels"));
     assert_eq!(
         presentation
             .interaction_frame()
             .target_at(Point::new(200.0, 100.0)),
-        Some(SESSION_SIDEBAR_RESIZE_HANDLE)
+        Some(TAB_CONTAINER_RESIZE_HANDLE)
     );
     dispatch.pointer_moved(Point::new(200.0, 100.0), &presentation.interaction_frame());
     assert_eq!(
@@ -729,8 +719,8 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
         terminal_grid_size_for_viewport(
             viewport(),
             ScreenBuffer::Primary,
-            SessionSidebarState::expanded(),
-            SidebarPartState::default(),
+            TabContainerState::expanded(),
+            InspectorPartState::default(),
         )
         .cols(),
         94
@@ -739,8 +729,8 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
         terminal_mouse_position_for_viewport(
             viewport(),
             ScreenBuffer::Primary,
-            SessionSidebarState::expanded(),
-            SidebarPartState::default(),
+            TabContainerState::expanded(),
+            InspectorPartState::default(),
             Point::new(100.0, 100.0),
         ),
         None
@@ -751,11 +741,12 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
 fn session_search_filters_tabs_by_session_name() {
     let composer = Composer::default();
     let mut session_search = SessionSearch::default();
+    let tab_part = TabPart::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
@@ -786,13 +777,13 @@ fn session_search_filters_tabs_by_session_name() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &[],
+            tab_part: &tab_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::expanded(),
-            sidebar_part: SidebarPartState::default(),
-            sidebar_pane_workspace: &sidebar_pane_workspace,
+            tab_container: TabContainerState::expanded(),
+            inspector_part: InspectorPartState::default(),
+            workspace_pane_host: &workspace_pane_host,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -817,7 +808,7 @@ fn session_search_filters_tabs_by_session_name() {
     assert!(
         accessibility_nodes
             .iter()
-            .all(|node| node.id != crate::shell_interaction::ACTIVE_SESSION_TAB)
+            .all(|node| node.id != crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB)
     );
     assert!(
         presentation
@@ -830,18 +821,18 @@ fn session_search_filters_tabs_by_session_name() {
 
 #[test]
 fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_actions() {
-    let sidebar_part = SidebarPartState::expanded();
-    let presentation = presentation_with_sidebars_and_menu(
+    let inspector_part = InspectorPartState::expanded();
+    let presentation = presentation_with_parts_and_menu(
         None,
         0,
-        SessionSidebarState::collapsed(),
-        sidebar_part,
+        TabContainerState::collapsed(),
+        inspector_part,
         SessionContextMenuState::default(),
     );
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
-    let sidebar = accessibility_nodes
+    let workspace_pane = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_SIDEBAR)
+        .find(|node| node.id == WORKSPACE_PANE)
         .unwrap();
     let explorer = accessibility_nodes
         .iter()
@@ -849,26 +840,26 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         .unwrap();
     let navigation = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_SIDEBAR_NAVIGATION)
+        .find(|node| node.id == WORKSPACE_PANE_NAVIGATION)
         .unwrap();
     let toolbar = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_SIDEBAR_TOOLBAR)
+        .find(|node| node.id == WORKSPACE_PANE_TOOLBAR)
         .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_SIDEBAR_RESIZE_HANDLE);
+        .find(|node| node.id == INSPECTOR_RESIZE_HANDLE);
 
     assert_eq!(
         accessibility_nodes
             .iter()
-            .find(|node| node.id == AGENT_SIDEBAR)
+            .find(|node| node.id == WORKSPACE_PANE)
             .map(|node| node.bounds),
         Some(zeta_ui::Rect::from_xywh(0.0, 32.0, 1000.0, 668.0))
     );
-    assert_eq!(sidebar.role, AccessibilityRole::Group);
-    assert_eq!(sidebar.label, "Workspace pane");
-    assert_eq!(explorer.parent, Some(AGENT_SIDEBAR));
+    assert_eq!(workspace_pane.role, AccessibilityRole::Group);
+    assert_eq!(workspace_pane.label, "Workspace pane");
+    assert_eq!(explorer.parent, Some(WORKSPACE_PANE));
     assert_eq!(explorer.label, "Files");
     assert_eq!(navigation.role, AccessibilityRole::Toolbar);
     assert_eq!(toolbar.label, "Workspace pane toolbar");
@@ -881,7 +872,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         navigation.bounds,
         zeta_ui::Rect::from_xywh(0.0, 32.0, 128.0, 36.0)
     );
-    assert_eq!(navigation.parent, Some(AGENT_SIDEBAR_TOOLBAR));
+    assert_eq!(navigation.parent, Some(WORKSPACE_PANE_TOOLBAR));
     assert_eq!(
         explorer.bounds,
         zeta_ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
@@ -922,8 +913,8 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         terminal_grid_size_for_viewport(
             viewport(),
             ScreenBuffer::Primary,
-            SessionSidebarState::collapsed(),
-            SidebarPartState::default(),
+            TabContainerState::collapsed(),
+            InspectorPartState::default(),
         )
         .cols(),
         119
@@ -934,22 +925,23 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
 fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_actions() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
+    let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
-    let mut agent_workspace = SidebarPaneWorkspace::default();
+    let mut agent_workspace = WorkspacePaneHost::default();
     agent_workspace.sync_repository(&workspace_context);
     let tab_key = TabInputKey::session(
         zeta_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
     );
-    let main_pane_group = PaneGroup::new();
+    let main_pane_group = PanePart::with_input(PaneInput::diff(
+        workspace_context.working_directory().to_path_buf(),
+    ));
     let mut pane_host = PaneHost::new();
     pane_host.insert(
         (
             PaneHostScope::Tab(tab_key.clone()),
             main_pane_group.root_pane(),
         ),
-        PaneBinding::new(PaneInput::diff(
-            workspace_context.working_directory().to_path_buf(),
-        )),
+        PaneBinding::new(),
     );
     let main_pane = pane_host.mount(
         &PaneHostScope::Tab(tab_key.clone()),
@@ -987,13 +979,13 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &[],
+            tab_part: &tab_part,
             active_tab_input: Some(&tab_key),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::collapsed(),
-            sidebar_part: SidebarPartState::default(),
-            sidebar_pane_workspace: &agent_workspace,
+            tab_container: TabContainerState::collapsed(),
+            inspector_part: InspectorPartState::default(),
+            workspace_pane_host: &agent_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -1053,12 +1045,19 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
 fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
     let mut menu_state = SessionContextMenuState::default();
     menu_state.open(
-        crate::shell_interaction::ACTIVE_SESSION_TAB,
+        TabInputKey::session(
+            zeta_protocol::SessionId::new("context-menu-session")
+                .expect("test session ID is non-empty"),
+        ),
         Point::new(80.0, 120.0),
         Some(COMPOSER),
     );
-    let presentation =
-        presentation_with_sidebar_and_menu(None, 0, SessionSidebarState::expanded(), menu_state);
+    let presentation = presentation_with_tab_container_and_menu(
+        None,
+        0,
+        TabContainerState::expanded(),
+        menu_state,
+    );
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let labels = accessibility_nodes
         .iter()
@@ -1164,8 +1163,9 @@ fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
 fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
+    let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let thread_projection = ThreadProjection::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
@@ -1202,13 +1202,13 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         workspace_context: &workspace_context,
         composer: &composer,
         session_search: &session_search,
-        tab_inputs: &[],
+        tab_part: &tab_part,
         active_tab_input: None,
         caret_visibility: CaretVisibility::Visible,
         dispatch: &dispatch,
-        session_sidebar: SessionSidebarState::collapsed(),
-        sidebar_part: SidebarPartState::default(),
-        sidebar_pane_workspace: &sidebar_pane_workspace,
+        tab_container: TabContainerState::collapsed(),
+        inspector_part: InspectorPartState::default(),
+        workspace_pane_host: &workspace_pane_host,
         session_context_menu: SessionContextMenuState::default(),
         git_branch_context_menu: &git_branch_context_menu,
         workspace_path_picker: &workspace_path_picker,
@@ -1226,19 +1226,27 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         window_control_insets: WindowControlInsets::NONE,
         pointer_position: None,
     };
-    let mut presentation = build_shell_presentation(viewport(), closed_model, &mut text_layout);
+    let mut presentation =
+        build_shell_presentation(viewport(), closed_model.clone(), &mut text_layout);
     let base_scene = presentation.scene().clone();
     let base_interactions = presentation.interaction_frame().clone();
     let base_accessibility = accessibility_nodes(&presentation, &dispatch);
     let mut menu = SessionContextMenuState::default();
-    menu.open(ACTIVE_SESSION_TAB, Point::new(200.0, 100.0), None);
+    menu.open(
+        TabInputKey::session(
+            zeta_protocol::SessionId::new("context-menu-session")
+                .expect("test session ID is non-empty"),
+        ),
+        Point::new(200.0, 100.0),
+        None,
+    );
 
     assert!(rebuild_shell_overlays(
         &mut presentation,
         viewport(),
         ShellPresentationModel {
             session_context_menu: menu,
-            ..closed_model
+            ..closed_model.clone()
         },
         &mut text_layout,
     ));
@@ -1339,10 +1347,11 @@ fn context_toolbar_starts_with_environment_below_the_composer_editor() {
 fn compact_viewport_uses_bounded_fallback_scene() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
+    let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let workspace_pane_host = WorkspacePaneHost::default();
     let thread_projection = ThreadProjection::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
@@ -1375,13 +1384,13 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            tab_inputs: &[],
+            tab_part: &tab_part,
             active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
-            session_sidebar: SessionSidebarState::collapsed(),
-            sidebar_part: SidebarPartState::default(),
-            sidebar_pane_workspace: &sidebar_pane_workspace,
+            tab_container: TabContainerState::collapsed(),
+            inspector_part: InspectorPartState::default(),
+            workspace_pane_host: &workspace_pane_host,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -1412,14 +1421,14 @@ fn primary_reserves_rows_for_composer_while_alternate_screen_uses_full_height() 
     let primary = terminal_grid_size_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
     );
     let alternate = terminal_grid_size_for_viewport(
         viewport(),
         ScreenBuffer::Alternate,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
     );
 
     assert_eq!(primary, GridSize::new(27, 119));
@@ -1431,16 +1440,16 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
     let first = terminal_mouse_position_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
         Point::new(24.0, 60.0),
     )
     .unwrap();
     let composer = terminal_mouse_position_for_viewport(
         viewport(),
         ScreenBuffer::Primary,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
         Point::new(40.0, 640.0),
     );
 
@@ -1450,14 +1459,14 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
 
 #[test]
 fn terminal_pane_sash_hit_uses_the_same_grid_geometry_as_the_panes() {
-    let mut group = PaneGroup::new();
+    let mut group = PanePart::new();
     group.split_active(PaneSplitDirection::Horizontal);
 
     let hit = terminal_pane_sash_for_viewport(
         viewport(),
         ScreenBuffer::Alternate,
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
         &group,
         Point::new(500.0, 300.0),
     )
@@ -1513,8 +1522,8 @@ fn primary_ime_candidate_position_comes_from_the_bottom_composer() {
     let terminal = TerminalCore::new(GridSize::new(29, 119));
     let layout = ShellLayout::for_viewport(
         viewport(),
-        SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        TabContainerState::collapsed(),
+        InspectorPartState::default(),
     )
     .unwrap();
 
@@ -1543,7 +1552,7 @@ fn background_terminal_title_does_not_replace_the_agent_session_title() {
     terminal.process_output(b"\x1b]2;project shell\x07");
 
     let presentation =
-        presentation_with_sidebar(Some(&terminal), 0, SessionSidebarState::expanded());
+        presentation_with_tab_container(Some(&terminal), 0, TabContainerState::expanded());
 
     let text = presentation
         .scene()

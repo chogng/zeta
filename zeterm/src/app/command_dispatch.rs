@@ -4,36 +4,33 @@ use zeta_commands::ZetermCommandId;
 use zui::ui::ElementId;
 
 use crate::NativeApp;
-use crate::pane_group::PaneSplitDirection;
 use crate::session::session_switch_trace;
 use crate::shell_interaction::{
-    self, AgentSidebarPaneAction, ContextAction, SessionContextMenuAction,
+    self, ContextAction, SessionContextMenuAction, WorkspacePaneSelection,
 };
+use crate::workbench_host::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
 
 /// Converts native UI entry points into stable product command requests.
 pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandRequest> {
-    if id == shell_interaction::SESSION_SIDEBAR_TOGGLE {
-        return Some(ZetermCommandId::ToggleSessionSidebar.into());
+    if id == shell_interaction::TAB_CONTAINER_TOGGLE {
+        return Some(ZetermCommandId::ToggleTabContainer.into());
     }
-    if id == shell_interaction::AGENT_SIDEBAR_TOGGLE {
-        return Some(ZetermCommandId::ToggleAgentSidebar.into());
+    if id == shell_interaction::WORKSPACE_PANE_TOGGLE {
+        return Some(ZetermCommandId::ToggleWorkspacePane.into());
     }
-    if id == shell_interaction::LANGUAGE_SERVER_SETTINGS_TOGGLE {
-        return Some(ZetermCommandId::OpenLanguageServerSettings.into());
-    }
-    if id == shell_interaction::ACTIVE_SESSION_TAB {
+    if id == shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB {
         return Some(ZetermCommandId::ActivateSessionTab.into());
     }
     if id == shell_interaction::ADD_SESSION {
         return Some(ZetermCommandId::AddSession.into());
     }
-    if let Some(action) = AgentSidebarPaneAction::from_element_id(id) {
+    if let Some(action) = WorkspacePaneSelection::from_element_id(id) {
         return Some(
             match action {
-                AgentSidebarPaneAction::Changes => ZetermCommandId::ShowAgentChanges,
-                AgentSidebarPaneAction::Files => ZetermCommandId::ShowAgentFiles,
+                WorkspacePaneSelection::Changes => ZetermCommandId::ShowAgentChanges,
+                WorkspacePaneSelection::Files => ZetermCommandId::ShowAgentFiles,
             }
             .into(),
         );
@@ -104,14 +101,14 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .expect("built-in command IDs must be unique");
     registry
         .register(
-            ZetermCommandId::ToggleSessionSidebar,
-            execute_toggle_session_sidebar,
+            ZetermCommandId::ToggleTabContainer,
+            execute_toggle_tab_container,
         )
         .expect("built-in command IDs must be unique");
     registry
         .register(
-            ZetermCommandId::ToggleAgentSidebar,
-            execute_toggle_sidebar_part,
+            ZetermCommandId::ToggleWorkspacePane,
+            execute_toggle_workspace_pane,
         )
         .expect("built-in command IDs must be unique");
     registry
@@ -291,26 +288,26 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
     app.keybindings.cancel_chord();
 }
 
-fn execute_toggle_session_sidebar(app: &mut NativeApp, _request: &CommandRequest) {
-    app.session_sidebar.toggle();
+fn execute_toggle_tab_container(app: &mut NativeApp, _request: &CommandRequest) {
+    app.tab_container.toggle();
     session_switch_trace::event(
         None,
-        "session-sidebar-toggle",
-        format_args!("expanded={}", app.session_sidebar.is_expanded()),
+        "tab-container-toggle",
+        format_args!("expanded={}", app.tab_container.is_expanded()),
     );
 }
 
-fn execute_toggle_sidebar_part(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest) {
     if app.workspace_surface.is_editor() {
         app.show_agent_pane();
-        app.sidebar_part.collapse();
+        app.inspector_part.collapse();
         app.pending_focus = Some(shell_interaction::COMPOSER);
         return;
     }
     match app.active_workspace_pane_kind() {
-        Some(crate::pane_input::PaneInputKind::Files)
-        | Some(crate::pane_input::PaneInputKind::Diff) => app.show_agent_pane(),
-        _ => app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files),
+        Some(crate::workbench_host::PaneInputKind::Files)
+        | Some(crate::workbench_host::PaneInputKind::Diff) => app.show_agent_pane(),
+        _ => app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files),
     }
 }
 
@@ -324,11 +321,11 @@ fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Changes);
 }
 
 fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files);
 }
 
 fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
@@ -341,8 +338,8 @@ fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandRequest) {
-    let visible = !app.sidebar_pane_workspace.search_visible();
-    app.sidebar_pane_workspace.set_search_visible(visible);
+    let visible = !app.workspace_pane_host.search_visible();
+    app.workspace_pane_host.set_search_visible(visible);
     if visible {
         app.rebuild_presentation();
         if let Some(presentation) = app.presentation.as_ref() {
@@ -362,8 +359,15 @@ fn execute_session_context_menu_action(app: &mut NativeApp, request: &CommandReq
             | ZetermCommandId::RenameSession
             | ZetermCommandId::ForkSession
     ));
-    let _target_session = app.session_context_menu.target_session();
+    let target_tab = app.session_context_menu.target_tab().cloned();
+    let command_id = request.command_id();
     app.dismiss_session_context_menu();
+    if command_id == ZetermCommandId::CloseSession {
+        if let Some(target_tab) = target_tab {
+            let _ = app.close_session_tab(&target_tab);
+        }
+        return;
+    }
     // These transitions require the future multi-Session runtime rather than mutating the single
     // PTY preview.
 }
@@ -386,7 +390,7 @@ fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
     {
         eprintln!("could not refresh Git projection: {error}");
     }
-    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Changes);
 }
 
 fn execute_split_terminal_horizontal(app: &mut NativeApp, _request: &CommandRequest) {

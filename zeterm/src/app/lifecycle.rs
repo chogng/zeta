@@ -49,10 +49,14 @@ impl App<NativeEvent> for NativeApp {
         let terminal_size = terminal_grid_size_for_viewport(
             self.logical_viewport(),
             ScreenBuffer::Primary,
-            self.session_sidebar,
-            self.sidebar_part,
+            self.tab_container,
+            self.inspector_part,
         );
-        if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
+        if let Err(error) = self
+            .workbench_host
+            .terminal_workspace
+            .spawn_initial(terminal_size)
+        {
             self.fail(error);
             context.exit();
             return;
@@ -91,7 +95,7 @@ impl App<NativeEvent> for NativeApp {
         }
         match event {
             WindowEvent::CloseRequested => {
-                context.exit();
+                context.close();
             }
             WindowEvent::Resized(size) => {
                 self.terminal_selection.clear();
@@ -131,12 +135,12 @@ impl App<NativeEvent> for NativeApp {
                 self.keyboard_shortcuts.window_blurred();
                 self.terminal_pointer.cancel();
                 self.file_editor_input.cancel_pointer();
-                self.cancel_session_sidebar_resize();
-                self.cancel_sidebar_resize();
+                self.cancel_tab_container_resize();
+                self.cancel_inspector_resize();
                 if self.cancel_terminal_pane_resize() {
                     self.update_cursor();
                 }
-                self.sidebar_pane_workspace.cancel_multi_diff_scrollbar();
+                self.workspace_pane_host.cancel_multi_diff_scrollbar();
                 self.terminal_scroll.cancel_scrollbar();
                 self.session_context_menu.dismiss();
                 self.git_branch_context_menu.dismiss();
@@ -241,7 +245,7 @@ impl App<NativeEvent> for NativeApp {
                 return;
             }
             NativeEvent::TerminalReady(ready) => {
-                match self.terminal_workspace.handle_ready(ready) {
+                match self.workbench_host.terminal_workspace.handle_ready(ready) {
                     TerminalReadyOutcome::Active {
                         key,
                         buffered_events,
@@ -297,18 +301,16 @@ impl App<NativeEvent> for NativeApp {
             self.caret_blink.advance(now),
             CaretBlinkAdvance::VisibilityChanged(_)
         );
-        let scrollbar_changed = self
-            .sidebar_pane_workspace
-            .advance_multi_diff_scrollbar(now);
+        let scrollbar_changed = self.workspace_pane_host.advance_multi_diff_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_scroll.advance_scrollbar(now);
-        let session_sash_changed = self.session_sidebar.advance_sash(now);
-        let sidebar_sash_changed = self.sidebar_part.advance_sash(now);
-        let sash_changed = session_sash_changed || sidebar_sash_changed;
+        let vertical_tab_sash_changed = self.tab_container.advance_sash(now);
+        let inspector_sash_changed = self.inspector_part.advance_sash(now);
+        let sash_changed = vertical_tab_sash_changed || inspector_sash_changed;
         let retained_runtime_due = self
             .retained_runtime
             .next_deadline()
             .is_some_and(|deadline| deadline <= now);
-        let file_search_changed = self.sidebar_pane_workspace.poll_file_search();
+        let file_search_changed = self.workspace_pane_host.poll_file_search();
         let file_editor_auto_scrolled = self.advance_file_editor_auto_scroll(now);
         if caret_changed
             || scrollbar_changed
@@ -324,11 +326,11 @@ impl App<NativeEvent> for NativeApp {
         let mut deadlines = FrameDeadlineSet::default();
         for deadline in [
             self.caret_blink.next_deadline(),
-            self.sidebar_pane_workspace.multi_diff_scrollbar_deadline(),
+            self.workspace_pane_host.multi_diff_scrollbar_deadline(),
             self.terminal_scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
-            self.session_sidebar.sash_deadline(),
-            self.sidebar_part.sash_deadline(),
+            self.tab_container.sash_deadline(),
+            self.inspector_part.sash_deadline(),
             self.keybindings.chord_deadline(),
             self.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),
@@ -339,7 +341,7 @@ impl App<NativeEvent> for NativeApp {
         {
             deadlines.include(deadline);
         }
-        if self.sidebar_pane_workspace.file_search_pending() {
+        if self.workspace_pane_host.file_search_pending() {
             deadlines.include(now + std::time::Duration::from_millis(50));
         }
         let control_flow = match deadlines.next_deadline() {

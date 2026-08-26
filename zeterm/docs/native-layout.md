@@ -244,14 +244,14 @@ enum TerminalPresentation {
 
 ## 当前实现与迁移顺序
 
-Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Terminal` 兼容路由：Agent ThreadTimeline 与 fixed Composer、独立 Terminal Surface、Session sidebar，以及 Files/Changes/File Editor 右侧区域已经存在。当前代码中的固定 Session Header 和右侧 Inspector 只是过渡实现，不代表本文目标布局；Terminal 仍未成为承载 Agent conversation 与 command blocks 的统一会话流。
+Current implementation 仍使用 `WorkspaceSurfaceKind::Agent | Editor | Terminal` 兼容路由：Agent ThreadTimeline 与 fixed Composer、独立 Terminal Surface、Tab Container，以及 Files/Changes/File Editor 右侧区域已经存在。当前代码中的固定 Session Header 和右侧 Inspector 只是过渡实现，不代表本文目标布局；Terminal 仍未成为承载 Agent conversation 与 command blocks 的统一会话流。
 
 迁移按以下顺序进行：
 
 1. 定义 typed Session Flow projection，把 Thread item、direct Shell Turn、Terminal command block 和 canonical evidence 映射到一个时间序列，不从 Markdown 或 terminal text 猜测状态。
 2. 让 primary Terminal block flow 成为默认主区域，把 Agent message 和 result block 插入同一 Session Flow；移除重复展示当前会话的固定 Header 与 Outcome Dashboard 方向。
 3. 让共享 Composer 的 Agent/Shell submission 在同一会话流创建对应 block，并明确 context attachment、runtime 和 command authority。
-4. 将 Session sidebar 收敛为 Top Bar switcher/临时列表；保留多 Session identity、PTY binding 和恢复状态，不保留默认占宽的导航列。
+4. 将 Tab Container 收敛为 Top Bar switcher/临时列表；保留多 Session identity、PTY binding 和恢复状态，不保留默认占宽的导航列。
 5. 将 Files、Changes、Editor、Diagnostics 和 Tests 收敛为单 active Inspection Surface；删除常驻功能 tab strip 和默认右栏假设。
 6. 把 Terminal Surface 兼容路由映射为 Flow/Interactive/Maximized presentation，保留 alternate screen、IME、selection、mouse mode、resize 和 PTY identity contract。
 7. 接入 responsive takeover、return stack、布局持久化和跨尺寸测试后，再移除 `WorkspaceSurfaceKind` 兼容枚举。

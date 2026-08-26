@@ -106,7 +106,7 @@ impl TabInput {
         &self.status_label
     }
 
-    fn update_from_session(&mut self, session: &Session, workspace: &str) {
+    pub(crate) fn update_from_session(&mut self, session: &Session, workspace: &str) {
         debug_assert_eq!(self.session_id(), Some(&session.session_id));
         self.title = session.title.clone();
         self.workspace = workspace_label(session, workspace);
@@ -129,142 +129,6 @@ pub enum TabInputChange {
     Updated(TabInputKey),
 }
 
-/// Product-side collection and active selection for Workbench inputs.
-///
-/// The model owns logical ordering and selection only. It does not allocate UI identities, paint
-/// tabs, or perform activation side effects in the product host.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TabInputModel {
-    inputs: Vec<TabInput>,
-    /// The input whose content is currently mounted in the main workbench part.
-    active: Option<TabInputKey>,
-    /// The last Session selection, retained while the singleton Settings input is active.
-    last_session: Option<SessionId>,
-}
-
-impl Default for TabInputModel {
-    fn default() -> Self {
-        Self {
-            inputs: vec![TabInput::from_settings()],
-            active: None,
-            last_session: None,
-        }
-    }
-}
-
-impl TabInputModel {
-    pub fn inputs(&self) -> &[TabInput] {
-        &self.inputs
-    }
-
-    pub fn session_count(&self) -> usize {
-        self.inputs
-            .iter()
-            .filter(|input| input.is_session())
-            .count()
-    }
-
-    pub fn session_input_at(&self, index: usize) -> Option<&TabInput> {
-        self.inputs
-            .iter()
-            .filter(|input| input.is_session())
-            .nth(index)
-    }
-
-    pub fn active_key(&self) -> Option<&TabInputKey> {
-        self.active.as_ref()
-    }
-
-    pub fn selected_session(&self) -> Option<&SessionId> {
-        self.last_session.as_ref()
-    }
-
-    pub const fn is_settings(&self) -> bool {
-        matches!(self.active, Some(TabInputKey::Settings))
-    }
-
-    pub fn activate(&mut self, key: TabInputKey) -> bool {
-        if self.inputs.iter().any(|input| input.key() == &key) {
-            if let Some(session_id) = key.session_id() {
-                self.last_session = Some(session_id.clone());
-            }
-            self.active = Some(key);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn activate_session(&mut self, session_id: &SessionId) -> bool {
-        self.activate(TabInputKey::session(session_id.clone()))
-    }
-
-    pub fn activate_settings(&mut self) -> bool {
-        self.activate(TabInputKey::Settings)
-    }
-
-    pub fn activate_last_session(&mut self) -> bool {
-        let Some(session_id) = self.last_session.clone() else {
-            self.active = None;
-            return false;
-        };
-        self.activate_session(&session_id)
-    }
-
-    pub fn upsert_session(&mut self, session: &Session, workspace: &str) -> TabInputChange {
-        let key = TabInputKey::session(session.session_id.clone());
-        let was_settings = self.is_settings();
-        if let Some(input) = self.inputs.iter_mut().find(|input| input.key() == &key) {
-            input.update_from_session(session, workspace);
-            self.last_session = Some(session.session_id.clone());
-            if !was_settings {
-                self.active = Some(key.clone());
-            }
-            return TabInputChange::Updated(key);
-        }
-
-        let insertion_index = self
-            .inputs
-            .iter()
-            .position(TabInput::is_settings)
-            .unwrap_or(self.inputs.len());
-        self.inputs
-            .insert(insertion_index, TabInput::from_session(session, workspace));
-        self.last_session = Some(session.session_id.clone());
-        if !was_settings {
-            self.active = Some(key.clone());
-        }
-        TabInputChange::Added(key)
-    }
-
-    pub fn upsert_catalog_session(&mut self, session: &Session, workspace: &str) -> TabInputChange {
-        let key = TabInputKey::session(session.session_id.clone());
-        if let Some(input) = self.inputs.iter_mut().find(|input| input.key() == &key) {
-            input.update_from_session(session, workspace);
-            return TabInputChange::Updated(key);
-        }
-
-        let insertion_index = self
-            .inputs
-            .iter()
-            .position(TabInput::is_settings)
-            .unwrap_or(self.inputs.len());
-        self.inputs
-            .insert(insertion_index, TabInput::from_session(session, workspace));
-        TabInputChange::Added(key)
-    }
-
-    pub fn update_status(&mut self, session_id: &SessionId, status_label: &str) {
-        if let Some(input) = self
-            .inputs
-            .iter_mut()
-            .find(|input| input.session_id() == Some(session_id))
-        {
-            input.update_status(status_label);
-        }
-    }
-}
-
 fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
     session
         .workspace
@@ -275,7 +139,3 @@ fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
         .map(str::to_owned)
         .unwrap_or_else(|| fallback.to_owned())
 }
-
-#[cfg(test)]
-#[path = "tab_input_tests.rs"]
-mod tests;

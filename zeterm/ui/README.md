@@ -9,7 +9,7 @@
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键产品组合由
 > [`zeterm-keybinding-ui`](../keybinding-ui/README.md) 拥有。
 
-`zeta-ui` 基于 `zui` 提供 zeterm 的 Root/Inspector、Sessions Part 和 Terminal Workspace/Agent Sidebar pane topology，以及 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
+`zeta-ui` 基于 `zui` 提供 zeterm 的 Root/Inspector、Sessions Part 和 Terminal Workspace pane topology，以及 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
 让现有产品代码可以渐进迁移 import；这只是兼容入口，不表示本 crate 拥有 framework contract。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
@@ -27,9 +27,9 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Terminal/heterogeneous PaneGroup geometry projection | `zeta-ui::layout::PaneGroupLayout` + `zui::GridLayout` | ✅；消费 host-owned、type-agnostic PaneTree，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput、PaneTree mutation、runtime 或 active Pane |
 | Workbench 的 Titlebar、Sessions、Main、Inspector Part/Pane topology | `zeta-ui::layout::{WorkbenchLayoutSpec,WorkbenchLayout}` | ✅；只拥有 Part/Pane geometry，TabInput state 与 scene composition 归 host |
 | Root/Inspector 与嵌套 Workspace topology | `zeta-ui::layout::{RootLayout,TerminalWorkspaceLayout}` | ✅；只拥有叶子 geometry，TabInput state 与 scene composition 归 host |
-| Workbench TabInput 的逻辑身份、集合和 active selection | `zeterm::tab_input::{TabInput,TabInputModel}` | ✅；`ElementId`、Tab surface 与具体内容仍由 host 的 projection/scene 负责 |
-| PaneInput 类型、逻辑 identity 与 Pane binding | `zeterm::pane_input` + `zeterm::pane_host` | 本次先建立 host contract 与 frame mount；`TerminalPaneInput` 接入独立 terminal runtime，Agent/Files/Diff/Settings payload 与 PaneView 仍由各自 feature crate 负责 |
-| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-agent-sidebar` / `zeta-editor` | 委托；各 crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
+| Workbench TabPart、TabGroup、TabInput 的逻辑身份、分组和 active selection | `zeta-workbench::{TabPart,TabGroup,TabInput}` | ✅；模型不含方向和 `ElementId`，横向/纵向 Tab surface 与具体内容仍由 host 的 projection/scene 负责 |
+| PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench::PaneInput` + `zeterm::workbench_host` | `TerminalPaneInput` 接入独立 terminal runtime，Agent/Files/Diff/Settings payload 与 PaneView 仍由各自 feature crate 负责 |
+| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeterm/src/features/workspace` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
 | Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
 | 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
@@ -68,7 +68,7 @@ zeta-ui -X→ App Server / workspace / product state
 不需要依赖 zeterm 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
-导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui` 只提供 `Tab`/`TabList`、type-agnostic `PaneGroupLayout` 等 presentation primitive；Titlebar 或 Sidebar 中的 `NavBar` 仍是计划中的组合边界。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
+导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui` 只提供 `Tab`/`TabList`、type-agnostic `PaneGroupLayout` 等 presentation primitive；Titlebar 或垂直 Navigator 中的 `NavBar` 仍是计划中的组合边界。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
 
 ## 2. 文件与接口地图
 
@@ -109,11 +109,11 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
-| `layout::{SessionSidebarLayoutSpec,SessionSidebarLayout}` | public | 解析 Sessions Part 与 main Part 的 split geometry；不拥有 session state、active identity、resize lifecycle 或 scene composition |
+| `layout::{TabContainerLayoutSpec,TabContainerLayout}` | public | 解析 Tab Container 与 main Part 的 split geometry；不拥有 TabInput state、active identity、resize lifecycle 或 scene composition |
 | `layout::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | public | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不拥有具体 Pane 内容、TabInput state、focus 或 event routing |
 | `layout::PaneGroupLayout` | public | 将 host-owned PaneTree 的 geometry spec 投影为 leaf bounds、split sash 和 active-pane-independent hit geometry；不拥有 Pane state、runtime 或 mutation |
-| `zeterm::tab_input::{TabInput,TabInputModel}` | product host | 保存逻辑 input identity、labels、顺序和 active input；不分配 `ElementId`，不绘制 Tab，也不执行 App Server/Terminal 激活副作用 |
-| `zeterm::pane_input::{PaneInput,PaneInputKind}` | product host | 保存 Pane 内容类型与逻辑 identity 的 host descriptor；不包含 Pane geometry、runtime handle 或 feature-owned view state |
+| `zeta-workbench::{TabPart,TabGroup,TabInput}` | reusable Workbench model | 保存逻辑 input identity、browser-style 分组、顺序和全局 active input；不分配 `ElementId`，不决定横/纵方向，不绘制 Tab，也不执行 App Server/Terminal 激活副作用 |
+| `zeta-workbench::{PanePart,PaneGroup,PaneInput}` | reusable Workbench model | 保存 Pane 内容类型、逻辑 identity 与递归 split topology；不包含 runtime handle 或 feature-owned view state |
 
 `Color` 的 RGB channel 是 sRGB、alpha 为 straight alpha。`Point`、`Size`、font size 与 line
 height 都使用 logical UI pixels；只有 renderer backend 可以执行 logical-to-physical 转换。

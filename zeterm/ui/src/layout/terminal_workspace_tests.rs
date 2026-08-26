@@ -1,43 +1,43 @@
-use super::SidebarLayoutSpec;
-use super::SidebarVisibility;
+use super::InspectorLayoutSpec;
+use super::PartVisibility;
 use super::TerminalWorkspaceLayout;
 use zui::ui::Rect;
 
-fn sidebar(visibility: SidebarVisibility) -> SidebarLayoutSpec {
-    SidebarLayoutSpec::new(visibility, 320.0, 240.0, 560.0, 240.0)
+fn inspector(visibility: PartVisibility) -> InspectorLayoutSpec {
+    InspectorLayoutSpec::new(visibility, 320.0, 240.0, 560.0, 240.0)
 }
 
 #[test]
-fn collapsed_sidebar_projects_only_the_active_workspace_leaf() {
+fn collapsed_inspector_projects_only_the_active_workspace_leaf() {
     let bounds = Rect::from_xywh(200.0, 32.0, 800.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, sidebar(SidebarVisibility::Collapsed));
+    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Collapsed));
 
     assert_eq!(layout.active_pane_bounds(), bounds);
-    assert_eq!(layout.sidebar_bounds(), None);
+    assert_eq!(layout.inspector_bounds(), None);
 }
 
 #[test]
-fn expanded_sidebar_is_the_rightmost_grid_leaf() {
+fn expanded_inspector_is_the_rightmost_grid_leaf() {
     let bounds = Rect::from_xywh(200.0, 32.0, 800.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, sidebar(SidebarVisibility::Expanded));
+    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
 
     assert_eq!(
         layout.active_pane_bounds(),
         Rect::from_xywh(200.0, 32.0, 480.0, 668.0)
     );
     assert_eq!(
-        layout.sidebar_bounds(),
+        layout.inspector_bounds(),
         Some(Rect::from_xywh(680.0, 32.0, 320.0, 668.0))
     );
     assert_eq!(
-        layout.sidebar_sash_track(),
+        layout.inspector_sash_track(),
         Some(Rect::from_xywh(680.0, 32.0, 0.0, 668.0))
     );
     let snapshot = layout
-        .sidebar_resize_snapshot()
-        .expect("expanded sidebar should expose a resize snapshot");
+        .inspector_resize_snapshot()
+        .expect("expanded inspector should expose a resize snapshot");
     let resize = snapshot.resize(0.0);
     assert_eq!(resize.previous_index(), 0);
     assert_eq!(resize.next_index(), 1);
@@ -45,11 +45,11 @@ fn expanded_sidebar_is_the_rightmost_grid_leaf() {
 }
 
 #[test]
-fn constrained_grid_omits_the_expanded_sidebar_leaf() {
+fn constrained_grid_omits_the_expanded_inspector_leaf() {
     let bounds = Rect::from_xywh(0.0, 32.0, 479.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, sidebar(SidebarVisibility::Expanded));
+    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
 
     assert_eq!(layout.active_pane_bounds(), bounds);
-    assert_eq!(layout.sidebar_bounds(), None);
+    assert_eq!(layout.inspector_bounds(), None);
 }

@@ -1,9 +1,9 @@
 use zui::ui::Rect;
 use zui::ui::SplitViewResizeSnapshot;
 
+use super::InspectorLayoutSpec;
 use super::LogicalViewport;
-use super::SessionSidebarLayoutSpec;
-use super::SidebarLayoutSpec;
+use super::TabContainerLayoutSpec;
 use super::TerminalWorkspaceLayout;
 
 const MINIMUM_VIEWPORT_WIDTH: f32 = 240.0;
@@ -17,8 +17,8 @@ const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
 pub enum WorkbenchPart {
     /// Native window titlebar content.
     Titlebar,
-    /// Session navigation content.
-    Sessions,
+    /// Optional body-mounted Tab Container projection.
+    TabContainer,
     /// Active Workbench content.
     Main,
     /// Optional right-hand inspection content.
@@ -33,21 +33,21 @@ pub enum WorkbenchPart {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorkbenchLayoutSpec {
     titlebar_height: f32,
-    sessions: SessionSidebarLayoutSpec,
-    inspector: SidebarLayoutSpec,
+    tab_container: TabContainerLayoutSpec,
+    inspector: InspectorLayoutSpec,
 }
 
 impl WorkbenchLayoutSpec {
-    /// Creates a Workbench sizing policy from the titlebar, Sessions Part, and Inspector Part
+    /// Creates a Workbench sizing policy from the titlebar, Tab Container, and Inspector Part
     /// policies.
     pub const fn new(
         titlebar_height: f32,
-        sessions: SessionSidebarLayoutSpec,
-        inspector: SidebarLayoutSpec,
+        tab_container: TabContainerLayoutSpec,
+        inspector: InspectorLayoutSpec,
     ) -> Self {
         Self {
             titlebar_height,
-            sessions,
+            tab_container,
             inspector,
         }
     }
@@ -65,17 +65,18 @@ impl WorkbenchLayoutSpec {
             viewport.width,
             (viewport.height - titlebar.size.height).max(0.0),
         );
-        let sessions = self.sessions.for_bounds(body);
-        let workspace = TerminalWorkspaceLayout::for_bounds(sessions.main_bounds(), self.inspector);
+        let tab_container = self.tab_container.for_bounds(body);
+        let workspace =
+            TerminalWorkspaceLayout::for_bounds(tab_container.main_bounds(), self.inspector);
 
         Some(WorkbenchLayout {
             titlebar,
-            sessions: sessions.sessions_bounds(),
-            sessions_sash_track: sessions.sash_track(),
+            tab_container: tab_container.tab_container_bounds(),
+            tab_container_sash_track: tab_container.sash_track(),
             main: workspace.active_pane_bounds(),
-            inspector: workspace.sidebar_bounds(),
-            inspector_sash_track: workspace.sidebar_sash_track(),
-            inspector_resize_snapshot: workspace.sidebar_resize_snapshot(),
+            inspector: workspace.inspector_bounds(),
+            inspector_sash_track: workspace.inspector_sash_track(),
+            inspector_resize_snapshot: workspace.inspector_resize_snapshot(),
         })
     }
 }
@@ -87,8 +88,8 @@ impl WorkbenchLayoutSpec {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WorkbenchLayout {
     titlebar: Rect,
-    sessions: Option<Rect>,
-    sessions_sash_track: Option<Rect>,
+    tab_container: Option<Rect>,
+    tab_container_sash_track: Option<Rect>,
     main: Rect,
     inspector: Option<Rect>,
     inspector_sash_track: Option<Rect>,
@@ -100,7 +101,7 @@ impl WorkbenchLayout {
     pub const fn part_bounds(self, part: WorkbenchPart) -> Option<Rect> {
         match part {
             WorkbenchPart::Titlebar => Some(self.titlebar),
-            WorkbenchPart::Sessions => self.sessions,
+            WorkbenchPart::TabContainer => self.tab_container,
             WorkbenchPart::Main => Some(self.main),
             WorkbenchPart::Inspector => self.inspector,
         }
@@ -111,14 +112,14 @@ impl WorkbenchLayout {
         self.titlebar
     }
 
-    /// Returns the optional Sessions Part bounds.
-    pub const fn sessions(self) -> Option<Rect> {
-        self.sessions
+    /// Returns the optional body-mounted Tab Container bounds.
+    pub const fn tab_container(self) -> Option<Rect> {
+        self.tab_container
     }
 
-    /// Returns the sash track for the Sessions Part.
-    pub const fn sessions_sash_track(self) -> Option<Rect> {
-        self.sessions_sash_track
+    /// Returns the sash track for the body-mounted Tab Container.
+    pub const fn tab_container_sash_track(self) -> Option<Rect> {
+        self.tab_container_sash_track
     }
 
     /// Returns the active Workbench content bounds.

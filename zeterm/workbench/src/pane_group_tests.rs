@@ -1,80 +1,62 @@
-//! Pane group tree and split-layout contract tests.
+//! EditorGroup-like logical input tests.
 
-use super::{PaneGroup, PaneId, PaneSplitDirection};
-use zeta_ui::Rect;
+use super::{PaneGroup, PaneInputId};
+use crate::PaneInput;
+use zeta_protocol::{SessionId, ThreadId};
 
-#[test]
-fn a_group_starts_with_one_active_leaf() {
-    let group = PaneGroup::new();
+fn session(id: &str) -> SessionId {
+    SessionId::new(id).expect("test session ID is non-empty")
+}
 
-    assert_eq!(group.leaf_ids(), [PaneId::ROOT]);
-    assert_eq!(group.active_pane(), PaneId::ROOT);
+fn thread(id: &str) -> ThreadId {
+    ThreadId::new(id).expect("test thread ID is non-empty")
 }
 
 #[test]
-fn splitting_active_pane_creates_a_new_active_sibling() {
+fn a_group_starts_empty_and_opens_an_active_input() {
     let mut group = PaneGroup::new();
 
-    let second = group.split_active(PaneSplitDirection::Horizontal);
+    assert_eq!(group.input_ids(), []);
+    assert_eq!(group.active_input_id(), None);
 
-    assert_eq!(group.leaf_ids(), [PaneId::ROOT, second]);
-    assert_eq!(group.active_pane(), second);
+    let input_id = group.open_input(PaneInput::terminal(session("session-1")));
+
+    assert_eq!(input_id.value(), 1);
+    assert_eq!(input_id, PaneInputId::from_value(1));
+    assert_eq!(group.active_input_id(), Some(input_id));
+    assert_eq!(
+        group.active_input().unwrap().kind(),
+        PaneInput::terminal(session("session-1")).kind()
+    );
 }
 
 #[test]
-fn nested_split_and_close_collapse_the_owning_split() {
-    let mut group = PaneGroup::new();
-    let second = group.split_active(PaneSplitDirection::Horizontal);
-    let third = group.split_active(PaneSplitDirection::Vertical);
+fn a_group_keeps_input_identity_when_replacing_content() {
+    let mut group =
+        PaneGroup::with_input(PaneInput::agent(session("session-1"), thread("thread-1")));
+    let input_id = group.active_input_id().expect("active input");
 
-    assert_eq!(group.leaf_ids(), [PaneId::ROOT, second, third]);
-    assert_eq!(group.close_active(), Some(third));
-    assert_eq!(group.leaf_ids(), [PaneId::ROOT, second]);
-    assert_eq!(group.active_pane(), second);
+    let previous = group
+        .replace_active_input(PaneInput::files("/workspace".into()))
+        .expect("previous input");
+
+    assert_eq!(previous.kind(), crate::PaneInputKind::Agent);
+    assert_eq!(group.active_input_id(), Some(input_id));
+    assert_eq!(
+        group.input(input_id).unwrap().kind(),
+        crate::PaneInputKind::Files
+    );
 }
 
 #[test]
-fn the_last_pane_cannot_be_closed() {
+fn closing_active_input_selects_the_nearest_remaining_input() {
     let mut group = PaneGroup::new();
+    let first = group.open_input(PaneInput::settings());
+    let second = group.open_input(PaneInput::files("/workspace".into()));
 
-    assert_eq!(group.close_active(), None);
-    assert_eq!(group.leaf_ids(), [PaneId::ROOT]);
-}
-
-#[test]
-fn focus_wraps_over_visual_leaf_order() {
-    let mut group = PaneGroup::new();
-    let second = group.split_active(PaneSplitDirection::Horizontal);
-    let third = group.split_active(PaneSplitDirection::Vertical);
-
-    assert_eq!(group.focus_previous(), second);
-    assert_eq!(group.focus_previous(), PaneId::ROOT);
-    assert_eq!(group.focus_previous(), third);
-    assert_eq!(group.focus_next(), PaneId::ROOT);
-}
-
-#[test]
-fn layout_exposes_one_leaf_per_pane_and_sash_per_split() {
-    let mut group = PaneGroup::new();
-    group.split_active(PaneSplitDirection::Horizontal);
-    group.split_active(PaneSplitDirection::Vertical);
-
-    let layout = group.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-
-    assert_eq!(layout.leaves().len(), 3);
-    assert_eq!(layout.sashes().len(), 2);
-}
-
-#[test]
-fn resizing_a_split_persists_its_ratio_in_the_next_layout() {
-    let mut group = PaneGroup::new();
-    group.split_active(PaneSplitDirection::Horizontal);
-    let initial = group.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-    let sash = initial.sashes()[0];
-    let resize = sash.resize_snapshot().resize(120.0);
-
-    assert!(group.resize_split(sash.split_id(), resize));
-
-    let resized = group.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-    assert!(resized.leaf(PaneId::ROOT).unwrap().bounds().size.width > 400.0);
+    assert_eq!(
+        group.close_input(second).unwrap().kind(),
+        crate::PaneInputKind::Files
+    );
+    assert_eq!(group.active_input_id(), Some(first));
 }

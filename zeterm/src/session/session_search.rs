@@ -1,4 +1,4 @@
-//! Host-owned search editor and matching policy for the Sessions sidebar.
+//! Host-owned search editor and matching policy for Session inputs in Tab Part projections.
 
 use zeta_ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 

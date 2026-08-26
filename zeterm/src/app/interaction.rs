@@ -33,7 +33,7 @@ impl NativeApp {
                 SashOrientation::Vertical => CursorIcon::ColResize,
                 SashOrientation::Horizontal => CursorIcon::RowResize,
             }
-        } else if self.session_sidebar.is_resizing() || self.sidebar_part.is_resizing() {
+        } else if self.tab_container.is_resizing() || self.inspector_part.is_resizing() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -69,11 +69,11 @@ impl NativeApp {
         let session_hovered = window_active
             && self
                 .ui_dispatch
-                .is_hovered(shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE);
+                .is_hovered(shell_interaction::TAB_CONTAINER_RESIZE_HANDLE);
         let agent_hovered = window_active
             && self
                 .ui_dispatch
-                .is_hovered(shell_interaction::AGENT_SIDEBAR_RESIZE_HANDLE);
+                .is_hovered(shell_interaction::INSPECTOR_RESIZE_HANDLE);
         let session_presence = if session_hovered {
             SashPointerPresence::Over
         } else {
@@ -85,9 +85,11 @@ impl NativeApp {
             SashPointerPresence::Outside
         };
         let session_changed = self
-            .session_sidebar
+            .tab_container
             .sash_pointer_presence(session_presence, now);
-        let agent_changed = self.sidebar_part.sash_pointer_presence(agent_presence, now);
+        let agent_changed = self
+            .inspector_part
+            .sash_pointer_presence(agent_presence, now);
         session_changed || agent_changed
     }
 
@@ -148,19 +150,19 @@ impl NativeApp {
             self.activate_composer_interaction_item(index);
             return;
         }
-        if let Some(action) = self.sidebar_pane_workspace.activate_file_tree_element(id) {
+        if let Some(action) = self.workspace_pane_host.activate_file_tree_element(id) {
             match action {
-                AgentSidebarAction::OpenFile { path } => self.open_workspace_file(path),
-                AgentSidebarAction::LoadChildren { element, path } => {
+                WorkspacePaneAction::OpenFile { path } => self.open_workspace_file(path),
+                WorkspacePaneAction::LoadChildren { element, path } => {
                     self.load_file_tree_directory(element, path);
                 }
-                AgentSidebarAction::Handled
-                | AgentSidebarAction::StateChanged
-                | AgentSidebarAction::Focus(_) => {}
+                WorkspacePaneAction::Handled
+                | WorkspacePaneAction::StateChanged
+                | WorkspacePaneAction::Focus(_) => {}
             }
             return;
         }
-        if self.sidebar_pane_workspace.toggle_multi_diff_fold(id) {
+        if self.workspace_pane_host.toggle_multi_diff_fold(id) {
             return;
         }
         if self.activate_keyboard_shortcuts_element(id) {
@@ -181,19 +183,24 @@ impl NativeApp {
         if self.activate_workspace_path_picker_element(id) {
             return;
         }
-        if id == shell_interaction::SETTINGS_WORKBENCH_TAB {
+        if matches!(
+            id,
+            shell_interaction::TAB_CONTAINER_SETTINGS_TAB
+                | shell_interaction::TITLEBAR_SETTINGS_TAB
+        ) {
             self.activate_settings_tab();
             return;
         }
-        if let Some(index) =
-            shell_interaction::session_tab_index(id, 0..self.tab_inputs.session_count())
-        {
+        if let Some(index) = shell_interaction::session_tab_index(
+            id,
+            0..self.workbench_host.tab_part().session_count(),
+        ) {
             session_switch_trace::event(
                 None,
                 "session-tab-hit",
                 format_args!(
                     "element={id:?} index={index} tab_count={}",
-                    self.tab_inputs.session_count()
+                    self.workbench_host.tab_part().session_count()
                 ),
             );
             self.activate_session_tab(index);
@@ -225,10 +232,10 @@ impl NativeApp {
         if self.route_session_context_menu_pointer_move(point) {
             return;
         }
-        if self.route_session_sidebar_resize_move(point) {
+        if self.route_tab_container_resize_move(point) {
             return;
         }
-        if self.route_sidebar_resize_move(point) {
+        if self.route_inspector_resize_move(point) {
             return;
         }
         if self.route_terminal_pane_resize_move(point) {
@@ -262,7 +269,7 @@ impl NativeApp {
         self.file_editor_input.cancel_pointer();
         let pane_resize_cancelled = self.cancel_terminal_pane_resize();
         if self
-            .sidebar_pane_workspace
+            .workspace_pane_host
             .leave_multi_diff_scrollbar(Instant::now())
         {
             self.rebuild_presentation();
@@ -339,10 +346,10 @@ impl NativeApp {
         if self.route_session_context_menu_button(state, button) {
             return;
         }
-        if button == MouseButton::Left && self.route_session_sidebar_resize_button(state) {
+        if button == MouseButton::Left && self.route_tab_container_resize_button(state) {
             return;
         }
-        if button == MouseButton::Left && self.route_sidebar_resize_button(state) {
+        if button == MouseButton::Left && self.route_inspector_resize_button(state) {
             return;
         }
         if button == MouseButton::Left && self.route_terminal_pane_resize_button(state) {
@@ -383,7 +390,7 @@ impl NativeApp {
             return false;
         };
         let outcome =
-            self.sidebar_pane_workspace
+            self.workspace_pane_host
                 .move_multi_diff_scrollbar(point, bounds, Instant::now());
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();
@@ -399,10 +406,10 @@ impl NativeApp {
         let now = Instant::now();
         let outcome = match state {
             ElementState::Pressed => self
-                .sidebar_pane_workspace
+                .workspace_pane_host
                 .press_multi_diff_scrollbar(point, bounds, now),
             ElementState::Released => self
-                .sidebar_pane_workspace
+                .workspace_pane_host
                 .release_multi_diff_scrollbar(point, bounds, now),
         };
         if outcome.presentation_changed {

@@ -6,14 +6,16 @@ pub(super) fn handle_terminal_event(
     event: TerminalSessionEvent,
 ) {
     let terminal_exited = matches!(&event, TerminalSessionEvent::Exited(_));
-    if app.terminal_workspace.is_pending(key) {
-        app.terminal_workspace.buffer_event_if_pending(key, event);
+    if app.workbench_host.terminal_workspace.is_pending(key) {
+        app.workbench_host
+            .terminal_workspace
+            .buffer_event_if_pending(key, event);
         session_switch_trace::event(None, "terminal-event-buffered", format_args!("key={key:?}"));
         return;
     }
     if app.active_pane_terminal_key() != Some(key) {
         {
-            let Some(terminal) = app.terminal_workspace.terminal_mut(key) else {
+            let Some(terminal) = app.workbench_host.terminal_workspace.terminal_mut(key) else {
                 return;
             };
             if let Err(error) = terminal.handle_event(event) {

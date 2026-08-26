@@ -1,4 +1,4 @@
-//! Source-control projections for the Sidebar Part's Changes Pane.
+//! Source-control projections for the Changes Workspace Pane.
 
 use zeta_editor::DiffEditorDocument;
 use zeta_ui::Color;

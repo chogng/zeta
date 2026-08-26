@@ -24,7 +24,7 @@ impl NativeApp {
         self.theme_follows_system = loaded.follows_system;
         self.composer.set_input_style(editor_style.clone());
         self.code_editor_style = editor_style;
-        self.sidebar_pane_workspace
+        self.workspace_pane_host
             .set_editor_style(palette.multi_diff_editor_style());
     }
 
@@ -32,38 +32,47 @@ impl NativeApp {
     ///
     /// Files and Changes are ordinary `PaneInput`s. Their feature state stays in the workspace
     /// feature, while this host only changes the descriptive binding and active-pane context.
-    pub(super) fn select_workspace_pane_view(&mut self, view: AgentSidebarView) {
+    pub(super) fn select_workspace_pane_view(&mut self, view: WorkspacePaneView) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
-        let pane = self
-            .pane_groups
-            .entry(tab_key.clone())
-            .or_default()
-            .root_pane();
+        let Some(pane) = self
+            .workbench_host
+            .pane_part(&tab_key)
+            .map(|pane_part| pane_part.root_pane())
+        else {
+            return;
+        };
         let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
         let current = self
-            .pane_host
-            .binding(&host_key)
-            .map(|binding| binding.input().clone());
+            .workbench_host
+            .pane_part(&tab_key)
+            .and_then(|pane_part| pane_part.pane_input(pane))
+            .cloned();
         if current.as_ref().is_some_and(|input| {
             !matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff)
         }) {
             if let Some(current) = current {
-                self.workspace_pane_returns.insert(tab_key.clone(), current);
+                let _ = self
+                    .workbench_host
+                    .remember_workspace_return(&tab_key, current);
             }
         }
         let input = match view {
-            AgentSidebarView::Changes => {
+            WorkspacePaneView::Changes => {
                 PaneInput::diff(self.workspace_context.working_directory().to_path_buf())
             }
-            AgentSidebarView::Files => {
+            WorkspacePaneView::Files => {
                 PaneInput::files(self.workspace_context.working_directory().to_path_buf())
             }
         };
-        self.pane_host.insert(host_key, PaneBinding::new(input));
+        self.workbench_host.mount_input(&tab_key, pane, input);
+        self.workbench_host.pane_host.remove(&host_key);
+        self.workbench_host
+            .pane_host
+            .insert(host_key, PaneBinding::new());
         self.workspace_surface.show_agent();
-        self.sidebar_part.collapse();
+        self.inspector_part.collapse();
         let _ = self.activate_pane_context(tab_key, pane);
     }
 
@@ -91,24 +100,34 @@ impl NativeApp {
         let Some(session_id) = tab_key.session_id().cloned() else {
             return false;
         };
-        let pane = self
-            .pane_groups
-            .entry(tab_key.clone())
-            .or_default()
-            .root_pane();
-        self.pane_host.insert(
-            (PaneHostScope::Tab(tab_key.clone()), pane),
-            PaneBinding::new(PaneInput::agent(session_id, thread_id)),
-        );
-        self.workspace_pane_returns.remove(&tab_key);
+        let Some(pane) = self
+            .workbench_host
+            .pane_part(&tab_key)
+            .map(|pane_part| pane_part.root_pane())
+        else {
+            return false;
+        };
+        self.workbench_host
+            .mount_input(&tab_key, pane, PaneInput::agent(session_id, thread_id));
+        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
+        self.workbench_host.pane_host.remove(&host_key);
+        self.workbench_host
+            .pane_host
+            .insert(host_key, PaneBinding::new());
+        let _ = self.workbench_host.clear_workspace_return(&tab_key);
         self.activate_pane_context(tab_key, pane)
     }
 
     pub(super) fn active_workspace_pane_kind(&self) -> Option<PaneInputKind> {
         let tab_key = self.active_session_tab_key()?;
-        let group = self.pane_groups.get(&tab_key)?;
-        self.pane_host
-            .kind(&(PaneHostScope::Tab(tab_key), group.active_pane()))
+        let pane = self
+            .workbench_host
+            .pane_part(&tab_key)
+            .map(|pane_part| pane_part.active_pane())?;
+        self.workbench_host
+            .pane_part(&tab_key)
+            .and_then(|pane_part| pane_part.pane_input(pane))
+            .map(PaneInput::kind)
     }
 
     /// Restores a Files/Changes pane that was temporarily replaced by the Terminal surface.
@@ -117,7 +136,7 @@ impl NativeApp {
             self.show_agent_pane();
             return;
         };
-        let Some(input) = self.workspace_pane_returns.remove(&tab_key) else {
+        let Some(input) = self.workbench_host.take_workspace_return(&tab_key) else {
             let _ = self.bind_agent_pane();
             return;
         };
@@ -125,15 +144,19 @@ impl NativeApp {
             let _ = self.bind_agent_pane();
             return;
         }
-        let pane = self
-            .pane_groups
-            .entry(tab_key.clone())
-            .or_default()
-            .root_pane();
-        self.pane_host.insert(
-            (PaneHostScope::Tab(tab_key.clone()), pane),
-            PaneBinding::new(input),
-        );
+        let Some(pane) = self
+            .workbench_host
+            .pane_part(&tab_key)
+            .map(|pane_part| pane_part.root_pane())
+        else {
+            return;
+        };
+        self.workbench_host.mount_input(&tab_key, pane, input);
+        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
+        self.workbench_host.pane_host.remove(&host_key);
+        self.workbench_host
+            .pane_host
+            .insert(host_key, PaneBinding::new());
         self.workspace_surface.show_agent();
         let _ = self.activate_pane_context(tab_key, pane);
     }
@@ -207,8 +230,8 @@ impl NativeApp {
         terminal_grid_size_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
-            self.session_sidebar,
-            self.sidebar_part,
+            self.tab_container,
+            self.inspector_part,
         )
     }
 }

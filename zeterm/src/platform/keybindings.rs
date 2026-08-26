@@ -40,8 +40,8 @@ pub(crate) struct NativeKeybindingContext {
 pub(crate) struct NativeKeybindingFacts {
     pub(crate) direct_terminal: bool,
     pub(crate) terminal_surface_visible: bool,
-    pub(crate) session_sidebar_visible: bool,
-    pub(crate) agent_sidebar_visible: bool,
+    pub(crate) tab_container_visible: bool,
+    pub(crate) inspector_visible: bool,
     pub(crate) file_search_visible: bool,
     pub(crate) composer_route: &'static str,
 }
@@ -53,8 +53,8 @@ impl NativeKeybindingContext {
             facts: NativeKeybindingFacts {
                 direct_terminal: false,
                 terminal_surface_visible: false,
-                session_sidebar_visible: false,
-                agent_sidebar_visible: false,
+                tab_container_visible: false,
+                inspector_visible: false,
                 file_search_visible: false,
                 composer_route: "agent",
             },
@@ -67,8 +67,8 @@ impl NativeKeybindingContext {
             facts: NativeKeybindingFacts {
                 direct_terminal: true,
                 terminal_surface_visible: true,
-                session_sidebar_visible: false,
-                agent_sidebar_visible: false,
+                tab_container_visible: false,
+                inspector_visible: false,
                 file_search_visible: false,
                 composer_route: "agent",
             },
@@ -86,8 +86,8 @@ impl NativeKeybindingContext {
                 | "terminalFocus"
                 | "agentSurfaceVisible"
                 | "terminalSurfaceVisible"
-                | "sessionSidebarVisible"
-                | "agentSidebarVisible"
+                | "tabContainerVisible"
+                | "inspectorVisible"
                 | "fileSearchVisible"
                 | "composerRoute"
         )
@@ -103,10 +103,8 @@ impl NativeKeybindingContext {
             "terminalSurfaceVisible" => {
                 Some(ContextValue::Boolean(self.facts.terminal_surface_visible))
             }
-            "sessionSidebarVisible" => {
-                Some(ContextValue::Boolean(self.facts.session_sidebar_visible))
-            }
-            "agentSidebarVisible" => Some(ContextValue::Boolean(self.facts.agent_sidebar_visible)),
+            "tabContainerVisible" => Some(ContextValue::Boolean(self.facts.tab_container_visible)),
+            "inspectorVisible" => Some(ContextValue::Boolean(self.facts.inspector_visible)),
             "fileSearchVisible" => Some(ContextValue::Boolean(self.facts.file_search_visible)),
             "composerRoute" => Some(ContextValue::String(self.facts.composer_route.to_owned())),
             _ => None,
@@ -222,8 +220,8 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
         })),
         ZetermCommandId::OpenLanguageServerSettings
         | ZetermCommandId::ManageRemoteTunnels
-        | ZetermCommandId::ToggleSessionSidebar
-        | ZetermCommandId::ToggleAgentSidebar
+        | ZetermCommandId::ToggleTabContainer
+        | ZetermCommandId::ToggleWorkspacePane
         | ZetermCommandId::ActivateSessionTab
         | ZetermCommandId::AddSession
         | ZetermCommandId::ShowAgentChanges

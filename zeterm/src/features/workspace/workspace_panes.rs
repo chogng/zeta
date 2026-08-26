@@ -28,7 +28,7 @@ pub use files::FilesState;
 pub use files::FilesToolbar;
 #[cfg(test)]
 pub(crate) use files::FilesTreeRow;
-pub use navigation::AgentSidebarNavigation;
+pub use navigation::WorkspacePaneNavigation;
 pub use scm::EditorPane;
 pub use scm::EditorPaneState;
 pub use scm::ScmDiff;
@@ -36,16 +36,16 @@ pub use scm::ScmLayout;
 pub use scm::ScmPaneStyle;
 pub use scm::ScmState;
 pub use scm::ScrollbarPointerOutcome;
-pub use style::AgentSidebarStyle;
+pub use style::WorkspacePaneStyle;
 
 /// The two stable workspace-pane selection intents published by the current shell toolbar.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AgentSidebarPaneAction {
+pub enum WorkspacePaneSelection {
     Changes,
     Files,
 }
 
-impl AgentSidebarPaneAction {
+impl WorkspacePaneSelection {
     pub const ALL: [Self; 2] = [Self::Changes, Self::Files];
 
     pub const fn element_id(self) -> ElementId {
@@ -62,10 +62,10 @@ impl AgentSidebarPaneAction {
         }
     }
 
-    pub const fn view(self) -> AgentSidebarView {
+    pub const fn view(self) -> WorkspacePaneView {
         match self {
-            Self::Changes => AgentSidebarView::Changes,
-            Self::Files => AgentSidebarView::Files,
+            Self::Changes => WorkspacePaneView::Changes,
+            Self::Files => WorkspacePaneView::Files,
         }
     }
 
@@ -85,12 +85,12 @@ pub(crate) const TEST_SCM_PANE_STYLE: ScmPaneStyle = ScmPaneStyle {
     text_muted: zeta_ui::Color::rgb(126, 126, 132),
 };
 
-/// A feature view that can be mounted in the sidebar Pane.
+/// A feature view that can be mounted in a Workspace Pane.
 ///
 /// Selection is owned by the host's `PaneInput`; this enum is only the feature crate's
 /// presentation vocabulary for its navigation buttons.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum AgentSidebarView {
+pub enum WorkspacePaneView {
     Changes,
     #[default]
     Files,
@@ -98,7 +98,7 @@ pub enum AgentSidebarView {
 
 /// A product intent raised by a Files-pane interaction.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AgentSidebarAction {
+pub enum WorkspacePaneAction {
     Handled,
     StateChanged,
     Focus(ElementId),
@@ -106,21 +106,21 @@ pub enum AgentSidebarAction {
     LoadChildren { element: ElementId, path: PathBuf },
 }
 
-/// Retained product state for SidebarPart feature panes.
+/// Retained product state shared by Files and Changes Workspace Panes.
 ///
 /// Hosts provide Files and SCM snapshots and execute returned actions, keeping
 /// native platform and app-server dependencies outside this crate.
 #[derive(Default)]
-pub struct AgentSidebar {
+pub struct WorkspacePaneState {
     files: FilesState,
     scm: ScmState,
 }
 
-impl AgentSidebar {
+impl WorkspacePaneState {
     pub fn new(workspace_root: PathBuf) -> Self {
-        let mut sidebar = Self::default();
-        sidebar.files.set_workspace_root(workspace_root);
-        sidebar
+        let mut state = Self::default();
+        state.files.set_workspace_root(workspace_root);
+        state
     }
 
     pub const fn files(&self) -> &FilesState {

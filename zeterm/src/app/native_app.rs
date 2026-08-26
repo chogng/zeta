@@ -12,9 +12,6 @@ use crate::keyboard_shortcuts::KeyboardShortcutsState;
 use crate::language_server_settings::LanguageServerSettingsState;
 use crate::launch::ZetermLaunch;
 use crate::native_event::NativeEvent;
-use crate::pane_group::{PaneGroup, PaneId, PaneSplitDirection, PaneSplitId};
-use crate::pane_host::{PaneHost, PaneHostScope};
-use crate::pane_input::{PaneBinding, PaneInput, PaneInputKind};
 use crate::remote_connection_cli::ZetermInvocation;
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
@@ -22,7 +19,6 @@ use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_process::NativeRemoteTunnelHost;
 use crate::session::session_context_menu::SessionContextMenuState;
 use crate::session::session_search::SessionSearch;
-use crate::session::session_sidebar::SessionSidebarState;
 use crate::session::session_switch_trace;
 use crate::shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use crate::shell_scene::{
@@ -32,9 +28,6 @@ use crate::shell_scene::{
     terminal_pane_sash_for_viewport,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
-use crate::sidebar_pane_workspace::{AgentSidebarView, SidebarPaneWorkspace};
-use crate::sidebar_part::SidebarPartState;
-use crate::tab_input::{TabInputKey, TabInputModel};
 use crate::terminal_pane_view::TerminalPaneViewState;
 use crate::terminal_pointer::TerminalPointer;
 use crate::terminal_scrollback::TerminalScroll;
@@ -42,9 +35,14 @@ use crate::terminal_selection::TerminalSelection;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline_scroll::ThreadTimelineScroll;
-use crate::workbench::terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
+use crate::workbench_host::{InspectorPartState, TabContainerState, TabInputKey};
+use crate::workbench_host::{
+    PaneBinding, PaneHostScope, PaneId, PaneInput, PaneInputKind, PaneSplitDirection, PaneSplitId,
+    TerminalReadyOutcome, WorkbenchHost,
+};
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneView};
+use crate::workspace_panes::WorkspacePaneAction;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurface;
 use zeta_composer::Composer;
@@ -160,12 +158,6 @@ pub(crate) mod launch_tests;
 mod lifecycle;
 #[path = "../platform/native_event.rs"]
 pub(crate) mod native_event;
-#[path = "../workbench/pane_group.rs"]
-pub(crate) mod pane_group;
-#[path = "../workbench/pane_host.rs"]
-pub(crate) mod pane_host;
-#[path = "../workbench/pane_input.rs"]
-pub(crate) mod pane_input;
 #[path = "presentation.rs"]
 mod presentation;
 #[path = "../features/remote/remote_connection_cli.rs"]
@@ -214,14 +206,8 @@ pub(crate) mod shell_interaction;
 pub(crate) mod shell_scene;
 #[path = "../presentation/shell_style.rs"]
 pub(crate) mod shell_style;
-#[path = "../features/workspace/sidebar_pane_workspace.rs"]
-pub(crate) mod sidebar_pane_workspace;
-#[path = "../workbench/sidebar_part.rs"]
-pub(crate) mod sidebar_part;
 #[path = "state.rs"]
 mod state;
-#[path = "../workbench/tab_input.rs"]
-pub(crate) mod tab_input;
 #[path = "../features/terminal/terminal_blocks.rs"]
 pub(crate) mod terminal_blocks;
 #[path = "../features/terminal/terminal_input.rs"]
@@ -246,14 +232,14 @@ pub(crate) mod thread_projection;
 pub(crate) mod thread_timeline;
 #[path = "../features/agent/thread_timeline_scroll.rs"]
 pub(crate) mod thread_timeline_scroll;
-#[path = "../workbench/titlebar.rs"]
-pub(crate) mod titlebar;
-#[path = "../workbench.rs"]
-pub(crate) mod workbench;
-#[path = "workbench.rs"]
+#[path = "../workbench_host.rs"]
+pub(crate) mod workbench_host;
+#[path = "../workbench_host/runtime.rs"]
 mod workbench_runtime;
 #[path = "../features/workspace/workspace_context.rs"]
 pub(crate) mod workspace_context;
+#[path = "../features/workspace/workspace_pane_host.rs"]
+pub(crate) mod workspace_pane_host;
 #[path = "../features/workspace/workspace_panes.rs"]
 pub(crate) mod workspace_panes;
 #[path = "../features/workspace/workspace_path_picker.rs"]

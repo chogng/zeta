@@ -9,8 +9,8 @@ impl NativeApp {
         let terminal_size = terminal_grid_size_for_viewport(
             viewport,
             active_screen,
-            self.session_sidebar,
-            self.sidebar_part,
+            self.tab_container,
+            self.inspector_part,
         );
         self.resize_terminal_panes(viewport, active_screen, terminal_size);
         let scroll_limit = self.terminal_scroll_limit();
@@ -97,35 +97,42 @@ impl NativeApp {
         active_screen: ScreenBuffer,
         fallback_size: GridSize,
     ) {
-        let Some(tab_key) = self.tab_inputs.active_key().cloned() else {
-            self.terminal_workspace.resize_all(fallback_size);
+        let Some(tab_key) = self.workbench_host.tab_part().active_tab_key().cloned() else {
+            self.workbench_host
+                .terminal_workspace
+                .resize_all(fallback_size);
             return;
         };
-        let Some(group) = self.pane_groups.get(&tab_key) else {
-            self.terminal_workspace.resize_all(fallback_size);
+        let Some(layout) = self.workbench_host.pane_part(&tab_key) else {
+            self.workbench_host
+                .terminal_workspace
+                .resize_all(fallback_size);
             return;
         };
         let panes = terminal_pane_bounds_for_viewport(
             viewport,
             active_screen,
-            self.session_sidebar,
-            self.sidebar_part,
-            group,
+            self.tab_container,
+            self.inspector_part,
+            layout,
         );
         if panes.is_empty() {
-            self.terminal_workspace.resize_all(fallback_size);
+            self.workbench_host
+                .terminal_workspace
+                .resize_all(fallback_size);
             return;
         }
         let resize_requests = panes
             .into_iter()
             .filter_map(|(pane, bounds)| {
-                self.pane_host
+                self.workbench_host
+                    .pane_host
                     .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
                     .map(|key| (key, terminal_grid_size_for_bounds(bounds)))
             })
             .collect::<Vec<_>>();
         for (key, size) in resize_requests {
-            self.terminal_workspace.resize_key(key, size);
+            self.workbench_host.terminal_workspace.resize_key(key, size);
         }
     }
 

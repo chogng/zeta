@@ -6,9 +6,9 @@ use zeta_ui::Edges;
 use zeta_ui::SearchBoxStyle;
 use zeta_ui::TextStyle;
 
-/// Theme projection shared by SidebarPart's toolbar and pane navigation.
+/// Theme projection shared by Workspace Pane toolbar and navigation components.
 #[derive(Clone)]
-pub struct AgentSidebarStyle {
+pub struct WorkspacePaneStyle {
     pub surface_raised: Color,
     pub text: Color,
     pub surface_hovered: Color,
@@ -16,7 +16,7 @@ pub struct AgentSidebarStyle {
     search: SearchBoxStyle,
 }
 
-impl AgentSidebarStyle {
+impl WorkspacePaneStyle {
     pub fn new(
         surface_raised: Color,
         text: Color,

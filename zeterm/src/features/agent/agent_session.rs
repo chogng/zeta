@@ -52,9 +52,9 @@ use crate::composer_host::synchronize_composer_classifier;
 use crate::composer_host::update_composer_classifier;
 use crate::native_event::NativeEvent;
 use crate::session::session_switch_trace::{self, SwitchId};
-use crate::sidebar_pane_workspace::AgentSidebarView;
-use crate::tab_input::TabInputChange;
 use crate::thread_projection::ThreadProjectionUpdate;
+use crate::workbench_host::{TabInputChange, TabInputKey};
+use crate::workspace_pane_host::WorkspacePaneView;
 
 #[path = "agent_session/remote.rs"]
 mod remote;
@@ -148,6 +148,10 @@ pub(crate) enum AgentSessionEvent {
 
 enum AgentSessionCommand {
     CreateSession,
+    StopSession {
+        session_id: SessionId,
+        response: SyncSender<std::result::Result<(), String>>,
+    },
     ActivateSession {
         session_id: SessionId,
         switch_id: SwitchId,
@@ -234,6 +238,21 @@ impl AgentSession {
             AgentSessionCommand::CreateSession,
             "Agent session creation queue is unavailable",
         )
+    }
+
+    pub(crate) fn stop_session(&self, session_id: SessionId) -> Result<()> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::StopSession {
+                session_id,
+                response,
+            },
+            "Agent session stop queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Agent session stop worker stopped")?
+            .map_err(anyhow::Error::msg)
     }
 
     pub(crate) fn activate_session(
@@ -579,6 +598,14 @@ fn drive_agent_session(
                             send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
                         }
                     }
+                }
+                Ok(AgentSessionCommand::StopSession {
+                    session_id,
+                    response,
+                }) => {
+                    let result =
+                        stop_session(client, &session_id).map_err(|error| error.to_string());
+                    let _ = response.send(result);
                 }
                 Ok(AgentSessionCommand::ActivateSession {
                     session_id,
@@ -1037,6 +1064,32 @@ fn create_session(client: &mut AppServerRequestHandle, workspace_root: &Path) ->
         .map_err(client_error)
 }
 
+fn stop_session(client: &mut AppServerRequestHandle, session_id: &SessionId) -> Result<()> {
+    let session = client
+        .read_session(SessionReadParams {
+            session_id: session_id.clone(),
+        })
+        .map_err(client_error)?
+        .session;
+    if session.status != SessionStatus::Active {
+        return Err(anyhow!("Session is not active: {session_id}"));
+    }
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: next_command_id("stop-session"),
+            session_id: session.session_id,
+            expected_sequence: session.sequence,
+            request: SessionRequest::Stop,
+        })
+        .map_err(client_error)?;
+    if !matches!(result, SessionRequestResult::Session(_)) {
+        return Err(anyhow!(
+            "Session stop request returned an unexpected result"
+        ));
+    }
+    Ok(())
+}
+
 fn ensure_session_thread(
     client: &mut AppServerRequestHandle,
     session: Session,
@@ -1316,8 +1369,27 @@ impl NativeApp {
     }
 
     pub(crate) fn activate_session_tab(&mut self, index: usize) {
+        self.activate_session_tab_at(index, false);
+    }
+
+    /// Reconnects the App Server worker after Workbench has selected a replacement for a closed
+    /// Session tab. The Workbench selection is already updated, so the normal already-selected
+    /// guard must be bypassed once.
+    pub(crate) fn activate_session_tab_after_close(&mut self, tab_key: &TabInputKey) {
+        let Some(index) = (0..self.workbench_host.tab_part().session_count()).find(|index| {
+            self.workbench_host
+                .tab_part()
+                .session_input_at(*index)
+                .is_some_and(|input| input.key() == tab_key)
+        }) else {
+            return;
+        };
+        self.activate_session_tab_at(index, true);
+    }
+
+    fn activate_session_tab_at(&mut self, index: usize, force: bool) {
         let switch_id = session_switch_trace::SwitchId::next();
-        let Some(tab) = self.tab_inputs.session_input_at(index) else {
+        let Some(tab) = self.workbench_host.tab_part().session_input_at(index) else {
             session_switch_trace::event(
                 Some(switch_id),
                 "activation-rejected",
@@ -1339,8 +1411,8 @@ impl NativeApp {
             "activation-request",
             format_args!("index={index} session_id={session_id}"),
         );
-        if self.tab_inputs.selected_session() == Some(&session_id) {
-            if self.tab_inputs.is_settings() {
+        if !force && self.workbench_host.tab_part().selected_session() == Some(&session_id) {
+            if self.workbench_host.tab_part().is_settings() {
                 self.activate_session_workbench_tab();
                 self.rebuild_presentation_on_next_redraw();
             } else {
@@ -1405,7 +1477,7 @@ impl NativeApp {
         {
             return;
         }
-        self.tab_inputs.activate_session(&session_id);
+        self.workbench_host.activate_session(&session_id);
         self.activate_session_workbench_tab();
         let terminal_activated = self.activate_terminal_for_session(&session_id);
         if !was_terminal {
@@ -1429,7 +1501,7 @@ impl NativeApp {
 
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
-        let result = self.tab_inputs.upsert_session(session, &workspace);
+        let result = self.workbench_host.upsert_session(session, &workspace);
         let (label, input_key) = match result {
             TabInputChange::Added(input_key) => ("session-tab-added", input_key),
             TabInputChange::Updated(input_key) => ("session-tab-updated", input_key),
@@ -1440,7 +1512,7 @@ impl NativeApp {
             format_args!(
                 "session_id={} input={input_key:?} tab_count={}",
                 session.session_id,
-                self.tab_inputs.session_count()
+                self.workbench_host.tab_part().session_count()
             ),
         );
     }
@@ -1448,7 +1520,8 @@ impl NativeApp {
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
-            self.tab_inputs.upsert_catalog_session(session, &workspace);
+            self.workbench_host
+                .upsert_catalog_session(session, &workspace);
         }
     }
 
@@ -1585,11 +1658,11 @@ impl NativeApp {
     pub(crate) fn replace_workspace_pane(&mut self) {
         let pane_kind = self.active_workspace_pane_kind();
         let removed = self
-            .sidebar_pane_workspace
+            .workspace_pane_host
             .replace_workspace(&self.workspace_context);
         let view = match pane_kind {
-            Some(crate::pane_input::PaneInputKind::Diff) => Some(AgentSidebarView::Changes),
-            Some(crate::pane_input::PaneInputKind::Files) => Some(AgentSidebarView::Files),
+            Some(crate::workbench_host::PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
+            Some(crate::workbench_host::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
             _ => None,
         };
         if let Some(view) = view {
@@ -1600,7 +1673,7 @@ impl NativeApp {
 
     fn sync_workspace_pane_repository(&mut self) {
         let removed = self
-            .sidebar_pane_workspace
+            .workspace_pane_host
             .sync_repository(&self.workspace_context);
         self.remove_scm_animation_tracks(removed);
     }
@@ -1621,7 +1694,7 @@ impl NativeApp {
             return;
         };
         match session.read_directory(PathBuf::from(".")) {
-            Ok(entries) => self.sidebar_pane_workspace.refresh_files(entries),
+            Ok(entries) => self.workspace_pane_host.refresh_files(entries),
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
         }
     }
@@ -1632,7 +1705,7 @@ impl NativeApp {
         };
         match session.read_directory(path) {
             Ok(entries) => {
-                self.sidebar_pane_workspace
+                self.workspace_pane_host
                     .complete_file_tree_directory_load(element, entries);
             }
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
@@ -1650,7 +1723,7 @@ impl NativeApp {
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
                 self.show_agent_pane();
-                self.sidebar_part.expand();
+                self.inspector_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
@@ -1686,7 +1759,7 @@ impl NativeApp {
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
                 self.show_agent_pane();
-                self.sidebar_part.expand();
+                self.inspector_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();

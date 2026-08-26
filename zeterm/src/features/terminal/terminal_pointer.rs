@@ -6,11 +6,11 @@ use zeta_terminal::{
 use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 use crate::NativeApp;
-use crate::pane_group::PaneId;
 use crate::shell_scene::{
     terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
 };
 use crate::terminal_session::TerminalSession;
+use crate::workbench_host::PaneId;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum PointerInput {
@@ -159,14 +159,14 @@ impl NativeApp {
         &self,
         point: zeta_ui::Point,
     ) -> Option<(PaneId, TerminalMousePosition)> {
-        let tab_key = self.tab_inputs.active_key()?;
-        let group = self.pane_groups.get(tab_key)?;
+        let tab_key = self.workbench_host.tab_part().active_tab_key()?;
+        let layout = self.workbench_host.pane_part(tab_key)?;
         terminal_pane_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
-            self.session_sidebar,
-            self.sidebar_part,
-            group,
+            self.tab_container,
+            self.inspector_part,
+            layout,
             point,
         )
     }
@@ -175,7 +175,7 @@ impl NativeApp {
         let Some((pane, _position)) = self.terminal_pane_hit(point) else {
             return false;
         };
-        let Some(tab_key) = self.tab_inputs.active_key().cloned() else {
+        let Some(tab_key) = self.workbench_host.tab_part().active_tab_key().cloned() else {
             return false;
         };
         self.activate_pane_context(tab_key, pane)
@@ -189,14 +189,18 @@ impl NativeApp {
             return None;
         }
         if let Some((pane, position)) = self.terminal_pane_hit(point) {
-            return (self.active_pane == Some((self.tab_inputs.active_key()?.clone(), pane)))
-                .then_some(position);
+            return (self.active_pane
+                == Some((
+                    self.workbench_host.tab_part().active_tab_key()?.clone(),
+                    pane,
+                )))
+            .then_some(position);
         }
         terminal_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
-            self.session_sidebar,
-            self.sidebar_part,
+            self.tab_container,
+            self.inspector_part,
             point,
         )
     }

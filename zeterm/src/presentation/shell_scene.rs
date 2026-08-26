@@ -23,9 +23,6 @@ use crate::keyboard_shortcuts::{
 use crate::language_server_settings::{
     LanguageServerSettings, LanguageServerSettingsState, paint_switch_fragment,
 };
-use crate::pane_group::{PaneGroup, PaneId, PaneSplitId};
-use crate::pane_host::PaneViewMount;
-use crate::pane_input::PaneInputKind;
 use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_manager_view::RemoteConnectionManager;
@@ -38,35 +35,40 @@ use crate::session::session_canvas::SessionCanvasLayout;
 use crate::session::session_canvas::SessionHeader;
 use crate::session::session_context_menu::{SessionContextMenu, SessionContextMenuState};
 use crate::session::session_search::SessionSearch;
-use crate::session::session_sidebar::SessionSidebarState;
-use crate::session::session_sidebar_toolbar::SessionSidebarToolbar;
-use crate::session::session_tab_list::{WorkbenchTab, WorkbenchTabList, tab_input_element_id};
 use crate::settings_sections::SettingsSectionPane;
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,
-    AGENT_SIDEBAR_TOOLBAR, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
-    MAIN_SURFACE, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_RESIZE_HANDLE,
-    SETTINGS_WORKBENCH_TAB, TERMINAL_OUTPUT, THREAD_TIMELINE, WINDOW,
+    AGENT_FILE_SEARCH_INPUT, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT,
+    FILE_EDITOR_REPLACE_INPUT, FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE,
+    MAIN_SURFACE, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT,
+    THREAD_TIMELINE, WINDOW, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::shell_style::ShellPalette;
-use crate::sidebar_pane_workspace::AgentSidebarView;
-use crate::sidebar_pane_workspace::SidebarPaneWorkspace;
-use crate::sidebar_part::SidebarPartState;
-use crate::tab_input::TabInput;
-use crate::tab_input::TabInputKey;
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::ThreadTimeline;
-use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
+use crate::workbench_host::tab_container::TabContainer;
+use crate::workbench_host::tab_container::TabContainerPlacement;
+use crate::workbench_host::tab_container::WorkbenchTab;
+use crate::workbench_host::tab_container::WorkbenchTabGroup;
+use crate::workbench_host::tab_container::project_tab_groups;
+use crate::workbench_host::tab_container::tab_input_element_id;
+use crate::workbench_host::tab_container_toolbar::TabContainerToolbar;
+use crate::workbench_host::titlebar::{TITLEBAR_HEIGHT, Titlebar};
+use crate::workbench_host::{
+    InspectorPartState, TabContainerState, TabInput, TabInputKey, TabPart,
+};
+use crate::workbench_host::{PaneId, PaneInputKind, PanePart, PaneSplitId, PaneViewMount};
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_panes::AgentSidebarNavigation;
+use crate::workspace_pane_host::WorkspacePaneHost;
+use crate::workspace_pane_host::WorkspacePaneView;
 use crate::workspace_panes::EditorPane;
 use crate::workspace_panes::FilesLayout;
 use crate::workspace_panes::FilesPane;
 use crate::workspace_panes::FilesToolbar;
 use crate::workspace_panes::ScmLayout;
+use crate::workspace_panes::WorkspacePaneNavigation;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_composer::Composer;
@@ -109,23 +111,23 @@ impl ShellLayout {
         self.workbench.titlebar()
     }
 
-    fn session_sidebar(self) -> Option<Rect> {
-        self.workbench.sessions()
+    fn tab_container(self) -> Option<Rect> {
+        self.workbench.tab_container()
     }
 
-    fn session_sidebar_sash_track(self) -> Option<Rect> {
-        self.workbench.sessions_sash_track()
+    fn tab_container_sash_track(self) -> Option<Rect> {
+        self.workbench.tab_container_sash_track()
     }
 
-    fn sidebar(self) -> Option<Rect> {
+    fn inspector(self) -> Option<Rect> {
         self.workbench.inspector()
     }
 
-    fn sidebar_sash_track(self) -> Option<Rect> {
+    fn inspector_sash_track(self) -> Option<Rect> {
         self.workbench.inspector_sash_track()
     }
 
-    fn sidebar_resize_snapshot(self) -> Option<SplitViewResizeSnapshot> {
+    fn inspector_resize_snapshot(self) -> Option<SplitViewResizeSnapshot> {
         self.workbench.inspector_resize_snapshot()
     }
 
@@ -135,13 +137,13 @@ impl ShellLayout {
 
     fn for_viewport(
         viewport: LogicalViewport,
-        session_sidebar: SessionSidebarState,
-        sidebar_part: SidebarPartState,
+        tab_container: TabContainerState,
+        inspector_part: InspectorPartState,
     ) -> Option<Self> {
         Self::for_viewport_with_composer_and_interaction_height(
             viewport,
-            session_sidebar,
-            sidebar_part,
+            tab_container,
+            inspector_part,
             COMPOSER_HEIGHT,
             0.0,
         )
@@ -150,14 +152,14 @@ impl ShellLayout {
     #[cfg(test)]
     fn for_viewport_with_composer_height(
         viewport: LogicalViewport,
-        session_sidebar: SessionSidebarState,
-        sidebar_part: SidebarPartState,
+        tab_container: TabContainerState,
+        inspector_part: InspectorPartState,
         preferred_composer_height: f32,
     ) -> Option<Self> {
         Self::for_viewport_with_composer_and_interaction_height(
             viewport,
-            session_sidebar,
-            sidebar_part,
+            tab_container,
+            inspector_part,
             preferred_composer_height,
             0.0,
         )
@@ -165,15 +167,15 @@ impl ShellLayout {
 
     fn for_viewport_with_composer_and_interaction_height(
         viewport: LogicalViewport,
-        session_sidebar: SessionSidebarState,
-        sidebar_part: SidebarPartState,
+        tab_container: TabContainerState,
+        inspector_part: InspectorPartState,
         preferred_composer_height: f32,
         preferred_interaction_height: f32,
     ) -> Option<Self> {
         let workbench = WorkbenchLayoutSpec::new(
             TITLEBAR_HEIGHT,
-            session_sidebar.layout_spec(),
-            sidebar_part.layout_spec(),
+            tab_container.layout_spec(),
+            inspector_part.layout_spec(),
         )
         .for_viewport(viewport)?;
         let main = workbench.main();
@@ -198,13 +200,13 @@ impl ShellLayout {
     }
 }
 
-pub(crate) fn sidebar_resize_snapshot_for_viewport(
+pub(crate) fn inspector_resize_snapshot_for_viewport(
     viewport: LogicalViewport,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
 ) -> Option<SplitViewResizeSnapshot> {
-    ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part)
-        .and_then(ShellLayout::sidebar_resize_snapshot)
+    ShellLayout::for_viewport(viewport, tab_container, inspector_part)
+        .and_then(ShellLayout::inspector_resize_snapshot)
 }
 
 pub(crate) struct ShellPresentation {
@@ -313,12 +315,12 @@ pub(crate) struct PaneView<'a> {
     pub(crate) selection: Option<TerminalSelectionRange>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) palette: ShellPalette,
     pub(crate) terminal: Option<&'a TerminalCore>,
     pub(crate) terminal_panes: &'a [PaneView<'a>],
-    pub(crate) pane_group: Option<&'a PaneGroup>,
+    pub(crate) pane_group: Option<&'a PanePart>,
     pub(crate) active_pane: Option<PaneViewMount<'a>>,
     pub(crate) terminal_pane_resize_split: Option<PaneSplitId>,
     pub(crate) terminal_scroll_offset: usize,
@@ -338,13 +340,13 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) workspace_context: &'a WorkspaceContext,
     pub(crate) composer: &'a Composer,
     pub(crate) session_search: &'a SessionSearch,
-    pub(crate) tab_inputs: &'a [TabInput],
+    pub(crate) tab_part: &'a TabPart,
     pub(crate) active_tab_input: Option<&'a TabInputKey>,
     pub(crate) caret_visibility: CaretVisibility,
     pub(crate) dispatch: &'a UiDispatch,
-    pub(crate) session_sidebar: SessionSidebarState,
-    pub(crate) sidebar_part: SidebarPartState,
-    pub(crate) sidebar_pane_workspace: &'a SidebarPaneWorkspace,
+    pub(crate) tab_container: TabContainerState,
+    pub(crate) inspector_part: InspectorPartState,
+    pub(crate) workspace_pane_host: &'a WorkspacePaneHost,
     pub(crate) session_context_menu: SessionContextMenuState,
     pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
     pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
@@ -365,11 +367,11 @@ pub(crate) struct ShellPresentationModel<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct SessionSidebarView<'a> {
+struct TabContainerView<'a> {
     title: &'a str,
     context: &'a WorkspaceContext,
     search: &'a SessionSearch,
-    tab_inputs: &'a [TabInput],
+    tab_part: &'a TabPart,
     selected_id: ElementId,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
@@ -377,7 +379,7 @@ struct SessionSidebarView<'a> {
 
 #[derive(Clone, Copy)]
 struct WorkspacePanePresentationView<'a> {
-    workspace: &'a SidebarPaneWorkspace,
+    workspace: &'a WorkspacePaneHost,
     pane: Option<PaneViewMount<'a>>,
     context: &'a WorkspaceContext,
     caret_visibility: CaretVisibility,
@@ -403,7 +405,7 @@ struct FileEditorPresentationView<'a> {
 struct MainPresentationView<'a> {
     terminal: PaneView<'a>,
     terminal_panes: &'a [PaneView<'a>],
-    pane_group: Option<&'a PaneGroup>,
+    pane_group: Option<&'a PanePart>,
     active_pane: Option<PaneViewMount<'a>>,
     terminal_pane_resize_split: Option<PaneSplitId>,
     workspace_surface: WorkspaceSurfaceKind,
@@ -415,7 +417,7 @@ struct MainPresentationView<'a> {
     thread_projection: &'a ThreadProjection,
     thread_timeline_scroll_offset: usize,
     composer: ComposerPanelView<'a>,
-    workspace: &'a SidebarPaneWorkspace,
+    workspace: &'a WorkspacePaneHost,
     workspace_context: &'a WorkspaceContext,
     keybindings: &'a NativeKeybindings,
     keyboard_shortcuts: &'a KeyboardShortcutsState,
@@ -467,8 +469,8 @@ fn build_shell_presentation_with_bindings(
     ));
     let Some(layout) = ShellLayout::for_viewport_with_composer_and_interaction_height(
         viewport,
-        model.session_sidebar,
-        model.sidebar_part,
+        model.tab_container,
+        model.inspector_part,
         model.composer.input().preferred_height(),
         model.composer.interaction().view().map_or(0.0, |view| {
             zeta_composer::interaction_preferred_height(view.items().len())
@@ -506,34 +508,35 @@ fn build_shell_presentation_with_bindings(
     };
     let session_title = model
         .active_tab_input
-        .and_then(|selected| {
-            model
-                .tab_inputs
-                .iter()
-                .find(|input| input.key() == selected)
-        })
+        .and_then(|selected| model.tab_part.input(selected))
         .map(TabInput::title)
         .unwrap_or("New session");
-    let selected_id = tab_input_element_id(model.tab_inputs, model.active_tab_input);
+    let selected_id = tab_input_element_id(
+        model.tab_part,
+        model.active_tab_input,
+        TabContainerPlacement::Body,
+    );
     let titlebar = Titlebar::new(
         layout.titlebar(),
         palette,
-        model.session_sidebar,
+        model.tab_part,
+        model.active_tab_input,
+        model.tab_container,
         model.active_pane.map(|pane| pane.kind()),
         model.window_control_insets,
         model.dispatch,
     );
     frame.draw_component(&titlebar);
-    let session_search_caret = if let Some(bounds) = layout.session_sidebar() {
+    let session_search_caret = if let Some(bounds) = layout.tab_container() {
         frame.with_context(|context| {
-            draw_session_sidebar(
+            draw_tab_container(
                 context,
                 bounds,
-                SessionSidebarView {
+                TabContainerView {
                     title,
                     context: model.workspace_context,
                     search: model.session_search,
-                    tab_inputs: model.tab_inputs,
+                    tab_part: model.tab_part,
                     selected_id,
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
@@ -545,7 +548,7 @@ fn build_shell_presentation_with_bindings(
     } else {
         None
     };
-    let file_editor_caret = if let Some(bounds) = layout.sidebar() {
+    let file_editor_caret = if let Some(bounds) = layout.inspector() {
         if model.workspace_surface == WorkspaceSurfaceKind::Editor {
             frame.with_context(|context| {
                 draw_file_editor_inspector(
@@ -608,7 +611,7 @@ fn build_shell_presentation_with_bindings(
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
-                workspace: model.sidebar_pane_workspace,
+                workspace: model.workspace_pane_host,
                 workspace_context: model.workspace_context,
                 keybindings: model.keybindings,
                 keyboard_shortcuts: model.keyboard_shortcuts,
@@ -626,18 +629,18 @@ fn build_shell_presentation_with_bindings(
         Some(animation_bindings) => frame.with_animation_bindings(animation_bindings, main_draw),
         None => frame.with_context(main_draw),
     };
-    if let Some(bounds) = layout.sidebar() {
-        draw_sidebar_part_border(frame.scene_mut(), bounds, palette);
+    if let Some(bounds) = layout.inspector() {
+        draw_inspector_border(frame.scene_mut(), bounds, palette);
     }
-    if let Some(bounds) = layout.sidebar_sash_track() {
+    if let Some(bounds) = layout.inspector_sash_track() {
         frame.with_context(|context| {
             draw_sash(
                 context,
                 bounds,
                 SashOrientation::Vertical,
-                model.sidebar_part.sash_state(),
-                AGENT_SIDEBAR_RESIZE_HANDLE,
-                "SidebarPartResizeHandle",
+                model.inspector_part.sash_state(),
+                INSPECTOR_RESIZE_HANDLE,
+                "InspectorPartResizeHandle",
                 "Resize inspector",
                 palette,
             )
@@ -653,16 +656,16 @@ fn build_shell_presentation_with_bindings(
     } else {
         main_draw.ime_cursor_area
     };
-    if let Some(bounds) = layout.session_sidebar_sash_track() {
+    if let Some(bounds) = layout.tab_container_sash_track() {
         frame.with_context(|context| {
             draw_sash(
                 context,
                 bounds,
                 SashOrientation::Vertical,
-                model.session_sidebar.sash_state(),
-                SESSION_SIDEBAR_RESIZE_HANDLE,
-                "SessionSidebarResizeHandle",
-                "Resize sessions sidebar",
+                model.tab_container.sash_state(),
+                TAB_CONTAINER_RESIZE_HANDLE,
+                "TabContainerResizeHandle",
+                "Resize tabs",
                 palette,
             )
         });
@@ -770,7 +773,7 @@ fn draw_shell_overlays(
     let mut remote_tunnel_manager_list_viewport = None;
     if let Some(context_menu) = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        model.session_context_menu,
+        &model.session_context_menu,
         palette,
         model.dispatch,
     ) {
@@ -902,10 +905,10 @@ fn draw_shell_overlays(
 pub(crate) fn terminal_grid_size_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
 ) -> GridSize {
-    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part) else {
+    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -933,11 +936,11 @@ pub(crate) fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
 pub(crate) fn terminal_pane_bounds_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
-    group: &PaneGroup,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
+    group: &PanePart,
 ) -> Vec<(PaneId, Rect)> {
-    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part) else {
+    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
         return Vec::new();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -952,11 +955,11 @@ pub(crate) fn terminal_pane_bounds_for_viewport(
 pub(crate) fn terminal_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
     point: zeta_ui::Point,
 ) -> Option<TerminalMousePosition> {
-    let layout = ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part)?;
+    let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
     let bounds = terminal_content_bounds(layout, active_screen);
     if !bounds.contains(point) {
         return None;
@@ -964,24 +967,24 @@ pub(crate) fn terminal_mouse_position_for_viewport(
     let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
     let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
     let size =
-        terminal_grid_size_for_viewport(viewport, active_screen, session_sidebar, sidebar_part);
+        terminal_grid_size_for_viewport(viewport, active_screen, tab_container, inspector_part);
     (row < size.rows() && col < size.cols()).then(|| TerminalMousePosition::new(row, col))
 }
 
 pub(crate) fn terminal_pane_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
-    group: &PaneGroup,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
+    group: &PanePart,
     point: zeta_ui::Point,
 ) -> Option<(PaneId, TerminalMousePosition)> {
-    let Some(layout) = ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part) else {
+    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
         return None;
     };
     let content_bounds = terminal_content_bounds(layout, active_screen);
-    let pane_layout = group.layout(content_bounds);
-    let leaf = pane_layout
+    let pane_geometry = group.layout(content_bounds);
+    let leaf = pane_geometry
         .leaves()
         .iter()
         .find(|leaf| leaf.bounds().contains(point))?;
@@ -1000,43 +1003,43 @@ fn draw_workspace_pane(
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    let sidebar = InteractionRegion::new(
+    let workspace_pane = InteractionRegion::new(
         "WorkspacePane",
-        AGENT_SIDEBAR,
+        WORKSPACE_PANE,
         bounds,
         AccessibilityRole::Group,
         "Workspace pane",
     )
     .with_parent(WINDOW);
     let active_view = match view.pane.map(PaneViewMount::kind) {
-        Some(PaneInputKind::Diff) => Some(AgentSidebarView::Changes),
-        Some(PaneInputKind::Files) | None => Some(AgentSidebarView::Files),
+        Some(PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
+        Some(PaneInputKind::Files) | None => Some(WorkspacePaneView::Files),
         Some(PaneInputKind::Agent)
         | Some(PaneInputKind::Settings)
         | Some(PaneInputKind::Terminal) => None,
     };
-    context.with_component(&sidebar, |context, _| {
-        draw_sidebar_part_surface(context.scene_mut(), bounds, palette);
+    context.with_component(&workspace_pane, |context, _| {
+        draw_workspace_surface(context.scene_mut(), bounds, palette);
         let Some(active_view) = active_view else {
             return None;
         };
         let toolbar_bounds = match active_view {
-            AgentSidebarView::Changes => ScmLayout::for_bounds(bounds).toolbar(),
-            AgentSidebarView::Files => FilesLayout::for_bounds(bounds).toolbar(),
+            WorkspacePaneView::Changes => ScmLayout::for_bounds(bounds).toolbar(),
+            WorkspacePaneView::Files => FilesLayout::for_bounds(bounds).toolbar(),
         };
         let content_bounds = match active_view {
-            AgentSidebarView::Changes => ScmLayout::for_bounds(bounds).content(),
-            AgentSidebarView::Files => FilesLayout::for_bounds(bounds).content(),
+            WorkspacePaneView::Changes => ScmLayout::for_bounds(bounds).content(),
+            WorkspacePaneView::Files => FilesLayout::for_bounds(bounds).content(),
         };
         let toolbar = InteractionRegion::new(
             "WorkspacePaneToolbar",
-            AGENT_SIDEBAR_TOOLBAR,
+            WORKSPACE_PANE_TOOLBAR,
             toolbar_bounds,
             AccessibilityRole::Toolbar,
             "Workspace pane toolbar",
         )
-        .with_parent(AGENT_SIDEBAR);
-        let sidebar_style = palette.sidebar_part_style();
+        .with_parent(WORKSPACE_PANE);
+        let workspace_style = palette.workspace_pane_style();
         let search_caret = context.with_component(&toolbar, |context, _| {
             context.scene_mut().draw_rect(
                 PaintRect::new(toolbar_bounds, palette.surface_raised).with_border(Border::new(
@@ -1044,23 +1047,23 @@ fn draw_workspace_pane(
                     palette.border,
                 )),
             );
-            let navigation = AgentSidebarNavigation::new(
-                AgentSidebarNavigation::bounds_in(toolbar_bounds),
+            let navigation = WorkspacePaneNavigation::new(
+                WorkspacePaneNavigation::bounds_in(toolbar_bounds),
                 active_view,
-                &sidebar_style,
+                &workspace_style,
                 view.dispatch,
             );
             context.draw_component(&navigation);
             match active_view {
-                AgentSidebarView::Changes => None,
-                AgentSidebarView::Files => {
+                WorkspacePaneView::Changes => None,
+                WorkspacePaneView::Files => {
                     let files_toolbar = FilesToolbar::new(
                         toolbar_bounds,
-                        AgentSidebarNavigation::bounds_in(toolbar_bounds),
+                        WorkspacePaneNavigation::bounds_in(toolbar_bounds),
                         view.workspace.files(),
                         view.context.upstream_distance(),
                         view.caret_visibility,
-                        sidebar_style,
+                        workspace_style,
                         text_layout,
                         view.dispatch,
                     );
@@ -1071,7 +1074,7 @@ fn draw_workspace_pane(
             }
         });
         match active_view {
-            AgentSidebarView::Changes => {
+            WorkspacePaneView::Changes => {
                 let editor = EditorPane::new(
                     content_bounds,
                     view.workspace.editor(),
@@ -1079,12 +1082,12 @@ fn draw_workspace_pane(
                 );
                 context.draw_component(&editor);
             }
-            AgentSidebarView::Files => {
+            WorkspacePaneView::Files => {
                 let files_style = palette.files_pane_style();
                 let explorer = FilesPane::new(
                     content_bounds,
                     view.workspace.files(),
-                    AGENT_SIDEBAR,
+                    WORKSPACE_PANE,
                     &files_style,
                     view.dispatch,
                 );
@@ -1107,14 +1110,14 @@ fn draw_file_editor_inspector(
 ) -> Option<Rect> {
     let inspector = InteractionRegion::new(
         "InspectorWorkbench",
-        AGENT_SIDEBAR,
+        WORKSPACE_PANE,
         bounds,
         AccessibilityRole::Group,
         "Inspector workbench · File editor",
     )
     .with_parent(WINDOW);
     context.with_component(&inspector, |context, _| {
-        draw_sidebar_part_surface(context.scene_mut(), bounds, palette);
+        draw_workspace_surface(context.scene_mut(), bounds, palette);
         let pane = FileEditorPane::new(
             bounds,
             view.host,
@@ -1126,7 +1129,7 @@ fn draw_file_editor_inspector(
                 CaretVisibility::Hidden
             },
         )
-        .with_parent(AGENT_SIDEBAR)
+        .with_parent(WORKSPACE_PANE)
         .with_prompt(view.prompt)
         .with_diagnostics(view.diagnostics)
         .with_language_features(view.language_hover, view.language_completions)
@@ -1150,17 +1153,17 @@ fn draw_file_editor_inspector(
     })
 }
 
-/// Paints the Native-owned surface of the Sidebar Part before feature content.
-fn draw_sidebar_part_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
+/// Paints a Native-owned Workbench surface before feature content.
+fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
     scene.draw_rect(PaintRect::new(bounds, palette.surface_raised));
 }
 
-/// Paints the Native-owned outer border of the Sidebar Part after feature content.
+/// Paints the Native-owned outer border of the Inspector Part after feature content.
 ///
-/// This boundary separates the right sidebar shell slot from the main
+/// This boundary separates the right Inspector slot from the main
 /// workspace. Files and SCM components own only their internal geometry and
 /// must not redraw this edge.
-fn draw_sidebar_part_border(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
+fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
     scene.draw_rect(
         PaintRect::new(bounds, Color::TRANSPARENT).with_border(Border::new(
             zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
@@ -1169,75 +1172,70 @@ fn draw_sidebar_part_border(scene: &mut UiScene, bounds: Rect, palette: ShellPal
     );
 }
 
-fn draw_session_sidebar(
+fn draw_tab_container(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
-    view: SessionSidebarView<'_>,
+    view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
-    let sidebar = InteractionRegion::new(
-        "SessionSidebar",
-        SESSION_SIDEBAR,
-        bounds,
-        AccessibilityRole::Group,
-        "Workbench navigator",
-    )
-    .with_parent(WINDOW);
-    context.with_component(&sidebar, |context, _| {
-        context
-            .scene_mut()
-            .draw_rect(
-                PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-                    zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
-                    palette.border,
-                )),
-            );
-        let toolbar = SessionSidebarToolbar::new(
-            bounds,
-            view.search.input(),
-            view.caret_visibility,
-            palette,
-            text_layout,
-            view.dispatch,
+    context
+        .scene_mut()
+        .draw_rect(
+            PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
+                zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
+                palette.border,
+            )),
         );
-        let search_caret = toolbar.search_caret_bounds();
-        context.draw_component(&toolbar);
-        let has_session_input = view.tab_inputs.iter().any(TabInput::is_session);
-        let mut tabs = Vec::new();
-        if !has_session_input && view.search.matches_session_name(view.title) {
-            tabs.push(WorkbenchTab::new(
-                ACTIVE_SESSION_TAB,
-                view.title,
-                view.context.working_directory_label(),
-                "Active",
+    let toolbar = TabContainerToolbar::new(
+        bounds,
+        view.search.input(),
+        view.caret_visibility,
+        palette,
+        text_layout,
+        view.dispatch,
+    );
+    let search_caret = toolbar.search_caret_bounds();
+    context.draw_component(&toolbar);
+    let has_session_input = view.tab_part.inputs().any(TabInput::is_session);
+    let mut groups = project_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
+        input.is_settings() || view.search.matches_session_name(input.title())
+    });
+    if !has_session_input && view.search.matches_session_name(view.title) {
+        let fallback = WorkbenchTab::new(
+            FIRST_TAB_CONTAINER_SESSION_TAB,
+            view.title,
+            view.context.working_directory_label(),
+            "Active",
+        );
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|group| group.id() == crate::workbench_host::TabGroupId::DEFAULT)
+        {
+            group.insert_tab(0, fallback);
+        } else {
+            groups.push(WorkbenchTabGroup::new(
+                crate::workbench_host::TabGroupId::DEFAULT,
+                None,
+                false,
+                vec![fallback],
             ));
         }
-        let mut session_index = 0;
-        for input in view.tab_inputs {
-            if input.is_settings() || view.search.matches_session_name(input.title()) {
-                tabs.push(WorkbenchTab::from_input(session_index, input));
-            }
-            if input.is_session() {
-                session_index += 1;
-            }
-        }
-        if !view.tab_inputs.iter().any(TabInput::is_settings) {
-            tabs.push(WorkbenchTab::settings(SETTINGS_WORKBENCH_TAB));
-        }
-        let tab_list = WorkbenchTabList::new(
-            SessionSidebarToolbar::content_bounds(bounds),
-            &tabs,
-            view.selected_id,
-            palette,
-            view.dispatch,
-        );
-        context.draw_component(&tab_list);
-        view.dispatch
-            .is_focused(SESSION_SEARCH_INPUT)
-            .then_some(search_caret)
-            .flatten()
-    })
+    }
+    let tab_container = TabContainer::new(
+        bounds,
+        TabContainerToolbar::content_bounds(bounds),
+        groups,
+        view.selected_id,
+        TabContainerPlacement::Body,
+        palette,
+        view.dispatch,
+    );
+    context.draw_component(&tab_container);
+    view.dispatch
+        .is_focused(SESSION_SEARCH_INPUT)
+        .then_some(search_caret)
+        .flatten()
 }
 
 fn draw_sash(
@@ -1423,7 +1421,7 @@ fn draw_main(
                                     );
                                 });
                             } else if let Some(group) = view.pane_group {
-                                let pane_layout = group.layout(terminal_bounds);
+                                let pane_geometry = group.layout(terminal_bounds);
                                 for pane in view.terminal_panes {
                                     if pane.kind != PaneInputKind::Terminal {
                                         continue;
@@ -1432,7 +1430,7 @@ fn draw_main(
                                         continue;
                                     };
                                     let Some(bounds) =
-                                        pane_layout.leaf(pane_id).map(|leaf| leaf.bounds())
+                                        pane_geometry.leaf(pane_id).map(|leaf| leaf.bounds())
                                     else {
                                         continue;
                                     };
@@ -1457,7 +1455,7 @@ fn draw_main(
                                 }
                                 draw_terminal_pane_sashes(
                                     context,
-                                    &pane_layout,
+                                    &pane_geometry,
                                     palette,
                                     view.dispatch,
                                     view.terminal_pane_resize_split,
@@ -1508,7 +1506,7 @@ fn draw_main(
             } else {
                 match view.workspace_surface {
                     WorkspaceSurfaceKind::Terminal if !view.terminal_panes.is_empty() => {
-                        let active_pane = view.pane_group.map(PaneGroup::active_pane);
+                        let active_pane = view.pane_group.map(PanePart::active_pane);
                         let terminal_bounds = terminal_content_bounds(layout, active_screen);
                         view.terminal_panes
                             .iter()
@@ -1585,7 +1583,7 @@ fn terminal_cursor_area_for_bounds(
 }
 
 fn terminal_bounds_for_pane(
-    group: Option<&PaneGroup>,
+    group: Option<&PanePart>,
     bounds: Rect,
     pane_id: Option<PaneId>,
 ) -> Option<Rect> {
@@ -1599,14 +1597,14 @@ fn terminal_bounds_for_pane(
 pub(crate) fn terminal_pane_sash_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
-    session_sidebar: SessionSidebarState,
-    sidebar_part: SidebarPartState,
-    group: &PaneGroup,
+    tab_container: TabContainerState,
+    inspector_part: InspectorPartState,
+    group: &PanePart,
     point: zeta_ui::Point,
 ) -> Option<(PaneSplitId, SplitViewOrientation, SplitViewResizeSnapshot)> {
-    let layout = ShellLayout::for_viewport(viewport, session_sidebar, sidebar_part)?;
-    let pane_layout = group.layout(terminal_content_bounds(layout, active_screen));
-    pane_layout.sashes().iter().find_map(|sash| {
+    let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
+    let pane_geometry = group.layout(terminal_content_bounds(layout, active_screen));
+    pane_geometry.sashes().iter().find_map(|sash| {
         let orientation = match sash.orientation() {
             SplitViewOrientation::Horizontal => SashOrientation::Vertical,
             SplitViewOrientation::Vertical => SashOrientation::Horizontal,

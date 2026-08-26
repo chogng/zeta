@@ -1,0 +1,261 @@
+//! Workbench Part composition and cross-Part command tests.
+
+use super::{PaneInput, PaneSplitDirection, TabInputKey, Workbench};
+use crate::PaneInputKind;
+use zeta_protocol::{Session, SessionId, SessionStatus, ThreadId};
+
+fn session(id: &str, title: &str) -> Session {
+    Session {
+        session_id: SessionId::new(id).expect("test session ID is non-empty"),
+        title: title.to_owned(),
+        status: SessionStatus::Active,
+        model: None,
+        workspace: None,
+        sequence: 1,
+        threads: Vec::new(),
+    }
+}
+
+fn thread(id: &str) -> ThreadId {
+    ThreadId::new(id).expect("test thread ID is non-empty")
+}
+
+#[test]
+fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_parts() {
+    let workbench = Workbench::new();
+
+    assert_eq!(workbench.tab_part().input_count(), 1);
+    assert!(
+        workbench
+            .tab_part()
+            .inputs()
+            .next()
+            .expect("Settings input")
+            .is_settings()
+    );
+    assert!(workbench.pane_part_keys().next().is_none());
+}
+
+#[test]
+fn tab_creation_initializes_the_matching_pane_part_terminal_pane() {
+    let mut workbench = Workbench::new();
+    let session = session("session-1", "Terminal");
+    let key = TabInputKey::session(session.session_id.clone());
+
+    workbench.upsert_session(&session, "/workspace");
+
+    assert_eq!(workbench.tab_part().active_tab_key(), Some(&key));
+    let panes = workbench
+        .pane_part(&key)
+        .expect("session Pane Part")
+        .panes();
+    assert_eq!(panes.len(), 1);
+    assert_eq!(panes[0].id().value(), 1);
+    assert_eq!(panes[0].input().kind(), PaneInputKind::Terminal);
+    assert_eq!(
+        panes[0].input().terminal_session_id(),
+        Some(&session.session_id)
+    );
+}
+
+#[test]
+fn settings_tab_mounts_a_settings_pane_when_activated() {
+    let mut workbench = Workbench::new();
+
+    assert!(workbench.activate_settings());
+
+    let key = TabInputKey::Settings;
+    let pane = workbench
+        .pane_part(&key)
+        .expect("settings Pane Part")
+        .panes()
+        .pop()
+        .expect("settings pane");
+    assert_eq!(pane.input().kind(), PaneInputKind::Settings);
+    assert_eq!(workbench.active_pane().expect("active settings pane"), pane);
+}
+
+#[test]
+fn titlebar_creates_or_destroys_active_panes() {
+    let mut workbench = Workbench::new();
+    let session = session("session-1", "Terminal");
+    let session_id = session.session_id.clone();
+    let key = TabInputKey::session(session_id.clone());
+    workbench.upsert_session(&session, "/workspace");
+
+    let pane = workbench
+        .create_pane_with_direction(
+            PaneInput::agent(session_id, thread("thread-1")),
+            PaneSplitDirection::Vertical,
+        )
+        .expect("created pane");
+    assert_eq!(pane.value(), 2);
+    let pane_ids = workbench
+        .pane_part(&key)
+        .expect("session Pane Part")
+        .group_ids();
+    assert_eq!(pane_ids.len(), 2);
+    assert_eq!(pane_ids[1], pane);
+
+    let second_input = workbench
+        .pane_part_mut(&key)
+        .expect("session Pane Part")
+        .open_input(pane, PaneInput::files("/workspace".into()))
+        .expect("opened group input");
+    assert_eq!(second_input.value(), 2);
+
+    let removed = workbench.destroy_pane().expect("active split pane");
+    assert_eq!(removed.len(), 2);
+    assert_eq!(removed[0].id().value(), 2);
+    assert_eq!(removed[0].input().kind(), PaneInputKind::Agent);
+    assert_eq!(removed[1].input().kind(), PaneInputKind::Files);
+    assert!(
+        workbench.destroy_pane().is_none(),
+        "the root pane is retained"
+    );
+}
+
+#[test]
+fn pane_part_routes_group_input_changes_by_stable_ids() {
+    let mut workbench = Workbench::new();
+    let session = session("session-1", "Terminal");
+    let key = TabInputKey::session(session.session_id.clone());
+    workbench.upsert_session(&session, "/workspace");
+
+    let group_id = workbench
+        .pane_part(&key)
+        .expect("session Pane Part")
+        .active_group();
+    let first_input_id = workbench
+        .pane_part(&key)
+        .and_then(|part| part.active_input_id(group_id))
+        .expect("initial input");
+    let second_input_id = workbench
+        .pane_part_mut(&key)
+        .expect("session Pane Part")
+        .open_input(
+            group_id,
+            PaneInput::agent(session.session_id.clone(), thread("thread-1")),
+        )
+        .expect("second input");
+
+    assert!(
+        workbench
+            .pane_part_mut(&key)
+            .expect("session Pane Part")
+            .activate_input(group_id, first_input_id)
+    );
+    assert_eq!(
+        workbench
+            .pane_part(&key)
+            .and_then(|part| part.group(group_id))
+            .and_then(|group| group.active_input_id()),
+        Some(first_input_id)
+    );
+
+    let replaced = workbench
+        .pane_part_mut(&key)
+        .expect("session Pane Part")
+        .replace_input(
+            group_id,
+            first_input_id,
+            PaneInput::files("/workspace".into()),
+        );
+    assert_eq!(
+        replaced.map(|input| input.kind()),
+        Some(PaneInputKind::Terminal)
+    );
+
+    let closed = workbench
+        .pane_part_mut(&key)
+        .expect("session Pane Part")
+        .close_input(group_id, second_input_id)
+        .expect("closed input");
+    assert_eq!(closed.input_id(), second_input_id);
+    assert_eq!(
+        workbench
+            .pane_part(&key)
+            .and_then(|part| part.group(group_id))
+            .and_then(|group| group.active_input_id()),
+        Some(first_input_id)
+    );
+}
+
+#[test]
+fn each_tab_keeps_its_own_pane_part_group() {
+    let mut workbench = Workbench::new();
+    let first = session("session-1", "First");
+    let second = session("session-2", "Second");
+    let first_key = TabInputKey::session(first.session_id.clone());
+    let second_key = TabInputKey::session(second.session_id.clone());
+
+    workbench.upsert_session(&first, "/first");
+    workbench.create_pane(PaneInput::files("/first".into()));
+    workbench.upsert_session(&second, "/second");
+    assert_eq!(
+        workbench
+            .pane_part(&second_key)
+            .expect("second Pane Part")
+            .group_ids()
+            .len(),
+        1
+    );
+
+    assert!(workbench.activate_tab(first_key.clone()));
+    assert_eq!(
+        workbench
+            .pane_part(&first_key)
+            .expect("first Pane Part")
+            .group_ids()
+            .len(),
+        2
+    );
+    assert_eq!(
+        workbench.active_pane().unwrap().input().kind(),
+        PaneInputKind::Files
+    );
+    assert!(workbench.pane_part(&second_key).is_some());
+}
+
+#[test]
+fn closing_a_tab_removes_its_pane_part_and_selects_the_next_tab() {
+    let mut workbench = Workbench::new();
+    let first = session("session-1", "First");
+    let second = session("session-2", "Second");
+    let first_key = TabInputKey::session(first.session_id.clone());
+    let second_key = TabInputKey::session(second.session_id.clone());
+    workbench.upsert_session(&first, "/first");
+    workbench.upsert_session(&second, "/second");
+    assert!(workbench.activate_tab(first_key.clone()));
+
+    let closed = workbench.close_tab(&first_key).expect("closed session tab");
+    assert_eq!(closed.key(), &first_key);
+    assert_eq!(closed.panes().len(), 1);
+    assert_eq!(closed.active_tab(), Some(&second_key));
+    assert!(workbench.pane_part(&first_key).is_none());
+    assert!(workbench.pane_part(&second_key).is_some());
+    assert_eq!(workbench.tab_part().active_tab_key(), Some(&second_key));
+}
+
+#[test]
+fn workbench_routes_pane_changes_by_logical_ids() {
+    let mut workbench = Workbench::new();
+    let session = session("session-1", "Terminal");
+    let tab_key = TabInputKey::session(session.session_id.clone());
+    workbench.upsert_session(&session, "/workspace");
+    let root = workbench.active_pane_for(&tab_key).expect("root pane").id();
+    let input_id = workbench
+        .pane(&tab_key, root)
+        .expect("root input")
+        .input_id();
+
+    assert!(workbench.activate_pane(&tab_key, root));
+    assert!(workbench.activate_input(&tab_key, root, input_id));
+    assert_eq!(
+        workbench
+            .pane_input(&tab_key, root)
+            .expect("active input")
+            .kind(),
+        PaneInputKind::Terminal
+    );
+}

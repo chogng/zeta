@@ -15,24 +15,25 @@ use zui::ui::{
 
 use crate::NativeApp;
 use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, SESSION_CONTEXT_MENU, SessionContextMenuAction, WINDOW,
+    SESSION_CONTEXT_MENU, SessionContextMenuAction, WINDOW, session_tab_index,
 };
 use crate::shell_style::ShellPalette;
+use crate::workbench_host::TabInputKey;
 
 const MENU_CONTENT_WIDTH: f32 = 160.0;
 const MENU_ITEM_HEIGHT: f32 = 30.0;
 const MENU_VIEWPORT_MARGIN: f32 = 6.0;
 const MENU_ANCHOR_GAP: f32 = 2.0;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 struct OpenSessionContextMenu {
-    target_session: ElementId,
+    target_tab: TabInputKey,
     anchor: Rect,
     restore_focus: Option<ElementId>,
 }
 
 /// Product-owned transient state for the Session Tab context menu.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct SessionContextMenuState {
     open: Option<OpenSessionContextMenu>,
 }
@@ -40,18 +41,18 @@ pub(crate) struct SessionContextMenuState {
 impl SessionContextMenuState {
     pub(crate) fn open(
         &mut self,
-        target_session: ElementId,
+        target_tab: TabInputKey,
         position: Point,
         restore_focus: Option<ElementId>,
     ) {
         self.open = Some(OpenSessionContextMenu {
-            target_session,
+            target_tab,
             anchor: Rect::from_xywh(position.x, position.y, 1.0, 1.0),
             restore_focus,
         });
     }
 
-    pub(crate) const fn is_open(self) -> bool {
+    pub(crate) const fn is_open(&self) -> bool {
         self.open.is_some()
     }
 
@@ -59,11 +60,8 @@ impl SessionContextMenuState {
         self.open.take().and_then(|open| open.restore_focus)
     }
 
-    pub(crate) const fn target_session(self) -> Option<ElementId> {
-        match self.open {
-            Some(open) => Some(open.target_session),
-            None => None,
-        }
+    pub(crate) fn target_tab(&self) -> Option<&TabInputKey> {
+        self.open.as_ref().map(|open| &open.target_tab)
     }
 }
 
@@ -75,11 +73,11 @@ pub(crate) struct SessionContextMenu {
 impl SessionContextMenu {
     pub(crate) fn new(
         viewport: Rect,
-        state: SessionContextMenuState,
+        state: &SessionContextMenuState,
         palette: ShellPalette,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
-        let open = state.open?;
+        let open = state.open.as_ref()?;
         let resting_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT);
         let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
             .with_hovered(palette.session_tab_highlight)
@@ -353,12 +351,22 @@ impl NativeApp {
         else {
             return false;
         };
-        if target != Some(ACTIVE_SESSION_TAB) {
+        let Some(index) = target.and_then(|target| {
+            session_tab_index(target, 0..self.workbench_host.tab_part().session_count())
+        }) else {
             return self.dismiss_session_context_menu();
-        }
+        };
+        let Some(target_tab) = self
+            .workbench_host
+            .tab_part()
+            .session_input_at(index)
+            .map(|input| input.key().clone())
+        else {
+            return self.dismiss_session_context_menu();
+        };
         let restore_focus = self.ui_dispatch.focused();
         self.session_context_menu
-            .open(ACTIVE_SESSION_TAB, point, restore_focus);
+            .open(target_tab, point, restore_focus);
         self.rebuild_presentation();
         let focus_outcome = self
             .presentation

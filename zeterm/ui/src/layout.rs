@@ -5,17 +5,17 @@
 
 mod pane_group;
 mod root;
-mod session_workspace;
+mod tab_container;
 mod terminal_workspace;
 mod workbench;
 
-/// Visibility projected by a host into a sidebar layout request.
+/// Visibility projected by a host into a structural Part layout request.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub enum SidebarVisibility {
-    /// Do not include the sidebar leaf in the resolved layout.
+pub enum PartVisibility {
+    /// Do not include the Part leaf in the resolved layout.
     #[default]
     Collapsed,
-    /// Include the sidebar when the available width can preserve both panes.
+    /// Include the Part when the available width can preserve both panes.
     Expanded,
 }
 
@@ -23,9 +23,9 @@ pub use pane_group::PaneGroupLayout;
 pub use root::InspectorPane;
 pub use root::LogicalViewport;
 pub use root::RootLayout;
-pub use session_workspace::SessionSidebarLayout;
-pub use session_workspace::SessionSidebarLayoutSpec;
-pub use terminal_workspace::SidebarLayoutSpec;
+pub use tab_container::TabContainerLayout;
+pub use tab_container::TabContainerLayoutSpec;
+pub use terminal_workspace::InspectorLayoutSpec;
 pub use terminal_workspace::TerminalWorkspaceLayout;
 pub use workbench::WorkbenchLayout;
 pub use workbench::WorkbenchLayoutSpec;

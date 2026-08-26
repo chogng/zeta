@@ -14,7 +14,7 @@ fn compiles_platform_overrides_chords_and_blockers() {
             {
                 "key": "ctrl+k ctrl+c",
                 "mac": "primary+k primary+c",
-                "command": "workbench.action.toggleSideBar",
+                "command": "workbench.action.toggleTabContainer",
                 "when": "textInputFocus && composerRoute == 'agent'"
             },
             {
@@ -34,7 +34,7 @@ fn compiles_platform_overrides_chords_and_blockers() {
 fn exact_duplicate_contexts_produce_a_non_fatal_conflict_diagnostic() {
     let rules = compile_user_bindings(
         br#"[
-            {"key":"ctrl+k","command":"workbench.action.toggleSideBar","when":"textInputFocus"},
+            {"key":"ctrl+k","command":"workbench.action.toggleTabContainer","when":"textInputFocus"},
             {"key":"ctrl+k","command":"workbench.action.toggleAuxiliaryBar","when":"textInputFocus"}
         ]"#,
         HostPlatform::Linux,
@@ -113,7 +113,7 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
     let path = root.join("keybindings.json");
     fs::write(
         &path,
-        br#"[{"key":"ctrl+k ctrl+c","command":"workbench.action.toggleSideBar"}]"#,
+        br#"[{"key":"ctrl+k ctrl+c","command":"workbench.action.toggleTabContainer"}]"#,
     )
     .expect("write valid resource");
     let now = Instant::now();
@@ -133,7 +133,7 @@ fn invalid_hot_update_preserves_the_previous_complete_rule_set() {
             &NativeKeybindingContext::text_input(),
             now + Duration::from_millis(10)
         ),
-        NativeKeybindingResolution::Command(ZetermCommandId::ToggleSessionSidebar)
+        NativeKeybindingResolution::Command(ZetermCommandId::ToggleTabContainer)
     );
 
     fs::write(&path, b"{").expect("write invalid resource");
@@ -161,7 +161,7 @@ fn recorder_update_atomically_replaces_the_commands_user_rule() {
     let path = root.join("keybindings.json");
     fs::write(
         &path,
-        br#"[{"key":"ctrl+b","command":"workbench.action.toggleSideBar"}]"#,
+        br#"[{"key":"ctrl+b","command":"workbench.action.toggleTabContainer"}]"#,
     )
     .expect("existing resource");
     let now = Instant::now();
@@ -169,7 +169,7 @@ fn recorder_update_atomically_replaces_the_commands_user_rule() {
     let sequence = parse_key_sequence("primary+k primary+b").expect("recorded shortcut");
 
     resource
-        .update_command_binding(ZetermCommandId::ToggleSessionSidebar, &sequence, now)
+        .update_command_binding(ZetermCommandId::ToggleTabContainer, &sequence, now)
         .expect("save recording");
 
     let value: serde_json::Value =

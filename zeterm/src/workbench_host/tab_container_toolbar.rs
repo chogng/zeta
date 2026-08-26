@@ -1,4 +1,4 @@
-//! Toolbar composition for the Sessions sidebar.
+//! Session search and creation controls for the body-mounted Tab Container.
 
 use zeta_icons::icons;
 use zeta_ui::{
@@ -13,39 +13,39 @@ use zui::ui::{
 };
 
 use crate::shell_interaction::{
-    ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR, SESSION_SIDEBAR_ACTION_BAR,
-    SESSION_SIDEBAR_TOOLBAR,
+    ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR,
+    TAB_CONTAINER_TOOLBAR,
 };
 use crate::shell_style::ShellPalette;
 
-pub(crate) const SIDEBAR_PADDING: f32 = 10.0;
+pub(crate) const PART_PADDING: f32 = 10.0;
 pub(crate) const TOOLBAR_HEIGHT: f32 = 24.0;
 pub(crate) const TOOLBAR_CONTENT_GAP: f32 = 4.0;
 const ACTION_SIZE: f32 = TOOLBAR_HEIGHT;
 const TOOLBAR_GAP: f32 = 6.0;
 
-/// Sessions toolbar that composes a leading SearchBox and trailing ActionBar.
-pub(crate) struct SessionSidebarToolbar {
+/// Tab Container toolbar with a leading Session SearchBox and trailing creation ActionBar.
+pub(crate) struct TabContainerToolbar {
     bounds: Rect,
     search_box: SearchBox,
     search_value: String,
     action_bar: ActionBar,
 }
 
-impl SessionSidebarToolbar {
+impl TabContainerToolbar {
     pub(crate) fn new(
-        sidebar_bounds: Rect,
+        part_bounds: Rect,
         search_input: &TextInput,
         caret_visibility: CaretVisibility,
         palette: ShellPalette,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
-        let bounds = Self::toolbar_bounds(sidebar_bounds);
+        let bounds = Self::toolbar_bounds(part_bounds);
         let content_bounds = Rect::from_xywh(
-            bounds.origin.x + SIDEBAR_PADDING,
+            bounds.origin.x + PART_PADDING,
             bounds.origin.y,
-            (bounds.size.width - SIDEBAR_PADDING * 2.0).max(1.0),
+            (bounds.size.width - PART_PADDING * 2.0).max(1.0),
             bounds.size.height,
         );
         let action_bounds = Rect::from_xywh(
@@ -134,14 +134,14 @@ impl SessionSidebarToolbar {
         .with_focus(FocusBehavior::TabStop)
         .with_action(NodeAction::Activate)
         .with_navigation(
-            NavigationGroupId::new(SESSION_SIDEBAR_ACTION_BAR),
+            NavigationGroupId::new(TAB_CONTAINER_ACTION_BAR),
             NavigationAxis::Horizontal,
         );
         vec![
             search,
             InteractionRegion::new(
                 "SessionActions",
-                SESSION_SIDEBAR_ACTION_BAR,
+                TAB_CONTAINER_ACTION_BAR,
                 self.action_bar.bounds(),
                 AccessibilityRole::Toolbar,
                 "Session actions",
@@ -154,46 +154,43 @@ impl SessionSidebarToolbar {
         self.search_box.caret_bounds()
     }
 
-    pub(crate) fn content_bounds(sidebar_bounds: Rect) -> Rect {
+    pub(crate) fn content_bounds(part_bounds: Rect) -> Rect {
         Rect::from_xywh(
-            sidebar_bounds.origin.x + SIDEBAR_PADDING,
-            sidebar_bounds.origin.y + SIDEBAR_PADDING + TOOLBAR_HEIGHT + TOOLBAR_CONTENT_GAP,
-            (sidebar_bounds.size.width - SIDEBAR_PADDING * 2.0).max(1.0),
-            (sidebar_bounds.size.height
-                - SIDEBAR_PADDING * 2.0
-                - TOOLBAR_HEIGHT
-                - TOOLBAR_CONTENT_GAP)
+            part_bounds.origin.x + PART_PADDING,
+            part_bounds.origin.y + PART_PADDING + TOOLBAR_HEIGHT + TOOLBAR_CONTENT_GAP,
+            (part_bounds.size.width - PART_PADDING * 2.0).max(1.0),
+            (part_bounds.size.height - PART_PADDING * 2.0 - TOOLBAR_HEIGHT - TOOLBAR_CONTENT_GAP)
                 .max(1.0),
         )
     }
 
-    fn toolbar_bounds(sidebar_bounds: Rect) -> Rect {
+    fn toolbar_bounds(part_bounds: Rect) -> Rect {
         Rect::from_xywh(
-            sidebar_bounds.origin.x,
-            sidebar_bounds.origin.y + SIDEBAR_PADDING,
-            sidebar_bounds.size.width,
+            part_bounds.origin.x,
+            part_bounds.origin.y + PART_PADDING,
+            part_bounds.size.width,
             TOOLBAR_HEIGHT,
         )
     }
 }
 
-impl Component for SessionSidebarToolbar {
+impl Component for TabContainerToolbar {
     fn element(&self) -> ComponentElement {
-        Element::leaf("SessionSidebarToolbar")
-            .padding(Edges::new(0.0, SIDEBAR_PADDING, 0.0, SIDEBAR_PADDING))
+        Element::leaf("TabContainerToolbar")
+            .padding(Edges::new(0.0, PART_PADDING, 0.0, PART_PADDING))
             .in_bounds(self.bounds)
-            .with_identity(SESSION_SIDEBAR_TOOLBAR)
+            .with_identity(TAB_CONTAINER_TOOLBAR)
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
-                SESSION_SIDEBAR_TOOLBAR,
+                TAB_CONTAINER_TOOLBAR,
                 element.bounds(),
                 AccessibilityRole::Toolbar,
                 "Sessions toolbar",
             )
-            .with_parent(SESSION_SIDEBAR),
+            .with_parent(TAB_CONTAINER),
         )
     }
 
@@ -212,5 +209,5 @@ impl Component for SessionSidebarToolbar {
 }
 
 #[cfg(test)]
-#[path = "session_sidebar_toolbar_tests.rs"]
+#[path = "tab_container_toolbar_tests.rs"]
 mod tests;

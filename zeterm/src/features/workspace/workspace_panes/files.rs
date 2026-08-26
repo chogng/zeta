@@ -18,7 +18,7 @@ use zeta_ui::TreeItem;
 use zeta_ui::VirtualListLayout;
 use zui::ui::ElementId;
 
-use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_panes::WorkspacePaneAction;
 
 #[path = "files/file_icon.rs"]
 mod file_icon;
@@ -166,13 +166,13 @@ impl FilesState {
     pub fn selected_element(&self) -> Option<ElementId> {
         self.tree.selected_element()
     }
-    pub fn activate(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub fn activate(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         self.tree.activate(element)
     }
-    pub fn navigate_right(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub fn navigate_right(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         self.tree.navigate_right(element)
     }
-    pub fn navigate_left(&mut self, element: ElementId) -> Option<AgentSidebarAction> {
+    pub fn navigate_left(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
         self.tree.navigate_left(element)
     }
     pub fn set_search_visible(&mut self, visible: bool) {

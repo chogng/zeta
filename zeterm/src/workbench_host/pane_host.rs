@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use zeta_protocol::SessionId;
 
-use crate::pane_group::{PaneGroup, PaneId};
-use crate::pane_input::{PaneBinding, PaneInput, PaneInputKind};
-use crate::tab_input::TabInputKey;
 use crate::terminal_session::TerminalSessionKey;
+use crate::workbench_host::pane_input::PaneBinding;
+use crate::workbench_host::{PaneId, PaneInput, PaneInputKind, TabInputKey};
+use zeta_workbench::PanePart;
 
 /// Product scope that owns a PaneGroup mounted by the Native host.
 ///
@@ -26,6 +26,7 @@ type PaneBindingKey = (PaneHostScope, PaneId);
 #[derive(Clone, Copy)]
 pub(crate) struct PaneViewMount<'a> {
     pane_id: PaneId,
+    input: &'a PaneInput,
     binding: &'a PaneBinding,
 }
 
@@ -35,7 +36,7 @@ impl<'a> PaneViewMount<'a> {
     }
 
     pub(crate) fn kind(self) -> PaneInputKind {
-        self.binding.input().kind()
+        self.input.kind()
     }
 
     pub(crate) fn terminal_key(self) -> Option<TerminalSessionKey> {
@@ -45,9 +46,10 @@ impl<'a> PaneViewMount<'a> {
 
 /// Native host boundary between PaneGroup topology and content-specific PaneViews.
 ///
-/// `PaneGroup` owns the tree and focus state. `PaneHost` owns the mapping from a leaf to its
-/// logical input and optional runtime. It deliberately does not own feature state or renderer
-/// nodes, so a group can mount heterogeneous content without making the layout model generic.
+/// `PanePart` owns the tree and focus state, and each `PaneGroup` owns its logical inputs.
+/// `PaneHost` only owns the mapping from a visible group to its optional product runtime. It
+/// deliberately does not own feature state or renderer nodes, so a layout can mount heterogeneous
+/// content without making the model generic.
 #[derive(Default)]
 pub(crate) struct PaneHost {
     bindings: HashMap<PaneBindingKey, PaneBinding>,
@@ -66,6 +68,21 @@ impl PaneHost {
         self.bindings.remove(key)
     }
 
+    /// Removes every product runtime binding owned by one logical Workbench tab.
+    pub(crate) fn remove_tab(&mut self, tab_key: &TabInputKey) -> Vec<PaneBinding> {
+        let scope = PaneHostScope::Tab(tab_key.clone());
+        let bindings = std::mem::take(&mut self.bindings);
+        let mut removed = Vec::new();
+        for (key, binding) in bindings {
+            if key.0 == scope {
+                removed.push(binding);
+            } else {
+                self.bindings.insert(key, binding);
+            }
+        }
+        removed
+    }
+
     pub(crate) fn binding(&self, key: &PaneBindingKey) -> Option<&PaneBinding> {
         self.bindings.get(key)
     }
@@ -74,36 +91,32 @@ impl PaneHost {
         self.binding(key).and_then(PaneBinding::terminal_key)
     }
 
-    pub(crate) fn kind(&self, key: &PaneBindingKey) -> Option<PaneInputKind> {
-        self.binding(key).map(|binding| binding.input().kind())
-    }
-
-    /// Ensures a leaf has a matching TerminalPaneInput before attaching its runtime key.
+    /// Ensures a visible group has a matching Terminal input before attaching its runtime key.
     pub(crate) fn ensure_terminal(
         &mut self,
         key: PaneBindingKey,
+        input: &PaneInput,
         session_id: &SessionId,
         terminal_key: TerminalSessionKey,
     ) -> bool {
-        let binding = self
-            .bindings
-            .entry(key)
-            .or_insert_with(|| PaneBinding::new(PaneInput::terminal(session_id.clone())));
-        binding.bind_terminal(session_id, terminal_key)
+        let binding = self.bindings.entry(key).or_insert_with(PaneBinding::new);
+        binding.bind_terminal(input, session_id, terminal_key)
     }
 
     /// Produces one content mount only for a leaf that belongs to the supplied group.
     pub(crate) fn mount<'a>(
         &'a self,
         scope: &PaneHostScope,
-        group: &PaneGroup,
+        layout: &'a PanePart,
         pane_id: PaneId,
     ) -> Option<PaneViewMount<'a>> {
-        if !group.leaf_ids().contains(&pane_id) {
-            return None;
-        }
+        let input = layout.active_input(pane_id)?;
         let binding = self.binding(&(scope.clone(), pane_id))?;
-        Some(PaneViewMount { pane_id, binding })
+        Some(PaneViewMount {
+            pane_id,
+            input,
+            binding,
+        })
     }
 }
 

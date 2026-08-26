@@ -4,11 +4,11 @@ use zui::ui::GridNode;
 use zui::ui::GridSashLayout;
 use zui::ui::Rect;
 
-/// Geometry projection for a host-owned PaneGroup tree.
+/// Geometry projection for a host-owned recursive pane layout.
 ///
 /// The host supplies the immutable [`GridNode`] for one frame and retains all topology, active
 /// state, runtime binding, and split mutations. This wrapper gives product layouts an explicit
-/// PaneGroup boundary without introducing a second geometry algorithm beside [`GridLayout`].
+/// explicit group boundary without introducing a second geometry algorithm beside [`GridLayout`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct PaneGroupLayout<LeafId, SplitId> {
     grid: GridLayout<LeafId, SplitId>,
@@ -19,14 +19,14 @@ where
     LeafId: Copy + Eq + std::hash::Hash,
     SplitId: Copy + Eq + std::hash::Hash,
 {
-    /// Resolves one host-owned PaneGroup geometry tree.
+    /// Resolves one host-owned recursive pane geometry tree.
     pub fn new(bounds: Rect, root: &GridNode<LeafId, SplitId>) -> Self {
         Self {
             grid: GridLayout::new(bounds, root),
         }
     }
 
-    /// Returns all visible Pane leaf bounds in tree order.
+    /// Returns all visible group leaf bounds in tree order.
     pub fn leaves(&self) -> &[GridLeafLayout<LeafId>] {
         self.grid.leaves()
     }
@@ -36,7 +36,7 @@ where
         self.grid.sashes()
     }
 
-    /// Finds one Pane leaf by its host identity.
+    /// Finds one visible group leaf by its host identity.
     pub fn leaf(&self, id: LeafId) -> Option<GridLeafLayout<LeafId>> {
         self.grid.leaf(id)
     }

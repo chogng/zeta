@@ -12,6 +12,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 | Button、Tab、InputBox 等组件外观 | `ButtonStyle`、`TabStyle`、`InputBoxStyle` 等 typed style | `zeta-ui` 组件 | 否；通过 style、state 或 named variant 传入 |
 | 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `zeta-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
 | hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
+| view-local / projected state 与订阅 | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
 | 任意后代 selector、继承和 cascade | 无 | 无 | 不适用；当前 Native contract 不支持 |
 
 一次 Native UI 帧的边界如下：
@@ -52,10 +53,10 @@ Native UI 当前明确不提供以下能力：
 
 | 层 | 负责什么 | 当前入口 | 明确不负责什么 |
 | --- | --- | --- | --- |
-| `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene 和 inspection | `zui::ui::{Element,Component,ComputedElement,UiScene}` | Button 语义、主题选择、产品状态、GPU 和业务 action |
+| `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
 | `zeta-ui` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
 | Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`ShellPalette` 及领域 style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
-| Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `zeterm`、`zeta-agent-sidebar`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
+| Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `zeterm`、`features/workspace`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
 这里的“组件拥有样式”表示组件拥有 style 字段的语义、状态到视觉的解释和内部绘制几何；不表示产品不能传入 palette-derived style。产品可以创建 `ButtonStyle` 的值，但不能假定 `Button` 内部的 icon、label、padding 和 state background 如何组合。
 
@@ -68,7 +69,8 @@ Native UI 当前明确不提供以下能力：
 3. 让组件 style struct 表达外观参数，例如背景状态、文字、边框、圆角、padding、icon size 和 content gap。
 4. 在 `Component::paint_element` 或 `Component::compose` 中消费同一次计算得到的 `ComputedElement`，不要重新计算根 bounds。
 5. 用 `UiScene::draw_component` 或 `ComponentContext::draw_component` 组合子组件，使 paint、inspection、interaction 和 accessibility 共享同一棵组合树。
-6. 为新增的布局、状态和视觉语义补充 component test，至少验证 computed geometry、状态绘制和 hit-test 使用相同边界。
+6. 需要跨帧 presentation state 时，让 host 持有 `ComponentRuntime`，通过 `UiFrame::with_component_runtime` 组合；组件根必须有稳定 identity，并使用有名称的 `ComponentSlot` 保存 local state、订阅外部 `ViewState` 或保留 RAII resource。
+7. 为新增的布局、状态和视觉语义补充 component test，至少验证 computed geometry、状态绘制、hit-test、invalidation 和 unmount cleanup 使用相同边界。
 
 最小结构示例：
 
@@ -165,6 +167,14 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 
 产品 style factory 可以位于 `shell_style.rs`、领域 crate 或组件调用方，但应以 `ThemeSnapshot` 或宿主 palette 为输入。组件实现不应直接依赖 `zeta_theme`、产品 profile、workspace 或业务 domain。
 
+### 5.4 Retained view state 与组件生命周期
+
+产品 reducer、session 和业务 store 仍是权威状态来源。`ViewState<T>` 只用于 view-local state 或 host 已经投影出的 typed presentation state；它提供稳定 identity、单调 revision、snapshot/update 和 RAII subscription，并允许 worker 更新后请求对应组件重绘，但不执行产品 action。
+
+需要跨帧状态时，窗口或测试 host 为一帧调用 `UiFrame::with_component_runtime`。带 identity 的组件可以通过 `ComponentContext::local_state` 保存 typed local state，通过 `observe_state` 订阅外部 `ViewState`，或通过 `retain_resource` 创建一个只在挂载期存在的 RAII resource。某个 identity 未出现在下一帧时，runtime 会在该帧结束前卸载它并释放 subscription/resource；同一 identity 与 slot 的类型变化会显式报错。
+
+这套 contract 不提供 virtual DOM、通用 effect scheduler 或组件内业务副作用。平台 listener、command、网络任务和 reducer mutation 仍由 host/runtime 的明确 owner 管理；只有生命周期必须与 presentation identity 一致的资源才进入 `retain_resource`。
+
 ## 6. 主题令牌投影
 
 主题系统回答视觉值是什么，组件 style 回答这些值何时使用，host state 回答当前是否使用它们：
@@ -180,7 +190,7 @@ zeta-theme token
 
 Native 组件新增颜色或标准尺寸时，先检查共享 token 是否已有准确语义；没有时在实际消费语义的 domain 注册 token，再让 Native host 投影到 palette 或 style。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
 
-当前 Native 主题投影的主要实现是 `ThemeSnapshot` 到 `ShellPalette`，再由 `ShellPalette` 构造 `SearchBoxStyle`、`ButtonStyle`、`InputBoxStyle` 等 typed style；实现证据见 [`shell_style.rs`](../src/shell_style.rs:129) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
+当前 Native 主题投影的主要实现是 `ThemeSnapshot` 到 `ShellPalette`，再由 `ShellPalette` 构造 `SearchBoxStyle`、`ButtonStyle`、`InputBoxStyle` 等 typed style；实现证据见 [`shell_style.rs`](../src/presentation/shell_style.rs:129) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
 
 如果现有组件仍包含历史 fallback 常量，它们属于迁移限制，不构成新组件的样式先例；修改相关区域时应优先移到共享 token 或明确的宿主 fallback。
 
@@ -202,6 +212,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 ### 当前状态 / 已实现
 
 - `zui` 已提供 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
+- `zui` 已提供 `ViewState` revision/subscription，以及由稳定 `ElementId` 驱动 local state、external observation、RAII resource 和 unmount cleanup 的 `ComponentRuntime`；
 - `zeta-ui` 已提供 Button、Switch、ActionBar、TabList、ScrollView、InputBox、ContextView 等 typed component/style contract；
 - Native host 已通过主题快照、palette 和领域 style factory 向组件投影颜色与标准尺寸；
 - 组件的 paint、interaction、inspection 和 accessibility 已沿同一 frame/Element contract 组合；
@@ -222,7 +233,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 - 新属性是结构布局、组件内部几何、主题值还是产品状态？
 - 是否有至少两个真实 caller，足以证明它应进入 `zui` 或 `zeta-ui` 公共 contract？
 - 它如何同时驱动 paint、hit-test、inspection 和 accessibility？
-- 它是否需要 retained state、animation 或 frame invalidation？如果需要，如何接入现有 `zui::runtime`？
+- 它是否需要 retained state、animation 或 frame invalidation？如果需要，能否接入 `ComponentRuntime`、`ViewState`、`AnimationRegistry` 或现有 `zui::runtime`，并由稳定 identity 管理生命周期？
 - 它是否会让 host 通过字符串 selector 穿透组件内部？如果会，应改成 typed variant 或新的组件 owner。
 
 只有在出现用户可编辑 Native skin、多个外部 component author 或跨进程 UI schema 等真实需求后，才评估受限的 declarative style format。即使引入，也应优先采用 semantic component slots 和 typed values，不直接复制浏览器 CSS 的开放 cascade。
@@ -231,6 +242,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 - [ ] 产品状态、交互状态、稳定 identity 和外部 bounds 仍由 host 拥有。
 - [ ] 组件通过 `Component::element` 声明根 Element，并使用 `ComputedElement` 作为唯一 box geometry 来源。
+- [ ] retained local state、subscription 或 resource 使用稳定 component identity 和有名称的 `ComponentSlot`；测试覆盖 invalidation、重绑定与 unmount cleanup。
 - [ ] 可复用视觉属性进入 typed style 或 named variant，而不是散落的魔法数和字符串键。
 - [ ] 主题颜色和标准尺寸来自 snapshot/palette；没有新增第二套主题表。
 - [ ] hover、focus、pressed、selected、disabled 的判定来源唯一，且没有把 `ElementId` 或 action ID 当 selector。

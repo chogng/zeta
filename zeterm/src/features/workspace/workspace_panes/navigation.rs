@@ -9,38 +9,38 @@ use zui::ui::{
 };
 
 use crate::shell_interaction::{
-    AGENT_SIDEBAR_NAVIGATION, AGENT_SIDEBAR_TOOLBAR, AgentSidebarPaneAction,
+    WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR, WorkspacePaneSelection,
 };
-use crate::workspace_panes::AgentSidebarStyle;
-use crate::workspace_panes::AgentSidebarView;
+use crate::workspace_panes::WorkspacePaneStyle;
+use crate::workspace_panes::WorkspacePaneView;
 
 const ITEM_WIDTH: f32 = 64.0;
 
-/// Horizontal Changes/Files pane switcher hosted by a Sidebar Part toolbar.
-pub struct AgentSidebarNavigation {
+/// Horizontal Changes/Files switcher hosted by a Workspace Pane toolbar.
+pub struct WorkspacePaneNavigation {
     bounds: Rect,
     action_bar: ActionBar,
-    selected: AgentSidebarView,
+    selected: WorkspacePaneView,
 }
 
-impl AgentSidebarNavigation {
+impl WorkspacePaneNavigation {
     pub fn bounds_in(toolbar: Rect) -> Rect {
         Rect::from_xywh(
             toolbar.origin.x,
             toolbar.origin.y,
-            (ITEM_WIDTH * AgentSidebarPaneAction::ALL.len() as f32).min(toolbar.size.width),
+            (ITEM_WIDTH * WorkspacePaneSelection::ALL.len() as f32).min(toolbar.size.width),
             toolbar.size.height,
         )
     }
 
     pub fn new(
         bounds: Rect,
-        selected: AgentSidebarView,
-        palette: &AgentSidebarStyle,
+        selected: WorkspacePaneView,
+        palette: &WorkspacePaneStyle,
         dispatch: &UiDispatch,
     ) -> Self {
         let button_style = palette.navigation_button_style();
-        let items = AgentSidebarPaneAction::ALL
+        let items = WorkspacePaneSelection::ALL
             .into_iter()
             .map(|action| {
                 let target = action.element_id();
@@ -78,15 +78,15 @@ impl AgentSidebarNavigation {
 
     fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
         let mut regions = Vec::new();
-        let navigation = NavigationGroupId::new(AGENT_SIDEBAR_NAVIGATION);
-        for (index, action) in AgentSidebarPaneAction::ALL.into_iter().enumerate() {
+        let navigation = NavigationGroupId::new(WORKSPACE_PANE_NAVIGATION);
+        for (index, action) in WorkspacePaneSelection::ALL.into_iter().enumerate() {
             let bounds = self
                 .action_bar
                 .interactive_item_bounds(index)
                 .expect("pane actions are enabled");
             regions.push(
                 InteractionRegion::new(
-                    "AgentSidebarPaneButton",
+                    "WorkspacePaneButton",
                     action.element_id(),
                     bounds,
                     AccessibilityRole::Button,
@@ -107,22 +107,22 @@ impl AgentSidebarNavigation {
     }
 }
 
-impl Component for AgentSidebarNavigation {
+impl Component for WorkspacePaneNavigation {
     fn element(&self) -> ComponentElement {
-        Element::leaf("AgentSidebarNavigation")
+        Element::leaf("WorkspacePaneNavigation")
             .in_bounds(self.bounds)
-            .with_identity(AGENT_SIDEBAR_NAVIGATION)
+            .with_identity(WORKSPACE_PANE_NAVIGATION)
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
-                AGENT_SIDEBAR_NAVIGATION,
+                WORKSPACE_PANE_NAVIGATION,
                 element.bounds(),
                 AccessibilityRole::Toolbar,
-                "Agent sidebar panes",
+                "Workspace panes",
             )
-            .with_parent(AGENT_SIDEBAR_TOOLBAR),
+            .with_parent(WORKSPACE_PANE_TOOLBAR),
         )
     }
 

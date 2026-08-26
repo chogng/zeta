@@ -5,19 +5,20 @@ pub(crate) struct NativeApp {
     pub(super) presentation: Option<ShellPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
-    pub(super) sidebar_part: SidebarPartState,
-    pub(super) sidebar_pane_workspace: SidebarPaneWorkspace,
+    pub(super) inspector_part: InspectorPartState,
+    pub(super) workspace_pane_host: WorkspacePaneHost,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
     pub(super) file_editor_search: file_editor_search::FileEditorSearchState,
     pub(super) language_service: language_service_host::NativeLanguageService,
-    pub(super) session_sidebar: SessionSidebarState,
+    pub(super) tab_container: TabContainerState,
     pub(super) session_search: SessionSearch,
-    pub(super) tab_inputs: TabInputModel,
-    pub(super) pane_groups: HashMap<TabInputKey, PaneGroup>,
-    pub(super) pane_host: PaneHost,
-    pub(super) workspace_pane_returns: HashMap<TabInputKey, PaneInput>,
+    pub(super) workbench_host: WorkbenchHost,
     pub(super) pane_view_states: HashMap<(TabInputKey, PaneId), TerminalPaneViewState>,
+    /// Last host view projection used to save and restore feature-specific view state.
+    ///
+    /// The canonical active group remains in the active `zeta_workbench::PanePart`; this is only a transient
+    /// host identity for the terminal view state cache.
     pub(super) active_pane: Option<(TabInputKey, PaneId)>,
     pub(super) terminal_pane_resize: Option<TerminalPaneResize>,
     pub(super) session_context_menu: SessionContextMenuState,
@@ -34,7 +35,6 @@ pub(crate) struct NativeApp {
     pub(super) thread_projection: ThreadProjection,
     pub(super) thread_timeline_scroll: ThreadTimelineScroll,
     pub(super) workspace_surface: WorkspaceSurface,
-    pub(super) terminal_workspace: TerminalWorkspace,
     pub(super) workspace_context: WorkspaceContext,
     pub(super) composer: Composer,
     pub(super) text_layout: TextInputLayoutEngine,
@@ -84,8 +84,7 @@ impl NativeApp {
         } else {
             local_workspace_context
         };
-        let sidebar_pane_workspace = SidebarPaneWorkspace::new(&workspace_context);
-        let pane_host = PaneHost::new();
+        let workspace_pane_host = WorkspacePaneHost::new(&workspace_context);
         let mut keybindings = keybindings::NativeKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             local_profile_root().join("keybindings.json"),
@@ -114,18 +113,15 @@ impl NativeApp {
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
-            sidebar_part: SidebarPartState::default(),
-            sidebar_pane_workspace,
+            inspector_part: InspectorPartState::default(),
+            workspace_pane_host,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: file_editor_search::FileEditorSearchState::default(),
             language_service,
             file_editor_host: FileEditorHost::default(),
-            session_sidebar: SessionSidebarState::default(),
+            tab_container: TabContainerState::default(),
             session_search: SessionSearch::default(),
-            tab_inputs: TabInputModel::default(),
-            pane_groups: HashMap::new(),
-            pane_host,
-            workspace_pane_returns: HashMap::new(),
+            workbench_host: WorkbenchHost::new(event_proxy.clone(), app_server_host.clone()),
             pane_view_states: HashMap::new(),
             active_pane: None,
             terminal_pane_resize: None,
@@ -143,7 +139,6 @@ impl NativeApp {
             thread_projection: ThreadProjection::default(),
             thread_timeline_scroll: ThreadTimelineScroll::default(),
             workspace_surface: WorkspaceSurface::default(),
-            terminal_workspace: TerminalWorkspace::new(event_proxy.clone(), app_server_host),
             composer,
             workspace_context,
             text_layout: TextInputLayoutEngine::new(),

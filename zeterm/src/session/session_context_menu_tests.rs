@@ -1,30 +1,35 @@
 //! Session context-menu interaction tests.
 
 use super::{SessionContextMenu, SessionContextMenuState, update_session_context_menu_pointer};
-use crate::shell_interaction::{
-    ACTIVE_SESSION_TAB, COMPOSER, SESSION_CONTEXT_MENU, SessionContextMenuAction,
-};
+use crate::shell_interaction::{COMPOSER, SESSION_CONTEXT_MENU, SessionContextMenuAction};
 use crate::shell_style::SHELL_PALETTE;
+use crate::workbench_host::TabInputKey;
+use zeta_protocol::SessionId;
 use zeta_ui::{Color, Edges, Point, Rect};
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     UiDispatch, UiFrame, UiNode,
 };
 
+fn session_tab() -> TabInputKey {
+    TabInputKey::session(SessionId::new("session-1").expect("test session ID is non-empty"))
+}
+
 #[test]
 fn context_menu_places_four_vertical_actions_beside_the_pointer() {
     let mut state = SessionContextMenuState::default();
-    state.open(ACTIVE_SESSION_TAB, Point::new(80.0, 120.0), Some(COMPOSER));
+    let target = session_tab();
+    state.open(target.clone(), Point::new(80.0, 120.0), Some(COMPOSER));
     let dispatch = UiDispatch::default();
     let menu = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
-        state,
+        &state,
         SHELL_PALETTE,
         &dispatch,
     )
     .unwrap();
 
-    assert_eq!(state.target_session(), Some(ACTIVE_SESSION_TAB));
+    assert_eq!(state.target_tab(), Some(&target));
     assert_eq!(menu.bounds().origin, Point::new(80.0, 123.0));
     assert_eq!(menu.bounds().size, zeta_ui::Size::new(164.0, 124.0));
     assert_eq!(
@@ -44,11 +49,11 @@ fn context_menu_places_four_vertical_actions_beside_the_pointer() {
 #[test]
 fn context_menu_paints_in_an_overlay_and_registers_menu_semantics() {
     let mut state = SessionContextMenuState::default();
-    state.open(ACTIVE_SESSION_TAB, Point::new(80.0, 120.0), Some(COMPOSER));
+    state.open(session_tab(), Point::new(80.0, 120.0), Some(COMPOSER));
     let mut dispatch = UiDispatch::default();
     let resting = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
-        state,
+        &state,
         SHELL_PALETTE,
         &dispatch,
     )
@@ -62,7 +67,7 @@ fn context_menu_paints_in_an_overlay_and_registers_menu_semantics() {
     );
     let hovered = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
-        state,
+        &state,
         SHELL_PALETTE,
         &dispatch,
     )
@@ -108,7 +113,7 @@ fn context_menu_paints_in_an_overlay_and_registers_menu_semantics() {
 #[test]
 fn dismiss_returns_the_focus_identity_captured_when_opening() {
     let mut state = SessionContextMenuState::default();
-    state.open(ACTIVE_SESSION_TAB, Point::new(10.0, 20.0), Some(COMPOSER));
+    state.open(session_tab(), Point::new(10.0, 20.0), Some(COMPOSER));
 
     assert!(state.is_open());
     assert_eq!(state.dismiss(), Some(COMPOSER));
@@ -118,11 +123,11 @@ fn dismiss_returns_the_focus_identity_captured_when_opening() {
 #[test]
 fn pointer_hover_moves_menu_focus_and_stays_on_the_last_item_after_exit() {
     let mut state = SessionContextMenuState::default();
-    state.open(ACTIVE_SESSION_TAB, Point::new(80.0, 120.0), Some(COMPOSER));
+    state.open(session_tab(), Point::new(80.0, 120.0), Some(COMPOSER));
     let mut dispatch = UiDispatch::default();
     let menu = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
-        state,
+        &state,
         SHELL_PALETTE,
         &dispatch,
     )
@@ -159,7 +164,7 @@ fn pointer_hover_moves_menu_focus_and_stays_on_the_last_item_after_exit() {
     assert!(!dispatch.is_hovered(COMPOSER));
     let exited = SessionContextMenu::new(
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
-        state,
+        &state,
         SHELL_PALETTE,
         &dispatch,
     )

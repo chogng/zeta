@@ -16,7 +16,7 @@ use zeta_ui::{
 use super::ScmDiff;
 use super::ScmPaneStyle;
 use crate::shell_interaction::{
-    AGENT_EDITOR_PANE, AGENT_SIDEBAR, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR,
+    AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR, WORKSPACE_PANE,
 };
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
@@ -427,7 +427,7 @@ impl<'a> EditorPane<'a> {
             AccessibilityRole::Group,
             "Changed files editor",
         )
-        .with_parent(AGENT_SIDEBAR)
+        .with_parent(WORKSPACE_PANE)
     }
 
     fn paint_surface(&self, scene: &mut UiScene, bounds: Rect) {

@@ -6,8 +6,8 @@ use zeta_ui::SashOrientation;
 use zeta_ui::SashPointerPresence;
 use zeta_ui::SashState;
 use zeta_ui::SplitViewResizeSnapshot;
-use zeta_ui::layout::SidebarLayoutSpec;
-use zeta_ui::layout::SidebarVisibility;
+use zeta_ui::layout::InspectorLayoutSpec;
+use zeta_ui::layout::PartVisibility;
 
 const DEFAULT_WIDTH: f32 = 520.0;
 const MINIMUM_WIDTH: f32 = 360.0;
@@ -15,55 +15,55 @@ const MAXIMUM_WIDTH: f32 = 800.0;
 const MINIMUM_MAIN_WIDTH: f32 = 400.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-enum SidebarPartVisibility {
+enum InspectorPartVisibility {
     #[default]
     Collapsed,
     Expanded,
 }
 
-/// Runtime visibility and layout state for the right workbench sidebar.
+/// Runtime visibility and layout state for the right Workbench Inspector.
 ///
-/// Feature content is owned by the product host. This type only controls whether the sidebar
+/// Feature content is owned by the product host. This type only controls whether the Inspector
 /// participates in workbench layout and how its width is resized.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SidebarPartState {
-    visibility: SidebarPartVisibility,
+pub struct InspectorPartState {
+    visibility: InspectorPartVisibility,
     preferred_width: f32,
     resizable: Resizable,
 }
 
-impl Default for SidebarPartState {
+impl Default for InspectorPartState {
     fn default() -> Self {
         Self {
-            visibility: SidebarPartVisibility::Collapsed,
+            visibility: InspectorPartVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 }
 
-impl SidebarPartState {
-    /// Creates an expanded sidebar with the default width.
+impl InspectorPartState {
+    /// Creates an expanded Inspector with the default width.
     pub const fn expanded() -> Self {
         Self {
-            visibility: SidebarPartVisibility::Expanded,
+            visibility: InspectorPartVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
             resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 
     pub const fn is_expanded(self) -> bool {
-        matches!(self.visibility, SidebarPartVisibility::Expanded)
+        matches!(self.visibility, InspectorPartVisibility::Expanded)
     }
 
     /// Projects visibility and persisted sizing into the host-neutral workbench layout contract.
-    pub const fn layout_spec(self) -> SidebarLayoutSpec {
+    pub const fn layout_spec(self) -> InspectorLayoutSpec {
         let visibility = if self.is_expanded() {
-            SidebarVisibility::Expanded
+            PartVisibility::Expanded
         } else {
-            SidebarVisibility::Collapsed
+            PartVisibility::Collapsed
         };
-        SidebarLayoutSpec::new(
+        InspectorLayoutSpec::new(
             visibility,
             self.preferred_width,
             MINIMUM_WIDTH,
@@ -94,19 +94,19 @@ impl SidebarPartState {
 
     pub fn toggle(&mut self) {
         self.visibility = match self.visibility {
-            SidebarPartVisibility::Collapsed => SidebarPartVisibility::Expanded,
-            SidebarPartVisibility::Expanded => SidebarPartVisibility::Collapsed,
+            InspectorPartVisibility::Collapsed => InspectorPartVisibility::Expanded,
+            InspectorPartVisibility::Expanded => InspectorPartVisibility::Collapsed,
         };
         self.resizable.cancel();
     }
 
     pub fn expand(&mut self) {
-        self.visibility = SidebarPartVisibility::Expanded;
+        self.visibility = InspectorPartVisibility::Expanded;
         self.resizable.cancel();
     }
 
     pub fn collapse(&mut self) {
-        self.visibility = SidebarPartVisibility::Collapsed;
+        self.visibility = InspectorPartVisibility::Collapsed;
         self.resizable.cancel();
     }
 
@@ -137,5 +137,5 @@ impl SidebarPartState {
 }
 
 #[cfg(test)]
-#[path = "sidebar_part_tests.rs"]
+#[path = "inspector_part_tests.rs"]
 mod tests;

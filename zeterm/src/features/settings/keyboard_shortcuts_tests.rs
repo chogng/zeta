@@ -16,7 +16,7 @@ fn recording_collects_chords_and_commits_after_the_quiet_period() {
     let now = Instant::now();
     let mut state = KeyboardShortcutsState::default();
     state.toggle();
-    state.start_recording(ZetermCommandId::ToggleSessionSidebar);
+    state.start_recording(ZetermCommandId::ToggleTabContainer);
     state.record(
         Chord::logical("k", ShortcutModifiers::primary()).expect("first chord"),
         now,
@@ -30,7 +30,7 @@ fn recording_collects_chords_and_commits_after_the_quiet_period() {
     let commit = state
         .advance(now + Duration::from_millis(1_200))
         .expect("completed recording");
-    assert_eq!(commit.command, ZetermCommandId::ToggleSessionSidebar);
+    assert_eq!(commit.command, ZetermCommandId::ToggleTabContainer);
     assert_eq!(
         serialize_key_sequence(&commit.keybinding),
         "primary+k primary+b"
