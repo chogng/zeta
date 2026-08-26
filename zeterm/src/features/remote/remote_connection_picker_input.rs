@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use zeta_app_server_client::local_profile_root;
 use zeta_remote_connections::RemoteConnectionCatalog;
 use zeta_ui::Point;
 use zeta_ui::ScrollCommand;
@@ -20,6 +19,7 @@ use zui::ui::NavigationAxis;
 use zui::ui::UiDispatch;
 
 use crate::NativeApp;
+use crate::app_server::local_profile_root;
 use crate::remote_connection_picker::REMOTE_CONNECTION_ITEM_HEIGHT;
 use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
 use crate::remote_connection_picker::RemoteConnectionPickerAction;

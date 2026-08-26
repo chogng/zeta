@@ -2,7 +2,6 @@ use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_app_server_client::local_profile_root;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_remote::RemoteAddressError;
@@ -24,7 +23,7 @@ use zeta_remote_connections::RemoteRuntimeInstallProgress;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 use zeta_remote_connections::SshRemoteRuntimeInstaller;
 
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::{AppServerHost, local_profile_root};
 
 const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";
 const BUNDLED_REMOTE_RUNTIME_CATALOG: &str = "zeta-remote-runtimes/catalog.json";
@@ -203,17 +202,15 @@ impl ZetermLaunch {
         })
     }
 
-    /// Resolves the App Server target used by both Agent and terminal connections.
-    pub(crate) fn agent_session_target(&self, local_workspace_root: &Path) -> AgentSessionTarget {
+    /// Resolves the App Server host used by Agent, Language, and Terminal connections.
+    pub(crate) fn app_server_host(&self, local_workspace_root: &Path) -> AppServerHost {
         match self {
-            Self::Local => AgentSessionTarget::local(local_workspace_root),
+            Self::Local => AppServerHost::local(local_workspace_root),
             Self::Remote {
                 profile,
                 ssh_executable,
                 ..
-            } => {
-                AgentSessionTarget::ssh_with_executable(profile.clone(), ssh_executable.as_deref())
-            }
+            } => AppServerHost::remote_with_executable(profile.clone(), ssh_executable.as_deref()),
         }
     }
 

@@ -1,6 +1,5 @@
 use std::time::Instant;
 
-use zeta_app_server_client::local_profile_root;
 use zeta_remote_connections::RemoteConnectionCatalog;
 use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::RemoteConnectionSaveMode;
@@ -19,6 +18,7 @@ use zui::ui::FocusDirection;
 use zui::ui::NavigationAxis;
 
 use crate::NativeApp;
+use crate::app_server::local_profile_root;
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
