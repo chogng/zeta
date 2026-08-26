@@ -16,11 +16,6 @@ use std::time::Instant;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_client::AppServerEvent;
-use zeta_app_server_client::AppServerEvents;
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::ClientError;
-use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionsParams;
 use zeta_app_server_protocol::protocol::language::LanguageDocumentDto;
@@ -32,7 +27,10 @@ use zeta_language_service::LanguageRequestKind;
 use zui::app::AppProxy;
 
 use super::remote::RemoteLanguageEvent;
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::{
+    AppServerEvent, AppServerEvents, AppServerHost, AppServerRequestHandle, ClientError,
+    ServerNotification,
+};
 use crate::native_event::NativeEvent;
 
 const COMMAND_QUEUE_CAPACITY: usize = 64;
@@ -107,10 +105,7 @@ pub(crate) struct RemoteLanguageSession {
 }
 
 impl RemoteLanguageSession {
-    pub(crate) fn spawn(
-        event_proxy: AppProxy<NativeEvent>,
-        target: AgentSessionTarget,
-    ) -> Result<Self> {
+    pub(crate) fn spawn(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Result<Self> {
         if !target.is_remote() {
             return Err(anyhow!("Remote language session requires an SSH target"));
         }
@@ -190,7 +185,7 @@ impl Drop for RemoteLanguageSession {
 fn run_remote_language_session(
     event_proxy: AppProxy<NativeEvent>,
     commands: Receiver<RemoteLanguageCommand>,
-    target: AgentSessionTarget,
+    target: AppServerHost,
     available: Arc<AtomicBool>,
     closing: Arc<AtomicBool>,
 ) {
@@ -246,7 +241,7 @@ fn run_remote_language_session(
 fn run_connection(
     event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
     available: &AtomicBool,
     closing: &AtomicBool,
 ) -> std::result::Result<(), RemoteLanguageFailure> {

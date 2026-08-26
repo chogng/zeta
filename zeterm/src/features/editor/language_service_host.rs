@@ -33,7 +33,7 @@ use self::remote::protocol_document;
 use self::remote::protocol_location_kind;
 use self::remote::protocol_position;
 use self::remote_session::RemoteLanguageSession;
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::AppServerHost;
 use crate::file_editor_host::{FileEditorHost, FileEditorTab};
 use crate::native_event::NativeEvent;
 
@@ -131,7 +131,7 @@ impl NativeLanguageService {
     pub(crate) fn start_remote(
         &mut self,
         event_proxy: AppProxy<NativeEvent>,
-        target: AgentSessionTarget,
+        target: AppServerHost,
     ) -> anyhow::Result<()> {
         self.attach_remote(RemoteLanguageSession::spawn(event_proxy, target)?);
         Ok(())
