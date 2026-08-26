@@ -18,6 +18,8 @@ mod interaction_region;
 mod keycap;
 #[path = "components/list_view/list_view.rs"]
 mod list_view;
+#[path = "components/resizable/resizable.rs"]
+mod resizable;
 #[path = "components/sash/sash.rs"]
 mod sash;
 #[path = "components/scroll_view/scroll_view.rs"]
@@ -49,6 +51,7 @@ pub use input_box::{InputBox, InputBoxState, InputBoxStateColors, InputBoxStyle}
 pub use interaction_region::InteractionRegion;
 pub use keycap::{Keycap, KeycapSequence, KeycapStyle};
 pub use list_view::{ListContentPadding, ListItemLayout, ListView, VirtualListLayout};
+pub use resizable::{Resizable, SashController, SashPointerPresence};
 pub use sash::{Sash, SashOrientation, SashState, SashStyle};
 pub use scroll_view::{
     ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollView,

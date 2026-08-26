@@ -1,0 +1,147 @@
+use zui::ui::Rect;
+use zui::ui::SplitViewResizeSnapshot;
+
+use super::LogicalViewport;
+use super::SessionSidebarLayoutSpec;
+use super::SidebarLayoutSpec;
+use super::TerminalWorkspaceLayout;
+
+const MINIMUM_VIEWPORT_WIDTH: f32 = 240.0;
+const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
+
+/// Structural leaves in one Workbench frame.
+///
+/// The enum describes layout ownership only. Session, Settings, Terminal, and Inspector content
+/// remain owned by their product hosts and are mounted into these leaves by the caller.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum WorkbenchPart {
+    /// Native window titlebar content.
+    Titlebar,
+    /// Session navigation content.
+    Sessions,
+    /// Active Workbench content.
+    Main,
+    /// Optional right-hand inspection content.
+    Inspector,
+}
+
+/// Host-neutral sizing policy for the Workbench part tree.
+///
+/// This value contains layout constraints only. Visibility and preferred sizes are projected by the
+/// product host, while the resulting geometry is resolved here so every content part uses the same
+/// topology.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WorkbenchLayoutSpec {
+    titlebar_height: f32,
+    sessions: SessionSidebarLayoutSpec,
+    inspector: SidebarLayoutSpec,
+}
+
+impl WorkbenchLayoutSpec {
+    /// Creates a Workbench sizing policy from the titlebar, Sessions Part, and Inspector Part
+    /// policies.
+    pub const fn new(
+        titlebar_height: f32,
+        sessions: SessionSidebarLayoutSpec,
+        inspector: SidebarLayoutSpec,
+    ) -> Self {
+        Self {
+            titlebar_height,
+            sessions,
+            inspector,
+        }
+    }
+
+    /// Resolves the structural Workbench parts for one logical viewport.
+    pub fn for_viewport(self, viewport: LogicalViewport) -> Option<WorkbenchLayout> {
+        if viewport.width < MINIMUM_VIEWPORT_WIDTH || viewport.height < MINIMUM_VIEWPORT_HEIGHT {
+            return None;
+        }
+
+        let titlebar = Rect::from_xywh(0.0, 0.0, viewport.width, self.titlebar_height);
+        let body = Rect::from_xywh(
+            0.0,
+            titlebar.bottom(),
+            viewport.width,
+            (viewport.height - titlebar.size.height).max(0.0),
+        );
+        let sessions = self.sessions.for_bounds(body);
+        let workspace = TerminalWorkspaceLayout::for_bounds(sessions.main_bounds(), self.inspector);
+
+        Some(WorkbenchLayout {
+            titlebar,
+            sessions: sessions.sessions_bounds(),
+            sessions_sash_track: sessions.sash_track(),
+            main: workspace.active_pane_bounds(),
+            inspector: workspace.sidebar_bounds(),
+            inspector_sash_track: workspace.sidebar_sash_track(),
+            inspector_resize_snapshot: workspace.sidebar_resize_snapshot(),
+        })
+    }
+}
+
+/// Resolved geometry for the Workbench part tree.
+///
+/// This type owns bounds and resize geometry only. Content, identity, focus semantics, and event
+/// routing stay with the host that mounts each part.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WorkbenchLayout {
+    titlebar: Rect,
+    sessions: Option<Rect>,
+    sessions_sash_track: Option<Rect>,
+    main: Rect,
+    inspector: Option<Rect>,
+    inspector_sash_track: Option<Rect>,
+    inspector_resize_snapshot: Option<SplitViewResizeSnapshot>,
+}
+
+impl WorkbenchLayout {
+    /// Returns the bounds for a structural Workbench part.
+    pub const fn part_bounds(self, part: WorkbenchPart) -> Option<Rect> {
+        match part {
+            WorkbenchPart::Titlebar => Some(self.titlebar),
+            WorkbenchPart::Sessions => self.sessions,
+            WorkbenchPart::Main => Some(self.main),
+            WorkbenchPart::Inspector => self.inspector,
+        }
+    }
+
+    /// Returns the titlebar bounds.
+    pub const fn titlebar(self) -> Rect {
+        self.titlebar
+    }
+
+    /// Returns the optional Sessions Part bounds.
+    pub const fn sessions(self) -> Option<Rect> {
+        self.sessions
+    }
+
+    /// Returns the sash track for the Sessions Part.
+    pub const fn sessions_sash_track(self) -> Option<Rect> {
+        self.sessions_sash_track
+    }
+
+    /// Returns the active Workbench content bounds.
+    pub const fn main(self) -> Rect {
+        self.main
+    }
+
+    /// Returns the optional Inspector Part bounds.
+    pub const fn inspector(self) -> Option<Rect> {
+        self.inspector
+    }
+
+    /// Returns the sash track for the Inspector Part.
+    pub const fn inspector_sash_track(self) -> Option<Rect> {
+        self.inspector_sash_track
+    }
+
+    /// Returns the resize snapshot matching the resolved Inspector sash.
+    pub const fn inspector_resize_snapshot(self) -> Option<SplitViewResizeSnapshot> {
+        self.inspector_resize_snapshot
+    }
+}
+
+#[cfg(test)]
+#[path = "workbench_tests.rs"]
+mod tests;

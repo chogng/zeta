@@ -5,10 +5,11 @@
 > [`docs/rendering-architecture.md`](../docs/rendering-architecture.md)，
 > renderer contract 与私有 wgpu 实现见 [`zui`](../zui/README.md)；native 文本输入的跨 crate ownership 见
 > [`docs/native-text-input.md`](../docs/native-text-input.md)；product icon system 见
-> [`docs/icons.md`](../../docs/icons.md)。`Keycap` 的快捷键产品组合由
+> [`docs/icons.md`](../../docs/icons.md)；Native UI 编写和样式边界见
+> [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键产品组合由
 > [`zeterm-keybinding-ui`](../keybinding-ui/README.md) 拥有。
 
-`zeta-ui` 基于 `zui` 提供 zeterm 的 Root/Inspector、Sessions Part 和 Terminal Workspace/Agent Sidebar pane topology，以及 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
+`zeta-ui` 基于 `zui` 提供 zeterm 的 Root/Inspector、Sessions Part 和 Terminal Workspace/Agent Sidebar pane topology，以及 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等组合控件。它暂时 `pub use zui::*`，
 让现有产品代码可以渐进迁移 import；这只是兼容入口，不表示本 crate 拥有 framework contract。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
@@ -22,9 +23,11 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
 | 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
-| Root/Inspector、Sessions Part 与 Terminal Workspace/Agent Sidebar topology | `zeta-ui::layout` | ✅；只拥有 Part/Pane geometry，Workbench item state 与 scene composition 归 host |
+| Workbench 的 Titlebar、Sessions、Main、Inspector Part/Pane topology | `zeta-ui::layout::{WorkbenchLayoutSpec,WorkbenchLayout}` | ✅；只拥有 Part/Pane geometry，TabInput state 与 scene composition 归 host |
+| Root/Inspector 与嵌套 Workspace topology | `zeta-ui::layout::{RootLayout,TerminalWorkspaceLayout}` | ✅；只拥有叶子 geometry，TabInput state 与 scene composition 归 host |
+| Workbench TabInput 的逻辑身份、集合和 active selection | `zeterm::tab_input::{TabInput,TabInputModel}` | ✅；`ElementId`、Tab surface 与具体内容仍由 host 的 projection/scene 负责 |
 | Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-agent-sidebar` / `zeta-editor` | 委托；各 crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
-| Sash 命中几何与 hover/active 反馈线 | `zeta-ui::Sash` | ✅；pointer capture、identity 与 resize transition 归 host |
+| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
 | 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
 | 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
@@ -77,6 +80,7 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::tab_list::{TabList, TabListStyle, TabListOrientation}` | public | 横向或纵向排列 Tab surface，拥有 item size/gap，并公开同源 tab bounds |
 | `components::tab_list::{TabStyle, TabBackgrounds}` | public | 定义 border、corner radii 及普通/selected 的状态背景 |
 | `components::sash::{Sash, SashStyle, SashState}` | public | 从零面积 separator track 推导共享 drag target 与 feedback line，并绘制 host 投影的 hover/active 状态 |
+| `components::resizable::{SashController, SashPointerPresence, Resizable}` | public | 延迟 hover、active presentation、deadline 与基于 `SplitViewResizeSnapshot` 的 drag-start-relative resize；不拥有 pointer capture、产品 identity 或 pane state |
 | `components::context_view::ContextView` | public | 计算锚点附近的浮层 bounds/content bounds，并把通用外壳与调用方内容画入独立浮层 |
 | `components::context_view::{ContextViewPlacement, ContextViewStyle}` | public | 分别定义锚定轴/方向/对齐/gap/viewport margin，以及 background/radius/padding；ContextView 天然无 border |
 | `components::context_view::ContextViewLayout` | public | 暴露实际 bounds、content bounds 及翻转后的方向/对齐，供 host 注册命中和组合内容 |
@@ -100,6 +104,8 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
 | `layout::{SessionSidebarLayoutSpec,SessionSidebarLayout}` | public | 解析 Sessions Part 与 main Part 的 split geometry；不拥有 session state、active identity、resize lifecycle 或 scene composition |
+| `layout::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | public | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不拥有具体 Pane 内容、TabInput state、focus 或 event routing |
+| `zeterm::tab_input::{TabInput,TabInputModel}` | product host | 保存逻辑 input identity、labels、顺序和 active input；不分配 `ElementId`，不绘制 Tab，也不执行 App Server/Terminal 激活副作用 |
 
 `Color` 的 RGB channel 是 sRGB、alpha 为 straight alpha。`Point`、`Size`、font size 与 line
 height 都使用 logical UI pixels；只有 renderer backend 可以执行 logical-to-physical 转换。
@@ -113,6 +119,7 @@ host
           → fit_sizes / distribute_delta
           → pane bounds + SplitViewSashLayout
       → recursive leaf bounds + GridSashLayout
+  → Resizable::presentation
   → Sash::new
       → interaction_bounds (host hit registration)
       → Component::paint (hover/active feedback)
@@ -204,11 +211,12 @@ background selection，并把 icon/text placement 委托给 `IconLabel`；`Butto
 `SplitViewLayout` 是每帧重算的 immutable geometry，不是 retained widget。Host 保存每个
 Pane 的 preferred size 与 visibility，传入 `SplitViewPane`；布局只计算当前 viewport 下的
 effective size，因此窗口临时缩小不能覆盖用户首选尺寸。`SplitViewSashLayout` 的
-`resize_snapshot` 固定一次拖动开始时相邻 Pane 的尺寸与约束，Host 必须始终用相对 drag-start
-的 delta 调用 `resize`，不能逐 pointer move 累加 delta。`Sash` 使用同一个 zero-area track
-推导 interaction bounds 和 feedback bounds；Host 用前者注册 identity、cursor、
-accessibility 与 pointer capture，再把 hover/active 投影为 `SashState`。若 Host 另行计算
-命中区域或直接在产品 scene 中画反馈线，说明 Sash geometry ownership 已漂移。
+`resize_snapshot` 固定一次拖动开始时相邻 Pane 的尺寸与约束；`Resizable` 保存 drag-start
+pointer 与 snapshot，并始终以相对 delta 调用 `resize`，不能逐 pointer move 累加 delta。
+`SashController` 负责 host 投影的 hover/active presentation 与 deadline；`Sash` 使用同一个
+zero-area track 推导 interaction bounds 和 feedback bounds。Host 用前者注册 identity、cursor、
+accessibility 与 pointer capture，再把 `Resizable` 返回的 pane size 写回产品状态。若 Host
+另行计算命中区域或直接在产品 scene 中画反馈线，说明 Sash geometry ownership 已漂移。
 
 `GridLayout` 在这层单轴能力上递归解析 caller-owned `GridNode`。每个 Split 的 identity、
 orientation、children 与 preferred sizes 都来自 Host；布局只输出当前帧的 Leaf/Split bounds
@@ -287,7 +295,8 @@ bazel test //zeterm/ui:ui-unit-tests
 ```
 
 `zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`zeta-ui` 单元测试覆盖
-组件裁剪与浮层合成、Sash 命中/反馈几何与状态绘制，ScrollState 的 axis clamp、绝对 offset、首尾和
+组件裁剪与浮层合成、Sash 命中/反馈几何、SashController deadline 与 Resizable drag 结果，
+ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，ScrollView 的内容坐标、裁剪、visibility policy、比例 thumb geometry、
 track paging、thumb drag 映射、hover/active 颜色与 fade deadline，ListView 的固定/可变高度
 visible/overscan range、prefix geometry、gap/padding、translated bounds、hit-test、ensure-visible
@@ -337,8 +346,9 @@ validation 测试属于具体 backend crate。
   flatten/expand semantics 仍由 composed control 或后续专用组件拥有；
 - `TreeView` 只消费 host-flattened visible nodes；异步 child loading、展开状态持久化、稳定节点
   identity、selection、重命名、拖放和文件打开仍属于产品 Tree model/host；
-- `Sash` 当前只拥有 presentation geometry，没有 pointer capture、keyboard resize 或
-  accessibility resize action；这些交互由 host 与 `zui` 组合；
+- `Sash` 与 `Resizable` 当前提供 presentation geometry、hover timing 和通用 split snapshot
+  drag 计算，但没有 pointer capture、keyboard resize 或 accessibility resize action；这些
+  产品语义仍由 host 与 `zui` 组合；
 - `InputBox` 消费显式 blink phase，但没有 mouse caret hit testing、drag selection 或
   disabled/read-only presentation；
 - native 当前使用 `CaretBlinkController::default` 的 530ms half-period，尚未读取系统 caret

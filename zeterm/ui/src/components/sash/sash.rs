@@ -8,7 +8,7 @@ pub enum SashOrientation {
     Horizontal,
 }
 
-/// Host-projected Sash interaction presentation.
+/// Sash interaction presentation consumed by the visual component.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub enum SashState {
     #[default]
@@ -47,9 +47,10 @@ impl SashStyle {
 
 /// Presentation-only resize separator derived from a caller-provided zero-area track.
 ///
-/// The host owns pointer capture, drag state, cursor selection, accessibility, and authoritative
-/// pane sizes. This component owns the shared relationship between the separator track, its wider
-/// interaction target, and its visible hover/active feedback line.
+/// The host owns pointer capture, cursor selection, accessibility, and authoritative pane sizes.
+/// [`super::Resizable`] owns the generic drag state; this component owns the shared relationship
+/// between the separator track, its wider interaction target, and its visible hover/active
+/// feedback line.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sash {
     track_bounds: Rect,

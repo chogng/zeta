@@ -2,7 +2,7 @@
 
 `zui` 是 Rust 桌面应用唯一需要依赖的原生 UI framework crate。它拥有 UI 内核、Application 与多窗口生命周期、任务和定时器、平台事件归一化、系统服务、托盘和全局快捷键、协议 URL、资源与隔离进程、OS accessibility、应用分发工具、渲染器契约、默认 wgpu 后端与确定性 testing；这些职责在同一 crate 内按能力目录隔离，不通过 sibling crate 暴露替代入口。
 
-产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。`zeta-ui` 在它之上提供可复用组件和 zeterm pane topology；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
+产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。Native UI 的编写、布局、样式和主题投影边界见 [`native-ui-authoring.md`](../docs/native-ui-authoring.md)。`zeta-ui` 在它之上提供可复用组件和 zeterm pane topology；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
 
 ## 1. Crate 边界
 
