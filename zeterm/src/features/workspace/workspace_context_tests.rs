@@ -6,12 +6,13 @@ use super::{
     WorkspaceContext, display_working_directory, editor_language_for_path,
     repository_root_from_workspace_path,
 };
-use zeta_app_server_client::{
-    AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
-};
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use zeta_editor::CodeEditorLanguage;
+
+use crate::app_server::testing::{
+    AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
+};
 
 static NEXT_REPOSITORY_ID: AtomicU64 = AtomicU64::new(0);
 
