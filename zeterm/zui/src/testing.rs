@@ -9,13 +9,17 @@ use std::time::Instant;
 
 use crate::app::ExitPolicy;
 use crate::app::ProtocolUrl;
+use crate::app::WindowFramePresentation;
 use crate::render::RenderOutcome;
 use crate::render::RenderTargetSize;
 use crate::render::Renderer;
 use crate::render::RendererError;
 use crate::runtime::AccessibilityNode;
+use crate::runtime::InteractionFrame;
+use crate::runtime::UiDispatch;
 use crate::services::GlobalShortcutEvent;
 use crate::services::TrayEvent;
+use crate::ui::presentation::UiFrame;
 use crate::ui::presentation::UiScene;
 use crate::window::LogicalSize;
 use crate::window::WindowId;
@@ -278,18 +282,19 @@ impl<T> TestRuntime<T> {
         }
     }
 
-    /// Presents a scene and accessibility snapshot into a live headless window.
-    pub fn present_scene(
+    /// Resolves and presents one complete UI frame into a live headless window.
+    pub fn present_frame(
         &mut self,
         id: WindowId,
-        scene: &UiScene,
-        accessibility: &[AccessibilityNode],
+        frame: &UiFrame<InteractionFrame>,
+        dispatch: &UiDispatch,
     ) -> Result<Option<RenderOutcome>, RendererError> {
         let Some(window) = self.windows.get_mut(&id.into_raw()) else {
             return Ok(None);
         };
-        window.accessibility = accessibility.to_vec();
-        window.renderer.render_scene(scene).map(Some)
+        let presentation = WindowFramePresentation::resolve(frame, dispatch);
+        window.accessibility = presentation.accessibility().to_vec();
+        window.renderer.render_scene(presentation.scene()).map(Some)
     }
 
     /// Enqueues an application-defined event immediately.

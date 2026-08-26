@@ -1,5 +1,9 @@
 use std::time::Instant;
 
+use super::Component;
+use super::ComponentElement;
+use super::ComputedElement;
+use super::UiScene;
 use crate::ui::foundation::AnimationBinding;
 use crate::ui::foundation::AnimationKey;
 use crate::ui::foundation::Color;
@@ -7,12 +11,6 @@ use crate::ui::foundation::ElementId;
 use crate::ui::foundation::InteractionSink;
 use crate::ui::foundation::Rect;
 use crate::ui::foundation::ScalarAnimationSpec;
-
-use super::Component;
-use super::ComponentElement;
-use super::ComputedElement;
-use super::UiScene;
-
 /// One presentation frame that keeps paint, inspection, and interaction composition together.
 ///
 /// The frame carries the host's clock so animation-aware components can sample time without

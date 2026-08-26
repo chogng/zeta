@@ -1,16 +1,17 @@
 use super::{
     LogicalViewport, ShellLayout, ShellPresentation, ShellPresentationModel,
     build_shell_presentation, rebuild_shell_overlays, terminal_grid_size_for_viewport,
-    terminal_mouse_position_for_viewport,
+    terminal_mouse_position_for_viewport, terminal_pane_sash_for_viewport,
 };
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::agent_sidebar::AgentSidebarState;
-use crate::agent_sidebar_workspace::{AgentSidebarView, AgentSidebarWorkspace};
 use crate::file_editor_host::FileEditorHost;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
 use crate::keyboard_shortcuts::KeyboardShortcutsState;
 use crate::language_server_settings::LanguageServerSettingsState;
+use crate::pane_group::{PaneGroup, PaneSplitDirection};
+use crate::pane_host::{PaneHost, PaneHostScope};
+use crate::pane_input::{PaneBinding, PaneInput};
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
@@ -25,8 +26,11 @@ use crate::shell_interaction::{
     MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER, SESSION_SEARCH_INPUT,
     SESSION_SIDEBAR_RESIZE_HANDLE, SETTINGS_WORKBENCH_TAB, THREAD_TIMELINE, TITLEBAR,
 };
+use crate::sidebar_pane_workspace::SidebarPaneWorkspace;
+use crate::sidebar_part::SidebarPartState;
+use crate::tab_input::TabInput;
+use crate::tab_input::TabInputKey;
 use crate::thread_projection::ThreadProjection;
-use crate::workbench::WorkbenchItem;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
@@ -40,6 +44,7 @@ use zeta_ui::{
     CaretVisibility, Color, Edges, Point, Rect, ScrollbarPresentation, TextInputCommand,
     TextInputLayoutEngine, UiScene,
 };
+use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
 use zui::window::WindowControlInsets;
 
@@ -51,11 +56,11 @@ fn viewport() -> LogicalViewport {
 }
 
 #[test]
-fn agent_sidebar_outer_border_is_owned_by_native_shell() {
+fn sidebar_part_outer_border_is_owned_by_native_shell() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
     let mut scene = UiScene::new(crate::shell_style::SHELL_PALETTE.background);
 
-    super::draw_agent_sidebar_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
+    super::draw_sidebar_part_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
 
     let frame = scene.rects().first().copied().expect("sidebar frame");
     assert_eq!(frame.bounds(), bounds);
@@ -68,7 +73,34 @@ fn agent_sidebar_outer_border_is_owned_by_native_shell() {
 }
 
 fn presentation(terminal: Option<&TerminalCore>, scroll_offset: usize) -> ShellPresentation {
-    presentation_with_sidebar(terminal, scroll_offset, SessionSidebarState::collapsed())
+    presentation_with_dispatch(terminal, scroll_offset).0
+}
+
+fn presentation_with_dispatch(
+    terminal: Option<&TerminalCore>,
+    scroll_offset: usize,
+) -> (ShellPresentation, UiDispatch) {
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
+    let mut dispatch = UiDispatch::default();
+    let presentation = presentation_with_workspace(
+        terminal,
+        scroll_offset,
+        SessionSidebarState::collapsed(),
+        SidebarPartState::default(),
+        SessionContextMenuState::default(),
+        &sidebar_pane_workspace,
+        &mut dispatch,
+    );
+    (presentation, dispatch)
+}
+
+fn accessibility_nodes(
+    presentation: &ShellPresentation,
+    dispatch: &UiDispatch,
+) -> Vec<AccessibilityNode> {
+    presentation
+        .interaction_frame()
+        .accessibility_nodes(dispatch)
 }
 
 fn presentation_with_sidebar(
@@ -94,7 +126,7 @@ fn presentation_with_sidebar_and_menu(
         terminal,
         scroll_offset,
         session_sidebar,
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
         session_context_menu,
     )
 }
@@ -103,18 +135,18 @@ fn presentation_with_sidebars_and_menu(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     session_sidebar: SessionSidebarState,
-    agent_sidebar: AgentSidebarState,
+    sidebar_part: SidebarPartState,
     session_context_menu: SessionContextMenuState,
 ) -> ShellPresentation {
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let mut dispatch = UiDispatch::default();
     presentation_with_workspace(
         terminal,
         scroll_offset,
         session_sidebar,
-        agent_sidebar,
+        sidebar_part,
         session_context_menu,
-        &agent_sidebar_workspace,
+        &sidebar_pane_workspace,
         &mut dispatch,
     )
 }
@@ -123,32 +155,32 @@ fn presentation_with_workspace(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     session_sidebar: SessionSidebarState,
-    agent_sidebar: AgentSidebarState,
+    sidebar_part: SidebarPartState,
     session_context_menu: SessionContextMenuState,
-    agent_sidebar_workspace: &AgentSidebarWorkspace,
+    sidebar_pane_workspace: &SidebarPaneWorkspace,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
-    presentation_with_workbench_item(
+    presentation_with_active_tab_input(
         terminal,
         scroll_offset,
         session_sidebar,
-        agent_sidebar,
+        sidebar_part,
         session_context_menu,
-        agent_sidebar_workspace,
+        sidebar_pane_workspace,
         dispatch,
-        WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+        None,
     )
 }
 
-fn presentation_with_workbench_item(
+fn presentation_with_active_tab_input(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     session_sidebar: SessionSidebarState,
-    agent_sidebar: AgentSidebarState,
+    sidebar_part: SidebarPartState,
     session_context_menu: SessionContextMenuState,
-    agent_sidebar_workspace: &AgentSidebarWorkspace,
+    sidebar_pane_workspace: &SidebarPaneWorkspace,
     dispatch: &mut UiDispatch,
-    workbench_item: WorkbenchItem,
+    active_tab_input: Option<TabInputKey>,
 ) -> ShellPresentation {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
@@ -157,11 +189,21 @@ fn presentation_with_workbench_item(
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
+    let active_tab_input = active_tab_input.as_ref();
+    let tab_inputs = active_tab_input
+        .is_some_and(|input| input.is_settings())
+        .then(|| vec![TabInput::from_settings()])
+        .unwrap_or_default();
     let initial = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: None,
+            sidebar_pane: None,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -185,14 +227,13 @@ fn presentation_with_workbench_item(
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item,
+            tab_inputs: &tab_inputs,
+            active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
-            agent_sidebar,
-            agent_sidebar_workspace,
+            sidebar_part,
+            sidebar_pane_workspace,
             session_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -218,6 +259,11 @@ fn presentation_with_workbench_item(
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: None,
+            sidebar_pane: None,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -241,14 +287,13 @@ fn presentation_with_workbench_item(
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item,
+            tab_inputs: &tab_inputs,
+            active_tab_input,
             caret_visibility: CaretVisibility::Visible,
             dispatch,
             session_sidebar,
-            agent_sidebar,
-            agent_sidebar_workspace,
+            sidebar_part,
+            sidebar_pane_workspace,
             session_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -271,19 +316,20 @@ fn presentation_with_workbench_item(
 }
 
 #[test]
-fn settings_workbench_item_renders_settings_and_selects_the_sidebar_entry() {
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+fn settings_tab_input_renders_settings_and_selects_the_sidebar_entry() {
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let mut dispatch = UiDispatch::default();
-    let presentation = presentation_with_workbench_item(
+    let presentation = presentation_with_active_tab_input(
         None,
         0,
         SessionSidebarState::expanded(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
         SessionContextMenuState::default(),
-        &agent_sidebar_workspace,
+        &sidebar_pane_workspace,
         &mut dispatch,
-        WorkbenchItem::Settings,
+        Some(TabInputKey::Settings),
     );
+    let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
 
     assert!(
         presentation
@@ -299,8 +345,7 @@ fn settings_workbench_item_renders_settings_and_selects_the_sidebar_entry() {
             .iter()
             .any(|icon| icon.icon() == zeta_icons::icons::GEAR)
     );
-    let node = presentation
-        .accessibility_nodes
+    let node = accessibility_nodes
         .iter()
         .find(|node| node.id == SETTINGS_WORKBENCH_TAB)
         .expect("settings workbench item should be mounted");
@@ -308,8 +353,8 @@ fn settings_workbench_item_renders_settings_and_selects_the_sidebar_entry() {
 }
 
 #[test]
-fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
-    let mut workspace = AgentSidebarWorkspace::default();
+fn expanded_sidebar_part_file_row_hover_rebuilds_with_the_hover_background() {
+    let mut workspace = SidebarPaneWorkspace::default();
     workspace.refresh_files(vec![
         FsReadDirectoryEntry {
             name: "alpha.txt".into(),
@@ -325,14 +370,14 @@ fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
         None,
         0,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::expanded(),
+        SidebarPartState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
         &mut dispatch,
     );
+    let accessibility_nodes = accessibility_nodes(&initial, &dispatch);
     let (row_id, row_bounds) = {
-        let row = initial
-            .accessibility_nodes
+        let row = accessibility_nodes
             .iter()
             .find(|node| node.label == "beta.txt")
             .expect("file row should be registered in the shell frame");
@@ -352,7 +397,7 @@ fn expanded_agent_sidebar_file_row_hover_rebuilds_with_the_hover_background() {
         None,
         0,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::expanded(),
+        SidebarPartState::expanded(),
         SessionContextMenuState::default(),
         &workspace,
         &mut dispatch,
@@ -370,14 +415,14 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
     let layout = ShellLayout::for_viewport(
         viewport(),
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     )
     .unwrap();
 
-    assert_eq!(layout.titlebar.origin.y, 0.0);
-    assert_eq!(layout.titlebar.size.height, 32.0);
-    assert_eq!(layout.main.origin.x, 0.0);
-    assert_eq!(layout.main.bottom(), 700.0);
+    assert_eq!(layout.titlebar().origin.y, 0.0);
+    assert_eq!(layout.titlebar().size.height, 32.0);
+    assert_eq!(layout.main().origin.x, 0.0);
+    assert_eq!(layout.main().bottom(), 700.0);
     assert_eq!(layout.output.bottom(), layout.composer_panel.origin.y);
     assert_eq!(layout.composer_panel.origin.y, 572.0);
     assert_eq!(layout.composer_info_bar.origin.y, 580.0);
@@ -391,7 +436,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let thread_projection = ThreadProjection::default();
     let mut file_editor_host = FileEditorHost::default();
     file_editor_host.open(TextFileSnapshot::new(
@@ -412,6 +457,11 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: None,
+            sidebar_pane: None,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -429,14 +479,13 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+            tab_inputs: &[],
+            active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
-            agent_sidebar: AgentSidebarState::expanded(),
-            agent_sidebar_workspace: &agent_sidebar_workspace,
+            sidebar_part: SidebarPartState::expanded(),
+            sidebar_pane_workspace: &sidebar_pane_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -456,28 +505,18 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
         },
         &mut text_layout,
     );
+    let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
 
     for id in [FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILE_EDITOR_DOCUMENT] {
-        assert!(
-            presentation
-                .accessibility_nodes
-                .iter()
-                .any(|node| node.id == id)
-        );
+        assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(AGENT_SIDEBAR))
     );
     for id in [SESSION_HEADER, COMPOSER, THREAD_TIMELINE] {
-        assert!(
-            presentation
-                .accessibility_nodes
-                .iter()
-                .any(|node| node.id == id)
-        );
+        assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
         presentation
@@ -500,7 +539,7 @@ fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
     let layout = ShellLayout::for_viewport_with_composer_height(
         viewport(),
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
         160.0,
     )
     .unwrap();
@@ -523,7 +562,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
     let layout = ShellLayout::for_viewport(
         viewport(),
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     )
     .unwrap();
     let presentation = presentation(None, 0);
@@ -581,40 +620,37 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
     let layout = ShellLayout::for_viewport(
         viewport(),
         SessionSidebarState::expanded(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     )
     .unwrap();
     let presentation = presentation_with_sidebar(None, 0, SessionSidebarState::expanded());
+    let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let visible_text = presentation
         .scene()
         .text_blocks()
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    let session_tab = presentation
-        .accessibility_nodes
+    let session_tab = accessibility_nodes
         .iter()
         .find(|node| node.id == crate::shell_interaction::ACTIVE_SESSION_TAB)
         .unwrap();
-    let resize_handle = presentation
-        .accessibility_nodes
+    let resize_handle = accessibility_nodes
         .iter()
         .find(|node| node.id == SESSION_SIDEBAR_RESIZE_HANDLE)
         .unwrap();
-    let search = presentation
-        .accessibility_nodes
+    let search = accessibility_nodes
         .iter()
         .find(|node| node.id == SESSION_SEARCH_INPUT)
         .unwrap();
-    let add_session = presentation
-        .accessibility_nodes
+    let add_session = accessibility_nodes
         .iter()
         .find(|node| node.id == ADD_SESSION)
         .unwrap();
     let mut dispatch = UiDispatch::default();
 
-    assert_eq!(layout.session_sidebar.unwrap().size.width, 200.0);
-    assert_eq!(layout.main.origin.x, 200.0);
+    assert_eq!(layout.session_sidebar().unwrap().size.width, 200.0);
+    assert_eq!(layout.main().origin.x, 200.0);
     assert_eq!(layout.composer.origin.x, 224.0);
     assert!(visible_text.contains(&"Search sessions..."));
     let inspected_search = presentation
@@ -664,7 +700,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
             viewport(),
             ScreenBuffer::Primary,
             SessionSidebarState::expanded(),
-            AgentSidebarState::default(),
+            SidebarPartState::default(),
         )
         .cols(),
         94
@@ -674,7 +710,7 @@ fn expanded_sidebar_reflows_the_terminal_and_publishes_a_selected_session_tab() 
             viewport(),
             ScreenBuffer::Primary,
             SessionSidebarState::expanded(),
-            AgentSidebarState::default(),
+            SidebarPartState::default(),
             Point::new(100.0, 100.0),
         ),
         None
@@ -689,7 +725,7 @@ fn session_search_filters_tabs_by_session_name() {
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
@@ -699,6 +735,11 @@ fn session_search_filters_tabs_by_session_name() {
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: None,
+            sidebar_pane: None,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -716,14 +757,13 @@ fn session_search_filters_tabs_by_session_name() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+            tab_inputs: &[],
+            active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::expanded(),
-            agent_sidebar: AgentSidebarState::default(),
-            agent_sidebar_workspace: &agent_sidebar_workspace,
+            sidebar_part: SidebarPartState::default(),
+            sidebar_pane_workspace: &sidebar_pane_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -743,10 +783,10 @@ fn session_search_filters_tabs_by_session_name() {
         },
         &mut text_layout,
     );
+    let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
 
     assert!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .all(|node| node.id != crate::shell_interaction::ACTIVE_SESSION_TAB)
     );
@@ -760,50 +800,46 @@ fn session_search_filters_tabs_by_session_name() {
 }
 
 #[test]
-fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions() {
-    let agent_sidebar = AgentSidebarState::expanded();
+fn expanded_sidebar_part_defaults_to_the_files_pane_with_navigation_and_actions() {
+    let sidebar_part = SidebarPartState::expanded();
     let layout =
-        ShellLayout::for_viewport(viewport(), SessionSidebarState::collapsed(), agent_sidebar)
+        ShellLayout::for_viewport(viewport(), SessionSidebarState::collapsed(), sidebar_part)
             .unwrap();
     let presentation = presentation_with_sidebars_and_menu(
         None,
         0,
         SessionSidebarState::collapsed(),
-        agent_sidebar,
+        sidebar_part,
         SessionContextMenuState::default(),
     );
-    let sidebar = presentation
-        .accessibility_nodes
+    let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
+    let sidebar = accessibility_nodes
         .iter()
         .find(|node| node.id == AGENT_SIDEBAR)
         .unwrap();
-    let explorer = presentation
-        .accessibility_nodes
+    let explorer = accessibility_nodes
         .iter()
         .find(|node| node.id == AGENT_EXPLORER_PANE)
         .unwrap();
-    let navigation = presentation
-        .accessibility_nodes
+    let navigation = accessibility_nodes
         .iter()
         .find(|node| node.id == AGENT_SIDEBAR_NAVIGATION)
         .unwrap();
-    let toolbar = presentation
-        .accessibility_nodes
+    let toolbar = accessibility_nodes
         .iter()
         .find(|node| node.id == AGENT_SIDEBAR_TOOLBAR)
         .unwrap();
-    let resize_handle = presentation
-        .accessibility_nodes
+    let resize_handle = accessibility_nodes
         .iter()
         .find(|node| node.id == AGENT_SIDEBAR_RESIZE_HANDLE)
         .unwrap();
 
     assert_eq!(
-        layout.agent_sidebar,
+        layout.sidebar(),
         Some(zeta_ui::Rect::from_xywh(480.0, 32.0, 520.0, 668.0))
     );
     assert_eq!(
-        layout.main,
+        layout.main(),
         zeta_ui::Rect::from_xywh(0.0, 32.0, 480.0, 668.0)
     );
     assert_eq!(sidebar.role, AccessibilityRole::Group);
@@ -844,16 +880,10 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
         AGENT_FILES_REFRESH,
         AGENT_FILES_SEARCH,
     ] {
-        assert!(
-            presentation
-                .accessibility_nodes
-                .iter()
-                .any(|node| node.id == id)
-        );
+        assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .all(|node| !matches!(node.id, AGENT_EDITOR_PANE | MULTI_DIFF_EDITOR))
     );
@@ -870,8 +900,7 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
     assert!(visible_text.contains(&"No files loaded"));
     assert!(visible_text.contains(&"↑0 ↓0"));
     assert_eq!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .filter(|node| node.parent == Some(crate::shell_interaction::AGENT_FILES_ACTION_BAR))
             .count(),
@@ -882,7 +911,7 @@ fn expanded_agent_sidebar_defaults_to_the_files_pane_with_navigation_and_actions
             viewport(),
             ScreenBuffer::Primary,
             SessionSidebarState::collapsed(),
-            agent_sidebar,
+            sidebar_part,
         )
         .cols(),
         54
@@ -894,9 +923,21 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
-    let mut agent_workspace = AgentSidebarWorkspace::default();
+    let mut agent_workspace = SidebarPaneWorkspace::default();
     agent_workspace.sync_repository(&workspace_context);
-    agent_workspace.select_view(AgentSidebarView::Changes);
+    let sidebar_pane_group = PaneGroup::new();
+    let mut pane_host = PaneHost::new();
+    pane_host.insert(
+        (PaneHostScope::Sidebar, sidebar_pane_group.root_pane()),
+        PaneBinding::new(PaneInput::diff(
+            workspace_context.working_directory().to_path_buf(),
+        )),
+    );
+    let sidebar_pane = pane_host.mount(
+        &PaneHostScope::Sidebar,
+        &sidebar_pane_group,
+        sidebar_pane_group.root_pane(),
+    );
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let thread_projection = ThreadProjection::default();
@@ -907,6 +948,11 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: Some(&sidebar_pane_group),
+            sidebar_pane,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -924,14 +970,13 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+            tab_inputs: &[],
+            active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
-            agent_sidebar: AgentSidebarState::expanded(),
-            agent_sidebar_workspace: &agent_workspace,
+            sidebar_part: SidebarPartState::expanded(),
+            sidebar_pane_workspace: &agent_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -951,28 +996,22 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
         },
         &mut text_layout,
     );
+    let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
 
     assert!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .any(|node| node.id == AGENT_EDITOR_PANE)
     );
     assert!(
-        presentation
-            .accessibility_nodes
+        accessibility_nodes
             .iter()
             .any(|node| node.id == MULTI_DIFF_EDITOR)
     );
-    assert!(
-        presentation
-            .accessibility_nodes
-            .iter()
-            .all(|node| !matches!(
-                node.id,
-                AGENT_EXPLORER_PANE | AGENT_FILES_REFRESH | AGENT_FILES_SEARCH
-            ))
-    );
+    assert!(accessibility_nodes.iter().all(|node| !matches!(
+        node.id,
+        AGENT_EXPLORER_PANE | AGENT_FILES_REFRESH | AGENT_FILES_SEARCH
+    )));
     let visible_text = presentation
         .scene()
         .text_blocks()
@@ -1003,14 +1042,13 @@ fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
     );
     let presentation =
         presentation_with_sidebar_and_menu(None, 0, SessionSidebarState::expanded(), menu_state);
-    let labels = presentation
-        .accessibility_nodes
+    let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
+    let labels = accessibility_nodes
         .iter()
         .filter(|node| node.parent == Some(crate::shell_interaction::SESSION_CONTEXT_MENU))
         .map(|node| node.label.as_str())
         .collect::<Vec<_>>();
-    let first_item = presentation
-        .accessibility_nodes
+    let first_item = accessibility_nodes
         .iter()
         .find(|node| {
             node.id == crate::shell_interaction::SessionContextMenuAction::Pin.element_id()
@@ -1036,19 +1074,17 @@ fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
 
 #[test]
 fn primary_presentation_publishes_current_control_semantics_and_focus() {
-    let presentation = presentation(None, 0);
-    let info_bar = presentation
-        .accessibility_nodes
+    let (presentation, dispatch) = presentation_with_dispatch(None, 0);
+    let accessibility_nodes = accessibility_nodes(&presentation, &dispatch);
+    let info_bar = accessibility_nodes
         .iter()
         .find(|node| node.id == COMPOSER_INFO_BAR)
         .unwrap();
-    let composer = presentation
-        .accessibility_nodes
+    let composer = accessibility_nodes
         .iter()
         .find(|node| node.id == COMPOSER)
         .unwrap();
-    let location = presentation
-        .accessibility_nodes
+    let location = accessibility_nodes
         .iter()
         .find(|node| node.id == ContextAction::Location.element_id())
         .unwrap();
@@ -1088,11 +1124,8 @@ fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
 
     for action in [ContextAction::WorkingDirectory, ContextAction::GitBranch] {
         let bounds = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == action.element_id())
-            .unwrap()
-            .bounds;
+            .element_bounds(action.element_id())
+            .expect("context action should be mounted");
         let point = Point::new(
             bounds.origin.x + bounds.size.width / 2.0,
             bounds.origin.y + bounds.size.height / 2.0,
@@ -1115,7 +1148,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let composer = Composer::default();
     let session_search = SessionSearch::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let thread_projection = ThreadProjection::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
@@ -1131,6 +1164,11 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let closed_model = ShellPresentationModel {
         palette: crate::shell_style::SHELL_PALETTE,
         terminal: None,
+        terminal_panes: &[],
+        pane_group: None,
+        sidebar_pane_group: None,
+        sidebar_pane: None,
+        terminal_pane_resize_split: None,
         terminal_scroll_offset: 0,
         terminal_scrollbar_presentation: ScrollbarPresentation::default(),
         terminal_selection: None,
@@ -1148,14 +1186,13 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         workspace_context: &workspace_context,
         composer: &composer,
         session_search: &session_search,
-        session_tabs: &[],
-        selected_session_tab: ACTIVE_SESSION_TAB,
-        workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+        tab_inputs: &[],
+        active_tab_input: None,
         caret_visibility: CaretVisibility::Visible,
         dispatch: &dispatch,
         session_sidebar: SessionSidebarState::collapsed(),
-        agent_sidebar: AgentSidebarState::default(),
-        agent_sidebar_workspace: &agent_sidebar_workspace,
+        sidebar_part: SidebarPartState::default(),
+        sidebar_pane_workspace: &sidebar_pane_workspace,
         session_context_menu: SessionContextMenuState::default(),
         git_branch_context_menu: &git_branch_context_menu,
         workspace_path_picker: &workspace_path_picker,
@@ -1176,7 +1213,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let mut presentation = build_shell_presentation(viewport(), closed_model, &mut text_layout);
     let base_scene = presentation.scene().clone();
     let base_interactions = presentation.interaction_frame().clone();
-    let base_accessibility = presentation.accessibility_nodes.clone();
+    let base_accessibility = accessibility_nodes(&presentation, &dispatch);
     let mut menu = SessionContextMenuState::default();
     menu.open(ACTIVE_SESSION_TAB, Point::new(200.0, 100.0), None);
 
@@ -1205,7 +1242,10 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     ));
     assert_eq!(*presentation.scene(), base_scene);
     assert_eq!(*presentation.interaction_frame(), base_interactions);
-    assert_eq!(presentation.accessibility_nodes, base_accessibility);
+    assert_eq!(
+        accessibility_nodes(&presentation, &dispatch),
+        base_accessibility
+    );
 }
 
 #[test]
@@ -1286,7 +1326,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let agent_sidebar_workspace = AgentSidebarWorkspace::default();
+    let sidebar_pane_workspace = SidebarPaneWorkspace::default();
     let thread_projection = ThreadProjection::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
@@ -1298,6 +1338,11 @@ fn compact_viewport_uses_bounded_fallback_scene() {
         ShellPresentationModel {
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
+            terminal_panes: &[],
+            pane_group: None,
+            sidebar_pane_group: None,
+            sidebar_pane: None,
+            terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
             terminal_selection: None,
@@ -1315,14 +1360,13 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             workspace_context: &workspace_context,
             composer: &composer,
             session_search: &session_search,
-            session_tabs: &[],
-            selected_session_tab: ACTIVE_SESSION_TAB,
-            workbench_item: WorkbenchItem::Session(ACTIVE_SESSION_TAB),
+            tab_inputs: &[],
+            active_tab_input: None,
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
-            agent_sidebar: AgentSidebarState::default(),
-            agent_sidebar_workspace: &agent_sidebar_workspace,
+            sidebar_part: SidebarPartState::default(),
+            sidebar_pane_workspace: &sidebar_pane_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -1354,13 +1398,13 @@ fn primary_reserves_rows_for_composer_while_alternate_screen_uses_full_height() 
         viewport(),
         ScreenBuffer::Primary,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     );
     let alternate = terminal_grid_size_for_viewport(
         viewport(),
         ScreenBuffer::Alternate,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     );
 
     assert_eq!(primary, GridSize::new(27, 119));
@@ -1373,7 +1417,7 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
         viewport(),
         ScreenBuffer::Primary,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
         Point::new(24.0, 60.0),
     )
     .unwrap();
@@ -1381,12 +1425,31 @@ fn primary_pointer_coordinates_are_limited_to_the_output_region() {
         viewport(),
         ScreenBuffer::Primary,
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
         Point::new(40.0, 640.0),
     );
 
     assert_eq!((first.row(), first.col()), (0, 0));
     assert_eq!(composer, None);
+}
+
+#[test]
+fn terminal_pane_sash_hit_uses_the_same_grid_geometry_as_the_panes() {
+    let mut group = PaneGroup::new();
+    group.split_active(PaneSplitDirection::Horizontal);
+
+    let hit = terminal_pane_sash_for_viewport(
+        viewport(),
+        ScreenBuffer::Alternate,
+        SessionSidebarState::collapsed(),
+        SidebarPartState::default(),
+        &group,
+        Point::new(500.0, 300.0),
+    )
+    .expect("horizontal terminal Pane Sash");
+
+    assert_eq!(hit.1, zui::ui::SplitViewOrientation::Horizontal);
+    assert!(hit.2.resize(80.0).previous_size() > hit.2.resize(0.0).previous_size());
 }
 
 #[test]
@@ -1436,7 +1499,7 @@ fn primary_ime_candidate_position_comes_from_the_bottom_composer() {
     let layout = ShellLayout::for_viewport(
         viewport(),
         SessionSidebarState::collapsed(),
-        AgentSidebarState::default(),
+        SidebarPartState::default(),
     )
     .unwrap();
 

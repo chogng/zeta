@@ -6,7 +6,10 @@ use zeta_terminal::{
 use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 use crate::NativeApp;
-use crate::shell_scene::terminal_mouse_position_for_viewport;
+use crate::pane_group::PaneId;
+use crate::shell_scene::{
+    terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
+};
 use crate::terminal_session::TerminalSession;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -152,6 +155,32 @@ impl TerminalPointer {
 }
 
 impl NativeApp {
+    pub(crate) fn terminal_pane_hit(
+        &self,
+        point: zeta_ui::Point,
+    ) -> Option<(PaneId, TerminalMousePosition)> {
+        let tab_key = self.tab_inputs.active_key()?;
+        let group = self.pane_groups.get(tab_key)?;
+        terminal_pane_mouse_position_for_viewport(
+            self.logical_viewport(),
+            self.active_screen(),
+            self.session_sidebar,
+            self.sidebar_part,
+            group,
+            point,
+        )
+    }
+
+    pub(crate) fn activate_terminal_pane_at(&mut self, point: zeta_ui::Point) -> bool {
+        let Some((pane, _position)) = self.terminal_pane_hit(point) else {
+            return false;
+        };
+        let Some(tab_key) = self.tab_inputs.active_key().cloned() else {
+            return false;
+        };
+        self.activate_pane_context(tab_key, pane)
+    }
+
     pub(crate) fn terminal_mouse_position(
         &self,
         point: zeta_ui::Point,
@@ -159,11 +188,15 @@ impl NativeApp {
         if !self.workspace_surface.is_terminal() {
             return None;
         }
+        if let Some((pane, position)) = self.terminal_pane_hit(point) {
+            return (self.active_pane == Some((self.tab_inputs.active_key()?.clone(), pane)))
+                .then_some(position);
+        }
         terminal_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
             self.session_sidebar,
-            self.agent_sidebar,
+            self.sidebar_part,
             point,
         )
     }

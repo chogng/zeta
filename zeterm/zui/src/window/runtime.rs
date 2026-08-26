@@ -20,13 +20,32 @@ use crate::window::WindowEvent;
 use crate::window::WindowHandle;
 use crate::window::WindowId;
 use crate::window::WindowRole;
+use thiserror::Error;
+
+/// Invalid policy supplied while configuring a native window.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub enum WindowOptionsError {
+    /// One configured size was non-finite, zero, or negative.
+    #[error("{field} must contain finite, positive dimensions")]
+    InvalidSize { field: &'static str },
+    /// The minimum size exceeded the maximum along at least one axis.
+    #[error("minimum inner size must not exceed maximum inner size")]
+    InvalidSizeRange,
+}
 
 /// Native window creation policy supplied by an application.
 #[derive(Debug)]
 pub struct WindowOptions {
-    title: String,
-    inner_size: Option<LogicalSize>,
-    chrome: WindowChrome,
+    pub(crate) title: String,
+    pub(crate) inner_size: Option<LogicalSize>,
+    pub(crate) min_inner_size: Option<LogicalSize>,
+    pub(crate) max_inner_size: Option<LogicalSize>,
+    pub(crate) chrome: WindowChrome,
+    pub(crate) visible: bool,
+    pub(crate) active: bool,
+    pub(crate) resizable: bool,
+    pub(crate) maximized: bool,
+    pub(crate) fullscreen: bool,
 }
 
 impl WindowOptions {
@@ -35,7 +54,14 @@ impl WindowOptions {
         Self {
             title: title.into(),
             inner_size: None,
+            min_inner_size: None,
+            max_inner_size: None,
             chrome: WindowChrome::Native,
+            visible: true,
+            active: true,
+            resizable: true,
+            maximized: false,
+            fullscreen: false,
         }
     }
 
@@ -55,6 +81,67 @@ impl WindowOptions {
     pub const fn with_inner_size(mut self, size: LogicalSize) -> Self {
         self.inner_size = Some(size);
         self
+    }
+
+    /// Sets the minimum logical content size accepted by the platform.
+    pub const fn with_min_inner_size(mut self, size: LogicalSize) -> Self {
+        self.min_inner_size = Some(size);
+        self
+    }
+
+    /// Sets the maximum logical content size accepted by the platform.
+    pub const fn with_max_inner_size(mut self, size: LogicalSize) -> Self {
+        self.max_inner_size = Some(size);
+        self
+    }
+
+    /// Selects whether the window is shown after renderer and accessibility setup completes.
+    pub const fn with_visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
+        self
+    }
+
+    /// Selects whether opening the window should request platform activation.
+    pub const fn with_active(mut self, active: bool) -> Self {
+        self.active = active;
+        self
+    }
+
+    /// Selects whether the user can resize the window.
+    pub const fn with_resizable(mut self, resizable: bool) -> Self {
+        self.resizable = resizable;
+        self
+    }
+
+    /// Selects whether the window opens maximized.
+    pub const fn with_maximized(mut self, maximized: bool) -> Self {
+        self.maximized = maximized;
+        self
+    }
+
+    /// Selects whether the window opens in borderless fullscreen mode.
+    pub const fn with_fullscreen(mut self, fullscreen: bool) -> Self {
+        self.fullscreen = fullscreen;
+        self
+    }
+
+    /// Validates size invariants before native resources are allocated.
+    pub fn validate(&self) -> Result<(), WindowOptionsError> {
+        for (field, size) in [
+            ("inner size", self.inner_size),
+            ("minimum inner size", self.min_inner_size),
+            ("maximum inner size", self.max_inner_size),
+        ] {
+            if size.is_some_and(|size| !size.is_valid()) {
+                return Err(WindowOptionsError::InvalidSize { field });
+            }
+        }
+        if let (Some(min), Some(max)) = (self.min_inner_size, self.max_inner_size)
+            && (min.width > max.width || min.height > max.height)
+        {
+            return Err(WindowOptionsError::InvalidSizeRange);
+        }
+        Ok(())
     }
 }
 
@@ -139,15 +226,13 @@ impl WindowRuntime {
         role: WindowRole,
         request_sender: DevToolsRequestSender,
     ) -> Result<Self, ApplicationError> {
-        let title = options.title;
-        let window = NativeWindow::create(
-            event_loop,
-            title.clone(),
-            options.inner_size,
-            options.chrome,
-            request_sender,
-        )
-        .map_err(ApplicationError::window)?;
+        options
+            .validate()
+            .map_err(ApplicationError::window_options)?;
+        let title = options.title.clone();
+        let initially_visible = options.visible;
+        let window = NativeWindow::create(event_loop, options, request_sender)
+            .map_err(ApplicationError::window)?;
         let metrics = WindowMetrics::new(window.inner_extent(), window.scale_factor());
         let accessibility =
             AccessibilityBridge::new(event_loop, &window, proxy, title, metrics.scale_factor());
@@ -159,7 +244,9 @@ impl WindowRuntime {
             metrics.physical_extent.height,
         ));
         renderer.set_scale_factor(metrics.scale_factor());
-        window.show();
+        if initially_visible {
+            window.show();
+        }
         Ok(Self {
             window,
             renderer,
@@ -187,6 +274,10 @@ impl WindowRuntime {
 
     pub(crate) fn handle(&self) -> WindowHandle {
         self.window.handle()
+    }
+
+    pub(crate) fn request_redraw(&self) {
+        self.window.request_redraw();
     }
 
     pub(crate) const fn role(&self) -> WindowRole {

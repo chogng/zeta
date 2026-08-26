@@ -6,12 +6,12 @@ use zeta_ui::{
     TextStyle, UiScene,
 };
 
-use crate::agent_sidebar::AgentSidebarState;
 use crate::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW,
 };
 use crate::shell_style::ShellPalette;
+use crate::sidebar_part::SidebarPartState;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
 use zui::window::WindowControlInsets;
 
@@ -28,7 +28,7 @@ pub(crate) struct Titlebar {
     right_action_bar: ActionBar,
     session_toggle_label: &'static str,
     settings_label: &'static str,
-    agent_toggle_label: &'static str,
+    sidebar_toggle_label: &'static str,
 }
 
 impl Titlebar {
@@ -36,7 +36,7 @@ impl Titlebar {
         bounds: Rect,
         palette: ShellPalette,
         session_sidebar: SessionSidebarState,
-        agent_sidebar: AgentSidebarState,
+        sidebar_part: SidebarPartState,
         window_control_insets: WindowControlInsets,
         dispatch: &UiDispatch,
     ) -> Self {
@@ -50,12 +50,12 @@ impl Titlebar {
             TOGGLE_SIZE,
             TOGGLE_SIZE,
         );
-        let agent_toggle_max_x = (content_right - TOGGLE_SIZE).max(content_left);
-        let agent_toggle_x = (content_right - TITLEBAR_ACTION_GAP - TOGGLE_SIZE)
+        let sidebar_toggle_max_x = (content_right - TOGGLE_SIZE).max(content_left);
+        let sidebar_toggle_x = (content_right - TITLEBAR_ACTION_GAP - TOGGLE_SIZE)
             .max(session_toggle_bounds.right() + TITLEBAR_ACTION_GAP)
-            .min(agent_toggle_max_x);
-        let agent_toggle_bounds = Rect::from_xywh(
-            agent_toggle_x,
+            .min(sidebar_toggle_max_x);
+        let sidebar_toggle_bounds = Rect::from_xywh(
+            sidebar_toggle_x,
             bounds.origin.y + (bounds.size.height - TOGGLE_SIZE) / 2.0,
             TOGGLE_SIZE,
             TOGGLE_SIZE,
@@ -78,7 +78,7 @@ impl Titlebar {
         } else {
             ButtonState::Resting
         };
-        let agent_toggle_state = if dispatch.is_pressed(AGENT_SIDEBAR_TOGGLE) {
+        let sidebar_toggle_state = if dispatch.is_pressed(AGENT_SIDEBAR_TOGGLE) {
             ButtonState::Pressed
         } else if dispatch.is_focused(AGENT_SIDEBAR_TOGGLE) {
             ButtonState::Focused
@@ -97,12 +97,12 @@ impl Titlebar {
         } else {
             icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
         };
-        let agent_toggle_label = if agent_sidebar.is_expanded() {
+        let sidebar_toggle_label = if sidebar_part.is_expanded() {
             "Collapse inspector"
         } else {
             "Expand inspector"
         };
-        let agent_toggle_icon = if agent_sidebar.is_expanded() {
+        let sidebar_toggle_icon = if sidebar_part.is_expanded() {
             icons::LAYOUT_SIDEBAR_RIGHT
         } else {
             icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
@@ -133,8 +133,8 @@ impl Titlebar {
             ),
             right_action_bar: ActionBar::new(
                 Rect::from_xywh(
-                    agent_toggle_bounds.origin.x - TOGGLE_SIZE - TITLEBAR_ACTION_GAP,
-                    agent_toggle_bounds.origin.y,
+                    sidebar_toggle_bounds.origin.x - TOGGLE_SIZE - TITLEBAR_ACTION_GAP,
+                    sidebar_toggle_bounds.origin.y,
                     TOGGLE_SIZE * 2.0 + TITLEBAR_ACTION_GAP,
                     TOGGLE_SIZE,
                 ),
@@ -146,9 +146,9 @@ impl Titlebar {
                         settings_toggle_state,
                     )),
                     ActionBarItem::Button(ActionBarButton::icon(
-                        agent_toggle_icon,
-                        agent_toggle_label,
-                        agent_toggle_state,
+                        sidebar_toggle_icon,
+                        sidebar_toggle_label,
+                        sidebar_toggle_state,
                     )),
                 ],
                 ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE))
@@ -156,7 +156,7 @@ impl Titlebar {
             ),
             session_toggle_label,
             settings_label,
-            agent_toggle_label,
+            sidebar_toggle_label,
         }
     }
 
@@ -187,13 +187,13 @@ impl Titlebar {
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate),
             InteractionRegion::new(
-                "AgentSidebarToggle",
+                "SidebarPartToggle",
                 AGENT_SIDEBAR_TOGGLE,
                 self.right_action_bar
                     .interactive_item_bounds(1)
-                    .expect("agent sidebar toggle is enabled"),
+                    .expect("sidebar part toggle is enabled"),
                 AccessibilityRole::Button,
-                self.agent_toggle_label,
+                self.sidebar_toggle_label,
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)

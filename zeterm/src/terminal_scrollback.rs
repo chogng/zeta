@@ -113,6 +113,9 @@ impl NativeApp {
         if self.route_thread_timeline_wheel(delta) {
             return;
         }
+        if let Some(point) = self.cursor_position {
+            let _ = self.activate_terminal_pane_at(point);
+        }
         let position = self
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
@@ -160,11 +163,8 @@ impl NativeApp {
         {
             return false;
         }
-        let Some(interaction_bounds) = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == crate::shell_interaction::COMPOSER_INTERACTION)
-            .map(|node| node.bounds)
+        let Some(interaction_bounds) =
+            presentation.element_bounds(crate::shell_interaction::COMPOSER_INTERACTION)
         else {
             return true;
         };
@@ -205,14 +205,12 @@ impl NativeApp {
             return false;
         }
         let Some(viewport) = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == MULTI_DIFF_EDITOR)
-            .map(|node| node.bounds.size)
+            .element_bounds(MULTI_DIFF_EDITOR)
+            .map(|bounds| bounds.size)
         else {
             return false;
         };
-        let changed = self.agent_sidebar_workspace.scroll_multi_diff(
+        let changed = self.sidebar_pane_workspace.scroll_multi_diff(
             multi_diff_scroll_pixels(delta),
             viewport,
             std::time::Instant::now(),
@@ -241,15 +239,13 @@ impl NativeApp {
             return false;
         }
         let Some(viewport) = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == AGENT_EXPLORER_PANE)
-            .map(|node| node.bounds.size)
+            .element_bounds(AGENT_EXPLORER_PANE)
+            .map(|bounds| bounds.size)
         else {
             return false;
         };
         let changed = self
-            .agent_sidebar_workspace
+            .sidebar_pane_workspace
             .scroll_file_list(file_list_scroll_pixels(delta), viewport);
         if changed {
             self.rebuild_presentation_on_next_redraw();

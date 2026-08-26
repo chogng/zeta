@@ -4,8 +4,15 @@ use std::time::Instant;
 use super::TestEvent;
 use super::TestRuntime;
 use super::TestTimerScope;
+use crate::runtime::AccessibilityRole;
+use crate::runtime::FocusBehavior;
+use crate::runtime::InteractionFrame;
+use crate::runtime::UiDispatch;
+use crate::runtime::UiNode;
 use crate::ui::foundation::Color;
-use crate::ui::presentation::UiScene;
+use crate::ui::foundation::ElementId;
+use crate::ui::foundation::Rect;
+use crate::ui::presentation::UiFrame;
 use crate::window::LogicalSize;
 
 #[test]
@@ -47,13 +54,27 @@ fn lifecycle_and_timer_events_follow_deterministic_fifo_order() {
 fn headless_windows_record_presented_scene_snapshots() {
     let mut runtime = TestRuntime::<()>::at(Instant::now());
     let window = runtime.open_window("Preview", LogicalSize::new(800.0, 600.0));
-    let scene = UiScene::new(Color::rgb(10, 20, 30));
+    let target = ElementId::scoped(1, 1);
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::rgb(10, 20, 30));
+    frame.interaction_mut().register(
+        UiNode::new(
+            target,
+            Rect::from_xywh(10.0, 20.0, 80.0, 30.0),
+            AccessibilityRole::Button,
+            "Run",
+        )
+        .with_focus(FocusBehavior::TabStop),
+    );
+    let mut dispatch = UiDispatch::default();
+    dispatch.focus_element(frame.interaction(), target);
 
-    runtime.present_scene(window, &scene, &[]).unwrap();
+    runtime.present_frame(window, &frame, &dispatch).unwrap();
 
     let window = runtime.window(window).unwrap();
     assert_eq!(window.title(), "Preview");
     assert_eq!(window.logical_size(), LogicalSize::new(800.0, 600.0));
-    assert_eq!(window.renderer().state().scenes(), &[scene]);
-    assert!(window.accessibility().is_empty());
+    assert_eq!(window.renderer().state().scenes(), &[frame.scene().clone()]);
+    assert_eq!(window.accessibility().len(), 1);
+    assert_eq!(window.accessibility()[0].id, target);
+    assert!(window.accessibility()[0].focused);
 }

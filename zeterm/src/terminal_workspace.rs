@@ -27,6 +27,7 @@ pub(crate) struct TerminalWorkspace {
     active: Option<(TerminalSessionKey, TerminalSession)>,
     inactive: HashMap<TerminalSessionKey, TerminalSession>,
     pending_events: HashMap<TerminalSessionKey, Vec<TerminalSessionEvent>>,
+    requested_sizes: HashMap<TerminalSessionKey, GridSize>,
     requested_size: GridSize,
 }
 
@@ -64,6 +65,7 @@ struct TerminalWorkspaceState {
     desired_active_key: Option<TerminalSessionKey>,
     pending_keys: HashSet<TerminalSessionKey>,
     session_terminal_keys: HashMap<SessionId, TerminalSessionKey>,
+    key_session_ids: HashMap<TerminalSessionKey, SessionId>,
 }
 
 impl TerminalWorkspaceState {
@@ -85,10 +87,12 @@ impl TerminalWorkspaceState {
         if self.session_terminal_keys.is_empty() {
             if let Some(key) = self.initial_key {
                 self.session_terminal_keys.insert(session_id.clone(), key);
+                self.key_session_ids.insert(key, session_id.clone());
                 return EnsureReservation::Pending(PendingTerminalReservation::Existing(key));
             }
             if let Some(key) = self.active_key {
                 self.session_terminal_keys.insert(session_id.clone(), key);
+                self.key_session_ids.insert(key, session_id.clone());
                 return EnsureReservation::Ready(key);
             }
         }
@@ -96,7 +100,14 @@ impl TerminalWorkspaceState {
         let key = self.allocate_key();
         self.pending_keys.insert(key);
         self.session_terminal_keys.insert(session_id.clone(), key);
+        self.key_session_ids.insert(key, session_id.clone());
         EnsureReservation::Pending(PendingTerminalReservation::Start(key))
+    }
+
+    fn reserve_standalone(&mut self) -> TerminalSessionKey {
+        let key = self.allocate_key();
+        self.pending_keys.insert(key);
+        key
     }
 
     fn reservation_for_key(&self, key: TerminalSessionKey) -> EnsureReservation {
@@ -107,10 +118,20 @@ impl TerminalWorkspaceState {
         }
     }
 
+    #[cfg(test)]
     fn activation_for_session(&mut self, session_id: &SessionId) -> ActivationDecision {
         let Some(&target_key) = self.session_terminal_keys.get(session_id) else {
             return ActivationDecision::Missing;
         };
+        self.activation_for_key(target_key)
+    }
+
+    fn activation_for_key(&mut self, target_key: TerminalSessionKey) -> ActivationDecision {
+        if !self.key_session_ids.contains_key(&target_key)
+            && !self.pending_keys.contains(&target_key)
+        {
+            return ActivationDecision::Missing;
+        }
         if self.active_key == Some(target_key) {
             self.desired_active_key = None;
             return ActivationDecision::AlreadyActive;
@@ -151,6 +172,7 @@ impl TerminalWorkspaceState {
         }
         self.session_terminal_keys
             .retain(|_, terminal_key| *terminal_key != key);
+        self.key_session_ids.remove(&key);
         if self.initial_key == Some(key) {
             self.initial_key = None;
         }
@@ -165,11 +187,27 @@ impl TerminalWorkspaceState {
     }
 
     fn session_id_for_key(&self, key: TerminalSessionKey) -> Option<SessionId> {
+        self.key_session_ids.get(&key).cloned()
+    }
+
+    fn bind_key_to_session(&mut self, key: TerminalSessionKey, session_id: SessionId) {
+        self.key_session_ids.insert(key, session_id);
+    }
+
+    fn remove_key(&mut self, key: TerminalSessionKey) {
+        self.pending_keys.remove(&key);
         self.session_terminal_keys
-            .iter()
-            .find_map(|(session_id, terminal_key)| {
-                (*terminal_key == key).then_some(session_id.clone())
-            })
+            .retain(|_, terminal_key| *terminal_key != key);
+        self.key_session_ids.remove(&key);
+        if self.initial_key == Some(key) {
+            self.initial_key = None;
+        }
+        if self.active_key == Some(key) {
+            self.active_key = None;
+        }
+        if self.desired_active_key == Some(key) {
+            self.desired_active_key = None;
+        }
     }
 
     fn allocate_key(&mut self) -> TerminalSessionKey {
@@ -209,6 +247,7 @@ impl TerminalWorkspace {
             active: None,
             inactive: HashMap::new(),
             pending_events: HashMap::new(),
+            requested_sizes: HashMap::new(),
             requested_size: GridSize::default(),
         }
     }
@@ -221,31 +260,96 @@ impl TerminalWorkspace {
         let Some(key) = self.state.reserve_initial() else {
             return Ok(());
         };
+        self.requested_sizes.insert(key, size);
         if let Err(error) = self.start_terminal(key, size) {
             self.state.fail_pending(key);
+            self.requested_sizes.remove(&key);
             return Err(error);
         }
         Ok(())
-    }
-
-    pub(crate) fn active(&self) -> Option<&TerminalSession> {
-        self.active.as_ref().map(|(_, terminal)| terminal)
-    }
-
-    pub(crate) fn active_mut(&mut self) -> Option<&mut TerminalSession> {
-        self.active.as_mut().map(|(_, terminal)| terminal)
     }
 
     pub(crate) fn active_key(&self) -> Option<TerminalSessionKey> {
         self.active.as_ref().map(|(key, _)| *key)
     }
 
-    pub(crate) fn inactive_mut(&mut self, key: TerminalSessionKey) -> Option<&mut TerminalSession> {
+    pub(crate) fn terminal(&self, key: TerminalSessionKey) -> Option<&TerminalSession> {
+        if self.active_key() == Some(key) {
+            return self.active.as_ref().map(|(_, terminal)| terminal);
+        }
+        self.inactive.get(&key)
+    }
+
+    pub(crate) fn terminal_mut(&mut self, key: TerminalSessionKey) -> Option<&mut TerminalSession> {
+        if self.active_key() == Some(key) {
+            return self.active.as_mut().map(|(_, terminal)| terminal);
+        }
         self.inactive.get_mut(&key)
     }
 
     pub(crate) fn session_id_for_key(&self, key: TerminalSessionKey) -> Option<SessionId> {
         self.state.session_id_for_key(key)
+    }
+
+    pub(crate) fn key_for_session(&self, session_id: &SessionId) -> Option<TerminalSessionKey> {
+        self.state.session_terminal_keys.get(session_id).copied()
+    }
+
+    /// Starts a fresh terminal runtime for a new Pane in the current TabInput.
+    pub(crate) fn spawn_pane(&mut self, size: GridSize) -> Result<TerminalSessionKey> {
+        self.requested_size = size;
+        let key = self.state.reserve_standalone();
+        self.requested_sizes.insert(key, size);
+        if let Err(error) = self.start_terminal(key, size) {
+            self.state.fail_pending(key);
+            self.requested_sizes.remove(&key);
+            return Err(error);
+        }
+        Ok(key)
+    }
+
+    pub(crate) fn bind_key_to_session(&mut self, key: TerminalSessionKey, session_id: SessionId) {
+        self.state.bind_key_to_session(key, session_id);
+    }
+
+    pub(crate) fn activate_key(&mut self, key: TerminalSessionKey) -> bool {
+        match self.state.activation_for_key(key) {
+            ActivationDecision::Missing => false,
+            ActivationDecision::AlreadyActive => true,
+            ActivationDecision::Pending(_) => false,
+            ActivationDecision::Ready(target_key) => {
+                let Some(next_terminal) = self.inactive.remove(&target_key) else {
+                    return false;
+                };
+                if let Some((current_key, current_terminal)) = self.active.take() {
+                    self.inactive.insert(current_key, current_terminal);
+                }
+                self.active = Some((target_key, next_terminal));
+                self.state.mark_active(target_key);
+                true
+            }
+        }
+    }
+
+    pub(crate) fn resize_key(&mut self, key: TerminalSessionKey, size: GridSize) {
+        if let Some(terminal) = self.terminal_mut(key) {
+            resize_terminal(terminal, size);
+        }
+    }
+
+    pub(crate) fn remove_key(&mut self, key: TerminalSessionKey) -> bool {
+        let removed = if self.active_key() == Some(key) {
+            self.active.take().is_some()
+        } else {
+            self.inactive.remove(&key).is_some()
+        };
+        self.pending_events.remove(&key);
+        let was_known = self.state.is_pending(key)
+            || self.state.session_id_for_key(key).is_some()
+            || self.state.active_key == Some(key);
+        self.state.remove_key(key);
+        self.requested_sizes.remove(&key);
+        removed || was_known
     }
 
     pub(crate) fn ensure_for_session(
@@ -279,37 +383,13 @@ impl TerminalWorkspace {
             return Ok(());
         };
 
+        self.requested_sizes.insert(key, size);
         if let Err(error) = self.start_terminal(key, size) {
             self.state.fail_pending(key);
+            self.requested_sizes.remove(&key);
             return Err(error);
         }
         Ok(())
-    }
-
-    pub(crate) fn activate_for_session(&mut self, session_id: &SessionId) -> bool {
-        match self.state.activation_for_session(session_id) {
-            ActivationDecision::Missing => false,
-            ActivationDecision::AlreadyActive => true,
-            ActivationDecision::Pending(key) => {
-                session_switch_trace::event(
-                    None,
-                    "terminal-activation-pending",
-                    format_args!("session_id={session_id} key={key:?}"),
-                );
-                false
-            }
-            ActivationDecision::Ready(target_key) => {
-                let Some(next_terminal) = self.inactive.remove(&target_key) else {
-                    return false;
-                };
-                if let Some((current_key, current_terminal)) = self.active.take() {
-                    self.inactive.insert(current_key, current_terminal);
-                }
-                self.active = Some((target_key, next_terminal));
-                self.state.mark_active(target_key);
-                true
-            }
-        }
     }
 
     pub(crate) fn handle_ready(&mut self, ready: TerminalSessionReady) -> TerminalReadyOutcome {
@@ -325,7 +405,11 @@ impl TerminalWorkspace {
                     .state
                     .finish_pending(key)
                     .expect("pending terminal disappeared before completion");
-                resize_terminal(&mut terminal, self.requested_size);
+                let requested_size = self
+                    .requested_sizes
+                    .remove(&key)
+                    .unwrap_or(self.requested_size);
+                resize_terminal(&mut terminal, requested_size);
                 match placement {
                     TerminalReadyPlacement::Active => {
                         session_switch_trace::event(

@@ -8,7 +8,7 @@ use zeta_editor::{
 };
 use zeta_icons::icons;
 use zeta_settings::SettingsPageStyle;
-use zeta_theme::{tokens, ThemeError, ThemeSnapshot};
+use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
 use zeta_ui::ActionBarSeparatorStyle;
 use zeta_ui::ActionBarStyle;
 use zeta_ui::Border;
@@ -110,7 +110,7 @@ impl ShellPalette {
         }
     }
 
-    pub(crate) fn agent_sidebar_style(self) -> AgentSidebarStyle {
+    pub(crate) fn sidebar_part_style(self) -> AgentSidebarStyle {
         AgentSidebarStyle::new(
             self.surface,
             self.surface_raised,

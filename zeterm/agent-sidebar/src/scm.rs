@@ -1,4 +1,4 @@
-//! Source-control projections hosted by the Agent Sidebar.
+//! Source-control projections for the Sidebar Part's Changes Pane.
 
 use zeta_editor::DiffEditorDocument;
 use zeta_ui::Color;

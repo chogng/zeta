@@ -10,6 +10,7 @@ use zeta_ui::TextInputCompositionEvent;
 use zui::ui::ElementId;
 
 use crate::remote_tunnel_process::RemoteTunnelEvent;
+use crate::remote_tunnel_process::RemoteTunnelId;
 use crate::remote_tunnel_process::RemoteTunnelUpdate;
 
 const REMOTE_TUNNEL_MANAGER_SCOPE: u32 = 11;
@@ -48,14 +49,14 @@ impl RemoteTunnelLifecycle {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct RemoteTunnelRecord {
-    tunnel_id: u32,
+    tunnel_id: RemoteTunnelId,
     remote_port: NonZeroU16,
     local_port: Option<NonZeroU16>,
     lifecycle: RemoteTunnelLifecycle,
 }
 
 impl RemoteTunnelRecord {
-    pub(crate) const fn tunnel_id(&self) -> u32 {
+    pub(crate) const fn tunnel_id(&self) -> RemoteTunnelId {
         self.tunnel_id
     }
 
@@ -164,7 +165,7 @@ impl RemoteTunnelManagerState {
         Some(remote_port)
     }
 
-    pub(crate) fn start_succeeded(&mut self, tunnel_id: u32, remote_port: NonZeroU16) {
+    pub(crate) fn start_succeeded(&mut self, tunnel_id: RemoteTunnelId, remote_port: NonZeroU16) {
         self.remote_port.take_text();
         self.tunnels.push(RemoteTunnelRecord {
             tunnel_id,
@@ -182,7 +183,7 @@ impl RemoteTunnelManagerState {
         self.set_error(error);
     }
 
-    pub(crate) fn stop_request(&mut self, tunnel_id: u32) -> bool {
+    pub(crate) fn stop_request(&mut self, tunnel_id: RemoteTunnelId) -> bool {
         let Some(tunnel) = self
             .tunnels
             .iter_mut()
@@ -201,7 +202,7 @@ impl RemoteTunnelManagerState {
         true
     }
 
-    pub(crate) fn stop_failed(&mut self, tunnel_id: u32, error: impl Into<String>) {
+    pub(crate) fn stop_failed(&mut self, tunnel_id: RemoteTunnelId, error: impl Into<String>) {
         if let Some(tunnel) = self
             .tunnels
             .iter_mut()
@@ -274,13 +275,13 @@ impl RemoteTunnelManagerState {
         &self.tunnels
     }
 
-    pub(crate) fn stop_id(&self, element: ElementId) -> Option<u32> {
+    pub(crate) fn stop_id(&self, element: ElementId) -> Option<RemoteTunnelId> {
         self.tunnels.iter().find_map(|tunnel| {
             (remote_tunnel_stop_id(tunnel.tunnel_id) == element).then_some(tunnel.tunnel_id)
         })
     }
 
-    pub(crate) fn can_stop(&self, tunnel_id: u32) -> bool {
+    pub(crate) fn can_stop(&self, tunnel_id: RemoteTunnelId) -> bool {
         self.tunnels.iter().any(|tunnel| {
             tunnel.tunnel_id == tunnel_id && tunnel.lifecycle != RemoteTunnelLifecycle::Stopping
         })
@@ -308,12 +309,12 @@ impl RemoteTunnelManagerState {
     }
 }
 
-pub(crate) const fn remote_tunnel_stop_id(tunnel_id: u32) -> ElementId {
-    ElementId::scoped(REMOTE_TUNNEL_STOP_SCOPE, tunnel_id)
+pub(crate) const fn remote_tunnel_stop_id(tunnel_id: RemoteTunnelId) -> ElementId {
+    ElementId::scoped(REMOTE_TUNNEL_STOP_SCOPE, tunnel_id.get())
 }
 
-pub(crate) const fn remote_tunnel_item_id(tunnel_id: u32) -> ElementId {
-    ElementId::scoped(REMOTE_TUNNEL_ITEM_SCOPE, tunnel_id)
+pub(crate) const fn remote_tunnel_item_id(tunnel_id: RemoteTunnelId) -> ElementId {
+    ElementId::scoped(REMOTE_TUNNEL_ITEM_SCOPE, tunnel_id.get())
 }
 
 pub(crate) fn is_remote_tunnel_manager_element(

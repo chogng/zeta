@@ -114,11 +114,12 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Native frame assembly | `ShellPresentation::frame` | ✅；由单一 `zui::ui::UiFrame<InteractionFrame>` owner 管理 |
 | 原生布局检查模式、pointer 拦截与 highlight overlay | `layout_inspector::LayoutInspector` / `NativeApp` | ✅；Inspector Panel 是根 Grid leaf，只有产品节点高亮进入 overlay |
 | Sessions/Main 单轴约束与 Sash presentation geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 委托 |
-| Terminal Workspace 与 Agent Sidebar 递归 Pane geometry | `zui::GridLayout` | 委托；当前输入树包含活动终端与可选右栏 Leaf |
-| Terminal Pane Tree、Pane-to-Session binding 与 active Pane | 后续 native Terminal Workspace model | 尚未完成；Session Tab 到独立 Terminal PTY 的一对一 binding 已完成 |
+| Terminal Workspace 与 SidebarPart 递归 Pane geometry | `zeta-ui::layout::TerminalWorkspaceLayout` + `zui::GridLayout` | 委托；外层布局消费 host-owned Terminal PaneGroup geometry，并保留可选 SidebarPart Leaf |
+| Terminal/heterogeneous PaneGroup、PaneTree 与 active Pane | `zeterm/src/pane_group` + `zeterm/src/pane_input` | 本次先建立 type-agnostic PaneGroup 与 `PaneInput` host contract；Session Tab 选择主工作区 PaneGroup，SidebarPart 使用独立 workspace-scoped PaneGroup，Terminal Surface 内每个 TerminalPaneInput 绑定独立 terminal runtime，最后一个 Pane 不可关闭 |
+| Pane-to-view/runtime binding | `zeterm/src/pane_host` + feature crates | `PaneHost` 按 `PaneHostScope`/`PaneInputKind` 产生 frame mount；Terminal 使用独立 `TerminalSessionKey`，SidebarPart 的 Files/Diff 复用各自 feature-owned PaneView，不能由 `zeta-ui` 统一持有 |
 | Sessions preferred width、显隐与当前 drag snapshot | `session_sidebar::SessionSidebarState` | ✅ |
-| Agent Sidebar 显隐、preferred width 与 resize gesture | `agent_sidebar::AgentSidebarState` / `zeta-ui::Sash` | ✅；宽度限制为 240–560px，不拥有内部 Pane 内容 |
-| Agent Sidebar 导航与各功能 Pane 的布局 | [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `files::FilesLayout` / `scm::ScmLayout` | 委托；zeterm 只提供主题投影、workspace 快照与 shell slot |
+| SidebarPart 显隐、preferred width 与 resize gesture | `sidebar_part::SidebarPartState` / `zeta-ui::Sash` | ✅；宽度限制为 240–560px，不拥有内部 feature state |
+| SidebarPart 导航与各 Pane 的布局 | `zeterm/src/pane_host` + [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `files::FilesLayout` / `scm::ScmLayout` | 委托；SidebarPart 只提供外层 shell slot，具体 Files/Diff view 由 feature crate 绘制 |
 | Files 层级树与模糊搜索 | [`zeta-agent-sidebar`](agent-sidebar/README.md) 的 `files::FilesState` / `files::FilesPane` / `zeta-ui::TreeView` / `ListView` / `zeta-file-search` | ✅；目录懒加载、稳定 mounted-node ID、展开/收起和 24px 虚拟行已接入；zeterm 只适配 App Server 目录 DTO 并执行打开/加载动作 |
 | UTF-8 文件保存 baseline、磁盘版本与外部变化冲突 | `zeta-text-file::TextFileLifecycle` | 委托；Native 只提供当前 editor text 与 I/O adapter |
 | 语言服务 composition、持久化设置、文档/请求 freshness 与 presentation | `language_service_host::NativeLanguageService` / `language_server_settings_model::LanguageServerSettingsState` / `file_editor_language_features` / `zeta-language-service` | ✅；Rust/JSON/Shell 独立设置与 runtime state，diagnostics，latest-only pointer hover，Ctrl/Cmd+Space completion popup/安全 edit 接受和 F12 definition navigation 已接入；文件读取仍通过 App Server authority |
@@ -128,11 +129,12 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Top Bar 左右 sidebar toggle `ActionBar` | `titlebar::Titlebar` | ✅ |
 | 原生窗口控件占位 | `zui::WindowControlInsets` | 委托；Titlebar 只增加自身内容间距 |
 | 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 委托；不拥有 Session content 或 tabpanel |
+| NavBar 导航容器（计划） | `zeta-ui` presentation composition + Native Titlebar/Sidebar host | 尚未作为独立 public component；只计划承载横向/纵向排列、slot 与 overflow/scroll geometry，不拥有 TabInput 或 provider state |
 | 多行编辑、caret/selection、find/replace、自动缩进、undo/redo、IME 与 syntax projection | `zeta-editor::CodeEditorDocument` / `CodeEditor` | 委托；Composer 与中心文件 Editor 都只转交平台输入，editor 内部管理文本、搜索替换、缩进、parser/revision/token、fold 与 hit-test |
 | 文本差异计算、行映射与字符级范围 | `zeta-diff::DiffDocument` | 委托；Native 不复制 diff 算法 |
 | 单列/并排及多文件只读差异展示 | `zeta-editor::DiffEditorDocument` / `DiffEditor` / `MultiDiffEditor` | 委托；Native 只按文件扩展名选择 language，editor 内部维护两侧 parser/revision/token；Changes pane 使用窄栏 Unified presentation |
-| 可折叠 Workbench Navigator、名称搜索与多 Session/Settings Tab | `session_sidebar_toolbar::SessionSidebarToolbar` / `session_search::SessionSearch` / `session_tab_list::WorkbenchTabList` / `workbench::WorkbenchItem` | ✅；Add 通过 App Server 创建 Session/Thread，Session tab 激活切换 Thread projection 并绑定独立 Terminal PTY，Settings 是不伪造 Session 的 singleton item |
-| 可折叠 Agent Sidebar 产品组合 | `zeta-agent-sidebar` 的 `AgentSidebarNavigation` / `files::FilesToolbar` / `FilesPane` / `scm::EditorPane` | 委托；Native 只负责外层显隐、主题映射和 action 执行 |
+| 可折叠 Workbench Navigator、名称搜索与多 Session/Settings Tab | `session_sidebar_toolbar::SessionSidebarToolbar` / `session_search::SessionSearch` / `session_tab_list::WorkbenchTabList` / `tab_input::{TabInput,TabInputModel}` / `workbench` | ✅；`TabInputModel` 统一维护 Session 与 singleton Settings 的逻辑输入和 active selection，UI `ElementId` 只在 projection 边界分配，Add 通过 App Server 创建 Session/Thread 并绑定独立 Terminal PTY |
+| 可折叠 SidebarPart 产品组合 | `SidebarPartState` + `pane_host::PaneHost` + `zeta-agent-sidebar` 的 `AgentSidebarNavigation` / `files::FilesToolbar` / `FilesPane` / `scm::EditorPane` | 委托；Native 只负责外层显隐、Pane binding、主题映射和 action 执行 |
 | 锚点浮层定位与独立 layer 合成 | `zeta-ui::ContextView` | 委托；不拥有显示生命周期或输入路由 |
 | 无边框下拉 surface、可选 header、item geometry 与默认选择 | `zeta-ui::Dropdown` | 委托；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、item geometry 与默认选择 | `zeta-ui::ContextMenu` | 委托；不拥有 Session identity、关闭或 command |
@@ -179,7 +181,7 @@ zeterm → zui::{app, window, input, ui, runtime, services, render}
             → zeterm-keybinding-ui → zeta-keybinding
                                   → zeta-ui → zui
             → zeta-app-server-client
-            → zeta-remote → zeta-remote-connections
+            → zeta-remote → zeta-remote-connections → zeta-remote-host
             → zeta-protocol
             → zeta-terminal
             → zeta-text-file
@@ -205,7 +207,7 @@ Native App 是让 Agent 获得完整工作区开发能力、让用户按结果�
 | `titlebar::Titlebar` | 窗口拖拽区和左右 sidebar toggle `ActionBar`；不绘制标题文案 | Top Bar | ✅ |
 | `zeta_ui::layout::RootLayout` | 用 `GridLayout` 解析固定 Product leaf 与可选 Inspector leaf | Native window 根布局 | ✅；窗口扩展后 Inspector 获得独立 360px sibling leaf，Product bounds 不变 |
 | `ShellLayout` | 组合 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | Top Bar 与 Workspace 外部布局 | ✅；Sessions 使用外层单轴 split |
-| `zeta_ui::layout::TerminalWorkspaceLayout` | 用 `GridLayout` 投影活动终端与可选 Agent Sidebar Leaf bounds | Workspace Pane geometry adapter | ✅；尚无多 Terminal Pane Tree；Session/Thread 与 Session-to-PTY switching 由 Native/App Server adapter 负责 |
+| `zeta_ui::layout::PaneGroupLayout` / `zui::GridLayout` | 用递归 Grid 投影 Terminal PaneGroup 的每个 Pane 与 owning-split Sash | Workspace Pane geometry adapter | ✅；PaneTree mutation、Session-to-PTY binding 与逐 Pane runtime 仍由 Native host 负责 |
 | `zeta-commands` / `command_dispatch` / `keybindings` / `keybindings_resource` / `keyboard_shortcuts` | 把 pointer/menu 的 `ElementId` 与标准化键盘事件映射到同一 `CommandRequest`，再交给 `CommandRegistry` 的宿主 handler；向 `zeterm-keybinding-ui` 提供命令行、稳定 identity 和保存 adapter | Product command 与快捷键输入层 | ✅；支持完整 `when` 表达式、冲突/错误诊断、最多四段 Chord 与 keycap UI |
 | `shell_scene` / `thread_timeline` | Agent Surface 绘制 canonical Thread items；Terminal Surface 绘制活动 grid | Agent Workspace / Terminal compatibility | ✅ |
 | `layout_inspector` | `Cmd/Ctrl+Shift+I` 开关检查面板，面板 cursor action 显式开关选取，点击锁定最深检查节点，Escape 先停止选取再关闭 | Native UI layout inspection | ✅；原生窗口向右扩展独立层级面板，自动显示 ancestor、authored row/column/width/height、computed size/padding/gap/radius、layer 与源码位置 |
@@ -215,12 +217,12 @@ Native App 是让 Agent 获得完整工作区开发能力、让用户按结果�
 | `session_sidebar_toolbar` / `session_search` | 整行组合 `SearchBox` 与右侧 `ActionBar`；按 session name 执行大小写不敏感过滤，并把 Add 暴露为稳定 action | Session 搜索与新建入口 | 搜索、新建 Session/Thread 和新 tab projection 已接通 |
 | `session_context_menu` | 右键当前 Session Tab 后，用 `ContextMenu` 呈现 Pin、Close、Rename、Fork；拥有 outside click、Escape、键盘导航和焦点恢复 | Session action surface | 通用基座提供柔和阴影、2px padding 与 4px radius，打开默认选择 Pin；真实 mutation 仍未执行 |
 | `zeta-editor::CodeEditor` | 多行 Unicode 编辑、selection、history、IME/syntax projection、Document/Compact presentation、soft wrap 与可见行绘制 | CodeEditor | 委托；Composer 与文件 Editor 都已接入平台事件、focus、caret blink、IME、pointer caret/drag、clipboard 和垂直 viewport；文件 Editor 启用 soft wrap 与拖选越界自动滚动 |
-| `zeta-agent-sidebar::AgentSidebarNavigation` | 只负责 Changes/Files 的跨功能切换和导航语义 | Agent Sidebar navigation | ✅；不拥有 Files/SCM 功能布局 |
+| `zeta-agent-sidebar::AgentSidebarNavigation` | 只负责 Changes/Files 的跨功能切换和导航语义 | SidebarPart navigation | ✅；不拥有 Files/SCM 功能布局 |
 | `zeta-agent-sidebar::files::FilesLayout` / `FilesToolbar` / `FilesState` / `FilesPane` | Files 自己拥有 36px 功能 toolbar、Refresh、ahead/behind、Search、文件树与搜索结果；Native 只通过 App Server 适配 `DirectoryEntry` | Files Pane | ✅；pointer/Enter/Space 产生 crate action，由宿主加载目录或打开文件 |
 | `zeta-agent-sidebar::scm::ScmLayout` / `ScmState` / `EditorPaneState` / `EditorPane` | SCM 自己拥有 Changes toolbar slot、changed-file snapshot、language-aware `DiffEditorDocument`、整体滚动位置、scrollbar pointer capture/animation、每文件 `DiffEditorState` 和 `MultiDiffEditorLayout` | Changes Pane | ✅；Native 只提供 `ScmDiff` 和主题投影 |
 | `zeta-editor::DiffEditor` / `MultiDiffEditor` | DiffEditor 提供 SideBySide/Unified presentation 与未修改区间折叠投影；MultiDiffEditor 再纵向组合多个文件 section、发布每文件 fold identity 并裁剪不可见项 | 多文件差异文档 | Changes 固定宽度栏显式选择 Unified；文件读取、diff 计算、持久状态与产品输入路由不属于 editor crate |
 | terminal grid / PTY / scrollback | grid、PTY 与会话内有界回滚已接通，跨重启持久化尚无 | 活动 Terminal Session runtime | 部分具备 |
-| multi-session projection / switching | App Server Session/Thread 的创建、动态 tab projection 和切换已接通；每个 Session Tab 绑定独立本地 PTY，切换时保留各自 TerminalCore 与 shell 进程 | 多会话入口 | 已实现；Session/Thread/用户消息不跨 zeterm 重启恢复，Session action mutation 与 Terminal Pane 分屏仍是当前限制 |
+| multi-session projection / switching | App Server Session/Thread 的创建、动态 tab projection 和切换已接通；每个 Session Tab 绑定独立本地 PTY，切换时保留各自 TerminalCore 与 shell 进程 | 多会话入口 | 已实现；Session/Thread/用户消息与 PaneGroup 不跨 zeterm 重启恢复，Session action mutation 仍是当前限制 |
 
 CodeEditor/DiffEditor/MultiDiffEditor 的实现 ownership、`DiffSideRows` 投影、显示列 contract、
 测试和当前限制由 [`zeta-editor` README](editor/README.md) 维护。zeterm 负责 changed-file
@@ -229,10 +231,10 @@ collection、文件 identity、整体滚动位置和每文件 `DiffEditorState`�
 binary、非 UTF-8 与单侧超过 2 MiB 的文件；index-only 对比仍是后续接线。
 
 当前已用 `zui::SplitViewLayout` 与 `zeta-ui::Sash` 支持 Sessions/Main 的单轴 resize，并用
-`zui::GridLayout` 作为 Terminal Workspace 的递归几何入口。当前 Grid 输入只有一个可见活动
-终端 Leaf，因此窗口 resize 仍从这一 Leaf 的 logical viewport 计算 rows/columns，再把同一
-尺寸发送给所有绑定的 terminal grid 和 PTY。多 Pane 还需要 native 拥有 Pane Tree、逐 Pane
-`TerminalSession`/scroll/selection/composer 状态以及 split command；这些不能由几何层伪造。
+`zui::GridLayout` 作为 Terminal Workspace 的递归几何入口。Native host 为每个 Session Tab
+保存 PaneTree、active Pane、独立 `TerminalSession`/scroll/selection 状态和 split command；
+窗口 resize 与 Sash 调整会按每个 Pane 的 logical viewport 计算 rows/columns，并分别同步
+对应 terminal grid 和 PTY。
 
 ## 当前执行路径
 
@@ -251,7 +253,7 @@ main
       → resize / scale-factor update → rebuild scene
           → TerminalWorkspace::resize_all → each TerminalSession::resize
               → Local PTY 或 Remote App Server `terminal/resize`
-      → AgentSessionEvent::Snapshot/Update → SessionTabState/TerminalWorkspace binding + ThreadProjection
+      → AgentSessionEvent::Snapshot/Update → TabInputModel/TerminalWorkspace binding + ThreadProjection
           → unknown Session reserves a terminal key and starts background terminal creation
           → TerminalReady → adopt Local PTY 或 Remote App Server terminal runtime
           → ThreadTimeline
@@ -295,14 +297,14 @@ main
           → SessionSidebarState drag snapshot
           → SplitViewLayout resize constraints
           → shell bounds + terminal grid/PTY resize
-      → Agent Sidebar toggle
-          → AgentSidebarState visibility
+      → SidebarPart toggle
+          → SidebarPartState visibility
           → shell bounds + terminal grid/PTY resize
-          → AgentSidebarNavigation → Changes / Files selection
+          → PaneHostScope::Sidebar → AgentSidebarNavigation → PaneInput::Diff / PaneInput::Files
               → FilesLayout → FilesToolbar + 根目录树 / 模糊路径匹配结果
               → ScmLayout → MultiDiffEditor → visible file sections → DiffEditor
       → zeta_ui::layout::TerminalWorkspaceLayout
-          → GridLayout → active terminal + optional Agent Sidebar leaf bounds
+          → GridLayout → active terminal + optional SidebarPart leaf bounds
           → terminal rows/columns → TerminalSession resize
       → Tab / Shift+Tab / Arrow keys → unified focus navigation
           → Enter / Space → focused action activation
@@ -326,20 +328,20 @@ cargo run --manifest-path Cargo.toml -p zeterm
 
 `shell_scene::ShellLayout` 把 titlebar 下方 body 先交给 Sessions/Main 横向
 `SplitViewLayout`，再把剩余区域交给 `zeta_ui::layout::TerminalWorkspaceLayout`；
-后者通过 `GridLayout` 同时投影活动 Terminal Leaf 和可选的右侧 Agent Sidebar Leaf。当前活动
+后者通过 `GridLayout` 同时投影活动 Terminal Leaf 和可选的右侧 SidebarPart leaf。当前活动
 Terminal Leaf 再分成上方 output viewport 与固定底部 composer；alternate screen 临时使用完整
 活动 Terminal Leaf。
 `SessionSidebarState` 保存 visibility、preferred width 与当前 `SplitViewResizeSnapshot`，
 viewport 临时约束只改变 effective width，不覆盖 preferred width。`Sash` 从
 `SplitViewSashLayout::track_bounds` 同源计算 drag target 与 hover/active feedback；
-`AgentSidebarState` 保存显隐、preferred width 与当前 `SplitViewResizeSnapshot`，并向外层 Grid
+`SidebarPartState` 保存显隐、preferred width 与当前 `SplitViewResizeSnapshot`，并向外层 Grid
 提供右侧 Sash 所需的 pane sizing；宽度限制为 240–560px，始终为 main Pane 保留至少 240px；
-`TerminalWorkspaceLayout` 解析右栏 Leaf bounds；`files::FilesLayout` 和 `scm::ScmLayout`
-分别把各自的功能 bounds 解析为 36px toolbar slot 与 active content pane；跨功能的
-Changes / Files 切换只由 `AgentSidebarNavigation` 负责。
-`zeta-agent-sidebar::AgentSidebar` 保存 Files / Changes 选择；`files::FilesState` 保存文件搜索、
-树与滚动，`scm::ScmState` 保存 changed-file snapshot 和 `EditorPaneState`。Native 的
-`AgentSidebarWorkspace` 只负责将 App Server/`WorkspaceContext` 快照适配为 crate 类型，并执行
+`TerminalWorkspaceLayout` 解析右栏 Leaf bounds，SidebarPart 内的 `PaneGroup` 再把 content
+leaf 投影给具体 view；`files::FilesLayout` 和 `scm::ScmLayout` 分别把各自的功能 bounds
+解析为 36px toolbar slot 与 active content pane，跨功能选择由 host 的 PaneInput binding 驱动。
+`files::FilesState` 保存文件搜索、树与滚动，`scm::ScmState` 保存 changed-file snapshot 和
+`EditorPaneState`。Native 的
+`SidebarPaneWorkspace` 只负责将 App Server/`WorkspaceContext` 快照适配为 crate 类型，并执行
 Refresh、文件打开和子目录加载动作。Refresh、Composer Changes action 和 shell command completion
 通过 App Server `git/textDiff` 重建上游领先/落后距离、HEAD/working-tree `DiffDocument` 与增删行统计；
 Native 按 path 选择 `CodeEditorLanguage` 后立即包装为 `DiffEditorDocument`，此后 parser/revision/token
@@ -503,7 +505,7 @@ roving keyboard focus；选择后同步替换 Files 根、文件
 `SearchBox`；输入按 branch name 实时过滤，方向键/Tab 从搜索框进入结果，Enter 选择首个匹配项，
 并支持 clipboard 与 IME。当前分支置顶并标记，其他本地分支分页展示；候选和选择分别通过
 `git/branch/list` 与 `git/branch/switch`。Git 因工作树冲突拒绝时，菜单保持打开并显示失败
-状态，不丢弃用户改动。Changes Button 会刷新 Git projection、展开 Agent Sidebar 并选择 Changes
+状态，不丢弃用户改动。Changes Button 会刷新 Git projection、展开 SidebarPart 并选择 Changes
 Pane；environment picker 尚未接入。
 在 shell integration 提供 cwd 事件前，目录标签表示用户选择的工作区，而不推断 PTY 内部 `cd`。
 `workspace_path_picker_path` 中的 `canonical_directory`、`resolve_directory_query` 和
@@ -616,8 +618,9 @@ Remote Server 参与，未来非 SSH transport 或远端动态 endpoint 才应�
 
 当当前窗口本身是 Remote authority 时，同一 location picker 还会显示
 `Manage Remote tunnels…`；也可将 `workbench.action.manageRemoteTunnels` 绑定到自定义快捷键。
-`remote_tunnel_process::RemoteTunnelHost` 从 `AgentSessionTarget` 复用该窗口
-已选择的 OpenSSH host 与 executable，在后台线程持有并监督每个 `ssh -N` child；Renderer-facing
+zeterm 的 `remote_tunnel_process::NativeRemoteTunnelHost` adapter 从 `AgentSessionTarget` 复用该窗口
+已选择的 OpenSSH host 与 executable，并调用 `zeta-remote-host::RemoteTunnelHost` 在后台线程持有和监督每个
+`ssh -N` child；Renderer-facing
 `RemoteTunnelManagerState` 只保存远端端口、分配后的本机 loopback 端口和
 Starting/Forwarding/Recovering/Stopping 状态。面板只接受远端端口，不能提交 host、凭据、监听地址或 SSH options。
 关闭面板不停止 Tunnel；再次打开可查看或逐项 Stop，关闭 zeterm 窗口则由 Native host owner 收掉全部

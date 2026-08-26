@@ -10,13 +10,14 @@ use zui::ui::UiFrame;
 
 use super::RemoteTunnelManager;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
+use crate::remote_tunnel_process::RemoteTunnelId;
 use crate::shell_style::SHELL_PALETTE;
 
 #[test]
 fn manager_is_modal_accessible_and_exposes_active_tunnel_controls() {
     let mut state = RemoteTunnelManagerState::default();
     state.open("build.example", None);
-    state.start_succeeded(1, NonZeroU16::new(3_000).unwrap());
+    state.start_succeeded(RemoteTunnelId::new(1), NonZeroU16::new(3_000).unwrap());
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let manager = RemoteTunnelManager::new(

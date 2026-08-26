@@ -16,9 +16,9 @@ use std::fs;
 use std::path::Path;
 
 #[cfg(unix)]
-use crate::launch_test_support::initialize_response;
-#[cfg(unix)]
 use crate::launch_test_support::make_executable;
+#[cfg(unix)]
+use crate::launch_test_support::{incompatible_initialize_response, initialize_response};
 #[cfg(unix)]
 use zeta_app_server_protocol::schema_hash;
 
@@ -173,7 +173,7 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
         &fake_ssh,
         &log,
         "/runtime/one/bin/zeta-server",
-        "obsolete-schema",
+        incompatible_initialize_response("obsolete-schema"),
     );
 
     let mut rejected = rollback_launch(&fake_ssh);
@@ -190,7 +190,7 @@ fn rollback_is_compatibility_checked_before_the_stored_generations_swap() {
         &fake_ssh,
         &log,
         "/runtime/one/bin/zeta-server",
-        &schema_hash(),
+        initialize_response(&schema_hash()),
     );
     let mut accepted = rollback_launch(&fake_ssh);
     accepted.prepare_remote_runtime_with_store(&store).unwrap();
@@ -259,8 +259,7 @@ fn remote_arguments(fake_ssh: &Path) -> Vec<String> {
 }
 
 #[cfg(unix)]
-fn write_runtime_fake_ssh(path: &Path, log: &Path, runtime: &str, server_schema_hash: &str) {
-    let response = initialize_response(server_schema_hash);
+fn write_runtime_fake_ssh(path: &Path, log: &Path, runtime: &str, response: String) {
     fs::write(
         path,
         format!(

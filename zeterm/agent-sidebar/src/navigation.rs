@@ -16,7 +16,7 @@ use crate::shell_interaction::{
 
 const ITEM_WIDTH: f32 = 64.0;
 
-/// Horizontal pane switcher hosted by the Agent Sidebar toolbar.
+/// Horizontal Changes/Files pane switcher hosted by a Sidebar Part toolbar.
 pub struct AgentSidebarNavigation {
     bounds: Rect,
     action_bar: ActionBar,

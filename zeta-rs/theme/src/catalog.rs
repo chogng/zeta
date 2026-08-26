@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::color::FloatColor;
 use crate::document::{
-    valid_theme_id, valid_theme_label, ColorScheme, ColorTransform, ColorValue, ThemeDocument,
+    ColorScheme, ColorTransform, ColorValue, ThemeDocument, valid_theme_id, valid_theme_label,
 };
 use crate::size::{ThemeSize, ThemeSizeUnit};
 use crate::snapshot::ThemeSnapshot;

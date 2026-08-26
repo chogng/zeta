@@ -2,9 +2,9 @@ use crate::launch::LaunchParseError;
 use crate::launch::RemoteRuntimeSource;
 use crate::launch::ZetermLaunch;
 #[cfg(unix)]
-use crate::launch_test_support::initialize_response;
-#[cfg(unix)]
 use crate::launch_test_support::make_executable;
+#[cfg(unix)]
+use crate::launch_test_support::{incompatible_initialize_response, initialize_response};
 #[cfg(unix)]
 use zeta_app_server_protocol::schema_hash;
 use zeta_remote::RemoteProfile;
@@ -173,7 +173,7 @@ fn remote_launch_checks_runtime_readiness_before_starting_the_ui() {
 fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_installs() {
     let directory = tempfile::tempdir().unwrap();
     let incompatible_ssh = directory.path().join("incompatible-ssh");
-    let obsolete_response = initialize_response("obsolete-schema");
+    let obsolete_response = incompatible_initialize_response("obsolete-schema");
     fs::write(
         &incompatible_ssh,
         format!(
@@ -196,7 +196,7 @@ fn explicit_incompatible_runtime_is_not_replaced_and_transport_failure_never_ins
     let error = explicit
         .prepare_remote_runtime_with_store(&profile_store(&directory))
         .unwrap_err();
-    assert!(error.contains("schema hash mismatch"));
+    assert!(error.contains("protocol major mismatch"));
     assert!(error.contains("will not replace it automatically"));
 
     let transport_ssh = directory.path().join("transport-ssh");
@@ -394,7 +394,7 @@ fn write_installing_fake_ssh(
         }
     };
     let current_response = initialize_response(&schema_hash());
-    let obsolete_response = initialize_response("obsolete-schema");
+    let obsolete_response = incompatible_initialize_response("obsolete-schema");
     fs::write(
         path,
         format!(

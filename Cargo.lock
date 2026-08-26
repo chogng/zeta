@@ -11368,6 +11368,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-remote-host"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "zeta-remote",
+ "zeta-remote-connections",
+]
+
+[[package]]
 name = "zeta-remote-server"
 version = "0.1.0"
 dependencies = [
@@ -11833,6 +11842,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
+ "zeta-remote-host",
  "zeta-server-host",
  "zeta-settings",
  "zeta-slash-commands",

@@ -185,6 +185,8 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
     static COPY: OnceLock<KeySequence> = OnceLock::new();
     static PASTE: OnceLock<KeySequence> = OnceLock::new();
     static SAVE: OnceLock<KeySequence> = OnceLock::new();
+    static SPLIT_HORIZONTAL: OnceLock<KeySequence> = OnceLock::new();
+    static SPLIT_VERTICAL: OnceLock<KeySequence> = OnceLock::new();
     match command {
         ZetermCommandId::ToggleTerminalSurface => Some(TOGGLE_TERMINAL.get_or_init(|| {
             KeySequence::single(
@@ -207,6 +209,17 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
                 Chord::logical("s", ShortcutModifiers::primary()).expect("builtin key"),
             )
         })),
+        ZetermCommandId::SplitTerminalHorizontal => Some(SPLIT_HORIZONTAL.get_or_init(|| {
+            KeySequence::single(
+                Chord::logical("\\", ShortcutModifiers::primary()).expect("builtin key"),
+            )
+        })),
+        ZetermCommandId::SplitTerminalVertical => Some(SPLIT_VERTICAL.get_or_init(|| {
+            KeySequence::single(
+                Chord::logical("\\", ShortcutModifiers::primary().with_shift())
+                    .expect("builtin key"),
+            )
+        })),
         ZetermCommandId::OpenLanguageServerSettings
         | ZetermCommandId::ManageRemoteTunnels
         | ZetermCommandId::ToggleSessionSidebar
@@ -224,7 +237,10 @@ fn default_keybinding(command: ZetermCommandId) -> Option<&'static KeySequence> 
         | ZetermCommandId::PickExecutionLocation
         | ZetermCommandId::PickWorkingDirectory
         | ZetermCommandId::PickGitBranch
-        | ZetermCommandId::ShowWorkspaceDiff => None,
+        | ZetermCommandId::ShowWorkspaceDiff
+        | ZetermCommandId::FocusNextPane
+        | ZetermCommandId::FocusPreviousPane
+        | ZetermCommandId::ClosePane => None,
     }
 }
 
@@ -257,6 +273,20 @@ fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition
         "s",
         ShortcutModifiers::primary(),
         ZetermCommandId::Save,
+        NativeBindingCondition::Always,
+    );
+    register(
+        &mut bindings,
+        "\\",
+        ShortcutModifiers::primary(),
+        ZetermCommandId::SplitTerminalHorizontal,
+        NativeBindingCondition::Always,
+    );
+    register(
+        &mut bindings,
+        "\\",
+        ShortcutModifiers::primary().with_shift(),
+        ZetermCommandId::SplitTerminalVertical,
         NativeBindingCondition::Always,
     );
     register_direct_terminal_clipboard(&mut bindings, platform);

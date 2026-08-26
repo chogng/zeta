@@ -20,13 +20,10 @@ impl NativeApp {
             self.dismiss_git_branch_context_menu();
             return;
         }
-        let anchor = self.presentation.as_ref().and_then(|presentation| {
-            presentation
-                .accessibility_nodes
-                .iter()
-                .find(|node| node.id == CONTEXT_GIT_BRANCH)
-                .map(|node| node.bounds)
-        });
+        let anchor = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.element_bounds(CONTEXT_GIT_BRANCH));
         let Some(anchor) = anchor else {
             return;
         };
@@ -83,7 +80,7 @@ impl NativeApp {
                 };
                 self.workspace_context
                     .apply_git_projection(Some(&projection));
-                self.agent_sidebar_workspace
+                self.sidebar_pane_workspace
                     .replace_workspace(&self.workspace_context);
                 self.refresh_files_from_app_server();
                 self.dismiss_git_branch_context_menu();

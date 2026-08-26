@@ -132,7 +132,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //zeterm:zeterm` 已�
 - [x] 将 `IconId`、SVG definition 和 rendering mode 收入 `zui` 通用 contract；`zeta-icons`
       只保留可选的 zeterm product catalog，`zui`/`zeta-ui` 不依赖该 catalog；
 - [x] 将 Root/Inspector 和 Terminal Workspace 的 pane topology 收敛到 `zeta-ui::layout`，Native 只投影
-      `AgentSidebarState` 为 `SidebarLayoutSpec`；
+      `SidebarPartState` 为 `SidebarLayoutSpec`；
 - [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui`，以 recording backend 验证通用
       组件可脱离 zeterm product host 组合；
 - [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list

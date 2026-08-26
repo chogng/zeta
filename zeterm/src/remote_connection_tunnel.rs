@@ -15,11 +15,11 @@ use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::SshTunnelDiagnostics;
 use zeta_remote_connections::SshTunnelOptions;
 use zeta_remote_connections::select_available_loopback_port;
+use zeta_remote_host::RemoteTunnelStartup;
+use zeta_remote_host::wait_for_remote_tunnel;
 
 use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 use crate::remote_connection_cli::load_connection;
-use crate::remote_tunnel_readiness::RemoteTunnelStartup;
-use crate::remote_tunnel_readiness::wait_for_remote_tunnel;
 
 const TUNNEL_PROCESS_POLL: Duration = Duration::from_millis(100);
 

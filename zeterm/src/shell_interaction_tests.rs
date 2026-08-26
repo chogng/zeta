@@ -32,7 +32,7 @@ fn context_actions_have_stable_unique_element_identities() {
 }
 
 #[test]
-fn agent_sidebar_pane_actions_have_stable_labels_and_identities() {
+fn sidebar_part_pane_actions_have_stable_labels_and_identities() {
     let ids = AgentSidebarPaneAction::ALL.map(AgentSidebarPaneAction::element_id);
     let labels = AgentSidebarPaneAction::ALL.map(AgentSidebarPaneAction::label);
 
@@ -75,14 +75,14 @@ fn session_tab_identities_are_unique_and_round_trip_to_their_indices() {
 }
 
 #[test]
-fn session_identity_namespace_does_not_overlap_agent_sidebar_elements() {
+fn session_identity_namespace_does_not_overlap_sidebar_part_elements() {
     let session_ids = [
         SESSION_TAB_LIST,
         ACTIVE_SESSION_TAB,
         SESSION_HEADER,
         session_tab_id(1),
     ];
-    let agent_sidebar_ids = [
+    let sidebar_part_ids = [
         AGENT_FILE_SEARCH_INPUT,
         zeta_agent_sidebar::AGENT_FILES_TOOLBAR,
     ];
@@ -90,7 +90,7 @@ fn session_identity_namespace_does_not_overlap_agent_sidebar_elements() {
     assert!(
         session_ids
             .into_iter()
-            .all(|session| !agent_sidebar_ids.contains(&session))
+            .all(|session| !sidebar_part_ids.contains(&session))
     );
 }
 

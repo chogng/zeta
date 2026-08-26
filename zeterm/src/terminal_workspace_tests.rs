@@ -147,3 +147,31 @@ fn failed_pending_terminal_releases_session_binding_for_a_retry() {
         EnsureReservation::Pending(PendingTerminalReservation::Start(_))
     ));
 }
+
+#[test]
+fn standalone_pane_keys_can_bind_to_the_current_session_and_activate() {
+    let mut state = TerminalWorkspaceState::default();
+    let root = state
+        .reserve_initial()
+        .expect("initial terminal reservation");
+    let session = session_id("session-1");
+    state.ensure_for_session(&session);
+    assert_eq!(
+        state.finish_pending(root),
+        Some(TerminalReadyPlacement::Active)
+    );
+
+    let pane = state.reserve_standalone();
+    state.bind_key_to_session(pane, session.clone());
+
+    assert_eq!(state.session_id_for_key(pane), Some(session));
+    assert_eq!(
+        state.activation_for_key(pane),
+        ActivationDecision::Pending(pane)
+    );
+    assert_eq!(
+        state.finish_pending(pane),
+        Some(TerminalReadyPlacement::Active)
+    );
+    assert_eq!(state.active_key, Some(pane));
+}

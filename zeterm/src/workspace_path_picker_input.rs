@@ -25,13 +25,10 @@ impl NativeApp {
             self.dismiss_workspace_path_picker();
             return;
         }
-        let anchor = self.presentation.as_ref().and_then(|presentation| {
-            presentation
-                .accessibility_nodes
-                .iter()
-                .find(|node| node.id == CONTEXT_WORKING_DIRECTORY)
-                .map(|node| node.bounds)
-        });
+        let anchor = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.element_bounds(CONTEXT_WORKING_DIRECTORY));
         let Some(anchor) = anchor else {
             return;
         };
@@ -111,7 +108,7 @@ impl NativeApp {
         }
         self.workspace_context
             .apply_git_projection(switched.git.as_ref());
-        self.replace_agent_sidebar_workspace();
+        self.replace_sidebar_pane_workspace();
         self.language_service
             .replace_workspace(self.workspace_context.working_directory());
         self.file_editor_host.replace_workspace();

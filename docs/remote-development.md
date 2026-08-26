@@ -44,7 +44,7 @@ Terminal、Search、Code Index 和语言协议。前端不会为每个领域复�
 | 回退 Desktop Remote runtime | 命令面板的 `Remote: Roll Back Remote Runtime` 请求 Main 验证 previous runtime；验证成功并原子切换 profile 后，Main 立即关闭或放弃旧 broker lease，再替换 Remote backend，不会把必然失败的 attach 重试到 30 秒超时。Renderer 将这些终端标成可 Relaunch 的 error | 确认回滚；验证失败时现有连接和终端保持不变，成功后按需 Relaunch 原终端实例 |
 | 从 Remote 窗口打开本地文件夹 | 当前 Remote 窗口保持原 Workspace，Main 为本地文件夹打开独立窗口；目标已打开时聚焦已有窗口 | 使用普通 Open Folder 动作，无需重启产品 |
 | 在 Desktop Remote Browser 打开远端本机服务 | Browser 与 App Server Browser Automation 仍接收 `http(s)://localhost/127.0.0.1/[::1]:port`；Electron Main 自动为该远端端口建立 Tunnel，只把分配后的本机 URL 交给 WebContents，并继续向 Renderer/Agent 报告用户请求的原 URL | 照常输入远端服务的 loopback URL；同一 Browser target 的同源导航和历史记录复用 lease，关闭 target 后自动关闭其 Tunnel |
-| 端口转发 | Electron Main 与 zeterm Native Host 都提供窗口级 loopback-only Tunnel lifecycle；只有本机 listener 稳定可连接且 SSH child 仍存活才发布 Open/Forwarding，运行中 SSH 断开会在 30 秒内以相同本机端口有界恢复。Desktop 的 Ports 面板直接投影 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote zeterm 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`zeterm remote tunnel <name> --remote-port <port>` 仍提供前台 CLI | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
+| 端口转发 | `zeta-remote-host` 提供可复用的 loopback-only Tunnel 生命周期、稳定 listener gate、同端口有界恢复和 typed events；Electron Main 与 zeterm Native Host 各自把它接入窗口级 coordinator。Desktop 的 Ports 面板直接投影 Main-owned Tunnel catalog，可新增、Stop、Stop All 并显示 Open/Recovering/Failed；Remote zeterm 窗口可从 location picker 或可绑定命令 `workbench.action.manageRemoteTunnels` 打开管理面板；`zeterm remote tunnel <name> --remote-port <port>` 仍提供前台 CLI | 图形入口可关闭面板而保留 Tunnel，再次打开可查看或 Stop；首次启动失败立即报告，CLI 需保持前台运行。readiness 只证明本地 forward，不证明远端应用协议已 ready；Debug stdio adapter 已直接在 Remote App Server 执行而不需要 Tunnel，socket/server adapter 与统一 Remote Explorer 连接树仍未接入 |
 | 远程多根 Workspace | 尚未完成 | 等待后续独立能力 |
 
 启动参数使用 OpenSSH 配置中的 host 名称，而不是包含密码或私钥的连接串：
@@ -156,9 +156,9 @@ flowchart LR
 | Electron Main 安装准备窗口 | 每个 Remote 窗口启动门禁持有自己的安装 operation、`AbortSignal` 和无凭据状态；独立 sandboxed Renderer 只能读取 host/phase、订阅变化或请求取消。关闭/取消只终止该窗口的本机安装命令，完成后仍等待精确 runtime 复核再打开 Workbench | artifact 路径、SSH option、凭据、安装决策或普通 Workbench IPC |
 | Desktop Workbench 窗口 registry | 合并同一 Workspace 的并发打开；为每个不同目标建立独立 Workspace context、supervisor、Browser Automation、IPC 与 Remote context；保存多个窗口的位置并按最近活动顺序聚焦 | 跨窗口共享 supervisor、把 Remote authority 热切换进已有窗口 |
 | Electron Main Remote 窗口上下文 | `RemoteWindowMainContext` 将一个窗口的 Agent、命名连接、Tunnel、手动重连、回滚路由和状态事件绑定到同一个 `AppServerSupervisor` 与 Workspace context；重连和回滚共用串行恢复门；Workspace 变化时关闭该窗口的全部 Tunnel，窗口销毁时再释放监听器和 Tunnel coordinator | 创建应用窗口、在多个窗口之间共享 supervisor、保存 SSH 凭据 |
-| Electron Main Remote Tunnel coordinator | `ssh -N`、本地/远端 loopback 绑定、同端口有界恢复、Tunnel 句柄和窗口/Workspace 销毁 | 公开监听、反向转发或领域协议 |
+| Electron Main Remote Tunnel coordinator | 调用 `zeta-remote-host` 管理 `ssh -N`、本地/远端 loopback 绑定和同端口有界恢复；自己拥有窗口/Workspace Tunnel lease、catalog 和销毁适配 | 公开监听、反向转发或领域协议 |
 | Electron Main Remote Browser adapter | 识别当前窗口是否为 Remote Workspace；把 Browser 的 loopback HTTP/HTTPS 顶层导航映射为 Tunnel load URL；按 requested/loaded origin 反向投影地址、保留历史 lease，并在 target 关闭、Tunnel 失败或 Workspace 变化时停止复用 | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理 |
-| zeterm Native Tunnel host | 从当前 Remote 窗口复用 host 与 OpenSSH executable；后台监督 `ssh -N`、自动本地端口、同端口有界恢复、可访问管理状态、Stop 和窗口级销毁 | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery |
+| zeterm Native Tunnel host | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `zeta-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 NativeEvent、可访问管理状态、Stop 和窗口级销毁 | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery |
 | `platform/remote` | Remote URI、authority、原生连接元数据和 IPC 契约 | 各领域业务状态 |
 | `workbench/services/remote` | 后端状态的只读 Workbench 投影 | 启动 SSH 或决定重连 |
 | `workbench/contrib/remote` | 状态栏、saved-host 选择/管理 Quick Pick 和 Remote 恢复协调 | 连接事实源、catalog 文件解析或 SSH 启动 |
@@ -459,7 +459,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
   Desktop Remote Terminal 可在 30 秒 lease 内恢复同一 broker 中的 PTY。该 lease 只覆盖短暂 transport
   中断，不覆盖远端主机重启、daemon 崩溃、runtime/broker generation 替换、跨设备漫游或长期离线；
   这些场景仍需要持久 session identity 与恢复协议。
-- Rust host layer、Desktop Main 与 zeterm Native host 都已提供 loopback-only Tunnel lifecycle；首次
+- `zeta-remote-host`、Desktop Main 与 zeterm Native host 都已提供 loopback-only Tunnel lifecycle；首次
   启动和恢复都必须先观察到稳定的本机 listener，两个产品 host 才会发布 Open/Forwarding，并会在运行中
   SSH 断开后以同一本机端口做 30 秒有界恢复。zeterm 还保留前台命名连接 Tunnel
   CLI。Desktop Browser 与 Browser Automation 已自动消费 loopback Tunnel；当前只重写顶层导航和
@@ -518,7 +518,8 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
   `zeta-ts/src/zeta/workbench/services/debug/browser/debugService.ts`、
   `zeta-ts/src/zeta/workbench/services/debug/browser/debugAdapterSession.ts`、
   `zeta-ts/src/zeta/workbench/contrib/debug/browser/debugViewPane.ts`
-- Shared Rust Remote identity/SSH/Tunnel primitives：`zeta-rs/remote`、`zeta-rs/remote-connections`
+- Shared Rust Remote identity/SSH/Tunnel primitives：`zeta-rs/remote`、`zeta-rs/remote-connections`、
+  `zeta-rs/remote-host`
 - Shared platform probe/package installer：`zeta-rs/remote-connections/src/install.rs`
 - Shared authenticated local catalog/network updater：`zeta-rs/remote-connections/src/catalog.rs`、
   `zeta-rs/remote-connections/src/runtime_updater.rs`
@@ -540,9 +541,9 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - zeterm Native connection manager：`zeterm/src/remote_connection_manager.rs`、
   `zeterm/src/remote_connection_manager_view.rs`、`zeterm/src/remote_connection_manager_input.rs`
 - zeterm pre-window CLI/Native launch progress protocol：`zeterm/src/launch_progress.rs`
-- zeterm foreground loopback Tunnel CLI/readiness gate：`zeterm/src/remote_connection_tunnel.rs`、
-  `zeterm/src/remote_tunnel_readiness.rs`
-- zeterm Native Tunnel host/manager：`zeterm/src/remote_tunnel_process.rs`、
+- zeterm foreground loopback Tunnel CLI：`zeterm/src/remote_connection_tunnel.rs`；readiness gate 与恢复
+  supervisor：`zeta-rs/remote-host`
+- zeterm Native Tunnel adapter/manager：`zeterm/src/remote_tunnel_process.rs`、
   `zeterm/src/remote_tunnel_manager.rs`、`zeterm/src/remote_tunnel_manager_input.rs`、
   `zeterm/src/remote_tunnel_manager_view.rs`
 - zeterm Remote bundle/build trust chain：`build/release/remote_runtime_bundle.py`、

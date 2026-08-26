@@ -37,13 +37,10 @@ impl NativeApp {
             self.dismiss_remote_connection_picker();
             return;
         }
-        let anchor = self.presentation.as_ref().and_then(|presentation| {
-            presentation
-                .accessibility_nodes
-                .iter()
-                .find(|node| node.id == CONTEXT_LOCATION)
-                .map(|node| node.bounds)
-        });
+        let anchor = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.element_bounds(CONTEXT_LOCATION));
         let Some(anchor) = anchor else {
             return;
         };

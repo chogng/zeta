@@ -1,4 +1,5 @@
-use super::{ImeCursorArea, PhysicalExtent};
+use super::ImeCursorArea;
+use super::PhysicalExtent;
 
 #[test]
 fn physical_extent_preserves_platform_pixel_dimensions() {

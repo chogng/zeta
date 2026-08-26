@@ -7,12 +7,16 @@ use zeta_remote_connections::SshTunnelReadiness;
 const TUNNEL_STARTUP_TIMEOUT: Duration = Duration::from_secs(12);
 const TUNNEL_READINESS_POLL: Duration = Duration::from_millis(10);
 
-pub(crate) enum RemoteTunnelStartup {
+/// Result of waiting for a local SSH Tunnel to expose its loopback listener.
+pub enum RemoteTunnelStartup {
+    /// The Tunnel is ready for use.
     Ready(SshTunnel),
+    /// The caller requested cancellation while the Tunnel was starting.
     Cancelled,
 }
 
-pub(crate) fn wait_for_remote_tunnel(
+/// Waits for a local SSH Tunnel to become ready or for the caller to cancel it.
+pub fn wait_for_remote_tunnel(
     mut tunnel: SshTunnel,
     mut cancelled: impl FnMut() -> bool,
 ) -> Result<RemoteTunnelStartup, String> {

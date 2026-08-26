@@ -26,11 +26,11 @@ use zeta_ui::ScrollState;
 
 pub(crate) use zeta_agent_sidebar::AgentSidebarView;
 
-pub(crate) struct AgentSidebarWorkspace {
+pub(crate) struct SidebarPaneWorkspace {
     sidebar: AgentSidebar,
 }
 
-impl Default for AgentSidebarWorkspace {
+impl Default for SidebarPaneWorkspace {
     fn default() -> Self {
         Self {
             sidebar: AgentSidebar::default(),
@@ -38,7 +38,7 @@ impl Default for AgentSidebarWorkspace {
     }
 }
 
-impl AgentSidebarWorkspace {
+impl SidebarPaneWorkspace {
     pub(crate) fn new(context: &WorkspaceContext) -> Self {
         let mut workspace = Self {
             sidebar: AgentSidebar::new(context.working_directory().to_path_buf()),
@@ -46,14 +46,6 @@ impl AgentSidebarWorkspace {
         };
         let _ = workspace.sync_repository(context);
         workspace
-    }
-
-    pub(crate) const fn active_view(&self) -> AgentSidebarView {
-        self.sidebar.active_view()
-    }
-
-    pub(crate) fn select_view(&mut self, view: AgentSidebarView) {
-        self.sidebar.select_view(view);
     }
 
     pub(crate) const fn editor(&self) -> &EditorPaneState {
@@ -265,5 +257,5 @@ fn directory_entries(entries: Vec<FsReadDirectoryEntry>) -> Vec<DirectoryEntry> 
 }
 
 #[cfg(test)]
-#[path = "agent_sidebar_workspace_tests.rs"]
+#[path = "sidebar_pane_workspace_tests.rs"]
 mod tests;

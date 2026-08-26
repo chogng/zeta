@@ -26,7 +26,7 @@ mod shell_interaction {
     pub const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(1, 39);
     pub const AGENT_FILES_TOOLBAR: ElementId = ElementId::scoped(1, 52);
 
-    /// The two stable pane-selection intents published by the Agent Sidebar.
+    /// The two stable pane-selection intents published by SidebarPart navigation.
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum AgentSidebarPaneAction {
         Changes,
@@ -122,7 +122,10 @@ pub use scm::ScmState;
 pub use scm::ScrollbarPointerOutcome;
 pub use style::AgentSidebarStyle;
 
-/// The active product pane in the Agent sidebar.
+/// A feature view that can be mounted in the sidebar Pane.
+///
+/// Selection is owned by the host's `PaneInput`; this enum is only the feature crate's
+/// presentation vocabulary for its navigation buttons.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum AgentSidebarView {
     Changes,
@@ -140,13 +143,12 @@ pub enum AgentSidebarAction {
     LoadChildren { element: ElementId, path: PathBuf },
 }
 
-/// Retained product state for Agent Sidebar panes.
+/// Retained product state for SidebarPart feature panes.
 ///
 /// Hosts provide Files and SCM snapshots and execute returned actions, keeping
 /// native platform and app-server dependencies outside this crate.
 #[derive(Default)]
 pub struct AgentSidebar {
-    active_view: AgentSidebarView,
     files: FilesState,
     scm: ScmState,
 }
@@ -158,12 +160,6 @@ impl AgentSidebar {
         sidebar
     }
 
-    pub const fn active_view(&self) -> AgentSidebarView {
-        self.active_view
-    }
-    pub fn select_view(&mut self, view: AgentSidebarView) {
-        self.active_view = view;
-    }
     pub const fn files(&self) -> &FilesState {
         &self.files
     }

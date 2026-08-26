@@ -22,10 +22,13 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Switch track、thumb、on/off 与交互状态 presentation | `zeta-ui::Switch` | ✅；值、输入路由和 accessibility 归 host |
 | Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
+| NavBar 导航容器 | 计划中的 `zeta-ui` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
 | 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
+| Terminal/heterogeneous PaneGroup geometry projection | `zeta-ui::layout::PaneGroupLayout` + `zui::GridLayout` | ✅；消费 host-owned、type-agnostic PaneTree，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput、PaneTree mutation、runtime 或 active Pane |
 | Workbench 的 Titlebar、Sessions、Main、Inspector Part/Pane topology | `zeta-ui::layout::{WorkbenchLayoutSpec,WorkbenchLayout}` | ✅；只拥有 Part/Pane geometry，TabInput state 与 scene composition 归 host |
 | Root/Inspector 与嵌套 Workspace topology | `zeta-ui::layout::{RootLayout,TerminalWorkspaceLayout}` | ✅；只拥有叶子 geometry，TabInput state 与 scene composition 归 host |
 | Workbench TabInput 的逻辑身份、集合和 active selection | `zeterm::tab_input::{TabInput,TabInputModel}` | ✅；`ElementId`、Tab surface 与具体内容仍由 host 的 projection/scene 负责 |
+| PaneInput 类型、逻辑 identity 与 Pane binding | `zeterm::pane_input` + `zeterm::pane_host` | 本次先建立 host contract 与 frame mount；`TerminalPaneInput` 接入独立 terminal runtime，Agent/Files/Diff/Settings payload 与 PaneView 仍由各自 feature crate 负责 |
 | Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `zeta-agent-sidebar` / `zeta-editor` | 委托；各 crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
 | Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
@@ -65,6 +68,8 @@ zeta-ui -X→ App Server / workspace / product state
 不需要依赖 zeterm 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
+导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui` 只提供 `Tab`/`TabList`、type-agnostic `PaneGroupLayout` 等 presentation primitive；Titlebar 或 Sidebar 中的 `NavBar` 仍是计划中的组合边界。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
+
 ## 2. 文件与接口地图
 
 | Symbol | 可见性 | 精确职责 |
@@ -78,6 +83,7 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
 | `components::tab_list::{Tab, TabState, TabSelection}` | public | 表达无产品 identity/content 的 Tab surface 交互与选中 presentation |
 | `components::tab_list::{TabList, TabListStyle, TabListOrientation}` | public | 横向或纵向排列 Tab surface，拥有 item size/gap，并公开同源 tab bounds |
+| `NavBar` 导航容器 | proposed composition boundary | 组合横向/纵向导航 shell 与 `TabList`；尚未形成 public API，具体方向见 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) |
 | `components::tab_list::{TabStyle, TabBackgrounds}` | public | 定义 border、corner radii 及普通/selected 的状态背景 |
 | `components::sash::{Sash, SashStyle, SashState}` | public | 从零面积 separator track 推导共享 drag target 与 feedback line，并绘制 host 投影的 hover/active 状态 |
 | `components::resizable::{SashController, SashPointerPresence, Resizable}` | public | 延迟 hover、active presentation、deadline 与基于 `SplitViewResizeSnapshot` 的 drag-start-relative resize；不拥有 pointer capture、产品 identity 或 pane state |
@@ -105,7 +111,9 @@ zeta-ui -X→ App Server / workspace / product state
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
 | `layout::{SessionSidebarLayoutSpec,SessionSidebarLayout}` | public | 解析 Sessions Part 与 main Part 的 split geometry；不拥有 session state、active identity、resize lifecycle 或 scene composition |
 | `layout::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | public | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不拥有具体 Pane 内容、TabInput state、focus 或 event routing |
+| `layout::PaneGroupLayout` | public | 将 host-owned PaneTree 的 geometry spec 投影为 leaf bounds、split sash 和 active-pane-independent hit geometry；不拥有 Pane state、runtime 或 mutation |
 | `zeterm::tab_input::{TabInput,TabInputModel}` | product host | 保存逻辑 input identity、labels、顺序和 active input；不分配 `ElementId`，不绘制 Tab，也不执行 App Server/Terminal 激活副作用 |
+| `zeterm::pane_input::{PaneInput,PaneInputKind}` | product host | 保存 Pane 内容类型与逻辑 identity 的 host descriptor；不包含 Pane geometry、runtime handle 或 feature-owned view state |
 
 `Color` 的 RGB channel 是 sRGB、alpha 为 straight alpha。`Point`、`Size`、font size 与 line
 height 都使用 logical UI pixels；只有 renderer backend 可以执行 logical-to-physical 转换。
@@ -335,6 +343,7 @@ validation 测试属于具体 backend crate。
   inset 或多重 shadow。ContextMenu 也暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
 - `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
+- `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向 Titlebar TabList 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui` presentation contract；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
   lifecycle/interaction 由 host 与 `zui` 组合；

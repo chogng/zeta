@@ -13,7 +13,6 @@ use zui::input::KeyEvent;
 use zui::input::ModifiersState;
 use zui::input::NamedKey;
 use zui::services::ClipboardHandle;
-use zui::window::WindowHandle;
 
 use crate::NativeApp;
 use crate::keybindings::{
@@ -37,10 +36,9 @@ impl NativeApp {
             return;
         }
         if is_devtools_toggle_shortcut(&event, self.modifiers) {
-            let _ = self
-                .window
-                .as_ref()
-                .is_some_and(WindowHandle::toggle_devtools);
+            if let Some(window) = self.window.as_ref() {
+                let _ = window.toggle_devtools();
+            }
             return;
         }
         if self.keyboard_shortcuts.is_visible() {
@@ -76,8 +74,8 @@ impl NativeApp {
             direct_terminal,
             terminal_surface_visible: self.workspace_surface.is_terminal(),
             session_sidebar_visible: self.session_sidebar.is_expanded(),
-            agent_sidebar_visible: self.agent_sidebar.is_expanded(),
-            file_search_visible: self.agent_sidebar_workspace.search_visible(),
+            agent_sidebar_visible: self.sidebar_part.is_expanded(),
+            file_search_visible: self.sidebar_pane_workspace.search_visible(),
             composer_route: match self.composer.route() {
                 ComposerRoute::Agent => "agent",
                 ComposerRoute::Shell => "shell",
@@ -112,20 +110,20 @@ impl NativeApp {
     fn file_search_keyboard_input(&mut self, event: &KeyEvent) {
         if event.logical_key == Key::Named(NamedKey::Escape) {
             if self
-                .agent_sidebar_workspace
+                .sidebar_pane_workspace
                 .file_search_input()
                 .text()
                 .is_empty()
             {
-                self.agent_sidebar_workspace.set_search_visible(false);
+                self.sidebar_pane_workspace.set_search_visible(false);
             } else {
-                self.agent_sidebar_workspace.clear_file_search();
+                self.sidebar_pane_workspace.clear_file_search();
             }
             self.file_search_changed();
             return;
         }
         if let Some(command) = text_input_command(event, self.modifiers) {
-            self.agent_sidebar_workspace.apply_file_search(command);
+            self.sidebar_pane_workspace.apply_file_search(command);
             self.file_search_changed();
         }
     }
@@ -301,11 +299,11 @@ impl NativeApp {
         };
         let navigation = match &event.logical_key {
             Key::Named(NamedKey::ArrowRight) => self
-                .agent_sidebar_workspace
+                .sidebar_pane_workspace
                 .navigate_file_tree_right(focused),
-            Key::Named(NamedKey::ArrowLeft) => self
-                .agent_sidebar_workspace
-                .navigate_file_tree_left(focused),
+            Key::Named(NamedKey::ArrowLeft) => {
+                self.sidebar_pane_workspace.navigate_file_tree_left(focused)
+            }
             _ => return false,
         };
         let Some(navigation) = navigation else {
@@ -414,13 +412,11 @@ impl NativeApp {
         let Some(view) = self.composer.interaction().view() else {
             return;
         };
-        let Some(interaction_bounds) = self.presentation.as_ref().and_then(|presentation| {
-            presentation
-                .accessibility_nodes
-                .iter()
-                .find(|node| node.id == COMPOSER_INTERACTION)
-                .map(|node| node.bounds)
-        }) else {
+        let Some(interaction_bounds) = self
+            .presentation
+            .as_ref()
+            .and_then(|presentation| presentation.element_bounds(COMPOSER_INTERACTION))
+        else {
             return;
         };
         let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
@@ -547,7 +543,7 @@ impl NativeApp {
             return;
         }
         if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
-            if let Some(text) = self.agent_sidebar_workspace.selected_file_search_text()
+            if let Some(text) = self.sidebar_pane_workspace.selected_file_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file search text: {error}");
@@ -622,7 +618,7 @@ impl NativeApp {
             else {
                 return;
             };
-            self.agent_sidebar_workspace
+            self.sidebar_pane_workspace
                 .apply_file_search(TextInputCommand::Insert(text));
             self.file_search_changed();
             return;

@@ -165,8 +165,8 @@ SSH 连接尝试，重试策略属于产品宿主。
 `SshTunnel::poll_readiness` 要求 OpenSSH child 保持存活，并在短暂稳定间隔前后两次确认选中的本机
 loopback 端口可连接；probe 不发送应用数据，只证明本地 forward listener 已经建立，不保证远端
 endpoint 后的应用已接受连接。产品宿主负责围绕 poll 设置超时和取消。Primitive 只尝试启动一次；
-zeterm Native host 和 Desktop Electron Main 各自在已就绪子进程退出后保留本机端口并执行 30 秒恢复。
-重试时序、状态投影、取消和 endpoint 连续性属于产品策略。
+`zeta-remote-host` 在此之上提供共享的取消、保留本机端口和 30 秒恢复策略。产品仍负责把这些
+typed events 映射到自己的事件循环、状态投影和窗口生命周期。
 
 ## 失败语义
 
@@ -186,7 +186,8 @@ OpenSSH spawn failure、输出关闭、错误 JSONL 和无法配对的 response 
 ## 扩展方向
 
 发布频道发现、publisher 签名验证、协议不兼容升级策略、不可变对象垃圾回收和产品级
-Tunnel/recovery policy 都属于本 crate 上层。`zeterm` 已通过 Native picker/manager 消费命名目录；Desktop 通过本机
+Tunnel/recovery policy 都属于本 crate 上层；共享的本机 Tunnel 生命周期协调位于
+[`zeta-remote-host`](../remote-host/README.md)。`zeterm` 已通过 Native picker/manager 消费命名目录；Desktop 通过本机
 `zeta remote connections` adapter 提供命令面板 saved-host picker/manager，并通过重启进入选中的 authority。
 `zeterm` 同时通过前台 CLI 与 Remote 窗口 Native manager 消费 Tunnel primitive。Desktop Browser
 与 Browser Automation 通过 Electron Main 的 Remote navigation adapter 自动为 loopback 顶层导航持有

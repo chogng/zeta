@@ -66,8 +66,8 @@ log. SSH credentials cannot be exposed because SSH is not present in this proces
 Add persistent session identity, host-restart restoration, capability reporting, and logical
 tunnel endpoints for non-SSH transports or Remote service discovery as explicit protocol work.
 Basic local `ssh -L` forwarding does not traverse this daemon: keep its listener, credentials, and
-SSH spawning in `zeta-remote-connections` plus the product host, and keep UI/product composition
-outside this crate.
+SSH spawning in `zeta-remote-connections`, its shared lifecycle supervision in `zeta-remote-host`,
+and UI/product composition in the product host.
 
 ## Verification
 

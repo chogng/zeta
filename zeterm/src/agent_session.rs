@@ -54,9 +54,8 @@ use crate::composer_host::synchronize_composer_classifier;
 use crate::composer_host::update_composer_classifier;
 use crate::native_event::NativeEvent;
 use crate::session_switch_trace::{self, SwitchId};
-use crate::session_tab_list::SessionTabUpsert;
-use crate::session_tab_list::upsert_session_catalog_tab as project_session_catalog_tab;
-use crate::session_tab_list::upsert_session_tab as project_session_tab;
+use crate::sidebar_pane_workspace::AgentSidebarView;
+use crate::tab_input::TabInputChange;
 use crate::thread_projection::ThreadProjectionUpdate;
 
 #[path = "agent_session_remote.rs"]
@@ -1323,7 +1322,7 @@ impl NativeApp {
 
     pub(crate) fn activate_session_tab(&mut self, index: usize) {
         let switch_id = session_switch_trace::SwitchId::next();
-        let Some(tab) = self.session_tabs.get(index) else {
+        let Some(tab) = self.tab_inputs.session_input_at(index) else {
             session_switch_trace::event(
                 Some(switch_id),
                 "activation-rejected",
@@ -1331,17 +1330,23 @@ impl NativeApp {
             );
             return;
         };
-        let tab_id = tab.id();
-        let session_id = tab.session_id().clone();
+        let Some(session_id) = tab.session_id().cloned() else {
+            session_switch_trace::event(
+                Some(switch_id),
+                "activation-rejected",
+                format_args!("reason=non-session-tab index={index}"),
+            );
+            return;
+        };
         let target_workspace_root = tab.workspace_root().map(Path::to_path_buf);
         session_switch_trace::event(
             Some(switch_id),
             "activation-request",
-            format_args!("index={index} tab_id={tab_id:?} session_id={session_id}"),
+            format_args!("index={index} session_id={session_id}"),
         );
-        if tab_id == self.selected_session_tab {
-            if self.workbench_item.is_settings() {
-                self.activate_session_workbench_tab(tab_id);
+        if self.tab_inputs.selected_session() == Some(&session_id) {
+            if self.tab_inputs.is_settings() {
+                self.activate_session_workbench_tab();
                 self.rebuild_presentation_on_next_redraw();
             } else {
                 session_switch_trace::event(
@@ -1404,8 +1409,8 @@ impl NativeApp {
         {
             return;
         }
-        self.selected_session_tab = tab_id;
-        self.activate_session_workbench_tab(tab_id);
+        self.tab_inputs.activate_session(&session_id);
+        self.activate_session_workbench_tab();
         let terminal_activated = self.activate_terminal_for_session(&session_id);
         session_switch_trace::event(
             Some(switch_id),
@@ -1419,30 +1424,24 @@ impl NativeApp {
         session_switch_trace::event(
             Some(switch_id),
             "local-activation-visible",
-            format_args!("selected_tab={tab_id:?}"),
+            format_args!("selected_session={session_id}"),
         );
     }
 
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
-        let result = project_session_tab(
-            &mut self.session_tabs,
-            &mut self.selected_session_tab,
-            session,
-            &workspace,
-        );
-        let (label, tab_id) = match result {
-            SessionTabUpsert::Added(tab_id) => ("session-tab-added", tab_id),
-            SessionTabUpsert::Updated(tab_id) => ("session-tab-updated", tab_id),
+        let result = self.tab_inputs.upsert_session(session, &workspace);
+        let (label, input_key) = match result {
+            TabInputChange::Added(input_key) => ("session-tab-added", input_key),
+            TabInputChange::Updated(input_key) => ("session-tab-updated", input_key),
         };
-        self.synchronize_session_workbench_tab(tab_id);
         session_switch_trace::event(
             None,
             label,
             format_args!(
-                "session_id={} tab_id={tab_id:?} tab_count={}",
+                "session_id={} input={input_key:?} tab_count={}",
                 session.session_id,
-                self.session_tabs.len()
+                self.tab_inputs.session_count()
             ),
         );
     }
@@ -1450,7 +1449,7 @@ impl NativeApp {
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
-            project_session_catalog_tab(&mut self.session_tabs, session, &workspace);
+            self.tab_inputs.upsert_catalog_session(session, &workspace);
         }
     }
 
@@ -1522,7 +1521,7 @@ impl NativeApp {
             AgentSessionEvent::GitProjection(projection) => {
                 self.workspace_context
                     .apply_git_projection(projection.as_ref());
-                self.sync_agent_sidebar_repository();
+                self.sync_sidebar_pane_repository();
                 self.refresh_files_from_app_server();
             }
             AgentSessionEvent::FilesChanged(changed) => {
@@ -1576,16 +1575,25 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
 }
 
 impl NativeApp {
-    pub(crate) fn replace_agent_sidebar_workspace(&mut self) {
+    pub(crate) fn replace_sidebar_pane_workspace(&mut self) {
+        let sidebar_kind = self.pane_host.kind(&(
+            crate::pane_host::PaneHostScope::Sidebar,
+            self.sidebar_pane_group.root_pane(),
+        ));
         let removed = self
-            .agent_sidebar_workspace
+            .sidebar_pane_workspace
             .replace_workspace(&self.workspace_context);
+        let view = match sidebar_kind {
+            Some(crate::pane_input::PaneInputKind::Diff) => AgentSidebarView::Changes,
+            _ => AgentSidebarView::Files,
+        };
+        self.select_sidebar_pane_view(view);
         self.remove_scm_animation_tracks(removed);
     }
 
-    fn sync_agent_sidebar_repository(&mut self) {
+    fn sync_sidebar_pane_repository(&mut self) {
         let removed = self
-            .agent_sidebar_workspace
+            .sidebar_pane_workspace
             .sync_repository(&self.workspace_context);
         self.remove_scm_animation_tracks(removed);
     }
@@ -1606,7 +1614,7 @@ impl NativeApp {
             return;
         };
         match session.read_directory(PathBuf::from(".")) {
-            Ok(entries) => self.agent_sidebar_workspace.refresh_files(entries),
+            Ok(entries) => self.sidebar_pane_workspace.refresh_files(entries),
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
         }
     }
@@ -1617,7 +1625,7 @@ impl NativeApp {
         };
         match session.read_directory(path) {
             Ok(entries) => {
-                self.agent_sidebar_workspace
+                self.sidebar_pane_workspace
                     .complete_file_tree_directory_load(element, entries);
             }
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
@@ -1634,7 +1642,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
-                self.agent_sidebar.expand();
+                self.sidebar_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
@@ -1669,7 +1677,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
-                self.agent_sidebar.expand();
+                self.sidebar_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();

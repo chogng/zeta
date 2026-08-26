@@ -4,6 +4,7 @@ use zeta_commands::ZetermCommandId;
 use zui::ui::ElementId;
 
 use crate::NativeApp;
+use crate::pane_group::PaneSplitDirection;
 use crate::session_switch_trace;
 use crate::shell_interaction::{
     self, AgentSidebarPaneAction, ContextAction, SessionContextMenuAction,
@@ -110,7 +111,7 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
     registry
         .register(
             ZetermCommandId::ToggleAgentSidebar,
-            execute_toggle_agent_sidebar,
+            execute_toggle_sidebar_part,
         )
         .expect("built-in command IDs must be unique");
     registry
@@ -189,6 +190,30 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         )
         .expect("built-in command IDs must be unique");
     registry
+        .register(
+            ZetermCommandId::SplitTerminalHorizontal,
+            execute_split_terminal_horizontal,
+        )
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(
+            ZetermCommandId::SplitTerminalVertical,
+            execute_split_terminal_vertical,
+        )
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(ZetermCommandId::FocusNextPane, execute_focus_next_pane)
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(
+            ZetermCommandId::FocusPreviousPane,
+            execute_focus_previous_pane,
+        )
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(ZetermCommandId::ClosePane, execute_close_pane)
+        .expect("built-in command IDs must be unique");
+    registry
 }
 
 impl NativeApp {
@@ -230,8 +255,7 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
 }
 
 fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandRequest) {
-    let selected_session_tab = app.selected_session_tab;
-    app.activate_session_workbench_tab(selected_session_tab);
+    app.activate_session_workbench_tab();
     app.remote_connection_picker.dismiss();
     app.dismiss_remote_connection_manager();
     app.dismiss_remote_tunnel_manager();
@@ -251,8 +275,7 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
     }
     let restore_focus = app.ui_dispatch.focused();
     app.keyboard_shortcuts.close();
-    let selected_session_tab = app.selected_session_tab;
-    app.activate_session_workbench_tab(selected_session_tab);
+    app.activate_session_workbench_tab();
     app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();
 }
@@ -266,12 +289,12 @@ fn execute_toggle_session_sidebar(app: &mut NativeApp, _request: &CommandRequest
     );
 }
 
-fn execute_toggle_agent_sidebar(app: &mut NativeApp, _request: &CommandRequest) {
-    if app.workspace_surface.is_editor() && app.agent_sidebar.is_expanded() {
+fn execute_toggle_sidebar_part(app: &mut NativeApp, _request: &CommandRequest) {
+    if app.workspace_surface.is_editor() && app.sidebar_part.is_expanded() {
         app.workspace_surface.show_agent();
         app.pending_focus = Some(shell_interaction::COMPOSER);
     }
-    app.agent_sidebar.toggle();
+    app.sidebar_part.toggle();
 }
 
 fn execute_activate_session_tab(_app: &mut NativeApp, _request: &CommandRequest) {
@@ -285,16 +308,14 @@ fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
     app.workspace_surface.show_agent();
-    app.agent_sidebar_workspace
-        .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Changes);
-    app.agent_sidebar.expand();
+    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
+    app.sidebar_part.expand();
 }
 
 fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
     app.workspace_surface.show_agent();
-    app.agent_sidebar_workspace
-        .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Files);
-    app.agent_sidebar.expand();
+    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files);
+    app.sidebar_part.expand();
 }
 
 fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
@@ -307,8 +328,8 @@ fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandRequest) {
-    let visible = !app.agent_sidebar_workspace.search_visible();
-    app.agent_sidebar_workspace.set_search_visible(visible);
+    let visible = !app.sidebar_pane_workspace.search_visible();
+    app.sidebar_pane_workspace.set_search_visible(visible);
     if visible {
         app.rebuild_presentation();
         if let Some(presentation) = app.presentation.as_ref() {
@@ -352,10 +373,29 @@ fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
     {
         eprintln!("could not refresh Git projection: {error}");
     }
-    app.agent_sidebar_workspace
-        .select_view(crate::agent_sidebar_workspace::AgentSidebarView::Changes);
+    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
     app.workspace_surface.show_agent();
-    app.agent_sidebar.expand();
+    app.sidebar_part.expand();
+}
+
+fn execute_split_terminal_horizontal(app: &mut NativeApp, _request: &CommandRequest) {
+    app.split_active_pane(PaneSplitDirection::Horizontal);
+}
+
+fn execute_split_terminal_vertical(app: &mut NativeApp, _request: &CommandRequest) {
+    app.split_active_pane(PaneSplitDirection::Vertical);
+}
+
+fn execute_focus_next_pane(app: &mut NativeApp, _request: &CommandRequest) {
+    app.focus_next_pane();
+}
+
+fn execute_focus_previous_pane(app: &mut NativeApp, _request: &CommandRequest) {
+    app.focus_previous_pane();
+}
+
+fn execute_close_pane(app: &mut NativeApp, _request: &CommandRequest) {
+    app.close_active_pane();
 }
 
 #[cfg(test)]

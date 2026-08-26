@@ -1,10 +1,9 @@
+use std::collections::HashMap;
 use std::process::ExitCode;
 use std::time::Instant;
 
 use agent_session::AgentSession;
 use agent_session_target::AgentSessionTarget;
-use agent_sidebar::AgentSidebarState;
-use agent_sidebar_workspace::AgentSidebarWorkspace;
 use file_editor_host::FileEditorHost;
 use file_editor_input::FileEditorInputState;
 use git_branch_context_menu::GitBranchContextMenuState;
@@ -13,21 +12,29 @@ use keyboard_shortcuts::KeyboardShortcutsState;
 use language_server_settings::LanguageServerSettingsState;
 use launch::ZetermLaunch;
 use native_event::NativeEvent;
+use pane_group::{PaneGroup, PaneId, PaneSplitDirection, PaneSplitId};
+use pane_host::{PaneHost, PaneHostScope};
+use pane_input::{PaneBinding, PaneInput, PaneInputKind};
 use remote_connection_cli::ZetermInvocation;
 use remote_connection_manager::RemoteConnectionManagerState;
 use remote_connection_picker::RemoteConnectionPickerState;
 use remote_tunnel_manager::RemoteTunnelManagerState;
-use remote_tunnel_process::RemoteTunnelHost;
+use remote_tunnel_process::NativeRemoteTunnelHost;
 use session_context_menu::SessionContextMenuState;
 use session_search::SessionSearch;
 use session_sidebar::SessionSidebarState;
-use session_tab_list::SessionTabState;
 use shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use shell_scene::{
     ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
-    rebuild_shell_fragment, rebuild_shell_overlays, terminal_grid_size_for_viewport,
+    rebuild_shell_fragment, rebuild_shell_overlays, terminal_grid_size_for_bounds,
+    terminal_grid_size_for_viewport, terminal_pane_bounds_for_viewport,
+    terminal_pane_sash_for_viewport,
 };
 use shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
+use sidebar_pane_workspace::{AgentSidebarView, SidebarPaneWorkspace};
+use sidebar_part::SidebarPartState;
+use tab_input::{TabInputKey, TabInputModel};
+use terminal_pane_view::TerminalPaneViewState;
 use terminal_pointer::TerminalPointer;
 use terminal_scrollback::TerminalScroll;
 use terminal_selection::TerminalSelection;
@@ -35,7 +42,6 @@ use terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey
 use terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
 use thread_projection::ThreadProjection;
 use thread_timeline_scroll::ThreadTimelineScroll;
-use workbench::WorkbenchItem;
 use workspace_context::WorkspaceContext;
 use workspace_path_picker::WorkspacePathPickerState;
 use workspace_surface::WorkspaceSurface;
@@ -48,6 +54,9 @@ use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui::layout::LogicalViewport;
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
+use zeta_ui::{
+    Resizable, SashOrientation, SashPointerPresence, SplitViewOrientation, SplitViewResizeSnapshot,
+};
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;
 use zui::app::App;
@@ -87,8 +96,6 @@ mod agent_session_target;
 #[cfg(test)]
 #[path = "agent_session_target_tests.rs"]
 mod agent_session_target_tests;
-mod agent_sidebar;
-mod agent_sidebar_workspace;
 mod command_dispatch;
 #[cfg(test)]
 #[path = "component_composition_tests.rs"]
@@ -126,6 +133,9 @@ mod launch_test_support;
 #[path = "launch_tests.rs"]
 mod launch_tests;
 mod native_event;
+mod pane_group;
+mod pane_host;
+mod pane_input;
 mod remote_connection_cli;
 #[cfg(test)]
 #[path = "remote_connection_cli_tests.rs"]
@@ -145,7 +155,6 @@ mod remote_tunnel_manager;
 mod remote_tunnel_manager_input;
 mod remote_tunnel_manager_view;
 mod remote_tunnel_process;
-mod remote_tunnel_readiness;
 mod session_canvas;
 mod session_context_menu;
 mod session_search;
@@ -157,9 +166,13 @@ mod settings_sections;
 mod shell_interaction;
 mod shell_scene;
 mod shell_style;
+mod sidebar_pane_workspace;
+mod sidebar_part;
+mod tab_input;
 mod terminal_blocks;
 mod terminal_input;
 mod terminal_output_scroll_view;
+mod terminal_pane_view;
 mod terminal_pointer;
 mod terminal_projection;
 mod terminal_scrollback;
@@ -254,17 +267,21 @@ struct NativeApp {
     presentation: Option<ShellPresentation>,
     frame_scheduler: FrameScheduler,
     retained_runtime: RetainedRuntime,
-    agent_sidebar: AgentSidebarState,
-    agent_sidebar_workspace: AgentSidebarWorkspace,
+    sidebar_part: SidebarPartState,
+    sidebar_pane_workspace: SidebarPaneWorkspace,
     file_editor_host: FileEditorHost,
     file_editor_input: FileEditorInputState,
     file_editor_search: file_editor_search::FileEditorSearchState,
     language_service: language_service_host::NativeLanguageService,
     session_sidebar: SessionSidebarState,
     session_search: SessionSearch,
-    session_tabs: Vec<SessionTabState>,
-    selected_session_tab: ElementId,
-    workbench_item: WorkbenchItem,
+    tab_inputs: TabInputModel,
+    pane_groups: HashMap<TabInputKey, PaneGroup>,
+    pane_host: PaneHost,
+    sidebar_pane_group: PaneGroup,
+    pane_view_states: HashMap<(TabInputKey, PaneId), TerminalPaneViewState>,
+    active_pane: Option<(TabInputKey, PaneId)>,
+    terminal_pane_resize: Option<TerminalPaneResize>,
     session_context_menu: SessionContextMenuState,
     git_branch_context_menu: GitBranchContextMenuState,
     workspace_path_picker: WorkspacePathPickerState,
@@ -272,7 +289,7 @@ struct NativeApp {
     remote_connection_manager: RemoteConnectionManagerState,
     remote_connection_launch: Option<remote_connection_process::RemoteConnectionLaunch>,
     remote_tunnel_manager: RemoteTunnelManagerState,
-    remote_tunnel_host: Option<RemoteTunnelHost>,
+    remote_tunnel_host: Option<NativeRemoteTunnelHost>,
     ui_dispatch: UiDispatch,
     agent_session: Option<AgentSession>,
     agent_session_target: AgentSessionTarget,
@@ -307,6 +324,12 @@ struct NativeApp {
     theme_follows_system: bool,
 }
 
+struct TerminalPaneResize {
+    tab_key: TabInputKey,
+    split_id: PaneSplitId,
+    resizable: Resizable,
+}
+
 impl NativeApp {
     fn new(application: ApplicationHandle<NativeEvent>, launch: ZetermLaunch) -> Self {
         let event_proxy = application.proxy();
@@ -318,14 +341,22 @@ impl NativeApp {
             agent_session_target
                 .ssh_transport()
                 .map(|(host, ssh_executable)| {
-                    RemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
+                    NativeRemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
                 });
         let workspace_context = if agent_session_target.is_remote() {
             WorkspaceContext::capture_remote(agent_session_target.workspace_root().to_path_buf())
         } else {
             local_workspace_context
         };
-        let agent_sidebar_workspace = AgentSidebarWorkspace::new(&workspace_context);
+        let sidebar_pane_workspace = SidebarPaneWorkspace::new(&workspace_context);
+        let sidebar_pane_group = PaneGroup::new();
+        let mut pane_host = PaneHost::new();
+        pane_host.insert(
+            (PaneHostScope::Sidebar, sidebar_pane_group.root_pane()),
+            PaneBinding::new(PaneInput::files(
+                workspace_context.working_directory().to_path_buf(),
+            )),
+        );
         let mut keybindings = keybindings::NativeKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             zeta_app_server_client::local_profile_root().join("keybindings.json"),
@@ -354,17 +385,21 @@ impl NativeApp {
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
-            agent_sidebar: AgentSidebarState::default(),
-            agent_sidebar_workspace,
+            sidebar_part: SidebarPartState::default(),
+            sidebar_pane_workspace,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: file_editor_search::FileEditorSearchState::default(),
             language_service,
             file_editor_host: FileEditorHost::default(),
             session_sidebar: SessionSidebarState::default(),
             session_search: SessionSearch::default(),
-            session_tabs: Vec::new(),
-            selected_session_tab: shell_interaction::ACTIVE_SESSION_TAB,
-            workbench_item: WorkbenchItem::default(),
+            tab_inputs: TabInputModel::default(),
+            pane_groups: HashMap::new(),
+            pane_host,
+            sidebar_pane_group,
+            pane_view_states: HashMap::new(),
+            active_pane: None,
+            terminal_pane_resize: None,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
@@ -431,8 +466,28 @@ impl NativeApp {
         self.theme_follows_system = loaded.follows_system;
         self.composer.set_input_style(editor_style.clone());
         self.code_editor_style = editor_style;
-        self.agent_sidebar_workspace
+        self.sidebar_pane_workspace
             .set_editor_style(palette.multi_diff_editor_style());
+    }
+
+    /// Synchronizes the sidebar's logical content selection with its mounted PaneInput.
+    ///
+    /// The sidebar Part owns visibility and width, while this binding identifies the content leaf
+    /// inside it. The feature crate keeps Files/SCM state; the Native host only changes which
+    /// feature input is mounted.
+    pub(crate) fn select_sidebar_pane_view(&mut self, view: AgentSidebarView) {
+        let input = match view {
+            AgentSidebarView::Changes => {
+                PaneInput::diff(self.workspace_context.working_directory().to_path_buf())
+            }
+            AgentSidebarView::Files => {
+                PaneInput::files(self.workspace_context.working_directory().to_path_buf())
+            }
+        };
+        self.pane_host.insert(
+            (PaneHostScope::Sidebar, self.sidebar_pane_group.root_pane()),
+            PaneBinding::new(input),
+        );
     }
 
     fn fail(&mut self, message: impl std::fmt::Display) {
@@ -451,11 +506,6 @@ impl NativeApp {
                     if presentation.remove_retained_fragment(*id).is_err() {
                         retained_cleanup_failed = true;
                     }
-                }
-                if !retained_cleanup_failed {
-                    presentation.accessibility_nodes = presentation
-                        .interaction_frame()
-                        .accessibility_nodes(&self.ui_dispatch);
                 }
             } else {
                 retained_cleanup_failed = true;
@@ -478,11 +528,8 @@ impl NativeApp {
         let Some(presentation) = self.presentation.as_ref() else {
             return;
         };
-        debug_assert!(!presentation.accessibility_nodes.is_empty());
         let _render_trace = session_switch_trace::Span::frame("renderer.render_scene");
-        if let Err(error) =
-            context.present_scene(presentation.scene(), &presentation.accessibility_nodes)
-        {
+        if let Err(error) = context.present_frame(presentation.frame(), &self.ui_dispatch) {
             self.fail(&error);
             context.exit_with_error(ApplicationError::product("zeterm frame rendering", error));
         }
@@ -513,7 +560,7 @@ impl NativeApp {
             self.logical_viewport(),
             self.active_screen(),
             self.session_sidebar,
-            self.agent_sidebar,
+            self.sidebar_part,
         )
     }
 
@@ -522,7 +569,23 @@ impl NativeApp {
             .terminal_workspace
             .ensure_for_session(session_id, self.terminal_size())
         {
-            Ok(()) => true,
+            Ok(()) => {
+                let tab_key = TabInputKey::session(session_id.clone());
+                let (group_key, root_pane) = {
+                    let group = self.pane_groups.entry(tab_key.clone()).or_default();
+                    (tab_key.clone(), group.root_pane())
+                };
+                if let Some(terminal_key) = self.terminal_workspace.key_for_session(session_id) {
+                    if !self.pane_host.ensure_terminal(
+                        (PaneHostScope::Tab(group_key), root_pane),
+                        session_id,
+                        terminal_key,
+                    ) {
+                        return false;
+                    }
+                }
+                true
+            }
             Err(error) => {
                 eprintln!("could not start terminal for session: {error}");
                 false
@@ -531,39 +594,342 @@ impl NativeApp {
     }
 
     pub(crate) fn activate_terminal_for_session(&mut self, session_id: &SessionId) -> bool {
-        if !self.terminal_workspace.activate_for_session(session_id) {
+        let tab_key = TabInputKey::session(session_id.clone());
+        let pane = self
+            .pane_groups
+            .entry(tab_key.clone())
+            .or_default()
+            .active_pane();
+        let Some(terminal_key) = self
+            .pane_host
+            .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+            .or_else(|| self.terminal_workspace.key_for_session(session_id))
+        else {
+            return false;
+        };
+        if !self.pane_host.ensure_terminal(
+            (PaneHostScope::Tab(tab_key.clone()), pane),
+            session_id,
+            terminal_key,
+        ) {
             return false;
         }
-        self.terminal_scroll.reset();
-        self.terminal_selection.clear();
-        self.terminal_pointer.cancel();
+        if !self.activate_pane_context(tab_key, pane) {
+            return false;
+        }
         if let Some(window) = self.window.as_ref()
             && let Some(terminal) = self.active_terminal()
         {
-            window.set_title(terminal.core().title().unwrap_or(PRODUCT_DISPLAY_NAME));
+            let _ = window.set_title(terminal.core().title().unwrap_or(PRODUCT_DISPLAY_NAME));
         }
         true
+    }
+
+    fn save_active_pane_view(&mut self) {
+        let Some(binding) = self.active_pane.clone() else {
+            return;
+        };
+        let state = TerminalPaneViewState {
+            scroll: std::mem::take(&mut self.terminal_scroll),
+            pointer: std::mem::take(&mut self.terminal_pointer),
+            selection: std::mem::take(&mut self.terminal_selection),
+        };
+        self.pane_view_states.insert(binding, state);
+    }
+
+    fn restore_pane_view(&mut self, binding: &(TabInputKey, PaneId)) {
+        let state = self.pane_view_states.remove(binding).unwrap_or_default();
+        self.terminal_scroll = state.scroll;
+        self.terminal_pointer = state.pointer;
+        self.terminal_selection = state.selection;
+    }
+
+    pub(crate) fn activate_pane_context(&mut self, tab_key: TabInputKey, pane: PaneId) -> bool {
+        let binding = (tab_key.clone(), pane);
+        if self.active_pane.as_ref() != Some(&binding) {
+            self.save_active_pane_view();
+            self.active_pane = Some(binding.clone());
+            self.restore_pane_view(&binding);
+        }
+        if let Some(group) = self.pane_groups.get_mut(&tab_key) {
+            if !group.activate(pane) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        let host_binding = (PaneHostScope::Tab(tab_key.clone()), pane);
+        let Some(pane_binding) = self.pane_host.binding(&host_binding) else {
+            return false;
+        };
+        let terminal_key = pane_binding.terminal_key();
+        let Some(terminal_key) = terminal_key else {
+            return true;
+        };
+        self.terminal_workspace.activate_key(terminal_key)
+            || self.terminal_workspace.active_key() == Some(terminal_key)
+    }
+
+    pub(crate) fn active_pane_terminal_key(&self) -> Option<TerminalSessionKey> {
+        match self.active_pane.as_ref() {
+            Some((tab_key, pane)) => self
+                .pane_host
+                .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), *pane)),
+            None => self.terminal_workspace.active_key(),
+        }
     }
 
     fn update_terminal_status(&mut self, key: TerminalSessionKey, status: &str) {
         let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
             return;
         };
-        if let Some(tab) = self
-            .session_tabs
-            .iter_mut()
-            .find(|tab| tab.session_id() == &session_id)
-        {
-            tab.update_status(status);
-        }
+        self.tab_inputs.update_status(&session_id, status);
     }
 
     pub(crate) fn active_terminal(&self) -> Option<&TerminalSession> {
-        self.terminal_workspace.active()
+        self.active_pane_terminal_key()
+            .and_then(|key| self.terminal_workspace.terminal(key))
     }
 
     pub(crate) fn active_terminal_mut(&mut self) -> Option<&mut TerminalSession> {
-        self.terminal_workspace.active_mut()
+        let key = self.active_pane_terminal_key()?;
+        self.terminal_workspace.terminal_mut(key)
+    }
+
+    fn active_session_tab_key(&self) -> Option<TabInputKey> {
+        self.tab_inputs
+            .active_key()
+            .filter(|key| key.is_session())
+            .cloned()
+    }
+
+    pub(crate) fn split_active_pane(&mut self, direction: PaneSplitDirection) {
+        if !self.workspace_surface.is_terminal() {
+            return;
+        }
+        let Some(tab_key) = self.active_session_tab_key() else {
+            return;
+        };
+        let Some(session_id) = tab_key.session_id().cloned() else {
+            return;
+        };
+        if !self.ensure_terminal_for_session(&session_id) {
+            return;
+        }
+        let terminal_key = match self.terminal_workspace.spawn_pane(self.terminal_size()) {
+            Ok(key) => key,
+            Err(error) => {
+                eprintln!("could not create split terminal Pane: {error}");
+                return;
+            }
+        };
+        self.terminal_workspace
+            .bind_key_to_session(terminal_key, session_id.clone());
+        let pane = self
+            .pane_groups
+            .entry(tab_key.clone())
+            .or_default()
+            .split_active(direction);
+        self.pane_host.insert(
+            (PaneHostScope::Tab(tab_key.clone()), pane),
+            pane_input::PaneBinding::terminal(session_id, terminal_key),
+        );
+        let _ = self.activate_pane_context(tab_key, pane);
+        self.rebuild_presentation_on_next_redraw();
+    }
+
+    pub(crate) fn close_active_pane(&mut self) {
+        if !self.workspace_surface.is_terminal() {
+            return;
+        }
+        let Some(tab_key) = self.active_session_tab_key() else {
+            return;
+        };
+        let Some(group) = self.pane_groups.get_mut(&tab_key) else {
+            return;
+        };
+        let previous_active = group.active_pane();
+        let root_pane = group.root_pane();
+        let Some(removed_pane) = group.close_active() else {
+            return;
+        };
+        let replacement_pane = group.active_pane();
+        let removed_binding = (tab_key.clone(), removed_pane);
+        let replacement_binding = (tab_key.clone(), replacement_pane);
+        let removed_host_binding = (PaneHostScope::Tab(tab_key.clone()), removed_pane);
+        let replacement_host_binding = (PaneHostScope::Tab(tab_key.clone()), replacement_pane);
+        let removed_binding_state = self.pane_host.remove(&removed_host_binding);
+        let removed_key = removed_binding_state
+            .as_ref()
+            .and_then(|binding| binding.terminal_key());
+        if removed_pane == root_pane {
+            let replacement_binding_state = self.pane_host.remove(&replacement_host_binding);
+            let replacement_key = replacement_binding_state
+                .as_ref()
+                .and_then(|binding| binding.terminal_key());
+            if let Some(replacement_key) = replacement_key {
+                let _ = self.terminal_workspace.remove_key(replacement_key);
+            }
+            if let Some(removed_binding_state) = removed_binding_state {
+                self.pane_host
+                    .insert(replacement_host_binding.clone(), removed_binding_state);
+            } else if let Some(mut replacement_binding_state) = replacement_binding_state {
+                if replacement_key.is_some() {
+                    replacement_binding_state.clear_runtime();
+                }
+                self.pane_host
+                    .insert(replacement_host_binding.clone(), replacement_binding_state);
+            }
+            if let Some(view) = self.pane_view_states.remove(&removed_binding) {
+                self.pane_view_states
+                    .insert(replacement_binding.clone(), view);
+            }
+        } else {
+            if let Some(removed_key) = removed_key {
+                let _ = self.terminal_workspace.remove_key(removed_key);
+            }
+            self.pane_view_states.remove(&removed_binding);
+        }
+        if self.active_pane.as_ref() == Some(&removed_binding)
+            || self.active_pane.as_ref() == Some(&(tab_key.clone(), previous_active))
+        {
+            self.active_pane = None;
+        }
+        let _ = self.activate_pane_context(tab_key, replacement_pane);
+        self.rebuild_presentation_on_next_redraw();
+    }
+
+    pub(crate) fn focus_next_pane(&mut self) {
+        self.focus_adjacent_pane(true);
+    }
+
+    pub(crate) fn focus_previous_pane(&mut self) {
+        self.focus_adjacent_pane(false);
+    }
+
+    fn focus_adjacent_pane(&mut self, next: bool) {
+        if !self.workspace_surface.is_terminal() {
+            return;
+        }
+        let Some(tab_key) = self.active_session_tab_key() else {
+            return;
+        };
+        let pane = {
+            let Some(group) = self.pane_groups.get_mut(&tab_key) else {
+                return;
+            };
+            if next {
+                group.focus_next()
+            } else {
+                group.focus_previous()
+            }
+        };
+        let _ = self.activate_pane_context(tab_key, pane);
+        self.rebuild_presentation_on_next_redraw();
+    }
+
+    fn terminal_pane_sash_at(
+        &self,
+        point: Point,
+    ) -> Option<(
+        TabInputKey,
+        PaneSplitId,
+        SplitViewOrientation,
+        SplitViewResizeSnapshot,
+    )> {
+        if !self.workspace_surface.is_terminal() {
+            return None;
+        }
+        let tab_key = self.active_session_tab_key()?;
+        let group = self.pane_groups.get(&tab_key)?;
+        terminal_pane_sash_for_viewport(
+            self.logical_viewport(),
+            self.active_screen(),
+            self.session_sidebar,
+            self.sidebar_part,
+            group,
+            point,
+        )
+        .map(|(split_id, orientation, snapshot)| (tab_key, split_id, orientation, snapshot))
+    }
+
+    fn route_terminal_pane_resize_move(&mut self, point: Point) -> bool {
+        let Some(resize) = self.terminal_pane_resize.as_mut() else {
+            return false;
+        };
+        let Some(next) = resize.resizable.resize_to(point) else {
+            self.update_cursor();
+            return true;
+        };
+        let changed = self
+            .pane_groups
+            .get_mut(&resize.tab_key)
+            .is_some_and(|group| group.resize_split(resize.split_id, next));
+        if changed {
+            self.terminal_selection.clear();
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
+        self.update_cursor();
+        true
+    }
+
+    fn route_terminal_pane_resize_button(&mut self, state: ElementState) -> bool {
+        let now = Instant::now();
+        match state {
+            ElementState::Pressed => {
+                if self.terminal_pane_resize.is_some() {
+                    return true;
+                }
+                let Some(point) = self.cursor_position else {
+                    return false;
+                };
+                let Some((tab_key, split_id, orientation, snapshot)) =
+                    self.terminal_pane_sash_at(point)
+                else {
+                    return false;
+                };
+                let identity = shell_interaction::terminal_pane_sash_id(split_id);
+                let over_sash = self.presentation.as_ref().is_some_and(|presentation| {
+                    presentation.interaction_frame().target_at(point) == Some(identity)
+                });
+                if !over_sash {
+                    return false;
+                }
+                let orientation = match orientation {
+                    SplitViewOrientation::Horizontal => SashOrientation::Vertical,
+                    SplitViewOrientation::Vertical => SashOrientation::Horizontal,
+                };
+                let mut resizable = Resizable::new(orientation);
+                if !resizable.begin_drag(snapshot, point, now) {
+                    return false;
+                }
+                self.terminal_pane_resize = Some(TerminalPaneResize {
+                    tab_key,
+                    split_id,
+                    resizable,
+                });
+            }
+            ElementState::Released => {
+                let Some(mut resize) = self.terminal_pane_resize.take() else {
+                    return false;
+                };
+                let identity = shell_interaction::terminal_pane_sash_id(resize.split_id);
+                let presence = self.sash_pointer_presence(identity);
+                let _ = resize.resizable.end_drag(presence, now);
+            }
+        }
+        self.rebuild_presentation();
+        self.update_cursor();
+        self.request_redraw();
+        true
+    }
+
+    fn cancel_terminal_pane_resize(&mut self) -> bool {
+        let Some(mut resize) = self.terminal_pane_resize.take() else {
+            return false;
+        };
+        resize.resizable.cancel()
     }
 
     fn rebuild_presentation(&mut self) {
@@ -574,9 +940,9 @@ impl NativeApp {
             viewport,
             active_screen,
             self.session_sidebar,
-            self.agent_sidebar,
+            self.sidebar_part,
         );
-        self.terminal_workspace.resize_all(terminal_size);
+        self.resize_terminal_panes(viewport, active_screen, terminal_size);
         let scroll_limit = self.terminal_scroll_limit();
         self.terminal_scroll.clamp(scroll_limit);
         let window_control_insets = self
@@ -625,13 +991,14 @@ impl NativeApp {
                 },
             );
         }
-        if let Some(point) = self.cursor_position
-            && self
+        let pointer_requires_rebuild = self.cursor_position.is_some_and(|point| {
+            let outcome = self
                 .ui_dispatch
-                .pointer_moved(point, presentation.interaction_frame())
-                .invalidation
-                != DispatchInvalidation::None
-        {
+                .pointer_moved(point, presentation.interaction_frame());
+            let sash_changed = self.sync_sash_pointer_presence(Instant::now());
+            outcome.invalidation != DispatchInvalidation::None || sash_changed
+        });
+        if pointer_requires_rebuild {
             presentation = with_shell_presentation_model(
                 self,
                 window_control_insets,
@@ -652,6 +1019,44 @@ impl NativeApp {
             self.sync_input_focus();
         }
         self.update_ime_cursor_area();
+    }
+
+    fn resize_terminal_panes(
+        &mut self,
+        viewport: LogicalViewport,
+        active_screen: ScreenBuffer,
+        fallback_size: GridSize,
+    ) {
+        let Some(tab_key) = self.tab_inputs.active_key().cloned() else {
+            self.terminal_workspace.resize_all(fallback_size);
+            return;
+        };
+        let Some(group) = self.pane_groups.get(&tab_key) else {
+            self.terminal_workspace.resize_all(fallback_size);
+            return;
+        };
+        let panes = terminal_pane_bounds_for_viewport(
+            viewport,
+            active_screen,
+            self.session_sidebar,
+            self.sidebar_part,
+            group,
+        );
+        if panes.is_empty() {
+            self.terminal_workspace.resize_all(fallback_size);
+            return;
+        }
+        let resize_requests = panes
+            .into_iter()
+            .filter_map(|(pane, bounds)| {
+                self.pane_host
+                    .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+                    .map(|key| (key, terminal_grid_size_for_bounds(bounds)))
+            })
+            .collect::<Vec<_>>();
+        for (key, size) in resize_requests {
+            self.terminal_workspace.resize_key(key, size);
+        }
     }
 
     fn rebuild_overlay_presentation(&mut self) {
@@ -786,7 +1191,7 @@ impl NativeApp {
 
     fn request_redraw(&self) {
         if let Some(window) = self.window.as_ref() {
-            window.request_redraw();
+            let _ = window.request_redraw();
         }
     }
 
@@ -799,7 +1204,12 @@ impl NativeApp {
                     .pointer_feedback(presentation.interaction_frame())
             })
             .unwrap_or_default();
-        let cursor = if self.session_sidebar.is_resizing() || self.agent_sidebar.is_resizing() {
+        let cursor = if let Some(resize) = self.terminal_pane_resize.as_ref() {
+            match resize.resizable.orientation() {
+                SashOrientation::Vertical => CursorIcon::ColResize,
+                SashOrientation::Horizontal => CursorIcon::RowResize,
+            }
+        } else if self.session_sidebar.is_resizing() || self.sidebar_part.is_resizing() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -807,14 +1217,58 @@ impl NativeApp {
                 CursorFeedback::Text => CursorIcon::Text,
                 CursorFeedback::Pointer => CursorIcon::Pointer,
                 CursorFeedback::ResizeHorizontal => CursorIcon::ColResize,
+                CursorFeedback::ResizeVertical => CursorIcon::RowResize,
             }
         };
         if let Some(window) = self.window.as_ref() {
-            window.set_cursor(cursor);
+            let _ = window.set_cursor(cursor);
         }
     }
 
+    fn sash_pointer_presence(&self, id: ElementId) -> SashPointerPresence {
+        let Some(point) = self.cursor_position else {
+            return SashPointerPresence::Outside;
+        };
+        let over = self.ui_dispatch.window_active()
+            && self.presentation.as_ref().is_some_and(|presentation| {
+                presentation.interaction_frame().target_at(point) == Some(id)
+            });
+        if over {
+            SashPointerPresence::Over
+        } else {
+            SashPointerPresence::Outside
+        }
+    }
+
+    fn sync_sash_pointer_presence(&mut self, now: Instant) -> bool {
+        let window_active = self.ui_dispatch.window_active();
+        let session_hovered = window_active
+            && self
+                .ui_dispatch
+                .is_hovered(shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE);
+        let agent_hovered = window_active
+            && self
+                .ui_dispatch
+                .is_hovered(shell_interaction::AGENT_SIDEBAR_RESIZE_HANDLE);
+        let session_presence = if session_hovered {
+            SashPointerPresence::Over
+        } else {
+            SashPointerPresence::Outside
+        };
+        let agent_presence = if agent_hovered {
+            SashPointerPresence::Over
+        } else {
+            SashPointerPresence::Outside
+        };
+        let session_changed = self
+            .session_sidebar
+            .sash_pointer_presence(session_presence, now);
+        let agent_changed = self.sidebar_part.sash_pointer_presence(agent_presence, now);
+        session_changed || agent_changed
+    }
+
     fn apply_dispatch_outcome(&mut self, outcome: DispatchOutcome) {
+        let sash_changed = self.sync_sash_pointer_presence(Instant::now());
         let activation = matches!(outcome.intent, Some(UiIntent::Activate(_)));
         if let Some(intent) = outcome.intent {
             session_switch_trace::event(None, "ui-intent", format_args!("intent={intent:?}"));
@@ -846,6 +1300,9 @@ impl NativeApp {
                 }
             }
         }
+        if sash_changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
     }
 
     fn activate_shell_element(&mut self, id: zui::ui::ElementId) {
@@ -867,7 +1324,7 @@ impl NativeApp {
             self.activate_composer_interaction_item(index);
             return;
         }
-        if let Some(action) = self.agent_sidebar_workspace.activate_file_tree_element(id) {
+        if let Some(action) = self.sidebar_pane_workspace.activate_file_tree_element(id) {
             match action {
                 AgentSidebarAction::OpenFile { path } => self.open_workspace_file(path),
                 AgentSidebarAction::LoadChildren { element, path } => {
@@ -879,7 +1336,7 @@ impl NativeApp {
             }
             return;
         }
-        if self.agent_sidebar_workspace.toggle_multi_diff_fold(id) {
+        if self.sidebar_pane_workspace.toggle_multi_diff_fold(id) {
             return;
         }
         if self.activate_keyboard_shortcuts_element(id) {
@@ -904,13 +1361,15 @@ impl NativeApp {
             self.activate_settings_tab();
             return;
         }
-        if let Some(index) = shell_interaction::session_tab_index(id, 0..self.session_tabs.len()) {
+        if let Some(index) =
+            shell_interaction::session_tab_index(id, 0..self.tab_inputs.session_count())
+        {
             session_switch_trace::event(
                 None,
                 "session-tab-hit",
                 format_args!(
                     "element={id:?} index={index} tab_count={}",
-                    self.session_tabs.len()
+                    self.tab_inputs.session_count()
                 ),
             );
             self.activate_session_tab(index);
@@ -945,7 +1404,10 @@ impl NativeApp {
         if self.route_session_sidebar_resize_move(point) {
             return;
         }
-        if self.route_agent_sidebar_resize_move(point) {
+        if self.route_sidebar_resize_move(point) {
+            return;
+        }
+        if self.route_terminal_pane_resize_move(point) {
             return;
         }
         if self.route_file_editor_pointer_move() {
@@ -974,14 +1436,19 @@ impl NativeApp {
     fn pointer_left(&mut self) {
         self.cursor_position = None;
         self.file_editor_input.cancel_pointer();
+        let pane_resize_cancelled = self.cancel_terminal_pane_resize();
         if self
-            .agent_sidebar_workspace
+            .sidebar_pane_workspace
             .leave_multi_diff_scrollbar(Instant::now())
         {
             self.rebuild_presentation();
             self.request_redraw();
         }
         let outcome = self.ui_dispatch.pointer_left();
+        if pane_resize_cancelled {
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
         self.update_cursor();
         self.apply_dispatch_outcome(outcome);
     }
@@ -997,10 +1464,8 @@ impl NativeApp {
             .flatten()
             .and_then(|(point, presentation)| {
                 presentation
-                    .accessibility_nodes
-                    .iter()
-                    .find(|node| node.id == COMPOSER)
-                    .map(|node| (point, node.bounds))
+                    .element_bounds(COMPOSER)
+                    .map(|bounds| (point, bounds))
             });
         let Some(presentation) = self.presentation.as_ref() else {
             return;
@@ -1053,11 +1518,20 @@ impl NativeApp {
         if button == MouseButton::Left && self.route_session_sidebar_resize_button(state) {
             return;
         }
-        if button == MouseButton::Left && self.route_agent_sidebar_resize_button(state) {
+        if button == MouseButton::Left && self.route_sidebar_resize_button(state) {
+            return;
+        }
+        if button == MouseButton::Left && self.route_terminal_pane_resize_button(state) {
             return;
         }
         if button == MouseButton::Left && self.route_multi_diff_scrollbar_button(state) {
             return;
+        }
+        if button == MouseButton::Left
+            && state == ElementState::Pressed
+            && let Some(point) = self.cursor_position
+        {
+            let _ = self.activate_terminal_pane_at(point);
         }
         let position = self
             .cursor_position
@@ -1077,10 +1551,7 @@ impl NativeApp {
     fn multi_diff_bounds(&self) -> Option<zeta_ui::Rect> {
         self.presentation
             .as_ref()?
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == shell_interaction::MULTI_DIFF_EDITOR)
-            .map(|node| node.bounds)
+            .element_bounds(shell_interaction::MULTI_DIFF_EDITOR)
     }
 
     fn route_multi_diff_scrollbar_move(&mut self, point: Point) -> bool {
@@ -1088,7 +1559,7 @@ impl NativeApp {
             return false;
         };
         let outcome =
-            self.agent_sidebar_workspace
+            self.sidebar_pane_workspace
                 .move_multi_diff_scrollbar(point, bounds, Instant::now());
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();
@@ -1104,10 +1575,10 @@ impl NativeApp {
         let now = Instant::now();
         let outcome = match state {
             ElementState::Pressed => self
-                .agent_sidebar_workspace
+                .sidebar_pane_workspace
                 .press_multi_diff_scrollbar(point, bounds, now),
             ElementState::Released => self
-                .agent_sidebar_workspace
+                .sidebar_pane_workspace
                 .release_multi_diff_scrollbar(point, bounds, now),
         };
         if outcome.presentation_changed {
@@ -1130,6 +1601,12 @@ fn with_shell_presentation_model<R>(
         palette,
         retained_runtime,
         terminal_workspace,
+        pane_groups,
+        pane_host,
+        sidebar_pane_group,
+        pane_view_states,
+        active_pane,
+        terminal_pane_resize,
         terminal_scroll,
         terminal_selection,
         workspace_surface,
@@ -1138,14 +1615,12 @@ fn with_shell_presentation_model<R>(
         workspace_context,
         composer,
         session_search,
-        session_tabs,
-        selected_session_tab,
-        workbench_item,
+        tab_inputs,
         caret_blink,
         ui_dispatch,
         session_sidebar,
-        agent_sidebar,
-        agent_sidebar_workspace,
+        sidebar_part,
+        sidebar_pane_workspace,
         file_editor_host,
         file_editor_input,
         file_editor_search,
@@ -1173,10 +1648,79 @@ fn with_shell_presentation_model<R>(
     let language_completions = language_service.active_completions(file_editor_host);
     let language_server_runtime_state =
         language_service.server_state(language_server_settings.selected_server().server_id());
+    let active_tab_input = tab_inputs.active_key();
+    let pane_group = active_tab_input.and_then(|key| pane_groups.get(key));
+    let sidebar_pane_group = &*sidebar_pane_group;
+    let sidebar_pane = pane_host.mount(
+        &PaneHostScope::Sidebar,
+        sidebar_pane_group,
+        sidebar_pane_group.root_pane(),
+    );
+    let active_binding = active_pane.as_ref();
+    let terminal_panes = pane_group
+        .map(|group| {
+            let Some(tab_key) = active_tab_input else {
+                return Vec::new();
+            };
+            group
+                .leaf_ids()
+                .into_iter()
+                .filter_map(|pane_id| {
+                    let binding = (tab_key.clone(), pane_id);
+                    let mount =
+                        pane_host.mount(&PaneHostScope::Tab(tab_key.clone()), group, pane_id)?;
+                    let pane_id = mount.pane_id();
+                    let kind = mount.kind();
+                    let terminal_key = (kind == PaneInputKind::Terminal)
+                        .then(|| mount.terminal_key())
+                        .flatten();
+                    let (scroll_offset, scrollbar_presentation, selection) =
+                        if active_binding == Some(&binding) {
+                            (
+                                terminal_scroll.offset(),
+                                terminal_scroll.scrollbar_presentation(),
+                                terminal_selection.range(),
+                            )
+                        } else if let Some(state) = pane_view_states.get(&binding) {
+                            (
+                                state.scroll.offset(),
+                                state.scroll.scrollbar_presentation(),
+                                state.selection.range(),
+                            )
+                        } else {
+                            (0, Default::default(), None)
+                        };
+                    Some(shell_scene::PaneView {
+                        pane_id: Some(pane_id),
+                        kind,
+                        core: terminal_key.and_then(|key| {
+                            terminal_workspace.terminal(key).map(TerminalSession::core)
+                        }),
+                        scroll_offset,
+                        scrollbar_presentation,
+                        selection,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let terminal_key = match active_binding {
+        Some((tab_key, pane)) => {
+            pane_host.terminal_key(&(PaneHostScope::Tab(tab_key.clone()), *pane))
+        }
+        None => terminal_workspace.active_key(),
+    };
     operation(
         ShellPresentationModel {
             palette: *palette,
-            terminal: terminal_workspace.active().map(TerminalSession::core),
+            terminal: terminal_key
+                .and_then(|key| terminal_workspace.terminal(key))
+                .map(TerminalSession::core),
+            terminal_panes: &terminal_panes,
+            pane_group,
+            sidebar_pane_group: Some(sidebar_pane_group),
+            sidebar_pane,
+            terminal_pane_resize_split: terminal_pane_resize.as_ref().map(|resize| resize.split_id),
             terminal_scroll_offset: terminal_scroll.offset(),
             terminal_scrollbar_presentation: terminal_scroll.scrollbar_presentation(),
             terminal_selection: terminal_selection.range(),
@@ -1194,14 +1738,13 @@ fn with_shell_presentation_model<R>(
             workspace_context,
             composer,
             session_search,
-            session_tabs,
-            selected_session_tab: *selected_session_tab,
-            workbench_item: *workbench_item,
+            tab_inputs: tab_inputs.inputs(),
+            active_tab_input,
             caret_visibility: caret_blink.visibility(),
             dispatch: ui_dispatch,
             session_sidebar: *session_sidebar,
-            agent_sidebar: *agent_sidebar,
-            agent_sidebar_workspace,
+            sidebar_part: *sidebar_part,
+            sidebar_pane_workspace,
             session_context_menu: *session_context_menu,
             git_branch_context_menu,
             workspace_path_picker,
@@ -1235,9 +1778,9 @@ fn handle_terminal_event(
         session_switch_trace::event(None, "terminal-event-buffered", format_args!("key={key:?}"));
         return;
     }
-    if app.terminal_workspace.active_key() != Some(key) {
+    if app.active_pane_terminal_key() != Some(key) {
         {
-            let Some(terminal) = app.terminal_workspace.inactive_mut(key) else {
+            let Some(terminal) = app.terminal_workspace.terminal_mut(key) else {
                 return;
             };
             if let Err(error) = terminal.handle_event(event) {
@@ -1272,7 +1815,7 @@ fn handle_terminal_event(
         return;
     };
     if let Some(window) = app.window.as_ref() {
-        window.set_title(&title);
+        let _ = window.set_title(&title);
     }
     if terminal_exited {
         app.update_terminal_status(key, "Exited");
@@ -1323,23 +1866,36 @@ impl App<NativeEvent> for NativeApp {
         };
         let window = opened_window.handle();
         let system_scheme = match window.theme() {
-            Some(Theme::Dark) => ColorScheme::Dark,
-            Some(Theme::Light) | None => ColorScheme::Light,
+            Ok(Some(Theme::Dark)) => ColorScheme::Dark,
+            Ok(Some(Theme::Light) | None) => ColorScheme::Light,
+            Err(error) => {
+                context.exit_with_error(ApplicationError::product(
+                    "initial window theme query",
+                    error,
+                ));
+                return;
+            }
         };
         self.reload_theme(system_scheme);
-        window.set_theme(
-            (!self.theme_follows_system).then_some(match self.theme_scheme {
+        if let Err(error) = window.set_theme((!self.theme_follows_system).then_some(
+            match self.theme_scheme {
                 ColorScheme::Dark | ColorScheme::HighContrastDark => Theme::Dark,
                 ColorScheme::Light | ColorScheme::HighContrastLight => Theme::Light,
-            }),
-        );
+            },
+        )) {
+            context.exit_with_error(ApplicationError::product(
+                "initial window theme update",
+                error,
+            ));
+            return;
+        }
         self.physical_extent = opened_window.metrics().physical_extent();
         self.scale_factor = opened_window.metrics().scale_factor();
         let terminal_size = terminal_grid_size_for_viewport(
             self.logical_viewport(),
             ScreenBuffer::Primary,
             self.session_sidebar,
-            self.agent_sidebar,
+            self.sidebar_part,
         );
         if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
             self.fail(error);
@@ -1373,7 +1929,7 @@ impl App<NativeEvent> for NativeApp {
     }
 
     fn window_event(&mut self, context: &mut WindowContext<'_, NativeEvent>, event: WindowEvent) {
-        if self.window.as_ref().and_then(WindowHandle::id) != Some(context.id()) {
+        if self.window.as_ref().map(WindowHandle::id) != Some(context.id()) {
             return;
         }
         match event {
@@ -1417,8 +1973,11 @@ impl App<NativeEvent> for NativeApp {
                 self.terminal_pointer.cancel();
                 self.file_editor_input.cancel_pointer();
                 self.cancel_session_sidebar_resize();
-                self.cancel_agent_sidebar_resize();
-                self.agent_sidebar_workspace.cancel_multi_diff_scrollbar();
+                self.cancel_sidebar_resize();
+                if self.cancel_terminal_pane_resize() {
+                    self.update_cursor();
+                }
+                self.sidebar_pane_workspace.cancel_multi_diff_scrollbar();
                 self.terminal_scroll.cancel_scrollbar();
                 self.session_context_menu.dismiss();
                 self.git_branch_context_menu.dismiss();
@@ -1457,7 +2016,7 @@ impl App<NativeEvent> for NativeApp {
         _context: &mut AppContext<'_, NativeEvent>,
         action: AccessibilityAction,
     ) {
-        if self.window.as_ref().and_then(WindowHandle::id) != Some(action.window()) {
+        if self.window.as_ref().map(WindowHandle::id) != Some(action.window()) {
             return;
         }
         let Some(presentation) = self.presentation.as_ref() else {
@@ -1580,20 +2139,24 @@ impl App<NativeEvent> for NativeApp {
             CaretBlinkAdvance::VisibilityChanged(_)
         );
         let scrollbar_changed = self
-            .agent_sidebar_workspace
+            .sidebar_pane_workspace
             .advance_multi_diff_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_scroll.advance_scrollbar(now);
+        let session_sash_changed = self.session_sidebar.advance_sash(now);
+        let sidebar_sash_changed = self.sidebar_part.advance_sash(now);
+        let sash_changed = session_sash_changed || sidebar_sash_changed;
         let retained_runtime_due = self
             .retained_runtime
             .next_deadline()
             .is_some_and(|deadline| deadline <= now);
-        let file_search_changed = self.agent_sidebar_workspace.poll_file_search();
+        let file_search_changed = self.sidebar_pane_workspace.poll_file_search();
         let file_editor_auto_scrolled = self.advance_file_editor_auto_scroll(now);
         if caret_changed
             || scrollbar_changed
             || terminal_scrollbar_changed
             || file_search_changed
             || file_editor_auto_scrolled
+            || sash_changed
         {
             self.rebuild_presentation_on_next_redraw();
         } else if retained_runtime_due {
@@ -1602,9 +2165,11 @@ impl App<NativeEvent> for NativeApp {
         let mut deadlines = FrameDeadlineSet::default();
         for deadline in [
             self.caret_blink.next_deadline(),
-            self.agent_sidebar_workspace.multi_diff_scrollbar_deadline(),
+            self.sidebar_pane_workspace.multi_diff_scrollbar_deadline(),
             self.terminal_scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
+            self.session_sidebar.sash_deadline(),
+            self.sidebar_part.sash_deadline(),
             self.keybindings.chord_deadline(),
             self.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),
@@ -1615,7 +2180,7 @@ impl App<NativeEvent> for NativeApp {
         {
             deadlines.include(deadline);
         }
-        if self.agent_sidebar_workspace.file_search_pending() {
+        if self.sidebar_pane_workspace.file_search_pending() {
             deadlines.include(now + std::time::Duration::from_millis(50));
         }
         let control_flow = match deadlines.next_deadline() {

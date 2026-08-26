@@ -9,8 +9,8 @@ use crate::ThemeChoiceKind;
 use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
-use crate::ThemeSurface;
 use crate::ThemeSizeUnit;
+use crate::ThemeSurface;
 use crate::loader::resolve_device_root;
 use crate::tokens;
 
