@@ -13,11 +13,6 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
-use zeta_app_server_client::SessionWorkspaceRoute;
-use zeta_app_server_client::route_session_workspace;
-use zeta_app_server_client::{
-    AppServerEvent, AppServerEvents, AppServerRequestHandle, ClientError, ServerNotification,
-};
 use zeta_app_server_protocol::protocol::common::CommandId;
 use zeta_app_server_protocol::protocol::config::{
     ConfigCommandResult, ConfigReadResult, LanguageServerConfigDto, LanguageServerConfigureParams,
@@ -48,17 +43,20 @@ use zeta_text_file::{
 use zui::app::AppProxy;
 
 use crate::NativeApp;
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::{
+    AppServerEvent, AppServerEvents, AppServerHost, AppServerRequestHandle, ClientError,
+    ServerNotification, SessionWorkspaceRoute, route_session_workspace,
+};
 use crate::composer_host::composer_model_options;
 use crate::composer_host::synchronize_composer_classifier;
 use crate::composer_host::update_composer_classifier;
 use crate::native_event::NativeEvent;
-use crate::session_switch_trace::{self, SwitchId};
+use crate::session::session_switch_trace::{self, SwitchId};
 use crate::sidebar_pane_workspace::AgentSidebarView;
 use crate::tab_input::TabInputChange;
 use crate::thread_projection::ThreadProjectionUpdate;
 
-#[path = "agent_session_remote.rs"]
+#[path = "agent_session/remote.rs"]
 mod remote;
 
 const COMMAND_QUEUE_CAPACITY: usize = 32;
@@ -207,10 +205,7 @@ pub(crate) struct AgentSession {
 }
 
 impl AgentSession {
-    pub(crate) fn spawn(
-        event_proxy: AppProxy<NativeEvent>,
-        target: AgentSessionTarget,
-    ) -> Result<Self> {
+    pub(crate) fn spawn(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Result<Self> {
         let (commands, command_receiver) = mpsc::sync_channel(COMMAND_QUEUE_CAPACITY);
         let available = Arc::new(AtomicBool::new(false));
         let worker_availability = Arc::clone(&available);
@@ -424,7 +419,7 @@ impl Drop for AgentSession {
 fn run_agent_session(
     event_proxy: AppProxy<NativeEvent>,
     commands: Receiver<AgentSessionCommand>,
-    target: AgentSessionTarget,
+    target: AppServerHost,
     available: Arc<AtomicBool>,
 ) {
     let result = run_agent_session_inner(&event_proxy, &commands, &target, &available);
@@ -437,7 +432,7 @@ fn run_agent_session(
 fn run_agent_session_inner(
     event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
     available: &AtomicBool,
 ) -> Result<()> {
     if target.is_remote() {
@@ -458,7 +453,7 @@ fn run_agent_session_inner(
                 let Some(reconnect) = failure.error.downcast_ref::<AgentSessionReconnect>() else {
                     return Err(failure.error);
                 };
-                target = AgentSessionTarget::local(reconnect.root.clone());
+                target = AppServerHost::local(reconnect.root.clone());
                 preferred_session_id = reconnect.preferred_session_id.clone();
             }
         }
@@ -468,7 +463,7 @@ fn run_agent_session_inner(
 fn run_agent_session_connection(
     event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
     preferred_session_id: Option<&SessionId>,
     available: &AtomicBool,
 ) -> std::result::Result<(), AgentSessionFailure> {
@@ -540,7 +535,7 @@ fn drive_agent_session(
     client: &mut AppServerRequestHandle,
     active: &mut ActiveSession,
     workspace_root: &Path,
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
 ) -> Result<()> {
     loop {
         loop {
@@ -1232,7 +1227,7 @@ fn switch_git_branch(
 }
 
 fn prepare_workspace_reconnect(
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
     root: PathBuf,
 ) -> Result<WorkspaceSwitchProjection> {
     let session = target.with_workspace_root(&root)?.start()?;
@@ -1798,5 +1793,5 @@ fn definition_editor_position(
 }
 
 #[cfg(test)]
-#[path = "agent_session_tests.rs"]
+#[path = "agent_session/tests.rs"]
 mod tests;

@@ -1,3 +1,5 @@
+//! Product Agent session contract tests.
+
 use super::AgentSession;
 use super::AgentSessionCommand;
 use super::AgentSessionConnectionLost;
@@ -14,8 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
-use zeta_app_server_client::ClientError;
-use zeta_app_server_client::SessionWorkspaceRoute;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
@@ -28,6 +28,8 @@ use zeta_protocol::Thread;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadOrigin;
+
+use crate::app_server::{ClientError, SessionWorkspaceRoute};
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;

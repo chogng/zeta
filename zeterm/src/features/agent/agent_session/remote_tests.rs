@@ -6,6 +6,8 @@ use super::AGENT_UNAVAILABLE_COMMAND_ERROR;
 use super::AgentSessionCommand;
 use super::MAX_RECONNECT_DELAY;
 use super::RECONNECT_WINDOW;
+// Remote Agent recovery contract tests.
+
 use super::reconnect_delay;
 use super::reconnect_delay_within_window;
 use super::reject_disconnected_command;

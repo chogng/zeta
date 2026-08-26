@@ -9,8 +9,8 @@ use zui::app::AppProxy;
 use super::AGENT_UNAVAILABLE_COMMAND_ERROR;
 use super::AgentSessionCommand;
 use super::AgentSessionEvent;
-use super::AgentSessionTarget;
 use super::NativeEvent;
+use crate::app_server::AppServerHost;
 
 const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
 const INITIAL_RECONNECT_DELAY: Duration = Duration::from_millis(250);
@@ -26,7 +26,7 @@ const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
 pub(super) fn run_with_recovery(
     event_proxy: &AppProxy<NativeEvent>,
     commands: &Receiver<AgentSessionCommand>,
-    target: &AgentSessionTarget,
+    target: &AppServerHost,
     available: &AtomicBool,
 ) -> anyhow::Result<()> {
     let mut target = target.clone();
@@ -174,5 +174,5 @@ fn reconnect_delay(attempt: usize) -> Duration {
 }
 
 #[cfg(test)]
-#[path = "agent_session_remote_tests.rs"]
+#[path = "remote_tests.rs"]
 mod tests;
