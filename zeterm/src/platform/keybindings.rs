@@ -115,7 +115,7 @@ impl NativeKeybindingContext {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) enum NativeBindingCondition {
+pub(crate) enum NativeBindingCondition {
     Always,
     TextInput,
     DirectTerminal,
