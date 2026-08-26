@@ -92,7 +92,7 @@ export class Button extends DisposableOwner {
 
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
-	set label(value: string) { this.content.labelElement.textContent = value; }
+	set label(value: string) { this.content.setLabel(value); }
 	get label(): string { return this.content.labelElement.textContent ?? ""; }
 
 	toggleClassName(className: string, shouldHaveIt?: boolean): void {

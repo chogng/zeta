@@ -22,7 +22,7 @@ Code 与 Academic 是同一个 Zeta Desktop 安装包中的两种内置 Workbenc
 | Workbench 模式 | 模式 ID | Editor 装配 | 模式能力 | Dedicated Sessions |
 | --- | --- | --- | --- | --- |
 | Code | `code` | `editor.code.all.ts` + `workbench/contrib/codeEditor` | Code/Diff、Tasks、Testing、Debug | `sessions-code` |
-| Academic | `academic` | `editor.academic.all.ts` + `workbench/contrib/academic` | Document、Academic profile、父 TextModel 上的 code-block projection | 尚未提供 |
+| Academic | `academic` | `editor.academic.all.ts` + `workbench/contrib/academic` | Document、Academic profile、父 TextModel 上的连续 code-region projection | 尚未提供 |
 
 同一 workspace 可以被不同模式的窗口打开，但它仍是共享文件场景，需要文件级协调。模式隔离不代表源文件复制，也不建立第二套 App Server 领域模型。
 

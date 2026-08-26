@@ -1,4 +1,4 @@
-/** Stable DOM-free Stanza API for programmatic text and block-document consumers. */
+/** Stable DOM-free Stanza API for programmatic text and line-document consumers. */
 export { TextPosition } from "./common/core/position.js";
 export type { IPosition } from "./common/core/position.js";
 export { TextRange } from "./common/core/range.js";
@@ -14,8 +14,8 @@ export type { TextModelMaintenanceOptions } from "./common/model/textModel.js";
 export type { TextModelOptions } from "./common/model/textModel.js";
 export { TextModelRemoteHistoryPolicy } from "./common/model/textModelBlockState.js";
 export type { TextModelBlockChange, TextModelBlockOptions } from "./common/model/textModelBlockState.js";
-export { TextModelBlockTree } from "./common/model/textModelBlockTree.js";
-export type { TextModelBlock, TextModelGroup } from "./common/model/textModelBlockTree.js";
+export { createLineDocumentSnapshot, LineFacetStore, LineSequence, PointStore, RangeStore, RegionStore, RelationStore, linePoint } from "./common/model/lineDocument.js";
+export type { AtomId, FacetId, InlineAtom, LineDocumentSnapshot, LineDocumentSnapshotInput, LineFacet, LineId, LinePoint, LineRegion, LineRelation, LineRelationTarget, LineSemanticAttributes, LineSemanticValue, MarkId, ModelLine, PersistentMark, RegionId, RelationId } from "./common/model/lineDocument.js";
 export { createDocumentNode } from "./common/model/document.js";
 export { createDocumentRoot } from "./common/model/document.js";
 export { createTextNode } from "./common/model/document.js";

@@ -1,4 +1,3 @@
-import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
 import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
@@ -7,6 +6,9 @@ import { FileKind, type IFileEntry, type IFileService } from "../../../../platfo
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import type { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
+import type { ILabelService } from "../../../../platform/label/common/labelService.js";
+import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from "../../../browser/labels.js";
 import { WorkbenchAsyncDataTree, type ResourceOpenEvent } from "../../../../platform/list/browser/listService.js";
 import type { IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
@@ -26,6 +28,7 @@ export class ExplorerViewPane extends ViewPane {
 	private readonly editorService: IEditorService;
 	private readonly fileIconThemeService: IFileIconThemeService;
 	private readonly hoverService: IHoverService;
+	private readonly resourceLabels: ResourceLabels;
 	private readonly scrollable: ScrollableElement;
 	private readonly tree: WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>;
 	private readonly renderedLabels =
@@ -43,6 +46,8 @@ export class ExplorerViewPane extends ViewPane {
 		fileIconThemeService: IFileIconThemeService,
 		hoverService: IHoverService,
 		configurationService: IConfigurationService,
+		fileLabelDecorationService?: IFileLabelDecorationService,
+		labelService?: ILabelService,
 	) {
 		super(container, options);
 		this.fileService = fileService;
@@ -50,6 +55,12 @@ export class ExplorerViewPane extends ViewPane {
 		this.editorService = editorService;
 		this.fileIconThemeService = fileIconThemeService;
 		this.hoverService = hoverService;
+		this.resourceLabels = this.own(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService,
+			fileIconThemeService,
+			fileLabelDecorationService,
+			labelService,
+		}));
 		this.element.classList.add("zeta-explorer-view-pane");
 		this.headerElement.classList.add("zeta-explorer-title");
 		this.contentElement.classList.add("zeta-explorer");
@@ -183,22 +194,16 @@ export class ExplorerViewPane extends ViewPane {
 		const document = this.element.ownerDocument;
 		const content = h(document, "span");
 		content.className = `zeta-explorer-row-content zeta-explorer-${node.kind}`;
-		const label = this.renderedLabels.add(new IconLabel(content, {
-			label: node.name,
-			renderIcon: node.kind === FileKind.Directory
-				? undefined
-				: (container) => {
-					this.fileIconThemeService.renderFileIcon(
-						node.resource,
-						container,
-					);
-				},
-			reserveIconSpace: node.kind !== FileKind.Directory,
-		}));
+		const label = this.renderedLabels.add(this.resourceLabels.create(content));
+		label.setFile(node.resource, {
+			fileKind: node.kind,
+			fileDecorations: { colors: true, badges: true },
+		});
+		const labelText = label.element.querySelector<HTMLElement>(".zeta-icon-label-text");
 		this.renderedLabels.add(this.hoverService.setupHover({
 			target: label.element,
-			content: () => label.labelElement.scrollWidth >
-					label.labelElement.clientWidth
+			content: () => labelText && labelText.scrollWidth >
+					labelText.clientWidth
 				? node.name
 				: undefined,
 			groupId: "explorer.items",

@@ -1,39 +1,39 @@
-import "./media/editorWidget.css";
-import { throwIfCancelled } from "../../base/common/cancellation.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../base/common/lifecycle.js";
-import { isSafeInteger } from "../../base/common/numbers.js";
-import { assertDefined } from "../../base/common/types.js";
-import { URI } from "../../base/common/uri.js";
-import type { IDimension } from "../../base/browser/geometry.js";
-import type { EditorResourceInput } from "../common/editorResource.js";
-import { TextModel } from "../common/model/textModel.js";
-import type { DocumentPlugin } from "../common/model/documentPlugin.js";
-import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../common/model/document.js";
-import { createDocumentDecoration, type DocumentDecoration } from "../common/model/documentDecoration.js";
-import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from "../common/model/documentOutline.js";
-import { documentPointToPosition } from "../common/core/documentPosition.js";
-import { documentSelectionToText } from "../common/model/documentText.js";
-import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from "../common/commands/documentCommands.js";
-import { extractDocumentFragment } from "../common/model/documentFragment.js";
-import { createDefaultDocumentSchema, type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
-import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from "../common/model/documentSerialization.js";
-import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from "../common/core/documentSelection.js";
-import { DocumentTransaction } from "../common/model/documentTransaction.js";
-import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from "./editorContribution.js";
-import { DocumentOutlineNavigator } from "./widget/documentOutlineNavigator.js";
-import { DocumentCollaborationController } from "../contrib/collaboration/common/controller.js";
-import { createDocumentFragmentFromHtml } from "../contrib/clipboard/browser/htmlDocumentFragment.js";
-import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../common/services/textModelService.js";
-import type { IDocumentCollaborationService } from "../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationPresence } from "../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
-import { h, fragment as createFragment } from "../../base/browser/dom.js";
-import { FastDomNode } from "../../base/browser/fastDomNode.js";
+import './richTextEditorWidget.css';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { isSafeInteger } from '../../../../base/common/numbers.js';
+import { assertDefined } from '../../../../base/common/types.js';
+import { URI } from '../../../../base/common/uri.js';
+import type { IDimension } from '../../../../base/browser/geometry.js';
+import type { EditorResourceInput } from '../../../common/editorResource.js';
+import { TextModel } from '../../../common/model/textModel.js';
+import type { DocumentPlugin } from '../../../common/model/documentPlugin.js';
+import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../../../common/model/document.js';
+import { createDocumentDecoration, type DocumentDecoration } from '../../../common/model/documentDecoration.js';
+import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from '../../../common/model/documentOutline.js';
+import { documentPointToPosition } from '../../../common/core/documentPosition.js';
+import { documentSelectionToText } from '../../../common/model/documentText.js';
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from '../../../common/commands/documentCommands.js';
+import { extractDocumentFragment } from '../../../common/model/documentFragment.js';
+import { createDefaultDocumentSchema, type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
+import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
+import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from '../../../common/core/documentSelection.js';
+import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
+import { EditorDom } from '../../editorDom.js';
+import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorContribution.js';
+import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
+import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
+import { createDocumentFragmentFromHtml } from '../../../contrib/clipboard/browser/htmlDocumentFragment.js';
+import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/textModelService.js';
+import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationTarget } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationInvite } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationMember } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationRoomRole } from '../../../common/services/documentCollaborationService.js';
+import { h, fragment as createFragment } from '../../../../base/browser/dom.js';
 
-export interface EditorWidgetOptions {
+export interface RichTextEditorOptions {
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly plugins?: readonly DocumentPlugin<unknown>[];
 	readonly schema?: DocumentSchema;
@@ -111,13 +111,13 @@ const DEFAULT_DOCUMENT_ACTIONS: readonly { readonly id: string; readonly label: 
 type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 
 /**
- * One browser editor projected over a TextModel with Group/Block metadata.
+ * One browser editor projected over a line-first TextModel with schema-backed rich semantics.
  *
  * The editor owns the schema-backed TextModel reference, working copy, DOM projection, and
  * block-level input. `EditorPane` owns Workbench pane lifecycle. Code blocks
  * edit line ranges in this same TextModel rather than creating nested models.
  */
-export class EditorWidget extends DisposableOwner {
+export class RichTextEditorWidget extends DisposableOwner {
 
 	private readonly modelReferenceSlot = this.own(new DisposableSlot<TextModelWorkingCopyReference>());
 	private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
@@ -126,9 +126,8 @@ export class EditorWidget extends DisposableOwner {
 	private readonly collaborationPresenceListenerSlot = this.own(new DisposableSlot<IDisposable>());
 	private readonly schema: DocumentSchema;
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
+	private editorDom: EditorDom | undefined;
 	private container: HTMLDivElement | undefined;
-	private containerNode: FastDomNode<HTMLDivElement> | undefined;
-	private layoutContainerNode: FastDomNode<HTMLDivElement> | undefined;
 	private formattingContribution: DocumentFormattingContribution | undefined;
 	private collaborationContribution: DocumentCollaborationContribution | undefined;
 	private outlineNavigator: DocumentOutlineNavigator | undefined;
@@ -143,7 +142,7 @@ export class EditorWidget extends DisposableOwner {
 		return this.modelReferenceSlot.value;
 	}
 
-	constructor(private readonly modelService: ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: EditorWidgetOptions = {}) {
+	constructor(private readonly modelService: ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: RichTextEditorOptions = {}) {
 		super();
 		if (!modelService || typeof modelService.acquire !== "function") {
 			this.dispose();
@@ -183,22 +182,22 @@ export class EditorWidget extends DisposableOwner {
 				},
 			});
 		}
-		const containerNode = new FastDomNode(h(parent.ownerDocument, "div"));
-		const container = containerNode.domNode;
-		containerNode.setClassName("zeta-text-editor-widget-pane");
-		const layoutContainerNode = new FastDomNode(h(parent.ownerDocument, "div"));
-		const layoutContainer = layoutContainerNode.domNode;
-		layoutContainerNode.setClassName("zeta-text-editor-widget-layout");
+		const editorDom = this.own(new EditorDom({
+			rootClassName: "zeta-text-editor-widget-layout",
+			contentClassName: "zeta-text-editor-widget-pane",
+		}));
+		parent.append(...[collaborationContribution?.element, formattingContribution?.element].filter((element): element is HTMLElement => element !== undefined));
+		editorDom.attach(parent);
+		const container = editorDom.contentDomNode;
+		const layoutContainer = editorDom.domNode;
 		const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(layoutContainer, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
 		if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
 		layoutContainer.append(container);
-		parent.append(...[collaborationContribution?.element, formattingContribution?.element, layoutContainer].filter((element): element is HTMLElement => element !== undefined));
 		collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
 		this.collaborationContribution = collaborationContribution;
 		this.formattingContribution = formattingContribution;
+		this.editorDom = editorDom;
 		this.container = container;
-		this.containerNode = containerNode;
-		this.layoutContainerNode = layoutContainerNode;
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
 		parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
@@ -209,11 +208,9 @@ export class EditorWidget extends DisposableOwner {
 			this.collaborationContribution = undefined;
 			formattingContribution?.element.remove();
 			this.formattingContribution = undefined;
-			this.layoutContainerNode = undefined;
-			container.remove();
+			this.editorDom = undefined;
 			this.outlineNavigator = undefined;
 			this.container = undefined;
-			this.containerNode = undefined;
 		});
 	}
 
@@ -272,14 +269,7 @@ export class EditorWidget extends DisposableOwner {
 
 	layout(dimension: IDimension): void {
 		this.dimension = { width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) };
-		if (this.layoutContainerNode) {
-			this.layoutContainerNode.setWidth(this.dimension.width);
-			this.layoutContainerNode.setHeight(this.dimension.height);
-		}
-		if (this.containerNode) {
-			this.containerNode.setWidth(this.dimension.width);
-			this.containerNode.setHeight(this.dimension.height);
-		}
+		this.editorDom?.layout(this.dimension);
 	}
 
 	focus(): void {

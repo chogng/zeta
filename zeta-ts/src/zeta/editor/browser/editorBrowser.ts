@@ -71,7 +71,7 @@ export interface EditorFindOptions {
 	readonly regularExpression?: boolean;
 }
 
-export interface EditorPartOptions {
+export interface EditorBrowserOptions {
 	readonly container: HTMLElement;
 	readonly input: EditorResourceInput;
 	readonly languageId: string;
@@ -116,7 +116,7 @@ export interface EditorPartOptions {
 	readonly find?: EditorFindOptions;
 	/** Applies a single LF at the save boundary when the document has content and no final LF. */
 	readonly insertFinalNewLine?: boolean;
-	/** Browser paragraph direction for this editor part's DOM projection. */
+	/** Browser paragraph direction for this editor browser's DOM projection. */
 	readonly textDirection?: EditorTextDirection;
 	readonly presentation?: EditorViewportPresentation;
 	/** Host-owned link opening callback; the editor never opens external targets directly. */
@@ -139,7 +139,7 @@ export interface EditorPartOptions {
 }
 
 /** Runtime created by one statically selected line-editor contribution bundle. */
-export interface IEditorPartRuntime extends IDisposable {
+export interface IEditorBrowserRuntime extends IDisposable {
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
@@ -160,32 +160,32 @@ export interface IEditorPartRuntime extends IDisposable {
 }
 
 /** Creates one line-editor runtime from the contributions selected by a Workbench mode bundle. */
-export type EditorPartFactory = (options: EditorPartOptions) => IEditorPartRuntime;
+export type EditorBrowserFactory = (options: EditorBrowserOptions) => IEditorBrowserRuntime;
 
-let editorPartFactory: EditorPartFactory | undefined;
+let editorBrowserFactory: EditorBrowserFactory | undefined;
 
 /** Installs the canonical line-editor composition before a product registers its pane. */
-export function registerEditorPartFactory(factory: EditorPartFactory): void {
-	if (typeof factory !== "function") throw new TypeError("Editor part factory must be a function");
-	if (editorPartFactory && editorPartFactory !== factory) throw new Error("Editor part factory is already registered");
-	editorPartFactory = factory;
+export function registerEditorBrowserFactory(factory: EditorBrowserFactory): void {
+	if (typeof factory !== "function") throw new TypeError("Editor browser factory must be a function");
+	if (editorBrowserFactory && editorBrowserFactory !== factory) throw new Error("Editor browser factory is already registered");
+	editorBrowserFactory = factory;
 }
 
-/** Product-neutral editor host that delegates feature assembly to the selected bundle. */
-export class EditorPart extends DisposableOwner implements IEditorPartRuntime {
-	private readonly runtime: IEditorPartRuntime;
+/** Product-neutral editor browser that delegates feature assembly to the selected bundle. */
+export class EditorBrowser extends DisposableOwner implements IEditorBrowserRuntime {
+	private readonly runtime: IEditorBrowserRuntime;
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
 	readonly textInput: TextInputController;
 
-	constructor(options: EditorPartOptions) {
+	constructor(options: EditorBrowserOptions) {
 		super();
-		const factory = editorPartFactory;
+		const factory = editorBrowserFactory;
 		if (!factory) {
 			this.dispose();
-			throw new Error("No editor part contributions are registered; import a product editor bundle first");
+			throw new Error("No editor browser contributions are registered; import a product editor bundle first");
 		}
 		try {
 			this.runtime = this.own(factory(options));

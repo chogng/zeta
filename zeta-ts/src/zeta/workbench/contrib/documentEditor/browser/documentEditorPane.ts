@@ -2,7 +2,7 @@ import { assertDefined } from "../../../../base/common/types.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import type { IDimension } from "../../../../base/browser/geometry.js";
 import type { URI } from "../../../../base/common/uri.js";
-import { EditorWidget, type EditorWidgetOptions } from "../../../../editor/browser/editorWidget.js";
+import { RichTextEditorWidget, type RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
 import type { DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutline } from "../../../../editor/common/model/documentOutline.js";
@@ -16,7 +16,7 @@ import { DOCUMENT_EDITOR_ID } from "./documentEditorInput.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Workbench-only services that complement one document editor. */
-export interface EditorPaneOptions extends EditorWidgetOptions {
+export interface EditorPaneOptions extends RichTextEditorOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 }
 
@@ -24,7 +24,7 @@ export interface EditorPaneOptions extends EditorWidgetOptions {
 export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 	readonly id = DOCUMENT_EDITOR_ID;
 
-	private readonly editor: EditorWidget;
+	private readonly editor: RichTextEditorWidget;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
@@ -36,7 +36,7 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 		super();
 		const modelService = this.own(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
 		const collaborationService = options.documentCollaborationService ? this.own(options.documentCollaborationService) : undefined;
-		this.editor = this.own(new EditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
+		this.editor = this.own(new RichTextEditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
 		this.defer(() => {
 			this.container?.remove();
 			this.container = undefined;

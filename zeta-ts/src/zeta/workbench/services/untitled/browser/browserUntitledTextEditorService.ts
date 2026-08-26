@@ -7,9 +7,11 @@ import { type IUntitledTextEditor, type IUntitledTextEditorService, type Untitle
 export class BrowserUntitledTextEditorService extends DisposableOwner implements IUntitledTextEditorService {
 	private readonly editors = new Map<string, IUntitledTextEditor>();
 	private readonly _onDidCreate = this.own(new Emitter<IUntitledTextEditor>());
+	private readonly _onDidChangeLabel = this.own(new Emitter<IUntitledTextEditor>());
 	private nextUntitledNumber = 1;
 
 	readonly onDidCreate = this._onDidCreate.event;
+	readonly onDidChangeLabel = this._onDidChangeLabel.event;
 
 	create(options: UntitledTextEditorOptions = {}): IUntitledTextEditor {
 		validateOptions(options);
@@ -29,6 +31,17 @@ export class BrowserUntitledTextEditorService extends DisposableOwner implements
 	get(resource: URI): IUntitledTextEditor | undefined {
 		if (!this.isUntitled(resource)) return undefined;
 		return this.editors.get(resource.toString());
+	}
+
+	rename(resource: URI, label: string): IUntitledTextEditor | undefined {
+		if (!this.isUntitled(resource)) return undefined;
+		if (typeof label !== 'string' || label.trim().length === 0) throw new TypeError('Untitled editor label must be a non-empty string');
+		const current = this.editors.get(resource.toString());
+		if (!current || current.label === label) return current;
+		const updated = Object.freeze({ ...current, label });
+		this.editors.set(resource.toString(), updated);
+		this._onDidChangeLabel.fire(updated);
+		return updated;
 	}
 
 	isUntitled(resource: URI): boolean {

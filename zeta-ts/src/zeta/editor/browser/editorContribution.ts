@@ -9,7 +9,7 @@ import { type DocumentCollaborationInvite } from "../common/services/documentCol
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
-import { type EditorPartOptions } from "./editorPart.js";
+import { type EditorBrowserOptions } from "./editorBrowser.js";
 import { type TextInputCompletionOptions, type TextInputController, type TextInputLanguageEditingAdapter } from "./input/textInputController.js";
 import { type EditorViewport } from "./view/editorViewport.js";
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
@@ -27,7 +27,7 @@ export interface EditorCapability<T> {
 /** Pre-widget assembly seam for contributions that supply model projection inputs. */
 export interface TextEditorContributionConfigurationContext {
 	readonly kind: "text";
-	readonly options: EditorPartOptions;
+	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
@@ -50,7 +50,7 @@ export interface TextEditorContributionConfigurationContext {
 
 export interface TextEditorContributionContext {
 	readonly kind: "text";
-	readonly options: EditorPartOptions;
+	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;

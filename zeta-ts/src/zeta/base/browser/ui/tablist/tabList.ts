@@ -20,6 +20,7 @@ export interface TabListItem<T> {
 	readonly id: string;
 	readonly value: T;
 	readonly label: string;
+	readonly description?: string;
 	readonly ariaLabel?: string;
 	readonly tooltip?: string;
 	readonly icon?: Icon;

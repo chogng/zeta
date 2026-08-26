@@ -6,6 +6,7 @@ export interface TextModelHistoryEntry {
 	readonly textUnits: number;
 	readonly transactionId: number;
 	readonly historyGroup: TextEditHistoryGroup | undefined;
+	readonly lineIds: readonly string[] | undefined;
 }
 
 export class TextModelHistory {
@@ -101,6 +102,7 @@ export class TextModelHistory {
 			edits,
 			previous.transactionId,
 			previous.historyGroup,
+			previous.lineIds,
 		);
 		this.historyTextUnits += replacement.textUnits - previous.textUnits;
 		this.undoStack[this.undoStack.length - 1] = replacement;
@@ -111,8 +113,9 @@ export class TextModelHistory {
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
 		historyGroup: TextEditHistoryGroup | undefined,
+		lineIds?: readonly string[],
 	): void {
-		this.push(this.undoStack, edits, transactionId, historyGroup);
+		this.push(this.undoStack, edits, transactionId, historyGroup, lineIds);
 		this.trim();
 	}
 
@@ -120,8 +123,9 @@ export class TextModelHistory {
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
 		historyGroup: TextEditHistoryGroup | undefined,
+		lineIds?: readonly string[],
 	): void {
-		this.push(this.redoStack, edits, transactionId, historyGroup);
+		this.push(this.redoStack, edits, transactionId, historyGroup, lineIds);
 		this.trim();
 	}
 
@@ -153,8 +157,9 @@ export class TextModelHistory {
 		edits: readonly OffsetTextEdit[],
 		transactionId: number,
 		historyGroup: TextEditHistoryGroup | undefined,
+		lineIds?: readonly string[],
 	): void {
-		const entry = createEntry(edits, transactionId, historyGroup);
+		const entry = createEntry(edits, transactionId, historyGroup, lineIds);
 		stack.push(entry);
 		this.historyTextUnits += entry.textUnits;
 	}
@@ -206,6 +211,7 @@ function createEntry(
 	edits: readonly OffsetTextEdit[],
 	transactionId: number,
 	historyGroup: TextEditHistoryGroup | undefined,
+	lineIds?: readonly string[],
 ): TextModelHistoryEntry {
 	return {
 		edits,
@@ -215,5 +221,6 @@ function createEntry(
 		),
 		transactionId,
 		historyGroup,
+		lineIds: lineIds === undefined ? undefined : Object.freeze([...lineIds]),
 	};
 }

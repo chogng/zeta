@@ -1,230 +1,185 @@
-# Stanza Document Engine
+# Stanza Rich Document Engine
 
-> 本文是结构化文档功能实现的 canonical 设计规范，拥有 schema、TextModel structure、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是富文档功能实现的 canonical 设计规范，拥有 line-first 内容模型、schema compatibility、transaction、selection、history、browser projection、profile、collaboration、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、持久化与服务端的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
-> 状态：Current。潜在演进会单独标记，不能被解释为已实现能力。
+> 状态：Current + Proposed。状态表明确区分已实现内核、兼容路径与后续迁移。
 
 ## 快速理解
 
-Stanza 只有一个同步权威：拥有 `TextBuffer`、Group 和 BlockTree 的 `TextModel`。Code 的默认拓扑是一个 source Group 和 code Block；Academic schema 定义更多 Group/Block 类型、selection、transaction history 和 plugin state。PieceTree 只是 TextBuffer 的当前私有实现。
+Stanza 以有序逻辑行为唯一内容主轴。Code 与 Academic 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
 
-| 场景 | Canonical owner | 关键保证 |
+| 场景 | 当前模型 | 明确边界 |
 | --- | --- | --- |
-| 修改节点、文本、mark 或表格 | `DocumentTransaction` → `TextModel.dispatch()` | BlockTree 与 TextBuffer 在同一版本上原子提交 |
-| selection、undo/redo 和 stored marks | structured `TextModel` | 与 TextModel version 一起映射，不依赖 DOM lifetime |
-| 结构化 DOM 和输入 | `EditorWidget` | DOM 只是 projection，不是文档权威 |
-| Academic schema、citation 和 toolbar | `EditorProfile` + matching contrib | 产品语义不进入通用 document core |
-| 打开、保存、revert 和 conflict | `DocumentEditorTextModelService` + `DocumentWorkingCopy` | Workbench transport 不拥有 model mutation |
-| 本地或远程 collaboration | collaboration contrib + `IDocumentCollaborationService` | server 排序；client 不伪装成完整 CRDT authority |
-| `codeBlock` 行编辑 | owning `TextModel` + `Group.blockTree` | 代码行仍属于当前文档，不创建嵌套模型 |
+| 独立代码文件 | 行、文档 metadata、selection、transaction、history、decoration | 不创建 source Group 或全文 code Block；语法颜色属于临时 decoration |
+| 学术论文 | 同一行主轴上的 mark、atom、facet、region、relation | schema 命令当前仍通过兼容 `DocumentNode` transaction 输入，再原子生成 line snapshot |
+| 论文代码区域 | 连续行 region，保存 `languageId` 等属性 | 不创建嵌套 `TextModel`，也不启动 Code pane |
+| 图片、引用与 hard break | 文本中的 `U+FFFC` 与一个 atom 一一对应 | 光标只位于原子前后；block atom 必须独占逻辑行 |
+| 标题、caption 与交叉关系 | line facet 与 stable-ID relation | 编号和显示文本由 renderer 派生，不写回正文 |
 
 ## 设计不变量
 
-- `TextModel` 是文本、分行、structure index、selection、stored marks、version、history 和 plugin state 的唯一同步 mutation authority。
-- `DocumentSchema` 决定 node/mark vocabulary、child order、group、cardinality 和 attributes；browser node view 不能绕过 schema。
-- Code 与 Academic 共享 TextModel 的文本、行、版本和生命周期；Academic 的结构化 transaction 是同一模型的可选能力。
-- `DocumentPoint` 和 node identity 是 durable mapping anchor；DOM offset 和 DOM node lifetime 不能成为 model coordinate。
-- Transaction、selection mapping、plugin apply 和 final schema validation 要么全部成功，要么不改变 model/history/version。
-- Profile-specific schema、node views、toolbar 和 collaboration schema identity 留在 profile/contrib owner，不进入通用 `common/model`。
-- Workbench 拥有 pane/input、working copy、resource transport 和 product composition；Editor common 不依赖 Workbench。
-- Collaboration transport、room authorization 和 server ordering 不进入 `TextModel`。
+- `TextModel` 是文本、有序逻辑行、稳定 `LineId`、version、history 和当前 `LineDocumentSnapshot` 的唯一同步 owner。
+- 逻辑行与视觉行严格分离。窗口换行只改变 projection，不创建模型行。
+- 文本位置使用 `LinePoint { lineId, offset }`；offset 是 UTF-16、零基、尾端排除坐标。
+- 持久字体与排版属性属于 mark；syntax token、diagnostic、搜索、diff 和主题颜色属于 decoration。
+- inline object 与 block-display object 都是 atom。一个 atom 必须指向恰好一个 `U+FFFC`，每个 `U+FFFC` 也必须有一个 atom。
+- `TextModel` 的一次提交只产生一个 version 与一个 undo entry。同步 mutation 不等待 Worker、Rust、App Server、文件系统或语言服务。
+- Code 与 Academic 可以使用不同 widget、输入 profile 和 codec，但不能创建不同的内容 authority。
 
-## 分层与依赖方向
+## Line-first snapshot
 
-```mermaid
-flowchart LR
-    Core[common/core coordinates] --> Model[common/model TextModel]
-    Schema[DocumentSchema] --> Model
-    Commands[common/commands] --> Model
-    Model --> Widget[browser/EditorWidget]
-    Profile[Workbench EditorProfile] --> Widget
-    Feature[contrib feature] --> Model
-    Feature --> Widget
-    Widget --> Pane[Workbench DocumentEditorPane]
-    Pane --> ModelService[DocumentEditorTextModelService]
-    ModelService --> Persistence[Working copy / file transport]
-    Collaboration[Collaboration contrib] --> Model
-    Collaboration --> Transport[IDocumentCollaborationService adapter]
+`TextModel.lineDocument` 返回一个不可变单版本快照：
+
+```ts
+interface LineDocumentSnapshot {
+	readonly lines: LineSequence;
+	readonly marks: RangeStore;
+	readonly atoms: PointStore;
+	readonly facets: LineFacetStore;
+	readonly regions: RegionStore;
+	readonly relations: RelationStore;
+	readonly metadata: LineSemanticAttributes;
+}
 ```
 
-| 层 | 拥有 | 不得拥有 |
-| --- | --- | --- |
-| `common/core` | `DocumentPoint`、`DocumentSelection`、absolute position value | schema、DOM、profile |
-| `common/model` | node tree、schema、transaction、mapping、history、plugin、decoration、serialization | browser focus、Workbench、transport DTO |
-| `common/commands` | DOM-free structural/text command plan | toolbar、keyboard listener、pane state |
-| `browser/editorWidget.ts` | node/mark DOM、input、selection projection、node-view lifecycle | resource save、profile matching、second model |
-| `contrib/<feature>/common` | feature schema、command、state、rebase data | DOM、Workbench composition |
-| `contrib/<feature>/browser` | node view、toolbar、transient UI | transaction authority、pane registration |
-| Workbench document services | model reference、working copy、persistence、profile materialization | document edit semantics、browser internals |
-| Collaboration adapters | App Server/HTTP DTO、authentication、polling/retry | profile schema、optimistic editor state |
-
-依赖保持 `Workbench → editor/contrib/browser → editor/common → base`。结构化状态由 `TextModel` 直接拥有，但普通 TextModel 不必启用 schema；Code 功能实现不依赖 Academic profile 或 document browser projection。
-
-## Schema 与 Block TextModel
-
-### Document tree
-
-`DocumentNode` 是 immutable tree value，block 和 inline structure 使用稳定 node identity。`DocumentSchema` 支持 node kind、group、attribute、mark、ordered content terms 和 `min`/`max` cardinality。Custom top node 与默认 `doc` 走同一验证路径，transaction 不假设 root name。
-
-Stanza 的目标结构只有一个方向：
+内容拓扑只有一个方向：
 
 ```text
-TextModel → Group[] → BlockTree → Block[] → Line[]
+TextModel
+  └─ LineSequence
+       ├─ ModelLine { id, text }
+       ├─ RangeStore<PersistentMark>
+       ├─ PointStore<InlineAtom>
+       ├─ LineFacetStore
+       ├─ RegionStore
+       └─ RelationStore
 ```
 
-- `TextModel` 原生拥有有序 Group；Code 总有一个 source Group，旧 schema 的 root-level block 在迁移期间由稳定的隐式 Group 包装。
-- 每个 `Group` 恰好拥有一个 `TextModelBlockTree`。BlockTree 拥有 root 顺序、block 父子拓扑与 identity lookup，但不保存第二份文本。
-- `Block` 是 typed union，不是泛化的“任意文本容器”：至少包括 `textBlock`、`codeBlock`、`quoteBlock` 与 `imageBlock`，后续类型通过 schema/profile 扩展。容器 block 的 children 仍属于同一个 BlockTree。
-- Block 使用零基、尾端排除的行范围关联 TextBuffer 物理行，不保存第二份文本或 Line 数组。`ImageBlock` 等 atomic block 拥有媒体 payload，并可选择覆盖 caption 行。
-- Group、Block 和需要 durable mapping 的结构节点拥有稳定 identity；line identity 与存储策略由对应实现决定，不能用 DOM line 充当 model authority。
+`TextBuffer` 保存字符和 LF 分行，`LineSequence` 保存与当前行一一对应的稳定 identity。PieceTree 只是 `TextBuffer` 的私有实现，不属于公开模型拓扑。
 
-调用方通过 `TextModel.groups`、`getGroup()`、`getBlock()` 和 `getBlockAtLine()` 访问语义拓扑；block 集合只能从对应 Group 的 BlockTree 获得。`DocumentNodeKind` 允许 profile 明确声明 `group` 与 `line`。迁移期间旧 paragraph/list/table 结构仍由现有 command 支持。
+### 行 identity 与文本编辑
 
-`createNode` 和 transaction builder 可以在一次原子组装期间创建 incomplete composite fragment；child type 与 order 始终验证，只有 content minimum 可以通过显式 `allowIncompleteContent` 暂时放宽。Commit 前必须执行 strict final validation。
+普通文本 edit 保留 edit 起始行的 identity，删除被 join 的后续行 identity，并为 split 产生的新行分配 identity。Undo/redo history 同时保存 inverse text edit 与目标 `LineId` 序列，因此撤销 split、重做 split 和再次 join 不会制造不同的行 identity。
 
-### Transaction 与 mapping
+纯文本 codec 可以不持久化 `LineId`，打开文件时由模型分配本次生命周期 identity；富文档 codec 必须恢复持久 identity。`TextModelOptions.lineIds` 只用于受限文本 profile，schema-backed 文档的 identity 来自文档 codec/projection。
 
-`DocumentTransaction` 包含 replace text、insert/delete/move node、set attributes、set marks 和 set node type 等 steps。所有 steps 都对同一个 pre-transaction document 解释，生成一份 `DocumentTransactionMapping`，供 selection、decoration、plugin 和 history 共用。
+## 五类正交语义
 
-Transaction metadata 通过 `withMeta`/`getMeta` 保持 immutable。Typing、paste、IME、command 和 remote origin 可以携带明确语义，但 inverse history 不继承只描述原始用户动作的 metadata。
+### Range mark
 
-`serializeDocumentTransaction` 和 `deserializeDocumentTransaction` 是 transport-neutral replay contract。Deserializer 验证 step、selection、stored marks 和 JSON-safe metadata，不能把 transport payload 直接提交给 model。
+`PersistentMark` 保存一个有序、非空 `LinePoint` range。多个 mark 可以重叠组合；同一文字可以同时拥有字体、字号、粗体、斜体、链接、上下标和行内代码样式。Mark 不得覆盖 atom 占位符。
 
-### Selection、history 和 stored marks
+### Point atom
 
-`DocumentSelection` 是 closed union：
+`InlineAtom` 保存稳定 id、kind、point、inline/block display 与 JSON-safe attrs。引用保存 reference identity，公式保存源码，图片保存 asset identity，cross-reference 保存 stable target；格式化后的引用编号、公式字形与交叉引用文字由 renderer 生成。
 
-- `TextSelection`：同一或跨相邻 block 的文本范围；
-- `NodeSelection`：image 等 atomic node；
-- `AllSelection`：整个 document。
+Block atom 所在逻辑行只能包含该 atom。视觉高度、公式编号、图片尺寸与 bibliography 展开行数属于 layout/projection，不改变模型行数量。
 
-Selection 使用 identity-based `DocumentPoint` 映射。`DocumentTransaction.withSelection(undefined)` 表示显式清除 selection，区别于让 model 自动 mapping。
+### Line facet
 
-`DocumentHistory` 保存 transaction 与 selection snapshot。Undo/redo 通过同一 schema 和 mapping contract 重放。Collapsed selection 的 stored marks 是 editor insertion state，后续 typing、paste 和 IME 使用它们，但它们不是 DOM selection 属性。
+`LineFacet` 把标题层级、列表、对齐、quote、caption 候选或 profile 自定义语义附着到一行。当前 schema compatibility projection 会把 group/block/line ancestor 变成同一行上的可组合 facet；heading 的 `level` 等 attrs 保持在 facet 上。
 
-### Plugin 与 decoration
+### Contiguous region
 
-`DocumentPlugin` 是 common-layer state extension。Plugin state 在 user、remote、undo、redo、reset 和显式 selection change 时原子更新；`filterTransaction` 可以在 mutation 前拒绝 transaction。Plugin failure 不能留下部分 document、selection、history 或 version。
+`LineRegion` 使用 start/end `LineId` 表达连续区域。当前 code block 投影为 `kind: 'code'` 的 region，并在 attrs 中保存 `languageId`。Region 交叉无效；嵌套必须显式声明 `parentRegionId`，不能从区间偶然重叠推断层级。
 
-`DocumentDecorationSet` 保存 immutable identity-based ranges。每个 plugin/source 保持独立集合；view 可以合并投影，但不能丢失 source identity。Transaction mapping 只计算一次，range 无法映射时明确 drop。
+### Stable relation
 
-## Browser projection
+`LineRelation` 连接 line、atom、region 或 external target。Caption 使用 caption line → image atom；缺失 target 必须显式标为 `unresolved`，否则 snapshot validation 拒绝提交。
 
-`EditorWidget` 是 canonical structured browser surface。它消费 caller-owned structured `TextModel`，创建 node/mark DOM、映射 browser input 与 selection，并拥有 node-view handle 的 `update`/`dispose` 生命周期。Disposing widget 不 dispose caller-owned model。
+## Transaction、mapping 与 history
 
-Browser surface 采用两种 text projection：
+`TextModel.applyEdits()` 处理受限文本 profile，并在同一 mutation boundary 更新 TextBuffer、LineId、tracked ranges、history、version 和事件。`TextModel.dispatch()` 当前处理 schema-backed Academic transaction，在提交前完成 schema、selection、plugin 与 projection validation，再一次性替换 document compatibility value 与 line snapshot。
 
-- 简单的无 mark 单一 text run 可以使用 lightweight textarea；
-- 多 run、mark、hard break、inline atom 或 decoration 使用 run-based `contenteditable` surface。
+当前 `DocumentTransaction` 是 Academic browser commands、clipboard、collaboration 和 serialization 的兼容输入，不是第二个 browser model。`projectDocumentToLines()` 在每次成功 transaction 中把 schema value 转成单版本 line snapshot；如果 atom、mark、region 或 relation 违反 line-first 约束，commit 在发布 version 前失败。
 
-`beforeinput`、paste、selection delete、split/join 和 IME 最终都转换为 common command/transaction。IME provisional DOM 在 commit 时形成一个 metadata-bearing history transaction；cancel 恢复最后的 model snapshot。
+Schema transaction compatibility 尚未迁移成直接的 `LineDocumentTransaction` step vocabulary。完成迁移前，新增富语义必须同时提供 schema 表达与 line projection，不能只写入松散 sidecar。
 
-Browser HTML 永远不是 trusted document state。Structured clipboard 使用 versioned custom MIME envelope；外部 HTML 只通过 restricted vocabulary converter 进入 schema-validated fragment，script、event attribute、unsafe URL、style 和 unknown state 被拒绝。Plain text 始终是 fallback。
+## Browser projection 与输入 profile
 
-## Code block 行范围
+`CodeEditorWidget` 投影普通代码文件的逻辑行、visual wrapping、selection、caret、token 和 decoration。`RichTextEditorWidget` 当前投影 schema compatibility value，并通过同一个 `TextModel` 提交 Academic commands；它不得拥有第二套文本、版本或 history。
 
-`codeBlock` 是 Stanza Academic 功能实现中的 typed block。它的 identity、顺序、attributes 和全部文本行都属于当前 structured `TextModel`；所属 Group 的 `TextModelBlockTree` 给出它的 `startLine`/`endLine` 和直属 line，浏览器只投影并编辑该范围。
+输入语义由 profile/widget 决定：
 
-代码块遵守以下边界：
+| 输入 | Code | Academic prose | Academic code region |
+| --- | --- | --- | --- |
+| Enter | split source line | 创建下一段 | split source line |
+| Shift+Enter | profile command | 插入 hard-break atom | profile command |
+| Tab | indentation/completion | profile navigation/formatting | code indentation |
+| Backspace/Delete | text command | atom 边界整对象删除 | text command |
 
-- 不创建第二个 `TextModel`，也不存在 embedded-editor factory；
-- 输入转换成 owning TextModel 的结构化 transaction，文本与 block 元数据使用同一版本；
-- Academic code-block projection 不 import `CodeEditorPane`、`EditorPart` 或 `workbench/contrib/codeEditor`；
-- 如果未来复用 Code 的高亮、gutter 或行布局，它们必须成为父 TextModel 行范围上的 projection，而不是新的编辑 authority。
+当前 Academic widget 的 `DocumentPoint` selection 仍属于 compatibility path。目标 `LinePoint` selection 和 atom-aware command mapping 是 Proposed，迁移时必须保持 clipboard、IME、stored marks 与 collaboration history 行为。
 
-## Profile 与 Contribution
+## Code region
 
-Workbench `EditorProfile` 将以下产品选择稳定组合：
+Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。所有 source line、language attrs、version 和 undo history 都属于父模型。
 
-- resource matcher 和稳定 `editorId`；
-- schema factory 和 canonical empty-document factory；
-- block/inline node views；
-- toolbar actions；
-- document plugins；
-- collaboration schema identity。
+- 不创建第二个 `TextModel` 或 embedded-editor factory；
+- 输入转换成 owning TextModel 的 transaction；
+- Academic code-region projection 不 import `CodeEditorPane`、`EditorBrowser` 或 `workbench/contrib/codeEditor`；
+- 高亮、gutter 与 line layout 如果复用 Code 实现，只能作为父模型 region projection。
 
-Schema 在一个 pane 生命周期内固定。不同 schema 的 profile 不得共享同一个 pane instance。`createDocumentEditorPaneOptions` 在 Workbench composition root 把 profile 与 text-file、working-copy 和 collaboration services 组合。
+## Profile、codec 与持久化
 
-通用 formatting、clipboard、collaboration 等能力属于独立 contribution。Academic title/abstract/section、citation/reference 等领域节点属于 matching profile/contrib，不得添加到默认 `DocumentSchema`。
+Workbench `EditorProfile` 组合 resource matcher、schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。
+
+Code codec 只读写 LF/CRLF 文本，并把 `languageId` 等信息放在文档 metadata 或宿主资源状态中。Academic codec 必须保存 lines、marks、atoms、facets、regions、relations、assets、references 与 document metadata；当前 production codec 仍使用 versioned schema serialization envelope，迁移到直接 line serialization 时必须提供兼容 migration。
+
+`DocumentEditorTextModelService` 解析 resource 为 caller-owned `TextModelWorkingCopyReference`。`DocumentWorkingCopy` 适配 dirty/revert/conflict、expected-revision save 和 untitled Save As；Workbench transport 不拥有 model mutation。
 
 ## Collaboration
 
-Collaboration 使用 server-ordered transaction stream，而不是让 `TextModel` 自己选择分布式顺序。
+Collaboration 使用 server-ordered transaction stream，不让 `TextModel` 自己选择分布式顺序。当前 wire contract 传输 schema transaction compatibility envelope；client rebase 后仍通过同一个 `TextModel.dispatchRemote()` 产生一个 version 与 line snapshot。
 
-```mermaid
-flowchart LR
-    Local[Local transaction] --> Sync[DocumentCollaborationSynchronizer]
-    Sync --> Submit[Exact in-flight envelope]
-    Submit --> Authority[App Server or remote room authority]
-    Authority --> Ordered[Ordered versioned update]
-    Ordered --> Controller[DocumentCollaborationController]
-    Controller --> Rebase[Rebase pending local/history]
-    Rebase --> Model[TextModel with structure]
-```
+- Synchronizer 分开保存 canonical、exact in-flight 与 later optimistic buffer；
+- 无法安全 rebase 的 history branch 明确 drop，不覆盖 remote content；
+- Snapshot resync 会丢弃 local intent 时报告 `resyncRequired`；
+- Presence 和 remote selection 是带 lease 的 ephemeral stream，不进入 durable history；
+- Transport、credential、room authorization 和 retry policy 留在 Workbench adapter。
 
-- `DocumentCollaborationSynchronizer` 分开保存 canonical、exact in-flight 和 later optimistic buffer。较晚 typing 不能泄漏到较早 submit snapshot。
-- `DocumentCollaborationController` 把一个 structured `TextModel` 绑定到 `IDocumentCollaborationService` connection，应用 ordered remote updates 和 rebase。
-- `rebaseDocumentTransaction` 只处理共享 base 上的一侧 pending-local transformation；它不是完整 OT/CRDT session。
-- `rebaseDocumentHistory` 重写 local undo/redo branch；无法安全 replay 的 branch 被 drop，而不是覆盖 remote content。
-- Snapshot resync 如果会丢弃 local intent，controller 停止并报告 `resyncRequired`，不静默 reset。
-- App Server local room 与 remote collaboration server 共享 ordering、bounded replay、snapshot resync 和 exact-submit-retry contract。
-- Remote room 使用 owner/editor/viewer role。Viewer 在 widget 创建 optimistic edit 前就被投影为 read-only；只有 owner 可以管理 members。
-- Presence 和 remote selection 是带 lease 的 ephemeral stream，不进入 durable document history。
+## Validation 与失败语义
 
-`IDocumentCollaborationService` 是 editor-owned transport seam。Workbench adapter 持有 endpoint、credential、HTTP/App Server DTO 和 retry policy；这些信息不进入 TextModel 或 document serialization。
+`createLineDocumentSnapshot()` 在状态可见前验证：
 
-## 持久化与 Workbench
+- line id、semantic id、kind 与 JSON-safe attrs；
+- line text 不包含模型换行符；
+- mark point 存在、range 有序非空且不覆盖 atom；
+- atom 与 `U+FFFC` 双向一一对应；
+- block atom 独占逻辑行；
+- facet line、region boundary、parent region 与 relation endpoint 存在；
+- region 不交叉，嵌套显式声明 parent；
+- unresolved relation target 显式标记。
 
-`DocumentEditorTextModelService` 解析一个 resource 为 caller-owned `TextModelWorkingCopyReference`。`DocumentWorkingCopy` 适配 serialization、dirty/revert/conflict、expected-revision save 和 untitled Save As。`DocumentEditorPane` 负责 host layout、visibility、focus 和 working-copy exposure，不实现 document command。
-
-Empty resource reload/revert 使用 profile 的 canonical empty-document factory；非空 plain text migration 使用通用 paragraph path。Persistence 反序列化必须使用当前 profile schema，不能先创建 generic document 再由 browser 修补。
-
-## 失败与生命周期
-
-- Invalid node、attribute、mark、selection、step 或 final schema 在 commit 前失败。
-- Transaction mapping、plugin apply、selection mapping、history update 和 version advance 是一个原子 boundary。
-- Node view 创建失败不能改变 model；已创建 handle 由 widget dispose。
-- Clipboard/custom MIME/remote envelope 在 schema 与 protocol validation 前不能进入 model。
-- Model reference、widget、pane、working copy 和 collaboration connection 分别释放自己创建的资源，不跨 owner dispose。
-- Remote retry 只重试可证明没有改变 exact submit identity 的请求；unknown outcome 通过 server version/replay contract 恢复。
-- Profile schema 或 `collaborationSchemaId` 变化是持久兼容边界，需要 serialization migration 和 collaboration compatibility review。
+Invalid schema、selection、step、plugin state 或 line snapshot 在 commit 前失败。Model reference、widget、pane、working copy 和 collaboration connection 分别释放自己创建的资源，不跨 owner dispose。
 
 ## 当前状态与限制
 
 | Area | Status | Boundary |
 | --- | --- | --- |
-| Schema、immutable tree、transaction、selection、history、serialization | ✅ Current | `editor/common` 同步权威 |
-| Text/mark/list/table/link/image/hard-break editing | ✅ Current | common command + `EditorWidget` projection |
-| Structured clipboard 和 restricted external HTML | ✅ Current | schema validation 后进入 model |
-| Academic profile、outline、citation 和 formatting | ✅ Current | profile/contrib owned |
-| Local/remote collaboration、membership、presence | ✅ Current | server ordered；transport 在 Workbench adapter |
-| Selective author undo through unsafe remote replacement | 部分具备 | 安全 branch 保留；不安全 branch drop |
-| Arbitrary profile-defined schema validation on server | Intentional boundary | profile 是 canonical validator；backend 不复制 browser profile schema |
-| Off-thread synchronous document mutation | Non-goal | dedicated worker entrypoint 不改变 Renderer mutation authority |
+| 有序逻辑行、稳定 LineId、UTF-16 LinePoint | ✅ Current | 普通 TextModel edit、split/join、undo/redo 已接入 |
+| Range/Point/Facet/Region/Relation store 与 validation | ✅ Current | immutable `LineDocumentSnapshot` |
+| 普通代码受限 profile，无 source Group/全文 Block | ✅ Current | mark/atom/facet/region/relation 为空 |
+| Schema document → line semantics projection | ✅ Current | mark、inline/block atom、ancestor facet、code region、caption relation |
+| Academic browser 直接使用 LinePoint command | Proposed | 当前仍使用 DocumentPoint compatibility commands |
+| 直接 `LineDocumentTransaction` 与 line-first rich codec | Proposed | 当前 schema transaction/serialization 是兼容输入 |
+| Math、cross-reference 与 generated bibliography UI | Extension point | store contract 已能表达；profile command/view 尚未提供 |
+| Table、footnote、pagination、floating object | Potential | 专门结构或页面布局问题，不改变行主轴 |
 
 ## 关键实现入口
 
 | Symbol/file | Responsibility | 修改时同步检查 |
 | --- | --- | --- |
-| `common/model/documentSchema.ts` | node/mark/content contract | profile schema、serialization、fixtures |
-| `common/model/textModel.ts` | TextBuffer、Group、BlockTree、版本与唯一 mutation authority | buffer、widget、language version gates |
-| `common/model/textBuffer.ts` | 字符和物理行存储 contract | PieceTree implementation、snapshot、worker mirror |
-| `common/model/textModelBlockState.ts` | TextModel 内部的 schema transaction、selection、plugin 与 block history helper | transaction、collaboration、atomic commit tests |
-| `common/model/textModelBlockSnapshot.ts` | schema node 到 Group/BlockTree 行范围的单版本转换 | schema、serialization、projection tests |
-| `common/model/textModelBlockTree.ts` | 单个 Group 内的 Block 父子拓扑与 TextBuffer 行范围 | nested block、projection tests |
-| `common/model/documentTransaction.ts` | steps、mapping、metadata | selection、decoration、rebase、serialization |
-| `common/model/documentHistory.ts` | undo/redo branches | remote rebase、selection restore |
-| `common/model/documentPlugin.ts` | plugin lifecycle 和 filter/apply | atomicity、decoration projection |
-| `browser/editorWidget.ts` | browser projection 和 input | DOM selection、IME、clipboard、node views |
-| `contrib/collaboration/common/synchronizer.ts` | canonical/in-flight/buffered state | retry、ack、resync tests |
-| `contrib/collaboration/common/controller.ts` | connection ↔ model binding | remote apply、presence、read-only state |
-| Workbench `editorProfile.ts` | product schema/composition | pane identity、empty document、collaboration schema |
+| `common/model/lineDocument.ts` | LineId、五类 store、snapshot freeze 与 validation | codec、projection、atom/region/relation tests |
+| `common/model/lineDocumentProjection.ts` | schema compatibility value → line semantics | schema、serialization、Academic model tests |
+| `common/model/textModel.ts` | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary | cursor、worker mirror、language version gate、model tests |
+| `common/model/textModelBlockState.ts` | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests |
+| `common/model/documentTransaction.ts` | compatibility steps、mapping 与 metadata | selection、decoration、rebase、serialization |
+| `browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input | DOM selection、IME、clipboard、node views |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | Code profile browser surface | input、viewport、accessibility、contributions |
 
 ## 验证与修改影响
 
-- 修改 schema、transaction、selection、history、plugin 或 serialization：运行 `corepack pnpm --dir zeta-ts run test:editor:unit`。
-- 修改 `EditorWidget`、clipboard、IME、node view 或 pane integration：运行 unit suite 和 `corepack pnpm --dir zeta-ts run test:editor:browser`。
-- 修改 collaboration protocol、rebase、membership 或 persistence：同步运行对应 Rust/service tests、architecture tests 和 Renderer typecheck。
+- 修改 line identity、store validation、transaction、selection、history、plugin 或 serialization：运行 `corepack pnpm --dir zeta-ts run test:editor:unit`。
+- 修改 `RichTextEditorWidget`、clipboard、IME、atom view 或 pane integration：运行 unit suite 和 `corepack pnpm --dir zeta-ts run test:editor:browser`。
+- 修改 dependency direction、profile composition 或 codec boundary：运行 editor architecture tests、Renderer typecheck 和 stale-reference scan。
 - 所有改动运行 `git diff --check`。
-
-修改 schema 时检查 profile、empty document、serialization 和 collaboration compatibility；修改 transaction/mapping 时检查 selection、history、decoration、plugin 和 rebase；修改 browser projection 时检查 DOM ownership、input atomicity、accessibility 和 disposal；修改 Workbench adapter 时检查 reference、dirty/conflict、expected revision 和 caller-owned model lifecycle。

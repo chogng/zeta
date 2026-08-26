@@ -27,9 +27,12 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	const analysisWorker = readFileSync(join(editorRoot, "browser/language/syntaxWorkerMain.ts"), "utf8");
 	const completionWorker = readFileSync(join(editorRoot, "browser/language/languageCompletionWorkerMain.ts"), "utf8");
 	assert.match(api, /TextModel/u);
-	assert.match(api, /TextModelBlockTree/u);
-	assert.match(api, /TextModelGroup/u);
+	assert.match(api, /LineDocumentSnapshot/u);
+	assert.match(api, /LineSequence/u);
+	assert.match(api, /RangeStore/u);
+	assert.match(api, /PointStore/u);
 	assert.doesNotMatch(api, /TextModelStructure/u);
+	assert.doesNotMatch(api, /TextModelBlockTree|TextModelGroup/u);
 	assert.doesNotMatch(api, /\bDocumentModel\b/u);
 	assert.doesNotMatch(api, /workbench|browser|contrib/u);
 	assert.match(codeBundle, /editor\.all/u);

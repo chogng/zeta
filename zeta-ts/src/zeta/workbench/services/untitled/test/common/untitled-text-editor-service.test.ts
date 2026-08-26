@@ -48,6 +48,20 @@ test("untitled service creates stable virtual editor identities", () => {
 	assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
 });
 
+test("untitled service publishes display-label changes without changing resource identity", () => {
+	using service = new BrowserUntitledTextEditorService();
+	const editor = service.create();
+	const changes: string[] = [];
+	using listener = service.onDidChangeLabel(value => changes.push(value.label));
+
+	const renamed = service.rename(editor.resource, "Scratch");
+	assert.equal(renamed?.resource.toString(), editor.resource.toString());
+	assert.equal(renamed?.label, "Scratch");
+	assert.equal(service.get(editor.resource)?.label, "Scratch");
+	assert.deepEqual(changes, ["Scratch"]);
+	assert.equal(service.rename(URI.file("C:\\project\\main.ts"), "Other"), undefined);
+});
+
 test("New Untitled Text Editor opens a compatible text editor input", async () => {
 	using untitled = new BrowserUntitledTextEditorService();
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];

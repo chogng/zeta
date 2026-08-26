@@ -50,7 +50,7 @@ export function compressConsecutiveTextChanges(previous: readonly TextChange[] |
 /** The operation that committed one text-model version. */
 export enum TextModelChangeReason {
 	Edit = "edit",
-	/** Text changed as part of an atomic Group/Block structure transaction. */
+	/** Text changed as part of an atomic rich-document transaction. */
 	Blocks = "blocks",
 	Reset = "reset",
 	Undo = "undo",

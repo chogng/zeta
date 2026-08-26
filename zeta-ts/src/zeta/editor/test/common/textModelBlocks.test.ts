@@ -369,21 +369,22 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.equal(schema.getNodeSpec("group")?.kind, "group");
 	assert.equal(schema.getNodeSpec("codeLine")?.kind, "line");
 	assert.equal(model.getText(), "First\nSecond\nQuoted\nconst value = 1;\nreturn value;\n\uFFFC\nFigure 1");
-	assert.equal(model.groups.length, 1);
 	assert.equal(model.lineCount, 7);
-	const indexedGroup = model.getGroup(group.id)!;
-	assert.equal(indexedGroup.blockTree.blocks.length, 4);
-	assert.deepEqual(indexedGroup.blockTree.roots.map(block => block.id), group.content.map(block => block.id));
-	assert.deepEqual(indexedGroup.blockTree.getBlock(group.content[2]!.id), {
-		id: group.content[2]!.id,
-		type: "codeBlock",
-		parentBlockId: undefined,
-		startLine: 3,
-		endLine: 5,
-		attrs: group.content[2]!.attrs,
-		children: [],
+	const codeBlock = group.content[2]!;
+	const codeRegion = model.lineDocument.regions.get(`${codeBlock.id}:region`)!;
+	assert.deepEqual({
+		kind: codeRegion.kind,
+		startLineId: codeRegion.startLineId,
+		endLineId: codeRegion.endLineId,
+		languageId: codeRegion.attrs.languageId,
+	}, {
+		kind: "code",
+		startLineId: codeBlock.content[0]!.id,
+		endLineId: codeBlock.content[1]!.id,
+		languageId: "text",
 	});
-	assert.equal(model.getBlockAtLine(4)?.type, "codeBlock");
+	assert.deepEqual(model.lineDocument.facets.forLine(codeBlock.content[1]!.id).map(facet => facet.kind), ["group", "codeBlock", "codeLine"]);
+	assert.equal(model.lineDocument.atoms.values[0]?.kind, "image");
 	const textChanges: { readonly reason: string; readonly changes: readonly { readonly rangeOffset: number; readonly rangeLength: number; readonly text: string }[] }[] = [];
 	model.onDidChange(change => textChanges.push(change));
 	const firstCodeText = group.content[2]!.content[0]!.content[0]!;
@@ -400,7 +401,7 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	model.dispatch(new DocumentTransaction().setNodeAttributes(group.content[2]!.id, { language: "rust" }));
 	assert.equal(model.version, 3);
 	assert.equal(model.getText(), textBeforeAttributeChange);
-	assert.equal(model.getGroup(group.id)?.blockTree.getBlock(group.content[2]!.id)?.attrs.language, "rust");
+	assert.equal(model.lineDocument.regions.get(`${codeBlock.id}:region`)?.attrs.languageId, "rust");
 	assert.equal(textChanges[1]?.reason, "blocks");
 	assert.equal(textChanges[1]?.changes[0]?.rangeOffset, 0);
 	assert.equal(textChanges[1]?.changes[0]?.rangeLength, textBeforeAttributeChange.length);
@@ -409,59 +410,44 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.throws(() => schema.createDocument([schema.createNode("codeBlock", { content: [line("codeLine", "orphan")] })]), /cannot contain 'codeBlock'/);
 });
 
-test("TextModel gives each Group an independently indexed BlockTree", () => {
+test("TextModel projects nested schema nodes as orthogonal line facets", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("nested", { id: "text-1" })] });
 	const listItem = schema.createNode("listItem", { id: "list-item-1", content: [paragraph] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [listItem] });
 	using model = TextModel.create(schema, schema.createDocument([list], "document-1"));
 
-	const group = model.groups[0]!;
-	assert.equal(group.id, "document-1:group");
-	assert.deepEqual(group.blockTree.blocks.map(block => ({
-		id: block.id,
-		parentBlockId: block.parentBlockId,
-		lineRange: [block.startLine, block.endLine],
+	assert.equal(model.getLineId(0), "paragraph-1");
+	assert.deepEqual(model.lineDocument.facets.forLine("paragraph-1").map(facet => ({
+		kind: facet.kind,
+		nodeId: facet.attrs.nodeId,
 	})), [
-		{ id: "list-1", parentBlockId: undefined, lineRange: [0, 1] },
-		{ id: "list-item-1", parentBlockId: "list-1", lineRange: [0, 1] },
-		{ id: "paragraph-1", parentBlockId: "list-item-1", lineRange: [0, 1] },
+		{ kind: "bulletList", nodeId: "list-1" },
+		{ kind: "listItem", nodeId: "list-item-1" },
+		{ kind: "paragraph", nodeId: "paragraph-1" },
 	]);
-	assert.equal(group.blockTree.getBlockAtLine(0)?.id, "paragraph-1");
-	assert.equal(model.getBlockAtLine(0)?.id, "paragraph-1");
 });
 
-test("Every TextModel exposes one native source Group and code Block", () => {
-	using model = new TextModel("first\nsecond");
-	const groups = model.groups;
+test("Plain TextModel uses the restricted line-document profile without structural sidecars", () => {
+	using model = new TextModel("first\nsecond", { lineIds: ["first", "second"], metadata: { languageId: "typescript" } });
 
-	assert.equal(model.groups, groups);
-	assert.deepEqual(groups.map(group => ({
-		id: group.id,
-		type: group.type,
-		lineRange: [group.startLine, group.endLine],
-		blocks: group.blockTree.blocks.map(block => ({ id: block.id, type: block.type, lineRange: [block.startLine, block.endLine] })),
-	})), [{
-		id: "source",
-		type: "source",
-		lineRange: [0, 2],
-		blocks: [{ id: "source:code", type: "codeBlock", lineRange: [0, 2] }],
-	}]);
-	assert.equal(model.getBlockAtLine(1)?.id, "source:code");
+	assert.deepEqual(model.lineDocument.lines.values, [{ id: "first", text: "first" }, { id: "second", text: "second" }]);
+	assert.deepEqual(model.lineDocument.marks.values, []);
+	assert.deepEqual(model.lineDocument.atoms.values, []);
+	assert.deepEqual(model.lineDocument.facets.values, []);
+	assert.deepEqual(model.lineDocument.regions.values, []);
+	assert.deepEqual(model.lineDocument.relations.values, []);
+	assert.equal(model.lineDocument.metadata.languageId, "typescript");
 	model.reset("first\nsecond\nthird");
-	assert.deepEqual([model.groups[0]?.startLine, model.groups[0]?.endLine], [0, 3]);
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.text), ["first", "second", "third"]);
 });
 
-test("TextModel retains an empty implicit Group for an empty schema-backed document", () => {
+test("TextModel retains one empty logical line for an empty schema-backed document", () => {
 	const schema = createDefaultDocumentSchema();
 	using model = TextModel.create(schema, schema.createDocument([], "empty-document"));
 
-	assert.deepEqual(model.groups.map(group => ({
-		id: group.id,
-		startLine: group.startLine,
-		endLine: group.endLine,
-		blocks: group.blockTree.blocks.length,
-	})), [{ id: "empty-document:group", startLine: 0, endLine: 0, blocks: 0 }]);
+	assert.deepEqual(model.lineDocument.lines.values, [{ id: "empty-document:line", text: "" }]);
+	assert.deepEqual(model.lineDocument.facets.values, []);
 });
 
 test("DocumentSchema enforces ordered content terms for custom academic nodes", () => {

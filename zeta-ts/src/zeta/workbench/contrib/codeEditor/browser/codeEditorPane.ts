@@ -13,7 +13,7 @@ import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
-import { EditorPart, isEditorTextViewState, type EditorPartOptions, type EditorTextViewState } from "../../../../editor/browser/editorPart.js";
+import { EditorBrowser, isEditorTextViewState, type EditorBrowserOptions, type EditorTextViewState } from "../../../../editor/browser/editorBrowser.js";
 import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/textModelService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view/editorViewport.js";
 import { type EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
@@ -44,13 +44,13 @@ export interface EditorPanePart extends IDisposable {
 	revert?(): Promise<void>;
 }
 
-export interface EditorPanePartOptions extends EditorPartOptions {
+export interface EditorPanePartOptions extends EditorBrowserOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly diffApi?: EditorPartOptions["diffApi"];
-	readonly instantiationService?: EditorPartOptions["instantiationService"];
+	readonly diffApi?: EditorBrowserOptions["diffApi"];
+	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
 }
 
 export interface EditorPaneOptions {
@@ -61,15 +61,15 @@ export interface EditorPaneOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly diffApi?: EditorPartOptions["diffApi"];
-	readonly instantiationService?: EditorPartOptions["instantiationService"];
+	readonly diffApi?: EditorBrowserOptions["diffApi"];
+	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly minimap?: EditorPartOptions["minimap"];
-	readonly activeLineHighlight?: EditorPartOptions["activeLineHighlight"];
+	readonly minimap?: EditorBrowserOptions["minimap"];
+	readonly activeLineHighlight?: EditorBrowserOptions["activeLineHighlight"];
 	readonly showLineNumbers?: boolean;
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
@@ -80,21 +80,21 @@ export interface EditorPaneOptions {
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
 	readonly formatOnSave?: boolean;
-	readonly find?: EditorPartOptions["find"];
-	readonly indentation?: EditorPartOptions["indentation"];
+	readonly find?: EditorBrowserOptions["find"];
+	readonly indentation?: EditorBrowserOptions["indentation"];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
-	readonly onShowContextMenu?: EditorPartOptions["onShowContextMenu"];
-	readonly onExecuteEditorCommand?: EditorPartOptions["onExecuteEditorCommand"];
+	readonly onShowContextMenu?: EditorBrowserOptions["onShowContextMenu"];
+	readonly onExecuteEditorCommand?: EditorBrowserOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorPartOptions["lineGutterDecorations"]>;
+	readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorBrowserOptions["lineGutterDecorations"]>;
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly insertFinalNewLine?: boolean;
-	readonly fontZoom?: EditorPartOptions["fontZoom"];
+	readonly fontZoom?: EditorBrowserOptions["fontZoom"];
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onSaveError?: (error: unknown) => void;
 }
@@ -130,7 +130,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 			throw new TypeError("Code editor pane requires a text model service");
 		}
 		this.modelService = options.modelService;
-		this.createPart = options.createPart ?? (partOptions => new EditorPart(partOptions));
+		this.createPart = options.createPart ?? (partOptions => new EditorBrowser(partOptions));
 	}
 
 	create(parent: HTMLElement): void {

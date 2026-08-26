@@ -22,18 +22,18 @@ for (const [name, value] of Object.entries({
 }
 
 await import("../../editor.code.all.js");
-const { EditorPart } = await import("../../browser/editorPart.js");
+const { EditorBrowser } = await import("../../browser/editorBrowser.js");
 
 test.after(() => browserEnvironment.window.close());
 
-test("Stanza editor part composes native input, local language syntax, and presentation", async () => {
+test("Stanza editor browser composes native input, local language syntax, and presentation", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("{\"name\": \"alpha\"");
 	const reference = modelReference(URI.file("C:\\project\\settings.json"), model);
 	const errors: unknown[] = [];
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: {
 			resource: reference.resource,
@@ -71,7 +71,7 @@ test("Stanza editor part composes native input, local language syntax, and prese
 	dom.window.close();
 });
 
-test("Stanza editor part gives language editing one disposable owner", () => {
+test("Stanza editor browser gives language editing one disposable owner", () => {
 	const tracker = new DisposableTracker();
 	{
 		using installation = installDisposableTracker(tracker);
@@ -80,7 +80,7 @@ test("Stanza editor part gives language editing one disposable owner", () => {
 		const container = dom.window.document.querySelector<HTMLElement>("main")!;
 		const model = new TextModel("const value = { nested: true };");
 		const reference = modelReference(URI.file("C:\\project\\main.ts"), model);
-		const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "main.ts" }, languageId: "typescript", modelReference: reference });
+		const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "main.ts" }, languageId: "typescript", modelReference: reference });
 
 		editorPart.dispose();
 		dom.window.close();
@@ -89,13 +89,13 @@ test("Stanza editor part gives language editing one disposable owner", () => {
 	assert.deepEqual(tracker.leaks().filter(leak => leak.label === "LanguageEditingAdapter"), []);
 });
 
-test("Stanza editor part derives indentation folds and projects their gutter controls", () => {
+test("Stanza editor browser derives indentation folds and projects their gutter controls", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("root\n  child\nafter");
 	const reference = modelReference(URI.file("C:\\project\\fold.txt"), model);
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: {
 			resource: reference.resource,
@@ -132,7 +132,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 		},
 	});
 	const errors: unknown[] = [];
-	const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "async-fold.txt" }, languageId: "plaintext", modelReference: reference, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
+	const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "async-fold.txt" }, languageId: "plaintext", modelReference: reference, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
 
 	assert.equal(providerSignal?.aborted, false);
 	editorPart.dispose();
@@ -146,13 +146,13 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 	dom.window.close();
 });
 
-test("Stanza editor part honors a read-only input without disabling selection infrastructure", () => {
+test("Stanza editor browser honors a read-only input without disabling selection infrastructure", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
 	const reference = modelReference(URI.file("C:\\project\\preview.txt"), model);
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: { resource: reference.resource, label: "preview.txt", readOnly: true },
 		languageId: "plaintext",
@@ -177,13 +177,13 @@ test("Stanza editor part honors a read-only input without disabling selection in
 	dom.window.close();
 });
 
-test("Stanza editor part mounts text drop as an optional full-editor contribution", () => {
+test("Stanza editor browser mounts text drop as an optional full-editor contribution", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
 	const reference = modelReference(URI.file("C:\\project\\drop.txt"), model);
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: { resource: reference.resource, label: "drop.txt" },
 		languageId: "plaintext",
@@ -201,7 +201,7 @@ test("Stanza editor part mounts text drop as an optional full-editor contributio
 	dom.window.close();
 });
 
-test("Stanza editor part applies selected before-save contributions through explicit save", async () => {
+test("Stanza editor browser applies selected before-save contributions through explicit save", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
@@ -213,7 +213,7 @@ test("Stanza editor part applies selected before-save contributions through expl
 		provideDocumentFormattingEdits: () => [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "formatted" }],
 	});
 	let savedText = "";
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: { resource: reference.resource, label: "save.txt" },
 		languageId: "plaintext",
@@ -230,13 +230,13 @@ test("Stanza editor part applies selected before-save contributions through expl
 	dom.window.close();
 });
 
-test("Stanza editor part omits disabled presentation and language-assistance contributions", () => {
+test("Stanza editor browser omits disabled presentation and language-assistance contributions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("function example() {\n  return 1;\n}");
 	const reference = modelReference(URI.file("C:\\project\\minimal.ts"), model);
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container,
 		input: { resource: reference.resource, label: "minimal.ts" },
 		languageId: "typescript",
@@ -271,7 +271,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("let value = 1;\n".repeat(300_001));
 	const reference = modelReference(URI.file("C:\\project\\large.ts"), model);
-	const editorPart = new EditorPart({ container, input: { resource: reference.resource, label: "large.ts" }, languageId: "typescript", modelReference: reference });
+	const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "large.ts" }, languageId: "typescript", modelReference: reference });
 	try {
 		editorPart.layout({ width: 500, height: 40 });
 		assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
@@ -316,7 +316,7 @@ test("constructor-backed editor contributions receive editor context and window 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel("runtime");
 	const reference = modelReference(URI.file("C:\\project\\runtime.txt"), model);
-	const editorPart = new EditorPart({
+	const editorPart = new EditorBrowser({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
 		input: { resource: reference.resource },
 		languageId: "plaintext",

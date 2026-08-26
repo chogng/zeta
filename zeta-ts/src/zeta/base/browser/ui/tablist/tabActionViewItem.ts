@@ -72,6 +72,7 @@ export class TabActionViewItem<T> extends ActionViewItem {
 		const label = this.own(new IconLabel(tab, {
 			label: item.label,
 			icon: item.icon,
+			description: item.description,
 		}));
 		container.append(tab);
 

@@ -11,7 +11,7 @@ import { LanguageFeaturesService } from "../common/services/languageService.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition, type TextRange } from "../common/core/text.js";
-import { registerEditorPartFactory, type EditorPartOptions, type EditorTextViewState, type IEditorPartRuntime } from "../browser/editorPart.js";
+import { registerEditorBrowserFactory, type EditorBrowserOptions, type EditorTextViewState, type IEditorBrowserRuntime } from "../browser/editorBrowser.js";
 import { getEditorContributions, type EditorCapability } from "../browser/editorContribution.js";
 import { type DecorationSource } from "../browser/viewparts/decorations/decorationPresentation.js";
 import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "../browser/viewparts/margin/lineGutterDecoration.js";
@@ -25,7 +25,7 @@ import { getWindow } from "../../base/browser/window.js";
 import { EditorContributionInstantiation, type EditorContribution, type TextEditorContributionContext } from "../browser/editorContribution.js";
 
 /** Owns all per-pane state projected over one shared text model reference. */
-class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntime {
+class ContributedEditorBrowser extends DisposableOwner implements IEditorBrowserRuntime {
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
@@ -38,7 +38,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 	private readonly onRevert: (() => Promise<void>) | undefined;
 	private readonly beforeSaveHooks: Array<() => void | Promise<void>> = [];
 
-	constructor(options: EditorPartOptions) {
+	constructor(options: EditorBrowserOptions) {
 		super();
 		try {
 			validateOptions(options);
@@ -128,6 +128,9 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 				lineHeight,
 				selectionController: this.selections,
 				ariaLabel,
+				placeholder: options.placeholder,
+				instantiationService: options.instantiationService,
+				onContributionError: this.onLanguageError,
 				viewport: {
 					lineVisibilitySource: lineProjection?.visibilitySource,
 					lineGutterDecoration: combineEditorLineGutterDecorations([...lineGutterDecorations, ...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : [])]),
@@ -268,7 +271,7 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 		await this.onRevert?.();
 	}
 
-	private installRuntimeContributions(contributions: readonly EditorContribution[], context: TextEditorContributionContext, options: EditorPartOptions): void {
+	private installRuntimeContributions(contributions: readonly EditorContribution[], context: TextEditorContributionContext, options: EditorBrowserOptions): void {
 		const runtimeContributions = contributions.filter(contribution => contribution.runtime !== undefined);
 		if (runtimeContributions.length === 0) return;
 		const instantiationService = options.instantiationService;
@@ -300,11 +303,11 @@ class ContributedEditorPart extends DisposableOwner implements IEditorPartRuntim
 
 }
 
-registerEditorPartFactory(options => new ContributedEditorPart(options));
+registerEditorBrowserFactory(options => new ContributedEditorBrowser(options));
 
-function validateOptions(options: EditorPartOptions): void {
+function validateOptions(options: EditorBrowserOptions): void {
 	if (!options || typeof options !== "object" || !options.container || !options.modelReference) {
-		throw new TypeError("Editor part requires a container and model reference");
+		throw new TypeError("Editor browser requires a container and model reference");
 	}
 	if (options.input?.readOnly !== undefined && typeof options.input.readOnly !== "boolean") {
 		throw new TypeError("Editor input read-only mode must be boolean");

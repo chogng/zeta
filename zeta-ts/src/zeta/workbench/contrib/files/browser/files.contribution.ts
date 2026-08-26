@@ -6,6 +6,8 @@ import { IWorkspaceContextService } from "../../../../platform/workspace/common/
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
+import { ILabelService } from "../../../../platform/label/common/labelService.js";
 import { WorkspaceFolderCountContext } from "../../../common/contextkeys.js";
 import { type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IWorkspaceOpenService } from "../../../services/workspaces/browser/workspaceOpenService.js";
@@ -35,6 +37,8 @@ export function registerFilesViews(
 					IFileIconThemeService,
 					IHoverService,
 					IConfigurationService,
+					IFileLabelDecorationService,
+					ILabelService,
 				],
 			}),
 		},

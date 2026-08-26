@@ -1,6 +1,6 @@
 import { BIBLIOGRAPHY_NODE_TYPE, CITATION_NODE_TYPE, REFERENCE_NODE_TYPE } from "../common/schema.js";
 import { REFERENCE_INDEX_KEY } from "../common/references.js";
-import type { InlineNodeViewFactory, NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
+import type { InlineNodeViewFactory, NodeViewContext, NodeViewFactory } from "../../../browser/widget/richTextEditor/richTextEditorWidget.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Block projections owned by the citation capability. */

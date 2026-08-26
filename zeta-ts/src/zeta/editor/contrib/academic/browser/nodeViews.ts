@@ -1,5 +1,5 @@
 import { ACADEMIC_NODE_TYPES } from "../common/schema.js";
-import type { NodeViewContext, NodeViewFactory } from "../../../browser/editorWidget.js";
+import type { NodeViewContext, NodeViewFactory } from "../../../browser/widget/richTextEditor/richTextEditorWidget.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Browser projections for Academic wrapper nodes; child editing stays editor-owned. */

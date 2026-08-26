@@ -2,8 +2,9 @@ import "./media/placeholderText.css";
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { observableFromEvent } from "../../../../base/common/observable.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
-import { registerCodeEditorPlaceholderFactory } from "../../../browser/widget/codeEditor/codeEditorWidget.js";
+import { CodeEditorContributionInstantiation, registerCodeEditorContribution, type CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { TextPosition } from "../../../common/core/text.js";
 
 /** Presents a non-editable hint when the shared model is empty. */
@@ -35,4 +36,15 @@ export class PlaceholderTextController extends DisposableOwner {
 	}
 }
 
-registerCodeEditorPlaceholderFactory((viewport, placeholder) => new PlaceholderTextController(viewport, placeholder));
+class PlaceholderTextContribution extends DisposableOwner {
+	constructor(context: CodeEditorContributionContext) {
+		super();
+		if (context.placeholder) this.own(new PlaceholderTextController(context.viewport, context.placeholder));
+	}
+}
+
+registerCodeEditorContribution({
+	id: "editor.contrib.placeholderText",
+	instantiation: CodeEditorContributionInstantiation.Eager,
+	descriptor: new SyncDescriptor(PlaceholderTextContribution),
+});

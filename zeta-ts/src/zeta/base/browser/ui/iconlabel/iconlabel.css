@@ -3,6 +3,7 @@
   min-width: 0;
   gap: 4px;
   align-items: center;
+  overflow: hidden;
 }
 
 .zeta-icon-label-icon {
@@ -32,3 +33,63 @@
   text-overflow: var(--zeta-icon-label-text-overflow, ellipsis);
   white-space: nowrap;
 }
+
+.zeta-icon-label-container {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  overflow: hidden;
+}
+
+.zeta-icon-label-name-container,
+.zeta-icon-label-segment {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-icon-label-text.multiple {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.zeta-icon-label-description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--zeta-description-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-icon-label-description::before {
+  margin: 0 4px;
+  content: "—";
+}
+
+.zeta-icon-label-suffix {
+  flex: 0 0 auto;
+  color: var(--zeta-description-foreground);
+  white-space: pre;
+}
+
+.zeta-icon-label.bold { font-weight: 600; }
+.zeta-icon-label.italic { font-style: italic; }
+.zeta-icon-label.strikethrough { text-decoration: line-through; }
+.zeta-icon-label-highlight { background: var(--zeta-search-match-background); }
+.zeta-icon-label-inline-icon {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  margin: 0 2px;
+  vertical-align: -0.15em;
+  align-items: center;
+  justify-content: center;
+}
+.zeta-icon-label-inline-icon .zeta-icon { width: 1em; height: 1em; }
+.zeta-icon-label-inline-icon.default-color { color: inherit; }
+.zeta-icon-label-description[hidden],
+.zeta-icon-label-suffix[hidden] { display: none; }

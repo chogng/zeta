@@ -77,7 +77,10 @@ export class SetiFileIconThemeService extends DisposableOwner
 
 	renderFileIcon(resource: URI, container: HTMLElement): void {
 		const definition = this.resolveDefinition(fileName(resource));
+		container.classList.remove("zeta-seti-file-icon");
 		container.classList.add("zeta-seti-file-icon");
+		container.style.color = "";
+		container.style.fontSize = "";
 		container.textContent = decodeFontCharacter(
 			definition?.fontCharacter ?? "",
 		);

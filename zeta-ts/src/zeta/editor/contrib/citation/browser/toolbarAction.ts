@@ -1,5 +1,5 @@
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../common/commands.js";
-import type { EditorToolbarAction } from "../../../browser/editorWidget.js";
+import type { EditorToolbarAction } from "../../../browser/widget/richTextEditor/richTextEditorWidget.js";
 
 /** Toolbar actions contributed by the citation capability. */
 export const citationToolbarActions: readonly EditorToolbarAction[] = Object.freeze([

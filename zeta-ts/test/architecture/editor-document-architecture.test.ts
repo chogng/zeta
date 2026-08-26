@@ -29,13 +29,13 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
-		"common/model/textModelBlockTree.ts",
+		"common/model/lineDocument.ts",
 		"common/model/textModelBlockState.ts",
-		"common/model/textModelBlockSnapshot.ts",
+		"common/model/lineDocumentProjection.ts",
 		"common/services/textModelService.ts",
 		"common/commands/documentCommands.ts",
-		"browser/editorWidget.ts",
-		"browser/media/editorWidget.css",
+		"browser/widget/richTextEditor/richTextEditorWidget.ts",
+		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"contrib/clipboard/browser/htmlDocumentFragment.ts",
 		"contrib/formatting/browser/formattingContribution.ts",
 		"contrib/collaboration/common/protocol.ts",
@@ -74,7 +74,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 	}
 });
 
-test("document editing keeps groups, blocks, lines, and codeBlock text in one TextModel", () => {
+test("document editing keeps lines and orthogonal rich semantics in one TextModel", () => {
 	const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
 	const textBuffer = readFileSync(join(editorRoot, "common/model/textBuffer.ts"), "utf8");
@@ -82,9 +82,10 @@ test("document editing keeps groups, blocks, lines, and codeBlock text in one Te
 	const pieceTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts"), "utf8");
 	const pieceTreeBuilder = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts"), "utf8");
 	const redBlackTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/rbTreeBase.ts"), "utf8");
-	const blockTree = readFileSync(join(editorRoot, "common/model/textModelBlockTree.ts"), "utf8");
+	const lineDocument = readFileSync(join(editorRoot, "common/model/lineDocument.ts"), "utf8");
+	const lineProjection = readFileSync(join(editorRoot, "common/model/lineDocumentProjection.ts"), "utf8");
 	const pane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
-	const editor = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
+	const editor = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
 	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
 	const editorAll = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
@@ -93,9 +94,10 @@ test("document editing keeps groups, blocks, lines, and codeBlock text in one Te
 	assert.match(pane, /export class DocumentEditorPane/u);
 	assert.match(pane, /implements IEditorPane/u);
 	assert.match(textModel, /static create\(/u);
-	assert.match(textModel, /get groups/u);
+	assert.match(textModel, /get lineDocument/u);
+	assert.match(textModel, /getLineId/u);
 	assert.match(textModel, /private buffer: TextBuffer/u);
-	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex/u);
+	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex|TextModelBlockTree/u);
 	assert.match(textBuffer, /export interface TextBuffer/u);
 	assert.doesNotMatch(textBuffer, /PieceTree/u);
 	assert.match(textBufferFactory, /new PieceTreeTextBufferBuilder/u);
@@ -106,12 +108,17 @@ test("document editing keeps groups, blocks, lines, and codeBlock text in one Te
 	assert.match(redBlackTree, /export const enum NodeColor/u);
 	assert.match(redBlackTree, /function fixInsert/u);
 	assert.match(redBlackTree, /function fixDelete/u);
-	assert.match(blockTree, /export class TextModelBlockTree/u);
-	assert.match(blockTree, /readonly startLine/u);
-	assert.match(blockTree, /readonly endLine/u);
-	assert.doesNotMatch(blockTree, /TextModelLine/u);
+	assert.match(lineDocument, /export interface LineDocumentSnapshot/u);
+	assert.match(lineDocument, /export class LineSequence/u);
+	assert.match(lineDocument, /export class RangeStore/u);
+	assert.match(lineDocument, /export class PointStore/u);
+	assert.match(lineDocument, /export class LineFacetStore/u);
+	assert.match(lineDocument, /export class RegionStore/u);
+	assert.match(lineDocument, /export class RelationStore/u);
+	assert.match(lineProjection, /projectDocumentToLines/u);
+	assert.match(lineProjection, /node\.type === 'codeBlock'/u);
 	assert.match(pane, /DocumentEditorTextModelService/u);
-	assert.match(editor, /export class EditorWidget/u);
+	assert.match(editor, /export class RichTextEditorWidget/u);
 	assert.match(editor, /ITextModelService/u);
 	assert.match(editor, /TextModelWorkingCopyReference/u);
 	assert.match(editor, /case "codeBlock":[\s\S]*this\.appendEditableText\(element, node, model, decorations\)/u);
@@ -119,7 +126,7 @@ test("document editing keeps groups, blocks, lines, and codeBlock text in one Te
 	assert.doesNotMatch(academicContribution, /AcademicCodeBlockEditorFactory|EmbeddedTextEditor|CodeEditorWidget/u);
 	assert.match(formatting, /new ToolBar\(/u);
 	const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");
-	const collaborationWidget = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
+	const collaborationWidget = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	assert.match(collaborationService, /export interface IDocumentCollaborationService/u);
 	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
 	assert.match(collaborationWidget, /CollaborationContribution/u);

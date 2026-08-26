@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
@@ -21,7 +23,9 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
-const { PlaceholderTextController } = await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
+const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
+const { createServiceIdentifier, InstantiationService, ServiceCollection, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -58,9 +62,9 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 		model,
 		selectionController: selections,
 		lineHeight: 20,
+		placeholder: "Ask Zeta",
 		viewport: { presentation: "embedded", padding: { top: 20, right: 20, bottom: 20, left: 20 } },
 	});
-	using placeholder = new PlaceholderTextController(editor.viewport, "Ask Zeta");
 
 	editor.layout({ width: 320, height: 40 });
 
@@ -73,6 +77,62 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
+
+test("CodeEditorWidget stages and owns per-instance contributions", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel("alpha");
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	const events: string[] = [];
+	const service = { kind: "test" };
+	const serviceId = createServiceIdentifier<typeof service>("test.codeEditorContribution");
+	const services = new ServiceCollection();
+	services.set(serviceId, service);
+	const instantiationService = new InstantiationService(services);
+	const state = { events, model, service };
+	using editor = new CodeEditorWidget({
+		container,
+		model,
+		selectionController: selections,
+		lineHeight: 20,
+		instantiationService,
+		contributions: [
+			{
+				id: "test.eager",
+				instantiation: CodeEditorContributionInstantiation.Eager,
+				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId] }),
+			},
+			{
+				id: "test.lazy",
+				instantiation: CodeEditorContributionInstantiation.Lazy,
+				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId] }),
+			},
+		],
+	});
+
+	assert.deepEqual(events, ["eager:create"]);
+	assert.ok(editor.contributions.get("test.lazy"));
+	assert.deepEqual(events, ["eager:create", "lazy:create"]);
+	editor.dispose();
+	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
+	dom.window.close();
+});
+
+class TestCodeEditorContribution extends DisposableOwner {
+	constructor(
+		private readonly state: { readonly events: string[]; readonly model: TextModel; readonly service: { readonly kind: string } },
+		private readonly id: string,
+		context: CodeEditorContributionContext,
+		service: { readonly kind: string },
+	) {
+		super();
+		assert.equal(context.model, state.model);
+		assert.equal(service, state.service);
+		state.events.push(`${id}:create`);
+		this.defer(() => state.events.push(`${id}:dispose`));
+	}
+}
 
 test("CodeEditorWidget rejects a selection controller from another model", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

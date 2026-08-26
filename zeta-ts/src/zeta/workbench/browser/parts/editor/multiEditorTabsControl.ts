@@ -65,9 +65,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			return {
 				id: editor.instanceId,
 				value: editor,
-				label,
+				label: label.name,
+				description: label.description,
 				tooltip: stateLabel ? `${editor.input.resource.toString()} — ${stateLabel}` : editor.input.resource.toString(),
-				ariaLabel: stateLabel ? `${label}, ${stateLabel}` : label,
+				ariaLabel: stateLabel ? `${label.name}, ${stateLabel}` : label.name,
 				...(state ? { state } : {}),
 				preview: editor.preview,
 				tabId: editor.tabId,
@@ -78,9 +79,16 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 	}
 }
 
-function editorInputLabel(input: EditorInput): string {
-	if (input.label?.trim()) return input.label;
-	const path = decodeURIComponent(input.resource.path).replace(/\/+$/, "");
-	const separator = path.lastIndexOf("/");
-	return path.slice(separator + 1) || input.resource.toString();
+function editorInputLabel(input: EditorInput): { readonly name: string; readonly description?: string } {
+	const path = input.resource.scheme === "file"
+		? input.resource.fsPath
+		: decodeURIComponent(input.resource.path);
+	const normalizedPath = path.replaceAll("\\", "/").replace(/\/+$/, "");
+	const separator = normalizedPath.lastIndexOf("/");
+	const explicitLabel = input.label?.trim();
+	const name = explicitLabel || normalizedPath.slice(separator + 1) || input.resource.authority || input.resource.toString();
+	const description = separator > 0 && (!explicitLabel || !/[\\/]/u.test(explicitLabel))
+		? normalizedPath.slice(0, separator)
+		: undefined;
+	return { name, description };
 }

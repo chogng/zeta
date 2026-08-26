@@ -1,0 +1,129 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { TextPosition, TextRange } from '../../common/core/text.js';
+import { createLineDocumentSnapshot, type LineSemanticAttributes } from '../../common/model/lineDocument.js';
+import { TextModel } from '../../common/model/textModel.js';
+
+test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical lines', () => {
+	const prose = 'Zeta \uFFFC uses \uFFFC; see \uFFFC';
+	const snapshot = createLineDocumentSnapshot({
+		lines: [
+			{ id: 'prose', text: prose },
+			{ id: 'code-1', text: 'const answer = 42;' },
+			{ id: 'code-2', text: 'return answer;' },
+			{ id: 'figure', text: '\uFFFC' },
+			{ id: 'caption', text: 'System architecture' },
+		],
+		marks: [{
+			id: 'latin-font',
+			kind: 'textStyle',
+			from: { lineId: 'prose', offset: 0 },
+			to: { lineId: 'prose', offset: 4 },
+			attrs: { fontFamily: 'Times New Roman' },
+		}],
+		atoms: [
+			{
+				id: 'citation',
+				kind: 'citation',
+				position: { lineId: 'prose', offset: prose.indexOf('\uFFFC') },
+				display: 'inline',
+				attrs: { referenceIds: ['smith-2025'] },
+			},
+			{
+				id: 'math',
+				kind: 'math',
+				position: { lineId: 'prose', offset: prose.indexOf('\uFFFC', prose.indexOf('\uFFFC') + 1) },
+				display: 'inline',
+				attrs: { source: 'E = mc^2', syntax: 'latex' },
+			},
+			{
+				id: 'cross-reference',
+				kind: 'crossReference',
+				position: { lineId: 'prose', offset: prose.lastIndexOf('\uFFFC') },
+				display: 'inline',
+				attrs: { format: 'number' },
+			},
+			{ id: 'image', kind: 'image', position: { lineId: 'figure', offset: 0 }, display: 'block', attrs: { assetId: 'asset-1' } },
+		],
+		facets: [{ id: 'heading', kind: 'outline', lineId: 'prose', attrs: { level: 1, labelId: 'introduction' } }],
+		regions: [{ id: 'code', kind: 'code', startLineId: 'code-1', endLineId: 'code-2', attrs: { languageId: 'typescript' } }],
+		relations: [{
+			id: 'caption-image',
+			kind: 'caption',
+			source: { kind: 'line', lineId: 'caption' },
+			target: { kind: 'atom', atomId: 'image' },
+			attrs: {},
+		}, {
+			id: 'cross-reference-image',
+			kind: 'crossReference',
+			source: { kind: 'atom', atomId: 'cross-reference' },
+			target: { kind: 'atom', atomId: 'image' },
+			attrs: { format: 'number' },
+		}],
+		metadata: { profile: 'academic' },
+	});
+
+	assert.equal(snapshot.getText(), `${prose}\nconst answer = 42;\nreturn answer;\n\uFFFC\nSystem architecture`);
+	assert.equal(snapshot.lines.get('code-2')?.text, 'return answer;');
+	assert.equal(snapshot.atoms.at({ lineId: 'prose', offset: prose.indexOf('\uFFFC') })?.kind, 'citation');
+	assert.deepEqual(snapshot.facets.forLine('prose').map(facet => facet.kind), ['outline']);
+	assert.equal(snapshot.regions.get('code')?.attrs.languageId, 'typescript');
+	assert.equal(snapshot.relations.get('caption-image')?.target.kind, 'atom');
+	assert.equal(snapshot.metadata.profile, 'academic');
+});
+
+test('LineDocumentSnapshot rejects detached atoms, atom marks, non-exclusive block atoms, and crossing regions', () => {
+	const cyclic: Record<string, unknown> = {};
+	cyclic.self = cyclic;
+	assert.throws(() => createLineDocumentSnapshot({
+		lines: [{ id: 'line', text: '' }],
+		metadata: cyclic as LineSemanticAttributes,
+	}), /must not contain cycles/);
+	assert.throws(() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: '\uFFFC' }] }), /has no atom/);
+	assert.throws(() => createLineDocumentSnapshot({
+		lines: [{ id: 'line', text: 'a\uFFFCb' }],
+		atoms: [{ id: 'image', kind: 'image', position: { lineId: 'line', offset: 1 }, display: 'block', attrs: {} }],
+	}), /only content/);
+	assert.throws(() => createLineDocumentSnapshot({
+		lines: [{ id: 'line', text: 'a\uFFFCb' }],
+		marks: [{ id: 'mark', kind: 'strong', from: { lineId: 'line', offset: 0 }, to: { lineId: 'line', offset: 3 }, attrs: {} }],
+		atoms: [{ id: 'atom', kind: 'citation', position: { lineId: 'line', offset: 1 }, display: 'inline', attrs: {} }],
+	}), /must not include atom/);
+	assert.throws(() => createLineDocumentSnapshot({
+		lines: ['a', 'b', 'c', 'd'].map(id => ({ id, text: id })),
+		regions: [
+			{ id: 'left', kind: 'code', startLineId: 'a', endLineId: 'c', attrs: {} },
+			{ id: 'right', kind: 'quote', startLineId: 'b', endLineId: 'd', attrs: {} },
+		],
+	}), /cross/);
+});
+
+test('TextModel preserves logical line identity through edits and history without creating code blocks', () => {
+	let nextLineId = 1;
+	using model = new TextModel('a\nb', {
+		lineIds: ['first', 'second'],
+		lineIdGenerator: () => `inserted:${nextLineId++}`,
+		metadata: { languageId: 'typescript' },
+	});
+	const initialSnapshot = model.lineDocument;
+	assert.equal(model.lineDocument, initialSnapshot);
+
+	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 1)), text: 'X\nY' }]);
+	assert.notEqual(model.lineDocument, initialSnapshot);
+	assert.equal(initialSnapshot.getText(), 'a\nb');
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
+	assert.equal(model.lineDocument.metadata.languageId, 'typescript');
+	assert.deepEqual(model.lineDocument.marks.values, []);
+	assert.deepEqual(model.lineDocument.atoms.values, []);
+
+	model.undo();
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'second']);
+	model.redo();
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
+
+	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 2), TextPosition.at(1, 0)), text: '' }]);
+	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'second']);
+	assert.equal(model.getText(), 'aXY\nb');
+	assert.deepEqual(model.linePointAt(TextPosition.at(1, 1)), { lineId: 'second', offset: 1 });
+	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), TextPosition.at(1, 1));
+});

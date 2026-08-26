@@ -14,8 +14,8 @@ import type { DocumentPluginKey } from "./documentPlugin.js";
 import type { DocumentSchema } from "./documentSchema.js";
 import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
-import { createTextModelBlockSnapshot } from "./textModelBlockSnapshot.js";
-import { createTextModelCodeGroup, type TextModelBlock, type TextModelGroup } from "./textModelBlockTree.js";
+import { projectDocumentToLines } from "./lineDocumentProjection.js";
+import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -27,6 +27,7 @@ interface PreparedEdit extends OffsetEdit {
 interface CommitContext {
 	readonly reason: TextModelChangeReason;
 	readonly transactionId?: number;
+	readonly lineIds?: readonly LineId[];
 }
 
 export interface TextModelHistoryLimit {
@@ -48,6 +49,12 @@ export interface TextModelOptions {
 	readonly maintenance?: TextModelMaintenanceOptions;
 	/** Schema-backed blocks used by document profiles. */
 	readonly blocks?: TextModelBlockInitialization;
+	/** Stable identities restored by a rich-document codec. Plain text codecs omit this. */
+	readonly lineIds?: readonly LineId[];
+	/** Document-level metadata such as a code file's languageId. */
+	readonly metadata?: LineSemanticAttributes;
+	/** Identity source for logical lines created by text edits. */
+	readonly lineIdGenerator?: () => LineId;
 }
 
 export interface TextModelBlockInitialization extends TextModelBlockOptions {
@@ -68,7 +75,7 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  *
  * The model owns normalized LF text, versioning, atomic non-overlapping edit
  * transactions, transaction-level undo/redo, and generic tracked ranges.
- * Group/Block metadata remains part of this same model and version.
+ * Logical line identity and rich semantic stores remain part of this same model and version.
  * The model has no DOM, URI, persistence, language, or presentation dependency.
  */
 export class TextModel extends DisposableOwner {
@@ -80,8 +87,13 @@ export class TextModel extends DisposableOwner {
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
 	private buffer: TextBuffer;
-	private codeGroups: readonly TextModelGroup[];
 	private readonly blockState: TextModelBlockState | undefined;
+	private readonly lineIdGenerator: () => LineId;
+	private readonly issuedLineIds = new Set<LineId>();
+	private nextGeneratedLineIdentity = 1;
+	private readonly lineMetadata: LineSemanticAttributes;
+	private plainLineIds: readonly LineId[] | undefined;
+	private plainLineSnapshot: LineDocumentSnapshot | undefined;
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
@@ -105,10 +117,22 @@ export class TextModel extends DisposableOwner {
 			historyTransactionLimit,
 			historyTextUnitLimit,
 		);
+		if (options.blocks && options.lineIds) throw new TypeError("Schema-backed TextModel line identities come from the document codec");
+		if (options.lineIdGenerator !== undefined && typeof options.lineIdGenerator !== "function") {
+			throw new TypeError("TextModel lineIdGenerator must be a function");
+		}
+		this.lineIdGenerator = options.lineIdGenerator ?? (() => `line:${this.nextGeneratedLineIdentity++}`);
 		const blockDocument = options.blocks?.document ?? options.blocks?.schema.createDocument();
-		const normalizedInitialText = blockDocument && options.blocks ? createTextModelBlockSnapshot(options.blocks.schema, blockDocument).getText() : normalizeTextLineEndings(initialText);
+		const blockSnapshot = blockDocument && options.blocks ? projectDocumentToLines(options.blocks.schema, blockDocument) : undefined;
+		const normalizedInitialText = blockSnapshot?.getText() ?? normalizeTextLineEndings(initialText);
 		this.buffer = createTextBuffer(normalizedInitialText);
-		this.codeGroups = Object.freeze([createTextModelCodeGroup(this.buffer.lineCount)]);
+		if (!options.blocks) {
+			this.plainLineIds = this.initializeLineIds(options.lineIds);
+			this.plainLineSnapshot = this.createPlainLineSnapshot(options.metadata);
+			this.lineMetadata = this.plainLineSnapshot.metadata;
+		} else {
+			this.lineMetadata = Object.freeze({});
+		}
 		this.largeFile = classifyTextModelSize(this.buffer.length, this.buffer.lineCount);
 		this.blockState = options.blocks && blockDocument ? this.own(new TextModelBlockState(
 			options.blocks.schema,
@@ -126,36 +150,44 @@ export class TextModel extends DisposableOwner {
 		});
 	}
 
-	/** Creates one TextModel with schema-backed Group and Block content. */
+	/** Creates one TextModel from schema-backed document content. */
 	static create(schema: DocumentSchema, document = schema.createDocument(), options: TextModelBlockOptions = {}): TextModel {
-		return new TextModel(createTextModelBlockSnapshot(schema, document).getText(), { blocks: { ...options, schema, document } });
+		return new TextModel("", { blocks: { ...options, schema, document } });
 	}
 
-	get groups(): readonly TextModelGroup[] {
+	/** Immutable line-first content snapshot at the current model version. */
+	get lineDocument(): LineDocumentSnapshot {
 		this.assertNotDisposed();
-		return this.blockState?.snapshot.groups ?? this.codeGroups;
+		return this.blockState?.snapshot ?? this.requirePlainLineSnapshot();
 	}
 
-	getGroup(id: string): TextModelGroup | undefined {
-		return this.groups.find(group => group.id === id);
-	}
-
-	getBlock(id: string): TextModelBlock | undefined {
-		for (const group of this.groups) {
-			const block = group.blockTree.getBlock(id);
-			if (block) return block;
-		}
-		return undefined;
-	}
-
-	getBlockAtLine(lineIndex: number): TextModelBlock | undefined {
+	getLineId(lineIndex: number): LineId {
 		this.assertNotDisposed();
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= this.buffer.lineCount) throw new RangeError("Block line index is outside the TextModel");
-		for (const group of this.groups) {
-			const block = group.blockTree.getBlockAtLine(lineIndex);
-			if (block) return block;
+		const line = this.lineDocument.lines.at(lineIndex);
+		if (!line) throw new RangeError("Line index is outside the TextModel");
+		return line.id;
+	}
+
+	getLineIndex(lineId: LineId): number {
+		this.assertNotDisposed();
+		const lineIndex = this.lineDocument.lines.indexOf(lineId);
+		if (lineIndex < 0) throw new RangeError(`Line '${lineId}' does not exist in the TextModel`);
+		return lineIndex;
+	}
+
+	linePointAt(position: TextPosition): LinePoint {
+		this.assertNotDisposed();
+		this.offsetAt(position);
+		return linePoint(this.getLineId(position.lineIndex), position.columnIndex);
+	}
+
+	textPositionAt(point: LinePoint): TextPosition {
+		this.assertNotDisposed();
+		const lineIndex = this.getLineIndex(point.lineId);
+		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > this.buffer.getLineLength(lineIndex)) {
+			throw new RangeError("Line point offset is outside the TextModel");
 		}
-		return undefined;
+		return TextPosition.at(lineIndex, point.offset);
 	}
 
 	get schema(): DocumentSchema {
@@ -361,6 +393,7 @@ export class TextModel extends DisposableOwner {
 		const result = this.commitOffsetEdits(entry.edits, {
 			reason: TextModelChangeReason.HistoryCancellation,
 			transactionId: entry.transactionId,
+			lineIds: entry.lineIds,
 		});
 		if (!result) {
 			throw new Error("History revision contained an empty transaction");
@@ -448,6 +481,7 @@ export class TextModel extends DisposableOwner {
 				result.inverseEdits,
 				result.change.transactionId,
 				options.historyGroup,
+				result.previousLineIds,
 			);
 		}
 		this.changeEmitter.fire(result.change);
@@ -483,6 +517,7 @@ export class TextModel extends DisposableOwner {
 			{
 				reason: TextModelChangeReason.Undo,
 				transactionId: entry.transactionId,
+				lineIds: entry.lineIds,
 			},
 		);
 		if (!result) {
@@ -492,6 +527,7 @@ export class TextModel extends DisposableOwner {
 			result.inverseEdits,
 			entry.transactionId,
 			entry.historyGroup,
+			result.previousLineIds,
 		);
 		this.changeEmitter.fire(result.change);
 		return result.change;
@@ -508,6 +544,7 @@ export class TextModel extends DisposableOwner {
 			{
 				reason: TextModelChangeReason.Redo,
 				transactionId: entry.transactionId,
+				lineIds: entry.lineIds,
 			},
 		);
 		if (!result) {
@@ -517,6 +554,7 @@ export class TextModel extends DisposableOwner {
 			result.inverseEdits,
 			entry.transactionId,
 			entry.historyGroup,
+			result.previousLineIds,
 		);
 		this.changeEmitter.fire(result.change);
 		return result.change;
@@ -542,9 +580,11 @@ export class TextModel extends DisposableOwner {
 	): {
 		readonly change: TextModelChange;
 		readonly inverseEdits: OffsetEdit[];
+		readonly previousLineIds: readonly LineId[] | undefined;
 	} | undefined {
 		const prepared = this.prepareEdits(edits);
 		if (prepared.length === 0) return undefined;
+		const previousLineIds = this.plainLineIds;
 		const transactionId =
 			context.transactionId ??
 			this.nextTransactionId++;
@@ -578,7 +618,10 @@ export class TextModel extends DisposableOwner {
 				edit.text,
 			);
 		}
-		this.codeGroups = Object.freeze([createTextModelCodeGroup(this.buffer.lineCount)]);
+		if (this.plainLineIds) {
+			this.plainLineIds = context.lineIds === undefined ? this.mapLineIds(prepared) : this.validateCommittedLineIds(context.lineIds);
+			this.plainLineSnapshot = undefined;
+		}
 		this.trackedRanges.acceptChanges(changes);
 		this.scheduleMaintenance();
 
@@ -592,6 +635,7 @@ export class TextModel extends DisposableOwner {
 		return {
 			change,
 			inverseEdits: normalizeInverseEdits(inverseEdits),
+			previousLineIds,
 		};
 	}
 
@@ -724,6 +768,77 @@ export class TextModel extends DisposableOwner {
 		return { version: this._version, change };
 	}
 
+	private initializeLineIds(lineIds: readonly LineId[] | undefined): readonly LineId[] {
+		if (lineIds !== undefined) {
+			if (!Array.isArray(lineIds) || lineIds.length !== this.buffer.lineCount) {
+				throw new RangeError(`TextModel requires exactly ${this.buffer.lineCount} line ids`);
+			}
+			return this.validateLineIdentities(lineIds);
+		}
+		return Object.freeze(Array.from({ length: this.buffer.lineCount }, () => this.allocateLineId()));
+	}
+
+	private mapLineIds(prepared: readonly PreparedEdit[]): readonly LineId[] {
+		const lineIds = [...this.plainLineIds!];
+		for (let index = prepared.length - 1; index >= 0; index -= 1) {
+			const edit = prepared[index]!;
+			const removedLineCount = edit.range.end.lineIndex - edit.range.start.lineIndex;
+			const insertedLineCount = countLineBreaks(edit.text);
+			const insertedLineIds = Array.from({ length: insertedLineCount }, () => this.allocateLineId());
+			lineIds.splice(edit.range.start.lineIndex + 1, removedLineCount, ...insertedLineIds);
+		}
+		if (lineIds.length !== this.buffer.lineCount) throw new Error("TextModel line identity mapping diverged from the TextBuffer");
+		return Object.freeze(lineIds);
+	}
+
+	private validateCommittedLineIds(lineIds: readonly LineId[]): readonly LineId[] {
+		if (lineIds.length !== this.buffer.lineCount) {
+			throw new RangeError(`Committed TextModel state requires exactly ${this.buffer.lineCount} line ids`);
+		}
+		return this.validateLineIdentities(lineIds);
+	}
+
+	private validateLineIdentities(lineIds: readonly LineId[]): readonly LineId[] {
+		const unique = new Set<LineId>();
+		for (const lineId of lineIds) {
+			if (typeof lineId !== "string" || lineId.trim().length === 0) throw new TypeError("TextModel line ids must be non-empty strings");
+			if (unique.has(lineId)) throw new TypeError(`Duplicate TextModel line id '${lineId}'`);
+			unique.add(lineId);
+			this.issuedLineIds.add(lineId);
+		}
+		return Object.freeze([...lineIds]);
+	}
+
+	private allocateLineId(): LineId {
+		for (let attempt = 0; attempt < 1_000; attempt += 1) {
+			const lineId = this.lineIdGenerator();
+			if (typeof lineId !== "string" || lineId.trim().length === 0) {
+				throw new TypeError("TextModel lineIdGenerator must return a non-empty string");
+			}
+			if (this.issuedLineIds.has(lineId)) continue;
+			this.issuedLineIds.add(lineId);
+			return lineId;
+		}
+		throw new Error("TextModel lineIdGenerator did not produce a unique identity");
+	}
+
+	private requirePlainLineSnapshot(): LineDocumentSnapshot {
+		const existing = this.plainLineSnapshot;
+		if (existing) return existing;
+		const snapshot = this.createPlainLineSnapshot(this.lineMetadata);
+		this.plainLineSnapshot = snapshot;
+		return snapshot;
+	}
+
+	private createPlainLineSnapshot(metadata: LineSemanticAttributes | undefined): LineDocumentSnapshot {
+		const lineIds = this.plainLineIds;
+		if (!lineIds || lineIds.length !== this.buffer.lineCount) throw new Error("TextModel plain line identities are unavailable");
+		return createLineDocumentSnapshot({
+			lines: lineIds.map((id, lineIndex) => ({ id, text: this.buffer.getLineContent(lineIndex) })),
+			metadata,
+		});
+	}
+
 	private requireBlockState(): TextModelBlockState {
 		this.assertNotDisposed();
 		const blockState = this.blockState;
@@ -740,6 +855,12 @@ export class TextModel extends DisposableOwner {
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {
 	return left.startOffset - right.startOffset ||
 		left.endOffset - right.endOffset;
+}
+
+function countLineBreaks(text: string): number {
+	let count = 0;
+	for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) count += 1;
+	return count;
 }
 
 function readHistoryLimit(

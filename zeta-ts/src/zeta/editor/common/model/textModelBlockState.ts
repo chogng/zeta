@@ -8,7 +8,8 @@ import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./docu
 import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
 import type { TextModelChange } from "../core/text.js";
-import { createTextModelBlockSnapshot, type TextModelBlockSnapshot } from "./textModelBlockSnapshot.js";
+import type { LineDocumentSnapshot } from "./lineDocument.js";
+import { projectDocumentToLines } from "./lineDocumentProjection.js";
 
 export type DocumentChangeOrigin = DocumentPluginChangeOrigin;
 
@@ -55,7 +56,7 @@ export class TextModelBlockState extends DisposableOwner {
 	private readonly plugins: readonly DocumentPlugin<unknown>[];
 	private pluginStates: Map<DocumentPluginKey<unknown>, unknown>;
 	private _document: DocumentNode;
-	private _snapshot: TextModelBlockSnapshot;
+	private _snapshot: LineDocumentSnapshot;
 	private _selection: DocumentSelection | undefined;
 	private _storedMarks: readonly DocumentMark[] | undefined;
 
@@ -70,7 +71,7 @@ export class TextModelBlockState extends DisposableOwner {
 		if (options.selection) validateDocumentSelection(normalizedDocument, options.selection);
 		if (options.storedMarks) schema.validateMarks(options.storedMarks);
 		this._document = normalizedDocument;
-		this._snapshot = createTextModelBlockSnapshot(schema, normalizedDocument);
+		this._snapshot = projectDocumentToLines(schema, normalizedDocument);
 		this._selection = options.selection;
 		this._storedMarks = cloneMarks(options.storedMarks);
 		this.history = new DocumentHistory(options.historyLimit);
@@ -91,7 +92,7 @@ export class TextModelBlockState extends DisposableOwner {
 		return this._document;
 	}
 
-	get snapshot(): TextModelBlockSnapshot {
+	get snapshot(): LineDocumentSnapshot {
 		this.assertNotDisposed();
 		return this._snapshot;
 	}
@@ -289,7 +290,7 @@ export class TextModelBlockState extends DisposableOwner {
 			selectionAfter: undefined,
 		});
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document: normalizedDocument, transaction, previousSelection, selection: undefined, origin: "reset", previousVersion, version });
-		const nextSnapshot = createTextModelBlockSnapshot(this.schema, normalizedDocument);
+		const nextSnapshot = projectDocumentToLines(this.schema, normalizedDocument);
 		const textCommit = this.host.commitText(nextSnapshot.getText());
 		if (textCommit.version !== version) throw new Error("TextModel block reset did not commit exactly one model version");
 		this._document = normalizedDocument;
@@ -317,7 +318,7 @@ export class TextModelBlockState extends DisposableOwner {
 		const version = previousVersion + 1;
 		const change = Object.freeze({ version, origin, transaction, previousDocument, document, selectionBefore, selectionAfter });
 		const pluginStates = this.applyPluginStates({ schema: this.schema, previousDocument, document, transaction, previousSelection: selectionBefore, selection: selectionAfter, origin, previousVersion, version });
-		const nextSnapshot = createTextModelBlockSnapshot(this.schema, document);
+		const nextSnapshot = projectDocumentToLines(this.schema, document);
 		const textCommit = this.host.commitText(nextSnapshot.getText());
 		if (textCommit.version !== version) throw new Error("TextModel block transaction did not commit exactly one model version");
 		this._document = document;

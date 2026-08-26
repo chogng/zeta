@@ -269,17 +269,13 @@ export class ScmViewPane extends ViewPane {
 		const parentPath = dirname(change.path);
 		const fileLabel = this.renderedChanges.add(new IconLabel(open, {
 			label: name,
+			description: parentPath || undefined,
 			reserveIconSpace: true,
 			renderIcon: (container) => this.fileIconThemeService.renderFileIcon(repositoryFileUri(this.status?.workspacePath, change.path), container),
 			title: change.originalPath ? `${change.originalPath} → ${change.path}` : change.path,
 		}));
 		fileLabel.element.classList.add("zeta-scm-change-label");
-		if (parentPath) {
-			const description = h(document, "span");
-			description.className = "zeta-scm-change-description";
-			description.textContent = parentPath;
-			fileLabel.element.append(description);
-		}
+		fileLabel.element.querySelector(".zeta-icon-label-description")?.classList.add("zeta-scm-change-description");
 		open.setAttribute("aria-label", `Open ${side === "index" ? "staged changes" : "changes"} for ${change.path}`);
 		open.append(fileLabel.element);
 		if (change.conflicted) {

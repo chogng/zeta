@@ -415,17 +415,13 @@ export class ScmGraphViewPane extends ViewPane {
 			const parentPath = change.path.includes("/") ? change.path.slice(0, change.path.lastIndexOf("/")) : "";
 			const fileLabel = this.hovers.add(new IconLabel(button, {
 				label: name,
+				description: parentPath || undefined,
 				reserveIconSpace: true,
 				renderIcon: (container) => this.fileIconThemeService.renderFileIcon(commitFileUri(commit.objectId, change.path, "modified"), container),
 				title: change.path,
 			}));
 			fileLabel.element.classList.add("zeta-scm-graph-change-label");
-			if (parentPath) {
-				const description = h(document, "span");
-				description.className = "zeta-scm-graph-change-description";
-				description.textContent = parentPath;
-				fileLabel.element.append(description);
-			}
+			fileLabel.element.querySelector(".zeta-icon-label-description")?.classList.add("zeta-scm-graph-change-description");
 			const status = h(document, "span");
 			status.className = `zeta-scm-graph-change-status ${change.status}`;
 			status.textContent = changeStatusLabel(change.status);

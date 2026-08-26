@@ -42,7 +42,10 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
 
 test("Flat editor layout keeps one TextModel owner and both mode bundles", () => {
 	const requiredFiles = [
-		"browser/editorPart.ts",
+		"browser/editorBrowser.ts",
+		"browser/editorDom.ts",
+		"browser/widget/richTextEditor/richTextEditorWidget.ts",
+		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/editorViewport.ts",
 		"browser/input/textInputController.ts",
 		"browser/services/rustDiffComputationService.ts",
@@ -94,9 +97,9 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
-		"common/model/textModelBlockTree.ts",
+		"common/model/lineDocument.ts",
 		"common/model/textModelBlockState.ts",
-		"common/model/textModelBlockSnapshot.ts",
+		"common/model/lineDocumentProjection.ts",
 		"common/services/textModelService.ts",
 		"common/model/documentTransaction.ts",
 		"contrib/academic/common/schema.ts",
@@ -149,11 +152,21 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/services/structuredTextModelService.ts",
 		"common/model/textModelStructure.ts",
 		"common/model/textModelStructureIndex.ts",
+		"common/model/textModelBlockTree.ts",
+		"common/model/textModelBlockSnapshot.ts",
 		"contrib/academic/browser/academicCodeBlockEditor.ts",
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
 	assert.equal(existsSync(join(editorRoot, "alpha")), false, "alpha directory");
 	assert.equal(existsSync(join(editorRoot, "gama")), false, "gama directory");
+});
+
+test("Editor browser retires only the editor-layer EditorPart", () => {
+	const editorBrowser = readFileSync(join(editorRoot, "browser/editorBrowser.ts"), "utf8");
+	assert.equal(statSafe(join(editorRoot, "browser/editorPart.ts")), false, "editor-layer EditorPart");
+	assert.equal(statSafe(join(workbenchRoot, "browser/parts/editor/editorPart.ts")), true, "Workbench EditorPart");
+	assert.match(editorBrowser, /export class EditorBrowser/u);
+	assert.doesNotMatch(editorBrowser, /export class EditorPart/u);
 });
 
 test("Stanza source does not retain retired engine compatibility identifiers", () => {
@@ -172,8 +185,8 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 	const diffInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/diffEditorInput.ts"), "utf8");
 	const viewport = readFileSync(join(editorRoot, "browser/view/editorViewport.ts"), "utf8");
 	const structuredSurface = [
-		readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8"),
-		readFileSync(join(editorRoot, "browser/media/editorWidget.css"), "utf8"),
+		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8"),
+		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.css"), "utf8"),
 		readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8"),
 		readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8"),
 	].join("\n");
@@ -277,11 +290,11 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 });
 
 test("Editor engines delegate optional feature composition to mode bundles", () => {
-	const textHost = readFileSync(join(editorRoot, "browser/editorPart.ts"), "utf8");
+	const textHost = readFileSync(join(editorRoot, "browser/editorBrowser.ts"), "utf8");
 	const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
-	const documentHost = readFileSync(join(editorRoot, "browser/editorWidget.ts"), "utf8");
+	const documentHost = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
 	const codePaneContribution = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditor.contribution.ts"), "utf8");
 	const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
@@ -292,8 +305,8 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const editorContributionRegistry = readFileSync(join(editorRoot, "browser/editorContribution.ts"), "utf8");
 	const optionalControllerPattern = /(?:AnchorSelect|BlockComment|BracketEditing|BracketMatch|BracketNavigation|CodeAction|CodeLens|ColorPicker|ContextMenu|CursorUndo|DiagnosticHover|DiagnosticNavigation|EditorState|Folding|FontZoom|Format|GotoLine|GotoSymbol|Hover|InPlaceReplace|InlayHints|InlineCompletions|InlineProgress|LineComment|LineJoin|LineOperations|LinkedEditing|Links|Message|MiddleScroll|MultiCursor|OccurrenceHighlight|OccurrenceSelection|ParameterHints|ReadOnlyMessage|Rename|SectionHeaders|SmartSelect|StickyScroll|SymbolIcons|TextDrop|ToggleTabFocusMode|Tokenization|Transpose|UnicodeHighlighter|UnusualLineTerminators|WordWrap)Controller/u;
 	assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
-	assert.match(textHost, /registerEditorPartFactory/u);
-	assert.match(textContribution, /registerEditorPartFactory/u);
+	assert.match(textHost, /registerEditorBrowserFactory/u);
+	assert.match(textContribution, /registerEditorBrowserFactory/u);
 	assert.doesNotMatch(textContribution, /FindController/u);
 	assert.doesNotMatch(textContribution, optionalControllerPattern);
 	assert.match(textContribution, /EditingCommandController/u);
@@ -324,8 +337,9 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(academicPaneContribution, /contrib\/codeEditor|CodeEditorPane|EmbeddedTextEditorFactory|AcademicCodeBlockEditorFactory|CodeEditorWidget/u);
 	assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
 	assert.match(textModel, /static create\(/u);
-	assert.match(textModel, /get groups/u);
-	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex/u);
+	assert.match(textModel, /get lineDocument/u);
+	assert.match(textModel, /getLineId/u);
+	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex|TextModelBlockTree/u);
 	assert.match(documentHost, /case "codeBlock":[\s\S]*appendEditableText/u);
 	assert.doesNotMatch(documentHost, /new TextModel|TextModel\.createStructured/u);
 	assert.match(standardBundle, /codeEditorPart\.contribution/u);

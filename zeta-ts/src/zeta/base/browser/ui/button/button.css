@@ -23,6 +23,7 @@
   grid-column: 1;
   justify-self: end;
 }
+.zeta-button.label-centered > .zeta-button-content > .zeta-icon-label-container { grid-column: 2; }
 .zeta-button.label-centered > .zeta-button-content > .zeta-button-label { grid-column: 2; }
 .zeta-button.hidden { display: none; }
 .zeta-button:focus-visible {

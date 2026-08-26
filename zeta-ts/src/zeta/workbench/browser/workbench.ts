@@ -64,6 +64,8 @@ import {
 import {
 	SetiFileIconThemeService,
 } from "../../platform/theme/browser/setiFileIconTheme.js";
+import { FileLabelDecorationService } from "../services/labels/browser/fileLabelDecorationService.js";
+import { IFileLabelDecorationService } from "../services/labels/common/fileLabelDecorationService.js";
 import {
 	IThemeService,
 	ThemeService,
@@ -119,6 +121,8 @@ import {
 } from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
 import { WorkbenchThemeController } from "./theme.js";
+import { IResourceLabelService, ResourceLabelService } from "./labels.js";
+import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
@@ -338,6 +342,9 @@ export class Workbench extends DisposableOwner {
 		const workspaceContext = this.own(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
 		services.set(IWorkspaceContextService, workspaceContext);
+		const labelService = this.own(new LabelService(workspaceContext));
+		services.set(ILabelService, labelService);
+		services.set(IFileLabelDecorationService, this.own(new FileLabelDecorationService()));
 		const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
 		services.set(IWorkspaceTrustService, workspaceTrustService);
 		const workspaceFileService = new BrowserFileService({
@@ -491,10 +498,15 @@ export class Workbench extends DisposableOwner {
 		this.own(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this.own(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.set(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
-		services.set(
-			IFileIconThemeService,
-			this.own(new SetiFileIconThemeService(themeService)),
-		);
+		const fileIconThemeService = this.own(new SetiFileIconThemeService(themeService));
+		services.set(IFileIconThemeService, fileIconThemeService);
+		services.set(IResourceLabelService, this.own(new ResourceLabelService({
+			workspaceContextService: workspaceContext,
+			fileIconThemeService,
+			untitledTextEditorService,
+			fileLabelDecorationService: services.get(IFileLabelDecorationService),
+			labelService,
+		})));
 		const workbenchThemeController = this.own(new WorkbenchThemeController(
 			configuration,
 			themeService,

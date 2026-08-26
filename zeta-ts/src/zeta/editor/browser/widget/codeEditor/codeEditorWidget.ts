@@ -7,7 +7,8 @@ import { EditorViewport, type EditorViewportOptions } from "../../view/editorVie
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
 import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../input/pointerSelectionController.js";
 import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { InstantiationService, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { CodeEditorContributions, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 
 export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
 
@@ -17,8 +18,13 @@ export interface CodeEditorWidgetOptions {
 	readonly selectionController: EditorSelectionController;
 	readonly lineHeight: number;
 	readonly ariaLabel?: string;
-	/** Compatibility seam for hosts that explicitly register placeholder presentation. */
+	/** Optional placeholder text consumed by the registered placeholder contribution. */
 	readonly placeholder?: string;
+	/** Contributions to instantiate for this widget; defaults to the registered widget contributions. */
+	readonly contributions?: readonly CodeEditorContributionDescription[];
+	/** Optional service container used to construct contributions. */
+	readonly instantiationService?: IInstantiationService;
+	readonly onContributionError?: (error: unknown) => void;
 	readonly viewport?: CodeEditorWidgetViewportOptions;
 	readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
 	readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
@@ -35,6 +41,7 @@ export interface CodeEditorWidgetOptions {
 export class CodeEditorWidget extends DisposableOwner {
 	readonly viewport: EditorViewport;
 	readonly textInput: TextInputController;
+	readonly contributions: CodeEditorContributions;
 
 	constructor(options: CodeEditorWidgetOptions) {
 		super();
@@ -52,10 +59,14 @@ export class CodeEditorWidget extends DisposableOwner {
 				...options.textInput,
 				ariaLabel: options.ariaLabel,
 			}));
-			if (options.placeholder) {
-				if (!placeholderFactory) throw new Error("Code editor placeholder requires the placeholder contribution");
-				this.own(placeholderFactory(this.viewport, options.placeholder));
-			}
+			this.contributions = this.own(new CodeEditorContributions());
+			this.contributions.initialize({
+				model: options.model,
+				selectionController: options.selectionController,
+				viewport: this.viewport,
+				textInput: this.textInput,
+				placeholder: options.placeholder,
+			}, options.instantiationService ?? new InstantiationService(), options.contributions, options.onContributionError);
 			this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
 			this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
 		} catch (error) {
@@ -77,22 +88,17 @@ export class CodeEditorWidget extends DisposableOwner {
 	}
 }
 
-export type CodeEditorPlaceholderFactory = (viewport: EditorViewport, placeholder: string) => IDisposable;
-
-let placeholderFactory: CodeEditorPlaceholderFactory | undefined;
-
-/** Registers optional placeholder presentation without a widget-to-contrib dependency. */
-export function registerCodeEditorPlaceholderFactory(factory: CodeEditorPlaceholderFactory): void {
-	if (typeof factory !== "function") throw new TypeError("Code editor placeholder factory must be a function");
-	if (placeholderFactory && placeholderFactory !== factory) throw new Error("Code editor placeholder factory is already registered");
-	placeholderFactory = factory;
-}
-
 function validateOptions(options: CodeEditorWidgetOptions): void {
 	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || !options.model || !options.selectionController) {
 		throw new TypeError("Stanza code editor requires a container, text model, and selection controller");
 	}
 	if (options.selectionController.textModel !== options.model) {
 		throw new TypeError("Stanza code editor model and selection controller must match");
+	}
+	if (options.instantiationService !== undefined && typeof options.instantiationService.createInstance !== "function") {
+		throw new TypeError("Code editor instantiation service must create instances");
+	}
+	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
+		throw new TypeError("Code editor contribution error handler must be a function");
 	}
 }

@@ -16,7 +16,7 @@ export type IconDefinition = () => string;
 type IconDefaults = Icon | IconDefinition;
 
 const iconDefaultsById = new Map<string, IconDefaults>();
-const iconIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const iconIdPattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/;
 
 /**
  * Registers the default artwork or semantic fallback for an icon ID.
@@ -33,6 +33,11 @@ export function register(id: string, defaults: IconDefaults): Icon {
 	}
 	iconDefaultsById.set(id, defaults);
 	return Icon.fromId(id);
+}
+
+/** Returns a registered icon reference without crossing into the renderer. */
+export function getRegisteredIcon(id: string): Icon | undefined {
+	return iconDefaultsById.has(id) ? Icon.fromId(id) : undefined;
 }
 
 /** Resolves an icon reference to the SVG factory used by the browser layer. */

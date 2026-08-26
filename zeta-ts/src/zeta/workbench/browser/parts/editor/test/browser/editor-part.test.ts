@@ -413,7 +413,7 @@ test("EditorPart retains tabs and switches loaded panes", async () => {
 		toolbar?.parentElement,
 	);
 	const firstTab = tablist?.querySelector<HTMLElement>("[role='tab']");
-	assert.equal(firstTab?.textContent, "main.ts");
+	assert.equal(firstTab?.querySelector(".zeta-icon-label-text")?.textContent, "main.ts");
 	assert.equal(firstTab?.getAttribute("aria-selected"), "true");
 	const firstPanelId = firstTab?.getAttribute("aria-controls");
 	assert.ok(firstPanelId);

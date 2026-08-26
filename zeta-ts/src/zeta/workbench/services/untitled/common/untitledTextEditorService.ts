@@ -28,12 +28,16 @@ export interface IUntitledTextEditor {
  */
 export interface IUntitledTextEditorService extends IDisposable {
 	readonly onDidCreate: Event<IUntitledTextEditor>;
+	readonly onDidChangeLabel: Event<IUntitledTextEditor>;
 
 	/** Creates a new unique `untitled:` editor input. */
 	create(options?: UntitledTextEditorOptions): IUntitledTextEditor;
 
 	/** Finds the Workbench input previously created for an exact resource. */
 	get(resource: URI): IUntitledTextEditor | undefined;
+
+	/** Changes the display label while keeping the virtual resource identity stable. */
+	rename(resource: URI, label: string): IUntitledTextEditor | undefined;
 
 	/** Reports whether a resource belongs to this virtual editor namespace. */
 	isUntitled(resource: URI): boolean;
