@@ -1,13 +1,20 @@
-load("//zeterm:defs.bzl", "zeterm_rust_binary")
+load("//zeterm:defs.bzl", "zeterm_rust_binary", "zeterm_rust_library")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
+zeterm_rust_library(
+    name = "zeterm_lib",
+    crate_name = "zeterm",
+    package_name = "zeterm",
+)
+
 zeterm_rust_binary(
     name = "zeterm",
     crate_name = "zeterm",
-    crate_root = "src/main.rs",
+    crate_root = "src/bin/zeterm.rs",
     package_name = "zeterm",
+    deps = [":zeterm_lib"],
 )
 
 exports_files([

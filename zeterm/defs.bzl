@@ -27,7 +27,7 @@ def zeterm_rust_library(
         edition = "2024",
         srcs = native.glob(
             ["src/**/*.rs"],
-            exclude = ["src/main.rs"],
+            exclude = ["src/main.rs", "src/bin/**/*.rs"],
         ),
         target_compatible_with = target_compatible_with,
         visibility = ["//visibility:public"],

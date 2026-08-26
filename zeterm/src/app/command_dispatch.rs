@@ -5,7 +5,7 @@ use zui::ui::ElementId;
 
 use crate::NativeApp;
 use crate::pane_group::PaneSplitDirection;
-use crate::session_switch_trace;
+use crate::session::session_switch_trace;
 use crate::shell_interaction::{
     self, AgentSidebarPaneAction, ContextAction, SessionContextMenuAction,
 };

@@ -197,6 +197,107 @@ fn product_uses_only_zui_for_native_framework_hosting() {
 }
 
 #[test]
+fn zeterm_app_server_adapter_owns_the_zeta_rs_client_boundary() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source_root = workspace.join("src");
+    let app_server_file = source_root.join("app_server.rs");
+    let app_server_root = source_root.join("app_server");
+    let mut violations = Vec::new();
+    visit_rust_sources(&source_root, &mut |path, source| {
+        if path == app_server_file || path.starts_with(&app_server_root) || is_test_source(path) {
+            return;
+        }
+        if source.contains("zeta_app_server_client") {
+            violations.push(
+                path.strip_prefix(workspace)
+                    .unwrap_or(path)
+                    .display()
+                    .to_string(),
+            );
+        }
+    });
+    assert!(
+        violations.is_empty(),
+        "zeterm modules must access zeta-rs App Server client through crate::app_server:\n{}",
+        violations.join("\n")
+    );
+
+    let product_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
+        .expect("zeterm manifest should be readable");
+    assert!(
+        product_manifest
+            .lines()
+            .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
+        "zeterm must own the shared zeta-rs App Server client dependency"
+    );
+
+    for relative_manifest in [
+        "ui/Cargo.toml",
+        "zui/Cargo.toml",
+        "agent-sidebar/Cargo.toml",
+        "composer/Cargo.toml",
+        "editor/Cargo.toml",
+        "settings/Cargo.toml",
+    ] {
+        let manifest = fs::read_to_string(workspace.join(relative_manifest))
+            .unwrap_or_else(|error| panic!("could not read {relative_manifest}: {error}"));
+        assert!(
+            !manifest
+                .lines()
+                .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
+            "UI crate {relative_manifest} must not depend on the App Server client"
+        );
+    }
+}
+
+#[test]
+fn native_app_state_is_private_to_the_app_composition_boundary() {
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let state_source = fs::read_to_string(source_root.join("app/state.rs"))
+        .expect("NativeApp state source should be readable");
+    assert!(
+        state_source.contains("pub(crate) struct NativeApp"),
+        "NativeApp should remain available to the product app without exposing its fields"
+    );
+    assert!(
+        !state_source.contains("    pub(crate) "),
+        "NativeApp fields must not be crate-wide; expose them only to app composition descendants"
+    );
+    assert!(
+        state_source.contains("    pub(super) window:")
+            && state_source.contains("    pub(super) app_server_host:"),
+        "NativeApp state fields must use the app-composition visibility boundary"
+    );
+
+    let native_app_source = fs::read_to_string(source_root.join("app/native_app.rs"))
+        .expect("NativeApp composition source should be readable");
+    assert!(
+        native_app_source.contains("mod state;")
+            && native_app_source.contains("pub(crate) use state::NativeApp;"),
+        "app::native_app must own and re-export the app state type"
+    );
+    assert!(
+        !native_app_source.contains("state: state::NativeAppState"),
+        "NativeApp must not add a second wrapper state layer"
+    );
+
+    for relative_path in [
+        "app/frame.rs",
+        "app/interaction.rs",
+        "app/runtime.rs",
+        "app/workbench.rs",
+        "workbench.rs",
+    ] {
+        let source = fs::read_to_string(source_root.join(relative_path))
+            .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));
+        assert!(
+            !source.contains("pub(crate) fn"),
+            "{relative_path} must not expose NativeApp composition methods at crate scope"
+        );
+    }
+}
+
+#[test]
 fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let backend_root = workspace.join("zui/src/render/wgpu");

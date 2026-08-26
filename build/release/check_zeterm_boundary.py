@@ -120,7 +120,7 @@ def main() -> int:
     for dependency in forbidden_keybinding_dependencies:
         if re.search(rf"(?m)^{re.escape(dependency)}\s*=", shared_keybinding_manifest):
             fail(f"shared zeta-keybinding depends on platform/UI crate: {dependency}")
-    launch_path = repository_root / "zeterm" / "src" / "launch.rs"
+    launch_path = repository_root / "zeterm" / "src" / "features" / "remote" / "launch.rs"
     launch_text = launch_path.read_text()
     if 'const DEFAULT_REMOTE_RUNTIME: &str = "zeta-server";' not in launch_text:
         fail("zeterm Remote must default to the product-neutral zeta-server host")

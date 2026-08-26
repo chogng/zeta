@@ -5,9 +5,14 @@ edition = "2024"
 license-file = "../LICENSE"
 publish = false
 
+[lib]
+name = "zeterm"
+path = "src/lib.rs"
+
 [[bin]]
 name = "zeterm"
-path = "src/main.rs"
+path = "src/bin/zeterm.rs"
+test = false
 
 [dependencies]
 anyhow = { workspace = true }
