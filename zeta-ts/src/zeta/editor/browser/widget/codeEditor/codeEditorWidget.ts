@@ -2,7 +2,10 @@ import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
@@ -28,6 +31,22 @@ export interface CodeEditorWidgetOptions extends Omit<EditorViewOptions, "contai
 	readonly mouseHandler?: MouseHandlerOptions;
 }
 
+export interface CodeEditorViewPositionState {
+	readonly lineIndex: number;
+	readonly columnIndex: number;
+}
+
+export interface CodeEditorViewSelectionState {
+	readonly anchor: CodeEditorViewPositionState;
+	readonly active: CodeEditorViewPositionState;
+}
+
+export interface CodeEditorViewState {
+	readonly selections: readonly CodeEditorViewSelectionState[];
+	readonly primarySelectionIndex: number;
+	readonly scrollPosition: EditorScrollPosition;
+}
+
 /**
  * Canonical browser editing surface for one Stanza text model and editor-local selection controller.
  *
@@ -36,6 +55,7 @@ export interface CodeEditorWidgetOptions extends Omit<EditorViewOptions, "contai
  * drop/paste behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends DisposableOwner {
+	private readonly selectionController: EditorSelectionController;
 	readonly ownerId: string;
 	readonly view: EditorView;
 	readonly viewport: EditorViewport;
@@ -46,6 +66,7 @@ export class CodeEditorWidget extends DisposableOwner {
 		super();
 		try {
 			validateOptions(options);
+			this.selectionController = options.selectionController;
 			this.view = this.own(new EditorView({
 				ownerId: options.ownerId,
 				container: options.container,
@@ -91,6 +112,49 @@ export class CodeEditorWidget extends DisposableOwner {
 
 	focus(): void {
 		this.view.focus();
+	}
+
+	announceAccessibilityStatus(message: string): void {
+		this.viewport.announceAccessibilityStatus(message);
+	}
+
+	getValue(): string {
+		return this.viewport.textModel.getText();
+	}
+
+	setValue(value: string): void {
+		if (this.getValue() === value) return;
+		this.viewport.textModel.reset(value);
+	}
+
+	revealRange(range: TextRange): void {
+		this.viewport.textModel.offsetAt(range.start);
+		this.viewport.textModel.offsetAt(range.end);
+		this.selectionController.setSelections(TextSelectionSet.single(TextSelection.from(range.start, range.end)));
+		this.viewport.revealPosition(range.start);
+	}
+
+	saveViewState(): CodeEditorViewState {
+		return Object.freeze({
+			selections: Object.freeze(this.selectionController.selections.selections.map(selection => Object.freeze({
+				anchor: Object.freeze({ lineIndex: selection.anchor.lineIndex, columnIndex: selection.anchor.columnIndex }),
+				active: Object.freeze({ lineIndex: selection.active.lineIndex, columnIndex: selection.active.columnIndex }),
+			}))),
+			primarySelectionIndex: this.selectionController.selections.primaryIndex,
+			scrollPosition: Object.freeze({ ...this.viewport.currentLayout.scrollPosition }),
+		});
+	}
+
+	restoreViewState(state: CodeEditorViewState): void {
+		const selections = state.selections.map(selection => {
+			const anchor = TextPosition.at(selection.anchor.lineIndex, selection.anchor.columnIndex);
+			const active = TextPosition.at(selection.active.lineIndex, selection.active.columnIndex);
+			this.viewport.textModel.offsetAt(anchor);
+			this.viewport.textModel.offsetAt(active);
+			return TextSelection.from(anchor, active);
+		});
+		this.selectionController.setSelections(TextSelectionSet.withPrimary(selections, state.primarySelectionIndex));
+		this.viewport.scrollTo(state.scrollPosition);
 	}
 
 	getId(): string {

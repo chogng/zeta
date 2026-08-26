@@ -23,6 +23,7 @@ import { ScreenReaderSupport } from './controller/editContext/native/screenReade
 import { TextAreaAccessibilityController } from './controller/editContext/textArea/textAreaAccessibilityController.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import { ViewController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
+import { ViewInputController } from './view/viewInputController.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyEditorFontInfo } from './config/domFontInfo.js';
 import { ElementSizeObserver } from './config/elementSizeObserver.js';
@@ -80,7 +81,8 @@ export interface EditorViewOptions {
  * The browser view/input boundary for one line editor.
  *
  * This follows the VS Code split: the view selects and owns the concrete
- * EditContext, while ViewController routes user input into common commands.
+ * EditContext and ViewInputController own browser input, while ViewController
+ * routes semantic input into common commands.
  * View owns DOM projection and rendering; feature contributions own
  * policies such as completion.
  */
@@ -144,7 +146,7 @@ export class EditorView extends DisposableOwner {
 			}
 
 			// Language editing is contribution-owned. The view only borrows the adapter
-			// while ViewController invokes it for the current input event.
+			// while ViewController invokes it for the current input command.
 			const languageEditing = viewOptions.languageEditing;
 			this.editContext = this.own(createEditContext(this.viewport.element, {
 				ariaLabel: viewOptions.ariaLabel,
@@ -164,16 +166,22 @@ export class EditorView extends DisposableOwner {
 				selectionController,
 			));
 			this.viewController = this.own(new ViewController(
-				this.editContext,
 				this.viewport,
 				selectionController,
-				this.compositionController,
 				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
 			));
-			this.onWillBeforeInput = this.viewController.onWillBeforeInput;
-			this.onWillTextUpdate = this.viewController.onWillTextUpdate;
-			this.onWillKeydown = this.viewController.onWillKeydown;
+			const viewInputController = this.own(new ViewInputController(
+				this.editContext,
+				this.viewController,
+				this.compositionController,
+			));
+			this.onWillBeforeInput = viewInputController.onWillBeforeInput;
+			this.onWillTextUpdate = viewInputController.onWillTextUpdate;
+			this.onWillKeydown = viewInputController.onWillKeydown;
 			this.onDidEdit = this.viewController.onDidEdit;
+			this.own(this.viewController.onDidChangeOvertype(overtyping => {
+				this.viewport.element.classList.toggle('overtype', overtyping);
+			}));
 
 			if (this.editContext instanceof NativeEditContext) {
 				this.own(new ScreenReaderSupport({

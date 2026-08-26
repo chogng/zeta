@@ -53,7 +53,7 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 ### 行式文本 engine
 
-`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，`browser/editorBrowserRuntime.ts` 负责组装 widget、EditContext 和 typed capability map；`browser/editorDom.ts` 提供稳定 DOM root 与布局。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
+`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，负责语言与 typed capability 装配；`browser/widget/codeEditor/codeEditorWidget.ts` 拥有编辑器操作和 view state，`codeEditorContributions.ts` 统一拥有 contribution 实例化阶段与生命周期；`browser/editorDom.ts` 提供稳定 DOM root 与布局。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
 
 ### 富文档 engine
 

@@ -44,10 +44,11 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
 test("Flat editor layout keeps one TextModel owner and both mode bundles", () => {
 	const requiredFiles = [
 		"browser/editorBrowser.ts",
-		"browser/editorBrowserRuntime.ts",
 		"browser/editorDom.ts",
 		"browser/editorExtensions.ts",
 		"browser/coreCommands.ts",
+		"browser/widget/codeEditor/codeEditorContributions.ts",
+		"browser/widget/codeEditor/codeEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/viewOverlays.ts",
@@ -348,7 +349,6 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 
 test("Editor engines delegate optional feature composition to mode bundles", () => {
 	const textHost = readFileSync(join(editorRoot, "browser/editorBrowser.ts"), "utf8");
-	const runtimeSource = readFileSync(join(editorRoot, "browser/editorBrowserRuntime.ts"), "utf8");
 	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
@@ -361,17 +361,19 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	const editorExtensionRegistry = readFileSync(join(editorRoot, "browser/editorExtensions.ts"), "utf8");
+	const codeEditorContributions = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorContributions.ts"), "utf8");
 	const optionalControllerPattern = /(?:AnchorSelect|BlockComment|BracketEditing|BracketMatch|BracketNavigation|CodeAction|CodeLens|ColorPicker|ContextMenu|CursorUndo|DiagnosticHover|DiagnosticNavigation|EditorState|Folding|FontZoom|Format|GotoLine|GotoSymbol|Hover|InPlaceReplace|InlayHints|InlineCompletions|InlineProgress|LineComment|LineJoin|LineOperations|LinkedEditing|Links|Message|MiddleScroll|MultiCursor|OccurrenceHighlight|OccurrenceSelection|ParameterHints|ReadOnlyMessage|Rename|SectionHeaders|SmartSelect|StickyScroll|SymbolIcons|TextDrop|ToggleTabFocusMode|Tokenization|Transpose|UnicodeHighlighter|UnusualLineTerminators|WordWrap)Controller/u;
 	assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
-	assert.match(textHost, /EditorBrowserRuntime/u);
+	assert.doesNotMatch(textHost, /EditorBrowserRuntime|IEditorBrowserRuntime/u);
 	assert.doesNotMatch(textHost, /registerEditorBrowserFactory|EditorBrowserFactory/u);
-	assert.match(runtimeSource, /getEditorContributions/u);
-	assert.doesNotMatch(runtimeSource, /from\s+["'][^"']*\/contrib\//u);
-	assert.doesNotMatch(runtimeSource, optionalControllerPattern);
-	assert.doesNotMatch(runtimeSource, /EditingCommandController/u);
+	assert.match(textHost, /getEditorContributions/u);
+	assert.match(textHost, /codeEditor\.contributions\.add/u);
+	assert.match(codeEditorContributions, /runWhenWindowIdle/u);
+	assert.doesNotMatch(textHost, optionalControllerPattern);
+	assert.doesNotMatch(textHost, /EditingCommandController/u);
 	assert.match(coreCommands, /editor\.action\.selectAll/u);
 	assert.match(coreCommands, /registerEditorContribution/u);
-	assert.doesNotMatch(runtimeSource, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
+	assert.doesNotMatch(textHost, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
 	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);

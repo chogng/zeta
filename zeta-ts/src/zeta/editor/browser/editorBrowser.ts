@@ -1,32 +1,36 @@
 import { type IDimension } from "../../base/browser/geometry.js";
 import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../base/common/lifecycle.js";
+import { DisposableOwner, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
-import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
-import { type TextPosition, type TextRange } from "../common/core/text.js";
+import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
+import { TextPosition, type TextRange } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
-import { type ILanguageFeaturesService } from "../common/services/languageService.js";
+import { LanguageFeaturesService, type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
-import { type EditorView } from "./view.js";
-import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
+import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
+import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
-import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../common/config/editorOptions.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
-import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
-import { type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
+import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
+import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
-import { type TabFocus } from "./config/tabFocus.js";
-import { EditorBrowserRuntime } from "./editorBrowserRuntime.js";
+import { TabFocus } from "./config/tabFocus.js";
+import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
+import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
+import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
+import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;
@@ -35,25 +39,10 @@ export interface EditorContextMenuRequest {
 	readonly clientY: number;
 }
 
-export interface EditorTextViewPositionState {
-	readonly lineIndex: number;
-	readonly columnIndex: number;
-}
-
-export interface EditorTextViewSelectionState {
-	readonly anchor: EditorTextViewPositionState;
-	readonly active: EditorTextViewPositionState;
-}
-
+export type EditorTextViewPositionState = CodeEditorViewPositionState;
+export type EditorTextViewSelectionState = CodeEditorViewSelectionState;
 /** JSON-safe instance state persisted by a Workbench text-editor pane. */
-export interface EditorTextViewState {
-	readonly selections: readonly EditorTextViewSelectionState[];
-	readonly primarySelectionIndex: number;
-	readonly scrollPosition: {
-		readonly left: number;
-		readonly top: number;
-	};
-}
+export type EditorTextViewState = CodeEditorViewState;
 
 export function isEditorTextViewState(value: unknown): value is EditorTextViewState {
 	if (!value || typeof value !== "object") return false;
@@ -152,8 +141,8 @@ export interface EditorBrowserOptions {
 	readonly fontZoom?: { readonly initialScale?: number };
 }
 
-/** Runtime created by one statically selected line-editor contribution bundle. */
-export interface IEditorBrowserRuntime extends IDisposable {
+/** Browser editor contract created from one statically selected contribution bundle. */
+export interface IEditorBrowser extends IDisposable {
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
@@ -174,8 +163,11 @@ export interface IEditorBrowserRuntime extends IDisposable {
 }
 
 /** Browser composition root for the line editor. */
-export class EditorBrowser extends DisposableOwner implements IEditorBrowserRuntime {
-	private readonly runtime: IEditorBrowserRuntime;
+export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
+	private readonly modelReference: TextModelReference;
+	private readonly onSave: (() => Promise<void | boolean>) | undefined;
+	private readonly onRevert: (() => Promise<void>) | undefined;
+	private readonly beforeSaveHooks: Array<() => void | Promise<void>> = [];
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
@@ -185,30 +177,186 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowserRunt
 	constructor(options: EditorBrowserOptions) {
 		super();
 		try {
-			this.runtime = this.own(new EditorBrowserRuntime(options));
-			this.onDidChange = this.runtime.onDidChange;
-			this.codeEditor = this.runtime.codeEditor;
-			this.viewport = this.runtime.viewport;
-			this.selections = this.runtime.selections;
-			this.view = this.runtime.view;
+			validateOptions(options);
+			const configuration = resolveEditorConfiguration(options);
+			const tabFocus = options.tabFocus ?? this.own(new TabFocus());
+			const languageId = options.languageId;
+			const onLanguageError = options.onLanguageError ?? reportLanguageError;
+			this.onSave = options.onSave;
+			this.onRevert = options.onRevert;
+			if (options.languageSupport) this.own(options.languageSupport);
+			const modelReference = this.modelReference = this.own(options.modelReference);
+			const model = modelReference.model;
+			this.onDidChange = listener => model.onDidChange(() => listener());
+			const languageFeaturesService = options.languageFeaturesService ?? this.own(new LanguageFeaturesService());
+			const configurations = languageFeaturesService.configurations;
+			this.selections = this.own(new EditorSelectionController(
+				model,
+				TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+				{ readOnly: options.input.readOnly },
+			));
+			const contributionCapabilities = new Map<string, unknown>();
+			const getCapability = <T>(capability: EditorCapability<T>): T => {
+				if (!contributionCapabilities.has(capability.id)) throw new ReferenceError(`Text editor capability '${capability.id}' is unavailable`);
+				return contributionCapabilities.get(capability.id) as T;
+			};
+			const getOptionalCapability = <T>(capability: EditorCapability<T>): T | undefined => contributionCapabilities.get(capability.id) as T | undefined;
+			const provideCapability = <T>(capability: EditorCapability<T>, value: T): void => {
+				if (contributionCapabilities.has(capability.id)) throw new RangeError(`Text editor capability '${capability.id}' is already provided`);
+				contributionCapabilities.set(capability.id, value);
+			};
+			const decorationSources: DecorationSource[] = [];
+			for (const source of options.decorationSources ?? []) decorationSources.push(this.own(source));
+			const lineGutterDecorations: EditorLineGutterDecoration[] = [...(options.lineGutterDecorations ?? [])];
+			let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration } | undefined;
+			let semanticTokenSource: SemanticTokenSource | undefined;
+			let bracketColorizationSource: BracketColorizationSource | undefined;
+			let languageLexicalContext: LanguageLexicalContextSource | undefined;
+			let languageEditing: EditorLanguageEditingAdapter | undefined;
+			const selectedContributions = getEditorContributions();
+			for (const contribution of selectedContributions) {
+				contribution.configure?.({
+					kind: "text",
+					options,
+					model,
+					languageId,
+					languageFeaturesService,
+					configurations,
+					selections: this.selections,
+					tabFocus,
+					onLanguageError,
+					getCapability,
+					getOptionalCapability,
+					provideCapability,
+					addDecorationSource: source => decorationSources.push(source),
+					addLineGutterDecoration: decoration => lineGutterDecorations.push(decoration),
+					setLineProjection: projection => {
+						if (lineProjection) throw new Error("Text editor line projection is already configured");
+						lineProjection = projection;
+					},
+					setSemanticTokenSource: source => {
+						if (semanticTokenSource) throw new Error("Text editor semantic-token source is already configured");
+						semanticTokenSource = source;
+					},
+					setBracketColorizationSource: source => {
+						if (bracketColorizationSource) throw new Error("Text editor bracket-colorization source is already configured");
+						bracketColorizationSource = source;
+					},
+					setLanguageLexicalContext: source => {
+						if (languageLexicalContext) throw new Error("Text editor lexical context is already configured");
+						languageLexicalContext = source;
+					},
+					setLanguageEditing: adapter => {
+						if (languageEditing) throw new Error("Text editor language editing is already configured");
+						languageEditing = adapter;
+					},
+					own: value => this.own(value),
+				});
+			}
+			const ariaLabel = editorLabel(options.input);
+			this.codeEditor = this.own(new CodeEditorWidget({
+				container: options.container,
+				model,
+				selectionController: this.selections,
+				lineHeight: configuration.lineHeight,
+				ariaLabel,
+				ownerId: options.ownerId,
+				instantiationService: options.instantiationService,
+				onContributionError: onLanguageError,
+				viewport: {
+					lineVisibilitySource: lineProjection?.visibilitySource,
+					lineGutterDecoration: combineEditorLineGutterDecorations([...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : []), ...lineGutterDecorations]),
+					decorationSources,
+					semanticTokenSource,
+					bracketColorizationSource,
+					lineWrapping: options.lineWrapping,
+					wrappingIndent: options.wrappingIndent,
+					fontFamily: configuration.fontFamily,
+					fontSize: configuration.fontSize,
+					fontLigatures: configuration.fontLigatures,
+					showLineNumbers: options.showLineNumbers,
+					rulers: options.rulers,
+					showIndentationGuides: options.showIndentationGuides,
+					minimap: options.minimap,
+					activeLineHighlight: options.activeLineHighlight,
+					textDirection: options.textDirection,
+					presentation: options.presentation,
+					indentation: options.indentation,
+				},
+				accessibilityService: options.accessibilityService,
+				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
+				accessibilityPageSize: options.accessibilityPageSize,
+				semanticTokenSource,
+				bracketColorizationSource,
+				languageEditing,
+				wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
+				keyboardNavigation: {
+					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
+				},
+				mouseHandler: {
+					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
+				},
+			}));
+			this.viewport = this.codeEditor.viewport;
+			this.view = this.codeEditor.view;
+			this.own(modelReference.onDidChangeExternalChange(() => {
+				if (modelReference.hasExternalChange) this.codeEditor.announceAccessibilityStatus("File changed on disk. Local edits are preserved.");
+			}));
+			const installContext: TextEditorContributionContext = {
+				kind: "text",
+				options,
+				model,
+				languageId,
+				languageFeaturesService,
+				configurations,
+				view: this.view,
+				viewport: this.viewport,
+				selections: this.selections,
+				tabFocus,
+				onLanguageError,
+				getCapability,
+				getOptionalCapability,
+				registerBeforeSave: hook => {
+					if (typeof hook !== "function") throw new TypeError("Editor before-save hook must be a function");
+					this.beforeSaveHooks.push(hook);
+					return toDisposable(() => {
+						const index = this.beforeSaveHooks.indexOf(hook);
+						if (index >= 0) this.beforeSaveHooks.splice(index, 1);
+					});
+				},
+				own: value => this.own(value),
+			};
+			for (const contribution of selectedContributions) contribution.install?.(installContext);
+			const runtimeContributions = selectedContributions.flatMap(contribution => contribution.runtime ? [{
+				id: contribution.id,
+				descriptor: contribution.runtime.descriptor,
+				instantiation: contribution.runtime.instantiation,
+			}] : []);
+			if (runtimeContributions.length > 0) {
+				if (!options.instantiationService) throw new Error("Runtime editor contributions require an instantiation service");
+				this.codeEditor.contributions.add(installContext, runtimeContributions);
+			}
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
 	}
 
-	layout(dimension: IDimension): void { this.runtime.layout(dimension); }
-	announceAccessibilityStatus(message: string): void { this.runtime.announceAccessibilityStatus(message); }
-	focus(): void { this.runtime.focus(); }
-	getValue(): string { return this.runtime.getValue(); }
-	setValue(value: string): void { this.runtime.setValue(value); }
-	revealRange(range: TextRange): void { this.runtime.revealRange(range); }
-	getViewState(): EditorTextViewState { return this.runtime.getViewState(); }
-	restoreViewState(state: EditorTextViewState): void { this.runtime.restoreViewState(state); }
-	get isDirty(): boolean { return this.runtime.isDirty; }
-	get hasExternalChange(): boolean { return this.runtime.hasExternalChange; }
-	save(): Promise<void> { return this.runtime.save(); }
-	revert(): Promise<void> { return this.runtime.revert(); }
+	layout(dimension: IDimension): void { this.codeEditor.layout(dimension); }
+	announceAccessibilityStatus(message: string): void { this.codeEditor.announceAccessibilityStatus(message); }
+	focus(): void { this.codeEditor.focus(); }
+	getValue(): string { return this.codeEditor.getValue(); }
+	setValue(value: string): void { this.codeEditor.setValue(value); }
+	revealRange(range: TextRange): void { this.codeEditor.revealRange(range); }
+	getViewState(): EditorTextViewState { return this.codeEditor.saveViewState(); }
+	restoreViewState(state: EditorTextViewState): void { this.codeEditor.restoreViewState(state); }
+	get isDirty(): boolean { return this.modelReference.isDirty; }
+	get hasExternalChange(): boolean { return this.modelReference.hasExternalChange; }
+	async save(): Promise<void> {
+		for (const hook of [...this.beforeSaveHooks]) await hook();
+		await this.onSave?.();
+	}
+	async revert(): Promise<void> { await this.onRevert?.(); }
 }
 
 function isViewPosition(value: unknown): value is EditorTextViewPositionState {
@@ -221,4 +369,52 @@ function isViewScrollPosition(value: unknown): value is EditorTextViewState["scr
 	if (!value || typeof value !== "object") return false;
 	const position = value as Partial<EditorTextViewState["scrollPosition"]>;
 	return isFiniteNumber(position.left) && position.left! >= 0 && isFiniteNumber(position.top) && position.top! >= 0;
+}
+
+function validateOptions(options: EditorBrowserOptions): void {
+	if (!options || typeof options !== "object" || !options.container || !options.modelReference) {
+		throw new TypeError("Editor browser requires a container and model reference");
+	}
+	if (options.input?.readOnly !== undefined && typeof options.input.readOnly !== "boolean") {
+		throw new TypeError("Editor input read-only mode must be boolean");
+	}
+	if (options.whenLanguageSupportReady !== undefined && typeof options.whenLanguageSupportReady !== "function") {
+		throw new TypeError("Editor language readiness must be a function");
+	}
+	if (options.onLanguageError !== undefined && typeof options.onLanguageError !== "function") {
+		throw new TypeError("Editor language error handler must be a function");
+	}
+	if (options.onSave !== undefined && typeof options.onSave !== "function") {
+		throw new TypeError("Editor save must be a function");
+	}
+	if (options.onRevert !== undefined && typeof options.onRevert !== "function") {
+		throw new TypeError("Editor revert must be a function");
+	}
+	if (options.insertFinalNewLine !== undefined && typeof options.insertFinalNewLine !== "boolean") {
+		throw new TypeError("Editor final newline option must be boolean");
+	}
+	for (const [name, value] of [
+		["line numbers", options.showLineNumbers],
+		["indentation guides", options.showIndentationGuides],
+		["bracket pair colorization", options.bracketPairColorization],
+		["sticky scroll", options.stickyScroll],
+		["suggestions", options.suggestions],
+		["inline completions", options.inlineCompletions],
+		["parameter hints", options.parameterHints],
+		["inlay hints", options.inlayHints],
+		["CodeLens", options.codeLens],
+		["format on save", options.formatOnSave],
+	] as const) {
+		if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Editor ${name} option must be boolean`);
+	}
+}
+
+function editorLabel(input: EditorResourceInput): string {
+	if (input.label?.trim()) return input.label;
+	const path = decodeURIComponent(input.resource.path);
+	return path.slice(path.lastIndexOf("/") + 1) || "Text editor";
+}
+
+function reportLanguageError(error: unknown): void {
+	console.error("Editor language request failed", error);
 }

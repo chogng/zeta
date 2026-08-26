@@ -121,7 +121,9 @@ export interface TextEditorRuntimeContribution extends IDisposable {}
 export enum EditorContributionInstantiation {
 	Eager = "eager",
 	AfterFirstRender = "afterFirstRender",
+	BeforeFirstInteraction = "beforeFirstInteraction",
 	Eventually = "eventually",
+	Lazy = "lazy",
 }
 
 export interface TextEditorRuntimeContributionRegistration {
@@ -159,5 +161,7 @@ export function getEditorContributions(): readonly EditorContribution[] {
 function isInstantiation(value: EditorContributionInstantiation): boolean {
 	return value === EditorContributionInstantiation.Eager
 		|| value === EditorContributionInstantiation.AfterFirstRender
-		|| value === EditorContributionInstantiation.Eventually;
+		|| value === EditorContributionInstantiation.BeforeFirstInteraction
+		|| value === EditorContributionInstantiation.Eventually
+		|| value === EditorContributionInstantiation.Lazy;
 }
