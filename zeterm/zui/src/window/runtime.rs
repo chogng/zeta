@@ -148,8 +148,9 @@ impl WindowRuntime {
             request_sender,
         )
         .map_err(ApplicationError::window)?;
-        let accessibility = AccessibilityBridge::new(event_loop, &window, proxy, title);
         let metrics = WindowMetrics::new(window.inner_extent(), window.scale_factor());
+        let accessibility =
+            AccessibilityBridge::new(event_loop, &window, proxy, title, metrics.scale_factor());
         let mut renderer = renderer_factory
             .create(window.render_window())
             .map_err(ApplicationError::renderer)?;
@@ -222,7 +223,8 @@ impl WindowRuntime {
     }
 
     pub(crate) fn update_accessibility(&mut self, nodes: &[AccessibilityNode]) {
-        self.accessibility.update(nodes);
+        self.accessibility
+            .update(nodes, self.metrics.scale_factor());
     }
 
     pub(crate) fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {

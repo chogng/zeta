@@ -36,6 +36,7 @@ pub enum CursorFeedback {
     Text,
     Pointer,
     ResizeHorizontal,
+    ResizeVertical,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

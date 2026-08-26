@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::ui::foundation::InteractionSink;
 use crate::ui::foundation::Point;
 use crate::ui::foundation::Rect;
@@ -81,7 +83,11 @@ impl InteractionFrame {
         }
         let mut path = Vec::new();
         let mut current = Some(id);
+        let mut visited = HashSet::new();
         while let Some(id) = current {
+            if !visited.insert(id) {
+                return Vec::new();
+            }
             path.push(id);
             if self.modal_root == Some(id) {
                 break;

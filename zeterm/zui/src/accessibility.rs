@@ -67,6 +67,7 @@ impl AccessibilityBridge {
         window: &NativeWindow,
         proxy: &AppProxy<T>,
         title: String,
+        scale_factor: f64,
     ) -> Self {
         let adapter = accesskit_platform::Adapter::with_event_loop_proxy(
             event_loop,
@@ -75,7 +76,7 @@ impl AccessibilityBridge {
         );
         Self {
             adapter,
-            snapshot: AccessibilitySnapshot::new(title, Vec::new()),
+            snapshot: AccessibilitySnapshot::with_scale_factor(title, Vec::new(), scale_factor),
         }
     }
 
@@ -88,8 +89,12 @@ impl AccessibilityBridge {
             .process_event(window.accessibility_window(), event);
     }
 
-    pub(crate) fn update(&mut self, nodes: &[AccessibilityNode]) {
-        self.snapshot = AccessibilitySnapshot::new(self.snapshot.title.clone(), nodes.to_vec());
+    pub(crate) fn update(&mut self, nodes: &[AccessibilityNode], scale_factor: f64) {
+        self.snapshot = AccessibilitySnapshot::with_scale_factor(
+            self.snapshot.title.clone(),
+            nodes.to_vec(),
+            scale_factor,
+        );
         let update = self.snapshot.full_update();
         self.adapter.update_if_active(move || update);
     }
@@ -118,10 +123,11 @@ struct AccessibilitySnapshot {
     title: String,
     nodes: Vec<AccessibilityNode>,
     root: NodeId,
+    scale_factor: f64,
 }
 
 impl AccessibilitySnapshot {
-    fn new(title: String, nodes: Vec<AccessibilityNode>) -> Self {
+    fn with_scale_factor(title: String, nodes: Vec<AccessibilityNode>, scale_factor: f64) -> Self {
         let occupied = nodes
             .iter()
             .map(|node| node.id.into_raw())
@@ -131,11 +137,12 @@ impl AccessibilitySnapshot {
             .find(|candidate| !occupied.contains(candidate))
             .map(NodeId)
             .expect("a finite accessibility snapshot always leaves a synthetic root identity");
-        Self { title, nodes, root }
-    }
-
-    fn contains(&self, id: NodeId) -> bool {
-        self.nodes.iter().any(|node| node.id.into_raw() == id.0)
+        Self {
+            title,
+            nodes,
+            root,
+            scale_factor: valid_scale_factor(scale_factor),
+        }
     }
 
     fn full_update(&self) -> TreeUpdate {
@@ -166,10 +173,10 @@ impl AccessibilitySnapshot {
                 node.set_value(value.clone());
             }
             node.set_bounds(Rect {
-                x0: source.bounds.origin.x.into(),
-                y0: source.bounds.origin.y.into(),
-                x1: source.bounds.right().into(),
-                y1: source.bounds.bottom().into(),
+                x0: f64::from(source.bounds.origin.x) * self.scale_factor,
+                y0: f64::from(source.bounds.origin.y) * self.scale_factor,
+                x1: f64::from(source.bounds.right()) * self.scale_factor,
+                y1: f64::from(source.bounds.bottom()) * self.scale_factor,
             });
             node.set_children(children.remove(&source.id).unwrap_or_default());
             if source.focusable {
@@ -216,12 +223,16 @@ fn requested_action(
     request: ActionRequest,
     snapshot: &AccessibilitySnapshot,
 ) -> Option<AccessibilityAction> {
-    if !snapshot.contains(request.target_node) {
+    if request.target_tree != TreeId::ROOT {
         return None;
     }
+    let node = snapshot
+        .nodes
+        .iter()
+        .find(|node| node.id.into_raw() == request.target_node.0)?;
     let kind = match request.action {
-        Action::Focus => AccessibilityActionKind::Focus,
-        Action::Click => AccessibilityActionKind::Activate,
+        Action::Focus if node.focusable => AccessibilityActionKind::Focus,
+        Action::Click if node.action == NodeAction::Activate => AccessibilityActionKind::Activate,
         _ => return None,
     };
     Some(AccessibilityAction {
@@ -229,6 +240,14 @@ fn requested_action(
         target: ElementId::from_raw(request.target_node.0),
         kind,
     })
+}
+
+fn valid_scale_factor(scale_factor: f64) -> f64 {
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        scale_factor
+    } else {
+        1.0
+    }
 }
 
 const fn map_role(role: AccessibilityRole) -> Role {

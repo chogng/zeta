@@ -280,6 +280,33 @@ fn tab_order_and_horizontal_navigation_share_the_same_focus_owner() {
 }
 
 #[test]
+fn ancestry_fails_closed_when_parent_links_form_a_cycle() {
+    let first = ElementId::scoped(3, 1);
+    let second = ElementId::scoped(3, 2);
+    let mut frame = InteractionFrame::default();
+    frame.register(
+        UiNode::new(
+            first,
+            Rect::from_xywh(0.0, 0.0, 100.0, 24.0),
+            AccessibilityRole::Group,
+            "First",
+        )
+        .with_parent(second),
+    );
+    frame.register(
+        UiNode::new(
+            second,
+            Rect::from_xywh(0.0, 24.0, 100.0, 24.0),
+            AccessibilityRole::Group,
+            "Second",
+        )
+        .with_parent(first),
+    );
+
+    assert!(frame.ancestry(first).is_empty());
+}
+
+#[test]
 fn keyboard_activation_and_accessibility_use_the_focused_node_identity() {
     let frame = frame();
     let mut dispatch = UiDispatch::default();
