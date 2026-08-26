@@ -74,7 +74,7 @@ pub struct AppServerSession {
 
 `AppServerSession` 拥有：
 
-- embedded App Server runner，或一个 remote App Server connection；
+- embedded App Server runner，或产品选择的 child-process JSONL connection；
 - 唯一 App Server connection；
 - request channel 的 server 端；
 - server message/event channel 的 client 端；
@@ -142,24 +142,33 @@ Consumer 不直接创建 `AppServer`、`ConnectionState`、dispatcher 或 notifi
 execution 已迁移到独立 `zeta-tool-executor`。后续 remote scheduler 仍位于 `zeta-exec` 上层，不能让
 “执行一个 tool process”和“宿主化完整 App Server”重新共享同一个模块或协议。
 
-长期 backend 选择必须是显式 enum：
+backend 选择应由产品宿主显式建模，但不应把 Remote 再做成
+`zeta-app-server-client` 的上层入口。客户端只负责统一的 session contract；例如 `zeterm`
+在自己的 `AppServerHost` 中选择 Local 或 Remote backend，然后把两者都转换为
+`AppServerSession`：
 
 ```rust
-pub enum AppServerTarget {
-    Embedded(EmbeddedAppServerOptions),
-    Remote(RemoteAppServerOptions),
+pub(crate) enum AppServerBackend {
+    Local { workspace_root: PathBuf },
+    Remote { connection: SshAppServerConnectionOptions },
 }
 ```
 
-- `Embedded` 由本 crate 组合并启动本地 App Server；
-- `Remote` 连接 daemon/remote App Server，完成相同 initialize 与 event wiring；
+- Local backend 通过 `StdioAppServerCommand` 连接 profile/Workspace-scoped local authority；
+- Remote backend 由 `zeta-remote-connections` 建立 SSH/stdio 连接，再交给相同的
+  `AppServerSession`；
 - 两者暴露相同 typed request handle、event stream 与 shutdown contract；
-- backend 差异不能泄漏成 Core 私有方法；
-- remote scheduler 仍位于 `zeta-exec` 上层，不等于 `RemoteAppServerOptions`。
+- `AppServerHost` 是 `zeterm` 的产品级横向协调层，不是 `zeta-rs` 的通用 App Server API；
+- remote scheduler 仍位于 `zeta-exec` 上层，不属于 App Server backend。
+
+在 zeterm 中，这个产品边界位于 `zeterm/src/app_server/`。Agent、Language 和 Terminal 通过
+`crate::app_server` 使用它导出的 session/event contract；`zui`、`zeta-ui`、Agent Sidebar
+等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，zeterm 提供
+产品启动、Workspace、Remote backend 与重连协调，两边不会再各自复制一套 client。
 
 ## 4. 启动流程
 
-建议暴露两个自解释入口，并可由 target enum 统一选择：
+客户端暴露两个自解释入口；产品宿主负责在 backend 分支中选择它们：
 
 ```rust
 let mut session = AppServerSession::start_embedded(options)?;
@@ -167,7 +176,9 @@ let client = session.client();
 let events = session.take_events()?;
 ```
 
-`connect_remote` 仍是 Proposed backend；当前 Current backend 是 embedded。
+Remote 不需要额外的 `connect_remote` client API：它通过产品宿主构造
+`StdioAppServerCommand`，或由 Remote connection adapter 直接创建同一个
+`AppServerSession`。因此 App Server 是横向核心 contract，Remote 只是其中一种可替换 backend。
 
 Embedded start 必须按以下顺序执行：
 

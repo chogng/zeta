@@ -137,7 +137,7 @@ impl<T: 'static> TimerScheduler<T> {
         self.schedule_at_in_scope(scope, deadline, event)
     }
 
-    fn schedule_at_in_scope(
+    pub(crate) fn schedule_at_in_scope(
         &self,
         scope: TaskScope,
         deadline: Instant,
@@ -160,7 +160,12 @@ impl<T: 'static> TimerScheduler<T> {
                 NativeEventLoopClosed(RuntimeEvent::ScheduleTimer(scheduled)) => {
                     TimerScheduleError::Disconnected(scheduled.event)
                 }
-                NativeEventLoopClosed(RuntimeEvent::Product(_) | RuntimeEvent::CancelTimer(_)) => {
+                NativeEventLoopClosed(
+                    RuntimeEvent::Product(_)
+                    | RuntimeEvent::Control(_)
+                    | RuntimeEvent::OpenWindow(_)
+                    | RuntimeEvent::CancelTimer(_),
+                ) => {
                     unreachable!("timer scheduling must retain the scheduled event")
                 }
                 NativeEventLoopClosed(RuntimeEvent::MenuAction(_)) => {
@@ -171,6 +176,17 @@ impl<T: 'static> TimerScheduler<T> {
                 }
                 NativeEventLoopClosed(RuntimeEvent::GlobalShortcut(_)) => {
                     unreachable!("timer scheduling cannot fail with a global shortcut event")
+                }
+                NativeEventLoopClosed(RuntimeEvent::SecondInstance(_)) => {
+                    unreachable!("timer scheduling cannot fail with a second-instance event")
+                }
+                #[cfg(target_os = "macos")]
+                NativeEventLoopClosed(RuntimeEvent::Activated(_)) => {
+                    unreachable!("timer scheduling cannot fail with an activation event")
+                }
+                #[cfg(target_os = "macos")]
+                NativeEventLoopClosed(RuntimeEvent::OpenFile(_)) => {
+                    unreachable!("timer scheduling cannot fail with an open-file event")
                 }
                 NativeEventLoopClosed(RuntimeEvent::OpenUrl(_)) => {
                     unreachable!("timer scheduling cannot fail with an application URL")

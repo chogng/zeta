@@ -50,10 +50,6 @@ impl Component for ElementComponent {
     fn paint_element(&self, scene: &mut UiScene, element: &ComputedElement) {
         scene.draw_rect(PaintRect::new(element.bounds(), Color::WHITE));
     }
-
-    fn paint(&self, _scene: &mut UiScene) {
-        panic!("element-backed paint must receive computed geometry")
-    }
 }
 
 #[test]

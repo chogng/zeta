@@ -14,10 +14,57 @@ use winit::window::WindowAttributes;
 use crate::devtools::DevToolsHandle;
 use crate::devtools::DevToolsRequestSender;
 
+#[cfg(target_os = "linux")]
+use super::WindowButtons;
 use super::WindowChrome;
+use super::WindowCloseRequester;
 use super::WindowHandle;
 use super::WindowOptions;
+use super::WindowOptionsError;
 use super::chrome::apply_window_chrome;
+use super::parent::NativeWindowCreateError;
+use super::parent::apply_parent;
+
+/// Logical screen coordinates used for native window placement.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LogicalPosition {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl LogicalPosition {
+    pub const fn new(x: f64, y: f64) -> Self {
+        Self { x, y }
+    }
+
+    /// Returns whether both coordinates are finite.
+    pub fn is_valid(self) -> bool {
+        self.x.is_finite() && self.y.is_finite()
+    }
+
+    pub(crate) const fn into_native(self) -> winit::dpi::LogicalPosition<f64> {
+        winit::dpi::LogicalPosition::new(self.x, self.y)
+    }
+}
+
+/// Requested stacking level for a native application window.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum WindowLevel {
+    AlwaysOnBottom,
+    #[default]
+    Normal,
+    AlwaysOnTop,
+}
+
+impl WindowLevel {
+    pub(crate) const fn into_native(self) -> winit::window::WindowLevel {
+        match self {
+            Self::AlwaysOnBottom => winit::window::WindowLevel::AlwaysOnBottom,
+            Self::Normal => winit::window::WindowLevel::Normal,
+            Self::AlwaysOnTop => winit::window::WindowLevel::AlwaysOnTop,
+        }
+    }
+}
 
 /// Logical dimensions used to configure and resize native windows.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -190,22 +237,114 @@ pub(crate) struct NativeWindow {
 }
 
 impl NativeWindow {
+    pub(crate) fn validate_platform_options(
+        event_loop: &ActiveEventLoop,
+        options: &WindowOptions,
+    ) -> Result<(), WindowOptionsError> {
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::ActiveEventLoopExtWayland;
+
+            if !options.active {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "initial window activation on Linux",
+                });
+            }
+            if options.enabled_buttons != WindowButtons::ALL {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "native window button policy on Linux",
+                });
+            }
+            if options.content_protected {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "window content protection on Linux",
+                });
+            }
+            if options.parent.is_some() {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "parent windows on Linux",
+                });
+            }
+
+            if event_loop.is_wayland() {
+                if options.position.is_some() {
+                    return Err(WindowOptionsError::Unsupported {
+                        capability: "initial window position on Wayland",
+                    });
+                }
+                if options.window_level != WindowLevel::Normal {
+                    return Err(WindowOptionsError::Unsupported {
+                        capability: "window stacking level on Wayland",
+                    });
+                }
+                if !options.visible {
+                    return Err(WindowOptionsError::Unsupported {
+                        capability: "initially hidden windows on Wayland",
+                    });
+                }
+                if options.icon.is_some() {
+                    return Err(WindowOptionsError::Unsupported {
+                        capability: "native window icons on Wayland",
+                    });
+                }
+            } else if options.blur {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "window background blur on X11",
+                });
+            }
+        }
+        #[cfg(target_os = "macos")]
+        {
+            if options.icon.is_some() {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "per-window icons on macOS",
+                });
+            }
+            if options.modal {
+                return Err(WindowOptionsError::Unsupported {
+                    capability: "modal child windows on macOS",
+                });
+            }
+        }
+        #[cfg(target_os = "windows")]
+        if options.blur {
+            return Err(WindowOptionsError::Unsupported {
+                capability: "window background blur on Windows",
+            });
+        }
+        let _ = (event_loop, options);
+        Ok(())
+    }
+
     /// Creates a native window from ZUI-owned options and a named chrome policy.
     pub(crate) fn create(
         event_loop: &ActiveEventLoop,
         options: WindowOptions,
+        parent: Option<&NativeWindow>,
+        desktop_application_id: Option<&str>,
         request_sender: DevToolsRequestSender,
-    ) -> Result<Self, winit::error::OsError> {
+    ) -> Result<Self, NativeWindowCreateError> {
         let mut attributes = WindowAttributes::default()
             .with_title(options.title)
             .with_active(options.active)
             .with_resizable(options.resizable)
+            .with_enabled_buttons(options.enabled_buttons.into_native())
             .with_maximized(options.maximized)
+            .with_window_level(options.window_level.into_native())
+            .with_theme(options.preferred_theme.map(super::Theme::into_native))
+            .with_content_protected(options.content_protected)
+            .with_cursor(options.cursor.into_native())
+            .with_transparent(options.transparent)
+            .with_blur(options.blur)
+            .with_window_icon(options.icon.map(super::WindowIcon::into_native))
             .with_fullscreen(
                 options
                     .fullscreen
                     .then_some(winit::window::Fullscreen::Borderless(None)),
             );
+        if let Some(position) = options.position {
+            attributes = attributes.with_position(position.into_native());
+        }
         if let Some(inner_size) = options.inner_size {
             attributes = attributes.with_inner_size(inner_size.into_native());
         }
@@ -215,8 +354,18 @@ impl NativeWindow {
         if let Some(max_inner_size) = options.max_inner_size {
             attributes = attributes.with_max_inner_size(max_inner_size.into_native());
         }
+        if let Some(resize_increments) = options.resize_increments {
+            attributes = attributes.with_resize_increments(resize_increments.into_native());
+        }
+        let attributes =
+            super::platform::apply_desktop_application_id(attributes, desktop_application_id);
         let attributes = apply_window_chrome(attributes, options.chrome).with_visible(false);
-        let window = Arc::new(event_loop.create_window(attributes)?);
+        let attributes = apply_parent(attributes, parent.map(|parent| parent.window.as_ref()))?;
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .map_err(NativeWindowCreateError::window)?,
+        );
         let owner = WindowId::from_native(window.id());
         Ok(Self {
             window,
@@ -233,12 +382,20 @@ impl NativeWindow {
     }
 
     /// Creates a non-owning product capability without sharing window lifecycle ownership.
-    pub(crate) fn handle(&self) -> WindowHandle {
+    pub(crate) fn handle(
+        &self,
+        close_requester: WindowCloseRequester,
+        parent: Option<WindowId>,
+        modal: bool,
+    ) -> WindowHandle {
         WindowHandle::new(
             self.id(),
             Arc::downgrade(&self.window),
             self.chrome,
             self.devtools.clone(),
+            close_requester,
+            parent,
+            modal,
         )
     }
 
@@ -254,6 +411,10 @@ impl NativeWindow {
         self.window.scale_factor()
     }
 
+    pub(crate) fn has_focus(&self) -> bool {
+        self.window.has_focus()
+    }
+
     /// Returns the platform's current light or dark window preference when available.
     /// Schedules a redraw request through the platform event loop.
     pub(crate) fn request_redraw(&self) {
@@ -262,6 +423,17 @@ impl NativeWindow {
 
     pub(crate) fn show(&self) {
         self.window.set_visible(true);
+    }
+
+    pub(crate) fn set_enabled(&self, enabled: bool) {
+        #[cfg(target_os = "windows")]
+        {
+            use winit::platform::windows::WindowExtWindows;
+
+            self.window.set_enable(enabled);
+        }
+        #[cfg(not(target_os = "windows"))]
+        let _ = enabled;
     }
 
     pub(crate) fn accessibility_window(&self) -> &Window {

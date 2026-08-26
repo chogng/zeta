@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::app::ApplicationExitReason;
 use crate::render::RenderOutcome;
 use crate::ui::presentation::InspectionFrame;
 use crate::ui::presentation::UiScene;
@@ -43,6 +44,8 @@ pub enum DiagnosticEventKind {
     Suspended,
     WindowOpened(WindowId),
     WindowEvent(WindowId),
+    DeviceEvent,
+    DisplayEvent,
     FramePresented {
         window: WindowId,
         outcome: RenderOutcome,
@@ -52,8 +55,14 @@ pub enum DiagnosticEventKind {
     MenuAction,
     TrayEvent,
     GlobalShortcut,
+    SecondInstance,
+    Activated,
+    OpenFile,
     OpenUrl,
     AccessibilityAction,
+    MemoryWarning,
+    ExitRequested(ApplicationExitReason),
+    ExitCancelled(ApplicationExitReason),
     Exiting,
 }
 

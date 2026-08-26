@@ -250,7 +250,7 @@ pub enum PhysicalKey {
 }
 
 impl PhysicalKey {
-    fn from_native(key: keyboard::PhysicalKey) -> Self {
+    pub(crate) fn from_native(key: keyboard::PhysicalKey) -> Self {
         match key {
             keyboard::PhysicalKey::Code(code) => Self::Code(KeyCode(format!("{code:?}"))),
             keyboard::PhysicalKey::Unidentified(code) => Self::Unidentified(format!("{code:?}")),

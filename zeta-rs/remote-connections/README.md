@@ -1,7 +1,8 @@
 # `zeta-remote-connections`
 
-`zeta-remote-connections` 是 `zeterm`、Desktop Main 和其他原生产品可复用的本机 SSH 连接层。它负责
-构造本机 OpenSSH 子进程命令，把标准输入输出转换成可用的 App Server 会话，并提供 POSIX 平台探测、
+`zeta-remote-connections` 是 `zeterm`、Desktop Main 和其他原生产品可复用的本机 Remote backend
+连接层。它负责构造本机 OpenSSH 子进程命令，为 `zeta-app-server-client` 提供 Remote App Server
+stdio backend，并提供 POSIX 平台探测、
 不可变完整包安装、发布认证后的网络制品物化、无凭据运行时代际存储和命名目标目录。它不负责
 Renderer 状态、SSH 凭据、发布频道/签名策略、产品配置档案位置、激活时机或远端领域服务。Electron Main 通过本机
 `zeta remote install` 命令委托安装，同时保留自己的窗口和进程协调器。
@@ -126,7 +127,8 @@ Desktop Main 则调用 CLI adapter；只有条件交换成功后，Desktop 才�
 ## 执行路径
 
 ```text
-zeterm native host / Electron Main
+zeterm `AppServerHost` / Electron Main
+  -> AppServerSession (shared Local/Remote contract)
   -> optional RemoteConnectionCatalog target selection
   -> product-authenticated local catalog or RemoteRuntimeCatalogRelease
   -> optional RemoteRuntimeCatalogUpdater content-addressed cache
@@ -135,7 +137,7 @@ zeterm native host / Electron Main
   -> product compatibility preflight
   -> RemoteConnectionProfileStore activation
   -> SshAppServerConnectionOptions::connect
-  -> AppServerSession::start_stdio
+  -> AppServerSession::start_stdio (canonical App Server client boundary)
   -> OpenSSH stdio
   -> Remote runtime remote-server connect
   -> per-Workspace Remote Server daemon

@@ -244,7 +244,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
    `start`。手动重连不更换 runtime/broker identity，也不放弃 Terminal lease；与 runtime 回滚共用
    exclusive operation gate，连接已 ready 时幂等返回，其他 transition 期间明确拒绝。
 7. Desktop Tunnel 请求只经过 Trusted IPC；Main 从当前 Remote Workspace 派生 SSH host，Renderer
-   不能提交 host、私钥或监听地址。Remote zeterm 窗口同样从其 `AgentSessionTarget` 派生 host 与本机
+   不能提交 host、私钥或监听地址。Remote zeterm 窗口同样从其 `AppServerHost` backend 派生 host 与本机
    OpenSSH executable；Native manager 只接受远端 TCP port，并自动选择本机 loopback port。UI 关闭
    不会停止 Tunnel，显式 Stop 或产品窗口退出会终止 OpenSSH。已经 Open 的 child 意外退出时，两种 host
    都在 30 秒内按 250ms 到 2s 退避并复用原 local port；首次启动错误仍立即失败。Desktop 通过
@@ -550,7 +550,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
   `build/release/build_remote_runtime_bundle.py`、`build/release/build_zeterm_package.py`
 - Optional headless Remote runtime：`zeta-rs/remote-server`
 - Remote Terminal lease/attach：`zeta-rs/app-server/src/terminal_service.rs`、
-  `zeterm/src/terminal_session_remote.rs`
+  `zeterm/src/terminal_session/remote.rs`
 - Desktop Main Tunnel coordinator：`zeta-ts/src/zeta/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：
   `zeta-ts/src/zeta/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`

@@ -21,11 +21,17 @@ configuration only when it asks `zeta-remote-connections` to connect.
 ## Execution path
 
 ```text
-product profile store
-  -> RemoteProfile
-  -> zeta-remote-connections::SshAppServerConnectionOptions
-  -> local OpenSSH child
+product AppServerHost
+  -> zeta-app-server-client::AppServerSession   # shared Local/Remote contract
+      -> Remote backend
+          -> RemoteProfile
+          -> zeta-remote-connections::SshAppServerConnectionOptions
+          -> local OpenSSH child
 ```
+
+Remote is therefore a backend of the App Server client, not the product's top-level application
+host. This crate owns the target identity passed into that backend; it does not own the App Server
+session, request/event lifecycle, or product connection registry.
 
 `zeta-remote-server` consumes the Workspace root after SSH reaches the target; this crate has no
 dependency on either implementation.

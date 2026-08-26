@@ -1,5 +1,10 @@
+#[cfg(unix)]
+use futures::executor::block_on;
+
 use super::ProcessCommand;
 use super::ProcessFileSystemAccess;
+#[cfg(unix)]
+use super::ProcessHandle;
 use super::ProcessNetworkAccess;
 use super::ProcessSandbox;
 use super::ProcessSandboxError;
@@ -21,12 +26,27 @@ fn process_commands_preserve_literal_program_and_argument_boundaries() {
 #[cfg(unix)]
 #[test]
 fn system_processes_report_successful_child_completion() {
-    let process = SystemProcesses::default()
-        .spawn(ProcessCommand::new("/usr/bin/true"))
-        .unwrap();
-    let exit = process.wait().unwrap();
+    let process = block_on(
+        ProcessHandle::new(SystemProcesses::default()).spawn(ProcessCommand::new("/usr/bin/true")),
+    )
+    .unwrap();
+    let exit = block_on(process.wait()).unwrap();
     assert!(exit.success);
     assert_eq!(exit.code, Some(0));
+}
+
+#[cfg(unix)]
+#[test]
+fn asynchronous_wait_does_not_prevent_process_termination() {
+    let process = SystemProcesses::default()
+        .spawn(ProcessCommand::new("/bin/sleep").with_argument("10"))
+        .unwrap();
+    let exit = process.wait();
+
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    process.terminate().unwrap();
+
+    assert!(!block_on(exit).unwrap().success);
 }
 
 #[test]
@@ -132,7 +152,7 @@ fn system_processes_enforce_read_only_seatbelt_before_reporting_isolation() {
         process.sandbox_kind(),
         super::ProcessSandboxKind::MacOsSeatbelt
     );
-    assert!(!process.wait().unwrap().success);
+    assert!(!block_on(process.wait()).unwrap().success);
     assert!(!denied_path.exists());
 }
 
@@ -160,7 +180,7 @@ fn seatbelt_workspace_write_allows_only_the_canonical_working_directory() {
                 .with_sandbox(policy),
         )
         .unwrap();
-    assert!(allowed.wait().unwrap().success);
+    assert!(block_on(allowed.wait()).unwrap().success);
     assert!(allowed_path.is_file());
 
     let denied = SystemProcesses::default()
@@ -171,6 +191,6 @@ fn seatbelt_workspace_write_allows_only_the_canonical_working_directory() {
                 .with_sandbox(policy),
         )
         .unwrap();
-    assert!(!denied.wait().unwrap().success);
+    assert!(!block_on(denied.wait()).unwrap().success);
     assert!(!denied_path.exists());
 }

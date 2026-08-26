@@ -1,16 +1,26 @@
 use base64::Engine;
 use ed25519_dalek::Signer;
 use ed25519_dalek::SigningKey;
+use futures::executor::block_on;
 
 use super::AppVersion;
+use super::DisabledUpdates;
 use super::ExternalUrl;
 use super::SignedHttpUpdater;
 use super::SystemServiceError;
 use super::UpdateConfig;
+use super::UpdateHandle;
 use super::UpdateInstaller;
 use super::UpdatePublicKey;
 use super::UpdateService;
 use super::UpdateTransport;
+
+#[test]
+fn disabled_update_handle_reports_unsupported_asynchronously() {
+    let error = block_on(UpdateHandle::new(DisabledUpdates).check()).unwrap_err();
+
+    assert!(error.is_unsupported());
+}
 
 struct StaticTransport(Vec<u8>);
 

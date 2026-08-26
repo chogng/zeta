@@ -16,8 +16,8 @@ use crate::window::WindowRole;
 
 use super::ApplicationError;
 use super::ApplicationHost;
-use super::WindowCommand;
 use super::WindowRuntime;
+use super::WindowRuntimeEnvironment;
 
 impl<T, A> ApplicationHost<T, A>
 where
@@ -60,13 +60,21 @@ where
         let options = WindowOptions::new("Developer Tools")
             .with_inner_size(crate::window::LogicalSize::new(900.0, 720.0))
             .with_chrome(WindowChrome::Native);
+        let desktop_file_name = self.services.desktop_file_name();
+        let environment = WindowRuntimeEnvironment::new(
+            None,
+            WindowRole::DevTools { owner },
+            desktop_file_name
+                .as_ref()
+                .map(crate::services::DesktopFileName::application_id),
+            self.devtools_request_sender.clone(),
+        );
         let runtime = match WindowRuntime::open(
             event_loop,
             self.renderer_factory.as_mut(),
             &self.event_proxy,
             options,
-            WindowRole::DevTools { owner },
-            self.devtools_request_sender.clone(),
+            environment,
         ) {
             Ok(runtime) => runtime,
             Err(error) => {
@@ -77,6 +85,7 @@ where
                 return;
             }
         };
+        runtime.finish_open(None);
         let id = runtime.id();
         let metrics = runtime.metrics();
         runtime.request_redraw();
@@ -115,12 +124,6 @@ where
         {
             runtime.request_redraw();
         }
-    }
-
-    pub(super) fn has_product_windows(&self) -> bool {
-        self.windows
-            .values()
-            .any(|runtime| runtime.role() == WindowRole::Product)
     }
 
     fn logical_point(&self, window: WindowId, position: PhysicalPosition) -> Point {
@@ -178,7 +181,7 @@ where
                 self.request_devtools_redraw(window);
                 return true;
             }
-            WindowEvent::KeyboardInput { event } if devtools.is_picking() => {
+            WindowEvent::KeyboardInput { event, .. } if devtools.is_picking() => {
                 if event.state == ElementState::Pressed
                     && event.logical_key == Key::Named(NamedKey::Escape)
                 {
@@ -207,7 +210,7 @@ where
                     runtime.handle().devtools().close_local();
                     runtime.request_redraw();
                 }
-                self.commands.push(WindowCommand::Close(window));
+                self.lifecycle.destroy_window(window);
             }
             WindowEvent::RedrawRequested => self.render_devtools_window(window, owner, event_loop),
             WindowEvent::CursorMoved { position } => {
@@ -225,7 +228,7 @@ where
                     }
                 }
             }
-            WindowEvent::KeyboardInput { event } => {
+            WindowEvent::KeyboardInput { event, .. } => {
                 if event.state == ElementState::Pressed
                     && event.logical_key == Key::Named(NamedKey::Escape)
                 {
@@ -233,14 +236,14 @@ where
                         runtime.handle().devtools().close_local();
                         runtime.request_redraw();
                     }
-                    self.commands.push(WindowCommand::Close(window));
+                    self.lifecycle.destroy_window(window);
                 }
             }
             WindowEvent::MouseInput {
                 state: ElementState::Released,
                 button: MouseButton::Left,
             } => self.handle_devtools_click(window, owner),
-            WindowEvent::MouseWheel { delta } => {
+            WindowEvent::MouseWheel { delta, .. } => {
                 let amount = match delta {
                     MouseScrollDelta::LineDelta(_, y) => {
                         *y * 0.5 * crate::devtools::view::ROW_HEIGHT
@@ -277,7 +280,7 @@ where
         };
         let bounds = Rect::from_xywh(0.0, 0.0, size.width, size.height);
         let Some(owner_runtime) = self.windows.get(&owner) else {
-            self.commands.push(WindowCommand::Close(window));
+            self.lifecycle.destroy_window(window);
             return;
         };
         let devtools = owner_runtime.handle().devtools();
@@ -292,7 +295,7 @@ where
             Some(crate::devtools::view::ToolbarAction::Close) => {
                 devtools.close_local();
                 owner_runtime.request_redraw();
-                self.commands.push(WindowCommand::Close(window));
+                self.lifecycle.destroy_window(window);
             }
             None => {
                 let Some(frame) = devtools.inspection() else {
@@ -356,12 +359,12 @@ where
         event_loop: &ActiveEventLoop,
     ) {
         let Some(owner_runtime) = self.windows.get(&owner) else {
-            self.commands.push(WindowCommand::Close(window));
+            self.lifecycle.destroy_window(window);
             return;
         };
         let devtools = owner_runtime.handle().devtools();
         if !devtools.is_open() {
-            self.commands.push(WindowCommand::Close(window));
+            self.lifecycle.destroy_window(window);
             return;
         }
         let Some(size) = self

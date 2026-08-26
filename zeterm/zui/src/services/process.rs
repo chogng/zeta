@@ -1,6 +1,8 @@
 use std::ffi::OsString;
+use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
@@ -8,8 +10,13 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use super::SystemServiceError;
+use super::blocking::BlockingServiceExecutor;
 
 const PROCESS_SERVICE: &str = "child process";
+
+/// Owned asynchronous result of managed child-process work.
+pub type ProcessFuture<T> =
+    Pin<Box<dyn Future<Output = Result<T, SystemServiceError>> + Send + 'static>>;
 
 mod sandbox;
 
@@ -204,6 +211,7 @@ pub trait ProcessController: Send + Sync {
 #[derive(Clone)]
 pub struct ChildProcess {
     controller: Arc<dyn ProcessController>,
+    executor: BlockingServiceExecutor,
 }
 
 impl ChildProcess {
@@ -211,6 +219,7 @@ impl ChildProcess {
     pub fn new(controller: impl ProcessController + 'static) -> Self {
         Self {
             controller: Arc::new(controller),
+            executor: BlockingServiceExecutor,
         }
     }
 
@@ -229,9 +238,13 @@ impl ChildProcess {
         self.controller.try_wait()
     }
 
-    /// Waits for terminal status.
-    pub fn wait(&self) -> Result<ProcessExit, SystemServiceError> {
-        self.controller.wait()
+    /// Waits for terminal status without blocking the calling thread.
+    ///
+    /// The underlying controller wait runs on ZUI's shared service worker pool.
+    pub fn wait(&self) -> ProcessFuture<ProcessExit> {
+        let controller = self.controller.clone();
+        self.executor
+            .spawn(PROCESS_SERVICE, move || controller.wait())
     }
 
     /// Requests forceful termination.
@@ -242,7 +255,7 @@ impl ChildProcess {
 
 /// Backend used to launch shell-free, lifecycle-owned child processes.
 pub trait ProcessService: Send + Sync {
-    /// Starts one child process.
+    /// Starts one child process when invoked on ZUI's service worker pool.
     fn spawn(&self, command: ProcessCommand) -> Result<ChildProcess, SystemServiceError>;
 }
 
@@ -250,18 +263,25 @@ pub trait ProcessService: Send + Sync {
 #[derive(Clone)]
 pub struct ProcessHandle {
     service: Arc<dyn ProcessService>,
+    executor: BlockingServiceExecutor,
 }
 
 impl ProcessHandle {
     pub(crate) fn new(service: impl ProcessService + 'static) -> Self {
         Self {
             service: Arc::new(service),
+            executor: BlockingServiceExecutor,
         }
     }
 
-    /// Starts one child process through the injected backend.
-    pub fn spawn(&self, command: ProcessCommand) -> Result<ChildProcess, SystemServiceError> {
-        self.service.spawn(command)
+    /// Starts one child process without blocking the calling thread.
+    ///
+    /// Dropping the future abandons the result; if a child was already created, its configured
+    /// [`ProcessDropPolicy`] determines whether it is terminated or detached.
+    pub fn spawn(&self, command: ProcessCommand) -> ProcessFuture<ChildProcess> {
+        let service = self.service.clone();
+        self.executor
+            .spawn(PROCESS_SERVICE, move || service.spawn(command))
     }
 }
 
@@ -400,20 +420,12 @@ impl ProcessController for SystemProcessController {
     }
 
     fn wait(&self) -> Result<ProcessExit, SystemServiceError> {
-        let mut state = self.state.lock().expect("child process lock");
-        if let Some(exit) = state.exit {
-            return Ok(exit);
+        loop {
+            if let Some(exit) = self.try_wait()? {
+                return Ok(exit);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        let status = state
-            .child
-            .as_mut()
-            .expect("running process retains child handle")
-            .wait()
-            .map_err(|source| SystemServiceError::backend(PROCESS_SERVICE, source))?;
-        let exit = process_exit(status);
-        state.exit = Some(exit);
-        state.child = None;
-        Ok(exit)
     }
 
     fn terminate(&self) -> Result<(), SystemServiceError> {

@@ -2,13 +2,22 @@
 
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::app::ApplicationActivation;
+use crate::app::ApplicationExitDecision;
+use crate::app::ApplicationExitReason;
+use crate::app::ApplicationPhase;
+use crate::app::ApplicationReadiness;
+use crate::app::ApplicationReadyFuture;
 use crate::app::ExitPolicy;
+use crate::app::LifecycleCore;
 use crate::app::ProtocolUrl;
+use crate::app::SecondInstance;
 use crate::app::WindowFramePresentation;
 use crate::render::RenderOutcome;
 use crate::render::RenderTargetSize;
@@ -158,18 +167,38 @@ pub enum TestTimerScope {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct TestTimerId(u64);
 
+/// Product decision for one window close request delivered during a deterministic app exit.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum TestWindowCloseDecision {
+    /// Accept the request and remove the window from the deterministic registry.
+    #[default]
+    Close,
+    /// Cancel the complete application exit while leaving this window open.
+    Cancel,
+}
+
 /// Runtime event emitted by [`TestRuntime`] in deterministic FIFO order.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TestEvent<T> {
+    Ready,
     Resumed,
+    Suspended,
     WindowOpened(WindowId),
     RedrawRequested(WindowId),
     User(T),
     Tray(TrayEvent),
     GlobalShortcut(GlobalShortcutEvent),
+    SecondInstance(SecondInstance),
+    Activated(ApplicationActivation),
+    OpenFile(PathBuf),
     OpenUrl(ProtocolUrl),
+    WindowCloseRequested(WindowId),
     WindowClosed(WindowId),
-    Exiting,
+    WindowAllClosed,
+    ExitRequested(ApplicationExitReason),
+    WillExitRequested(ApplicationExitReason),
+    ExitCancelled(ApplicationExitReason),
+    Exiting(ApplicationExitReason),
 }
 
 /// Inspectable headless window owned by a deterministic test runtime.
@@ -179,6 +208,9 @@ pub struct TestWindow {
     logical_size: LogicalSize,
     renderer: HeadlessRenderer,
     accessibility: Vec<AccessibilityNode>,
+    parent: Option<WindowId>,
+    modal: bool,
+    input_enabled: bool,
 }
 
 impl TestWindow {
@@ -195,6 +227,21 @@ impl TestWindow {
     /// Returns the configured logical size.
     pub const fn logical_size(&self) -> LogicalSize {
         self.logical_size
+    }
+
+    /// Returns this window's direct parent, if configured.
+    pub const fn parent_id(&self) -> Option<WindowId> {
+        self.parent
+    }
+
+    /// Returns whether this is a modal child.
+    pub const fn is_modal(&self) -> bool {
+        self.modal
+    }
+
+    /// Returns whether the deterministic native model currently accepts input.
+    pub const fn input_enabled(&self) -> bool {
+        self.input_enabled
     }
 
     /// Returns a shared handle to this window's headless renderer.
@@ -216,13 +263,15 @@ struct TestTimer<T> {
 /// Deterministic lifecycle, event, timer, and presentation host for application tests.
 pub struct TestRuntime<T> {
     clock: TestClock,
-    exit_policy: ExitPolicy,
+    lifecycle: LifecycleCore,
     next_window: u64,
     next_timer: u64,
     windows: BTreeMap<u64, TestWindow>,
     timers: BTreeMap<(Instant, TestTimerId), TestTimer<T>>,
     events: VecDeque<TestEvent<T>>,
-    exiting: bool,
+    next_exit_decision: ApplicationExitDecision,
+    next_will_exit_decision: ApplicationExitDecision,
+    window_close_decisions: BTreeMap<u64, TestWindowCloseDecision>,
 }
 
 impl<T> TestRuntime<T> {
@@ -230,56 +279,57 @@ impl<T> TestRuntime<T> {
     pub fn at(now: Instant) -> Self {
         Self {
             clock: TestClock::at(now),
-            exit_policy: ExitPolicy::default(),
+            lifecycle: LifecycleCore::new(ExitPolicy::default(), ApplicationReadiness::default()),
             next_window: 1,
             next_timer: 1,
             windows: BTreeMap::new(),
             timers: BTreeMap::new(),
             events: VecDeque::new(),
-            exiting: false,
+            next_exit_decision: ApplicationExitDecision::Exit,
+            next_will_exit_decision: ApplicationExitDecision::Exit,
+            window_close_decisions: BTreeMap::new(),
         }
     }
 
     /// Selects the same last-window exit policy used by native applications.
-    pub const fn with_exit_policy(mut self, exit_policy: ExitPolicy) -> Self {
-        self.exit_policy = exit_policy;
+    pub fn with_exit_policy(mut self, exit_policy: ExitPolicy) -> Self {
+        self.lifecycle.set_exit_policy(exit_policy);
         self
+    }
+
+    /// Returns the current shared application-host lifecycle phase.
+    pub const fn phase(&self) -> ApplicationPhase {
+        self.lifecycle.phase()
+    }
+
+    /// Returns whether the first deterministic ready event has been committed.
+    pub fn is_ready(&self) -> bool {
+        self.lifecycle.is_ready()
+    }
+
+    /// Waits for deterministic readiness or reports that the runtime exited first.
+    pub fn when_ready(&self) -> ApplicationReadyFuture {
+        self.lifecycle.when_ready()
+    }
+
+    /// Returns the recorded exit reason after the runtime enters its exiting phase.
+    pub const fn exit_reason(&self) -> Option<ApplicationExitReason> {
+        self.lifecycle.exit_reason()
     }
 
     /// Emits the initial resume callback event.
     pub fn resume(&mut self) {
+        if self.lifecycle.resumed() {
+            self.events.push_back(TestEvent::Ready);
+            self.lifecycle.mark_ready();
+        }
         self.events.push_back(TestEvent::Resumed);
     }
 
-    /// Opens one headless window and emits its lifecycle event.
-    pub fn open_window(&mut self, title: impl Into<String>, logical_size: LogicalSize) -> WindowId {
-        let raw = self.next_window;
-        self.next_window += 1;
-        let id = WindowId::from_raw(raw);
-        self.windows.insert(
-            raw,
-            TestWindow {
-                id,
-                title: title.into(),
-                logical_size,
-                renderer: HeadlessRenderer::default(),
-                accessibility: Vec::new(),
-            },
-        );
-        self.events.push_back(TestEvent::WindowOpened(id));
-        id
-    }
-
-    /// Returns one live headless window.
-    pub fn window(&self, id: WindowId) -> Option<&TestWindow> {
-        self.windows.get(&id.into_raw())
-    }
-
-    /// Requests a redraw for a live window.
-    pub fn request_redraw(&mut self, id: WindowId) {
-        if self.windows.contains_key(&id.into_raw()) {
-            self.events.push_back(TestEvent::RedrawRequested(id));
-        }
+    /// Enters the shared suspended phase and emits its deterministic lifecycle event.
+    pub fn suspend(&mut self) {
+        self.lifecycle.suspended();
+        self.events.push_back(TestEvent::Suspended);
     }
 
     /// Resolves and presents one complete UI frame into a live headless window.
@@ -310,6 +360,21 @@ impl<T> TestRuntime<T> {
     /// Enqueues one platform-independent global shortcut interaction.
     pub fn send_global_shortcut(&mut self, event: GlobalShortcutEvent) {
         self.events.push_back(TestEvent::GlobalShortcut(event));
+    }
+
+    /// Enqueues one secondary process invocation.
+    pub fn send_second_instance(&mut self, event: SecondInstance) {
+        self.events.push_back(TestEvent::SecondInstance(event));
+    }
+
+    /// Enqueues an operating-system request to reactivate the application.
+    pub fn activate(&mut self, event: ApplicationActivation) {
+        self.events.push_back(TestEvent::Activated(event));
+    }
+
+    /// Enqueues one operating-system open-file request.
+    pub fn send_open_file(&mut self, path: impl Into<PathBuf>) {
+        self.events.push_back(TestEvent::OpenFile(path.into()));
     }
 
     /// Enqueues one application protocol URL.
@@ -356,34 +421,17 @@ impl<T> TestRuntime<T> {
         }
     }
 
-    /// Closes one window, cancelling its timers and applying the configured exit policy.
-    pub fn close_window(&mut self, id: WindowId) {
-        if self.windows.remove(&id.into_raw()).is_none() {
-            return;
-        }
-        self.timers
-            .retain(|_, timer| timer.scope != TestTimerScope::Window(id));
-        self.events.push_back(TestEvent::WindowClosed(id));
-        if self.windows.is_empty() && self.exit_policy == ExitPolicy::OnLastWindowClosed {
-            self.exit();
-        }
-    }
-
-    /// Emits one exit event and cancels every pending timer.
-    pub fn exit(&mut self) {
-        if self.exiting {
-            return;
-        }
-        self.exiting = true;
-        self.timers.clear();
-        self.events.push_back(TestEvent::Exiting);
-    }
-
     /// Removes the next deterministic runtime event.
     pub fn next_event(&mut self) -> Option<TestEvent<T>> {
         self.events.pop_front()
     }
 }
+
+#[path = "testing/lifecycle.rs"]
+mod lifecycle;
+
+#[path = "testing/windows.rs"]
+mod windows;
 
 #[cfg(test)]
 #[path = "testing/testing_tests.rs"]

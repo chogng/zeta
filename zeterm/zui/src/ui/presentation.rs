@@ -1,6 +1,8 @@
 //! Declarative elements, inspection metadata, paint values, and immutable scene composition.
 
 mod component;
+mod component_context_state;
+mod component_runtime;
 mod element;
 mod frame;
 mod icon;
@@ -8,8 +10,12 @@ mod image;
 mod inspection;
 mod paint;
 mod scene;
+mod view_state;
 
 pub use component::Component;
+pub use component_runtime::ComponentRuntime;
+pub use component_runtime::ComponentRuntimeError;
+pub use component_runtime::ComponentSlot;
 pub use element::ComponentElement;
 pub use element::ComputedElement;
 pub use element::Element;
@@ -35,3 +41,8 @@ pub use scene::SceneFragmentError;
 pub use scene::TextBlock;
 pub use scene::TextBlockWrap;
 pub use scene::UiScene;
+pub use view_state::StateRevision;
+pub use view_state::StateSubscription;
+pub use view_state::ViewState;
+pub use view_state::ViewStateId;
+pub use view_state::ViewStateSnapshot;

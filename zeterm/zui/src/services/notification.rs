@@ -1,3 +1,5 @@
+use std::future::Future;
+use std::pin::Pin;
 #[cfg(unix)]
 use std::process::Command;
 use std::sync::Arc;
@@ -5,6 +7,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use super::SystemServiceError;
+use super::blocking::BlockingServiceExecutor;
+
+/// Owned asynchronous result of submitting a desktop notification.
+pub type NotificationFuture =
+    Pin<Box<dyn Future<Output = Result<NotificationId, SystemServiceError>> + Send + 'static>>;
 
 static NEXT_NOTIFICATION_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -57,18 +64,22 @@ pub trait NotificationService: Send + Sync {
 #[derive(Clone)]
 pub struct NotificationHandle {
     service: Arc<dyn NotificationService>,
+    executor: BlockingServiceExecutor,
 }
 
 impl NotificationHandle {
     pub(crate) fn new(service: impl NotificationService + 'static) -> Self {
         Self {
             service: Arc::new(service),
+            executor: BlockingServiceExecutor,
         }
     }
 
-    /// Submits a notification through the injected backend.
-    pub fn show(&self, request: NotificationRequest) -> Result<NotificationId, SystemServiceError> {
-        self.service.show(request)
+    /// Submits a notification without blocking the calling thread.
+    pub fn show(&self, request: NotificationRequest) -> NotificationFuture {
+        let service = Arc::clone(&self.service);
+        self.executor
+            .spawn("desktop notification", move || service.show(request))
     }
 }
 

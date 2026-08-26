@@ -1,10 +1,12 @@
 use std::error::Error;
 use std::fmt;
+use std::future::Future;
 use std::io::Read;
 use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use base64::Engine;
@@ -16,8 +18,13 @@ use sha2::Sha256;
 
 use super::ExternalUrl;
 use super::SystemServiceError;
+use super::blocking::BlockingServiceExecutor;
 
 const UPDATE_SERVICE: &str = "application update";
+
+/// Owned asynchronous result of signed application-update work.
+pub type UpdateFuture<T> =
+    Pin<Box<dyn Future<Output = Result<T, SystemServiceError>> + Send + 'static>>;
 
 /// Validated semantic application version.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -131,7 +138,7 @@ pub trait UpdateInstaller: Send + Sync {
 
 /// Complete update backend exposed through [`UpdateHandle`].
 pub trait UpdateService: Send + Sync {
-    /// Checks the signed feed and returns a newer compatible release when available.
+    /// Checks the signed feed when invoked on ZUI's service worker pool.
     fn check(&self) -> Result<Option<UpdateRelease>, SystemServiceError>;
 
     /// Downloads and verifies one release into the configured staging directory.
@@ -163,32 +170,39 @@ impl UpdateService for DisabledUpdates {
 #[derive(Clone)]
 pub struct UpdateHandle {
     service: Arc<dyn UpdateService>,
+    executor: BlockingServiceExecutor,
 }
 
 impl UpdateHandle {
     pub(crate) fn new(service: impl UpdateService + 'static) -> Self {
         Self {
             service: Arc::new(service),
+            executor: BlockingServiceExecutor,
         }
     }
 
-    /// Checks the configured signed update feed.
-    pub fn check(&self) -> Result<Option<UpdateRelease>, SystemServiceError> {
-        self.service.check()
+    /// Checks the configured signed update feed without blocking the calling thread.
+    pub fn check(&self) -> UpdateFuture<Option<UpdateRelease>> {
+        let service = self.service.clone();
+        self.executor.spawn(UPDATE_SERVICE, move || service.check())
     }
 
-    /// Downloads and verifies one release.
-    pub fn download(&self, release: UpdateRelease) -> Result<StagedUpdate, SystemServiceError> {
-        self.service.download(release)
+    /// Downloads and verifies one release without blocking the calling thread.
+    pub fn download(&self, release: UpdateRelease) -> UpdateFuture<StagedUpdate> {
+        let service = self.service.clone();
+        self.executor
+            .spawn(UPDATE_SERVICE, move || service.download(release))
     }
 
-    /// Hands one verified update to the platform installer.
-    pub fn install(&self, update: &StagedUpdate) -> Result<(), SystemServiceError> {
-        self.service.install(update)
+    /// Hands one verified update to the platform installer without blocking the calling thread.
+    pub fn install(&self, update: StagedUpdate) -> UpdateFuture<()> {
+        let service = self.service.clone();
+        self.executor
+            .spawn(UPDATE_SERVICE, move || service.install(&update))
     }
 }
 
-/// Blocking HTTP transport intended to run through [`crate::task::BackgroundExecutor`].
+/// Blocking HTTP transport invoked on the service worker pool through [`UpdateHandle`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct HttpUpdateTransport;
 

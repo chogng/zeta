@@ -228,6 +228,9 @@ impl TrayHandle {
 
     /// Creates one runtime-owned tray item.
     pub fn create(&self, options: TrayOptions) -> Result<(), SystemServiceError> {
+        if let Some(menu) = &options.menu {
+            validate_menu(menu)?;
+        }
         self.service.borrow_mut().create(options)
     }
 
@@ -243,12 +246,18 @@ impl TrayHandle {
 
     /// Replaces one tray item's context menu.
     pub fn set_menu(&self, id: &TrayId, menu: MenuModel) -> Result<(), SystemServiceError> {
+        validate_menu(&menu)?;
         self.service.borrow_mut().set_menu(id, menu)
     }
 
     pub(crate) fn set_event_handler(&self, handler: Option<TrayEventHandler>) {
         self.service.borrow_mut().set_event_handler(handler);
     }
+}
+
+fn validate_menu(menu: &MenuModel) -> Result<(), SystemServiceError> {
+    menu.validate()
+        .map_err(|source| SystemServiceError::invalid_input(TRAY_SERVICE, source))
 }
 
 /// Default native tray backend for Linux, macOS, and Windows.

@@ -14,29 +14,34 @@ use crate::runtime::InteractionFrame;
 use crate::runtime::UiDispatch;
 use crate::ui::presentation::UiFrame;
 use crate::ui::presentation::UiScene;
+use crate::window::CursorPositionError;
+use crate::window::DisplaySnapshot;
+use crate::window::PhysicalPosition;
 use crate::window::WindowHandle;
 use crate::window::WindowId;
 use crate::window::WindowOperationError;
+use crate::window::WindowOptionsError;
 
 use super::AppProxy;
 use super::ApplicationError;
+use super::ApplicationPhase;
+use super::ApplicationReadyFuture;
 use super::BackgroundExecutor;
 use super::ClipboardHandle;
 use super::DiagnosticsHandle;
+use super::LifecycleCore;
 use super::OpenedWindow;
 use super::RendererFactory;
 use super::Services;
 use super::Task;
 use super::TaskScope;
-use super::TaskSpawnError;
 use super::Timer;
 use super::TimerScheduleError;
 use super::TimerScheduler;
 use super::WindowFramePresentation;
 use super::WindowMetrics;
 use super::WindowOptions;
-use super::lifecycle::WindowCommand;
-use super::lifecycle::WindowCommandQueue;
+use super::WindowRuntimeEnvironment;
 use crate::window::WindowRole;
 use crate::window::WindowRuntime;
 
@@ -49,7 +54,7 @@ pub struct AppContext<'a, T: 'static> {
     services: &'a Services,
     event_proxy: &'a AppProxy<T>,
     error: &'a mut Option<ApplicationError>,
-    commands: &'a mut WindowCommandQueue,
+    lifecycle: &'a mut LifecycleCore,
     control_flow: &'a mut ControlFlow,
     background: &'a BackgroundExecutor<T>,
     timers: &'a TimerScheduler<T>,
@@ -65,7 +70,7 @@ pub(super) struct AppContextParts<'a, T: 'static> {
     pub(super) services: &'a Services,
     pub(super) event_proxy: &'a AppProxy<T>,
     pub(super) error: &'a mut Option<ApplicationError>,
-    pub(super) commands: &'a mut WindowCommandQueue,
+    pub(super) lifecycle: &'a mut LifecycleCore,
     pub(super) control_flow: &'a mut ControlFlow,
     pub(super) background: &'a BackgroundExecutor<T>,
     pub(super) timers: &'a TimerScheduler<T>,
@@ -83,7 +88,7 @@ impl<'a, T: 'static> AppContext<'a, T> {
             services: parts.services,
             event_proxy: parts.event_proxy,
             error: parts.error,
-            commands: parts.commands,
+            lifecycle: parts.lifecycle,
             control_flow: parts.control_flow,
             background: parts.background,
             timers: parts.timers,
@@ -97,13 +102,34 @@ impl<'a, T: 'static> AppContext<'a, T> {
     where
         T: Send,
     {
+        let parent = match options.parent() {
+            Some(parent) => Some(
+                self.windows
+                    .get(&parent)
+                    .filter(|runtime| runtime.role() == WindowRole::Product)
+                    .ok_or_else(|| {
+                        ApplicationError::window_options(WindowOptionsError::ParentNotFound {
+                            parent,
+                        })
+                    })?,
+            ),
+            None => None,
+        };
+        let desktop_file_name = self.services.desktop_file_name();
+        let environment = WindowRuntimeEnvironment::new(
+            parent.map(WindowRuntime::native_window),
+            WindowRole::Product,
+            desktop_file_name
+                .as_ref()
+                .map(crate::services::DesktopFileName::application_id),
+            self.devtools_requests.clone(),
+        );
         let runtime = WindowRuntime::open(
             self.event_loop,
             self.renderer_factory,
             self.event_proxy,
             options,
-            WindowRole::Product,
-            self.devtools_requests.clone(),
+            environment,
         )?;
         let opened = runtime.opened_window();
         self.services
@@ -112,10 +138,26 @@ impl<'a, T: 'static> AppContext<'a, T> {
             .map_err(|source| {
                 ApplicationError::product("native application menu attachment", source)
             })?;
+        runtime.finish_open(parent);
         self.windows.insert(opened.id(), runtime);
         self.diagnostics.open_window(opened.id(), opened.metrics());
-        self.commands.push(WindowCommand::Opened(opened.id()));
+        self.lifecycle.record_window_opened(opened.id());
         Ok(opened)
+    }
+
+    /// Returns the current shared application-host lifecycle phase.
+    pub const fn phase(&self) -> ApplicationPhase {
+        self.lifecycle.phase()
+    }
+
+    /// Returns whether the first [`super::App::ready`] callback has completed.
+    pub fn is_ready(&self) -> bool {
+        self.lifecycle.is_ready()
+    }
+
+    /// Waits for the first [`super::App::ready`] callback to complete or the application to exit.
+    pub fn when_ready(&self) -> ApplicationReadyFuture {
+        self.lifecycle.when_ready()
     }
 
     /// Returns whether the runtime currently owns a window with `id`.
@@ -131,6 +173,72 @@ impl<'a, T: 'static> AppContext<'a, T> {
     /// Returns a non-owning platform capability for a runtime-owned window.
     pub fn window_handle(&self, id: WindowId) -> Option<WindowHandle> {
         self.windows.get(&id).map(WindowRuntime::handle)
+    }
+
+    /// Returns the live product parent of `id`, if the window has one.
+    pub fn parent_window(&self, id: WindowId) -> Option<WindowHandle> {
+        let parent = self.windows.get(&id)?.parent()?;
+        self.windows
+            .get(&parent)
+            .filter(|runtime| runtime.role() == WindowRole::Product)
+            .map(WindowRuntime::handle)
+    }
+
+    /// Returns direct live product children in stable numeric order.
+    pub fn child_windows(&self, parent: WindowId) -> Vec<WindowHandle> {
+        let mut children = self
+            .windows
+            .values()
+            .filter(|runtime| {
+                runtime.role() == WindowRole::Product && runtime.parent() == Some(parent)
+            })
+            .map(WindowRuntime::handle)
+            .collect::<Vec<_>>();
+        children.sort_by_key(|window| window.id().into_raw());
+        children
+    }
+
+    /// Returns every live product window identity in stable numeric order.
+    pub fn window_ids(&self) -> Vec<WindowId> {
+        let mut windows: Vec<_> = self
+            .windows
+            .values()
+            .filter(|runtime| matches!(runtime.role(), WindowRole::Product))
+            .map(WindowRuntime::id)
+            .collect();
+        windows.sort_by_key(|window| window.into_raw());
+        windows
+    }
+
+    /// Returns non-owning capabilities for every live window in stable identity order.
+    pub fn window_handles(&self) -> Vec<WindowHandle> {
+        self.window_ids()
+            .into_iter()
+            .filter_map(|window| self.window_handle(window))
+            .collect()
+    }
+
+    /// Returns the runtime-owned window that currently has keyboard focus, if any.
+    pub fn focused_window(&self) -> Option<WindowHandle> {
+        self.windows
+            .values()
+            .filter(|runtime| matches!(runtime.role(), WindowRole::Product) && runtime.has_focus())
+            .min_by_key(|runtime| runtime.id().into_raw())
+            .map(WindowRuntime::handle)
+    }
+
+    /// Captures all connected displays and the platform primary display.
+    pub fn display_snapshot(&self) -> DisplaySnapshot {
+        DisplaySnapshot::from_native(
+            self.event_loop.available_monitors(),
+            self.event_loop.primary_monitor(),
+            None,
+        )
+    }
+
+    /// Returns the pointer location in the same global physical screen space as display bounds.
+    pub fn cursor_screen_position(&self) -> Result<PhysicalPosition, CursorPositionError> {
+        crate::window::cursor_screen_position(self.event_loop)
     }
 
     /// Requests another frame for a runtime-owned window.
@@ -159,27 +267,9 @@ impl<'a, T: 'static> AppContext<'a, T> {
         self.diagnostics.clone()
     }
 
-    /// Queues one window for closing after the current application callback returns.
-    pub fn close_window(&mut self, id: WindowId) {
-        self.commands.push(WindowCommand::Close(id));
-    }
-
     /// Sets the native event-loop wakeup policy selected by the application.
     pub fn set_control_flow(&mut self, control_flow: ControlFlow) {
         *self.control_flow = control_flow;
-    }
-
-    /// Queues a normal application exit after the current callback returns.
-    pub fn exit(&mut self) {
-        self.commands.push(WindowCommand::Exit);
-    }
-
-    /// Records a fatal runtime error and exits the native application.
-    pub fn exit_with_error(&mut self, error: ApplicationError) {
-        if self.error.is_none() {
-            *self.error = Some(error);
-        }
-        self.commands.push(WindowCommand::Exit);
     }
 
     /// Returns the cloneable application-wide background executor.
@@ -188,7 +278,7 @@ impl<'a, T: 'static> AppContext<'a, T> {
     }
 
     /// Starts application-scoped background work and delivers its output as a user event.
-    pub fn spawn<F>(&self, future: F) -> Result<Task, TaskSpawnError>
+    pub fn spawn<F>(&self, future: F) -> Task
     where
         T: Send,
         F: Future<Output = T> + Send + 'static,
@@ -216,10 +306,11 @@ impl<'a, T: 'static> AppContext<'a, T> {
 /// Runtime and platform capabilities scoped to one native window callback.
 pub struct WindowContext<'a, T: 'static> {
     runtime: &'a mut WindowRuntime,
+    event_proxy: &'a AppProxy<T>,
     clipboard: &'a ClipboardHandle,
     services: &'a Services,
     error: &'a mut Option<ApplicationError>,
-    commands: &'a mut WindowCommandQueue,
+    lifecycle: &'a mut LifecycleCore,
     background: &'a BackgroundExecutor<T>,
     timers: &'a TimerScheduler<T>,
     diagnostics: &'a DiagnosticsHandle,
@@ -227,10 +318,11 @@ pub struct WindowContext<'a, T: 'static> {
 
 pub(super) struct WindowContextParts<'a, T: 'static> {
     pub(super) runtime: &'a mut WindowRuntime,
+    pub(super) event_proxy: &'a AppProxy<T>,
     pub(super) clipboard: &'a ClipboardHandle,
     pub(super) services: &'a Services,
     pub(super) error: &'a mut Option<ApplicationError>,
-    pub(super) commands: &'a mut WindowCommandQueue,
+    pub(super) lifecycle: &'a mut LifecycleCore,
     pub(super) background: &'a BackgroundExecutor<T>,
     pub(super) timers: &'a TimerScheduler<T>,
     pub(super) diagnostics: &'a DiagnosticsHandle,
@@ -240,10 +332,11 @@ impl<'a, T: 'static> WindowContext<'a, T> {
     pub(super) fn new(parts: WindowContextParts<'a, T>) -> Self {
         Self {
             runtime: parts.runtime,
+            event_proxy: parts.event_proxy,
             clipboard: parts.clipboard,
             services: parts.services,
             error: parts.error,
-            commands: parts.commands,
+            lifecycle: parts.lifecycle,
             background: parts.background,
             timers: parts.timers,
             diagnostics: parts.diagnostics,
@@ -258,6 +351,11 @@ impl<'a, T: 'static> WindowContext<'a, T> {
     /// Returns the current physical and logical window metrics.
     pub fn metrics(&self) -> WindowMetrics {
         self.runtime.metrics()
+    }
+
+    /// Returns the current shared application-host lifecycle phase.
+    pub const fn phase(&self) -> ApplicationPhase {
+        self.lifecycle.phase()
     }
 
     /// Returns a non-owning capability for product-directed platform updates.
@@ -293,6 +391,11 @@ impl<'a, T: 'static> WindowContext<'a, T> {
     /// Schedules another frame for this window.
     pub fn request_redraw(&self) -> Result<(), WindowOperationError> {
         self.runtime.handle().request_redraw()
+    }
+
+    /// Captures connected displays and the display containing this window.
+    pub fn display_snapshot(&self) -> Result<DisplaySnapshot, WindowOperationError> {
+        self.runtime.handle().display_snapshot()
     }
 
     /// Returns the application-wide text clipboard capability.
@@ -348,26 +451,8 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         Ok(outcome)
     }
 
-    /// Closes this window after the current callback returns.
-    pub fn close(&mut self) {
-        self.commands.push(WindowCommand::Close(self.id()));
-    }
-
-    /// Queues a normal application exit after the current callback returns.
-    pub fn exit(&mut self) {
-        self.commands.push(WindowCommand::Exit);
-    }
-
-    /// Records a fatal runtime error and exits the complete native application.
-    pub fn exit_with_error(&mut self, error: ApplicationError) {
-        if self.error.is_none() {
-            *self.error = Some(error);
-        }
-        self.commands.push(WindowCommand::Exit);
-    }
-
     /// Starts background work cancelled automatically when this window closes.
-    pub fn spawn<F>(&self, future: F) -> Result<Task, TaskSpawnError>
+    pub fn spawn<F>(&self, future: F) -> Task
     where
         T: Send,
         F: Future<Output = T> + Send + 'static,
@@ -383,4 +468,24 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.timers
             .schedule_after_in_scope(TaskScope::Window(self.id()), delay, event)
     }
+
+    /// Schedules a user event at `deadline`, cancelled automatically when this window closes.
+    pub fn schedule_at(&self, deadline: Instant, event: T) -> Result<Timer, TimerScheduleError<T>>
+    where
+        T: Send,
+    {
+        self.timers
+            .schedule_at_in_scope(TaskScope::Window(self.id()), deadline, event)
+    }
 }
+
+mod application_badge;
+mod file_icon;
+mod jump_list;
+mod locale;
+mod login_item;
+mod paths;
+mod presentation;
+mod protocol_client;
+mod recent_documents;
+mod termination;

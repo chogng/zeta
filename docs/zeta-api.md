@@ -789,7 +789,7 @@ idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `zeta-http
 - [Codex authentication](https://learn.chatgpt.com/docs/auth)
 - [Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - 本地 Codex source snapshot：`../codex/codex-rs/codex-api/src/endpoint/`（验证
-  `memories/trace_summarize`、`alpha/search`、Responses/Realtime WebSocket 和 service target contract）
+  `memories/trace_summarize`、Responses/Realtime WebSocket 和 service target contract）
 
 ### Anthropic
 

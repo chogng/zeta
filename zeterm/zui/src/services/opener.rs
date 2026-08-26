@@ -1,9 +1,16 @@
 use std::error::Error;
 use std::fmt;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use super::SystemServiceError;
+use super::blocking::BlockingServiceExecutor;
+
+/// Owned asynchronous result of an operating-system opener request.
+pub type OpenerFuture =
+    Pin<Box<dyn Future<Output = Result<(), SystemServiceError>> + Send + 'static>>;
 
 /// Validated external URL passed to the operating system's registered handler.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -65,18 +72,21 @@ pub trait OpenerService: Send + Sync {
 #[derive(Clone)]
 pub struct OpenerHandle {
     service: Arc<dyn OpenerService>,
+    executor: BlockingServiceExecutor,
 }
 
 impl OpenerHandle {
     pub(crate) fn new(service: impl OpenerService + 'static) -> Self {
         Self {
             service: Arc::new(service),
+            executor: BlockingServiceExecutor,
         }
     }
 
-    /// Opens one target through the injected backend.
-    pub fn open(&self, target: OpenTarget) -> Result<(), SystemServiceError> {
-        self.service.open(target)
+    /// Opens one target without blocking the calling thread.
+    pub fn open(&self, target: OpenTarget) -> OpenerFuture {
+        let service = Arc::clone(&self.service);
+        self.executor.spawn("opener", move || service.open(target))
     }
 }
 

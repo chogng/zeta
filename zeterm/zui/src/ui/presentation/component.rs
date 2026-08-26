@@ -4,10 +4,11 @@ use super::ComputedElement;
 use super::UiScene;
 use crate::ui::foundation::UiNode;
 
-/// Presentation-only contract for a reusable native UI component.
+/// Frame-composition contract for a reusable native UI component.
 ///
-/// Implementations translate caller-provided state into scene primitives. The product host remains
-/// responsible for layout, input routing, lifecycle, async work, and authoritative domain state.
+/// Implementations declare layout, interaction semantics, inspection metadata, and paint from
+/// caller-provided state. [`crate::ui::presentation::UiFrame`] resolves those outputs together;
+/// the product host retains authoritative domain state, event reduction, and side effects.
 pub trait Component {
     /// Returns the declarative root element owned by this component.
     ///
@@ -48,7 +49,7 @@ pub trait Component {
     ///
     /// Product and composition callers should use [`UiScene::draw_component`] instead of invoking
     /// this method directly, so inspectable ancestors are not skipped.
-    fn paint(&self, scene: &mut UiScene);
+    fn paint(&self, _scene: &mut UiScene) {}
 }
 
 impl UiScene {

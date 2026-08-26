@@ -1,9 +1,16 @@
-load("//zeterm:defs.bzl", "zeterm_rust_binary")
+load("//zeterm:defs.bzl", "zeterm_rust_binary", "zeterm_rust_library")
+
+zeterm_rust_library(
+    name = "zui_demo_lib",
+    crate_name = "zui_demo",
+    package_name = "zeterm/zui-demo",
+)
 
 zeterm_rust_binary(
     name = "zui_demo",
     crate_name = "zui_demo",
     crate_root = "src/main.rs",
+    deps = [":zui_demo_lib"],
     package_name = "zeterm/zui-demo",
 )
 

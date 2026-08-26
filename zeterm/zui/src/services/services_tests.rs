@@ -1,10 +1,14 @@
 use std::cell::RefCell;
+use std::error::Error;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use futures::executor::block_on;
+
 use super::ExternalUrl;
+use super::FileDialogFuture;
 use super::FileDialogOptions;
 use super::FileDialogService;
 use super::GlobalShortcut;
@@ -15,14 +19,17 @@ use super::MenuEventHandler;
 use super::MenuItemId;
 use super::MenuModel;
 use super::MenuService;
+use super::NotificationFuture;
 use super::NotificationId;
 use super::NotificationRequest;
 use super::NotificationService;
 use super::OpenTarget;
+use super::OpenerFuture;
 use super::OpenerService;
 use super::Services;
 use super::ShortcutAccelerator;
 use super::SystemServiceError;
+use super::SystemServiceErrorCode;
 use super::TrayEventHandler;
 use super::TrayIconImage;
 use super::TrayId;
@@ -34,28 +41,33 @@ struct RecordingFileDialogs {
     opened: Arc<Mutex<Vec<FileDialogOptions>>>,
 }
 
+fn require_send<T: Send>() {}
+
+#[test]
+fn blocking_system_handle_results_can_cross_threads() {
+    require_send::<NotificationFuture>();
+    require_send::<OpenerFuture>();
+}
+
 impl FileDialogService for RecordingFileDialogs {
-    fn open_file(&self, options: FileDialogOptions) -> Result<Option<PathBuf>, SystemServiceError> {
-        self.opened.lock().unwrap().push(options);
-        Ok(Some(PathBuf::from("selected.txt")))
+    fn open_file(&self, options: FileDialogOptions) -> FileDialogFuture<Option<PathBuf>> {
+        let opened = self.opened.clone();
+        Box::pin(async move {
+            opened.lock().unwrap().push(options);
+            Ok(Some(PathBuf::from("selected.txt")))
+        })
     }
 
-    fn open_files(&self, _options: FileDialogOptions) -> Result<Vec<PathBuf>, SystemServiceError> {
-        Ok(Vec::new())
+    fn open_files(&self, _options: FileDialogOptions) -> FileDialogFuture<Vec<PathBuf>> {
+        Box::pin(async { Ok(Vec::new()) })
     }
 
-    fn select_folder(
-        &self,
-        _options: FileDialogOptions,
-    ) -> Result<Option<PathBuf>, SystemServiceError> {
-        Ok(None)
+    fn select_folder(&self, _options: FileDialogOptions) -> FileDialogFuture<Option<PathBuf>> {
+        Box::pin(async { Ok(None) })
     }
 
-    fn save_file(
-        &self,
-        _options: FileDialogOptions,
-    ) -> Result<Option<PathBuf>, SystemServiceError> {
-        Ok(None)
+    fn save_file(&self, _options: FileDialogOptions) -> FileDialogFuture<Option<PathBuf>> {
+        Box::pin(async { Ok(None) })
     }
 }
 
@@ -186,16 +198,14 @@ fn injected_services_are_used_without_calling_operating_system_backends() {
 
     let options = FileDialogOptions::new().with_title("Open workspace");
     assert_eq!(
-        services.file_dialogs().open_file(options.clone()).unwrap(),
+        block_on(services.file_dialogs().open_file(options.clone())).unwrap(),
         Some(PathBuf::from("selected.txt"))
     );
     let target = OpenTarget::Url(ExternalUrl::parse("https://example.com/docs").unwrap());
-    services.opener().open(target.clone()).unwrap();
+    block_on(services.opener().open(target.clone())).unwrap();
     let request = NotificationRequest::new("Finished").with_body("The task completed");
     assert_eq!(
-        services
-            .notifications()
-            .show(request.clone())
+        block_on(services.notifications().show(request.clone()))
             .unwrap()
             .into_raw(),
         41
@@ -237,7 +247,19 @@ fn service_value_types_validate_stable_external_identities() {
     );
     assert!(MenuItemId::new("  ").is_err());
     assert_eq!(MenuItemId::new("file.open").unwrap().as_str(), "file.open");
-    assert!(SystemServiceError::unsupported("menu").is_unsupported());
+    let unsupported = SystemServiceError::unsupported("menu");
+    assert!(unsupported.is_unsupported());
+    assert_eq!(unsupported.service(), "menu");
+    assert_eq!(unsupported.code(), SystemServiceErrorCode::Unsupported);
+    assert!(unsupported.source().is_none());
+    let backend = SystemServiceError::backend("menu", std::io::Error::other("offline"));
+    assert!(!backend.is_unsupported());
+    assert_eq!(backend.service(), "menu");
+    assert_eq!(backend.code(), SystemServiceErrorCode::Backend);
+    assert_eq!(
+        backend.source().map(ToString::to_string).as_deref(),
+        Some("offline")
+    );
     assert!(TrayId::new("").is_err());
     assert!(TrayIconImage::from_rgba(vec![0; 3], 1, 1).is_err());
     assert!(GlobalShortcutId::new(" ").is_err());

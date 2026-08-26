@@ -236,12 +236,20 @@ fn native_dependencies_stay_with_their_capability_owners() {
         if source.contains("winit::")
             && ![
                 "app/native_host.rs",
+                "input/device.rs",
                 "input/keyboard.rs",
                 "internal.rs",
                 "window/capability.rs",
                 "window/chrome.rs",
+                "window/display.rs",
                 "window/event.rs",
+                "window/icon.rs",
                 "window/native.rs",
+                "window/operations.rs",
+                "window/parent.rs",
+                "window/platform.rs",
+                "window/policy.rs",
+                "window/state.rs",
             ]
             .contains(&relative.as_ref())
         {
@@ -256,7 +264,23 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 path.display()
             ));
         }
+        if source.contains("gio::")
+            && relative != "services/file_icon/platform/linux.rs"
+            && relative != "services/protocol_client/platform.rs"
+        {
+            violations.push(format!(
+                "{} imports GIO outside audited platform owners",
+                path.display()
+            ));
+        }
+        if source.contains("zbus::") && relative != "services/application_badge/platform.rs" {
+            violations.push(format!(
+                "{} imports zbus outside the application-badge owner",
+                path.display()
+            ));
+        }
         if (source.contains("gtk::") || source.contains("tray_icon::"))
+            && relative != "services/file_icon/platform/linux.rs"
             && relative != "services/tray.rs"
             && !relative.starts_with("services/tray/")
         {
@@ -274,12 +298,60 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 path.display()
             ));
         }
+        if source.contains("x11rb::") && relative != "window/display/linux.rs" {
+            violations.push(format!(
+                "{} imports X11 outside the display owner",
+                path.display()
+            ));
+        }
+        if (source.contains("fs2::") || source.contains("uds_windows::"))
+            && relative != "app/single_instance/transport.rs"
+        {
+            violations.push(format!(
+                "{} imports process coordination outside the single-instance transport owner",
+                path.display()
+            ));
+        }
+        if (source.contains("objc2::")
+            || source.contains("objc2_app_kit::")
+            || source.contains("objc2_foundation::"))
+            && relative != "app/macos.rs"
+            && relative != "app/locale/platform.rs"
+            && relative != "app/presentation/platform.rs"
+            && relative != "services/application_badge/platform/macos.rs"
+            && relative != "services/file_icon/platform/macos.rs"
+            && relative != "services/login_item/platform/macos.rs"
+            && relative != "services/protocol_client/platform/macos.rs"
+            && relative != "services/recent_document/platform.rs"
+            && relative != "window/display/macos.rs"
+        {
+            violations.push(format!(
+                "{} imports AppKit/Objective-C outside audited macOS owners",
+                path.display()
+            ));
+        }
         if source.contains("windows_sys::")
+            && relative != "app/locale/platform.rs"
+            && relative != "app/presentation/platform.rs"
+            && relative != "app/presentation/platform/windows.rs"
+            && relative != "services/login_item/platform/windows.rs"
+            && relative != "services/file_icon/platform/windows.rs"
             && relative != "services/menu/windows.rs"
+            && relative != "services/protocol_client/platform.rs"
+            && relative != "services/recent_document/platform.rs"
+            && relative != "window/display/windows.rs"
             && !relative.starts_with("services/process/sandbox/windows/")
         {
             violations.push(format!(
-                "{} imports Win32 APIs outside audited service owners",
+                "{} imports Win32 APIs outside audited platform owners",
+                path.display()
+            ));
+        }
+        if source.contains("windows::Win32::")
+            && relative != "services/jump_list/platform/windows.rs"
+        {
+            violations.push(format!(
+                "{} imports typed Win32 APIs outside the audited Jump List owner",
                 path.display()
             ));
         }

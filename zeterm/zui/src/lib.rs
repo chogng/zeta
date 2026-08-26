@@ -1,4 +1,4 @@
-//! Complete native UI framework for Zeta applications.
+//! Reusable native UI framework capabilities for Zeta applications.
 //!
 //! Public capability modules are also the physical source owners. Native adapters and backend
 //! glue remain private, while product state and reusable product components stay outside ZUI.
@@ -77,8 +77,6 @@ pub use runtime::Task;
 #[cfg(feature = "native")]
 pub use runtime::TaskScope;
 #[cfg(feature = "native")]
-pub use runtime::TaskSpawnError;
-#[cfg(feature = "native")]
 pub use runtime::Timer;
 #[cfg(feature = "native")]
 pub use runtime::TimerId;
@@ -92,6 +90,10 @@ pub use services::Clipboard;
 pub use services::ClipboardError;
 #[cfg(feature = "native")]
 pub use services::ClipboardHandle;
+#[cfg(feature = "native")]
+pub use services::ClipboardHtml;
+#[cfg(feature = "native")]
+pub use services::ClipboardImage;
 #[cfg(feature = "native")]
 pub use services::SystemClipboard;
 #[cfg(feature = "native")]

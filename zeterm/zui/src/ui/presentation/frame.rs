@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use super::Component;
 use super::ComponentElement;
+use super::ComponentRuntime;
 use super::ComputedElement;
 use super::UiScene;
 use crate::ui::foundation::AnimationBinding;
@@ -61,15 +62,29 @@ impl<S: InteractionSink + Default> UiFrame<S> {
     /// Composes one component through the shared identity, inspection, interaction, and paint
     /// path.
     pub fn draw_component<C: Component + ?Sized>(&mut self, component: &C) {
-        let mut context =
-            ComponentContext::new(&mut self.scene, &mut self.interaction, None, None, self.now);
+        let mut context = ComponentContext::new(
+            &mut self.scene,
+            &mut self.interaction,
+            None,
+            None,
+            None,
+            None,
+            self.now,
+        );
         context.draw_component(component);
     }
 
     /// Runs custom composition through a context owned by this frame.
     pub fn with_context<R>(&mut self, draw: impl FnOnce(&mut ComponentContext<'_, '_>) -> R) -> R {
-        let mut context =
-            ComponentContext::new(&mut self.scene, &mut self.interaction, None, None, self.now);
+        let mut context = ComponentContext::new(
+            &mut self.scene,
+            &mut self.interaction,
+            None,
+            None,
+            None,
+            None,
+            self.now,
+        );
         draw(&mut context)
     }
 
@@ -87,9 +102,69 @@ impl<S: InteractionSink + Default> UiFrame<S> {
             &mut self.interaction,
             None,
             Some(animation_bindings),
+            None,
+            None,
             self.now,
         );
         draw(&mut context)
+    }
+
+    /// Runs one frame with cross-frame component state, observations, and resources enabled.
+    ///
+    /// Stable component identities not composed by `draw` are unmounted before this method
+    /// returns, dropping their retained subscriptions and resources.
+    pub fn with_component_runtime<'frame, 'runtime, R>(
+        &'frame mut self,
+        runtime: &'runtime mut ComponentRuntime,
+        draw: impl FnOnce(&mut ComponentContext<'frame, 'runtime>) -> R,
+    ) -> R {
+        runtime.begin_frame();
+        {
+            let mut context = ComponentContext::new(
+                &mut self.scene,
+                &mut self.interaction,
+                None,
+                None,
+                Some(runtime),
+                None,
+                self.now,
+            );
+            let result = draw(&mut context);
+            context
+                .component_runtime
+                .as_deref_mut()
+                .expect("component runtime remains attached during composition")
+                .finish_frame();
+            result
+        }
+    }
+
+    /// Runs one frame with both retained component state and scalar-animation bindings.
+    pub fn with_component_runtime_and_animation_bindings<'frame, 'runtime, R>(
+        &'frame mut self,
+        runtime: &'runtime mut ComponentRuntime,
+        animation_bindings: &'runtime mut dyn AnimationBinding,
+        draw: impl FnOnce(&mut ComponentContext<'frame, 'runtime>) -> R,
+    ) -> R {
+        runtime.begin_frame();
+        {
+            let mut context = ComponentContext::new(
+                &mut self.scene,
+                &mut self.interaction,
+                None,
+                Some(animation_bindings),
+                Some(runtime),
+                None,
+                self.now,
+            );
+            let result = draw(&mut context);
+            context
+                .component_runtime
+                .as_deref_mut()
+                .expect("component runtime remains attached during composition")
+                .finish_frame();
+            result
+        }
     }
 
     /// Draws one component with a retained scalar-animation registry available to its subtree.
@@ -109,8 +184,15 @@ impl<S: InteractionSink + Default> UiFrame<S> {
         element: ComponentElement,
         draw: impl FnOnce(&mut ComponentContext<'_, '_>, &ComputedElement) -> R,
     ) -> R {
-        let mut context =
-            ComponentContext::new(&mut self.scene, &mut self.interaction, None, None, self.now);
+        let mut context = ComponentContext::new(
+            &mut self.scene,
+            &mut self.interaction,
+            None,
+            None,
+            None,
+            None,
+            self.now,
+        );
         context.with_element(element, draw)
     }
 
@@ -120,8 +202,15 @@ impl<S: InteractionSink + Default> UiFrame<S> {
         bounds: Rect,
         draw: impl FnOnce(&mut ComponentContext<'_, '_>) -> R,
     ) -> R {
-        let mut context =
-            ComponentContext::new(&mut self.scene, &mut self.interaction, None, None, self.now);
+        let mut context = ComponentContext::new(
+            &mut self.scene,
+            &mut self.interaction,
+            None,
+            None,
+            None,
+            None,
+            self.now,
+        );
         context.with_clip(bounds, draw)
     }
 
@@ -146,6 +235,8 @@ pub struct ComponentContext<'frame, 'animation> {
     interaction: &'frame mut dyn InteractionSink,
     interaction_parent: Option<ElementId>,
     animation_bindings: Option<&'animation mut dyn AnimationBinding>,
+    pub(super) component_runtime: Option<&'animation mut ComponentRuntime>,
+    pub(super) component_identity: Option<ElementId>,
     now: Instant,
 }
 
@@ -155,6 +246,8 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
         interaction: &'frame mut dyn InteractionSink,
         interaction_parent: Option<ElementId>,
         animation_bindings: Option<&'animation mut dyn AnimationBinding>,
+        component_runtime: Option<&'animation mut ComponentRuntime>,
+        component_identity: Option<ElementId>,
         now: Instant,
     ) -> Self {
         Self {
@@ -162,6 +255,8 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
             interaction,
             interaction_parent,
             animation_bindings,
+            component_runtime,
+            component_identity,
             now,
         }
     }
@@ -215,18 +310,35 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
         let interaction = &mut *self.interaction;
         let scene = &mut *self.scene;
         let animation_bindings = self.animation_bindings.take();
-        let (result, animation_bindings) = scene.with_element(element, |scene, computed| {
-            let mut context = ComponentContext {
-                scene,
-                interaction,
-                interaction_parent: parent,
-                animation_bindings,
-                now,
-            };
-            let result = draw(&mut context, computed);
-            (result, context.animation_bindings)
-        });
+        let component_runtime = self.component_runtime.take();
+        let component_identity = self.component_identity;
+        let (result, animation_bindings, component_runtime) =
+            scene.with_element(element, |scene, computed| {
+                let identity = computed.identity().or(component_identity);
+                let mut context = ComponentContext {
+                    scene,
+                    interaction,
+                    interaction_parent: parent,
+                    animation_bindings,
+                    component_runtime,
+                    component_identity: identity,
+                    now,
+                };
+                if let (Some(runtime), Some(identity)) = (
+                    context.component_runtime.as_deref_mut(),
+                    computed.identity(),
+                ) {
+                    runtime.observe_component(identity);
+                }
+                let result = draw(&mut context, computed);
+                (
+                    result,
+                    context.animation_bindings,
+                    context.component_runtime,
+                )
+            });
         self.animation_bindings = animation_bindings;
+        self.component_runtime = component_runtime;
         result
     }
 
@@ -247,15 +359,24 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
         let interaction = &mut *self.interaction;
         let scene = &mut *self.scene;
         let animation_bindings = self.animation_bindings.take();
-        let (result, animation_bindings) =
+        let component_runtime = self.component_runtime.take();
+        let (result, animation_bindings, component_runtime) =
             scene.with_element(component.element(), |scene, computed| {
+                let identity = computed.identity();
                 let mut context = ComponentContext {
                     scene,
                     interaction,
                     interaction_parent: parent,
                     animation_bindings,
+                    component_runtime,
+                    component_identity: identity,
                     now,
                 };
+                if let (Some(runtime), Some(identity)) =
+                    (context.component_runtime.as_deref_mut(), identity)
+                {
+                    runtime.observe_component(identity);
+                }
                 if let Some(node) = component.interaction_node(computed) {
                     debug_assert_eq!(
                         computed.identity(),
@@ -271,9 +392,14 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
                     context.interaction_parent = Some(child_parent);
                 }
                 let result = draw(&mut context, computed);
-                (result, context.animation_bindings)
+                (
+                    result,
+                    context.animation_bindings,
+                    context.component_runtime,
+                )
             });
         self.animation_bindings = animation_bindings;
+        self.component_runtime = component_runtime;
         result
     }
 
@@ -288,18 +414,27 @@ impl<'frame, 'animation> ComponentContext<'frame, 'animation> {
         let interaction = &mut *self.interaction;
         let scene = &mut *self.scene;
         let animation_bindings = self.animation_bindings.take();
-        let (result, animation_bindings) = scene.with_clip(bounds, |scene| {
+        let component_runtime = self.component_runtime.take();
+        let component_identity = self.component_identity;
+        let (result, animation_bindings, component_runtime) = scene.with_clip(bounds, |scene| {
             let mut context = ComponentContext {
                 scene,
                 interaction,
                 interaction_parent: parent,
                 animation_bindings,
+                component_runtime,
+                component_identity,
                 now,
             };
             let result = draw(&mut context);
-            (result, context.animation_bindings)
+            (
+                result,
+                context.animation_bindings,
+                context.component_runtime,
+            )
         });
         self.animation_bindings = animation_bindings;
+        self.component_runtime = component_runtime;
         result
     }
 

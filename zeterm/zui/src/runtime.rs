@@ -50,8 +50,6 @@ pub use task::Task;
 #[cfg(feature = "native")]
 pub use task::TaskScope;
 #[cfg(feature = "native")]
-pub use task::TaskSpawnError;
-#[cfg(feature = "native")]
 pub use timer::Timer;
 #[cfg(feature = "native")]
 pub use timer::TimerId;

@@ -28,11 +28,20 @@ native = [
     "dep:arboard",
     "dep:ashpd",
     "dep:base64",
+    "dep:block2",
+    "dep:core-graphics",
     "dep:ed25519-dalek",
+    "dep:dirs",
     "dep:futures",
+    "dep:fs2",
     "dep:global-hotkey",
+    "dep:gio",
     "dep:gtk",
+    "dep:icon-loader",
     "dep:muda",
+    "dep:objc2",
+    "dep:objc2-app-kit",
+    "dep:objc2-foundation",
     "dep:open",
     "dep:raw-window-handle",
     "dep:rfd",
@@ -42,10 +51,15 @@ native = [
     "dep:sha2",
     "dep:tray-icon",
     "dep:tokio",
+    "dep:unic-langid",
     "dep:url",
     "dep:ureq",
     "dep:winit",
+    "dep:windows",
     "dep:windows-sys",
+    "dep:uds_windows",
+    "dep:x11rb",
+    "dep:zbus",
 ]
 wgpu = [
     "native",
@@ -62,8 +76,10 @@ accesskit-platform = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 cosmic-text = { workspace = true }
+dirs = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
-futures = { workspace = true, optional = true }
+futures = { workspace = true, optional = true, features = ["thread-pool"] }
+fs2 = { workspace = true, optional = true }
 global-hotkey = { workspace = true, optional = true }
 glyphon = { workspace = true, optional = true }
 open = { workspace = true, optional = true }
@@ -78,6 +94,7 @@ sha2 = { workspace = true, optional = true }
 sys-locale = { workspace = true }
 thiserror = { workspace = true }
 unicode-segmentation = { workspace = true }
+unic-langid = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 ureq = { workspace = true, optional = true }
 wgpu = { workspace = true, optional = true }
@@ -87,30 +104,60 @@ winit = { workspace = true, optional = true }
 arboard = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = { workspace = true, optional = true }
+core-graphics = { workspace = true, optional = true }
 muda = { workspace = true, optional = true }
+objc2 = { workspace = true, optional = true }
+objc2-app-kit = { workspace = true, optional = true, features = ["NSApplication", "NSBitmapImageRep", "NSDockTile", "NSDocumentController", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSResponder", "NSRunningApplication", "NSScreen", "NSWorkspace"] }
+objc2-foundation = { workspace = true, optional = true, features = ["block2", "NSArray", "NSAttributedString", "NSBundle", "NSData", "NSDictionary", "NSError", "NSJSONSerialization", "NSLocale", "NSNotification", "NSObject", "NSOperation", "NSString", "NSURL", "NSUserActivity"] }
 tray-icon = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 muda = { workspace = true, optional = true }
 tray-icon = { workspace = true, optional = true }
-windows-sys = { workspace = true, optional = true, features = [
+uds_windows = { workspace = true, optional = true }
+windows = { workspace = true, optional = true, features = [
     "Win32_Foundation",
+    "Win32_Storage_EnhancedStorage",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+] }
+windows-sys = { workspace = true, optional = true, features = [
+    "Wdk_System_SystemServices",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Globalization",
     "Win32_Security",
     "Win32_Security_Authorization",
     "Win32_Security_Isolation",
     "Win32_Storage_FileSystem",
     "Win32_System_Console",
+    "Win32_System_Com",
     "Win32_System_JobObjects",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
     "Win32_System_Threading",
     "Win32_System_WindowsProgramming",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ashpd = { workspace = true, optional = true, features = ["global_shortcuts", "tokio"] }
+gio = { workspace = true, optional = true }
 gtk = { workspace = true, optional = true }
+icon-loader = { workspace = true, optional = true }
 muda = { workspace = true, optional = true, features = ["gtk"] }
 tokio = { workspace = true, optional = true, features = ["macros", "rt", "sync"] }
 tray-icon = { workspace = true, optional = true, features = ["gtk"] }
+x11rb = { workspace = true, optional = true }
+zbus = { workspace = true, optional = true }
 
 [lints.rust]
 # Win32 AppContainer integration is isolated to modules that opt into unsafe code. The crate root

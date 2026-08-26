@@ -1,123 +1,29 @@
+#[cfg(target_os = "windows")]
+use std::cell::Cell;
 use std::cell::RefCell;
-use std::error::Error;
-use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use super::SystemServiceError;
 
+mod model;
 #[cfg(target_os = "windows")]
 mod windows;
 
-/// Stable application-owned identity for one actionable native menu item.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct MenuItemId(String);
+pub use model::MenuAboutMetadata;
+pub use model::MenuAccelerator;
+pub use model::MenuAcceleratorError;
+pub use model::MenuAction;
+pub use model::MenuEntry;
+pub use model::MenuGroup;
+pub use model::MenuItemId;
+pub use model::MenuItemIdError;
+pub use model::MenuModel;
+pub use model::MenuModelError;
+pub use model::MenuRole;
+pub use model::MenuRoleItem;
 
-impl MenuItemId {
-    /// Creates a non-empty application-owned menu identity.
-    pub fn new(value: impl Into<String>) -> Result<Self, MenuItemIdError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(MenuItemIdError);
-        }
-        Ok(Self(value))
-    }
-
-    /// Returns the stable string identity.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-    fn from_native(value: &str) -> Self {
-        Self(value.to_owned())
-    }
-}
-
-/// Failure to create an empty menu item identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct MenuItemIdError;
-
-impl fmt::Display for MenuItemIdError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("menu item identity cannot be empty")
-    }
-}
-
-impl Error for MenuItemIdError {}
-
-/// One actionable item in a backend-independent menu model.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MenuAction {
-    pub id: MenuItemId,
-    pub label: String,
-    pub enabled: bool,
-}
-
-impl MenuAction {
-    /// Creates an enabled action.
-    pub fn new(id: MenuItemId, label: impl Into<String>) -> Self {
-        Self {
-            id,
-            label: label.into(),
-            enabled: true,
-        }
-    }
-
-    /// Sets whether the action can currently be selected.
-    pub const fn with_enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-}
-
-/// Action, separator, or nested submenu in a menu group.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MenuEntry {
-    Action(MenuAction),
-    Separator,
-    Submenu(MenuGroup),
-}
-
-/// Labeled menu containing actions and nested groups.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MenuGroup {
-    pub id: MenuItemId,
-    pub label: String,
-    pub enabled: bool,
-    pub entries: Vec<MenuEntry>,
-}
-
-impl MenuGroup {
-    /// Creates an enabled menu group.
-    pub fn new(
-        id: MenuItemId,
-        label: impl Into<String>,
-        entries: impl IntoIterator<Item = MenuEntry>,
-    ) -> Self {
-        Self {
-            id,
-            label: label.into(),
-            enabled: true,
-            entries: entries.into_iter().collect(),
-        }
-    }
-}
-
-/// Complete backend-independent application-menu model.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct MenuModel {
-    pub groups: Vec<MenuGroup>,
-}
-
-impl MenuModel {
-    /// Creates a menu model from top-level groups.
-    pub fn new(groups: impl IntoIterator<Item = MenuGroup>) -> Self {
-        Self {
-            groups: groups.into_iter().collect(),
-        }
-    }
-}
+const MENU_SERVICE: &str = "native application menu";
 
 /// Thread-safe callback installed by the runtime to receive native menu actions.
 pub type MenuEventHandler = Arc<dyn Fn(MenuItemId) + Send + Sync>;
@@ -141,6 +47,13 @@ pub trait MenuService {
 
     /// Detaches native menu resources before a runtime-owned window is destroyed.
     fn detach_window(&mut self, _window: crate::window::WindowId) {}
+
+    /// Exposes the live Windows accelerator table to the native event-loop bridge.
+    #[cfg(target_os = "windows")]
+    #[doc(hidden)]
+    fn accelerator_table(&self) -> Option<Rc<Cell<isize>>> {
+        None
+    }
 }
 
 /// Cloneable main-thread capability for configuring the application menu.
@@ -158,6 +71,9 @@ impl MenuHandle {
 
     /// Replaces the application menu through the injected backend.
     pub fn set_application_menu(&self, model: MenuModel) -> Result<(), SystemServiceError> {
+        model
+            .validate()
+            .map_err(|source| SystemServiceError::invalid_input(MENU_SERVICE, source))?;
         self.service.borrow_mut().set_application_menu(model)
     }
 
@@ -175,6 +91,11 @@ impl MenuHandle {
     pub(crate) fn detach_window(&self, window: crate::window::WindowId) {
         self.service.borrow_mut().detach_window(window);
     }
+
+    #[cfg(target_os = "windows")]
+    pub(crate) fn accelerator_table(&self) -> Option<Rc<Cell<isize>>> {
+        self.service.borrow().accelerator_table()
+    }
 }
 
 /// Default native application-menu backend.
@@ -186,6 +107,8 @@ pub struct SystemMenu {
     menu: Option<muda::Menu>,
     #[cfg(target_os = "windows")]
     windows: std::collections::HashMap<crate::window::WindowId, isize>,
+    #[cfg(target_os = "windows")]
+    accelerator_table: Rc<Cell<isize>>,
 }
 
 impl MenuService for SystemMenu {
@@ -199,22 +122,32 @@ impl MenuService for SystemMenu {
         }
         #[cfg(target_os = "windows")]
         {
-            if let Some(previous) = self.menu.take() {
+            let menu = build_native_menu(model)?;
+            let previous = self.menu.take();
+            self.accelerator_table.set(0);
+            if let Some(previous) = &previous {
                 for hwnd in self.windows.values().copied() {
-                    let _ = windows::remove(&previous, hwnd);
+                    let _ = windows::remove(previous, hwnd);
                 }
             }
-            let menu = build_native_menu(model)?;
             let mut attached = Vec::new();
             for hwnd in self.windows.values().copied() {
                 if let Err(source) = windows::attach(&menu, hwnd) {
                     for hwnd in attached {
                         let _ = windows::remove(&menu, hwnd);
                     }
+                    if let Some(previous) = previous {
+                        for hwnd in self.windows.values().copied() {
+                            let _ = windows::attach(&previous, hwnd);
+                        }
+                        self.accelerator_table.set(previous.haccel());
+                        self.menu = Some(previous);
+                    }
                     return Err(source);
                 }
                 attached.push(hwnd);
             }
+            self.accelerator_table.set(menu.haccel());
             self.menu = Some(menu);
             Ok(())
         }
@@ -244,12 +177,13 @@ impl MenuService for SystemMenu {
     ) -> Result<(), SystemServiceError> {
         #[cfg(target_os = "windows")]
         {
-            let id = window.id().ok_or_else(|| {
-                SystemServiceError::backend(
+            if !window.is_open() {
+                return Err(SystemServiceError::backend(
                     "native application menu",
                     std::io::Error::other("menu target window is no longer live"),
-                )
-            })?;
+                ));
+            }
+            let id = window.id();
             if self.windows.contains_key(&id) {
                 return Ok(());
             }
@@ -279,10 +213,30 @@ impl MenuService for SystemMenu {
         #[cfg(not(target_os = "windows"))]
         let _ = window;
     }
+
+    #[cfg(target_os = "windows")]
+    fn accelerator_table(&self) -> Option<Rc<Cell<isize>>> {
+        Some(self.accelerator_table.clone())
+    }
+}
+
+impl Drop for SystemMenu {
+    fn drop(&mut self) {
+        #[cfg(target_os = "windows")]
+        self.accelerator_table.set(0);
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub(crate) fn translate_accelerator(table: &Cell<isize>, message: *const std::ffi::c_void) -> bool {
+    windows::translate_accelerator(table, message)
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub(super) fn build_native_menu(model: MenuModel) -> Result<muda::Menu, SystemServiceError> {
+    model
+        .validate()
+        .map_err(|source| SystemServiceError::invalid_input(MENU_SERVICE, source))?;
     let menu = muda::Menu::new();
     for group in model.groups {
         let submenu = build_submenu(group)?;
@@ -298,25 +252,119 @@ fn build_submenu(group: MenuGroup) -> Result<muda::Submenu, SystemServiceError> 
     for entry in group.entries {
         match entry {
             MenuEntry::Action(action) => {
-                let item =
-                    muda::MenuItem::with_id(action.id.as_str(), action.label, action.enabled, None);
-                submenu.append(&item).map_err(|source| {
-                    SystemServiceError::backend("native application menu", source)
-                })?;
+                let accelerator = action
+                    .accelerator
+                    .as_ref()
+                    .map(MenuAccelerator::to_native)
+                    .transpose()
+                    .map_err(|source| SystemServiceError::invalid_input(MENU_SERVICE, source))?;
+                if let Some(checked) = action.checked {
+                    let item = muda::CheckMenuItem::with_id(
+                        action.id.as_str(),
+                        action.label,
+                        action.enabled,
+                        checked,
+                        accelerator,
+                    );
+                    append_item(&submenu, &item)?;
+                } else {
+                    let item = muda::MenuItem::with_id(
+                        action.id.as_str(),
+                        action.label,
+                        action.enabled,
+                        accelerator,
+                    );
+                    append_item(&submenu, &item)?;
+                }
+            }
+            MenuEntry::Role(role) => {
+                let item = build_role(role)?;
+                append_item(&submenu, &item)?;
             }
             MenuEntry::Separator => {
                 let separator = muda::PredefinedMenuItem::separator();
-                submenu.append(&separator).map_err(|source| {
-                    SystemServiceError::backend("native application menu", source)
-                })?;
+                append_item(&submenu, &separator)?;
             }
             MenuEntry::Submenu(group) => {
                 let child = build_submenu(group)?;
-                submenu.append(&child).map_err(|source| {
-                    SystemServiceError::backend("native application menu", source)
-                })?;
+                append_item(&submenu, &child)?;
             }
         }
     }
     Ok(submenu)
 }
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn append_item(
+    submenu: &muda::Submenu,
+    item: &dyn muda::IsMenuItem,
+) -> Result<(), SystemServiceError> {
+    submenu
+        .append(item)
+        .map_err(|source| SystemServiceError::backend(MENU_SERVICE, source))
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn build_role(role: MenuRoleItem) -> Result<muda::PredefinedMenuItem, SystemServiceError> {
+    if !role_supported(&role.role) {
+        return Err(SystemServiceError::unsupported("native menu role"));
+    }
+    let label = role.label.as_deref();
+    Ok(match role.role {
+        MenuRole::Copy => muda::PredefinedMenuItem::copy(label),
+        MenuRole::Cut => muda::PredefinedMenuItem::cut(label),
+        MenuRole::Paste => muda::PredefinedMenuItem::paste(label),
+        MenuRole::SelectAll => muda::PredefinedMenuItem::select_all(label),
+        MenuRole::Undo => muda::PredefinedMenuItem::undo(label),
+        MenuRole::Redo => muda::PredefinedMenuItem::redo(label),
+        MenuRole::Minimize => muda::PredefinedMenuItem::minimize(label),
+        MenuRole::Maximize => muda::PredefinedMenuItem::maximize(label),
+        MenuRole::Fullscreen => muda::PredefinedMenuItem::fullscreen(label),
+        MenuRole::Hide => muda::PredefinedMenuItem::hide(label),
+        MenuRole::HideOthers => muda::PredefinedMenuItem::hide_others(label),
+        MenuRole::ShowAll => muda::PredefinedMenuItem::show_all(label),
+        MenuRole::CloseWindow => muda::PredefinedMenuItem::close_window(label),
+        MenuRole::Quit => muda::PredefinedMenuItem::quit(label),
+        MenuRole::About(metadata) => {
+            muda::PredefinedMenuItem::about(label, Some((*metadata).into_native()))
+        }
+        MenuRole::Services => muda::PredefinedMenuItem::services(label),
+        MenuRole::BringAllToFront => muda::PredefinedMenuItem::bring_all_to_front(label),
+    })
+}
+
+#[cfg(target_os = "macos")]
+const fn role_supported(_role: &MenuRole) -> bool {
+    true
+}
+
+#[cfg(target_os = "windows")]
+const fn role_supported(role: &MenuRole) -> bool {
+    matches!(
+        role,
+        MenuRole::Copy
+            | MenuRole::Cut
+            | MenuRole::Paste
+            | MenuRole::SelectAll
+            | MenuRole::Undo
+            | MenuRole::Redo
+            | MenuRole::Minimize
+            | MenuRole::Maximize
+            | MenuRole::Hide
+            | MenuRole::CloseWindow
+            | MenuRole::Quit
+            | MenuRole::About(_)
+    )
+}
+
+#[cfg(target_os = "linux")]
+const fn role_supported(role: &MenuRole) -> bool {
+    matches!(
+        role,
+        MenuRole::Copy | MenuRole::Cut | MenuRole::Paste | MenuRole::SelectAll | MenuRole::About(_)
+    )
+}
+
+#[cfg(test)]
+#[path = "menu_tests.rs"]
+mod tests;

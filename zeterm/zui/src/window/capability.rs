@@ -1,186 +1,57 @@
-use std::error::Error;
-use std::fmt;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use winit::dpi::LogicalPosition;
+use winit::dpi::LogicalPosition as NativeLogicalPosition;
 use winit::window::Window;
 
 use crate::devtools::DevToolsHandle;
 
 use super::CursorIcon;
 use super::ImeCursorArea;
+use super::LogicalPosition;
 use super::LogicalSize;
 use super::PhysicalExtent;
-use super::Theme;
+use super::PhysicalPosition;
 use super::WindowChrome;
 use super::WindowControlInsets;
 use super::WindowId;
+use super::WindowLevel;
+use super::WindowOperationError;
+use super::WindowState;
 use super::chrome::window_control_insets;
+use super::platform::focus_supported;
+use super::platform::map_external_error;
+use super::platform::minimized_restore_supported;
+use super::platform::programmatic_position_supported;
+use super::platform::visibility_supported;
+use super::platform::window_level_supported;
 
-/// Failure while applying an operation through a non-owning window capability.
-#[derive(Debug)]
-pub enum WindowOperationError {
-    /// The runtime released the native window before the operation was requested.
-    Closed {
-        window: WindowId,
-        operation: &'static str,
-    },
-    /// A logical size supplied to the operation was invalid.
-    InvalidSize {
-        window: WindowId,
-        operation: &'static str,
-    },
-    /// The platform rejected an otherwise valid operation.
-    Platform {
-        window: WindowId,
-        operation: &'static str,
-        source: Box<dyn Error + Send + Sync>,
-    },
+#[derive(Clone)]
+pub(crate) struct WindowCloseRequester {
+    send: Arc<dyn Fn(WindowId, WindowCloseMode) -> bool + Send + Sync>,
 }
 
-impl WindowOperationError {
-    /// Returns the stable identity of the operation target.
-    pub const fn window(&self) -> WindowId {
-        match self {
-            Self::Closed { window, .. }
-            | Self::InvalidSize { window, .. }
-            | Self::Platform { window, .. } => *window,
-        }
-    }
-
-    /// Returns the stable name of the failed operation.
-    pub const fn operation(&self) -> &'static str {
-        match self {
-            Self::Closed { operation, .. }
-            | Self::InvalidSize { operation, .. }
-            | Self::Platform { operation, .. } => operation,
-        }
-    }
-
-    /// Returns whether the runtime no longer owns the target window.
-    pub const fn is_closed(&self) -> bool {
-        matches!(self, Self::Closed { .. })
-    }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WindowCloseMode {
+    Request,
+    Destroy,
 }
 
-impl fmt::Display for WindowOperationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Closed { window, operation } => write!(
-                formatter,
-                "{operation} failed: window {} is closed",
-                window.into_raw()
-            ),
-            Self::InvalidSize { operation, .. } => write!(
-                formatter,
-                "{operation} failed: logical size must be finite and positive"
-            ),
-            Self::Platform {
-                operation, source, ..
-            } => write!(formatter, "{operation} failed: {source}"),
-        }
-    }
-}
-
-impl Error for WindowOperationError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Platform { source, .. } => Some(source.as_ref()),
-            Self::Closed { .. } | Self::InvalidSize { .. } => None,
-        }
-    }
-}
-
-/// Queryable platform state captured from one live native window.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WindowState {
-    physical_extent: PhysicalExtent,
-    logical_size: LogicalSize,
-    scale_factor: f64,
-    visible: Option<bool>,
-    focused: bool,
-    minimized: Option<bool>,
-    maximized: bool,
-    fullscreen: bool,
-    resizable: bool,
-    theme: Option<Theme>,
-}
-
-impl WindowState {
-    fn from_native(window: &Window) -> Self {
-        let extent = window.inner_size();
-        let scale_factor = window.scale_factor();
-        let scale_factor = if scale_factor.is_finite() && scale_factor > 0.0 {
-            scale_factor
-        } else {
-            1.0
-        };
+impl WindowCloseRequester {
+    pub(crate) fn new(
+        send: impl Fn(WindowId, WindowCloseMode) -> bool + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            physical_extent: PhysicalExtent::new(extent.width, extent.height),
-            logical_size: LogicalSize::new(
-                f64::from(extent.width) / scale_factor,
-                f64::from(extent.height) / scale_factor,
-            ),
-            scale_factor,
-            visible: window.is_visible(),
-            focused: window.has_focus(),
-            minimized: window.is_minimized(),
-            maximized: window.is_maximized(),
-            fullscreen: window.fullscreen().is_some(),
-            resizable: window.is_resizable(),
-            theme: window.theme().map(Theme::from_native),
+            send: Arc::new(send),
         }
     }
 
-    /// Returns the current physical content extent.
-    pub const fn physical_extent(self) -> PhysicalExtent {
-        self.physical_extent
+    fn request(&self, window: WindowId) -> bool {
+        (self.send)(window, WindowCloseMode::Request)
     }
 
-    /// Returns the current logical content size.
-    pub const fn logical_size(self) -> LogicalSize {
-        self.logical_size
-    }
-
-    /// Returns the validated logical-to-physical scale factor.
-    pub const fn scale_factor(self) -> f64 {
-        self.scale_factor
-    }
-
-    /// Returns platform visibility when the backend can report it.
-    pub const fn visible(self) -> Option<bool> {
-        self.visible
-    }
-
-    /// Returns whether the window currently owns keyboard focus.
-    pub const fn focused(self) -> bool {
-        self.focused
-    }
-
-    /// Returns platform minimization state when the backend can report it.
-    pub const fn minimized(self) -> Option<bool> {
-        self.minimized
-    }
-
-    /// Returns whether the platform currently reports the window as maximized.
-    pub const fn maximized(self) -> bool {
-        self.maximized
-    }
-
-    /// Returns whether the window currently occupies a fullscreen space.
-    pub const fn fullscreen(self) -> bool {
-        self.fullscreen
-    }
-
-    /// Returns whether the user can resize the window.
-    pub const fn resizable(self) -> bool {
-        self.resizable
-    }
-
-    /// Returns the current platform appearance preference when available.
-    pub const fn theme(self) -> Option<Theme> {
-        self.theme
+    fn destroy(&self, window: WindowId) -> bool {
+        (self.send)(window, WindowCloseMode::Destroy)
     }
 }
 
@@ -194,6 +65,9 @@ pub struct WindowHandle {
     window: Weak<Window>,
     chrome: WindowChrome,
     devtools: DevToolsHandle,
+    close_requester: WindowCloseRequester,
+    parent: Option<WindowId>,
+    modal: bool,
 }
 
 impl WindowHandle {
@@ -202,18 +76,34 @@ impl WindowHandle {
         window: Weak<Window>,
         chrome: WindowChrome,
         devtools: DevToolsHandle,
+        close_requester: WindowCloseRequester,
+        parent: Option<WindowId>,
+        modal: bool,
     ) -> Self {
         Self {
             id,
             window,
             chrome,
             devtools,
+            close_requester,
+            parent,
+            modal,
         }
     }
 
     /// Returns the stable identity assigned when the window was opened.
     pub const fn id(&self) -> WindowId {
         self.id
+    }
+
+    /// Returns the live product parent selected when this window was opened, if any.
+    pub const fn parent_id(&self) -> Option<WindowId> {
+        self.parent
+    }
+
+    /// Returns whether this window disables its parent while it remains open.
+    pub const fn is_modal(&self) -> bool {
+        self.modal
     }
 
     /// Returns whether the application runtime still owns the native window.
@@ -230,6 +120,32 @@ impl WindowHandle {
     /// Schedules a redraw or reports that the window has closed.
     pub fn request_redraw(&self) -> Result<(), WindowOperationError> {
         self.live_window("redraw request")?.request_redraw();
+        Ok(())
+    }
+
+    /// Requests a cancelable [`super::WindowEvent::CloseRequested`] callback on the main loop.
+    pub fn close(&self) -> Result<(), WindowOperationError> {
+        let operation = "window close request";
+        let _window = self.live_window(operation)?;
+        if !self.close_requester.request(self.id) {
+            return Err(WindowOperationError::Disconnected {
+                window: self.id,
+                operation,
+            });
+        }
+        Ok(())
+    }
+
+    /// Destroys this window without delivering a cancelable close request.
+    pub fn destroy(&self) -> Result<(), WindowOperationError> {
+        let operation = "window destroy request";
+        let _window = self.live_window(operation)?;
+        if !self.close_requester.destroy(self.id) {
+            return Err(WindowOperationError::Disconnected {
+                window: self.id,
+                operation,
+            });
+        }
         Ok(())
     }
 
@@ -269,13 +185,10 @@ impl WindowHandle {
 
     /// Begins a platform window drag when the runtime still owns the window.
     pub fn start_window_drag(&self) -> Result<(), WindowOperationError> {
-        self.live_window("window drag")?
+        let operation = "window drag";
+        self.live_window(operation)?
             .drag_window()
-            .map_err(|source| WindowOperationError::Platform {
-                window: self.id,
-                operation: "window drag",
-                source: Box::new(source),
-            })?;
+            .map_err(|source| map_external_error(self.id, operation, source))?;
         Ok(())
     }
 
@@ -309,37 +222,99 @@ impl WindowHandle {
             .map(|size| PhysicalExtent::new(size.width, size.height)))
     }
 
-    /// Returns the current platform theme preference or reports that the window has closed.
-    pub fn theme(&self) -> Result<Option<Theme>, WindowOperationError> {
-        Ok(self
-            .live_window("theme query")?
-            .theme()
-            .map(Theme::from_native))
+    /// Returns the current outer top-left screen position in physical pixels.
+    pub fn outer_position(&self) -> Result<PhysicalPosition, WindowOperationError> {
+        let operation = "outer position query";
+        let position = self
+            .live_window(operation)?
+            .outer_position()
+            .map_err(|source| WindowOperationError::Platform {
+                window: self.id,
+                operation,
+                source: Box::new(source),
+            })?;
+        Ok(PhysicalPosition::new(
+            f64::from(position.x),
+            f64::from(position.y),
+        ))
     }
 
-    /// Applies an explicit platform theme or reports that the window has closed.
-    pub fn set_theme(&self, theme: Option<Theme>) -> Result<(), WindowOperationError> {
-        self.live_window("theme update")?
-            .set_theme(theme.map(Theme::into_native));
+    /// Requests a new logical top-left screen position.
+    pub fn set_outer_logical_position(
+        &self,
+        position: LogicalPosition,
+    ) -> Result<(), WindowOperationError> {
+        let operation = "outer position update";
+        if !position.is_valid() {
+            return Err(WindowOperationError::InvalidPosition {
+                window: self.id,
+                operation,
+            });
+        }
+        let window = self.live_window(operation)?;
+        if !programmatic_position_supported(&window) {
+            return Err(WindowOperationError::Unsupported {
+                window: self.id,
+                operation,
+            });
+        }
+        window.set_outer_position(position.into_native());
+        Ok(())
+    }
+
+    /// Requests a native stacking level for this window.
+    pub fn set_window_level(&self, level: WindowLevel) -> Result<(), WindowOperationError> {
+        let operation = "window level update";
+        let window = self.live_window(operation)?;
+        if level != WindowLevel::Normal && !window_level_supported(&window) {
+            return Err(WindowOperationError::Unsupported {
+                window: self.id,
+                operation,
+            });
+        }
+        window.set_window_level(level.into_native());
         Ok(())
     }
 
     /// Shows or hides the native window.
     pub fn set_visible(&self, visible: bool) -> Result<(), WindowOperationError> {
-        self.live_window("visibility update")?.set_visible(visible);
+        let operation = "visibility update";
+        let window = self.live_window(operation)?;
+        if !visibility_supported(&window) {
+            return Err(WindowOperationError::Unsupported {
+                window: self.id,
+                operation,
+            });
+        }
+        window.set_visible(visible);
         Ok(())
     }
 
     /// Requests keyboard focus for the native window.
     pub fn focus(&self) -> Result<(), WindowOperationError> {
-        self.live_window("focus request")?.focus_window();
+        let operation = "focus request";
+        let window = self.live_window(operation)?;
+        if !focus_supported(&window) {
+            return Err(WindowOperationError::Unsupported {
+                window: self.id,
+                operation,
+            });
+        }
+        window.focus_window();
         Ok(())
     }
 
     /// Changes the platform minimization state.
     pub fn set_minimized(&self, minimized: bool) -> Result<(), WindowOperationError> {
-        self.live_window("minimization update")?
-            .set_minimized(minimized);
+        let operation = "minimization update";
+        let window = self.live_window(operation)?;
+        if !minimized && !minimized_restore_supported(&window) {
+            return Err(WindowOperationError::Unsupported {
+                window: self.id,
+                operation,
+            });
+        }
+        window.set_minimized(minimized);
         Ok(())
     }
 
@@ -380,7 +355,7 @@ impl WindowHandle {
     pub fn set_ime_cursor_area(&self, area: ImeCursorArea) -> Result<(), WindowOperationError> {
         self.live_window("IME cursor-area update")?
             .set_ime_cursor_area(
-                LogicalPosition::new(area.x, area.y),
+                NativeLogicalPosition::new(area.x, area.y),
                 winit::dpi::LogicalSize::new(area.width, area.height),
             );
         Ok(())
@@ -391,7 +366,10 @@ impl WindowHandle {
         window_control_insets(self.chrome)
     }
 
-    fn live_window(&self, operation: &'static str) -> Result<Arc<Window>, WindowOperationError> {
+    pub(crate) fn live_window(
+        &self,
+        operation: &'static str,
+    ) -> Result<Arc<Window>, WindowOperationError> {
         self.window.upgrade().ok_or(WindowOperationError::Closed {
             window: self.id,
             operation,

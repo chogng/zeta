@@ -1,8 +1,12 @@
 # `zeta-remote-host`
 
-`zeta-remote-host` 是本机 Remote host 的生命周期协调层。它位于
+`zeta-remote-host` 是本机 Remote Tunnel 的生命周期工具层。它位于
 [`zeta-remote-connections`](../remote-connections/README.md) 的 SSH/Tunnel primitive 之上，
 为产品宿主提供可复用的 Tunnel 启动、就绪检测、取消、进程退出恢复和类型化事件。
+
+它不是 App Server host，也不是 Remote App Server client。App Server 的横向产品边界由
+`zeta-app-server-client::AppServerSession` 提供；Local 与 Remote 都必须交付同一个 client/session
+contract。这个 crate 只服务于需要 loopback Tunnel 的产品能力。
 
 ## Ownership
 
@@ -24,12 +28,20 @@
 产品应先解析自己的 profile/catalog，再将 `SshHost` 和 SSH executable 交给
 `RemoteTunnelHost`。产品宿主负责把 `RemoteTunnelEvent` 映射到自己的事件循环和 UI state。
 
-## Layering
+## App Server 与 Tunnel 的边界
 
 ```text
-product host (zeterm / Desktop)
-  -> zeta-remote-host        # lifecycle, cancellation, recovery, events
-  -> zeta-remote-connections # OpenSSH and Tunnel process primitives
+product AppServerHost (zeterm / Desktop)
+  -> zeta-app-server-client  # typed session, initialize, events, shutdown
+      ├─ Local App Server
+      └─ Remote backend
+          -> zeta-remote
+          -> zeta-remote-connections
+          -> OpenSSH / remote-server
+
+product Tunnel coordinator (optional)
+  -> zeta-remote-host        # Tunnel lifecycle only
+  -> zeta-remote-connections # OpenSSH/Tunnel primitives
   -> zeta-remote              # target identity and validation
 ```
 
