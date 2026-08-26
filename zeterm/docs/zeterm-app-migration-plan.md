@@ -1,8 +1,9 @@
 # `zeterm` 应用根迁移计划
 
 > 状态：当前迁移计划。本文拥有 `zeterm` 从 `zeta-rs/native` 迁移到仓库根 `zeterm/` 的阶段、边界和验收条件；
-> 共享 Rust backend 的 crate contract 由对应 `zeta-rs` README 维护，Native UI framework 的迁移细节由
-> [`ui-component-migration-plan.md`](ui-component-migration-plan.md) 维护。
+> 共享 Rust backend 的 crate contract 由对应 `zeta-rs` README 维护，Native UI framework 的当前 contract 见
+> [`../zui/README.md`](../zui/README.md) 和 [`../ui/README.md`](../ui/README.md)；兼容边界见
+> [`native-deprecation-plan.md`](native-deprecation-plan.md)。
 
 ## 快速理解
 

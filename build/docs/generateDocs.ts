@@ -74,7 +74,6 @@ const groups: DocGroupDefinition[] = [
       "zeterm/native-terminal-ui",
       "zeterm/native-text-input",
       "zeterm/rendering-architecture",
-      "zeterm/ui-component-migration-plan",
       "zeterm/native-deprecation-plan",
       "zeterm/zeterm-app-migration-plan",
       "zeterm/zeterm-release-graph",

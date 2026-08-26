@@ -132,7 +132,6 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 | --- | --- |
 | [`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md) | 长期演进方向 |
 | [`zeterm/docs/native-deprecation-plan.md`](../zeterm/docs/native-deprecation-plan.md) | Native 弃用迁移 |
-| [`zeterm/docs/ui-component-migration-plan.md`](../zeterm/docs/ui-component-migration-plan.md) | UI 组件迁移 |
 | [`zeterm/docs/zeterm-app-migration-plan.md`](../zeterm/docs/zeterm-app-migration-plan.md) | Zeterm 迁移 |
 | [`zeterm/docs/zeterm-release-graph.md`](../zeterm/docs/zeterm-release-graph.md) | Zeterm 发布依赖 |
 

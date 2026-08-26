@@ -23,7 +23,6 @@
 | 产品 Pane topology 与 resize projection | [`zeta-ui`](../ui/README.md) | `zeta-ui::layout` + host state adapter |
 | Composer state、input、routing、interaction 与 panel/list geometry | [`zeta-composer`](../composer/README.md) | `zeta-composer` + Native product/scene adapter |
 | 通用 UI 脱离产品宿主的最小验证 | [`zui-demo`](../zui-demo/README.md) | `zui` / `zeta-ui` |
-| Native UI 组件和宿主迁移边界 | [`ui-component-migration-plan.md`](ui-component-migration-plan.md) | zeterm-owned UI crates |
 | 从旧 Native workspace 的迁移状态 | [`zeterm-app-migration-plan.md`](zeterm-app-migration-plan.md) | `zeterm/` + root Cargo workspace |
 | Native 弃用与长期 owner | [`native-deprecation-plan.md`](native-deprecation-plan.md) | `zui` / `zeta-ui` / `zeterm` host boundary |
 | 构建、签名和发布输入 | [`zeterm-release-graph.md`](zeterm-release-graph.md) | root Cargo/Bazel graph + `zeterm/packaging` |
