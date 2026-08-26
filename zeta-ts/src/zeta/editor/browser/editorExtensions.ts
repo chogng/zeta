@@ -10,8 +10,7 @@ import { type DocumentCollaborationMember } from "../common/services/documentCol
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import { type EditorBrowserOptions } from "./editorBrowser.js";
-import { type EditorInputController } from "./controller/inputController.js";
-import { type InputCompletionOptions, type InputLanguageEditingAdapter } from "./controller/inputContracts.js";
+import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
 import { type EditorViewport } from "./view/editorViewport.js";
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
@@ -46,8 +45,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
 	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
-	readonly setInputCompletion: (completion: InputCompletionOptions) => void;
-	readonly setInputLanguageEditing: (adapter: InputLanguageEditingAdapter) => void;
+	readonly setLanguageEditing: (adapter: EditorLanguageEditingAdapter) => void;
 	readonly own: <T extends IDisposable>(value: T) => T;
 }
 
@@ -58,7 +56,7 @@ export interface TextEditorContributionContext {
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;
-	readonly input: EditorInputController;
+	readonly view: EditorView;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
 	readonly tabFocus: TabFocus;

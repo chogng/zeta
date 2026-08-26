@@ -53,7 +53,7 @@ registerEditorContribution({
 	id: "editor.contrib.anchorSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new AnchorSelectController(context.input.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
+		context.own(new AnchorSelectController(context.view.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
 	},
 });
 

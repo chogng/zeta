@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type InputLanguageEditingAdapter, type InputLanguageTypeCommand } from "../../../browser/controller/inputContracts.js";
+import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../../../browser/controller/viewController.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
@@ -15,7 +15,7 @@ import { createLanguageEnterCommand } from "../common/enter.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../common/pairEditing.js";
 
 /** Language-aware typing adapter selected by the bracket-matching contribution. */
-export class LanguageEditingAdapter extends DisposableOwner implements InputLanguageEditingAdapter {
+export class LanguageEditingAdapter extends DisposableOwner implements EditorLanguageEditingAdapter {
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;
 
@@ -29,7 +29,7 @@ export class LanguageEditingAdapter extends DisposableOwner implements InputLang
 		this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
 	}
 
-	createTypeCommand(selections: TextSelectionSet, text: string): InputLanguageTypeCommand | undefined {
+	createTypeCommand(selections: TextSelectionSet, text: string): EditorLanguageTypeCommand | undefined {
 		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
 		if (!result) return undefined;
 		return Object.freeze({

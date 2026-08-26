@@ -12,7 +12,7 @@ import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxServi
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
-import { type EditorInputController } from "./controller/inputController.js";
+import { type EditorView } from "./view.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
 import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
@@ -78,6 +78,8 @@ export interface EditorBrowserOptions {
 	readonly container: HTMLElement;
 	readonly input: EditorResourceInput;
 	readonly languageId: string;
+	/** Optional stable editor identity used by browser host integrations. */
+	readonly ownerId?: string;
 	/** Optional host-scoped Tab-focus state shared by multiple editor instances. */
 	readonly tabFocus?: TabFocus;
 	/** Optional shared language registrations and providers for this editor host. */
@@ -155,7 +157,7 @@ export interface IEditorBrowserRuntime extends IDisposable {
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
-	readonly input: EditorInputController;
+	readonly view: EditorView;
 	announceAccessibilityStatus(message: string): void;
 	layout(dimension: IDimension): void;
 	focus(): void;
@@ -177,7 +179,7 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowserRunt
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
-	readonly input: EditorInputController;
+	readonly view: EditorView;
 
 	constructor(options: EditorBrowserOptions) {
 		super();
@@ -187,7 +189,7 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowserRunt
 			this.codeEditor = this.runtime.codeEditor;
 			this.viewport = this.runtime.viewport;
 			this.selections = this.runtime.selections;
-			this.input = this.runtime.input;
+			this.view = this.runtime.view;
 		} catch (error) {
 			this.dispose();
 			throw error;

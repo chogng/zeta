@@ -55,8 +55,9 @@ export class TextAreaEditContext extends EditContext implements ITextAreaWrapper
 		this.element.setAttribute("aria-roledescription", "code editor");
 		this.element.setAttribute("aria-readonly", String(this.element.readOnly));
 		this.textAreaInput = this.own(new TextAreaInput(this.element));
-		container.append(this.element);
+		if (options.ownerId !== undefined) this.own(TextAreaEditContextRegistry.register(options.ownerId, this));
 		this.own(TextAreaEditContextRegistry.register(this.element, this));
+		container.append(this.element);
 		this.defer(() => this.element.remove());
 	}
 

@@ -7,9 +7,9 @@ registerEditorContribution({
 	id: "editor.contrib.clipboard",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new ClipboardController(context.input.editContext, context.viewport, context.selections, {
+		context.own(new ClipboardController(context.view.editContext, context.viewport, context.selections, {
 			semanticTokens: context.getOptionalCapability(TextEditorCapability.semanticTokenSource),
-			isEditingAllowed: () => !context.input.compositionController.composing,
+			isEditingAllowed: () => !context.view.compositionController.composing,
 			pasteProviders: [UriListPasteProvider],
 		}));
 	},

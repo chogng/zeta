@@ -89,5 +89,5 @@ export class InlineCompletionsController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || context.options.inlineCompletions === false) return;
 	const service = context.own(context.languageFeaturesService.createInlineCompletionsService(context.model));
-	context.own(new InlineCompletionsController(context.input.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	context.own(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

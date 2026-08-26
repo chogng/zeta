@@ -31,7 +31,8 @@ Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM c
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
 | Language model | 已具备 Code 主路径 | 版本化 token/diagnostic/completion、TextMate 与 parser facts、跨文件 definition/declaration/references/implementation/type definition、Peek、workspace symbols、call/type hierarchy、rename、code action 与有序 WorkspaceEdit 均接通 App Server；更广的语言覆盖由 language-server catalog 演进，不再复制 editor contract |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、至多 160 行的有界 density minimap（WebGL 优先、DOM 回退、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
-| Input controller | 部分具备 | IME 内核事务、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、completion 键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`、基础 composition DOM event 已完成；Android/macOS 特化仍未完成 |
+| EditorView / ViewController | 部分具备 | `EditorView` 选择并拥有 EditContext 生命周期，`ViewController` 将 beforeinput/textupdate/keydown 路由到 common command，覆盖 IME 协作、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`；Android/macOS 特化仍未完成 |
+| SuggestController | 部分具备 | 独立 contribution 拥有 completion service/session 的 browser 接线、键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、completion/listbox ARIA；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
 | Accessibility | 部分具备 | editor label、聚焦 textarea 的文本/主选区镜像、multi-selection `aria-description`、completion/listbox ARIA、dialog state 与 cursor/selection/save live-region announcements、forced-colors focus/selection/caret/diagnostic 语义已具备；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
 | Large-file policy | 已具备 | 模型创建时固定判断 20 MiB/30 万行 tokenization、50 MiB synchronization、256M text-unit heap 阈值；保留编辑/滚动/查找/保存，关闭或限制全量后台 token、diagnostic、folding、CodeLens、Inlay Hint、symbol、occurrence 与 bracket colorization |
 | Workbench Editor Part | 已有独立实现 | tabs、pane 生命周期、可见性和模式 contribution |
@@ -106,7 +107,7 @@ Language snapshots ─────→ Language workers
         ↓
 Viewport + Layout model
         ↓
-Input controller ←──────→ Native DOM renderer
+EditorView ←────────────→ Native DOM renderer
 ```
 
 ## 长期不变量
@@ -440,14 +441,7 @@ Tab、clipboard、composition DOM event 或平台辅助功能命令。
 前拒绝；相邻删除使 caret 汇聚时，完全相同的结果会合并并重映射 primary。
 undo 仍恢复命令前的原多 selection，redo 恢复合并后的结果。
 
-`EditorInputController` 创建并拥有一个不可见 textarea。Viewport root
-获得焦点时转移到该 textarea；focus 状态通过稳定的 `.input-focused` 类投影，
-视觉规则由 Stanza component CSS 持有。非 composition `beforeinput` 将
-`insertText`、replacement text、Enter、Backspace、Delete、history undo/redo
-映射到 common 命令，普通 Tab 由 keydown 映射为 `\t`。成功编辑后清空
-textarea 并 reveal primary active position。它与 viewport、selection
-controller 必须引用同一个 `TextModel`，销毁 adapter 只移除自己的 DOM 和
-listener。
+`EditorView` 选择并拥有一个 `EditContext` 实现；Viewport root 获得焦点时转移到该输入表面，focus 状态通过稳定的 `.input-focused` 类投影，视觉规则由 Stanza component CSS 持有。`ViewController` 将非 composition `beforeinput` 的 `insertText`、replacement text、Enter、Backspace、Delete、history undo/redo 以及普通 Tab keydown 映射到 common 命令，成功编辑后清空输入表面并 reveal primary active position；它与 viewport、selection controller 必须引用同一个 `TextModel`，销毁 view 只移除自己的 DOM 和 listener。
 
 普通 `beforeinput` router 明确忽略 composition input，由组合持有的
 composition controller 按 Current 18 处理；clipboard 路径见 Current 17。
@@ -463,7 +457,7 @@ router。
 offset，并使用 `Isolated` history，确保 paste/cut 不会与前后的连续 typing
 合成一个 undo step。
 
-`StanzaClipboardController` 由 textarea input controller 组合持有并监听原生
+`StanzaClipboardController` 由 editor view 组合持有并监听原生
 copy/cut/paste。copy 写入可移植的 `text/plain`、转义后的预格式化 `text/html`；
 Editor 的多 selection 复制额外写入版本化 `application/x-stanza-editor`
 元数据。粘贴时，合法且数量匹配的元数据逐 selection 分发；外部纯文本或无效
@@ -700,14 +694,7 @@ range/insertText，生成一个 isolated `EditorEditCommand`，并把 caret 放�
 store invalidation 在 accept 期间由 session 协调，最终只发布一次
 `Accepted` close；undo 通过既有 selection history 同时恢复文本与触发 caret。
 
-browser 的 `CompletionWidget` 由 `EditorInputController` 可选托管。
-widget 使用 viewport 的 content coordinates 锚定在触发 caret 下方，以
-`.visible`、`.focused` 状态类同步 listbox/option ARIA。上下键循环 focus，
-Enter/Tab 接受，Escape 本地取消；活跃 session 才截获这些键，其余事件继续
-走既有 navigation/input controllers。鼠标在 mousedown 同一事务中 focus
-并接受，避免重绘后的 detached option 丢失 click。label/detail/kind 全部用
-`textContent`，kind 只映射命名 enum，CSS 由 widget 自己拥有并仅消费现有
-theme tokens。
+browser 的 `CompletionWidget` 由 `SuggestController` 创建并托管。widget 使用 viewport 的 content coordinates 锚定在触发 caret 下方，以 `.visible`、`.focused` 状态类同步 listbox/option ARIA；`SuggestController` 在 view 的 pre-command 事件上处理上下键循环、Enter/Tab 接受、Escape 本地取消和 commit character，活跃 session 才截获这些键，其余事件继续走既有 navigation controllers。鼠标在 mousedown 同一事务中 focus 并接受，避免重绘后的 detached option 丢失 click。label/detail/kind 全部用 `textContent`，kind 只映射命名 enum，CSS 由 widget 自己拥有并仅消费现有 theme tokens。
 
 当前结果协议和接受链路已具备：deferred resolve/documentation、commit character、
 non-overlapping additional edits，以及 `$n`/`${n}`/`${n:default}`/`${n|a,b|}` snippet
@@ -734,12 +721,7 @@ discriminated context，避免用 boolean 或可歧义的 optional 参数表达�
 第一个 preselect，并对 `isIncomplete` 做 OR。`LanguageCompletionService`
 拥有 coordinator、host 和 result store，但不拥有 registry 或 model。
 
-browser 输入层通过 `InputControllerOptions.completion.requests`
-显式接入 service 和 language ID。Ctrl+Space 发送 `Invoke`；已注册的 trigger
-character 在文本事务完成后，以新的 model version 和 caret 发送请求；当前
-结果为 incomplete 时，普通输入发送 `IncompleteRefresh`。请求只发生在单一
-collapsed selection 上，失败不会回滚已经成功的文本事务。session 必须精确
-观察该 service 的 result store，避免同模型、不同 request-ID domain 被误接。
+browser 的 Suggest contribution 在 editor configuration 阶段创建 service/session，并在 `EditorView` 建立后安装 `SuggestController`；它显式接入 service 和 language ID。Ctrl+Space 发送 `Invoke`；已注册的 trigger character 在文本事务完成后，以新的 model version 和 caret 发送请求；当前结果为 incomplete 时，普通输入发送 `IncompleteRefresh`。请求只发生在单一 collapsed selection 上，失败不会回滚已经成功的文本事务。session 必须精确观察该 service 的 result store，避免同模型、不同 request-ID domain 被误接。
 
 当前 incomplete refresh 会重新查询所有匹配 provider，不复用旧版本 complete
 items，因为旧 range 不能越过 model-version gate。host 隔离在
@@ -835,11 +817,7 @@ registry catalog。`requestTriggerCharacter` 捕获当前 model version，启动
 重建 Worker，等待首次 catalog，再只对真实匹配 provider 发请求。等待期间模型
 变化会丢弃该 trigger，而不是用旧位置请求新版本。
 
-`EditorInputController` 使用该异步 trigger API。若 catalog 证明字符不受
-支持，且先前 result 是 incomplete，它只在 model version、单一 collapsed
-selection 和 caret 都未变化时回退到 `IncompleteRefresh`。Worker terminal
-failure 或 disposal 会先发布 empty catalog；下一次 trigger 让 coordinator
-创建新 Worker，并重新完成 catalog handshake，旧 metadata 不会继续路由输入。
+`SuggestController` 使用该异步 trigger API。若 catalog 证明字符不受支持，且先前 result 是 incomplete，它只在 model version、单一 collapsed selection 和 caret 都未变化时回退到 `IncompleteRefresh`。Worker terminal failure 或 disposal 会先发布 empty catalog；下一次 trigger 让 coordinator 创建新 Worker，并重新完成 catalog handshake，旧 metadata 不会继续路由输入。
 
 当前 catalog 描述 Worker 已加载的 provider，但还不能要求 Worker 动态加载
 任意 renderer 函数。后续需要命名 provider module/feature manifest 与受控加载
@@ -1139,11 +1117,7 @@ editor-common 事务构造器。`createLanguagePairTypeCommand` 在这一边界�
 - `createLanguagePairBackspaceCommand` 删除空 pair 两侧，同时让同一多光标事务中的
   其他 selection 保持普通 Backspace 语义。
 
-`InputControllerOptions.language` 显式接收 concrete language ID 与
-caller-owned `LanguageConfigurationSource`。每次相关 `beforeinput` 都读取当前 resolved
-revision，因此配置贡献变化无需重建 View。若同时接入 completion requests，两条路径
-必须使用相同 language ID。DOM 层只做事件适配；pair 决策、事务、selection 映射与
-undo 仍由 common/controller/model 拥有。
+`LanguageEditingAdapter` 由 bracket-matching contribution 创建，并显式接收 concrete language ID 与 caller-owned `LanguageConfigurationSource`；它在每次相关 `beforeinput` 中读取当前 resolved revision，因此配置贡献变化无需重建 View。`ViewController` 只负责 DOM 事件到 command 的适配，`SuggestController` 独立消费 view 的 pre-command/post-edit 事件；pair 决策、事务、selection 映射与 undo 仍由 common/controller/model 拥有。
 
 测试覆盖单字符和多字符 pair、后继字符策略、quote overtype、正反向 selection
 surround、多光标偏移、空 pair Backspace、undo、配置 revision 热更新和浏览器
@@ -1166,7 +1140,8 @@ model 的 `EditorSelectionController`：
 | --- | --- | --- |
 | tracked-range 映射算法 | `TextModel` / Stanza text core | ✅ 复用，不建立第二套 decoration |
 | “由自动闭合产生”的身份 | `LanguageAutoClosingTracker` | editor-instance 状态，不进入共享 model |
-| DOM `beforeinput` 与 tracker 生命周期 | `EditorInputController` | browser 只适配事件和记录提交回执 |
+| DOM `beforeinput` 路由 | `ViewController` | browser 只适配事件并把 language adapter 的提交回执交回 common |
+| auto-closing tracker 生命周期 | `LanguageEditingAdapter` | 每个 editor 实例独立拥有 tracker，不进入 shared model |
 | language pair 配置 | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供 |
 | URI、文件保存、TextMate runtime | 各自 platform/adapter service | ❌ 不与自动闭合来源耦合 |
 | 通用 `base` | domain-neutral primitives | ❌ 不新增 editor identity 或反向依赖 |
@@ -1179,7 +1154,7 @@ overtype；只有 trusted pair 仍为空时，Backspace 才删除两侧。用户
 selection 离开 enclosing range 都会永久释放对应记录。多光标记录独立失效。
 undo 令 pair 消失时来源随之失效；redo 只恢复 model/selection 历史，不伪造已经释放
 的短生命周期来源。测试覆盖以上路径、过期 version、销毁后借用依赖仍存活，以及
-browser controller 的自动记录链路。
+`ViewController` 与 `LanguageEditingAdapter` 的自动记录链路。
 
 ### Current 41：语言感知 Enter 与实例缩进
 
@@ -1203,10 +1178,7 @@ Indent、IndentOutdent、Outdent、appendText 与 removeText 都转换为
 history group，但让 Enter 后紧邻输入继续加入新 group：一次 undo 删除 Enter 与随后
 输入，再一次 undo 才删除 Enter 前的输入。
 
-缩进样式没有放入 language registry。`EditorIndentationOptions` 明确选择 Tabs 或
-Spaces，并提供 tabSize；visual-column 归一化负责 mixed whitespace、shift 与 unshift。
-browser controller 只拥有 resolved 实例选项并在每次 Enter 读取当前 language
-revision。
+缩进样式没有放入 language registry。`EditorIndentationOptions` 明确选择 Tabs 或 Spaces，并提供 tabSize；visual-column 归一化负责 mixed whitespace、shift 与 unshift。`LanguageEditingAdapter` 只拥有 resolved 实例选项并在每次 Enter 读取当前 language revision。
 
 | 候选抽象 | 当前归属 | 评估 |
 | --- | --- | --- |
@@ -1255,7 +1227,7 @@ overtype 仍先由 `LanguageAutoClosingTracker` 决定，不会被 `notIn` 破�
 | 生命周期/能力 | 当前所有者 | 结论 |
 | --- | --- | --- |
 | 行 scanner 编译与 lazy state cache | `LanguageLexicalContextIndex` | Stanza common、可共享注入 |
-| 默认 input context | `EditorInputController` | controller 创建并销毁本地 index |
+| 默认 input context | `LanguageEditingAdapter` | bracket-matching contribution 创建并销毁本地 lexical index |
 | document-level 共享 | future composition root | 可直接注入 source，无需改 command |
 | full token/diagnostic analysis | Analysis Worker | 继续异步，不阻塞按键 |
 | lifecycle/event primitives | `base/common` | ✅ 复用 |

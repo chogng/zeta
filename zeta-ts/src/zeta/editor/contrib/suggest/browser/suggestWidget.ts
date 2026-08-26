@@ -22,6 +22,7 @@ export class CompletionWidget extends DisposableOwner {
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: EditorSelectionController,
 		private readonly session: LanguageCompletionSessionController,
+		container: HTMLElement | undefined = undefined,
 	) {
 		super();
 		try {
@@ -49,7 +50,7 @@ export class CompletionWidget extends DisposableOwner {
 		inputElement.setAttribute("aria-autocomplete", "none");
 		inputElement.setAttribute("aria-controls", this.widgetId);
 		inputElement.setAttribute("aria-haspopup", "listbox");
-		viewport.element.append(this.element);
+		(container ?? viewport.element).append(this.element);
 		this.defer(() => {
 			this.element.remove();
 			restoreAttribute(inputElement, "aria-autocomplete", this.previousAriaAutocomplete);

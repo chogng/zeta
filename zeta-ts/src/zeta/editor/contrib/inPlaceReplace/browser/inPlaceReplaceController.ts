@@ -42,7 +42,7 @@ registerEditorContribution({
 	id: "editor.contrib.inPlaceReplace",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new InPlaceReplaceController(context.input.element, context.viewport, context.selections));
+		context.own(new InPlaceReplaceController(context.view.element, context.viewport, context.selections));
 	},
 });
 

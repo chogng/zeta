@@ -3,7 +3,9 @@ import { BaseEdit, BaseReplacement } from "./edit.js";
 
 /** A simultaneous edit over an array of values. */
 export class ArrayEdit<T> extends BaseEdit<ArrayReplacement<T>, ArrayEdit<T>> {
+
 	static readonly empty = new ArrayEdit<never>([]);
+
 	static create<T>(replacements: readonly ArrayReplacement<T>[]): ArrayEdit<T> { return new ArrayEdit(replacements); }
 	static single<T>(replacement: ArrayReplacement<T>): ArrayEdit<T> { return new ArrayEdit([replacement]); }
 	static replace<T>(range: OffsetRange, value: readonly T[]): ArrayEdit<T> { return new ArrayEdit([new ArrayReplacement(range, value)]); }

@@ -1,6 +1,6 @@
 import "./media/linkedEditing.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { type EditorInputController } from "../../../browser/controller/inputController.js";
+import { type EditorView } from "../../../browser/view.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
@@ -20,12 +20,12 @@ export class LinkedEditingController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private wordPattern: RegExp | undefined;
 
-	constructor(private readonly inputController: EditorInputController, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
+	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || service.textModel !== selections.textModel) throw new TypeError("Stanza linked editing dependencies must share a text model");
 		this.own(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));
 		this.own(addDisposableListener(input, "keydown", event => { if (event.key !== "Escape" || !this.active) return; stopEvent(event); this.clear(); }, true));
-		this.own(inputController.registerCommandTransformer(command => this.extendCommand(command)));
+		this.own(view.registerCommandTransformer(command => this.extendCommand(command)));
 		this.own(selections.onDidChange(() => this.scheduleActivation()));
 		this.scheduleActivation();
 	}
@@ -116,5 +116,5 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 registerEditorContribution({ id: "editor.contrib.linkedEditing", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createLinkedEditingService(context.model, context.options.input.resource));
-	context.own(new LinkedEditingController(context.input, context.input.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+	context.own(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 } });

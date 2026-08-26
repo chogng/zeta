@@ -5,7 +5,7 @@ type NativeEditContextOwner = string | HTMLElement;
 
 /**
  * Finds an active native edit context without making clipboard or host code
- * depend on the concrete input controller instance.
+ * depend on the concrete editor view instance.
  */
 class NativeEditContextRegistryImpl {
 	private readonly byId = new Map<string, NativeEditContext>();

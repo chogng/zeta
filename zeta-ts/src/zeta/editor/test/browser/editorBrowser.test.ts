@@ -54,7 +54,7 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	assert.equal(container.querySelectorAll(".stanza-editor-decoration.warning-underline").length > 0, true);
 	assert.deepEqual(errors, []);
 
-	editorPart.input.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
+	editorPart.view.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
 		bubbles: true,
 		cancelable: true,
 		data: "x",
@@ -159,7 +159,7 @@ test("Stanza editor browser honors a read-only input without disabling selection
 		modelReference: reference,
 	});
 
-	const input = editorPart.input.textArea!;
+	const input = editorPart.view.textArea!;
 	assert.equal(input.readOnly, true);
 	assert.equal(input.getAttribute("aria-readonly"), "true");
 	const edit = new dom.window.InputEvent("beforeinput", {
@@ -277,7 +277,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 		assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
 		assert.equal(container.querySelectorAll(".stanza-editor-token").length, 0, "background tokens");
 		assert.equal(container.querySelectorAll(".stanza-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
-		editorPart.input.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
+		editorPart.view.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
 		assert.equal(editorPart.getValue().startsWith("xlet value = 1;\n"), true, "basic editing");
 	} finally {
 		editorPart.dispose();

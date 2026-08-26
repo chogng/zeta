@@ -51,10 +51,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/editorViewport.ts",
 		"browser/controller/compositionController.ts",
-		"browser/controller/inputController.ts",
-		"browser/controller/inputCommandController.ts",
-		"browser/controller/inputCompletionController.ts",
-		"browser/controller/inputContracts.ts",
+		"browser/view.ts",
+		"browser/controller/viewController.ts",
 		"browser/controller/editContext/clipboardUtils.ts",
 		"browser/controller/editContext/editContext.ts",
 		"browser/controller/editContext/factory.ts",
@@ -145,6 +143,10 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 	for (const file of requiredFiles) assert.equal(statSafe(join(editorRoot, file)), true, file);
 
 	const removedLegacyNames = [
+		"browser/controller/inputController.ts",
+		"browser/controller/inputCommandController.ts",
+		"browser/controller/inputCompletionController.ts",
+		"browser/controller/inputContracts.ts",
 		"browser/input/textInputController.ts",
 		"browser/input/textInputCommandController.ts",
 		"browser/input/textInputCompletionController.ts",
@@ -364,9 +366,9 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(coreCommands, /editor\.action\.selectAll/u);
 	assert.match(coreCommands, /registerEditorContribution/u);
 	assert.doesNotMatch(runtimeSource, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
-	const input = readFileSync(join(editorRoot, "browser/controller/inputController.ts"), "utf8");
+	const viewController = readFileSync(join(editorRoot, "browser/controller/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
-	assert.doesNotMatch(input, /from\s+["'][^"']*\/contrib\//u);
+	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
 	assert.match(findContribution, /registerEditorContribution/u);

@@ -51,6 +51,6 @@ registerEditorContribution({
 	id: "editor.contrib.fontZoom",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new FontZoomController(context.input.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
+		context.own(new FontZoomController(context.view.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
 	},
 });

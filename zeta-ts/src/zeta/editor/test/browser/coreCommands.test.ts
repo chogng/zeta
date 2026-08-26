@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../browser/view/editorViewport.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 const { LineSelectionController } = await import("../../contrib/lineSelection/browser/lineSelectionController.js");
-const { EditorInputController } = await import("../../browser/controller/inputController.js");
+const { EditorView } = await import("../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -41,7 +41,7 @@ test("core commands select all", () => {
 		selectionController: selections,
 	});
 	viewport.layout({ width: 400, height: 100 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using commands = installCoreTextEditorCommands(input.element, viewport, selections);
 
 	const selectAll = keyboardEvent(dom.window, "a", { metaKey: true });
@@ -59,7 +59,7 @@ test("line selection remains an independent editor extension", () => {
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 400, height: 100 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using commands = new LineSelectionController(input.element, viewport, selections);
 
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });

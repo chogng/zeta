@@ -26,5 +26,5 @@ export class WordWrapController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.wordWrap", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new WordWrapController(context.input.element, context.viewport));
+	context.own(new WordWrapController(context.view.element, context.viewport));
 } });

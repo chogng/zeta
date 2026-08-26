@@ -3,21 +3,20 @@ import { getClientArea, type IDimension } from "../../../../base/browser/geometr
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { EditorViewport, type EditorViewportOptions } from "../../view/editorViewport.js";
+import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
+import { type EditorViewport } from "../../view/editorViewport.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
-import { EditorInputController, type InputControllerOptions } from "../../controller/inputController.js";
 import { InstantiationService, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 
-export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, "container" | "model" | "lineHeight" | "ariaLabel" | "selectionController">;
+export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
 
-export interface CodeEditorWidgetOptions {
+export interface CodeEditorWidgetOptions extends Omit<EditorViewOptions, "container" | "model" | "selectionController" | "lineHeight"> {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
 	readonly selectionController: EditorSelectionController;
 	readonly lineHeight: number;
-	readonly ariaLabel?: string;
 	/** Optional placeholder text consumed by the registered placeholder contribution. */
 	readonly placeholder?: string;
 	/** Contributions to instantiate for this widget; defaults to the registered widget contributions. */
@@ -25,8 +24,6 @@ export interface CodeEditorWidgetOptions {
 	/** Optional service container used to construct contributions. */
 	readonly instantiationService?: IInstantiationService;
 	readonly onContributionError?: (error: unknown) => void;
-	readonly viewport?: CodeEditorWidgetViewportOptions;
-	readonly input?: Omit<InputControllerOptions, "ariaLabel">;
 	readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
 	readonly mouseHandler?: MouseHandlerOptions;
 }
@@ -39,32 +36,39 @@ export interface CodeEditorWidgetOptions {
  * drop/paste behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends DisposableOwner {
+	readonly ownerId: string;
+	readonly view: EditorView;
 	readonly viewport: EditorViewport;
-	readonly input: EditorInputController;
 	readonly contributions: CodeEditorContributions;
 
 	constructor(options: CodeEditorWidgetOptions) {
 		super();
 		try {
 			validateOptions(options);
-			this.viewport = this.own(new EditorViewport({
-				...options.viewport,
+			this.view = this.own(new EditorView({
+				ownerId: options.ownerId,
 				container: options.container,
 				model: options.model,
 				lineHeight: options.lineHeight,
 				ariaLabel: options.ariaLabel,
 				selectionController: options.selectionController,
+				viewport: options.viewport,
+				accessibilityService: options.accessibilityService,
+				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
+				accessibilityPageSize: options.accessibilityPageSize,
+				semanticTokenSource: options.semanticTokenSource,
+				bracketColorizationSource: options.bracketColorizationSource,
+				languageEditing: options.languageEditing,
+				wordPattern: options.wordPattern,
 			}));
-			this.input = this.own(new EditorInputController(this.viewport, options.selectionController, {
-				...options.input,
-				ariaLabel: options.ariaLabel,
-			}));
+			this.ownerId = this.view.ownerId;
+			this.viewport = this.view.viewport;
 			this.contributions = this.own(new CodeEditorContributions());
 			this.contributions.initialize({
 				model: options.model,
 				selectionController: options.selectionController,
 				viewport: this.viewport,
-				input: this.input,
+				view: this.view,
 				placeholder: options.placeholder,
 			}, options.instantiationService ?? new InstantiationService(), options.contributions, options.onContributionError);
 			this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
@@ -84,7 +88,11 @@ export class CodeEditorWidget extends DisposableOwner {
 	}
 
 	focus(): void {
-		this.input.focus();
+		this.view.focus();
+	}
+
+	getId(): string {
+		return this.ownerId;
 	}
 }
 

@@ -153,10 +153,11 @@ export class NativeEditContext extends EditContext {
 		imeTextArea.readOnly = true;
 		imeTextArea.setAttribute("aria-hidden", "true");
 		(element as NativeEditContextElement).editContext = nativeContext;
+		if (options.ownerId !== undefined) this.own(NativeEditContextRegistry.register(options.ownerId, this));
+		this.own(NativeEditContextRegistry.register(element, this));
 		container.append(element);
 		container.append(imeTextArea);
 		this.focusTracker = this.own(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
-		this.own(NativeEditContextRegistry.register(element, this));
 		this.defer(() => {
 			(element as NativeEditContextElement).editContext = undefined;
 			element.remove();

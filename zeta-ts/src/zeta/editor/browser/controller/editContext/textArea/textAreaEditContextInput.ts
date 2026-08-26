@@ -10,7 +10,7 @@ import { type ITextAreaWrapper, TextAreaState } from "./textAreaEditContextState
  * DOM event bridge for the textarea edit-context backend.
  *
  * This class deliberately knows about the textarea only. Model edits are
- * routed by the shared editor input controller, while accessibility content
+ * routed by the owning EditorView, while accessibility content
  * is written by the textarea accessibility controller.
  */
 export class TextAreaInput extends DisposableOwner implements ITextAreaWrapper {

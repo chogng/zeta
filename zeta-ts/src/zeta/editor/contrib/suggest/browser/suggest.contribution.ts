@@ -1,7 +1,17 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
 import { type EditorResourceInput } from "../../../common/editorResource.js";
+import { type LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionSessionController } from "../common/suggestModel.js";
-import { CompletionWidget } from "./suggestWidget.js";
+import { SuggestController } from "./suggestController.js";
+
+interface SuggestContributionState {
+	readonly service: LanguageCompletionService;
+	readonly session: LanguageCompletionSessionController;
+}
+
+const suggestState: EditorCapability<SuggestContributionState> = {
+	id: "editor.suggest.state",
+};
 
 registerEditorContribution({
 	id: "editor.contrib.suggest",
@@ -17,15 +27,20 @@ registerEditorContribution({
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
-		context.setInputCompletion({
-			session,
-			viewFactory: (element, viewport, selections, candidate) => new CompletionWidget(element, viewport, selections, candidate as LanguageCompletionSessionController),
-			requests: {
-				service: completions,
-				languageId: context.languageId,
-				onRequestError: context.onLanguageError,
-			},
-		});
+		context.provideCapability(suggestState, { service: completions, session });
+	},
+	install: context => {
+		if (context.kind !== "text") return;
+		const state = context.getOptionalCapability(suggestState);
+		if (!state) return;
+		context.own(new SuggestController(
+			context.view,
+			context.selections,
+			state.service,
+			state.session,
+			context.languageId,
+			{ onRequestError: context.onLanguageError },
+		));
 	},
 });
 

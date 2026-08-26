@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { LineOperationsController } = await import("../../browser/lineOperationsController.js");
-const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
+const { EditorView } = await import("../../../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -41,7 +41,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 400, height: 100 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using controller = new LineOperationsController(input.element, viewport, selections, {
 		indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
 	});

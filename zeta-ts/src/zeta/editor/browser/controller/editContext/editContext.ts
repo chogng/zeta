@@ -53,6 +53,8 @@ export interface EditContextOptions {
 	readonly ariaLabel?: string;
 	readonly readOnly?: boolean;
 	readonly textDirection?: string;
+	/** Stable editor-view identity used by host integrations. */
+	readonly ownerId?: string;
 	/** Resolves model-relative character geometry for native IME requests. */
 	readonly characterBoundsProvider?: (
 		modelOffset: number,
@@ -67,7 +69,7 @@ export interface EditContextPosition {
 }
 
 /**
- * Browser editing surface used by the semantic input controllers.
+ * Browser editing surface used by the semantic editor-view collaborators.
  *
  * The common editor never talks directly to a textarea or to the browser's
  * EditContext object. Implementations translate their platform-specific DOM

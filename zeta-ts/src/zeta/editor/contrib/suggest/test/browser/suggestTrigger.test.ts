@@ -12,7 +12,7 @@ import { LanguageCompletionItemKind } from "../../../../common/languages/complet
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { CompletionWidget } from "../../browser/suggestWidget.js";
+import { SuggestController } from "../../browser/suggestController.js";
 import { LanguageEditingAdapter } from "../../../bracketMatching/browser/languageEditingAdapter.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -33,9 +33,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
-const completionViewFactory = (element: HTMLElement, viewport: InstanceType<typeof EditorViewport>, selections: EditorSelectionController, session: object) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController);
-
+const { EditorView } = await import("../../../../browser/view.js");
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
@@ -55,7 +53,7 @@ test("Ctrl+Space requests providers through the completion service", async () =>
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
 	assert.equal(requests[0]!.snapshot.getText(), "con");
 	assert.equal(fixture.session.state!.selectedItem.providerId, "typescript");
-	assert.equal(fixture.input.completionWidget!.visible, true);
+	assert.equal(fixture.suggest.widget.visible, true);
 });
 
 test("A registered trigger character requests after the text transaction", async () => {
@@ -176,32 +174,8 @@ test("Completion request wiring rejects a same-model session from another servic
 		selectionController: selections,
 	});
 
-	assert.throws(() => new EditorInputController(viewport, selections, {
-		completion: {
-			session,
-			viewFactory: completionViewFactory,
-			requests: {
-				service: secondService,
-				languageId: "typescript",
-			},
-		},
-	}), /must share one text model and completion result store/);
-	using configurations = new LanguageConfigurationRegistry();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	assert.throws(() => new EditorInputController(viewport, selections, {
-		language: {
-			languageId: "json",
-			configurations,
-		},
-		completion: {
-			session,
-			viewFactory: completionViewFactory,
-			requests: {
-				service: firstService,
-				languageId: "typescript",
-			},
-		},
-	}), /identities must match/);
+	using input = new EditorView(viewport, selections);
+	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -210,7 +184,8 @@ interface TriggerFixture extends Disposable {
 	readonly model: TextModel;
 	readonly service: LanguageCompletionService;
 	readonly session: LanguageCompletionSessionController;
-	readonly input: InstanceType<typeof EditorInputController>;
+	readonly input: InstanceType<typeof EditorView>;
+	readonly suggest: SuggestController;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
@@ -231,21 +206,9 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const input = new EditorInputController(viewport, selections, {
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations),
-		completion: {
-			session,
-			viewFactory: completionViewFactory,
-			requests: {
-				service,
-				languageId: "typescript",
-			},
-		},
-	});
+	const languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
+	const input = new EditorView(viewport, selections, { languageEditing });
+	const suggest = new SuggestController(input, selections, service, session, "typescript");
 	input.focus();
 	return {
 		dom,
@@ -253,8 +216,11 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		service,
 		session,
 		input,
+		suggest,
 		[Symbol.dispose](): void {
+			suggest.dispose();
 			input.dispose();
+			languageEditing.dispose();
 			viewport.dispose();
 			session.dispose();
 			selections.dispose();

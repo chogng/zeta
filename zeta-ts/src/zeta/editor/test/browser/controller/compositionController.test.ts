@@ -40,7 +40,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
-const { EditorInputController } = await import("../../../browser/controller/inputController.js");
+const { EditorView } = await import("../../../browser/view.js");
 
 test("Textarea composition commits one revision and positions the IME input", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -57,7 +57,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 		selectionController: selections,
 	});
 	viewport.layout({ width: 100, height: 20 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	const states: boolean[] = [];
 	using listener = input.compositionController.onDidChange(state => states.push(state));
 
@@ -153,7 +153,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 		selectionController: selections,
 	});
 	viewport.layout({ width: 100, height: 20 });
-	const input = new EditorInputController(viewport, selections);
+	const input = new EditorView(viewport, selections);
 
 	startAndUpdate(dom.window, input.textArea!, "中");
 	const positionedInput = {
@@ -212,7 +212,7 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	input.textArea!.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
 	input.textArea!.dispatchEvent(compositionEvent(dom.window, "compositionend", ""));
@@ -254,7 +254,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 		selectionController: selections,
 	});
 	viewport.layout({ width: 100, height: 40 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	const multiStart = compositionEvent(dom.window, "compositionstart", "");
 	input.textArea!.dispatchEvent(multiStart);

@@ -26,11 +26,11 @@ registerEditorContribution({ id: "editor.contrib.bracketMatching", configure: co
 		const colorizations = context.own(new LanguageBracketColorizationIndex(context.model, lexicalContext));
 		context.setBracketColorizationSource(new BracketColorizationSource(colorizations));
 	}
-		context.setInputLanguageEditing(new LanguageEditingAdapter(context.model, context.selections, context.languageId, context.configurations, lexicalContext, context.options.indentation));
+		context.setLanguageEditing(context.own(new LanguageEditingAdapter(context.model, context.selections, context.languageId, context.configurations, lexicalContext, context.options.indentation)));
 }, install: context => {
 	if (context.kind !== "text") return;
 	const matcher = context.getCapability(TextEditorCapability.bracketMatcher);
 	context.own(new BracketMatchController(context.selections, matcher, context.getCapability(TextEditorCapability.bracketDecorations)));
-	context.own(new BracketNavigationController(context.input.element, context.viewport, context.selections, matcher));
-	context.own(new BracketEditingController(context.input.element, context.viewport, context.selections, matcher));
+	context.own(new BracketNavigationController(context.view.element, context.viewport, context.selections, matcher));
+	context.own(new BracketEditingController(context.view.element, context.viewport, context.selections, matcher));
 } });

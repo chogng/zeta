@@ -38,6 +38,6 @@ registerEditorContribution({
 	id: "editor.contrib.toggleTabFocusMode",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new ToggleTabFocusModeController(context.input.element, context.viewport, context.tabFocus));
+		context.own(new ToggleTabFocusModeController(context.view.element, context.viewport, context.tabFocus));
 	},
 });

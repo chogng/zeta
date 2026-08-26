@@ -117,5 +117,5 @@ export class RenameController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.rename", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
-	context.own(new RenameController(context.input.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.own(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

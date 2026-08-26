@@ -5,7 +5,7 @@ import { type EditorResourceInput } from "../common/editorResource.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorViewport } from "./view/editorViewport.js";
-import { type EditorInputController } from "./controller/inputController.js";
+import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
 import { LanguageFeaturesService } from "../common/services/languageService.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
@@ -17,7 +17,6 @@ import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } f
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
-import { type InputCompletionOptions, type InputLanguageEditingAdapter } from "./controller/inputContracts.js";
 import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from "../../base/browser/scheduler.js";
 import { getWindow } from "../../base/browser/window.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
@@ -32,7 +31,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
-	readonly input: EditorInputController;
+	readonly view: EditorView;
 	private readonly languageId: string;
 	private readonly onLanguageError: (error: unknown) => void;
 	private readonly modelReference: TextModelReference;
@@ -78,8 +77,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
-			let inputCompletion: InputCompletionOptions | undefined;
-			let inputLanguageEditing: InputLanguageEditingAdapter | undefined;
+			let languageEditing: EditorLanguageEditingAdapter | undefined;
 			const selectedContributions = getEditorContributions();
 			for (const contribution of selectedContributions) {
 				contribution.configure?.({
@@ -113,13 +111,9 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 						if (languageLexicalContext) throw new Error("Text editor lexical context is already configured");
 						languageLexicalContext = source;
 					},
-					setInputCompletion: completion => {
-						if (inputCompletion) throw new Error("Text editor completion input is already configured");
-						inputCompletion = completion;
-					},
-					setInputLanguageEditing: adapter => {
-						if (inputLanguageEditing) throw new Error("Text editor language editing is already configured");
-						inputLanguageEditing = adapter;
+					setLanguageEditing: adapter => {
+						if (languageEditing) throw new Error("Text editor language editing is already configured");
+						languageEditing = adapter;
 					},
 					own: value => this.own(value),
 				});
@@ -132,6 +126,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 				model,
 				lineHeight,
 				selectionController: this.selections,
+				ownerId: options.ownerId,
 				ariaLabel,
 				placeholder: options.placeholder,
 				instantiationService: options.instantiationService,
@@ -155,16 +150,13 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 					presentation: options.presentation,
 					indentation: options.indentation,
 				},
-				input: {
-					accessibilityService: options.accessibilityService,
-					renderRichScreenReaderContent: options.renderRichScreenReaderContent,
-					accessibilityPageSize: options.accessibilityPageSize,
-					semanticTokenSource,
-					bracketColorizationSource,
-					languageEditing: inputLanguageEditing,
-					wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
-					completion: inputCompletion,
-				},
+				accessibilityService: options.accessibilityService,
+				renderRichScreenReaderContent: options.renderRichScreenReaderContent,
+				accessibilityPageSize: options.accessibilityPageSize,
+				semanticTokenSource,
+				bracketColorizationSource,
+				languageEditing,
+				wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
 				keyboardNavigation: {
 					wordPattern: () => configurations.getLanguageConfiguration(this.languageId).wordPattern,
 				},
@@ -173,7 +165,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 				},
 			}));
 			this.viewport = this.codeEditor.viewport;
-			this.input = this.codeEditor.input;
+			this.view = this.codeEditor.view;
 			this.own(modelReference.onDidChangeExternalChange(() => {
 				if (modelReference.hasExternalChange) {
 					this.viewport.announceAccessibilityStatus("File changed on disk. Local edits are preserved.");
@@ -186,7 +178,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 				languageId: this.languageId,
 				languageFeaturesService,
 				configurations,
-				input: this.input,
+				view: this.view,
 				viewport: this.viewport,
 				selections: this.selections,
 				tabFocus,

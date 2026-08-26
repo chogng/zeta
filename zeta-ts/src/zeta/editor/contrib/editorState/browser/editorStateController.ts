@@ -19,5 +19,5 @@ export class EditorStateController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.editorState", install: context => {
 	if (context.kind !== "text") return;
 	const state = context.own(new EditorStateModel(context.model, context.selections.selections));
-	context.own(new EditorStateController(context.input.element, context.viewport, context.selections, state));
+	context.own(new EditorStateController(context.view.element, context.viewport, context.selections, state));
 } });

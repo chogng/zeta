@@ -46,7 +46,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorTextDirection, EditorViewport } = await import("../../../browser/view/editorViewport.js");
 const { KeyboardNavigationController } = await import("../../../browser/controller/keyboardNavigationController.js");
-const { EditorInputController } = await import("../../../browser/controller/inputController.js");
+const { EditorView } = await import("../../../browser/view.js");
 
 test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -70,7 +70,7 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
 		selections,
 		{ operatingSystem: OperatingSystem.Windows },
 	);
-	const input = new EditorInputController(viewport, selections);
+	const input = new EditorView(viewport, selections);
 
 	viewport.element.focus();
 	assert.equal(dom.window.document.activeElement, input.textArea!);
@@ -188,7 +188,7 @@ test("Textarea keyboard fallback routes undo and redo without browser history in
 	using model = new TextModel("value");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 5)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "!"));
 	const undo = keyboardEvent(dom.window, "z", { ctrlKey: true });
@@ -210,7 +210,7 @@ test("Textarea routes browser soft-line deletion through Stanza commands", () =>
 	using model = new TextModel("alpha\nbeta");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	const backward = beforeInput(dom.window, "deleteSoftLineBackward");
 	input.textArea!.dispatchEvent(backward);
@@ -230,7 +230,7 @@ test("Textarea accepts an isolated composing dead-key commit without a compositi
 	using model = new TextModel("e");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	const commit = beforeInput(dom.window, "insertText", "́", true);
 	input.textArea!.dispatchEvent(commit);
@@ -254,7 +254,7 @@ test("Textarea mirrors the focused document and primary selection for assistive 
 	using model = new TextModel("alpha\nbeta");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections, { ariaLabel: "Source file" });
+	using input = new EditorView(viewport, selections, { ariaLabel: "Source file" });
 
 	input.focus();
 	assert.equal(input.textArea!.getAttribute("aria-roledescription"), "code editor");
@@ -299,7 +299,7 @@ test("Textarea bounds its accessibility mirror around the primary selection", ()
 	using model = new TextModel("x".repeat(40_000));
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 20_000)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	input.focus();
 	assert.equal(input.textArea!.value.length, 32 * 1_024);
@@ -324,7 +324,7 @@ test("Textarea inherits the viewport direction for macOS accessibility text serv
 		selectionController: selections,
 		textDirection: EditorTextDirection.RightToLeft,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	assert.equal(input.textArea!.dir, "rtl");
 	dom.window.close();
@@ -337,7 +337,7 @@ test("Textarea toggles transient overtype mode for ordinary input", () => {
 	using model = new TextModel("a😊bc");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 
 	const enable = keyboardEvent(dom.window, "Insert");
 	input.textArea!.dispatchEvent(enable);
@@ -373,38 +373,23 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
 	});
 
 	assert.throws(
-		() => new EditorInputController(viewport, selections),
+		() => new EditorView(viewport, selections),
 		/must share one text model/,
 	);
 	using compatibleSelections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
-	assert.throws(() => new EditorInputController(viewport, compatibleSelections, {
-		language: {
-			languageId: "*",
-			configurations: { getLanguageConfiguration: () => { throw new Error("unreachable"); } },
-		},
+	assert.throws(() => new EditorView(viewport, compatibleSelections, {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "*", { getLanguageConfiguration: () => { throw new Error("unreachable"); } }),
 	}), /Language ID/);
-	assert.throws(() => new EditorInputController(viewport, compatibleSelections, {
-		language: {
-			languageId: "typescript",
-			configurations: {} as LanguageConfigurationRegistry,
-		},
+	assert.throws(() => new EditorView(viewport, compatibleSelections, {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "typescript", {} as LanguageConfigurationRegistry),
 	}), /configuration source/);
 	using lexicalModel = new TextModel("");
 	using lexicalConfigurations = new LanguageConfigurationRegistry();
 	using lexicalContext = new LanguageLexicalContextIndex(lexicalModel, "typescript", lexicalConfigurations);
-	assert.throws(() => new EditorInputController(viewport, compatibleSelections, {
-		language: {
-			languageId: "typescript",
-			configurations: { getLanguageConfiguration: () => { throw new Error("unreachable"); } },
-			lexicalContext,
-		},
+	assert.throws(() => new EditorView(viewport, compatibleSelections, {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "typescript", { getLanguageConfiguration: () => { throw new Error("unreachable"); } }, lexicalContext),
 	}), /lexical context/);
-	assert.throws(() => new EditorInputController(viewport, compatibleSelections, {
-		indentation: { tabSize: 0 },
-	}), /tab size/);
+	assert.throws(() => new EditorViewport({ container, model, lineHeight: 20, indentation: { tabSize: 0 } }), /tab size/);
 	model.applyEdits([{
 		range: TextRange.emptyAt(model.positionAt(5)),
 		text: " editor",
@@ -429,12 +414,9 @@ test("Textarea applies current language pair configuration through editor comman
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections, {
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations),
+	using languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
+	using input = new EditorView(viewport, selections, {
+		languageEditing,
 	});
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "("));
@@ -476,7 +458,7 @@ test("Textarea command transformers keep linked input and undo atomic", () => {
 	using model = new TextModel("tag tag");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using linked = input.registerCommandTransformer(command => extendEditorEditCommand(model, command, [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "X" }]));
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "X"));
@@ -502,12 +484,9 @@ test("Textarea does not trust matching pairs that it did not auto-close", () => 
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections, {
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations),
+	using languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
+	using input = new EditorView(viewport, selections, {
+		languageEditing,
 	});
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", ")"));
@@ -537,19 +516,12 @@ test("Textarea applies current on-enter rules with editor-owned indentation", ()
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections, {
-		indentation: {
-			kind: EditorIndentationKind.Spaces,
-			tabSize: 2,
-		},
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations, undefined, {
-			kind: EditorIndentationKind.Spaces,
-			tabSize: 2,
-		}),
+	using languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations, undefined, {
+		kind: EditorIndentationKind.Spaces,
+		tabSize: 2,
+	});
+	using input = new EditorView(viewport, selections, {
+		languageEditing,
 	});
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertLineBreak"));
@@ -592,19 +564,12 @@ test("Textarea Enter ignores structural brackets inside lexical string tokens", 
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections, {
-		indentation: {
-			kind: EditorIndentationKind.Spaces,
-			tabSize: 2,
-		},
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations, undefined, {
-			kind: EditorIndentationKind.Spaces,
-			tabSize: 2,
-		}),
+	using languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations, undefined, {
+		kind: EditorIndentationKind.Spaces,
+		tabSize: 2,
+	});
+	using input = new EditorView(viewport, selections, {
+		languageEditing,
 	});
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertLineBreak"));
@@ -629,12 +594,9 @@ test("Textarea respects auto-closing notIn inside lexical string tokens", () => 
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections, {
-		language: {
-			languageId: "typescript",
-			configurations,
-		},
-		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations),
+	using languageEditing = new LanguageEditingAdapter(model, selections, "typescript", configurations);
+	using input = new EditorView(viewport, selections, {
+		languageEditing,
 	});
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "'"));

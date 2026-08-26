@@ -115,10 +115,10 @@ const { ClipboardController, EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, 
 const { UriListPasteProvider } = await import("../../browser/clipboardPasteProvider.js");
 const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
 const { SemanticTokenPresentation } = await import("../../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js");
-const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
+const { EditorView } = await import("../../../../browser/view.js");
 
 function attachClipboard(
-	input: InstanceType<typeof EditorInputController>,
+	input: InstanceType<typeof EditorView>,
 	viewport: InstanceType<typeof EditorViewport>,
 	selections: EditorSelectionController,
 	options: ClipboardControllerOptions = {},
@@ -148,7 +148,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -228,7 +228,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 20 });
-	const input = new EditorInputController(viewport, selections);
+	const input = new EditorView(viewport, selections);
 	const clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -289,7 +289,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -372,7 +372,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 	});
@@ -419,7 +419,7 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 		emptySelectionPolicy: EditorEmptySelectionClipboardPolicy.Ignore,
@@ -447,7 +447,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
 
 	const copied = new MemoryClipboardData();
@@ -497,7 +497,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 				}]
 				: [],
 	};
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		lineEnding: ClipboardLineEnding.LF,
 		semanticTokens,
@@ -535,7 +535,7 @@ test("Clipboard reads one user-provided text file only while its revision and se
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
 	const file = new DeferredTextFile("snippet.rs");
 	const data = new MemoryClipboardData();
@@ -577,7 +577,7 @@ test("Clipboard runs local URI providers and discards stale asynchronous provide
 	const providedText = new Promise<string>(resolve => {
 		resolveProvidedText = resolve;
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		pasteProviders: [{
 			id: "test.delayed-snippet",
@@ -622,7 +622,7 @@ test("Clipboard uses the system text reader only as a stale-safe empty-transfer 
 		selectionController: selections,
 	});
 	const systemTextReader = new DeferredSystemTextReader();
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, { systemTextReader });
 
 	const fallbackPaste = clipboardEvent(dom.window, "paste", new MemoryClipboardData());
@@ -659,7 +659,7 @@ test("Clipboard safely prefers the rich system reader before its plain-text fall
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	let plainReaderCalls = 0;
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, {
 		richTextReader: { readText: () => Promise.resolve({ html: "<b> two</b><script>ignored()</script>" }) },
 		systemTextReader: { readText: () => { plainReaderCalls += 1; return Promise.resolve(" fallback"); } },
@@ -681,7 +681,7 @@ test("Clipboard falls back to Async rich copy and delays cut until it succeeds",
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const writer = new DeferredRichTextWriter();
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections, { richTextWriter: writer });
 
 	const copy = clipboardEvent(dom.window, "copy", null);
@@ -717,7 +717,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using input = new EditorInputController(viewport, selections);
+	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
 	input.element.dispatchEvent(compositionEvent(dom.window, "compositionstart", ""));
 	assert.equal(input.compositionController.composing, true);

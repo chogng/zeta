@@ -6,10 +6,12 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../../../common/languages/completion/languageCompletions.js";
+import { LanguageCompletionProviderRegistry } from "../../../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { CompletionWidget } from "../../browser/suggestWidget.js";
+import { SuggestController } from "../../browser/suggestController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -29,16 +31,16 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
-const completionViewFactory = (element: HTMLElement, viewport: InstanceType<typeof EditorViewport>, selections: EditorSelectionController, session: object) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController);
+const { EditorView } = await import("../../../../browser/view.js");
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
 	using selections = controllerAt(model, TextPosition.at(0, 3));
-	using store = createLanguageCompletionStore(model);
-	using session = new LanguageCompletionSessionController(store, selections);
+	using registry = new LanguageCompletionProviderRegistry();
+	using service = new LanguageCompletionService(model, registry);
+	using session = new LanguageCompletionSessionController(service.results, selections);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -47,15 +49,14 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	using input = new EditorInputController(viewport, selections, {
-		completion: { session, viewFactory: completionViewFactory },
-	});
+	using input = new EditorView(viewport, selections);
+	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
-	accept(store, model, 1, [
+	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
 		completion("console", "console", LanguageCompletionItemKind.Variable, "global", true),
 	]);
-	const widget = input.completionWidget!;
+	const widget = suggest.widget;
 	const options = [...widget.element.querySelectorAll<HTMLElement>(".stanza-editor-completion-option")];
 
 	assert.equal(widget.visible, true);
@@ -99,7 +100,7 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console");
 	assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 7)), 0);
-	assert.equal(fixture.input.completionWidget!.visible, false);
+	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
 
@@ -121,7 +122,7 @@ test("Typing a declared completion commit character accepts it atomically before
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console.");
 	assert.equal(fixture.selections.selections.primary.active.compareTo(TextPosition.at(0, 8)), 0);
-	assert.equal(fixture.input.completionWidget!.visible, false);
+	assert.equal(fixture.suggest.widget.visible, false);
 	fixture.selections.undo();
 	assert.equal(fixture.model.getText(), "con");
 });
@@ -195,7 +196,7 @@ test("Escape cancels locally while clicking accepts the selected option", () => 
 	const escape = keyboardEvent(fixture.dom.window, "Escape");
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
-	assert.equal(fixture.input.completionWidget!.visible, false);
+	assert.equal(fixture.suggest.widget.visible, false);
 	assert.notEqual(fixture.store.result, undefined);
 
 	accept(fixture.store, fixture.model, 2, [
@@ -203,13 +204,13 @@ test("Escape cancels locally while clicking accepts the selected option", () => 
 		completion("continue", "continue", LanguageCompletionItemKind.Keyword),
 	]);
 	const option = requiredElement<HTMLElement>(
-		fixture.input.completionWidget!.element,
+		fixture.suggest.widget.element,
 		'[data-completion-index="1"]',
 	);
 	option.dispatchEvent(mouseEvent(fixture.dom.window, "mousedown"));
 	option.dispatchEvent(mouseEvent(fixture.dom.window, "click"));
 	assert.equal(fixture.model.getText(), "continue");
-	assert.equal(fixture.input.completionWidget!.visible, false);
+	assert.equal(fixture.suggest.widget.visible, false);
 });
 
 test("Completion widget validates ownership and restores input ARIA on disposal", () => {
@@ -219,10 +220,12 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
 	using otherModel = new TextModel("other");
 	using selections = controllerAt(model, TextPosition.at(0, 3));
 	using otherSelections = controllerAt(otherModel, TextPosition.at(0, 5));
-	using store = createLanguageCompletionStore(model);
-	using otherStore = createLanguageCompletionStore(otherModel);
-	using session = new LanguageCompletionSessionController(store, selections);
-	using otherSession = new LanguageCompletionSessionController(otherStore, otherSelections);
+	using registry = new LanguageCompletionProviderRegistry();
+	using otherRegistry = new LanguageCompletionProviderRegistry();
+	using service = new LanguageCompletionService(model, registry);
+	using otherService = new LanguageCompletionService(otherModel, otherRegistry);
+	using session = new LanguageCompletionSessionController(service.results, selections);
+	using otherSession = new LanguageCompletionSessionController(otherService.results, otherSelections);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -230,19 +233,15 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	assert.throws(() => new EditorInputController(viewport, selections, {
-		completion: { session: otherSession, viewFactory: completionViewFactory },
-	}), /must share one text model/);
-
-	const input = new EditorInputController(viewport, selections, {
-		completion: { session, viewFactory: completionViewFactory },
-	});
+	using input = new EditorView(viewport, selections);
+	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
+	using suggest = new SuggestController(input, selections, service, session, "plaintext");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "none");
-	input.dispose();
+	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), null);
 	assert.equal(input.element.getAttribute("aria-controls"), null);
 
-	accept(store, model, 1, [
+	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword),
 	]);
 	assert.notEqual(session.state, undefined);
@@ -255,11 +254,11 @@ test("Disposing the common session immediately hides a surviving widget", () => 
 	accept(fixture.store, fixture.model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword),
 	]);
-	assert.equal(fixture.input.completionWidget!.visible, true);
+	assert.equal(fixture.suggest.widget.visible, true);
 
 	fixture.session.dispose();
 
-	assert.equal(fixture.input.completionWidget!.visible, false);
+	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "none");
 	const down = keyboardEvent(fixture.dom.window, "ArrowDown");
 	fixture.input.element.dispatchEvent(down);
@@ -287,7 +286,7 @@ test("Completion widget projects resolved details only for the focused option", 
 	await new Promise<void>(resolve => setImmediate(resolve));
 	await new Promise<void>(resolve => setImmediate(resolve));
 	const selected = requiredElement<HTMLElement>(
-		fixture.input.completionWidget!.element,
+		fixture.suggest.widget.element,
 		'[data-completion-index="0"]',
 	);
 
@@ -306,15 +305,17 @@ interface CompletionFixture extends Disposable {
 	readonly store: ReturnType<typeof createLanguageCompletionStore>;
 	readonly session: LanguageCompletionSessionController;
 	readonly viewport: InstanceType<typeof EditorViewport>;
-	readonly input: InstanceType<typeof EditorInputController>;
+	readonly input: InstanceType<typeof EditorView>;
+	readonly suggest: SuggestController;
 }
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const model = new TextModel(text);
 	const selections = controllerAt(model, TextPosition.at(0, text.length));
-	const store = createLanguageCompletionStore(model);
-	const session = new LanguageCompletionSessionController(store, selections, sessionOptions);
+	const registry = new LanguageCompletionProviderRegistry();
+	const service = new LanguageCompletionService(model, registry);
+	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
 	const viewport = new EditorViewport({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
@@ -323,25 +324,27 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const input = new EditorInputController(viewport, selections, {
-		completion: { session, viewFactory: completionViewFactory },
-	});
+	const input = new EditorView(viewport, selections);
+	const suggest = new SuggestController(input, selections, service, session, "plaintext");
 	input.focus();
 	return {
 		dom,
 		model,
 		selections,
-		store,
+		store: service.results,
 		session,
 		viewport,
 		input,
+		suggest,
 		[Symbol.dispose](): void {
+			suggest.dispose();
 			input.dispose();
 			viewport.dispose();
 			session.dispose();
-			store.dispose();
+			service.dispose();
 			selections.dispose();
 			model.dispose();
+			registry.dispose();
 			dom.window.close();
 		},
 	};

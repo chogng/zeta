@@ -5,7 +5,7 @@ import { getWindow } from '../../../../base/browser/window.js';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
-import { type EditorInputController } from '../../controller/inputController.js';
+import { type EditorView } from '../../view.js';
 import { type EditorViewport } from '../../view/editorViewport.js';
 
 /** Controls when a widget contribution joins one CodeEditorWidget's lifetime. */
@@ -22,7 +22,7 @@ export interface CodeEditorContributionContext {
 	readonly model: TextModel;
 	readonly selectionController: EditorSelectionController;
 	readonly viewport: EditorViewport;
-	readonly input: EditorInputController;
+	readonly view: EditorView;
 	readonly placeholder: string | undefined;
 }
 
@@ -90,7 +90,7 @@ export class CodeEditorContributions extends DisposableOwner {
 		this.own(addDisposableListener(context.viewport.element, 'wheel', () => this.onBeforeInteractionEvent(), true));
 		this.own(addDisposableListener(context.viewport.element, 'contextmenu', () => this.onBeforeInteractionEvent(), true));
 		for (const type of ['keydown', 'beforeinput', 'compositionstart', 'paste', 'cut'] as const) {
-			this.own(addDisposableListener(context.input.element, type, () => this.onBeforeInteractionEvent(), true));
+			this.own(addDisposableListener(context.view.element, type, () => this.onBeforeInteractionEvent(), true));
 		}
 
 		const targetWindow = getWindow(context.viewport.element);

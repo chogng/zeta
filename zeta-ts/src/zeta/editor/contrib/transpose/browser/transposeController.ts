@@ -46,7 +46,7 @@ export class TransposeController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.transpose", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new TransposeController(context.input.element, context.viewport, context.selections));
+	context.own(new TransposeController(context.view.element, context.viewport, context.selections));
 } });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {

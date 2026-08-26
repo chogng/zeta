@@ -97,5 +97,5 @@ function isMutationInput(event: InputEvent): boolean {
 
 registerEditorContribution({ id: "editor.contrib.readOnlyMessage", install: context => {
 	if (context.kind !== "text" || !context.options.input.readOnly) return;
-	context.own(new ReadOnlyMessageController(context.input.element, context.viewport));
+	context.own(new ReadOnlyMessageController(context.view.element, context.viewport));
 } });

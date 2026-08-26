@@ -6,7 +6,7 @@ import { type EditorViewportLayout } from "../../../common/viewLayout/editorView
 import { projectStanzaCompositionOverlay } from "./compositionProjection.js";
 import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
 
-/** Owns tracked IME range presentation while the input controller owns composition state. */
+/** Owns tracked IME range presentation while EditorView owns composition state. */
 export class CompositionPart extends EditorOverlayPart {
 	private readonly model: TextModel;
 	private compositionRange: TrackedRange | undefined;

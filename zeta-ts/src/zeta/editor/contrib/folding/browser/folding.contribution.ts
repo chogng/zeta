@@ -59,6 +59,6 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-		context.own(new FoldingController(context.input.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
+		context.own(new FoldingController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
 	},
 });

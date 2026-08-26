@@ -44,7 +44,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	assert.equal(container.querySelector(".stanza-editor-placeholder-text"), null);
 
 	const copy = new dom.window.Event("copy", { bubbles: true, cancelable: true });
-	editor.input.element.dispatchEvent(copy);
+	editor.view.element.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, false);
 
 	editor.dispose();

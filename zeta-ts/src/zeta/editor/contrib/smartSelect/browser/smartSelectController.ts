@@ -76,6 +76,6 @@ registerEditorContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new SmartSelectController(context.input.element, context.viewport, context.selections, context.languageId, context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts), () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+		context.own(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts), () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 	},
 });
