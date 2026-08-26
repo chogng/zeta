@@ -6,11 +6,9 @@ import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProj
 import { getTextGraphemeBoundaries } from "../../common/core/textSegmentation.js";
 import { type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 
-export enum EditorLineWrapping {
-	Off = "off",
-	On = "on",
-}
+export { EditorLineWrapping } from '../../common/config/editorOptions.js';
 
 export interface VisualLineProjectionOptions {
 	readonly wrapping?: EditorLineWrapping;

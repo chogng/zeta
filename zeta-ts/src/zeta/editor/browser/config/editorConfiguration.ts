@@ -19,9 +19,8 @@ const DEFAULT_LINE_HEIGHT = 20;
 /**
  * Resolves browser geometry options once at the composition boundary.
  *
- * This is deliberately smaller than VS Code's historical editor option
- * aggregator. Product callbacks, feature toggles, services, and contribution
- * selection remain owned by `EditorBrowserRuntime` and its contributions.
+ * The option contract lives in the browser adapter because these values are
+ * currently consumed only while assembling the DOM editor surface.
  */
 export function resolveEditorConfiguration(options: EditorConfigurationInput): EditorConfiguration {
 	if (!options || typeof options !== 'object') {

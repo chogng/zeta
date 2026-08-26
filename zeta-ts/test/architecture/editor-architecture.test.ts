@@ -24,6 +24,7 @@ test("Editor production code does not depend on Workbench or generated transport
 
 test("Editor synchronous layers do not import Electron or generated DTOs", () => {
 	const protectedDirectories = [
+		"common/config",
 		"common/core",
 		"common/model",
 		"common/cursor",
@@ -74,6 +75,14 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/editContext/native/screenReaderUtils.ts",
 		"browser/services/rustDiffComputationService.ts",
 		"common/core/position.ts",
+		"common/config/diffEditor.ts",
+		"common/config/diffEditorOptions.ts",
+		"common/config/editorConfiguration.ts",
+		"common/config/editorConfigurationSchema.ts",
+		"common/config/editorOptions.ts",
+		"common/config/editorZoom.ts",
+		"common/config/fontInfo.ts",
+		"common/config/fontInfoFromSettings.ts",
 		"common/model/decorationCollection.ts",
 		"common/model/textModel.ts",
 		"common/cursor/editorSelectionController.ts",
