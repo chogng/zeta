@@ -1,3 +1,5 @@
+//! Toolbar composition for the Sessions sidebar.
+
 use zeta_icons::icons;
 use zeta_ui::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,

@@ -1,3 +1,5 @@
+//! Workbench tab-list projection for Sessions and Settings.
+
 use zeta_icons::icons;
 use zeta_ui::{
     Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,

@@ -1,3 +1,5 @@
+//! Session canvas projection owned by the product workbench.
+
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::TurnStatus;
 use zeta_ui::Border;

@@ -1,3 +1,5 @@
+//! Session canvas projection tests.
+
 use super::SessionCanvasLayout;
 use super::SessionHeader;
 use crate::shell_style::SHELL_PALETTE;

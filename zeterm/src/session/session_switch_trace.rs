@@ -1,3 +1,5 @@
+//! Diagnostics for product session switches and terminal adoption.
+
 use std::fmt::Display;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};

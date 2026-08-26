@@ -1,3 +1,5 @@
+//! Session search matching and input tests.
+
 use super::SessionSearch;
 use zeta_ui::TextInputCommand;
 

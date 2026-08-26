@@ -1,3 +1,5 @@
+//! Workbench tab-list projection tests.
+
 use super::WorkbenchTab;
 use super::WorkbenchTabList;
 use super::tab_input_element_id;

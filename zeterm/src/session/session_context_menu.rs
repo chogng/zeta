@@ -1,3 +1,5 @@
+//! Product actions and overlay state for a Session tab context menu.
+
 use zeta_ui::{
     ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
     ComputedElement, ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle,
@@ -224,7 +226,7 @@ impl Component for SessionContextMenu {
 }
 
 impl NativeApp {
-    pub(super) fn route_session_context_menu_pointer_move(&mut self, point: Point) -> bool {
+    pub(crate) fn route_session_context_menu_pointer_move(&mut self, point: Point) -> bool {
         if !self.session_context_menu.is_open() {
             return false;
         }
@@ -243,7 +245,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn route_session_context_menu_button(
+    pub(crate) fn route_session_context_menu_button(
         &mut self,
         state: ElementState,
         button: MouseButton,
@@ -274,7 +276,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn route_session_context_menu_keyboard(&mut self, event: &KeyEvent) -> bool {
+    pub(crate) fn route_session_context_menu_keyboard(&mut self, event: &KeyEvent) -> bool {
         if !self.session_context_menu.is_open() {
             return false;
         }
@@ -314,7 +316,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn dismiss_session_context_menu(&mut self) -> bool {
+    pub(crate) fn dismiss_session_context_menu(&mut self) -> bool {
         if !self.session_context_menu.is_open() {
             return false;
         }

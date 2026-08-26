@@ -1,6 +1,7 @@
+//! Host-owned search editor and matching policy for the Sessions sidebar.
+
 use zeta_ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
-/// Host-owned search editor and matching policy for the Sessions sidebar.
 #[derive(Default)]
 pub(crate) struct SessionSearch {
     input: TextInput,

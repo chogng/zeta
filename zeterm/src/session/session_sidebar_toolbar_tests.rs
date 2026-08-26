@@ -1,3 +1,5 @@
+//! Sessions sidebar toolbar projection tests.
+
 use super::{SessionSidebarToolbar, TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT};
 use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, SESSION_SIDEBAR_ACTION_BAR};
 use crate::shell_style::SHELL_PALETTE;

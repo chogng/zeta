@@ -1,3 +1,5 @@
+//! Session context-menu interaction tests.
+
 use super::{SessionContextMenu, SessionContextMenuState, update_session_context_menu_pointer};
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, COMPOSER, SESSION_CONTEXT_MENU, SessionContextMenuAction,

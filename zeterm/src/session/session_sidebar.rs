@@ -1,3 +1,5 @@
+//! Product-owned Sessions sidebar state and resize behavior.
+
 use crate::NativeApp;
 use crate::shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE;
 use std::time::Instant;
@@ -153,7 +155,7 @@ impl SessionSidebarState {
 }
 
 impl NativeApp {
-    pub(super) fn route_session_sidebar_resize_move(&mut self, point: Point) -> bool {
+    pub(crate) fn route_session_sidebar_resize_move(&mut self, point: Point) -> bool {
         if !self.session_sidebar.is_resizing() {
             return false;
         }
@@ -166,7 +168,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn route_session_sidebar_resize_button(&mut self, state: ElementState) -> bool {
+    pub(crate) fn route_session_sidebar_resize_button(&mut self, state: ElementState) -> bool {
         let now = Instant::now();
         match state {
             ElementState::Pressed => {
@@ -212,7 +214,7 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn cancel_session_sidebar_resize(&mut self) {
+    pub(crate) fn cancel_session_sidebar_resize(&mut self) {
         if self.session_sidebar.cancel_resizing() {
             self.rebuild_presentation();
             self.update_cursor();

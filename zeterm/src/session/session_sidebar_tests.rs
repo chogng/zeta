@@ -1,3 +1,5 @@
+//! Sessions sidebar sizing and visibility tests.
+
 use std::time::Instant;
 
 use super::{MINIMUM_MAIN_WIDTH, SessionSidebarState};
