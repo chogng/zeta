@@ -1,18 +1,34 @@
+#[path = "components/action_bar/action_bar.rs"]
 mod action_bar;
+#[path = "components/button/button.rs"]
 mod button;
+#[path = "components/context_menu/context_menu.rs"]
 mod context_menu;
+#[path = "components/context_view/context_view.rs"]
 mod context_view;
+#[path = "components/dropdown/dropdown.rs"]
 mod dropdown;
+#[path = "components/icon_label/icon_label.rs"]
 mod icon_label;
+#[path = "components/input_box/input_box.rs"]
 mod input_box;
+#[path = "components/interaction_region/interaction_region.rs"]
 mod interaction_region;
+#[path = "components/keycap/keycap.rs"]
 mod keycap;
+#[path = "components/list_view/list_view.rs"]
 mod list_view;
+#[path = "components/sash/sash.rs"]
 mod sash;
+#[path = "components/scroll_view/scroll_view.rs"]
 mod scroll_view;
+#[path = "components/search_box/search_box.rs"]
 mod search_box;
+#[path = "components/switch/switch.rs"]
 mod switch;
+#[path = "components/tab_list/tab_list.rs"]
 mod tab_list;
+#[path = "components/tree_view/tree_view.rs"]
 mod tree_view;
 
 pub use action_bar::{
