@@ -1,3 +1,5 @@
+//! Remote App Server terminal backend.
+
 use std::num::NonZeroU16;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -14,8 +16,6 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use base64::Engine;
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::AppServerSession;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
@@ -31,6 +31,7 @@ use zeta_remote_connections::SshAppServerConnectionOptions;
 use zeta_terminal::GridSize;
 use zui::app::AppProxy;
 
+use crate::app_server::{AppServerRequestHandle, AppServerSession};
 use crate::native_event::NativeEvent;
 use crate::terminal_session::TerminalSessionEvent;
 use crate::terminal_session::TerminalSessionEventEnvelope;

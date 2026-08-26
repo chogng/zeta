@@ -1,3 +1,5 @@
+//! Terminal session lifecycle contract tests.
+
 use super::{
     BootstrapOutputFilter, SHELL_BOOTSTRAP_MARKER, TerminalSessionEvent,
     TerminalSessionEventEnvelope, TerminalSessionKey, shell_bootstrap,

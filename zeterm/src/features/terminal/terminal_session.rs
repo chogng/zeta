@@ -8,11 +8,11 @@ use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_proc
 use zui::app::AppProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::AppServerHost;
 use crate::native_event::NativeEvent;
-use crate::session_switch_trace;
+use crate::session::session_switch_trace;
 
-#[path = "terminal_session_remote.rs"]
+#[path = "terminal_session/remote.rs"]
 mod remote;
 use remote::RemoteTerminalBackend;
 
@@ -99,7 +99,7 @@ impl TerminalSession {
         key: TerminalSessionKey,
         size: GridSize,
         event_proxy: AppProxy<NativeEvent>,
-        target: AgentSessionTarget,
+        target: AppServerHost,
     ) -> Result<()> {
         session_switch_trace::event(
             None,
@@ -131,22 +131,22 @@ impl TerminalSession {
         key: TerminalSessionKey,
         size: GridSize,
         event_proxy: AppProxy<NativeEvent>,
-        target: AgentSessionTarget,
+        target: AppServerHost,
     ) -> Result<Self> {
         let _trace = session_switch_trace::Span::new(None, "terminal-session-spawn");
-        match target {
-            AgentSessionTarget::Local { .. } => Self::spawn_local(key, size, event_proxy),
-            AgentSessionTarget::Ssh { connection, .. } => Ok(Self {
-                backend: TerminalBackend::Remote(RemoteTerminalBackend::spawn(
-                    key,
-                    size,
-                    event_proxy,
-                    connection,
-                )?),
-                core: TerminalCore::new(size),
+        let Some(connection) = target.remote_connection() else {
+            return Self::spawn_local(key, size, event_proxy);
+        };
+        Ok(Self {
+            backend: TerminalBackend::Remote(RemoteTerminalBackend::spawn(
+                key,
                 size,
-            }),
-        }
+                event_proxy,
+                connection.clone(),
+            )?),
+            core: TerminalCore::new(size),
+            size,
+        })
     }
 
     fn spawn_local(
@@ -403,5 +403,5 @@ fn default_shell() -> String {
 }
 
 #[cfg(test)]
-#[path = "terminal_session_tests.rs"]
+#[path = "terminal_session/tests.rs"]
 mod tests;
