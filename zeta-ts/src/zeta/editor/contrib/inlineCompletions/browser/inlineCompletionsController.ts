@@ -6,7 +6,7 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type InlineCompletionsService, type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends DisposableOwner {

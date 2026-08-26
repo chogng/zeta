@@ -7,7 +7,7 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { TextRange } from "../../../common/core/text.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type CodeActionService, type LanguageCodeAction } from "../common/codeAction.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 

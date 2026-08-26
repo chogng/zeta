@@ -131,7 +131,7 @@ export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: Edi
 	}
 	const fullLine = model.getLineContent(visualLine.logicalLineIndex);
 	const text = fullLine.slice(visualLine.startColumn, visualLine.endColumn);
-	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft;
+	const textOffset = point.left + layout.scrollPosition.left - metrics.textLeft - (visualLine.wrappedTextIndentWidth ?? 0);
 	if (textOffset < 0 || text.length === 0) {
 		return target(EditorHitTargetKind.EmptyContent, visualLine.logicalLineIndex, visualLine.startColumn);
 	}

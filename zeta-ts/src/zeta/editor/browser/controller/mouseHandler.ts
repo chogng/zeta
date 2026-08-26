@@ -6,7 +6,7 @@ import { TextPosition, TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
 import { getWordSelectionRange } from "../../common/cursor/wordBoundary.js";
-import { type EditorViewport } from "../view/editorViewport.js";
+import { type EditorViewport } from "../view.js";
 import { DragScrolling } from "./dragScrolling.js";
 import { PointerHandler } from "./pointerHandler.js";
 import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";

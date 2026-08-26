@@ -24,8 +24,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../browser/view/editorViewport.js");
-const { EditorLineWrapping } = await import("../../browser/viewModel/visualLineProjection.js");
+const { EditorViewport } = await import("../../browser/view.js");
+const { EditorLineWrapping } = await import("../../common/config/editorOptions.js");
 
 test("Viewport projects tokens only for virtualized lines and preserves overlapping rows", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

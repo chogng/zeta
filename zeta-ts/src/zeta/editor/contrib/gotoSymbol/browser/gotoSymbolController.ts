@@ -4,7 +4,7 @@ import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/com
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */
 export class GotoSymbolController extends DisposableOwner {

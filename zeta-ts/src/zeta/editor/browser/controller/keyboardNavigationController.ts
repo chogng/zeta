@@ -4,8 +4,8 @@ import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../base/common/platform.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../view/editorViewport.js";
-import { EditorLineWrapping } from "../viewModel/visualLineProjection.js";
+import { type EditorViewport } from "../view.js";
+import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 
 export interface KeyboardNavigationControllerOptions {

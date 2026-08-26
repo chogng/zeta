@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type TokenizationTextModelPart } from "../common/tokenizationTextModelPart.js";
 
 /** Exposes tokenization readiness to the browser view without owning token production. */

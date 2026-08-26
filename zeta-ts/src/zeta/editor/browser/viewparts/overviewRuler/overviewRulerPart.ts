@@ -1,12 +1,10 @@
 import "./overviewRuler.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type DiagnosticOverviewMarker } from "./diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "./diffOverviewMarkers.js";
 import { MINIMAP_WIDTH } from "../minimap/minimapPresentation.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 const OVERVIEW_RULER_WIDTH = 6;
 
@@ -21,7 +19,7 @@ export interface OverviewRulerPartOptions {
 }
 
 /** Projects diagnostic and diff markers into the editor's overview ruler. */
-export class OverviewRulerPart extends DisposableOwner implements EditorViewPart {
+export class OverviewRulerPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly minimapEnabled: boolean;
@@ -42,7 +40,8 @@ export class OverviewRulerPart extends DisposableOwner implements EditorViewPart
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		const rightOffset = this.minimapEnabled ? MINIMAP_WIDTH + 4 : 0;
 		this.root.setLeft(
 			layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - OVERVIEW_RULER_WIDTH - rightOffset),

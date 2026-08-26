@@ -18,8 +18,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { EditorLineWrapping } = await import("../../../../browser/viewModel/visualLineProjection.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
+const { EditorLineWrapping } = await import("../../../../common/config/editorOptions.js");
 const { WordWrapController } = await import("../../browser/wordWrapController.js");
 
 test("Word-wrap shortcut switches Stanza's visual projection without editing text", () => {

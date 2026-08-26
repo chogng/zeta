@@ -2,7 +2,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { type TabFocus } from "../../../browser/config/tabFocus.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Controls whether Tab is routed to editor text insertion or browser focus traversal. */
 export class ToggleTabFocusModeController extends DisposableOwner {

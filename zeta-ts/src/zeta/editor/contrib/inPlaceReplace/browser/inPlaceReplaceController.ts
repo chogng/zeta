@@ -4,7 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextRange } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Replaces the current selection with the next or previous matching occurrence. */
 export class InPlaceReplaceController extends DisposableOwner {

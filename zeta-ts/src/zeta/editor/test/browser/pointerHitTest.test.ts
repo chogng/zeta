@@ -142,7 +142,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import(
-	"../../browser/view/editorViewport.js"
+	"../../browser/view.js"
 );
 
 test("Viewport maps client coordinates through its bounds and scroll state", () => {

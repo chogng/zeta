@@ -1,7 +1,7 @@
 import "./media/peekView.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** A lifecycle-safe preview surface anchored to an editor position. */

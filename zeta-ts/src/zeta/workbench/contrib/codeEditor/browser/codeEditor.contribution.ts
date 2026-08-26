@@ -7,8 +7,9 @@ import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
 import { CodeEditorPane } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
 import { DiffEditorPane } from "./diffEditorPane.js";
-import { EditorMinimap } from "../../../../editor/browser/view/editorViewport.js";
-import { CodeEditorConfiguration } from "../common/editorConfiguration.js";
+import { EditorMinimap } from "../../../../editor/browser/view.js";
+import { WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
+import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
@@ -34,6 +35,7 @@ registerEditorPane({
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
 			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
+			wrappingIndent: toWrappingIndent(configuration?.getValue(CodeEditorConfiguration.wrappingIndent)),
 			minimap: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) === false ? EditorMinimap.Off : EditorMinimap.On,
 			activeLineHighlight: configuration?.getValue(CodeEditorConfiguration.highlightActiveLine) === false ? "off" : "on",
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers),
@@ -68,6 +70,16 @@ registerEditorPane({
 		});
 	},
 });
+
+function toWrappingIndent(value: WrappingIndentSetting | undefined): WrappingIndent | undefined {
+	switch (value) {
+		case "none": return WrappingIndent.None;
+		case "same": return WrappingIndent.Same;
+		case "indent": return WrappingIndent.Indent;
+		case "deepIndent": return WrappingIndent.DeepIndent;
+		default: return undefined;
+	}
+}
 
 registerEditorPane({
 	id: DIFF_EDITOR_ID,

@@ -1,7 +1,7 @@
 import "./media/zoneWidget.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 export interface ZoneWidgetOptions { readonly anchor: TextPosition; readonly createContent: (document: Document) => HTMLElement; readonly className?: string; }

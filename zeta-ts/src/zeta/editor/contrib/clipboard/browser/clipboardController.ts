@@ -8,7 +8,7 @@ import { type EditorEditCommand } from "../../../common/commands/editorEditComma
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { EditContext } from "../../../browser/controller/editContext/editContext.js";
 import { type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData, createClipboardCopyEvent, createClipboardPasteEvent } from "../../../browser/controller/editContext/clipboardUtils.js";
 import { type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";

@@ -28,10 +28,10 @@ await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
 const { BrowserTextModelService } = await import("../../../../../editor/browser/services/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
-const { EditorTextDirection } = await import("../../../../../editor/browser/view/editorViewport.js");
-const { EditorMinimap } = await import("../../../../../editor/browser/view/editorViewport.js");
+const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
+const { EditorMinimap } = await import("../../../../../editor/browser/view.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
-const { EditorLineWrapping } = await import("../../../../../editor/browser/viewModel/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../../../editor/common/config/editorOptions.js");
 
 test.after(() => browserEnvironment.window.close());
 

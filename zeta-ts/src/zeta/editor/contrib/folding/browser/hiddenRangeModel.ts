@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorLineVisibilitySource } from "../../../common/viewModel/modelLineProjection.js";
+import { type EditorLineVisibilitySource } from "../../../common/viewModel/viewModelLines.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 

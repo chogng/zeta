@@ -7,7 +7,7 @@ import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../../../
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;

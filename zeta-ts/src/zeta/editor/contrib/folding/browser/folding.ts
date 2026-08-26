@@ -6,7 +6,7 @@ import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export enum FoldingCommand {
 	Collapse = "collapse",

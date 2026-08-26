@@ -31,6 +31,27 @@ test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 
 	});
 });
 
+test("visual hit testing treats wrapped continuation indentation as empty content", () => {
+	using model = new TextModel("abcdef");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
+	const layout = {
+		lineHeight: 20,
+		viewportSize: { width: 200, height: 60 },
+		scrollPosition: { left: 0, top: 0 },
+	};
+	const metrics = { gutterWidth: 30, textLeft: 40 };
+	const measurer = new FixedTextMeasurer();
+
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 55, top: 25 }, metrics, measurer), {
+		kind: EditorHitTargetKind.EmptyContent,
+		position: TextPosition.at(0, 2),
+	});
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(model, projection, layout, { left: 66, top: 25 }, metrics, measurer), {
+		kind: EditorHitTargetKind.Text,
+		position: TextPosition.at(0, 3),
+	});
+});
+
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 0;
 	readonly contentLeftPadding = 0;

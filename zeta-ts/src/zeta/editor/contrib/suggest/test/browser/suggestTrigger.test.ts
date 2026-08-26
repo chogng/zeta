@@ -32,7 +32,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { EditorView } = await import("../../../../browser/view.js");
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];

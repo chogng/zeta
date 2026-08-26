@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface ReadOnlyMessageControllerOptions {
 	readonly message?: string;

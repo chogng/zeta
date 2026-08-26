@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { BracketMatchController } = await import("../../browser/bracketMatchController.js");
 
 test("Bracket match controller projects current pairs and clears them for a range selection", () => {

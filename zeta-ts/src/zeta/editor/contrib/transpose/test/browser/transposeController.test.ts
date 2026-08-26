@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { TransposeController } = await import("../../browser/transposeController.js");
 
 test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {

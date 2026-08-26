@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface ContextMenuRequest { readonly position: TextPosition; readonly target: EditorHitTarget | undefined; readonly clientX: number; readonly clientY: number; }
 

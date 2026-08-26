@@ -42,7 +42,7 @@ const { SimpleScreenReaderContent } = await import("../../../../browser/controll
 const { RichScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentRich.js");
 const { createScreenReaderContentState, modelOffsetAtContentOffset } = await import("../../../../browser/controller/editContext/native/screenReaderUtils.js");
 const { ScreenReaderSupport } = await import("../../../../browser/controller/editContext/native/screenReaderSupport.js");
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 
 test.after(() => browserEnvironment.window.close());
 

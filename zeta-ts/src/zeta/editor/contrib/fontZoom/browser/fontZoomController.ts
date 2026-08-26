@@ -2,7 +2,7 @@ import "./media/fontZoom.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface FontZoomControllerOptions { readonly baseFontSize?: number; readonly baseLineHeight?: number; readonly initialScale?: number; }
 

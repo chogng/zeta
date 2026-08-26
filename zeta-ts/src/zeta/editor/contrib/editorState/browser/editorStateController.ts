@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { EditorStateModel } from "../common/editorState.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */
 export class EditorStateController extends DisposableOwner {

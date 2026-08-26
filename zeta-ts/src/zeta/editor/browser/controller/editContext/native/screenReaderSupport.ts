@@ -7,7 +7,7 @@ import { type EditorSelectionController } from "../../../../common/cursor/editor
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
-import { type EditorViewport } from "../../../view/editorViewport.js";
+import { type EditorViewport } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, screenReaderLineOffsetAtModelOffset, type NativeScreenReaderContent } from "./screenReaderUtils.js";

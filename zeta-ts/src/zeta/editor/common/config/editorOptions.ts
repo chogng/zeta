@@ -234,6 +234,13 @@ export enum WrappingIndent {
 	DeepIndent = 3,
 }
 
+export function isWrappingIndent(value: unknown): value is WrappingIndent {
+	return value === WrappingIndent.None
+		|| value === WrappingIndent.Same
+		|| value === WrappingIndent.Indent
+		|| value === WrappingIndent.DeepIndent;
+}
+
 /** Code-action lightbulb presentation modes. */
 export enum ShowLightbulbIconMode {
 	Off = 'off',

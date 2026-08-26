@@ -3,7 +3,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns transient editor-local messages without replacing host notifications. */
 export class MessageController extends DisposableOwner {

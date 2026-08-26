@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { EditorHitTargetKind } from "../../../common/viewModel/pointerHitTest.js";

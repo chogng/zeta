@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 
 export interface BlockCommentControllerOptions {

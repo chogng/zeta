@@ -4,7 +4,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
 import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";
 import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";

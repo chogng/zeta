@@ -50,10 +50,15 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/coreCommands.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
-		"browser/view/editorViewport.ts",
+		"browser/view/viewOverlays.ts",
+		"browser/view/viewLayer.ts",
+		"browser/view/renderingContext.ts",
+		"browser/view/domLineBreaksComputer.ts",
+		"browser/view/dynamicViewOverlay.ts",
+		"browser/view/viewUserInputEvents.ts",
 		"browser/controller/compositionController.ts",
 		"browser/view.ts",
-		"browser/controller/viewController.ts",
+		"browser/view/viewController.ts",
 		"browser/controller/editContext/clipboardUtils.ts",
 		"browser/controller/editContext/editContext.ts",
 		"browser/controller/editContext/factory.ts",
@@ -88,7 +93,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/cursor/editorSelectionController.ts",
 		"common/services/languageService.ts",
 		"contrib/gotoError/browser/gotoError.ts",
-		"browser/viewparts/viewPart.ts",
+		"browser/view/viewPart.ts",
 		"browser/viewparts/viewLines/viewLinesPart.ts",
 		"browser/viewparts/viewLines/renderedLine.ts",
 		"browser/viewparts/margin/marginPart.ts",
@@ -113,9 +118,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/config/elementSizeObserver.ts",
 		"browser/config/tabFocus.ts",
 		"browser/measurement/lineWidthIndex.ts",
-		"browser/viewModel/visualLineProjection.ts",
-		"browser/viewModel/visibleLineProjection.ts",
 		"common/viewModel/textMeasurer.ts",
+		"common/viewModel/viewModelLines.ts",
 		"common/viewModel/rangeGeometry.ts",
 		"common/viewModel/visualRangeGeometry.ts",
 		"common/viewModel/selectionGeometry.ts",
@@ -155,6 +159,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/inputController.ts",
 		"browser/controller/inputCommandController.ts",
 		"browser/controller/inputCompletionController.ts",
+		"browser/controller/viewController.ts",
 		"browser/controller/inputContracts.ts",
 		"browser/input/textInputController.ts",
 		"browser/input/textInputCommandController.ts",
@@ -178,6 +183,9 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"contrib/gotoError/browser/gotoErrorController.ts",
 		"contrib/indentation/browser/indentation.ts",
 		"browser/view/renderedLine.ts",
+		"browser/view/editorViewport.ts",
+		"browser/viewModel/visualLineProjection.ts",
+		"browser/viewModel/visibleLineProjection.ts",
 		"browser/view/decorationLineIndex.ts",
 		"browser/view/indentationGuides.ts",
 		"browser/view/lineGutterDecoration.ts",
@@ -231,7 +239,7 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 	const codeInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditorInput.ts"), "utf8");
 	const documentInput = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorInput.ts"), "utf8");
 	const diffInput = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/diffEditorInput.ts"), "utf8");
-	const viewport = readFileSync(join(editorRoot, "browser/view/editorViewport.ts"), "utf8");
+	const viewport = readFileSync(join(editorRoot, "browser/view.ts"), "utf8");
 	const structuredSurface = [
 		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8"),
 		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.css"), "utf8"),
@@ -364,7 +372,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(coreCommands, /editor\.action\.selectAll/u);
 	assert.match(coreCommands, /registerEditorContribution/u);
 	assert.doesNotMatch(runtimeSource, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
-	const viewController = readFileSync(join(editorRoot, "browser/controller/viewController.ts"), "utf8");
+	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);

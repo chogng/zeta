@@ -1,7 +1,6 @@
 import "./decorations.css";
 import { type Event, Emitter } from "../../../../base/common/event.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type DiagnosticOverviewMarker } from "../overviewRuler/diagnosticOverviewMarkers.js";
 import { createStanzaDiagnosticOverviewMarkers } from "../overviewRuler/diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "../overviewRuler/diffOverviewMarkers.js";
@@ -10,12 +9,13 @@ import { type DecorationSource, type ResolvedDecoration } from "../decorations/d
 import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
 import { projectStanzaDecorationOverlays } from "./decorationProjection.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
-import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
+import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 
 export type DecorationsPartMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 /** Owns decoration snapshots, visible-line lookup, inline DOM projection, and overview aggregation. */
-export class DecorationsPart extends EditorOverlayPart {
+export class DecorationsPart extends DynamicViewOverlay {
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
@@ -47,12 +47,12 @@ export class DecorationsPart extends EditorOverlayPart {
 		return this.markerRevision;
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
-		projectStanzaDecorationOverlays(context, this.resolveVisibleDecorations(context));
+		projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay));
 	}
 
 	public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {

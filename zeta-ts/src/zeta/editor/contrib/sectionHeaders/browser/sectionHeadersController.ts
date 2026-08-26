@@ -1,6 +1,6 @@
 import "./media/sectionHeaders.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 
 /** Marks logical lines that introduce a foldable section for browser presentation and accessibility. */

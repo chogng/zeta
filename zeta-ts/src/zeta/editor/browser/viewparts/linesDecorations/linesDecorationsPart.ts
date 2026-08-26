@@ -1,11 +1,11 @@
 import "./linesDecorations.css";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { DecorationsPart } from "../decorations/decorationsPart.js";
-import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
+import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { projectStanzaLinesDecorations } from "./linesDecorationsProjection.js";
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
-export class LinesDecorationsPart extends EditorOverlayPart {
+export class LinesDecorationsPart extends DynamicViewOverlay {
 	private readonly decorations: DecorationsPart;
 
 	constructor(context: EditorViewContext, decorations: DecorationsPart) {
@@ -13,11 +13,11 @@ export class LinesDecorationsPart extends EditorOverlayPart {
 		this.decorations = decorations;
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
-		projectStanzaLinesDecorations(context, this.decorations.visibleDecorations(context));
+		projectStanzaLinesDecorations(overlay, this.decorations.visibleDecorations(overlay));
 	}
 }

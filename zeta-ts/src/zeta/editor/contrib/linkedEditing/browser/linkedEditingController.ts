@@ -1,7 +1,7 @@
 import "./media/linkedEditing.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { type EditorView } from "../../../browser/view.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";

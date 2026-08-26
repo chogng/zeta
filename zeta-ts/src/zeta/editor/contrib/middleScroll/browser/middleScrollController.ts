@@ -2,7 +2,7 @@ import "./media/middleScroll.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Implements editor-local middle-button panning without entering pointer selection mode. */
 export class MiddleScrollController extends DisposableOwner {

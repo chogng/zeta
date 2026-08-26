@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../../../browser/controller/viewController.js";
+import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../../../browser/view/viewController.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";

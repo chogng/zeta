@@ -4,7 +4,7 @@ import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type HoverService, type LanguageHover } from "../common/hover.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
 export class HoverController extends DisposableOwner {

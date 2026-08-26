@@ -4,7 +4,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type LinkService, type LanguageLink } from "../common/links.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Resolves provider links on demand and delegates opening to the host callback. */
 export class LinksController extends DisposableOwner {

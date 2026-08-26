@@ -1,9 +1,7 @@
 import "./lineNumbers.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export interface LineNumbersPartOptions {
 	readonly showLineNumbers: boolean;
@@ -12,7 +10,7 @@ export interface LineNumbersPartOptions {
 }
 
 /** Projects line numbers into virtual rows; MarginPart owns feature-gutter slots. */
-export class LineNumbersPart extends DisposableOwner implements EditorViewPart {
+export class LineNumbersPart extends EditorViewPart {
 	private readonly showLineNumbers: boolean;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
@@ -24,7 +22,7 @@ export class LineNumbersPart extends DisposableOwner implements EditorViewPart {
 		this.readRenderedLines = options.readRenderedLines;
 	}
 
-	render(_layout: EditorViewportLayout): void {
+	render(_context: EditorRenderingContext): void {
 		const visualProjection = this.readVisualProjection();
 		for (const [visualLineIndex, line] of this.readRenderedLines()) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);

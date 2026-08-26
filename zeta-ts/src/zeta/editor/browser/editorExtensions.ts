@@ -11,10 +11,10 @@ import { type DocumentCollaborationRoomRole } from "../common/services/documentC
 import { type DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import { type EditorBrowserOptions } from "./editorBrowser.js";
 import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
-import { type EditorViewport } from "./view/editorViewport.js";
+import { type EditorViewport } from "./view.js";
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
-import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
+import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type TabFocus } from "./config/tabFocus.js";

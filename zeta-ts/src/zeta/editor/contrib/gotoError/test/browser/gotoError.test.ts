@@ -13,7 +13,7 @@ import { h } from "../../../../../base/browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({ window: environment.window, document: environment.window.document, Node: environment.window.Node, Element: environment.window.Element, HTMLElement: environment.window.HTMLElement, Event: environment.window.Event, KeyboardEvent: environment.window.KeyboardEvent })) Object.defineProperty(globalThis, name, { configurable: true, value });
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {

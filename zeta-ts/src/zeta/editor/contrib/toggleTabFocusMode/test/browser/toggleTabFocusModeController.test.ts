@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { ToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
 const { TabFocus } = await import("../../../../browser/config/tabFocus.js");
 

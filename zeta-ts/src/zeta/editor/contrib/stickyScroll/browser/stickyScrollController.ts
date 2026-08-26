@@ -1,7 +1,7 @@
 import "./media/stickyScroll.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
 import { h } from "../../../../base/browser/dom.js";

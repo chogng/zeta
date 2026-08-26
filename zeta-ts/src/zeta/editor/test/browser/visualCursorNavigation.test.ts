@@ -59,6 +59,25 @@ test("Visual cursor navigation preserves measured horizontal intent across wrapp
 	);
 });
 
+test("Visual cursor navigation removes continuation indentation before resolving a target column", () => {
+	using model = new TextModel("abcdef");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
+	const result = navigateStanzaVisualCursors(
+		model,
+		projection,
+		TextSelectionSet.single(caret(0, 1)),
+		{
+			command: EditorCursorNavigationCommand.LineDown,
+			mode: EditorCursorNavigationMode.Move,
+			pageLineCount: 1,
+		},
+		text => [...text].length * 10,
+	);
+
+	assert.deepEqual(result.selections.primary, caret(0, 2));
+	assert.deepEqual(result.preferredHorizontalOffsets, [10]);
+});
+
 test("Visual cursor navigation uses browser geometry when bidirectional layout provides it", () => {
 	using model = new TextModel("abc אבג");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3, 7]]);

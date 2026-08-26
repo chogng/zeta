@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { BracketEditingController } = await import("../../browser/bracketEditingController.js");
 
 test("Remove-brackets shortcut mutates through an isolated Stanza transaction", () => {

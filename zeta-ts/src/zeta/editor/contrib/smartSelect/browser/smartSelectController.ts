@@ -6,7 +6,7 @@ import { type RustSyntaxFactsService } from "../../../browser/services/rustSynta
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { expandSmartSelection } from "../common/smartSelect.js";
 

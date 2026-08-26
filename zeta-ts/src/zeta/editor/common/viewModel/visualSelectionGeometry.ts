@@ -40,7 +40,7 @@ export function createStanzaVisualSelectionGeometry(model: TextModel, selectionS
 		carets.push(Object.freeze({
 			selectionIndex,
 			visualLineIndex,
-			left: textLeft + measurer.measureLineWidth(text.slice(visualLine.startColumn, selection.active.columnIndex)),
+			left: textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measurer.measureLineWidth(text.slice(visualLine.startColumn, selection.active.columnIndex)),
 			primary: selectionIndex === selectionSet.primaryIndex,
 		}));
 	}

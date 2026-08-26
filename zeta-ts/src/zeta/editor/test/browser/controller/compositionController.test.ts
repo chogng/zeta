@@ -39,7 +39,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../browser/view.js");
 const { EditorView } = await import("../../../browser/view.js");
 
 test("Textarea composition commits one revision and positions the IME input", () => {

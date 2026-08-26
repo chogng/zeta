@@ -36,7 +36,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../browser/view.js");
 const { MouseHandler } = await import("../../../browser/controller/mouseHandler.js");
 
 test("Alt pointer gestures add, toggle, drag, and track multiple selections", () => {

@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { FoldingCommand, FoldingController, resolveStanzaFoldingCommand } = await import("../../browser/folding.js");
 
 test.after(() => browserEnvironment.window.close());

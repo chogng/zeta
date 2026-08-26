@@ -33,7 +33,7 @@ export function createStanzaVisualRangeRectangles<T>(model: TextModel, entries: 
 			rectangles.push(Object.freeze({
 				value: entry.value,
 				visualLineIndex,
-				left: textLeft + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, entry.range.start.columnIndex)),
+				left: textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, entry.range.start.columnIndex)),
 				width: Math.max(1, newlineWidth),
 			}));
 			continue;
@@ -53,8 +53,9 @@ export function createStanzaVisualRangeRectangles<T>(model: TextModel, entries: 
 				: visualLine.endColumn;
 			if (endColumn < startColumn) continue;
 			if (endsOnLogicalLine && endColumn === 0 && !startsOnLogicalLine) continue;
-			const left = textLeft + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, startColumn));
-			let right = textLeft + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, endColumn));
+			const indent = visualLine.wrappedTextIndentWidth ?? 0;
+			const left = textLeft + indent + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, startColumn));
+			let right = textLeft + indent + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, endColumn));
 			if (!endsOnLogicalLine && visualLine.lastForLogicalLine) right += newlineWidth;
 			if (right <= left) continue;
 			rectangles.push(Object.freeze({

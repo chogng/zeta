@@ -36,7 +36,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import(
-	"../../../browser/view/editorViewport.js"
+	"../../../browser/view.js"
 );
 const { MouseHandler } = await import(
 	"../../../browser/controller/mouseHandler.js"

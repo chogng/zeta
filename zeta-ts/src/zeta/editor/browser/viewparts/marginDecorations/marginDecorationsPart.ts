@@ -1,11 +1,11 @@
 import "./marginDecorations.css";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { DecorationsPart } from "../decorations/decorationsPart.js";
-import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
+import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { projectStanzaDiagnosticMarginDecorations } from "./marginDecorationsProjection.js";
 
 /** Projects line-level diagnostics into the editor margin. */
-export class MarginDecorationsPart extends EditorOverlayPart {
+export class MarginDecorationsPart extends DynamicViewOverlay {
 	private readonly decorations: DecorationsPart;
 
 	constructor(context: EditorViewContext, decorations: DecorationsPart) {
@@ -13,11 +13,11 @@ export class MarginDecorationsPart extends EditorOverlayPart {
 		this.decorations = decorations;
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
-		projectStanzaDiagnosticMarginDecorations(context, this.decorations.visibleDecorations(context));
+		projectStanzaDiagnosticMarginDecorations(overlay, this.decorations.visibleDecorations(overlay));
 	}
 }

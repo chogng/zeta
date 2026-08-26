@@ -5,7 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../../common/editorIndentation.js";
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "./linesOperations.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "./lineIndentCommands.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface LineOperationsControllerOptions {
 	readonly operatingSystem?: OperatingSystem;

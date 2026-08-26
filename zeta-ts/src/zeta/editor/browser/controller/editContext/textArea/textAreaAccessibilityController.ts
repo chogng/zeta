@@ -2,7 +2,7 @@ import { DisposableOwner } from '../../../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextRange } from '../../../../common/core/text.js';
-import { type EditorViewport } from '../../../../browser/view/editorViewport.js';
+import { type EditorViewport } from '../../../../browser/view.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type CompositionController } from '../../compositionController.js';
 import { modelOffsetAtContentOffset, SimplePagedScreenReaderStrategy, type ISimpleScreenReaderContentState } from '../screenReaderUtils.js';

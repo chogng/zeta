@@ -40,7 +40,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../browser/view.js");
 const { EditorView } = await import("../../../browser/view.js");
 const { TextAreaEditContext } = await import("../../../browser/controller/editContext/textArea/textAreaEditContext.js");
 const { NativeEditContext } = await import("../../../browser/controller/editContext/native/nativeEditContext.js");

@@ -1,12 +1,10 @@
 import "./scrollDecoration.css";
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 /** Projects scroll shadows without owning the editor's scroll state. */
-export class ScrollDecorationPart extends DisposableOwner implements EditorViewPart {
+export class ScrollDecorationPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly topShadow: FastDomNode<HTMLDivElement>;
@@ -26,7 +24,8 @@ export class ScrollDecorationPart extends DisposableOwner implements EditorViewP
 		this.domNode.append(this.topShadow.domNode, this.bottomShadow.domNode);
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		this.root.setWidth(layout.viewportSize.width);
 		this.root.setHeight(layout.viewportSize.height);
 		this.root.setTransform(`translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`);

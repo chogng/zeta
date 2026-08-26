@@ -5,7 +5,7 @@ import { type EditorCompositionSession } from "../../common/cursor/editorComposi
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type TextSelectionOffsets } from "../../common/commands/editorEditCommand.js";
 import { normalizeTextLineEndings, type TextPosition } from "../../common/core/text.js";
-import { type EditorViewport } from "../view/editorViewport.js";
+import { type EditorViewport } from "../view.js";
 import { type EditContext, type EditContextCompositionEvent } from "./editContext/editContext.js";
 
 interface ActiveComposition {

@@ -1,6 +1,6 @@
 import "./media/floatingMenu.css";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { h } from "../../../../base/browser/dom.js";
 

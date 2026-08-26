@@ -44,7 +44,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorTextDirection, EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { EditorTextDirection, EditorViewport } = await import("../../../browser/view.js");
 const { KeyboardNavigationController } = await import("../../../browser/controller/keyboardNavigationController.js");
 const { EditorView } = await import("../../../browser/view.js");
 

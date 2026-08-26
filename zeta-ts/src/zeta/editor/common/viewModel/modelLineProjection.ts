@@ -1,14 +1,7 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
-import { type Event } from "../../../base/common/event.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
-
-/** Supplies logical-line visibility to a visual projection without naming a feature. */
-export interface EditorLineVisibilitySource {
-	readonly onDidChange: Event<void>;
-	isLineVisible(lineIndex: number): boolean;
-}
 
 /** One fixed-height visual row projected from a logical TextModel line. */
 export interface EditorVisualLine {
@@ -18,6 +11,8 @@ export interface EditorVisualLine {
 	readonly endColumn: number;
 	readonly firstForLogicalLine: boolean;
 	readonly lastForLogicalLine: boolean;
+	/** Pixel width reserved before text on a wrapped continuation row. */
+	readonly wrappedTextIndentWidth?: number;
 }
 
 /** Immutable source-to-visual-line mapping for one exact TextModel version. */
@@ -39,9 +34,12 @@ export class EditorVisualLineProjection {
 	}
 
 	/** Builds a projection from one final visual segment end-column list per logical line. */
-	static fromBreakColumns(model: TextModel, breakColumnsByLine: readonly (readonly number[])[]): EditorVisualLineProjection {
+	static fromBreakColumns(model: TextModel, breakColumnsByLine: readonly (readonly number[])[], wrappedTextIndentWidthsByLine?: readonly number[]): EditorVisualLineProjection {
 		if (!Array.isArray(breakColumnsByLine) || breakColumnsByLine.length !== model.lineCount) {
 			throw new RangeError("Visual line break columns must contain one entry for every logical line");
+		}
+		if (wrappedTextIndentWidthsByLine !== undefined && (!Array.isArray(wrappedTextIndentWidthsByLine) || wrappedTextIndentWidthsByLine.length !== model.lineCount)) {
+			throw new RangeError("Visual line wrapped-text indent widths must contain one entry for every logical line");
 		}
 		const lines: EditorVisualLine[] = [];
 		const visualLineStarts: number[] = [];
@@ -50,6 +48,10 @@ export class EditorVisualLineProjection {
 			const breaks = breakColumnsByLine[logicalLineIndex];
 			if (!breaks) throw new RangeError("Visual line break columns must not contain holes");
 			validateBreakColumns(text, breaks);
+			const wrappedTextIndentWidth = wrappedTextIndentWidthsByLine?.[logicalLineIndex] === undefined
+				? 0
+				: wrappedTextIndentWidthsByLine[logicalLineIndex]!;
+			validateWrappedTextIndentWidth(wrappedTextIndentWidth);
 			visualLineStarts.push(lines.length);
 			let startColumn = 0;
 			for (let index = 0; index < breaks.length; index += 1) {
@@ -61,6 +63,7 @@ export class EditorVisualLineProjection {
 					endColumn,
 					firstForLogicalLine: index === 0,
 					lastForLogicalLine: index + 1 === breaks.length,
+					...(index > 0 && wrappedTextIndentWidth > 0 ? { wrappedTextIndentWidth } : {}),
 				}));
 				startColumn = endColumn;
 			}
@@ -96,6 +99,10 @@ export class EditorVisualLineProjection {
 			if (!Number.isSafeInteger(line.startColumn) || !Number.isSafeInteger(line.endColumn) || line.startColumn < 0 || line.endColumn < line.startColumn) {
 				throw new RangeError("Visible visual line columns must be ordered non-negative safe integers");
 			}
+			const wrappedTextIndentWidth = line.wrappedTextIndentWidth === undefined
+				? 0
+				: line.wrappedTextIndentWidth;
+			validateWrappedTextIndentWidth(wrappedTextIndentWidth);
 			if (starts[line.logicalLineIndex] === -1) starts[line.logicalLineIndex] = visualLineIndex;
 			visibility[line.logicalLineIndex] = true;
 			return Object.freeze({
@@ -105,6 +112,7 @@ export class EditorVisualLineProjection {
 				endColumn: line.endColumn,
 				firstForLogicalLine: line.firstForLogicalLine,
 				lastForLogicalLine: line.lastForLogicalLine,
+				...(wrappedTextIndentWidth > 0 ? { wrappedTextIndentWidth } : {}),
 			});
 		});
 		for (let logicalLineIndex = 0; logicalLineIndex < logicalLineCount; logicalLineIndex += 1) {
@@ -217,5 +225,11 @@ function validateBreakColumns(text: string, breakColumns: readonly number[]): vo
 function validateLogicalLineIndex(lineIndex: number, lineCount: number): void {
 	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= lineCount) {
 		throw new RangeError("Logical line index is outside the visual projection");
+	}
+}
+
+function validateWrappedTextIndentWidth(width: number): void {
+	if (!Number.isFinite(width) || width < 0) {
+		throw new RangeError("Visual line wrapped-text indent width must be finite and non-negative");
 	}
 }

@@ -5,7 +5,7 @@ import { createPasteTextCommand } from "../../../common/cursor/cursorTypeOperati
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { readEditorHtmlText } from "../../clipboard/browser/clipboardController.js";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "./textFileTransfer.js";
 

@@ -15,8 +15,8 @@ import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { EditorBrowser, isEditorTextViewState, type EditorBrowserOptions, type EditorTextViewState } from "../../../../editor/browser/editorBrowser.js";
 import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/textModelService.js";
-import { type EditorTextDirection } from "../../../../editor/browser/view/editorViewport.js";
-import { type EditorLineWrapping } from "../../../../editor/browser/viewModel/visualLineProjection.js";
+import { type EditorTextDirection } from "../../../../editor/browser/view.js";
+import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import { type TextRange } from "../../../../editor/common/core/text.js";
@@ -67,6 +67,7 @@ export interface EditorPaneOptions {
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
+	readonly wrappingIndent?: WrappingIndent;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
@@ -170,6 +171,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 				instantiationService: this.options.instantiationService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
+				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily,
 				fontSize: this.options.fontSize,
 				lineHeight: this.options.lineHeight,

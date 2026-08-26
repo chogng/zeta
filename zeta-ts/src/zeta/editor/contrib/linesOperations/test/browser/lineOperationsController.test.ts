@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { LineOperationsController, resolveStanzaDuplicateLineDirection } = await import("../../browser/lineOperationsController.js");
 
 test("Line operation shortcuts duplicate and delete through Stanza commands", () => {

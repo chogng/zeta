@@ -5,7 +5,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type ColorService, type LanguageColorInformation } from "../common/color.js";
 
 /** Presents provider colors through a native color input and applies the selected text presentation. */

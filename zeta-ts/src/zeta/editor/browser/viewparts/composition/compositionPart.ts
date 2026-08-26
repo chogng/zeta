@@ -2,12 +2,12 @@ import "./composition.css";
 import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { projectStanzaCompositionOverlay } from "./compositionProjection.js";
-import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
+import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 
 /** Owns tracked IME range presentation while EditorView owns composition state. */
-export class CompositionPart extends EditorOverlayPart {
+export class CompositionPart extends DynamicViewOverlay {
 	private readonly model: TextModel;
 	private compositionRange: TrackedRange | undefined;
 
@@ -23,14 +23,14 @@ export class CompositionPart extends EditorOverlayPart {
 			: undefined;
 		this.compositionRange?.dispose();
 		this.compositionRange = next;
-		this.render(this.context.layout);
+		this.renderNow(this.context.renderingContext);
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
-		projectStanzaCompositionOverlay(context, this.compositionRange?.range);
+		projectStanzaCompositionOverlay(overlay, this.compositionRange?.range);
 	}
 }

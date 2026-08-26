@@ -8,6 +8,7 @@ import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRang
 import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
+import { WrappingIndent } from "../../common/config/editorOptions.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -26,16 +27,16 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import(
-	"../../browser/view/editorViewport.js"
+	"../../browser/view.js"
 );
 const { EditorMinimap } = await import(
-	"../../browser/view/editorViewport.js"
+	"../../browser/view.js"
 );
 const { EditorTextDirection } = await import(
-	"../../browser/view/editorViewport.js"
+	"../../browser/view.js"
 );
 const { EditorLineWrapping } = await import(
-	"../../browser/viewModel/visualLineProjection.js"
+	"../../common/config/editorOptions.js"
 );
 
 test("EditorViewport projects the initial virtual line window", () => {
@@ -473,6 +474,28 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 		lineElements(viewport.element).map(line => lineText(line).textContent),
 		["abcd", "ef", "gh"],
 	);
+
+	dom.window.close();
+});
+
+test("Soft wrapping applies the configured indent to continuation DOM rows", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel("  abcdefgh");
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(10, 24),
+		lineWrapping: EditorLineWrapping.On,
+		wrappingIndent: WrappingIndent.Same,
+	});
+
+	viewport.layout({ width: 96, height: 60 });
+
+	const rendered = lineElements(viewport.element);
+	assert.equal(rendered[0]?.querySelector<HTMLSpanElement>(".stanza-editor-line-text")?.style.marginInlineStart, "0px");
+	assert.equal(rendered[1]?.querySelector<HTMLSpanElement>(".stanza-editor-line-text")?.style.marginInlineStart, "20px");
 
 	dom.window.close();
 });

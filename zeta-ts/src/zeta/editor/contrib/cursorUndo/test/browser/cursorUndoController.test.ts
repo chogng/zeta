@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { CursorUndoController, isCursorUndoChord } = await import("../../browser/cursorUndoController.js");
 
 test.after(() => browserEnvironment.window.close());

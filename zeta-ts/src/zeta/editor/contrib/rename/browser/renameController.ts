@@ -5,7 +5,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { type RenameService } from "../common/rename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 

@@ -2,7 +2,7 @@ import "./stanzaChatInputEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import { EditorLineWrapping } from "../../../../../editor/browser/viewModel/visualLineProjection.js";
+import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { EditorSelectionController } from "../../../../../editor/common/cursor/editorSelectionController.js";
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";

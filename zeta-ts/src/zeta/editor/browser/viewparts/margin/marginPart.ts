@@ -1,13 +1,11 @@
 import "./margin.css";
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../config/fontMeasurements.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
 
 const GUTTER_HORIZONTAL_PADDING = 16;
@@ -27,7 +25,7 @@ export interface MarginPartOptions {
 }
 
 /** Owns the editor margin geometry, background, and feature-gutter projection. */
-export class MarginPart extends DisposableOwner implements EditorViewPart {
+export class MarginPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly host: HTMLElement;
@@ -83,7 +81,8 @@ export class MarginPart extends DisposableOwner implements EditorViewPart {
 		return this.gutterWidth + this.textMeasurer.contentLeftPadding;
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		const gutterWidth = this.gutterWidth;
 		const featureGutterWidth = this.featureGutterWidth;
 		const additionalFeatureGutterWidth = this.additionalFeatureGutterWidth;

@@ -4,7 +4,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
 export class ParameterHintsController extends DisposableOwner {

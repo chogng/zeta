@@ -3,7 +3,7 @@ import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { observableFromEvent } from "../../../../base/common/observable.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { CodeEditorContributionInstantiation, registerCodeEditorContribution, type CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { TextPosition } from "../../../common/core/text.js";
 

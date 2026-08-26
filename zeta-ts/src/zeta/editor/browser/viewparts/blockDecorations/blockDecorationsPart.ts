@@ -1,12 +1,12 @@
 import './blockDecorations.css';
 import { h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { type EditorViewportLayout } from '../../../common/viewLayout/editorViewportModel.js';
 import { DecorationsPart } from '../decorations/decorationsPart.js';
-import { EditorOverlayPart, EditorViewContext } from '../viewPart.js';
+import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
+import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
 import { resolveStanzaBlockDecorationGeometry } from './blockDecorationsProjection.js';
 
-export class BlockDecorationsPart extends EditorOverlayPart {
+export class BlockDecorationsPart extends DynamicViewOverlay {
 	public readonly domNode: HTMLDivElement;
 
 	private readonly root: FastDomNode<HTMLDivElement>;
@@ -24,24 +24,25 @@ export class BlockDecorationsPart extends EditorOverlayPart {
 		this.domNode.setAttribute('aria-hidden', 'true');
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
+		const layout = context.layout;
 
 		this.root.setWidth(layout.contentSize.width);
 		this.root.setHeight(layout.contentSize.height);
 
 		let count = 0;
-		const decorations = this.decorations.visibleDecorations(context);
+		const decorations = this.decorations.visibleDecorations(overlay);
 		for (const decoration of decorations) {
 			const presentation = decoration.blockDecoration;
 			if (!presentation) {
 				continue;
 			}
 
-			const geometry = resolveStanzaBlockDecorationGeometry(context, layout, decoration);
+			const geometry = resolveStanzaBlockDecorationGeometry(overlay, layout, decoration);
 			if (!geometry) {
 				continue;
 			}

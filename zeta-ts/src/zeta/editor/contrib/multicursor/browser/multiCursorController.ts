@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../../common/cursor/cursorInsertion.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 export interface MultiCursorControllerOptions {
 	readonly operatingSystem?: OperatingSystem;

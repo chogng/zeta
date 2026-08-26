@@ -4,7 +4,7 @@ import { DisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
-import { type EditorViewport } from "./view/editorViewport.js";
+import { type EditorViewport } from "./view.js";
 import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
 import { LanguageFeaturesService } from "../common/services/languageService.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
@@ -15,7 +15,7 @@ import { getEditorContributions, type EditorCapability, EditorContributionInstan
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
-import { type EditorLineVisibilitySource } from "../common/viewModel/modelLineProjection.js";
+import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from "../../base/browser/scheduler.js";
 import { getWindow } from "../../base/browser/window.js";
@@ -138,6 +138,7 @@ export class EditorBrowserRuntime extends DisposableOwner implements IEditorBrow
 					semanticTokenSource,
 					bracketColorizationSource,
 					lineWrapping: options.lineWrapping,
+					wrappingIndent: options.wrappingIndent,
 					fontFamily: configuration.fontFamily,
 					fontSize: configuration.fontSize,
 					fontLigatures: configuration.fontLigatures,

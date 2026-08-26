@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createRemoveMatchingBracketsCommand } from "../common/bracketEditing.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the VS Code remove-brackets chord through Stanza's lexical bracket matcher. */
 export class BracketEditingController extends DisposableOwner {

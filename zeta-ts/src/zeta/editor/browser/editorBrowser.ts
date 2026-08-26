@@ -15,8 +15,8 @@ import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type EditorView } from "./view.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
-import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
-import { type EditorLineWrapping } from "./viewModel/visualLineProjection.js";
+import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view.js";
+import { type EditorLineWrapping, type WrappingIndent } from "../common/config/editorOptions.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
@@ -109,6 +109,7 @@ export interface EditorBrowserOptions {
 	readonly onRevert?: () => Promise<void>;
 	readonly indentation?: EditorIndentationOptions;
 	readonly lineWrapping?: EditorLineWrapping;
+	readonly wrappingIndent?: WrappingIndent;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
 	readonly lineHeight?: number;

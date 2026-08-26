@@ -1,14 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { toDisposable } from "../../../base/common/lifecycle.js";
-import { EditorLineWrapping, VisualLineProjection } from "../../browser/viewModel/visualLineProjection.js";
+import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
+import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
+import { DOMLineBreaksComputer } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");
-	using projection = new VisualLineProjection(model, new FixedTextMeasurer(), {
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 	});
@@ -38,18 +40,49 @@ test("browser visual-line projection wraps at grapheme boundaries and rebuilds a
 	assert.equal(projection.projection.visualLineCount, 2);
 });
 
+test("browser visual-line projection applies wrapping indent modes to continuation rows", () => {
+	using model = new TextModel("  abcdefghijkl");
+	const computer = new DOMLineBreaksComputer(new FixedTextMeasurer(), 4);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.None).wrappedTextIndentWidth, 0);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.Same).wrappedTextIndentWidth, 20);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.Indent).wrappedTextIndentWidth, 40);
+	assert.equal(computer.computeLineBreaksWithIndent(model.getLineContent(0), 110, WrappingIndent.DeepIndent).wrappedTextIndentWidth, 80);
+
+	using projection = new ViewModelLines(model, computer, {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 70,
+		wrappingIndent: WrappingIndent.Same,
+	});
+	assert.deepEqual(projection.projection.lines.map(line => ({
+		start: line.startColumn,
+		end: line.endColumn,
+		indent: line.wrappedTextIndentWidth,
+	})), [
+		{ start: 0, end: 7, indent: undefined },
+		{ start: 7, end: 12, indent: 20 },
+		{ start: 12, end: 14, indent: 20 },
+	]);
+
+	projection.setWrappingIndent(WrappingIndent.Indent);
+	assert.deepEqual(projection.projection.lines.map(line => line.endColumn), [7, 10, 13, 14]);
+	assert.equal(projection.projection.lines[1]?.wrappedTextIndentWidth, 40);
+});
+
 test("browser visual-line projection validates its public wrapping inputs", () => {
 	using model = new TextModel("text");
-	assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
+	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: "invalid" as EditorLineWrapping,
 	}), /wrapping mode/);
-	assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
+	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapWidth: -1,
 	}), /wrap width/);
-	assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
+	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+		wrappingIndent: "Same" as unknown as WrappingIndent,
+	}), /wrapping indent mode/);
+	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		initialWrappingMeasurement: { schedule: undefined as never },
 	}), /requires a scheduler/);
-	assert.throws(() => new VisualLineProjection(model, new FixedTextMeasurer(), {
+	assert.throws(() => new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		initialWrappingMeasurement: { initialLineCount: 0, schedule: () => toDisposable(() => {}) },
 	}), /measurement count/);
 });
@@ -58,7 +91,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 	using model = new TextModel("abc\ndefg\nhij");
 	const scheduled: (() => void)[] = [];
 	const measurer = new CountingTextMeasurer();
-	using projection = new VisualLineProjection(model, measurer, {
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(measurer), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {
@@ -94,7 +127,7 @@ test("browser visual-line projection measures initial wrapped rows in cancellabl
 test("browser visual-line projection restarts an incomplete wrapped scan after an edit", () => {
 	using model = new TextModel("abc\ndef");
 	const scheduled: (() => void)[] = [];
-	using projection = new VisualLineProjection(model, new FixedTextMeasurer(), {
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
 		initialWrappingMeasurement: {
@@ -136,7 +169,13 @@ class FixedTextMeasurer implements TextMeasurer {
 	}
 
 	measureLineWidth(text: string): number {
-		return [...text].length * 10;
+		let width = 0;
+		for (const character of text) {
+			width = character === "\t"
+				? (Math.floor(width / 10 / 4) + 1) * 4 * 10
+				: width + 10;
+		}
+		return width;
 	}
 }
 

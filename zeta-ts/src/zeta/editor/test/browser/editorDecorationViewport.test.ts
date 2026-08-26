@@ -28,10 +28,10 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorTextDirection, EditorViewport } = await import(
-	"../../browser/view/editorViewport.js"
+	"../../browser/view.js"
 );
 const { EditorLineWrapping } = await import(
-	"../../browser/viewModel/visualLineProjection.js"
+	"../../common/config/editorOptions.js"
 );
 
 test("Decoration sources project, update, and follow tracked model ranges", () => {

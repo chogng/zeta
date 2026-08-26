@@ -4,7 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 let nextCompletionWidgetId = 1;
 

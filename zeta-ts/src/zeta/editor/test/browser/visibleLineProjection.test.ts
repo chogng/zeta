@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { VisibleLineProjection } from "../../browser/viewModel/visibleLineProjection.js";
-import { EditorLineWrapping, VisualLineProjection } from "../../browser/viewModel/visualLineProjection.js";
+import { EditorLineWrapping } from "../../common/config/editorOptions.js";
+import { ViewModelLines } from "../../common/viewModel/viewModelLines.js";
+import { DOMLineBreaksComputer } from "../../browser/view/domLineBreaksComputer.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -10,13 +11,13 @@ import { TextPosition, TextRange } from "../../common/core/text.js";
 
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
 	using model = new TextModel("header\ninside\nend\nlast");
-	using wrapping = new VisualLineProjection(model, new FixedTextMeasurer(), {
-		wrapping: EditorLineWrapping.On,
-		wrapWidth: 20,
-	});
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using projection = new VisibleLineProjection(wrapping, hiddenRanges);
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 20,
+		visibilitySource: hiddenRanges,
+	});
 
 	assert.deepEqual(projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, start: line.startColumn, end: line.endColumn })), [
 		{ logical: 0, start: 0, end: 2 },
@@ -42,8 +43,9 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	using model = new TextModel("header\ninside\nend");
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
-	using wrapping = new VisualLineProjection(model, new FixedTextMeasurer());
-	using projection = new VisibleLineProjection(wrapping, hiddenRanges);
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()), {
+		visibilitySource: hiddenRanges,
+	});
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 
 	assert.doesNotThrow(() => model.applyEdits([{
@@ -55,14 +57,14 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	assert.equal(projection.projection.lineAt(0)?.logicalLineIndex, 0);
 });
 
-test("Visible visual-line projection reuses its source when no visibility filter is installed", () => {
+test("View-model lines keep the wrapping projection path when no visibility filter is installed", () => {
 	using model = new TextModel("first\nsecond");
-	using wrapping = new VisualLineProjection(model, new FixedTextMeasurer());
-	using projection = new VisibleLineProjection(wrapping, undefined);
+	using projection = new ViewModelLines(model, new DOMLineBreaksComputer(new FixedTextMeasurer()));
 
-	assert.equal(projection.projection, wrapping.projection);
+	const initialProjection = projection.projection;
 	model.applyEdits([{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 0)), text: "x" }]);
-	assert.equal(projection.projection, wrapping.projection);
+	assert.notEqual(projection.projection, initialProjection);
+	assert.equal(projection.projection.visualLineCount, 2);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

@@ -10,7 +10,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextSearchQuery } from "../../../common/model/textModelSearch.js";
 import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../../../common/commands/textSearchCommands.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;

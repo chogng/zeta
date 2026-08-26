@@ -1,4 +1,4 @@
-import { type EditorViewport } from '../view/editorViewport.js';
+import { type EditorViewport } from '../view.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 
 /** Identifies the browser-owned semantic area under one mouse or pointer event. */

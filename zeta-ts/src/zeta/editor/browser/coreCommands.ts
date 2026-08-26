@@ -4,7 +4,7 @@ import { type EditorSelectionController } from "../common/cursor/editorSelection
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { registerEditorContribution } from "./editorExtensions.js";
-import { type EditorViewport } from "./view/editorViewport.js";
+import { type EditorViewport } from "./view.js";
 
 export const EditorCoreCommandId = Object.freeze({
 	selectAll: "editor.action.selectAll",

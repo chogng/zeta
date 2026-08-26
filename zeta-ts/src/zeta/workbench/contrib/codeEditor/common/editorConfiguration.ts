@@ -2,6 +2,8 @@ import { ConfigurationsRegistry } from "../../../../platform/configuration/commo
 import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 
+export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
+
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
 	fontFamily: ConfigurationsRegistry.registerConfiguration<string>({
@@ -47,6 +49,20 @@ export const CodeEditorConfiguration = Object.freeze({
 		setting: selectSetting("Word wrap", "Wrap long lines at the editor viewport instead of scrolling horizontally.", [
 			{ value: EditorLineWrapping.Off, label: "Off" },
 			{ value: EditorLineWrapping.On, label: "On" },
+		]),
+	}),
+	wrappingIndent: ConfigurationsRegistry.registerConfiguration<WrappingIndentSetting>({
+		key: "editor.wrappingIndent",
+		defaultValue: "same",
+		parse(value: unknown): WrappingIndentSetting {
+			if (value === "none" || value === "same" || value === "indent" || value === "deepIndent") return value;
+			throw new TypeError(`editor.wrappingIndent must be none, same, indent, or deepIndent; received ${String(value)}`);
+		},
+		setting: selectSetting("Wrapping indent", "Choose the indentation applied to continuation rows created by word wrapping.", [
+			{ value: "none", label: "None" },
+			{ value: "same", label: "Same" },
+			{ value: "indent", label: "Indent" },
+			{ value: "deepIndent", label: "Deep indent" },
 		]),
 	}),
 	minimapEnabled: ConfigurationsRegistry.registerConfiguration<boolean>({

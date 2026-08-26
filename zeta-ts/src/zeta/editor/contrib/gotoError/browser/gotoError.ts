@@ -5,7 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
 export class DiagnosticNavigationController extends DisposableOwner {

@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns Stanza's non-modal diagnostic hover over projected gutter markers. */
 export class DiagnosticHoverController extends DisposableOwner {

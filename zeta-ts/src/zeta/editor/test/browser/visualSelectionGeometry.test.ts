@@ -31,6 +31,29 @@ test("visual selection geometry splits one logical range across wrapped fragment
 	}]);
 });
 
+test("visual selection geometry offsets continuation rows by their wrapping indent", () => {
+	using model = new TextModel("abcdef");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4, 6]], [20]);
+	const selections = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 4), TextPosition.at(0, 2)));
+	const geometry = createStanzaVisualSelectionGeometry(model, selections, projection, {
+		startLineIndex: 0,
+		endLineIndexExclusive: 3,
+	}, 10, new FixedTextMeasurer());
+
+	assert.deepEqual(geometry.selections, [{
+		selectionIndex: 0,
+		visualLineIndex: 1,
+		left: 30,
+		width: 20,
+	}]);
+	assert.deepEqual(geometry.carets, [{
+		selectionIndex: 0,
+		visualLineIndex: 1,
+		left: 30,
+		primary: true,
+	}]);
+});
+
 test("visual range geometry rejects a projection from another model version", () => {
 	using model = new TextModel("abc");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);

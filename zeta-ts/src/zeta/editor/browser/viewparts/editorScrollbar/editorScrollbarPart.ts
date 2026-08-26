@@ -1,11 +1,10 @@
 import "./editorScrollbar.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
-import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";
 
@@ -24,7 +23,7 @@ export interface EditorScrollbarPartOptions {
  * scrollbar axes. Native scrolling remains the editor's input and
  * accessibility fallback; this part owns only the visible custom tracks.
  */
-export class EditorScrollbarPart extends DisposableOwner implements EditorViewPart {
+export class EditorScrollbarPart extends EditorViewPart {
 	private static nextViewportId = 1;
 	private readonly container: HTMLElement;
 	private readonly horizontal: HorizontalScrollbar;
@@ -83,7 +82,8 @@ export class EditorScrollbarPart extends DisposableOwner implements EditorViewPa
 		});
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		if (
 			this.lastScrollPosition !== undefined &&
 			(this.lastScrollPosition.left !== layout.scrollPosition.left ||

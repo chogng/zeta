@@ -1,10 +1,8 @@
 import "./rulers.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type TextMeasurer } from "../../config/fontMeasurements.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 /** One 1-based editor column at which a vertical guide is rendered. */
 export interface EditorRuler {
@@ -20,7 +18,7 @@ export interface RulersPartOptions {
 }
 
 /** Projects configured column guides into the scrollable editor content. */
-export class RulersPart extends DisposableOwner implements EditorViewPart {
+export class RulersPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly textMeasurer: TextMeasurer;
@@ -40,7 +38,8 @@ export class RulersPart extends DisposableOwner implements EditorViewPart {
 		this.domNode.setAttribute("aria-hidden", "true");
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		const height = Math.min(layout.contentSize.height, 1_000_000);
 		this.root.setWidth(layout.contentSize.width);
 		this.root.setHeight(height);

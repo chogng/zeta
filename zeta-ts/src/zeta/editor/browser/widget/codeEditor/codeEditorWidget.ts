@@ -4,7 +4,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
-import { type EditorViewport } from "../../view/editorViewport.js";
+import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { InstantiationService, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -39,6 +39,7 @@ export class CodeEditorWidget extends DisposableOwner {
 	readonly ownerId: string;
 	readonly view: EditorView;
 	readonly viewport: EditorViewport;
+	readonly userInputEvents: EditorView['userInputEvents'];
 	readonly contributions: CodeEditorContributions;
 
 	constructor(options: CodeEditorWidgetOptions) {
@@ -63,6 +64,7 @@ export class CodeEditorWidget extends DisposableOwner {
 			}));
 			this.ownerId = this.view.ownerId;
 			this.viewport = this.view.viewport;
+			this.userInputEvents = this.view.userInputEvents;
 			this.contributions = this.own(new CodeEditorContributions());
 			this.contributions.initialize({
 				model: options.model,

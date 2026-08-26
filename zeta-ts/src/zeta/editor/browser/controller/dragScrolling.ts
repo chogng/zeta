@@ -1,7 +1,7 @@
 import { AnimationFrameScheduler } from "../../../base/browser/scheduler.js";
 import { DisposableOwner } from "../../../base/common/lifecycle.js";
 import { clamp } from "../../../base/common/numbers.js";
-import { type EditorViewport } from "../view/editorViewport.js";
+import { type EditorViewport } from "../view.js";
 import { type ClientPoint, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
 
 const MINIMUM_SPEED = 240;

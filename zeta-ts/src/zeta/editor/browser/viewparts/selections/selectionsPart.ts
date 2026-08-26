@@ -1,11 +1,11 @@
 import "./selections.css";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { projectStanzaCurrentLineHighlight, projectStanzaSelectionOverlays } from "./selectionProjection.js";
-import { EditorOverlayPart, EditorViewContext } from "../viewPart.js";
+import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
+import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 
 /** Projects selection ranges and current-line state without owning selection state. */
-export class SelectionsPart extends EditorOverlayPart {
+export class SelectionsPart extends DynamicViewOverlay {
 	private readonly selectionController: EditorSelectionController | undefined;
 
 	constructor(context: EditorViewContext, selectionController: EditorSelectionController | undefined) {
@@ -13,12 +13,12 @@ export class SelectionsPart extends EditorOverlayPart {
 		this.selectionController = selectionController;
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		const context = this.context.overlayContext(layout);
-		if (!context) {
+	public render(context: EditorRenderingContext): void {
+		const overlay = context.overlay;
+		if (!overlay) {
 			return;
 		}
-		projectStanzaCurrentLineHighlight(context, this.selectionController);
-		projectStanzaSelectionOverlays(context, this.selectionController);
+		projectStanzaCurrentLineHighlight(overlay, this.selectionController);
+		projectStanzaSelectionOverlays(overlay, this.selectionController);
 	}
 }

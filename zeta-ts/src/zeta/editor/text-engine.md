@@ -234,8 +234,10 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `common/model/textModel.ts` | transaction、version、history、snapshot | cursor、tracked range、language invalidation、model tests |
 | `common/cursor/editorSelectionController.ts` | editor-local selection 和 command execution | input、undo/redo、composition tests |
 | `common/viewLayout/editorViewportModel.ts` | viewport/scroll/layout snapshot | wrapping、folding、hit test、viewport tests |
-| `common/viewModel/modelLineProjection.ts` | logical → visual line projection | folding、selection geometry、navigation |
-| `browser/view/editorViewport.ts` | 当前 view host 和 scheduler | Part order、DOM topology、measurement、scroll |
+| `common/viewModel/modelLineProjection.ts` | immutable logical → visual line projection data | folding、selection geometry、navigation |
+| `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |
+| `browser/view/domLineBreaksComputer.ts` | browser font measurement for logical-line breaks | DOM measurement、grapheme boundaries |
+| `browser/view.ts` | 当前 view host 和 scheduler | Part order、DOM topology、scroll |
 | `browser/viewparts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
 | `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |

@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { observableValue } from "../../../../base/common/observable.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Provides a reusable inline progress presentation for asynchronous editor requests. */
 export class InlineProgressController extends DisposableOwner {

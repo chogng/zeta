@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */

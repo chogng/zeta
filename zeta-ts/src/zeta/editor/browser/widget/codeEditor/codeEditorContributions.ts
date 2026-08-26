@@ -6,7 +6,7 @@ import { type EditorSelectionController } from '../../../common/cursor/editorSel
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorView } from '../../view.js';
-import { type EditorViewport } from '../../view/editorViewport.js';
+import { type EditorViewport } from '../../view.js';
 
 /** Controls when a widget contribution joins one CodeEditorWidget's lifetime. */
 export enum CodeEditorContributionInstantiation {

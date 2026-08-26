@@ -103,9 +103,9 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../browser/view.js");
 const { KeyboardNavigationController } = await import("../../../browser/controller/keyboardNavigationController.js");
-const { EditorLineWrapping } = await import("../../../browser/viewModel/visualLineProjection.js");
+const { EditorLineWrapping } = await import("../../../common/config/editorOptions.js");
 
 test("Keyboard controller retains columns, routes multi-selection, and reveals primary", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

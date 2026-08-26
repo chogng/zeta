@@ -3,7 +3,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { jumpToMatchingBrackets } from "../common/bracketNavigation.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
-import { type EditorViewport } from "../../../browser/view/editorViewport.js";
+import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the VS Code go-to-bracket shortcut through Stanza's lexical matcher. */
 export class BracketNavigationController extends DisposableOwner {

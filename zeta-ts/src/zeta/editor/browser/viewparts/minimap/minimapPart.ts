@@ -1,7 +1,6 @@
 import "./minimap.css";
 import { addDisposableListener, h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type DiagnosticOverviewMarker } from "../overviewRuler/diagnosticOverviewMarkers.js";
@@ -10,7 +9,7 @@ import { GpuMinimapRenderer } from "./gpuMinimapRenderer.js";
 import { MinimapNavigationController } from "./minimapNavigationController.js";
 import { MINIMAP_LINE_HEIGHT, MINIMAP_WIDTH, createMinimapSliderLayout, minimapContentWidth } from "./minimapPresentation.js";
 import { createMinimapRows } from "./minimapProjection.js";
-import { type EditorViewPart } from "../viewPart.js";
+import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export type MinimapMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
@@ -18,6 +17,7 @@ export interface MinimapPartOptions {
 	readonly host: HTMLElement;
 	readonly model: TextModel;
 	readonly readLayout: () => EditorViewportLayout;
+	readonly readRenderingContext: () => EditorRenderingContext;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
 	readonly readMarkers: () => readonly MinimapMarker[];
 	readonly readMarkersRevision: () => number;
@@ -25,7 +25,7 @@ export interface MinimapPartOptions {
 }
 
 /** Owns the minimap preview, its bounded density projection, and navigation. */
-export class MinimapPart extends DisposableOwner implements EditorViewPart {
+export class MinimapPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly canvas: HTMLCanvasElement;
@@ -33,6 +33,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 	private readonly viewportNode: FastDomNode<HTMLDivElement>;
 	private readonly model: TextModel;
 	private readonly readLayout: () => EditorViewportLayout;
+	private readonly readRenderingContext: () => EditorRenderingContext;
 	private readonly readMarkers: () => readonly MinimapMarker[];
 	private readonly readMarkersRevision: () => number;
 	private readonly gpuRenderer: GpuMinimapRenderer | undefined;
@@ -42,6 +43,7 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 		super();
 		this.model = options.model;
 		this.readLayout = options.readLayout;
+		this.readRenderingContext = options.readRenderingContext;
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
 		const ownerDocument = options.host.ownerDocument;
@@ -69,11 +71,12 @@ export class MinimapPart extends DisposableOwner implements EditorViewPart {
 			event.preventDefault();
 			this.gpuRenderer?.disable();
 			this.renderedMarkersRevision = -1;
-			this.render(this.readLayout());
+			this.renderNow(this.readRenderingContext());
 		}));
 	}
 
-	render(layout: EditorViewportLayout): void {
+	render(context: EditorRenderingContext): void {
+		const layout = context.layout;
 		if (this.domNode.hidden) return;
 		const left = layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - MINIMAP_WIDTH);
 		this.root.setTransform(`translate3d(${left}px, ${layout.scrollPosition.top}px, 0)`);

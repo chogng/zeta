@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
+const { EditorViewport } = await import("../../../../browser/view.js");
 const { EditorView } = await import("../../../../browser/view.js");
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {

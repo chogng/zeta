@@ -10,9 +10,10 @@ import { createTypeTextCommand } from '../../common/cursor/cursorTypeOperations.
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { type TextModelChange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
-import { type EditorViewport } from '../view/editorViewport.js';
-import { type EditContext, type EditContextTextUpdate } from './editContext/editContext.js';
-import { type CompositionController } from './compositionController.js';
+import { type EditorViewport } from '../view.js';
+import { type EditContext, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
+import { type CompositionController } from '../controller/compositionController.js';
+import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
 
 export interface EditorCommandContext {
 	readonly inputType: string;
@@ -51,6 +52,7 @@ export interface EditorViewDidEditEvent {
 export interface ViewControllerOptions {
 	readonly languageEditing?: EditorLanguageEditingAdapter;
 	readonly wordPattern?: () => RegExp | undefined;
+	readonly userInputEvents?: ViewUserInputEvents;
 }
 
 /**
@@ -68,6 +70,7 @@ export class ViewController extends DisposableOwner {
 	private readonly commandTransformers: EditorCommandTransformer[] = [];
 	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private readonly userInputEvents: ViewUserInputEvents;
 	private overtype = false;
 
 	readonly onWillBeforeInput: Event<InputEvent> = this.willBeforeInputEmitter.event;
@@ -95,6 +98,7 @@ export class ViewController extends DisposableOwner {
 			}
 			this.languageEditing = options.languageEditing;
 			this.wordPattern = options.wordPattern;
+			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents();
 			this.own(input.onDidBeforeInput(event => this.handleBeforeInput(event)));
 			this.own(input.onDidInput(event => {
 				if (!event.isComposing || !this.compositionController.composing) this.input.clear();
@@ -232,6 +236,7 @@ export class ViewController extends DisposableOwner {
 
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented) return;
+		this.userInputEvents.emitKeyDown(event);
 		this.willKeydownEmitter.fire(event);
 		if (event.defaultPrevented) return;
 		if (!event.isComposing && !event.getModifierState('AltGraph')) {
@@ -295,6 +300,51 @@ export class ViewController extends DisposableOwner {
 
 	private get currentWordPattern(): RegExp | undefined {
 		return this.wordPattern?.();
+	}
+
+	/** Forwards view-originated input without taking ownership of its policy. */
+	emitKeyDown(event: KeyboardEvent): void {
+		this.userInputEvents.emitKeyDown(event);
+	}
+
+	emitKeyUp(event: KeyboardEvent): void {
+		this.userInputEvents.emitKeyUp(event);
+	}
+
+	emitContextMenu(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitContextMenu(event);
+	}
+
+	emitMouseMove(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseMove(event);
+	}
+
+	emitMouseLeave(event: EditorViewPartialMouseEvent): void {
+		this.userInputEvents.emitMouseLeave(event);
+	}
+
+	emitMouseDown(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseDown(event);
+	}
+
+	emitMouseUp(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseUp(event);
+	}
+
+	emitMouseDrag(event: EditorViewMouseEvent): void {
+		this.userInputEvents.emitMouseDrag(event);
+	}
+
+	emitMouseDrop(event: EditorViewPartialMouseEvent): void {
+		this.userInputEvents.emitMouseDrop(event);
+	}
+
+	emitMouseDropCanceled(): void {
+		this.userInputEvents.emitMouseDropCanceled();
+	}
+
+	emitMouseWheel(event: WheelEvent): void {
+		this.userInputEvents.emitMouseWheel(event);
 	}
 }
 

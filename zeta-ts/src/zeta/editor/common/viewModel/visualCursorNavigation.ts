@@ -69,11 +69,12 @@ function visualVerticalTarget(model: TextModel, projection: EditorVisualLineProj
 		visualLine.startColumn,
 		visualLine.endColumn,
 	);
+	const textOffset = Math.max(0, preferredHorizontalOffset - (visualLine.wrappedTextIndentWidth ?? 0));
 	return TextPosition.at(
 		visualLine.logicalLineIndex,
 		visualLine.startColumn + nearestCursorColumn(
 			text,
-			preferredHorizontalOffset,
+			textOffset,
 			measureTextWidth,
 		),
 	);
@@ -87,7 +88,7 @@ function resolvePreferredHorizontalOffsets(model: TextModel, projection: EditorV
 		const visualLine = projection.lineAt(
 			projection.visualLineIndexAt(selection.active),
 		)!;
-		return geometry?.getHorizontalOffset(selection.active) ?? measureTextWidth(model.getLineContent(visualLine.logicalLineIndex).slice(
+		return geometry?.getHorizontalOffset(selection.active) ?? (visualLine.wrappedTextIndentWidth ?? 0) + measureTextWidth(model.getLineContent(visualLine.logicalLineIndex).slice(
 			visualLine.startColumn,
 			selection.active.columnIndex,
 		));
