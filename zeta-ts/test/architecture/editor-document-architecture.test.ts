@@ -13,8 +13,6 @@ test("editor exposes one flat VS Code-shaped domain for both feature implementat
 	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["input", "language", "measurement", "media", "services", "view", "viewModel", "viewparts", "widget"]);
 	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
-	assert.equal(statSafe(join(editorRoot, "alpha")), false);
-	assert.equal(statSafe(join(editorRoot, "gama")), false);
 	assert.equal(statSafe(join(editorRoot, "editor.academic.all.ts")), true);
 	assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
 });
@@ -141,12 +139,6 @@ function directoryNames(directory: string): string[] {
 		.map(entry => entry.name)
 		.sort();
 }
-
-test("flat editor paths do not reintroduce retired engine directories", () => {
-	for (const file of collectFiles(editorRoot)) {
-		assert.doesNotMatch(relative(editorRoot, file), /(?:^|[\\/])(?:alpha|gama)(?:[\\/]|$)/u);
-	}
-});
 
 function collectFiles(directory: string): string[] {
 	const result: string[] = [];

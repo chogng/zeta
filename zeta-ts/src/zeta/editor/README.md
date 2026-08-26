@@ -109,7 +109,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 - 异步语言、diff、文件和协作结果必须按 model version 或服务器版本拒绝过期结果。
 - Academic schema 与 `collaborationSchemaId` 是持久兼容边界；改变节点语义时必须同步迁移、serialization 测试和 collaboration 测试。
 - Workbench 模式 bundle 在 Renderer 启动时静态装配，不提供运行时卸载 contribution 的承诺。
-- Stanza 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `stanza` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入 Alpha/Gama 兼容标识。
+- Stanza 自有的公开入口、editor ID、content type 和 DOM vocabulary 必须使用 `stanza` 品牌；Workbench 通用 editor part 与主题语义 token 仍由各自 owner 命名。不得重新引入旧 editor 兼容标识。
 
 ## 测试与修改影响
 

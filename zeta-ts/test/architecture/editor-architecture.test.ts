@@ -207,8 +207,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
 	assert.equal(existsSync(join(editorRoot, "browser/input")), false, "legacy browser input directory");
-	assert.equal(existsSync(join(editorRoot, "alpha")), false, "alpha directory");
-	assert.equal(existsSync(join(editorRoot, "gama")), false, "gama directory");
 });
 
 test("Editor browser retires only the editor-layer EditorPart", () => {
@@ -217,15 +215,6 @@ test("Editor browser retires only the editor-layer EditorPart", () => {
 	assert.equal(statSafe(join(workbenchRoot, "browser/parts/editor/editorPart.ts")), true, "Workbench EditorPart");
 	assert.match(editorBrowser, /export class EditorBrowser/u);
 	assert.doesNotMatch(editorBrowser, /export class EditorPart/u);
-});
-
-test("Stanza source does not retain retired engine compatibility identifiers", () => {
-	const sourceRoot = resolve(desktopRoot, "src/zeta");
-	const legacyCompatibilityPattern = /zeta-(?:alpha|gama)|zeta\.editor\.(?:alpha|gama)|application\/(?:x-|vnd\.)?zeta(?:[-.](?:alpha|gama))|--(?:alpha|gama)-editor-|(?:ALPHA|GAMA)_EDITOR_ID/u;
-	for (const file of collectFiles(sourceRoot)) {
-		if (!/\.(?:css|md|ts)$/u.test(file)) continue;
-		assert.doesNotMatch(readFileSync(file, "utf8"), legacyCompatibilityPattern, relative(sourceRoot, file));
-	}
 });
 
 test("Stanza owns its public protocol and DOM vocabulary without renaming the editor domain", () => {

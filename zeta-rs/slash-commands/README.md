@@ -17,7 +17,7 @@
 | --- | --- |
 | canonical `SlashCommandDefinition` 的名称、描述、冲突校验与稳定顺序 | 命令实际执行与授权 |
 | `SlashCommandInput` 的 `/` 查询、补全范围和参数解析 | composer 文本存储、键盘或鼠标事件 |
-| `SlashCommandsState` 的匹配、选择与 dismiss 状态 | Ratatui、WGPU、DOM 或 Alpha Editor 绘制与滚动几何 |
+| `SlashCommandsState` 的匹配、选择与 dismiss 状态 | Ratatui、WGPU、DOM 或各宿主 renderer 的绘制与滚动几何 |
 | 与 model 分离的 server/local/Skill contribution kind | `SkillRef`、App Server 初始化、IPC 或 Renderer lifecycle |
 
 本 crate 依赖 `zeta-app-server-protocol` 以直接复用 canonical wire definition。App Server、TUI 和
@@ -91,6 +91,6 @@ App Server initialization tests、TUI/native adapter tests 和 Desktop 的跨语
 
 - **Current**：Rust App Server、TUI 与 native 可直接复用同一实现。
 - **Current**：Desktop 直接消费 protocol-generated `SlashCommandDefinition`；它与 Rust surfaces
-  使用同一个 model，TypeScript adapter 只绑定 Workbench action 和 Alpha renderer。
+  使用同一个 model，TypeScript adapter 只绑定 Workbench action 和 Stanza renderer。
 - **Conformance**：Rust core 与 Desktop adapter 共同执行同一 fixtures，保证不同语言宿主不会改变
   model validation、matching 或 input semantics。

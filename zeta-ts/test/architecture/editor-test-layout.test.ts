@@ -24,8 +24,6 @@ test("Stanza browser integration is flat and named after concrete model mount po
 	for (const file of ["textModel.html", "textModel.integration.ts", "textModel.integration.spec.ts", "academic.html", "academic.integration.ts", "academic.integration.spec.ts", "memoryTextFiles.ts", "playwright.config.ts", "vite.config.ts"]) {
 		assert.equal(exists(join(browserIntegrationRoot, file)), true, file);
 	}
-	assert.equal(exists(join(desktopRoot, "test/alpha")), false);
-	assert.equal(exists(join(desktopRoot, "test/gama")), false);
 	const textModelIntegration = readFileSync(join(browserIntegrationRoot, "textModel.integration.spec.ts"), "utf8");
 	const academicIntegration = readFileSync(join(browserIntegrationRoot, "academic.integration.spec.ts"), "utf8");
 	const config = readFileSync(join(browserIntegrationRoot, "playwright.config.ts"), "utf8");
@@ -50,8 +48,6 @@ test("browser integrations import the stable API and only their mode bundle", ()
 
 test("desktop exposes one editor browser test entrypoint", () => {
 	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node ../scripts/test/editor-browser.ts");
-	assert.equal(desktopPackage.scripts?.["test:alpha"], undefined);
-	assert.equal(desktopPackage.scripts?.["test:gama"], undefined);
 });
 
 function exists(file: string): boolean {

@@ -6,7 +6,7 @@
 
 `zeta-editor-core` 拥有 revision-bound 的文本事务、多选区值、UTF-16 offset 边界与有界 undo/redo。
 它不依赖 `zui`、`zeta-ui`、Native、DOM、文件、语法解析器或 IPC transport。当前真实消费者是 Native
-`zeta-editor`；Zeta Alpha 拥有独立的 TypeScript `TextModel`，不依赖本 crate。
+`zeta-editor`；Desktop Stanza 拥有独立的 TypeScript `TextModel`，不依赖本 crate。
 
 ## 当前 API 与调用路径
 
@@ -64,7 +64,7 @@ cargo clippy --manifest-path Cargo.toml -p zeta-editor-core --all-targets -- -D 
 
 ## 当前限制与演进
 
-Current：Native `CodeEditorDocument` 是唯一产品消费者，并以同步 Rust 调用组合本 crate。Alpha 的 TypeScript
+Current：Native `CodeEditorDocument` 是唯一产品消费者，并以同步 Rust 调用组合本 crate。Desktop Stanza 的 TypeScript
 `TextModel`、history、selection 与 tracked ranges 是另一个运行时边界，不通过 WASM、App Server 或 shadow document
 调用本 crate。Proposed：只有第二个真实 Rust consumer 出现后，才按其同步 Rust 调用面提取额外 adapter；不得为
 Browser hot path 预建 transport。

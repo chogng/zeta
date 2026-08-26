@@ -15,7 +15,7 @@ Stanza 是 Zeta 唯一的可组装编辑器内核。所有文档都由 `TextMode
 
 Stanza 是整个内核的品牌，不是某一个 mode 的别名。Code 与 Academic 拥有不同的 feature implementation、projection 和 bundle，但共享唯一 `TextModel`。结构化能力是 TextModel 的显式可选状态，不是第二个万能接口或平行模型；复用底层文本能力不代表复用 Code pane 或 Code contribution 集合。
 
-Stanza 是当前唯一的 Zeta editor runtime。旧 Alpha/Gama editor ID、DOM class、目录和兼容 pane 已删除；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
+Stanza 是当前唯一的 Zeta editor runtime。不保留旧 editor ID、DOM class、目录或兼容 pane；架构与测试不得再以兼容为理由重新引入第二套编辑状态。
 
 ## 所有权
 
@@ -120,7 +120,7 @@ EditorView ←────────────→ Native DOM renderer
 - IME composition 在提交前不是普通编辑事务，取消 composition 不得污染
   history。
 - accessibility 是 view/input contract 的组成部分，不是渲染完成后的补丁。
-- 旧 Alpha/Gama identity、DOM vocabulary 和 runtime 类型不得重新进入 editor、document 或 Workbench 公共接口。
+- 旧 editor identity、DOM vocabulary 和 runtime 类型不得重新进入 editor、document 或 Workbench 公共接口。
 
 ## 分阶段实施
 

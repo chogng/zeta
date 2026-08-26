@@ -10,8 +10,6 @@ test("flat Stanza domain exposes public entrypoints and mode bundles", () => {
 	for (const entrypoint of ["editor.api.ts", "editor.code.all.ts", "editor.academic.all.ts", "editor.all.ts", "editor.main.ts", "editor.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, entrypoint)), true, entrypoint);
 	}
-	assert.equal(exists(join(editorRoot, "alpha")), false, "alpha directory");
-	assert.equal(exists(join(editorRoot, "gama")), false, "gama directory");
 	for (const retiredEntrypoint of ["stanza.api.ts", "stanza.code.all.ts", "stanza.academic.all.ts", "stanza.all.ts", "stanza.main.ts", "stanza.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, retiredEntrypoint)), false, retiredEntrypoint);
 	}

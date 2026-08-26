@@ -25,8 +25,8 @@ Server DTO。
 | `SyntaxTokenKind` | 提供不含主题颜色的语言中立 highlight category | 决定主题、foreground 或 decoration layer |
 | `DocumentSymbol` | 表达 tree-sitter tags query 发现的语法声明 | 类型解析、跨文件 reference、rename 或 completion |
 
-`SyntaxPoint.column` 和 `SyntaxRange.bytes` 都使用 UTF-8 byte offset。Desktop adapter 必须显式在
-Alpha UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 byte range，但仍必须
+`SyntaxPoint.column` 和 `SyntaxRange.bytes` 都使用 UTF-8 byte offset。Desktop Stanza adapter 必须显式在
+UTF-16 position 与该 contract 之间转换；Native host 可以直接使用 byte range，但仍必须
 拒绝不匹配当前 EditorHost revision 的 snapshot。
 
 ## 内部接口与执行路径
