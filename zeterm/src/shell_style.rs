@@ -8,7 +8,7 @@ use zeta_editor::{
 };
 use zeta_icons::icons;
 use zeta_settings::SettingsPageStyle;
-use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
+use zeta_theme::{tokens, ThemeError, ThemeSnapshot};
 use zeta_ui::ActionBarSeparatorStyle;
 use zeta_ui::ActionBarStyle;
 use zeta_ui::Border;
@@ -27,6 +27,9 @@ pub(crate) struct ShellPalette {
     pub(crate) border: Color,
     pub(crate) text: Color,
     pub(crate) text_muted: Color,
+    font_size_body: f32,
+    font_size_label: f32,
+    scrollbar_size: f32,
     pub(crate) accent: Color,
     pub(crate) success: Color,
     pub(crate) error: Color,
@@ -56,6 +59,9 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
     border: Color::rgb(222, 222, 224),
     text: Color::rgb(38, 38, 41),
     text_muted: Color::rgb(126, 126, 132),
+    font_size_body: 13.0,
+    font_size_label: 12.0,
+    scrollbar_size: 10.0,
     accent: Color::rgb(15, 110, 96),
     success: Color::rgb(16, 124, 16),
     error: Color::rgb(180, 38, 38),
@@ -138,6 +144,9 @@ impl ShellPalette {
             border: theme_color(theme, tokens::BORDER)?,
             text: theme_color(theme, tokens::FOREGROUND)?,
             text_muted: theme_color(theme, tokens::MUTED_FOREGROUND)?,
+            font_size_body: theme.required_pixel_size(tokens::FONT_SIZE_BODY1)?,
+            font_size_label: theme.required_pixel_size(tokens::FONT_SIZE_LABEL1)?,
+            scrollbar_size: theme.required_pixel_size(tokens::SCROLLBAR_SIZE)?,
             accent: theme_color(theme, tokens::ACCENT_FOREGROUND)?,
             success: theme_color(theme, tokens::SUCCESS_FOREGROUND)?,
             error: theme_color(theme, tokens::ERROR_FOREGROUND)?,
@@ -175,8 +184,8 @@ impl ShellPalette {
         let input_box = InputBoxStyle::new(
             InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
             InputBoxStateColors::new(Color::TRANSPARENT, Color::TRANSPARENT, Color::TRANSPARENT),
-            TextStyle::new(12.0, self.text).with_line_height(16.0),
-            TextStyle::new(12.0, self.text_muted).with_line_height(16.0),
+            TextStyle::new(self.font_size_label, self.text).with_line_height(16.0),
+            TextStyle::new(self.font_size_label, self.text_muted).with_line_height(16.0),
         )
         .with_border_width(0.0)
         .with_corner_radii(CornerRadii::uniform(4.0))
@@ -191,8 +200,8 @@ impl ShellPalette {
         let search_input = InputBoxStyle::new(
             InputBoxStateColors::new(self.surface_raised, self.surface_hovered, self.surface),
             InputBoxStateColors::new(self.border, self.border, self.accent),
-            TextStyle::new(13.0, self.text).with_line_height(18.0),
-            TextStyle::new(13.0, self.text_muted).with_line_height(18.0),
+            TextStyle::new(self.font_size_body, self.text).with_line_height(18.0),
+            TextStyle::new(self.font_size_body, self.text_muted).with_line_height(18.0),
         )
         .with_border_width(1.0)
         .with_corner_radii(CornerRadii::uniform(6.0))
@@ -205,10 +214,12 @@ impl ShellPalette {
                 .with_hovered(self.surface_hovered)
                 .with_focused(self.surface_hovered)
                 .with_pressed(self.border),
-            TextStyle::new(13.0, self.text).with_line_height(18.0),
+            TextStyle::new(self.font_size_body, self.text).with_line_height(18.0),
         )
         .with_selected_backgrounds(ButtonBackgrounds::new(self.session_tab_highlight))
-        .with_disabled_text_style(TextStyle::new(13.0, self.text_muted).with_line_height(18.0))
+        .with_disabled_text_style(
+            TextStyle::new(self.font_size_body, self.text_muted).with_line_height(18.0),
+        )
         .with_corner_radii(CornerRadii::uniform(5.0))
         .with_padding(Edges::new(7.0, 10.0, 7.0, 10.0));
         let close_button = ButtonStyle::new(
@@ -216,7 +227,7 @@ impl ShellPalette {
                 .with_hovered(self.surface_hovered)
                 .with_focused(self.surface_hovered)
                 .with_pressed(self.border),
-            TextStyle::new(13.0, self.text).with_line_height(18.0),
+            TextStyle::new(self.font_size_body, self.text).with_line_height(18.0),
         )
         .with_border(Border::uniform(0.0, Color::TRANSPARENT))
         .with_corner_radii(CornerRadii::uniform(5.0))
@@ -227,9 +238,11 @@ impl ShellPalette {
                 .with_focused(self.surface_hovered)
                 .with_pressed(self.border)
                 .with_disabled(Color::TRANSPARENT),
-            TextStyle::new(13.0, self.text).with_line_height(18.0),
+            TextStyle::new(self.font_size_body, self.text).with_line_height(18.0),
         )
-        .with_disabled_text_style(TextStyle::new(13.0, self.text_muted).with_line_height(18.0))
+        .with_disabled_text_style(
+            TextStyle::new(self.font_size_body, self.text_muted).with_line_height(18.0),
+        )
         .with_border(Border::uniform(1.0, self.border))
         .with_corner_radii(CornerRadii::uniform(5.0))
         .with_padding(Edges::new(6.0, 10.0, 6.0, 10.0));
@@ -270,6 +283,7 @@ impl ShellPalette {
     fn overlay_scroll_view_style(self) -> ScrollViewStyle {
         ScrollViewStyle::new(
             ScrollbarStyle::new(Color::TRANSPARENT, self.scrollbar)
+                .with_thickness(self.scrollbar_size)
                 .with_hovered_colors(Color::TRANSPARENT, self.scrollbar_hovered)
                 .with_active_colors(Color::TRANSPARENT, self.scrollbar_active),
         )
@@ -311,7 +325,7 @@ impl ShellPalette {
             surface: self.surface,
             file_header: self.surface_raised,
             divider: self.border,
-            file_name: TextStyle::new(12.0, self.text)
+            file_name: TextStyle::new(self.font_size_label, self.text)
                 .with_family(FontFamily::Monospace)
                 .with_weight(FontWeight::Bold)
                 .with_line_height(18.0),
@@ -415,4 +429,23 @@ pub(crate) fn code_editor_style(theme: &ThemeSnapshot) -> Result<CodeEditorStyle
 fn theme_color(theme: &ThemeSnapshot, token: &str) -> Result<Color, ThemeError> {
     let [red, green, blue, alpha] = theme.required_color(token)?.components();
     Ok(Color::rgba(red, green, blue, alpha))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ShellPalette;
+    use zeta_theme::{ColorScheme, ThemeCatalog};
+
+    #[test]
+    fn theme_projection_uses_shared_native_size_tokens() {
+        let snapshot = ThemeCatalog::embedded()
+            .unwrap()
+            .built_in(ColorScheme::Light)
+            .unwrap();
+        let palette = ShellPalette::from_theme(&snapshot).unwrap();
+
+        assert_eq!(palette.font_size_body, 13.0);
+        assert_eq!(palette.font_size_label, 12.0);
+        assert_eq!(palette.scrollbar_size, 10.0);
+    }
 }

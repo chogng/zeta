@@ -1,4 +1,4 @@
-//! Stable semantic color-token identifiers consumed by Rust presentation adapters.
+//! Stable semantic token identifiers consumed by Rust presentation adapters.
 
 pub const FOREGROUND: &str = "foreground";
 pub const DESCRIPTION_FOREGROUND: &str = "description.foreground";
@@ -19,6 +19,10 @@ pub const SIDE_BAR_BACKGROUND: &str = "sideBar.background";
 pub const SCROLLBAR_SLIDER_BACKGROUND: &str = "scrollbar.sliderBackground";
 pub const SCROLLBAR_SLIDER_HOVER_BACKGROUND: &str = "scrollbar.sliderHoverBackground";
 pub const SCROLLBAR_SLIDER_ACTIVE_BACKGROUND: &str = "scrollbar.sliderActiveBackground";
+
+pub const FONT_SIZE_BODY1: &str = "fontSize.body1";
+pub const FONT_SIZE_LABEL1: &str = "fontSize.label1";
+pub const SCROLLBAR_SIZE: &str = "scrollbar.size";
 
 pub const DIFF_REMOVED_LINE_BACKGROUND: &str = "diffEditor.removedLineBackground";
 pub const DIFF_INSERTED_LINE_BACKGROUND: &str = "diffEditor.insertedLineBackground";

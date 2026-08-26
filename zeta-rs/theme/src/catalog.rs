@@ -3,10 +3,12 @@ use std::collections::{BTreeMap, HashMap};
 use serde::Deserialize;
 use thiserror::Error;
 
-use crate::color::{FloatColor, Rgba};
+use crate::color::FloatColor;
 use crate::document::{
-    ColorScheme, ColorTransform, ColorValue, ThemeDocument, valid_theme_id, valid_theme_label,
+    valid_theme_id, valid_theme_label, ColorScheme, ColorTransform, ColorValue, ThemeDocument,
 };
+use crate::size::{ThemeSize, ThemeSizeUnit};
+use crate::snapshot::ThemeSnapshot;
 
 const EMBEDDED_MANIFEST: &str = include_str!("../../../resources/design-tokens/design-tokens.json");
 const EMBEDDED_THEME_ENTRIES: &str =
@@ -15,45 +17,10 @@ const LEGACY_EDITOR_TOKEN_PREFIX: &str = "editor.semanticToken.";
 const EDITOR_TOKEN_PREFIX: &str = "editor.token.";
 const DEFAULT_THEME_ENTRY: &str = "zeta";
 
-/// Immutable, fully resolved theme selected for one presentation surface.
-#[derive(Clone, Debug)]
-pub struct ThemeSnapshot {
-    id: String,
-    label: String,
-    color_scheme: ColorScheme,
-    colors: BTreeMap<String, Rgba>,
-}
-
-impl ThemeSnapshot {
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
-    pub const fn color_scheme(&self) -> ColorScheme {
-        self.color_scheme
-    }
-
-    pub fn color(&self, token: &str) -> Option<Rgba> {
-        self.colors.get(token).copied()
-    }
-
-    pub fn required_color(&self, token: &str) -> Result<Rgba, ThemeError> {
-        self.color(token)
-            .ok_or_else(|| ThemeError::MissingResolvedColor(token.to_owned()))
-    }
-
-    pub fn colors(&self) -> &BTreeMap<String, Rgba> {
-        &self.colors
-    }
-}
-
 /// Versioned catalog compiled from the shared design-token manifest.
 pub struct ThemeCatalog {
     colors: BTreeMap<String, ColorContribution>,
+    sizes: BTreeMap<String, ThemeSize>,
     entries: BTreeMap<String, ThemeEntryContribution>,
 }
 
@@ -69,6 +36,20 @@ impl ThemeCatalog {
             if colors.insert(id.clone(), contribution).is_some() {
                 return Err(ThemeError::DuplicateToken(id));
             }
+        }
+        let mut sizes = BTreeMap::new();
+        for contribution in manifest.sizes {
+            let id = contribution.id.clone();
+            if colors.contains_key(&id) || sizes.contains_key(&id) {
+                return Err(ThemeError::DuplicateToken(id));
+            }
+            let value = ThemeSize::parse(&contribution.value).ok_or_else(|| {
+                ThemeError::InvalidSizeValue {
+                    token: contribution.id.clone(),
+                    value: contribution.value.clone(),
+                }
+            })?;
+            sizes.insert(id, value);
         }
         let entry_manifest: ThemeEntryManifest = serde_json::from_str(EMBEDDED_THEME_ENTRIES)?;
         if entry_manifest.version != 1 {
@@ -104,7 +85,11 @@ impl ThemeCatalog {
                 DEFAULT_THEME_ENTRY.to_owned(),
             ));
         }
-        let catalog = Self { colors, entries };
+        let catalog = Self {
+            colors,
+            sizes,
+            entries,
+        };
         for entry_id in catalog.entries.keys() {
             for scheme in [
                 ColorScheme::Dark,
@@ -232,6 +217,7 @@ impl ThemeCatalog {
             label: label.to_owned(),
             color_scheme,
             colors,
+            sizes: self.sizes.clone(),
         })
     }
 }
@@ -362,6 +348,7 @@ fn normalize_legacy_editor_tokens(
 struct Manifest {
     version: u8,
     colors: Vec<ColorContribution>,
+    sizes: Vec<SizeContribution>,
 }
 
 #[derive(Deserialize)]
@@ -393,6 +380,13 @@ struct ColorContribution {
     id: String,
     needs_transparency: bool,
     defaults: BTreeMap<ColorScheme, ColorValue>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SizeContribution {
+    id: String,
+    value: String,
 }
 
 #[derive(Debug, Error)]
@@ -429,8 +423,18 @@ pub enum ThemeError {
     MissingDefault(String),
     #[error("resolved theme is missing required color '{0}'")]
     MissingResolvedColor(String),
-    #[error("duplicate color token '{0}' in the shared catalog")]
+    #[error("duplicate token '{0}' in the shared catalog")]
     DuplicateToken(String),
+    #[error("invalid shared size token '{token}' value '{value}'")]
+    InvalidSizeValue { token: String, value: String },
+    #[error("resolved theme is missing required size '{0}'")]
+    MissingResolvedSize(String),
+    #[error("size token '{token}' uses {actual}; expected {expected}")]
+    SizeUnitMismatch {
+        token: String,
+        expected: ThemeSizeUnit,
+        actual: ThemeSizeUnit,
+    },
     #[error("duplicate built-in theme entry '{0}'")]
     DuplicateThemeEntry(String),
     #[error("built-in theme entry '{0}' is unavailable")]

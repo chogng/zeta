@@ -10,6 +10,7 @@ use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
 use crate::ThemeSurface;
+use crate::ThemeSizeUnit;
 use crate::loader::resolve_device_root;
 use crate::tokens;
 
@@ -98,6 +99,45 @@ fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
             .unwrap(),
         zeterm.required_color(tokens::FOREGROUND).unwrap()
     );
+}
+
+#[test]
+fn embedded_snapshots_expose_typed_shared_size_tokens() {
+    let snapshot = ThemeCatalog::embedded()
+        .unwrap()
+        .built_in(ColorScheme::Light)
+        .unwrap();
+
+    let body = snapshot.size(tokens::FONT_SIZE_BODY1).unwrap();
+    assert_eq!(body.unit(), ThemeSizeUnit::Pixels);
+    assert_eq!(body.value(), 13.0);
+    assert_eq!(
+        snapshot
+            .required_pixel_size(tokens::FONT_SIZE_LABEL1)
+            .unwrap(),
+        12.0
+    );
+    assert_eq!(
+        snapshot
+            .required_size("fontWeight.semiBold")
+            .unwrap()
+            .unit(),
+        ThemeSizeUnit::Unitless
+    );
+    assert_eq!(
+        snapshot
+            .required_size("animation.durationFast")
+            .unwrap()
+            .as_milliseconds(),
+        Some(120.0)
+    );
+    assert_eq!(
+        snapshot
+            .required_pixel_size(tokens::SCROLLBAR_SIZE)
+            .unwrap(),
+        10.0
+    );
+    assert!(snapshot.required_pixel_size("fontWeight.semiBold").is_err());
 }
 
 #[test]

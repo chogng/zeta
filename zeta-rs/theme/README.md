@@ -9,7 +9,7 @@ Schema 和模板由 Desktop registry 编译到 [`resources/design-tokens`](../..
 | --- | --- |
 | `ThemeCatalog` | 读取版本化共享 manifest，解析默认值、alias、覆盖和颜色变换 |
 | `ThemeDocument` | 严格解析最多 1 MiB、512 个覆盖项的用户主题 JSON |
-| `ThemeSnapshot` | 保存完整 resolved RGBA token table；不包含 DOM、WGPU 或 Ratatui 类型 |
+| `ThemeSnapshot` | 保存完整 resolved RGBA 与 typed scalar size token table；不包含 DOM、WGPU 或 Ratatui 类型 |
 | `ThemeLoader` | 有界读取主题入口、device configuration 与 `themes/*.json`，隔离单文件错误并选择主题 |
 | `ThemeLoader::choices` / `preview` / `select` | 枚举有效 built-in/user 主题；无副作用解析 preview；验证后原子保存 surface preference |
 | `ThemeLoadOptions::with_default_entry` | 由产品启动组合选择 `zeta`、`zeta-code` 或 `zeterm` 默认入口；组件和 token 不感知产品 |
@@ -62,7 +62,7 @@ contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_pref
   不是绕过入口回到全局颜色。
 - 一个用户主题文件失败只产生带路径的 `ThemeDiagnostic`，不会阻断其他主题；选中的主题不可用时
   回退调用方提供的 system scheme。
-- `ThemeSnapshot::required_color` 只用于宿主声明为必需的 token；缺失返回 `ThemeError`，adapter
+- `ThemeSnapshot::required_color`、`required_size` 和 `required_pixel_size` 只用于宿主声明为必需的 token；缺失或单位不匹配返回 `ThemeError`，adapter
   必须原子地保留上一份完整 palette 或 fallback，不能部分应用。
 - Native 选择 `ThemeSurface::Graphical`，TUI 选择 `ThemeSurface::Terminal`；TUI preference 缺失时
   loader 才回退 graphical preference。
@@ -76,9 +76,10 @@ legacy 映射必须同时更新共享 `theme-conformance.json` 并让 TS/Rust �
 `resources/design-tokens/theme-entries.json`；修改 device path、文件上限或 preference 优先级必须同步
 Desktop loader、本文与 `docs/design-tokens.md`。
 
-当前 snapshot 只包含颜色；尺寸仍由 Desktop 消费。Native/TUI 目前不监听外部主题文件，应用新
-JSON 需要重启对应进程；Native 会在系统明暗事件到达时重新选择 system snapshot。高对比度已保留
-独立 scheme，但默认值当前继承相应明暗方案。
+当前 snapshot 已包含共享 manifest 的颜色和类型化尺寸；Native/TUI 仍需要各自将尺寸投影为组件
+style，不能让组件直接依赖 `zeta-theme`。Native/TUI 目前不监听外部主题文件，应用新 JSON 需要
+重启对应进程；Native 会在系统明暗事件到达时重新选择 system snapshot。高对比度已保留独立
+scheme，但默认值当前继承相应明暗方案。
 
 ```text
 cargo test --manifest-path Cargo.toml -p zeta-theme
