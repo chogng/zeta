@@ -214,6 +214,7 @@ export class ViewController extends DisposableOwner {
 	}
 
 	private execute(command: EditorEditCommand, inputType: string, insertedText: string | undefined = undefined, afterExecute?: (change: TextModelChange) => void, emitDidEdit = true): TextModelChange | undefined {
+		for (const transformer of this.commandTransformers) command = transformer(command, { inputType });
 		const change = this.selectionController.execute(command);
 		this.revealPrimary();
 		if (change) {

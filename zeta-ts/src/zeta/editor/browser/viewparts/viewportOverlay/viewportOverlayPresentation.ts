@@ -3,7 +3,7 @@ import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
-import { type EditorLineRange } from "../../../common/viewLayout/editorViewportModel.js";
+import { type EditorLineRange } from "../../../common/viewLayout/linesLayout.js";
 import { getStanzaDomTextCaretLeft, getStanzaDomTextRangeRectangles } from "./domTextGeometry.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
 

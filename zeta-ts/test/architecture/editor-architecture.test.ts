@@ -60,6 +60,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/compositionController.ts",
 		"browser/view.ts",
 		"browser/view/viewController.ts",
+		"browser/view/viewInputController.ts",
 		"browser/controller/editContext/clipboardUtils.ts",
 		"browser/controller/editContext/editContext.ts",
 		"browser/controller/editContext/factory.ts",
@@ -143,6 +144,13 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/lineDocument.ts",
 		"common/model/textModelBlockState.ts",
 		"common/model/lineDocumentProjection.ts",
+		"common/viewLayout/lineDecorations.ts",
+		"common/viewLayout/lineHeights.ts",
+		"common/viewLayout/linePart.ts",
+		"common/viewLayout/linesLayout.ts",
+		"common/viewLayout/viewLayout.ts",
+		"common/viewLayout/viewLineRenderer.ts",
+		"common/viewLayout/viewLinesViewportData.ts",
 		"common/services/textModelService.ts",
 		"common/model/documentTransaction.ts",
 		"contrib/academic/common/schema.ts",
@@ -221,6 +229,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/textModelStructureIndex.ts",
 		"common/model/textModelBlockTree.ts",
 		"common/model/textModelBlockSnapshot.ts",
+		"common/viewLayout/editorViewportModel.ts",
 		"contrib/academic/browser/academicCodeBlockEditor.ts",
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
@@ -377,6 +386,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);
+	assert.doesNotMatch(viewController, /from\s+["'][^"']*base\/browser\/dom(?:\.js)?["']/u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
 	assert.match(findContribution, /registerEditorContribution/u);

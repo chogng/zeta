@@ -1,7 +1,7 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { clamp } from "../../../../base/common/numbers.js";
-import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
+import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
 
 /**
  * Owns pointer navigation for one rendered Stanza minimap.

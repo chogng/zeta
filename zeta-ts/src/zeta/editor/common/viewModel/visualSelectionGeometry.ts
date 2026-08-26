@@ -1,7 +1,7 @@
 import { type TextSelectionSet } from "../core/selection.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { type EditorLineRange } from "../viewLayout/editorViewportModel.js";
+import { type EditorLineRange } from "../viewLayout/linesLayout.js";
 import { type TextMeasurer } from "./textMeasurer.js";
 import { createStanzaVisualRangeRectangles } from "./visualRangeGeometry.js";
 

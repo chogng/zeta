@@ -1,5 +1,5 @@
 import { DisposableOwner } from '../../../base/common/lifecycle.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/editorViewportModel.js';
+import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorRenderingContext } from './renderingContext.js';
 
 export type { EditorRenderingContext } from './renderingContext.js';

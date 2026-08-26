@@ -1,7 +1,8 @@
 import './viewLines.css';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange, type EditorViewportLayout } from '../../../common/viewLayout/editorViewportModel.js';
+import { type EditorLineRange } from '../../../common/viewLayout/linesLayout.js';
+import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectStanzaSemanticTokenLine } from '../semanticTokens/semanticTokenPresentation.js';
 import { type EditorLineGutterDecoration } from '../margin/lineGutterDecoration.js';

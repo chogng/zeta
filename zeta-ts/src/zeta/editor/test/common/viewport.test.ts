@@ -3,11 +3,12 @@ import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { EditorViewportChangeReason, EditorViewportModel, type EditorViewportLineSource } from "../../common/viewLayout/editorViewportModel.js";
+import { EditorViewportChangeReason, ViewLayout } from "../../common/viewLayout/viewLayout.js";
+import { type EditorViewportLineSource } from "../../common/viewLayout/linesLayout.js";
 
-test("EditorViewportModel calculates visible and overscan line ranges", () => {
+test("ViewLayout calculates visible and overscan line ranges", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 		overscanLineCount: 2,
 	});
@@ -55,9 +56,9 @@ test("EditorViewportModel calculates visible and overscan line ranges", () => {
 	});
 });
 
-test("EditorViewportModel includes vertical padding in content and row projection", () => {
+test("ViewLayout includes vertical padding in content and row projection", () => {
 	using model = new TextModel(lines(10));
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 		overscanLineCount: 2,
 		padding: { top: 20, bottom: 10 },
@@ -92,7 +93,7 @@ test("EditorViewportModel includes vertical padding in content and row projectio
 
 test("Viewport resize and line-height changes preserve a stable top line", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 		overscanLineCount: 2,
 	});
@@ -136,7 +137,7 @@ test("Viewport resize and line-height changes preserve a stable top line", () =>
 
 test("Model line changes update layout and clamp scrolling", () => {
 	using model = new TextModel(lines(100));
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 		overscanLineCount: 3,
 	});
@@ -190,7 +191,7 @@ test("Model line changes update layout and clamp scrolling", () => {
 
 test("Same-line model changes still advance the viewport model version", () => {
 	using model = new TextModel("abc");
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	viewport.setViewportSize({ width: 100, height: 20 });
@@ -219,7 +220,7 @@ test("Same-line model changes still advance the viewport model version", () => {
 test("Viewport virtualizes a caller-owned visual-line source", () => {
 	using model = new TextModel("one\ntwo");
 	using visualLines = new MutableLineSource(5);
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 10,
 		lineSource: visualLines,
 	});
@@ -245,7 +246,7 @@ test("Viewport virtualizes a caller-owned visual-line source", () => {
 
 test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
 	using model = new TextModel("");
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 		overscanLineCount: 5,
 	});
@@ -277,29 +278,29 @@ test("Zero-sized viewports render no lines and setters suppress no-ops", () => {
 	});
 });
 
-test("EditorViewportModel validates geometry before changing layout", () => {
+test("ViewLayout validates geometry before changing layout", () => {
 	using model = new TextModel("a");
 
 	assert.throws(
-		() => new EditorViewportModel(model, { lineHeight: 0 }),
+		() => new ViewLayout(model, { lineHeight: 0 }),
 		/lineHeight must be positive/,
 	);
 	assert.throws(
-		() => new EditorViewportModel(model, {
+		() => new ViewLayout(model, {
 			lineHeight: 20,
 			overscanLineCount: 1.5,
 		}),
 		/overscanLineCount/,
 	);
 	assert.throws(
-		() => new EditorViewportModel(model, {
+		() => new ViewLayout(model, {
 			lineHeight: 20,
 			padding: { top: -1, bottom: 0 },
 		}),
 		/padding.top must be non-negative/,
 	);
 
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	assert.throws(
@@ -328,7 +329,7 @@ test("EditorViewportModel validates geometry before changing layout", () => {
 
 test("Viewport disposal releases its listener without owning the model", () => {
 	using model = new TextModel("a");
-	using viewport = new EditorViewportModel(model, {
+	using viewport = new ViewLayout(model, {
 		lineHeight: 20,
 	});
 	let viewportChangeCount = 0;

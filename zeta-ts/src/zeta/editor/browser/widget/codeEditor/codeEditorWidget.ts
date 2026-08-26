@@ -5,7 +5,7 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorScrollPosition } from "../../../common/viewLayout/editorViewportModel.js";
+import { type EditorScrollPosition } from "../../../common/viewLayout/viewLayout.js";
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";

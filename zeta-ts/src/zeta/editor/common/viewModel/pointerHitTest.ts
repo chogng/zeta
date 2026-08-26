@@ -1,7 +1,7 @@
 import { TextPosition } from "../core/text.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
-import { type EditorScrollPosition } from "../viewLayout/editorViewportModel.js";
+import { type EditorScrollPosition } from "../viewLayout/viewLayout.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
 import { type TextMeasurer } from "./textMeasurer.js";
 

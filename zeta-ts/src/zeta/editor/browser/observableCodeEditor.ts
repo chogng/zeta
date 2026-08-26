@@ -17,7 +17,7 @@ import { LineRange } from '../common/core/ranges/lineRange.js';
 import { TextSelection, type TextSelectionSet } from '../common/core/selection.js';
 import { type EditorSelectionController } from '../common/cursor/editorSelectionController.js';
 import { type TextModel } from '../common/model/textModel.js';
-import { type EditorViewportLayout } from '../common/viewLayout/editorViewportModel.js';
+import { type EditorViewportLayout } from '../common/viewLayout/viewLayout.js';
 import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
 import { CodeEditorWidget } from './widget/codeEditor/codeEditorWidget.js';
 

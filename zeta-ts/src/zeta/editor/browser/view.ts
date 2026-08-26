@@ -14,7 +14,7 @@ import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
-import { type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from '../common/viewLayout/editorViewportModel.js';
+import { type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController } from './controller/compositionController.js';
 import { createEditContext } from './controller/editContext/factory.js';
 import { type EditContext, type EditContextCharacterBounds } from './controller/editContext/editContext.js';
@@ -404,7 +404,7 @@ export class View extends DisposableOwner {
 	readonly element: HTMLDivElement;
 	readonly onDidChangeLayout: Event<EditorViewportChange>;
 	private readonly model: TextModel;
-	private readonly viewport: EditorViewportModel;
+	private readonly viewport: ViewLayout;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
 	private readonly textMetricsElement: HTMLSpanElement;
@@ -546,7 +546,7 @@ export class View extends DisposableOwner {
 				visibilitySource: options.lineVisibilitySource,
 			},
 		));
-		const viewport = this.own(new EditorViewportModel(this.model, {
+		const viewport = this.own(new ViewLayout(this.model, {
 			lineHeight: options.lineHeight,
 			overscanLineCount: options.overscanLineCount,
 			lineSource: this.viewModelLines.lineSource,

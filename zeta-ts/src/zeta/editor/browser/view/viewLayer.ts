@@ -3,7 +3,8 @@ import { h, reset, fragment as createFragment } from '../../../base/browser/dom.
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { DisposableOwner } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange, type EditorViewportLayout } from '../../common/viewLayout/editorViewportModel.js';
+import { type EditorLineRange } from '../../common/viewLayout/linesLayout.js';
+import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;
@@ -92,4 +93,3 @@ export class ViewLayer<TLine> extends DisposableOwner {
 function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {
 	return left.startLineIndex === right.startLineIndex && left.endLineIndexExclusive === right.endLineIndexExclusive;
 }
-

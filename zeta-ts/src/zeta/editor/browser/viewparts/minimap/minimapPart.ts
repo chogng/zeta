@@ -2,7 +2,7 @@ import "./minimap.css";
 import { addDisposableListener, h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
+import { type EditorScrollPosition, type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
 import { type DiagnosticOverviewMarker } from "../overviewRuler/diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "../overviewRuler/diffOverviewMarkers.js";
 import { GpuMinimapRenderer } from "./gpuMinimapRenderer.js";

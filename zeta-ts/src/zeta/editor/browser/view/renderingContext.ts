@@ -1,4 +1,4 @@
-import { type EditorViewportLayout } from '../../common/viewLayout/editorViewportModel.js';
+import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type ViewportOverlayContext } from '../viewparts/viewportOverlay/viewportOverlayPresentation.js';
 
 /**

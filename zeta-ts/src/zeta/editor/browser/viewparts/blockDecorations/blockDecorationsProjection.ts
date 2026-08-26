@@ -1,6 +1,6 @@
 import { type ResolvedDecoration } from "../decorations/decorationPresentation.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
-import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
+import { type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
 import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
 
 export interface BlockDecorationGeometry {

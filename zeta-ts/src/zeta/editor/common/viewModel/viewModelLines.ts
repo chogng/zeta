@@ -3,7 +3,7 @@ import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../base
 import { isFiniteNumber, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/editorOptions.js';
 import { type TextModel } from '../model/textModel.js';
-import { type EditorViewportLineSource } from '../viewLayout/editorViewportModel.js';
+import { type EditorViewportLineSource } from '../viewLayout/linesLayout.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
 
 /** Supplies logical-line visibility without importing a browser feature. */

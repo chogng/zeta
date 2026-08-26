@@ -225,7 +225,7 @@ anchor；Android diff、macOS 长按及其他平台差异仍未完成。
 
 ### Current 6：固定行高 viewport 内核
 
-`EditorViewportModel` 已在 `editor/common` 中建立 DOM 无关的 view-model
+`ViewLayout`、`LinesLayout` 与 `LineHeightsManager` 已在 `editor/common/viewLayout` 中建立 DOM 无关的 view-model
 边界。browser 层负责测量并输入 viewport size、content width 和 line height；
 common 层负责内容尺寸、横纵滚动约束、可见行范围和 overscan render range。
 输出 layout 是不可变快照并携带 `TextModel.version`，因此即使一次编辑没有
