@@ -10371,18 +10371,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-agent-sidebar"
-version = "0.1.0"
-dependencies = [
- "zeta-diff",
- "zeta-editor",
- "zeta-file-search",
- "zeta-icons",
- "zeta-ui",
- "zui",
-]
-
-[[package]]
 name = "zeta-agents"
 version = "0.1.0"
 dependencies = [
@@ -11797,6 +11785,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-workbench"
+version = "0.1.0"
+dependencies = [
+ "zeta-protocol",
+ "zeta-ui",
+ "zui",
+]
+
+[[package]]
 name = "zeta-workspace"
 version = "0.1.0"
 dependencies = [
@@ -11823,7 +11820,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "unicode-width 0.2.0",
- "zeta-agent-sidebar",
  "zeta-app-server-client",
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
@@ -11852,6 +11848,7 @@ dependencies = [
  "zeta-ui",
  "zeta-utils-path",
  "zeta-utils-pty",
+ "zeta-workbench",
  "zeta-workspace",
  "zeterm-keybinding-ui",
  "zui",

@@ -9,7 +9,6 @@ from pathlib import Path
 
 EXPECTED_ZETERM_MEMBERS = {
     "zeterm",
-    "zeterm/agent-sidebar",
     "zeterm/commands",
     "zeterm/composer",
     "zeterm/editor",

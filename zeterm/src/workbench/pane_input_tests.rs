@@ -1,8 +1,7 @@
-use std::path::PathBuf;
-
 use super::{PaneBinding, PaneInput, PaneInputKind};
 use crate::terminal_session::TerminalSessionKey;
-use zeta_protocol::{SessionId, ThreadId};
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 
 fn session(value: &str) -> SessionId {
     SessionId::new(value).expect("test session ID is non-empty")
@@ -10,31 +9,6 @@ fn session(value: &str) -> SessionId {
 
 fn thread(value: &str) -> ThreadId {
     ThreadId::new(value).expect("test thread ID is non-empty")
-}
-
-#[test]
-fn pane_input_separates_kind_from_layout_instance() {
-    let terminal = PaneInput::terminal(session("session-1"));
-    let agent = PaneInput::agent(session("session-1"), thread("thread-1"));
-    let files = PaneInput::files(PathBuf::from("/workspace"));
-    let diff = PaneInput::diff(PathBuf::from("/workspace"));
-    let settings = PaneInput::settings();
-
-    assert_eq!(terminal.kind(), PaneInputKind::Terminal);
-    assert_eq!(agent.kind(), PaneInputKind::Agent);
-    assert_eq!(files.kind(), PaneInputKind::Files);
-    assert_eq!(diff.kind(), PaneInputKind::Diff);
-    assert_eq!(settings.kind(), PaneInputKind::Settings);
-    assert_ne!(terminal, agent);
-    assert_ne!(files, diff);
-}
-
-#[test]
-fn agent_inputs_are_distinct_by_thread_identity() {
-    let first = PaneInput::agent(session("session-1"), thread("thread-1"));
-    let second = PaneInput::agent(session("session-1"), thread("thread-2"));
-
-    assert_ne!(first, second);
 }
 
 #[test]

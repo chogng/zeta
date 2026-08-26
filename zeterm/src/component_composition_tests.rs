@@ -234,7 +234,6 @@ fn zeterm_app_server_adapter_owns_the_zeta_rs_client_boundary() {
     for relative_manifest in [
         "ui/Cargo.toml",
         "zui/Cargo.toml",
-        "agent-sidebar/Cargo.toml",
         "composer/Cargo.toml",
         "editor/Cargo.toml",
         "settings/Cargo.toml",

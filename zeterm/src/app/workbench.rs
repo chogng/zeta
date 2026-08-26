@@ -37,18 +37,34 @@ impl NativeApp {
             .entry(tab_key.clone())
             .or_default()
             .active_pane();
+        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
+        let current = self
+            .pane_host
+            .binding(&host_key)
+            .map(|binding| binding.input().clone());
+        if current
+            .as_ref()
+            .is_some_and(|input| matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff))
+        {
+            if let Some(current) = current {
+                self.workspace_pane_returns.insert(tab_key.clone(), current);
+            }
+        }
         let Some(terminal_key) = self
             .pane_host
-            .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+            .terminal_key(&host_key)
             .or_else(|| self.terminal_workspace.key_for_session(session_id))
         else {
             return false;
         };
-        if !self.pane_host.ensure_terminal(
-            (PaneHostScope::Tab(tab_key.clone()), pane),
-            session_id,
-            terminal_key,
-        ) {
+        self.pane_host.insert(
+            host_key.clone(),
+            PaneBinding::new(PaneInput::terminal(session_id.clone())),
+        );
+        if !self
+            .pane_host
+            .ensure_terminal(host_key, session_id, terminal_key)
+        {
             return false;
         }
         if !self.activate_pane_context(tab_key, pane) {

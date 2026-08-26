@@ -9,11 +9,8 @@ use zeta_ui::TextStyle;
 /// Theme projection shared by SidebarPart's toolbar and pane navigation.
 #[derive(Clone)]
 pub struct AgentSidebarStyle {
-    pub surface: Color,
     pub surface_raised: Color,
-    pub border: Color,
     pub text: Color,
-    pub text_muted: Color,
     pub surface_hovered: Color,
     pub session_tab_highlight: Color,
     search: SearchBoxStyle,
@@ -21,21 +18,15 @@ pub struct AgentSidebarStyle {
 
 impl AgentSidebarStyle {
     pub fn new(
-        surface: Color,
         surface_raised: Color,
-        border: Color,
         text: Color,
-        text_muted: Color,
         surface_hovered: Color,
         session_tab_highlight: Color,
         search: SearchBoxStyle,
     ) -> Self {
         Self {
-            surface,
             surface_raised,
-            border,
             text,
-            text_muted,
             surface_hovered,
             session_tab_highlight,
             search,

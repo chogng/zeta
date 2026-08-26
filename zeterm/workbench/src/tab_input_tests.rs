@@ -1,3 +1,5 @@
+//! Tab input model behavior tests.
+
 use super::TabInputChange;
 use super::TabInputKey;
 use super::TabInputModel;

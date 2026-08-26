@@ -61,14 +61,14 @@ use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::ThreadTimeline;
 use crate::titlebar::{TITLEBAR_HEIGHT, Titlebar};
 use crate::workspace_context::WorkspaceContext;
+use crate::workspace_panes::AgentSidebarNavigation;
+use crate::workspace_panes::EditorPane;
+use crate::workspace_panes::FilesLayout;
+use crate::workspace_panes::FilesPane;
+use crate::workspace_panes::FilesToolbar;
+use crate::workspace_panes::ScmLayout;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
-use zeta_agent_sidebar::AgentSidebarNavigation;
-use zeta_agent_sidebar::EditorPane;
-use zeta_agent_sidebar::FilesLayout;
-use zeta_agent_sidebar::FilesPane;
-use zeta_agent_sidebar::FilesToolbar;
-use zeta_agent_sidebar::ScmLayout;
 use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
 use zeta_editor::CodeEditorStyle;
@@ -319,8 +319,7 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) terminal: Option<&'a TerminalCore>,
     pub(crate) terminal_panes: &'a [PaneView<'a>],
     pub(crate) pane_group: Option<&'a PaneGroup>,
-    pub(crate) sidebar_pane_group: Option<&'a PaneGroup>,
-    pub(crate) sidebar_pane: Option<PaneViewMount<'a>>,
+    pub(crate) active_pane: Option<PaneViewMount<'a>>,
     pub(crate) terminal_pane_resize_split: Option<PaneSplitId>,
     pub(crate) terminal_scroll_offset: usize,
     pub(crate) terminal_scrollbar_presentation: ScrollbarPresentation,
@@ -377,9 +376,8 @@ struct SessionSidebarView<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct SidebarPartPresentationView<'a> {
+struct WorkspacePanePresentationView<'a> {
     workspace: &'a SidebarPaneWorkspace,
-    pane_group: Option<&'a PaneGroup>,
     pane: Option<PaneViewMount<'a>>,
     context: &'a WorkspaceContext,
     caret_visibility: CaretVisibility,
@@ -406,6 +404,7 @@ struct MainPresentationView<'a> {
     terminal: PaneView<'a>,
     terminal_panes: &'a [PaneView<'a>],
     pane_group: Option<&'a PaneGroup>,
+    active_pane: Option<PaneViewMount<'a>>,
     terminal_pane_resize_split: Option<PaneSplitId>,
     workspace_surface: WorkspaceSurfaceKind,
     active_tab_input: Option<&'a TabInputKey>,
@@ -416,6 +415,7 @@ struct MainPresentationView<'a> {
     thread_projection: &'a ThreadProjection,
     thread_timeline_scroll_offset: usize,
     composer: ComposerPanelView<'a>,
+    workspace: &'a SidebarPaneWorkspace,
     workspace_context: &'a WorkspaceContext,
     keybindings: &'a NativeKeybindings,
     keyboard_shortcuts: &'a KeyboardShortcutsState,
@@ -519,7 +519,7 @@ fn build_shell_presentation_with_bindings(
         layout.titlebar(),
         palette,
         model.session_sidebar,
-        model.sidebar_part,
+        model.active_pane.map(|pane| pane.kind()),
         model.window_control_insets,
         model.dispatch,
     );
@@ -545,10 +545,9 @@ fn build_shell_presentation_with_bindings(
     } else {
         None
     };
-    let mut file_editor_caret = None;
-    let file_search_caret = if let Some(bounds) = layout.sidebar() {
+    let file_editor_caret = if let Some(bounds) = layout.sidebar() {
         if model.workspace_surface == WorkspaceSurfaceKind::Editor {
-            file_editor_caret = frame.with_context(|context| {
+            frame.with_context(|context| {
                 draw_file_editor_inspector(
                     context,
                     bounds,
@@ -568,45 +567,9 @@ fn build_shell_presentation_with_bindings(
                     text_layout,
                     palette,
                 )
-            });
-            None
+            })
         } else {
-            match animation_bindings.as_deref_mut() {
-                Some(animation_bindings) => {
-                    frame.with_animation_bindings(animation_bindings, |context| {
-                        draw_sidebar_part(
-                            context,
-                            bounds,
-                            SidebarPartPresentationView {
-                                workspace: model.sidebar_pane_workspace,
-                                pane_group: model.sidebar_pane_group,
-                                pane: model.sidebar_pane,
-                                context: model.workspace_context,
-                                caret_visibility: model.caret_visibility,
-                                dispatch: model.dispatch,
-                            },
-                            text_layout,
-                            palette,
-                        )
-                    })
-                }
-                None => frame.with_context(|context| {
-                    draw_sidebar_part(
-                        context,
-                        bounds,
-                        SidebarPartPresentationView {
-                            workspace: model.sidebar_pane_workspace,
-                            pane_group: model.sidebar_pane_group,
-                            pane: model.sidebar_pane,
-                            context: model.workspace_context,
-                            caret_visibility: model.caret_visibility,
-                            dispatch: model.dispatch,
-                        },
-                        text_layout,
-                        palette,
-                    )
-                }),
-            }
+            None
         }
     } else {
         None
@@ -626,6 +589,7 @@ fn build_shell_presentation_with_bindings(
                 },
                 terminal_panes: model.terminal_panes,
                 pane_group: model.pane_group,
+                active_pane: model.active_pane,
                 terminal_pane_resize_split: model.terminal_pane_resize_split,
                 workspace_surface: model.workspace_surface,
                 active_tab_input: model.active_tab_input,
@@ -644,6 +608,7 @@ fn build_shell_presentation_with_bindings(
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
+                workspace: model.sidebar_pane_workspace,
                 workspace_context: model.workspace_context,
                 keybindings: model.keybindings,
                 keyboard_shortcuts: model.keyboard_shortcuts,
@@ -683,8 +648,6 @@ fn build_shell_presentation_with_bindings(
         || model.dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT)
     {
         file_editor_caret
-    } else if model.dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
-        file_search_caret
     } else if model.dispatch.is_focused(SESSION_SEARCH_INPUT) {
         session_search_caret
     } else {
@@ -1030,19 +993,19 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
         .then(|| (leaf.id(), TerminalMousePosition::new(row, col)))
 }
 
-fn draw_sidebar_part(
+fn draw_workspace_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
-    view: SidebarPartPresentationView<'_>,
+    view: WorkspacePanePresentationView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: ShellPalette,
 ) -> Option<Rect> {
     let sidebar = InteractionRegion::new(
-        "SidebarPart",
+        "WorkspacePane",
         AGENT_SIDEBAR,
         bounds,
         AccessibilityRole::Group,
-        "Workspace inspector",
+        "Workspace pane",
     )
     .with_parent(WINDOW);
     let active_view = match view.pane.map(PaneViewMount::kind) {
@@ -1065,21 +1028,12 @@ fn draw_sidebar_part(
             AgentSidebarView::Changes => ScmLayout::for_bounds(bounds).content(),
             AgentSidebarView::Files => FilesLayout::for_bounds(bounds).content(),
         };
-        let content_bounds = view
-            .pane
-            .and_then(|pane| {
-                view.pane_group?
-                    .layout(content_bounds)
-                    .leaf(pane.pane_id())
-                    .map(|leaf| leaf.bounds())
-            })
-            .unwrap_or(content_bounds);
         let toolbar = InteractionRegion::new(
-            "SidebarPartToolbar",
+            "WorkspacePaneToolbar",
             AGENT_SIDEBAR_TOOLBAR,
             toolbar_bounds,
             AccessibilityRole::Toolbar,
-            "Workspace inspector toolbar",
+            "Workspace pane toolbar",
         )
         .with_parent(AGENT_SIDEBAR);
         let sidebar_style = palette.sidebar_part_style();
@@ -1426,102 +1380,123 @@ fn draw_main(
                     )),
                 }
             } else {
-                match view.workspace_surface {
-                    WorkspaceSurfaceKind::Terminal => {
-                        let terminal_bounds = terminal_content_bounds(layout, active_screen);
-                        if view.terminal_panes.is_empty() {
-                            let terminal_region = InteractionRegion::new(
-                                "TerminalOutput",
-                                TERMINAL_OUTPUT,
-                                terminal_bounds,
-                                AccessibilityRole::Terminal,
-                                "Interactive terminal",
-                            )
-                            .with_parent(MAIN_SURFACE)
-                            .with_cursor(CursorFeedback::Text);
-                            context.with_component(&terminal_region, |context, _| {
-                                draw_terminal(
-                                    context.scene_mut(),
-                                    layout,
-                                    view.terminal,
-                                    active_screen,
-                                    palette,
-                                );
-                            });
-                        } else if let Some(group) = view.pane_group {
-                            let pane_layout = group.layout(terminal_bounds);
-                            for pane in view.terminal_panes {
-                                if pane.kind != PaneInputKind::Terminal {
-                                    continue;
-                                }
-                                let Some(pane_id) = pane.pane_id else {
-                                    continue;
-                                };
-                                let Some(bounds) =
-                                    pane_layout.leaf(pane_id).map(|leaf| leaf.bounds())
-                                else {
-                                    continue;
-                                };
+                let workspace_pane_active =
+                    !matches!(view.workspace_surface, WorkspaceSurfaceKind::Editor)
+                        && view.active_pane.is_some_and(|pane| {
+                            matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
+                        });
+                if workspace_pane_active {
+                    ime_cursor_area = draw_workspace_pane(
+                        context,
+                        layout.main(),
+                        WorkspacePanePresentationView {
+                            workspace: view.workspace,
+                            pane: view.active_pane,
+                            context: view.workspace_context,
+                            caret_visibility: view.caret_visibility,
+                            dispatch: view.dispatch,
+                        },
+                        text_layout,
+                        palette,
+                    );
+                } else {
+                    match view.workspace_surface {
+                        WorkspaceSurfaceKind::Terminal => {
+                            let terminal_bounds = terminal_content_bounds(layout, active_screen);
+                            if view.terminal_panes.is_empty() {
                                 let terminal_region = InteractionRegion::new(
-                                    "TerminalPane",
-                                    crate::shell_interaction::terminal_pane_id(pane_id),
-                                    bounds,
+                                    "TerminalOutput",
+                                    TERMINAL_OUTPUT,
+                                    terminal_bounds,
                                     AccessibilityRole::Terminal,
-                                    "Interactive terminal Pane",
+                                    "Interactive terminal",
                                 )
                                 .with_parent(MAIN_SURFACE)
                                 .with_cursor(CursorFeedback::Text);
                                 context.with_component(&terminal_region, |context, _| {
-                                    draw_terminal_in_bounds(
+                                    draw_terminal(
                                         context.scene_mut(),
-                                        bounds,
-                                        *pane,
+                                        layout,
+                                        view.terminal,
                                         active_screen,
                                         palette,
                                     );
                                 });
+                            } else if let Some(group) = view.pane_group {
+                                let pane_layout = group.layout(terminal_bounds);
+                                for pane in view.terminal_panes {
+                                    if pane.kind != PaneInputKind::Terminal {
+                                        continue;
+                                    }
+                                    let Some(pane_id) = pane.pane_id else {
+                                        continue;
+                                    };
+                                    let Some(bounds) =
+                                        pane_layout.leaf(pane_id).map(|leaf| leaf.bounds())
+                                    else {
+                                        continue;
+                                    };
+                                    let terminal_region = InteractionRegion::new(
+                                        "TerminalPane",
+                                        crate::shell_interaction::terminal_pane_id(pane_id),
+                                        bounds,
+                                        AccessibilityRole::Terminal,
+                                        "Interactive terminal Pane",
+                                    )
+                                    .with_parent(MAIN_SURFACE)
+                                    .with_cursor(CursorFeedback::Text);
+                                    context.with_component(&terminal_region, |context, _| {
+                                        draw_terminal_in_bounds(
+                                            context.scene_mut(),
+                                            bounds,
+                                            *pane,
+                                            active_screen,
+                                            palette,
+                                        );
+                                    });
+                                }
+                                draw_terminal_pane_sashes(
+                                    context,
+                                    &pane_layout,
+                                    palette,
+                                    view.dispatch,
+                                    view.terminal_pane_resize_split,
+                                );
                             }
-                            draw_terminal_pane_sashes(
-                                context,
-                                &pane_layout,
-                                palette,
-                                view.dispatch,
-                                view.terminal_pane_resize_split,
-                            );
                         }
-                    }
-                    WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
-                        context.draw_component(&SessionHeader::new(
-                            layout.session_header,
-                            view.session_title,
-                            view.thread_projection,
-                            view.composer.context,
-                            palette,
-                        ));
-                        let timeline_region = InteractionRegion::new(
-                            "ThreadTimeline",
-                            THREAD_TIMELINE,
-                            layout.thread_timeline,
-                            AccessibilityRole::Group,
-                            "Agent Thread timeline",
-                        )
-                        .with_parent(MAIN_SURFACE)
-                        .with_cursor(CursorFeedback::Text);
-                        context.with_component(&timeline_region, |context, _| {
-                            context.draw_component(&ThreadTimeline::new(
-                                layout.thread_timeline,
+                        WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
+                            context.draw_component(&SessionHeader::new(
+                                layout.session_header,
+                                view.session_title,
                                 view.thread_projection,
-                                view.thread_timeline_scroll_offset,
+                                view.composer.context,
                                 palette,
                             ));
-                        });
-                        ime_cursor_area = draw_composer_panel(
-                            context,
-                            layout.composer_panel_layout,
-                            view.composer,
-                            text_layout,
-                            palette,
-                        );
+                            let timeline_region = InteractionRegion::new(
+                                "ThreadTimeline",
+                                THREAD_TIMELINE,
+                                layout.thread_timeline,
+                                AccessibilityRole::Group,
+                                "Agent Thread timeline",
+                            )
+                            .with_parent(MAIN_SURFACE)
+                            .with_cursor(CursorFeedback::Text);
+                            context.with_component(&timeline_region, |context, _| {
+                                context.draw_component(&ThreadTimeline::new(
+                                    layout.thread_timeline,
+                                    view.thread_projection,
+                                    view.thread_timeline_scroll_offset,
+                                    palette,
+                                ));
+                            });
+                            ime_cursor_area = draw_composer_panel(
+                                context,
+                                layout.composer_panel_layout,
+                                view.composer,
+                                text_layout,
+                                palette,
+                            );
+                        }
                     }
                 }
             }

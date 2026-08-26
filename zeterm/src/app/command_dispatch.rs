@@ -241,7 +241,18 @@ fn execute_save(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandRequest) {
+    let was_terminal = app.workspace_surface.is_terminal();
     app.workspace_surface.toggle_terminal();
+    if app.workspace_surface.is_terminal() {
+        if let Some(session_id) = app
+            .active_session_tab_key()
+            .and_then(|key| key.session_id().cloned())
+        {
+            let _ = app.activate_terminal_for_session(&session_id);
+        }
+    } else if was_terminal {
+        app.restore_workspace_pane_after_terminal();
+    }
     app.pending_focus = if app.workspace_surface.is_editor() {
         Some(shell_interaction::FILE_EDITOR_DOCUMENT)
     } else if app.workspace_surface.is_terminal() {
@@ -290,11 +301,17 @@ fn execute_toggle_session_sidebar(app: &mut NativeApp, _request: &CommandRequest
 }
 
 fn execute_toggle_sidebar_part(app: &mut NativeApp, _request: &CommandRequest) {
-    if app.workspace_surface.is_editor() && app.sidebar_part.is_expanded() {
-        app.workspace_surface.show_agent();
+    if app.workspace_surface.is_editor() {
+        app.show_agent_pane();
+        app.sidebar_part.collapse();
         app.pending_focus = Some(shell_interaction::COMPOSER);
+        return;
     }
-    app.sidebar_part.toggle();
+    match app.active_workspace_pane_kind() {
+        Some(crate::pane_input::PaneInputKind::Files)
+        | Some(crate::pane_input::PaneInputKind::Diff) => app.show_agent_pane(),
+        _ => app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files),
+    }
 }
 
 fn execute_activate_session_tab(_app: &mut NativeApp, _request: &CommandRequest) {
@@ -307,15 +324,11 @@ fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
-    app.workspace_surface.show_agent();
-    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
-    app.sidebar_part.expand();
+    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
 }
 
 fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
-    app.workspace_surface.show_agent();
-    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files);
-    app.sidebar_part.expand();
+    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Files);
 }
 
 fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
@@ -373,9 +386,7 @@ fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
     {
         eprintln!("could not refresh Git projection: {error}");
     }
-    app.select_sidebar_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
-    app.workspace_surface.show_agent();
-    app.sidebar_part.expand();
+    app.select_workspace_pane_view(crate::sidebar_pane_workspace::AgentSidebarView::Changes);
 }
 
 fn execute_split_terminal_horizontal(app: &mut NativeApp, _request: &CommandRequest) {

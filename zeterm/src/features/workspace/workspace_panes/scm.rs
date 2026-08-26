@@ -3,10 +3,11 @@
 use zeta_editor::DiffEditorDocument;
 use zeta_ui::Color;
 
+#[path = "scm/layout.rs"]
 mod layout;
+#[path = "scm/pane.rs"]
 mod pane;
 
-pub use layout::SCM_TOOLBAR_HEIGHT;
 pub use layout::ScmLayout;
 pub use pane::EditorPane;
 pub use pane::EditorPaneState;
@@ -68,10 +69,6 @@ impl ScmState {
     ) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
         self.diffs = diffs.into_iter().collect();
         self.editor.replace_diffs(&self.diffs)
-    }
-
-    pub fn diffs(&self) -> &[ScmDiff] {
-        &self.diffs
     }
 
     pub const fn editor(&self) -> &EditorPaneState {

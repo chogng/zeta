@@ -1,6 +1,6 @@
-use zeta_agent_sidebar::AgentSidebarStyle;
-use zeta_agent_sidebar::FilesPaneStyle;
-use zeta_agent_sidebar::ScmPaneStyle;
+use crate::workspace_panes::AgentSidebarStyle;
+use crate::workspace_panes::FilesPaneStyle;
+use crate::workspace_panes::ScmPaneStyle;
 use zeta_editor::{
     CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
     CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
@@ -112,11 +112,8 @@ impl ShellPalette {
 
     pub(crate) fn sidebar_part_style(self) -> AgentSidebarStyle {
         AgentSidebarStyle::new(
-            self.surface,
             self.surface_raised,
-            self.border,
             self.text,
-            self.text_muted,
             self.surface_hovered,
             self.session_tab_highlight,
             self.session_search_style(),

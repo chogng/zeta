@@ -56,26 +56,3 @@ fn terminal_runtime_can_only_attach_to_matching_terminal_input() {
     assert_eq!(host.terminal_key(&key), Some(TerminalSessionKey::new(1)));
     assert!(!host.ensure_terminal(key, &session("session-2"), TerminalSessionKey::new(2),));
 }
-
-#[test]
-fn sidebar_mount_has_a_scope_separate_from_session_tabs() {
-    let group = PaneGroup::new();
-    let root = group.root_pane();
-    let mut host = PaneHost::new();
-    host.insert(
-        (PaneHostScope::Sidebar, root),
-        PaneBinding::new(PaneInput::diff("/workspace".into())),
-    );
-
-    let mount = host
-        .mount(&PaneHostScope::Sidebar, &group, root)
-        .expect("sidebar Pane should mount");
-    assert_eq!(mount.kind(), PaneInputKind::Diff);
-    assert_eq!(
-        host.kind(&(PaneHostScope::Sidebar, root)),
-        Some(PaneInputKind::Diff)
-    );
-
-    let session_scope = PaneHostScope::Tab(TabInputKey::session(session("session-1")));
-    assert!(host.mount(&session_scope, &group, root).is_none());
-}

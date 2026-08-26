@@ -11,11 +11,11 @@ use zui::ui::{
 };
 
 use super::FilesState;
-use crate::AgentSidebarStyle;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
     AGENT_FILES_TOOLBAR, AGENT_SIDEBAR_TOOLBAR,
 };
+use crate::workspace_panes::AgentSidebarStyle;
 
 const PADDING: f32 = 8.0;
 const ACTION_SIZE: f32 = 28.0;

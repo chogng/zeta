@@ -6,12 +6,12 @@ use zeta_ui::{
     TextStyle, UiScene,
 };
 
+use crate::pane_input::PaneInputKind;
 use crate::session::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR, WINDOW,
 };
 use crate::shell_style::ShellPalette;
-use crate::sidebar_part::SidebarPartState;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
 use zui::window::WindowControlInsets;
 
@@ -28,7 +28,7 @@ pub(crate) struct Titlebar {
     right_action_bar: ActionBar,
     session_toggle_label: &'static str,
     settings_label: &'static str,
-    sidebar_toggle_label: &'static str,
+    workspace_toggle_label: &'static str,
 }
 
 impl Titlebar {
@@ -36,7 +36,7 @@ impl Titlebar {
         bounds: Rect,
         palette: ShellPalette,
         session_sidebar: SessionSidebarState,
-        sidebar_part: SidebarPartState,
+        active_pane_kind: Option<PaneInputKind>,
         window_control_insets: WindowControlInsets,
         dispatch: &UiDispatch,
     ) -> Self {
@@ -97,12 +97,16 @@ impl Titlebar {
         } else {
             icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
         };
-        let sidebar_toggle_label = if sidebar_part.is_expanded() {
-            "Collapse inspector"
+        let workspace_pane_visible = matches!(
+            active_pane_kind,
+            Some(PaneInputKind::Files | PaneInputKind::Diff)
+        );
+        let workspace_toggle_label = if workspace_pane_visible {
+            "Show agent workspace"
         } else {
-            "Expand inspector"
+            "Show workspace files"
         };
-        let sidebar_toggle_icon = if sidebar_part.is_expanded() {
+        let sidebar_toggle_icon = if workspace_pane_visible {
             icons::LAYOUT_SIDEBAR_RIGHT
         } else {
             icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
@@ -147,7 +151,7 @@ impl Titlebar {
                     )),
                     ActionBarItem::Button(ActionBarButton::icon(
                         sidebar_toggle_icon,
-                        sidebar_toggle_label,
+                        workspace_toggle_label,
                         sidebar_toggle_state,
                     )),
                 ],
@@ -156,7 +160,7 @@ impl Titlebar {
             ),
             session_toggle_label,
             settings_label,
-            sidebar_toggle_label,
+            workspace_toggle_label,
         }
     }
 
@@ -193,7 +197,7 @@ impl Titlebar {
                     .interactive_item_bounds(1)
                     .expect("sidebar part toggle is enabled"),
                 AccessibilityRole::Button,
-                self.sidebar_toggle_label,
+                self.workspace_toggle_label,
             )
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)

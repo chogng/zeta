@@ -108,12 +108,18 @@ impl NativeApp {
         }
         self.workspace_context
             .apply_git_projection(switched.git.as_ref());
-        self.replace_sidebar_pane_workspace();
+        self.replace_workspace_pane();
         self.language_service
             .replace_workspace(self.workspace_context.working_directory());
         self.file_editor_host.replace_workspace();
         self.file_editor_input.reset_for_document_change();
         self.workspace_surface.show_agent();
+        if !matches!(
+            self.active_workspace_pane_kind(),
+            Some(crate::pane_input::PaneInputKind::Files | crate::pane_input::PaneInputKind::Diff)
+        ) {
+            let _ = self.bind_agent_pane();
+        }
         self.pending_focus = Some(crate::shell_interaction::COMPOSER);
         self.refresh_files_from_app_server();
         self.composer

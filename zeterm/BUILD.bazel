@@ -29,7 +29,6 @@ filegroup(
     ]) + [
         "//:Cargo.lock",
         "//:Cargo.toml",
-        "//zeterm/agent-sidebar:agent-sidebar_sources",
         "//zeterm/commands:commands_sources",
         "//zeterm/composer:composer_sources",
         "//zeterm/editor:editor_sources",
@@ -40,6 +39,7 @@ filegroup(
         "//zeterm/native-keybindings:native-keybindings_sources",
         "//zeterm/settings:settings_sources",
         "//zeterm/ui:ui_sources",
+        "//zeterm/workbench:workbench_sources",
         "//zeterm/zui:zui_sources",
         "//zeterm/zui-demo:zui_demo_sources",
     ],

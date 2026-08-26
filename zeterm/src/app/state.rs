@@ -16,7 +16,7 @@ pub(crate) struct NativeApp {
     pub(super) tab_inputs: TabInputModel,
     pub(super) pane_groups: HashMap<TabInputKey, PaneGroup>,
     pub(super) pane_host: PaneHost,
-    pub(super) sidebar_pane_group: PaneGroup,
+    pub(super) workspace_pane_returns: HashMap<TabInputKey, PaneInput>,
     pub(super) pane_view_states: HashMap<(TabInputKey, PaneId), TerminalPaneViewState>,
     pub(super) active_pane: Option<(TabInputKey, PaneId)>,
     pub(super) terminal_pane_resize: Option<TerminalPaneResize>,
@@ -85,14 +85,7 @@ impl NativeApp {
             local_workspace_context
         };
         let sidebar_pane_workspace = SidebarPaneWorkspace::new(&workspace_context);
-        let sidebar_pane_group = PaneGroup::new();
-        let mut pane_host = PaneHost::new();
-        pane_host.insert(
-            (PaneHostScope::Sidebar, sidebar_pane_group.root_pane()),
-            PaneBinding::new(PaneInput::files(
-                workspace_context.working_directory().to_path_buf(),
-            )),
-        );
+        let pane_host = PaneHost::new();
         let mut keybindings = keybindings::NativeKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             local_profile_root().join("keybindings.json"),
@@ -132,7 +125,7 @@ impl NativeApp {
             tab_inputs: TabInputModel::default(),
             pane_groups: HashMap::new(),
             pane_host,
-            sidebar_pane_group,
+            workspace_pane_returns: HashMap::new(),
             pane_view_states: HashMap::new(),
             active_pane: None,
             terminal_pane_resize: None,

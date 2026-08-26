@@ -29,8 +29,8 @@ pub(crate) use app::native_app::{
     sidebar_pane_workspace, sidebar_part, tab_input, terminal_blocks, terminal_input,
     terminal_output_scroll_view, terminal_pane_view, terminal_pointer, terminal_projection,
     terminal_scrollback, terminal_selection, terminal_session, thread_projection, thread_timeline,
-    thread_timeline_scroll, titlebar, workbench, workspace_context, workspace_path_picker,
-    workspace_path_picker_input, workspace_surface,
+    thread_timeline_scroll, titlebar, workbench, workspace_context, workspace_panes,
+    workspace_path_picker, workspace_path_picker_input, workspace_surface,
 };
 
 #[cfg(test)]

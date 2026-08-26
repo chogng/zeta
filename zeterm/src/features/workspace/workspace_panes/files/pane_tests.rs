@@ -1,5 +1,5 @@
 use super::{EXPLORER_PANE, FilesPane, FilesPaneStyle};
-use crate::{DirectoryEntry, FilesState};
+use crate::workspace_panes::{DirectoryEntry, FilesState};
 use zeta_ui::{Color, Component, Point, Rect, ScrollViewStyle, ScrollbarStyle, UiScene};
 use zui::ui::{AccessibilityRole, DispatchInvalidation, InteractionFrame, UiDispatch, UiFrame};
 

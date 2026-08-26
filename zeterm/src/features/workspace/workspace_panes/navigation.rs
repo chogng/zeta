@@ -8,11 +8,11 @@ use zui::ui::{
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::AgentSidebarStyle;
-use crate::AgentSidebarView;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_NAVIGATION, AGENT_SIDEBAR_TOOLBAR, AgentSidebarPaneAction,
 };
+use crate::workspace_panes::AgentSidebarStyle;
+use crate::workspace_panes::AgentSidebarView;
 
 const ITEM_WIDTH: f32 = 64.0;
 

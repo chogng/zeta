@@ -3,24 +3,22 @@ use zui::ui::ElementId;
 
 use crate::pane_group::PaneId;
 
-#[cfg(test)]
-pub(crate) use zeta_agent_sidebar::AGENT_CHANGES;
-#[cfg(test)]
-pub(crate) use zeta_agent_sidebar::AGENT_EDITOR_PANE;
-pub(crate) use zeta_agent_sidebar::AGENT_EXPLORER_PANE;
-pub(crate) use zeta_agent_sidebar::AGENT_FILE_SEARCH_INPUT;
-#[cfg(test)]
-pub(crate) use zeta_agent_sidebar::AGENT_FILES;
-#[cfg(test)]
-pub(crate) use zeta_agent_sidebar::AGENT_FILES_ACTION_BAR;
-pub(crate) use zeta_agent_sidebar::AGENT_FILES_REFRESH;
-pub(crate) use zeta_agent_sidebar::AGENT_FILES_SEARCH;
-pub(crate) use zeta_agent_sidebar::AGENT_SIDEBAR;
-#[cfg(test)]
-pub(crate) use zeta_agent_sidebar::AGENT_SIDEBAR_NAVIGATION;
-pub(crate) use zeta_agent_sidebar::AGENT_SIDEBAR_TOOLBAR;
-pub(crate) use zeta_agent_sidebar::AgentSidebarPaneAction;
-pub(crate) use zeta_agent_sidebar::MULTI_DIFF_EDITOR;
+pub(crate) const AGENT_SIDEBAR: ElementId = ElementId::scoped(1, 23);
+pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
+pub(crate) const AGENT_EDITOR_PANE: ElementId = ElementId::scoped(1, 29);
+pub(crate) const MULTI_DIFF_EDITOR: ElementId = ElementId::scoped(1, 30);
+pub(crate) const MULTI_DIFF_SCROLLBAR: ElementId = ElementId::scoped(1, 31);
+pub(crate) const AGENT_SIDEBAR_NAVIGATION: ElementId = ElementId::scoped(1, 32);
+pub(crate) const AGENT_CHANGES: ElementId = ElementId::scoped(1, 33);
+pub(crate) const AGENT_FILES: ElementId = ElementId::scoped(1, 34);
+pub(crate) const AGENT_SIDEBAR_TOOLBAR: ElementId = ElementId::scoped(1, 35);
+pub(crate) const AGENT_FILES_ACTION_BAR: ElementId = ElementId::scoped(1, 36);
+pub(crate) const AGENT_FILES_REFRESH: ElementId = ElementId::scoped(1, 37);
+pub(crate) const AGENT_FILES_SEARCH: ElementId = ElementId::scoped(1, 38);
+pub(crate) const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(1, 39);
+pub(crate) const AGENT_FILES_TOOLBAR: ElementId = ElementId::scoped(1, 52);
+
+pub(crate) use crate::workspace_panes::AgentSidebarPaneAction;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;

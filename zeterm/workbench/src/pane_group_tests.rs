@@ -76,13 +76,5 @@ fn resizing_a_split_persists_its_ratio_in_the_next_layout() {
     assert!(group.resize_split(sash.split_id(), resize));
 
     let resized = group.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-    assert!(
-        resized
-            .leaf(crate::pane_group::PaneId::ROOT)
-            .unwrap()
-            .bounds()
-            .size
-            .width
-            > 400.0
-    );
+    assert!(resized.leaf(PaneId::ROOT).unwrap().bounds().size.width > 400.0);
 }

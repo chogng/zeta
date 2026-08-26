@@ -7,7 +7,7 @@ use zui::ui::ElementId;
 
 use super::DirectoryEntry;
 use super::DirectoryEntryKind;
-use crate::AgentSidebarAction;
+use crate::workspace_panes::AgentSidebarAction;
 
 const FILE_TREE_SCOPE: u32 = 5;
 
@@ -31,14 +31,6 @@ impl FilesEntry {
         &self.label
     }
 
-    pub const fn is_directory(&self) -> bool {
-        self.directory
-    }
-
-    pub const fn is_expanded(&self) -> bool {
-        self.expanded
-    }
-
     pub fn element_id(&self) -> ElementId {
         tree_element_id(self.id)
     }
@@ -47,16 +39,11 @@ impl FilesEntry {
 #[derive(Clone, Copy)]
 pub struct FilesTreeRow<'a> {
     entry: &'a FilesEntry,
-    depth: usize,
 }
 
 impl<'a> FilesTreeRow<'a> {
     pub const fn entry(self) -> &'a FilesEntry {
         self.entry
-    }
-
-    pub const fn depth(self) -> usize {
-        self.depth
     }
 }
 
@@ -98,7 +85,6 @@ impl FilesTree {
         let node_id = *self.visible_nodes.get(index)?;
         Some(FilesTreeRow {
             entry: self.nodes.get(node_id.0)?,
-            depth: self.visible_items.get(index)?.depth(),
         })
     }
 

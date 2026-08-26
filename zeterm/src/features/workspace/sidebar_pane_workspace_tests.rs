@@ -10,7 +10,7 @@ static NEXT_WORKSPACE_ID: AtomicU64 = AtomicU64::new(0);
 #[test]
 fn replacing_workspace_rebuilds_the_files_root() {
     let fixture = std::env::temp_dir().join(format!(
-        "zeta-agent-sidebar-workspace-{}-{}",
+        "zeta-workspace-pane-workspace-{}-{}",
         std::process::id(),
         NEXT_WORKSPACE_ID.fetch_add(1, Ordering::Relaxed)
     ));
@@ -44,7 +44,7 @@ fn replacing_workspace_rebuilds_the_files_root() {
 #[test]
 fn file_list_retains_pixel_scroll_and_resets_it_when_files_refresh() {
     let fixture = std::env::temp_dir().join(format!(
-        "zeta-agent-sidebar-scroll-{}-{}",
+        "zeta-workspace-pane-scroll-{}-{}",
         std::process::id(),
         NEXT_WORKSPACE_ID.fetch_add(1, Ordering::Relaxed)
     ));

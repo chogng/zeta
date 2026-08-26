@@ -13,11 +13,11 @@ use zeta_ui::{
     ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle, UiNode, UiScene,
 };
 
+use super::ScmDiff;
 use super::ScmPaneStyle;
 use crate::shell_interaction::{
     AGENT_EDITOR_PANE, AGENT_SIDEBAR, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR,
 };
-use crate::workspace_context::WorkspaceDiff;
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
 
@@ -132,7 +132,7 @@ impl EditorPaneState {
         toggled
     }
 
-    pub fn replace_diffs(&mut self, diffs: &[WorkspaceDiff]) -> Vec<MultiDiffEditorItemIdentity> {
+    pub fn replace_diffs(&mut self, diffs: &[ScmDiff]) -> Vec<MultiDiffEditorItemIdentity> {
         let mut next_diffs = Vec::with_capacity(diffs.len());
         for diff in diffs {
             let file_name = diff.path().to_owned();

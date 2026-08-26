@@ -24,7 +24,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use zeta_agent_sidebar::AgentSidebarAction;
+use crate::workspace_panes::AgentSidebarAction;
 use zeta_composer::{ComposerInteractionActivation, SelectionDirection};
 use zeta_composer::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;

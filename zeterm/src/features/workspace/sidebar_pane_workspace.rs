@@ -1,11 +1,11 @@
 use std::time::Instant;
 
-use zeta_agent_sidebar::AgentSidebar;
-use zeta_agent_sidebar::AgentSidebarAction;
-use zeta_agent_sidebar::DirectoryEntry;
-use zeta_agent_sidebar::EditorPaneState;
-use zeta_agent_sidebar::FilesState;
-use zeta_agent_sidebar::ScmDiff;
+use crate::workspace_panes::AgentSidebar;
+use crate::workspace_panes::AgentSidebarAction;
+use crate::workspace_panes::DirectoryEntry;
+use crate::workspace_panes::EditorPaneState;
+use crate::workspace_panes::FilesState;
+use crate::workspace_panes::ScmDiff;
 use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
 use zeta_editor::MultiDiffEditorStyle;
 use zeta_ui::Point;
@@ -17,14 +17,14 @@ use zeta_ui::TextInputCompositionEvent;
 use zui::ui::ElementId;
 
 use crate::workspace_context::WorkspaceContext;
-use zeta_agent_sidebar::ScrollbarPointerOutcome;
+use crate::workspace_panes::ScrollbarPointerOutcome;
 
 #[cfg(test)]
-use zeta_agent_sidebar::FilesTreeRow;
+use crate::workspace_panes::FilesTreeRow;
 #[cfg(test)]
 use zeta_ui::ScrollState;
 
-pub(crate) use zeta_agent_sidebar::AgentSidebarView;
+pub(crate) use crate::workspace_panes::AgentSidebarView;
 
 pub(crate) struct SidebarPaneWorkspace {
     sidebar: AgentSidebar,

@@ -28,12 +28,31 @@ impl NativeApp {
             .set_editor_style(palette.multi_diff_editor_style());
     }
 
-    /// Synchronizes the sidebar's logical content selection with its mounted PaneInput.
+    /// Mounts a workspace feature as the active leaf of the current Session workbench.
     ///
-    /// The sidebar Part owns visibility and width, while this binding identifies the content leaf
-    /// inside it. The feature crate keeps Files/SCM state; the Native host only changes which
-    /// feature input is mounted.
-    pub(super) fn select_sidebar_pane_view(&mut self, view: AgentSidebarView) {
+    /// Files and Changes are ordinary `PaneInput`s. Their feature state stays in the workspace
+    /// feature, while this host only changes the descriptive binding and active-pane context.
+    pub(super) fn select_workspace_pane_view(&mut self, view: AgentSidebarView) {
+        let Some(tab_key) = self.active_session_tab_key() else {
+            return;
+        };
+        let pane = self
+            .pane_groups
+            .entry(tab_key.clone())
+            .or_default()
+            .root_pane();
+        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
+        let current = self
+            .pane_host
+            .binding(&host_key)
+            .map(|binding| binding.input().clone());
+        if current.as_ref().is_some_and(|input| {
+            !matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff)
+        }) {
+            if let Some(current) = current {
+                self.workspace_pane_returns.insert(tab_key.clone(), current);
+            }
+        }
         let input = match view {
             AgentSidebarView::Changes => {
                 PaneInput::diff(self.workspace_context.working_directory().to_path_buf())
@@ -42,10 +61,81 @@ impl NativeApp {
                 PaneInput::files(self.workspace_context.working_directory().to_path_buf())
             }
         };
+        self.pane_host.insert(host_key, PaneBinding::new(input));
+        self.workspace_surface.show_agent();
+        self.sidebar_part.collapse();
+        let _ = self.activate_pane_context(tab_key, pane);
+    }
+
+    /// Restores the active Session's Agent pane after a workspace feature pane is dismissed.
+    pub(super) fn show_agent_pane(&mut self) {
+        let _ = self.bind_agent_pane();
+        self.workspace_surface.show_agent();
+    }
+
+    /// Binds the active Session's Agent descriptor without changing the visible surface.
+    ///
+    /// File-editor and terminal transitions use this form when the `WorkspaceSurface` has already
+    /// selected the surface that should remain visible.
+    pub(super) fn bind_agent_pane(&mut self) -> bool {
+        let Some(tab_key) = self.active_session_tab_key() else {
+            return false;
+        };
+        let Some(thread_id) = self
+            .thread_projection
+            .thread()
+            .map(|thread| thread.thread_id.clone())
+        else {
+            return false;
+        };
+        let Some(session_id) = tab_key.session_id().cloned() else {
+            return false;
+        };
+        let pane = self
+            .pane_groups
+            .entry(tab_key.clone())
+            .or_default()
+            .root_pane();
         self.pane_host.insert(
-            (PaneHostScope::Sidebar, self.sidebar_pane_group.root_pane()),
+            (PaneHostScope::Tab(tab_key.clone()), pane),
+            PaneBinding::new(PaneInput::agent(session_id, thread_id)),
+        );
+        self.workspace_pane_returns.remove(&tab_key);
+        self.activate_pane_context(tab_key, pane)
+    }
+
+    pub(super) fn active_workspace_pane_kind(&self) -> Option<PaneInputKind> {
+        let tab_key = self.active_session_tab_key()?;
+        let group = self.pane_groups.get(&tab_key)?;
+        self.pane_host
+            .kind(&(PaneHostScope::Tab(tab_key), group.active_pane()))
+    }
+
+    /// Restores a Files/Changes pane that was temporarily replaced by the Terminal surface.
+    pub(super) fn restore_workspace_pane_after_terminal(&mut self) {
+        let Some(tab_key) = self.active_session_tab_key() else {
+            self.show_agent_pane();
+            return;
+        };
+        let Some(input) = self.workspace_pane_returns.remove(&tab_key) else {
+            let _ = self.bind_agent_pane();
+            return;
+        };
+        if !matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff) {
+            let _ = self.bind_agent_pane();
+            return;
+        }
+        let pane = self
+            .pane_groups
+            .entry(tab_key.clone())
+            .or_default()
+            .root_pane();
+        self.pane_host.insert(
+            (PaneHostScope::Tab(tab_key.clone()), pane),
             PaneBinding::new(input),
         );
+        self.workspace_surface.show_agent();
+        let _ = self.activate_pane_context(tab_key, pane);
     }
 
     pub(super) fn fail(&mut self, message: impl std::fmt::Display) {

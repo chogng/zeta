@@ -1,3 +1,5 @@
+//! Sidebar visibility, sizing, and resize-state contract tests.
+
 use std::time::Instant;
 
 use super::{DEFAULT_WIDTH, MAXIMUM_WIDTH, MINIMUM_MAIN_WIDTH, MINIMUM_WIDTH, SidebarPartState};

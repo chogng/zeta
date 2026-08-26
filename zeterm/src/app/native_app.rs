@@ -44,9 +44,9 @@ use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline_scroll::ThreadTimelineScroll;
 use crate::workbench::terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
 use crate::workspace_context::WorkspaceContext;
+use crate::workspace_panes::AgentSidebarAction;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurface;
-use zeta_agent_sidebar::AgentSidebarAction;
 use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
 use zeta_protocol::SessionId;
@@ -214,7 +214,7 @@ pub(crate) mod shell_interaction;
 pub(crate) mod shell_scene;
 #[path = "../presentation/shell_style.rs"]
 pub(crate) mod shell_style;
-#[path = "../workbench/sidebar_pane_workspace.rs"]
+#[path = "../features/workspace/sidebar_pane_workspace.rs"]
 pub(crate) mod sidebar_pane_workspace;
 #[path = "../workbench/sidebar_part.rs"]
 pub(crate) mod sidebar_part;
@@ -254,6 +254,8 @@ pub(crate) mod workbench;
 mod workbench_runtime;
 #[path = "../features/workspace/workspace_context.rs"]
 pub(crate) mod workspace_context;
+#[path = "../features/workspace/workspace_panes.rs"]
+pub(crate) mod workspace_panes;
 #[path = "../features/workspace/workspace_path_picker.rs"]
 pub(crate) mod workspace_path_picker;
 #[path = "../features/workspace/workspace_path_picker_input.rs"]

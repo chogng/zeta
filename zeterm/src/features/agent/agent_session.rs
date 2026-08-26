@@ -1367,6 +1367,7 @@ impl NativeApp {
             eprintln!("could not open Session Workspace while the active file has unsaved changes");
             return;
         }
+        let was_terminal = self.workspace_surface.is_terminal();
         let ensured = {
             let _trace = session_switch_trace::Span::new(Some(switch_id), "ensure-terminal");
             self.ensure_terminal_for_session(&session_id)
@@ -1407,6 +1408,9 @@ impl NativeApp {
         self.tab_inputs.activate_session(&session_id);
         self.activate_session_workbench_tab();
         let terminal_activated = self.activate_terminal_for_session(&session_id);
+        if !was_terminal {
+            let _ = self.bind_agent_pane();
+        }
         session_switch_trace::event(
             Some(switch_id),
             "local-terminal-activation",
@@ -1502,6 +1506,14 @@ impl NativeApp {
                 self.activate_terminal_for_session(&session.session_id);
                 synchronize_composer_classifier(&mut self.composer, &thread);
                 self.thread_projection.replace_snapshot(thread);
+                let active_session = self
+                    .active_session_tab_key()
+                    .and_then(|key| key.session_id().cloned());
+                if active_session.as_ref() == Some(&session.session_id)
+                    && !self.workspace_surface.is_terminal()
+                {
+                    let _ = self.bind_agent_pane();
+                }
             }
             AgentSessionEvent::Update(update) => {
                 update_composer_classifier(&mut self.composer, &update.update);
@@ -1516,7 +1528,7 @@ impl NativeApp {
             AgentSessionEvent::GitProjection(projection) => {
                 self.workspace_context
                     .apply_git_projection(projection.as_ref());
-                self.sync_sidebar_pane_repository();
+                self.sync_workspace_pane_repository();
                 self.refresh_files_from_app_server();
             }
             AgentSessionEvent::FilesChanged(changed) => {
@@ -1570,23 +1582,23 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
 }
 
 impl NativeApp {
-    pub(crate) fn replace_sidebar_pane_workspace(&mut self) {
-        let sidebar_kind = self.pane_host.kind(&(
-            crate::pane_host::PaneHostScope::Sidebar,
-            self.sidebar_pane_group.root_pane(),
-        ));
+    pub(crate) fn replace_workspace_pane(&mut self) {
+        let pane_kind = self.active_workspace_pane_kind();
         let removed = self
             .sidebar_pane_workspace
             .replace_workspace(&self.workspace_context);
-        let view = match sidebar_kind {
-            Some(crate::pane_input::PaneInputKind::Diff) => AgentSidebarView::Changes,
-            _ => AgentSidebarView::Files,
+        let view = match pane_kind {
+            Some(crate::pane_input::PaneInputKind::Diff) => Some(AgentSidebarView::Changes),
+            Some(crate::pane_input::PaneInputKind::Files) => Some(AgentSidebarView::Files),
+            _ => None,
         };
-        self.select_sidebar_pane_view(view);
+        if let Some(view) = view {
+            self.select_workspace_pane_view(view);
+        }
         self.remove_scm_animation_tracks(removed);
     }
 
-    fn sync_sidebar_pane_repository(&mut self) {
+    fn sync_workspace_pane_repository(&mut self) {
         let removed = self
             .sidebar_pane_workspace
             .sync_repository(&self.workspace_context);
@@ -1637,6 +1649,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
+                self.show_agent_pane();
                 self.sidebar_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
@@ -1672,6 +1685,7 @@ impl NativeApp {
                 self.language_service
                     .synchronize_active(&self.file_editor_host);
                 self.file_editor_input.reset_for_document_change();
+                self.show_agent_pane();
                 self.sidebar_part.expand();
                 self.workspace_surface.show_editor();
                 self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);

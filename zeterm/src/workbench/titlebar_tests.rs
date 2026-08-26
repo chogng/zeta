@@ -1,10 +1,10 @@
 use super::Titlebar;
+use crate::pane_input::PaneInputKind;
 use crate::session::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR,
 };
 use crate::shell_style::SHELL_PALETTE;
-use crate::sidebar_part::SidebarPartState;
 use zeta_icons::icons;
 use zeta_ui::{Color, Component, Point, Rect, UiScene};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame, UiIntent};
@@ -18,7 +18,7 @@ fn titlebar_places_actions_after_native_window_controls_and_component_gap() {
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         SHELL_PALETTE,
         SessionSidebarState::collapsed(),
-        SidebarPartState::default(),
+        None,
         WindowControlInsets::from_logical_sides(70.0, 110.0),
         &dispatch,
     );
@@ -97,7 +97,7 @@ fn expanded_sidebars_use_the_left_and_right_icons() {
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
         SHELL_PALETTE,
         SessionSidebarState::expanded(),
-        SidebarPartState::expanded(),
+        Some(PaneInputKind::Files),
         WindowControlInsets::NONE,
         &UiDispatch::default(),
     );

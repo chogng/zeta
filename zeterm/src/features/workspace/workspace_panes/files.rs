@@ -18,21 +18,24 @@ use zeta_ui::TreeItem;
 use zeta_ui::VirtualListLayout;
 use zui::ui::ElementId;
 
-use crate::AgentSidebarAction;
+use crate::workspace_panes::AgentSidebarAction;
 
+#[path = "files/file_icon.rs"]
 mod file_icon;
+#[path = "files/file_tree.rs"]
 mod file_tree;
+#[path = "files/layout.rs"]
 mod layout;
+#[path = "files/pane.rs"]
 mod pane;
+#[path = "files/toolbar.rs"]
 mod toolbar;
+#[path = "files/tree_view.rs"]
 mod tree_view;
 
-pub use file_tree::FilesEntry;
 use file_tree::FilesTree;
 pub use file_tree::FilesTreeRow;
-pub use layout::FILES_TOOLBAR_HEIGHT;
 pub use layout::FilesLayout;
-pub use pane::EXPLORER_PANE;
 pub use pane::FilesPane;
 pub use pane::FilesPaneStyle;
 pub use toolbar::FilesToolbar;

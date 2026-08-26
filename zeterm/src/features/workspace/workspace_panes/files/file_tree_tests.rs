@@ -2,7 +2,7 @@
 
 use super::DirectoryEntry;
 use super::FilesTree;
-use crate::AgentSidebarAction;
+use crate::workspace_panes::AgentSidebarAction;
 use zeta_ui::TreeItemExpansion;
 
 #[test]

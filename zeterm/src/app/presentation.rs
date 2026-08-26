@@ -15,9 +15,8 @@ pub(super) fn with_shell_presentation_model<R>(
         terminal_workspace,
         pane_groups,
         pane_host,
-        sidebar_pane_group,
         pane_view_states,
-        active_pane,
+        active_pane: _,
         terminal_pane_resize,
         terminal_scroll,
         terminal_selection,
@@ -62,13 +61,15 @@ pub(super) fn with_shell_presentation_model<R>(
         language_service.server_state(language_server_settings.selected_server().server_id());
     let active_tab_input = tab_inputs.active_key();
     let pane_group = active_tab_input.and_then(|key| pane_groups.get(key));
-    let sidebar_pane_group = &*sidebar_pane_group;
-    let sidebar_pane = pane_host.mount(
-        &PaneHostScope::Sidebar,
-        sidebar_pane_group,
-        sidebar_pane_group.root_pane(),
-    );
-    let active_binding = active_pane.as_ref();
+    let active_pane = active_tab_input.and_then(|tab_key| {
+        let group = pane_groups.get(tab_key)?;
+        pane_host.mount(
+            &PaneHostScope::Tab(tab_key.clone()),
+            group,
+            group.active_pane(),
+        )
+    });
+    let active_pane_id = active_pane.map(|mount| mount.pane_id());
     let terminal_panes = pane_group
         .map(|group| {
             let Some(tab_key) = active_tab_input else {
@@ -87,7 +88,7 @@ pub(super) fn with_shell_presentation_model<R>(
                         .then(|| mount.terminal_key())
                         .flatten();
                     let (scroll_offset, scrollbar_presentation, selection) =
-                        if active_binding == Some(&binding) {
+                        if active_pane_id == Some(pane_id) {
                             (
                                 terminal_scroll.offset(),
                                 terminal_scroll.scrollbar_presentation(),
@@ -116,12 +117,12 @@ pub(super) fn with_shell_presentation_model<R>(
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let terminal_key = match active_binding {
-        Some((tab_key, pane)) => {
-            pane_host.terminal_key(&(PaneHostScope::Tab(tab_key.clone()), *pane))
-        }
-        None => terminal_workspace.active_key(),
-    };
+    let terminal_key = active_tab_input
+        .zip(active_pane_id)
+        .and_then(|(tab_key, pane)| {
+            pane_host.terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+        })
+        .or_else(|| terminal_workspace.active_key());
     operation(
         ShellPresentationModel {
             palette: *palette,
@@ -130,8 +131,7 @@ pub(super) fn with_shell_presentation_model<R>(
                 .map(TerminalSession::core),
             terminal_panes: &terminal_panes,
             pane_group,
-            sidebar_pane_group: Some(sidebar_pane_group),
-            sidebar_pane,
+            active_pane,
             terminal_pane_resize_split: terminal_pane_resize.as_ref().map(|resize| resize.split_id),
             terminal_scroll_offset: terminal_scroll.offset(),
             terminal_scrollbar_presentation: terminal_scroll.scrollbar_presentation(),

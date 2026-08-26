@@ -6,7 +6,7 @@ use zui::input::MouseScrollDelta;
 use crate::NativeApp;
 use crate::shell_interaction::{AGENT_EXPLORER_PANE, MULTI_DIFF_EDITOR};
 use crate::terminal_projection::scroll_limit;
-use zeta_agent_sidebar::FILE_LIST_ROW_HEIGHT;
+use crate::workspace_panes::FILE_LIST_ROW_HEIGHT;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const PIXELS_PER_LINE: f64 = 18.0;

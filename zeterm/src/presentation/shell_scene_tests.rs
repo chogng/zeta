@@ -189,7 +189,40 @@ fn presentation_with_active_tab_input(
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let thread_projection = ThreadProjection::default();
-    let active_tab_input = active_tab_input.as_ref();
+    let workspace_tab_key = TabInputKey::session(
+        zeta_protocol::SessionId::new("workspace-pane-session")
+            .expect("test session ID is non-empty"),
+    );
+    let workspace_pane_enabled = sidebar_part.is_expanded() && active_tab_input.is_none();
+    let sidebar_part = workspace_pane_enabled
+        .then(SidebarPartState::default)
+        .unwrap_or(sidebar_part);
+    let workspace_pane_group = PaneGroup::new();
+    let mut pane_host = PaneHost::new();
+    if workspace_pane_enabled {
+        pane_host.insert(
+            (
+                PaneHostScope::Tab(workspace_tab_key.clone()),
+                workspace_pane_group.root_pane(),
+            ),
+            PaneBinding::new(PaneInput::files(
+                workspace_context.working_directory().to_path_buf(),
+            )),
+        );
+    }
+    let workspace_pane = workspace_pane_enabled.then(|| {
+        pane_host
+            .mount(
+                &PaneHostScope::Tab(workspace_tab_key.clone()),
+                &workspace_pane_group,
+                workspace_pane_group.root_pane(),
+            )
+            .expect("workspace pane should mount")
+    });
+    let active_tab_input = active_tab_input
+        .as_ref()
+        .or(workspace_pane_enabled.then_some(&workspace_tab_key));
+    let pane_group = workspace_pane_enabled.then_some(&workspace_pane_group);
     let tab_inputs = active_tab_input
         .is_some_and(|input| input.is_settings())
         .then(|| vec![TabInput::from_settings()])
@@ -200,9 +233,8 @@ fn presentation_with_active_tab_input(
             palette: crate::shell_style::SHELL_PALETTE,
             terminal,
             terminal_panes: &[],
-            pane_group: None,
-            sidebar_pane_group: None,
-            sidebar_pane: None,
+            pane_group,
+            active_pane: workspace_pane,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -260,9 +292,8 @@ fn presentation_with_active_tab_input(
             palette: crate::shell_style::SHELL_PALETTE,
             terminal,
             terminal_panes: &[],
-            pane_group: None,
-            sidebar_pane_group: None,
-            sidebar_pane: None,
+            pane_group,
+            active_pane: workspace_pane,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -459,8 +490,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            sidebar_pane_group: None,
-            sidebar_pane: None,
+            active_pane: None,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -737,8 +767,7 @@ fn session_search_filters_tabs_by_session_name() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            sidebar_pane_group: None,
-            sidebar_pane: None,
+            active_pane: None,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -800,11 +829,8 @@ fn session_search_filters_tabs_by_session_name() {
 }
 
 #[test]
-fn expanded_sidebar_part_defaults_to_the_files_pane_with_navigation_and_actions() {
+fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_actions() {
     let sidebar_part = SidebarPartState::expanded();
-    let layout =
-        ShellLayout::for_viewport(viewport(), SessionSidebarState::collapsed(), sidebar_part)
-            .unwrap();
     let presentation = presentation_with_sidebars_and_menu(
         None,
         0,
@@ -831,48 +857,34 @@ fn expanded_sidebar_part_defaults_to_the_files_pane_with_navigation_and_actions(
         .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_SIDEBAR_RESIZE_HANDLE)
-        .unwrap();
+        .find(|node| node.id == AGENT_SIDEBAR_RESIZE_HANDLE);
 
     assert_eq!(
-        layout.sidebar(),
-        Some(zeta_ui::Rect::from_xywh(480.0, 32.0, 520.0, 668.0))
-    );
-    assert_eq!(
-        layout.main(),
-        zeta_ui::Rect::from_xywh(0.0, 32.0, 480.0, 668.0)
+        accessibility_nodes
+            .iter()
+            .find(|node| node.id == AGENT_SIDEBAR)
+            .map(|node| node.bounds),
+        Some(zeta_ui::Rect::from_xywh(0.0, 32.0, 1000.0, 668.0))
     );
     assert_eq!(sidebar.role, AccessibilityRole::Group);
-    assert_eq!(sidebar.label, "Workspace inspector");
+    assert_eq!(sidebar.label, "Workspace pane");
     assert_eq!(explorer.parent, Some(AGENT_SIDEBAR));
     assert_eq!(explorer.label, "Files");
     assert_eq!(navigation.role, AccessibilityRole::Toolbar);
-    assert_eq!(toolbar.label, "Workspace inspector toolbar");
-    assert_eq!(resize_handle.role, AccessibilityRole::Separator);
-    assert_eq!(resize_handle.label, "Resize inspector");
-    assert_eq!(resize_handle.value.as_deref(), Some("480 pixels"));
-    assert_eq!(
-        resize_handle.bounds,
-        zeta_ui::Rect::from_xywh(476.0, 32.0, 8.0, 668.0)
-    );
-    let mut resize_dispatch = UiDispatch::default();
-    resize_dispatch.pointer_moved(Point::new(480.0, 100.0), &presentation.interaction_frame());
-    assert_eq!(
-        resize_dispatch.pointer_feedback(&presentation.interaction_frame()),
-        CursorFeedback::ResizeHorizontal
-    );
+    assert_eq!(toolbar.label, "Workspace pane toolbar");
+    assert!(resize_handle.is_none());
     assert_eq!(
         toolbar.bounds,
-        zeta_ui::Rect::from_xywh(480.0, 32.0, 520.0, 36.0)
+        zeta_ui::Rect::from_xywh(0.0, 32.0, 1000.0, 36.0)
     );
     assert_eq!(
         navigation.bounds,
-        zeta_ui::Rect::from_xywh(480.0, 32.0, 128.0, 36.0)
+        zeta_ui::Rect::from_xywh(0.0, 32.0, 128.0, 36.0)
     );
     assert_eq!(navigation.parent, Some(AGENT_SIDEBAR_TOOLBAR));
     assert_eq!(
         explorer.bounds,
-        zeta_ui::Rect::from_xywh(480.0, 68.0, 520.0, 632.0)
+        zeta_ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
     );
     for id in [
         AGENT_CHANGES,
@@ -911,10 +923,10 @@ fn expanded_sidebar_part_defaults_to_the_files_pane_with_navigation_and_actions(
             viewport(),
             ScreenBuffer::Primary,
             SessionSidebarState::collapsed(),
-            sidebar_part,
+            SidebarPartState::default(),
         )
         .cols(),
-        54
+        119
     );
 }
 
@@ -925,18 +937,24 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let mut agent_workspace = SidebarPaneWorkspace::default();
     agent_workspace.sync_repository(&workspace_context);
-    let sidebar_pane_group = PaneGroup::new();
+    let tab_key = TabInputKey::session(
+        zeta_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
+    );
+    let main_pane_group = PaneGroup::new();
     let mut pane_host = PaneHost::new();
     pane_host.insert(
-        (PaneHostScope::Sidebar, sidebar_pane_group.root_pane()),
+        (
+            PaneHostScope::Tab(tab_key.clone()),
+            main_pane_group.root_pane(),
+        ),
         PaneBinding::new(PaneInput::diff(
             workspace_context.working_directory().to_path_buf(),
         )),
     );
-    let sidebar_pane = pane_host.mount(
-        &PaneHostScope::Sidebar,
-        &sidebar_pane_group,
-        sidebar_pane_group.root_pane(),
+    let main_pane = pane_host.mount(
+        &PaneHostScope::Tab(tab_key.clone()),
+        &main_pane_group,
+        main_pane_group.root_pane(),
     );
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
@@ -949,9 +967,8 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
             terminal_panes: &[],
-            pane_group: None,
-            sidebar_pane_group: Some(&sidebar_pane_group),
-            sidebar_pane,
+            pane_group: Some(&main_pane_group),
+            active_pane: main_pane,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -971,11 +988,11 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             composer: &composer,
             session_search: &session_search,
             tab_inputs: &[],
-            active_tab_input: None,
+            active_tab_input: Some(&tab_key),
             caret_visibility: CaretVisibility::Visible,
             dispatch: &dispatch,
             session_sidebar: SessionSidebarState::collapsed(),
-            sidebar_part: SidebarPartState::expanded(),
+            sidebar_part: SidebarPartState::default(),
             sidebar_pane_workspace: &agent_workspace,
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
@@ -1166,8 +1183,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         terminal: None,
         terminal_panes: &[],
         pane_group: None,
-        sidebar_pane_group: None,
-        sidebar_pane: None,
+        active_pane: None,
         terminal_pane_resize_split: None,
         terminal_scroll_offset: 0,
         terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -1340,8 +1356,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
-            sidebar_pane_group: None,
-            sidebar_pane: None,
+            active_pane: None,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),

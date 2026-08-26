@@ -26,9 +26,13 @@ impl NativeApp {
 
     /// Returns to the last selected session without fabricating a session for Settings.
     pub(super) fn activate_session_workbench_tab(&mut self) {
+        let was_terminal = self.workspace_surface.is_terminal();
         let _ = self.tab_inputs.activate_last_session();
         if let Some(session_id) = self.tab_inputs.selected_session().cloned() {
             let _ = self.activate_terminal_for_session(&session_id);
+            if !was_terminal {
+                let _ = self.bind_agent_pane();
+            }
         }
         self.language_server_settings.close();
         self.keyboard_shortcuts.close();

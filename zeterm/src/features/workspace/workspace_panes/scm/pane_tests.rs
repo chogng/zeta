@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use super::{EditorPane, EditorPaneState};
 use crate::shell_interaction::{AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR};
-use crate::shell_style::SHELL_PALETTE;
+use crate::workspace_panes::TEST_SCM_PANE_STYLE;
 use zeta_diff::DiffDocument;
 use zeta_ui::{Color, Component, Rect, UiScene};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
@@ -164,7 +164,7 @@ fn overflowing_editor_registers_an_accessible_scrollbar_region() {
     let pane = EditorPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 240.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -198,7 +198,7 @@ fn editor_pane_paints_all_visible_file_diffs_as_unified_sections_without_tab_sel
     let pane = EditorPane::new(
         Rect::from_xywh(680.0, 212.0, 320.0, 488.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -258,7 +258,7 @@ fn editor_pane_exposes_nested_component_inspection_nodes() {
     let pane = EditorPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 300.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -315,7 +315,7 @@ fn empty_editor_pane_exposes_an_honest_empty_state() {
     let pane = EditorPane::new(
         Rect::from_xywh(0.0, 100.0, 320.0, 300.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     let mut scene = UiScene::new(Color::WHITE);
 
@@ -347,7 +347,7 @@ fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
     let pane = EditorPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 300.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     frame.draw_component(&pane);
     let nodes = frame
@@ -371,7 +371,7 @@ fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
     let expanded_pane = EditorPane::new(
         Rect::from_xywh(0.0, 0.0, 320.0, 480.0),
         &state,
-        SHELL_PALETTE,
+        TEST_SCM_PANE_STYLE,
     );
     expanded_frame.draw_component(&expanded_pane);
     assert!(

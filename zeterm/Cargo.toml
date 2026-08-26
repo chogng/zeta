@@ -21,7 +21,6 @@ serde_json = { workspace = true }
 signal-hook = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 unicode-width = { workspace = true }
-zeta-agent-sidebar = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-daemon = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
@@ -49,6 +48,7 @@ zeta-theme = { workspace = true }
 zeta-commands = { workspace = true }
 zeta-composer = { workspace = true }
 zeta-ui = { workspace = true }
+zeta-workbench = { workspace = true }
 zeta-utils-path = { workspace = true }
 zeta-utils-pty = { workspace = true }
 zui = { workspace = true, features = ["wgpu"] }

@@ -111,7 +111,6 @@ members = [
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
     "zeterm",
-    "zeterm/agent-sidebar",
     "zeterm/commands",
     "zeterm/composer",
     "zeterm/editor",
@@ -121,6 +120,7 @@ members = [
     "zeterm/native-keybindings",
     "zeterm/settings",
     "zeterm/ui",
+    "zeterm/workbench",
     "zeterm/zui",
     "zeterm/zui-demo",
 ]
@@ -350,6 +350,7 @@ zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui = { path = "zeterm/ui" }
+zeta-workbench = { path = "zeterm/workbench" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }

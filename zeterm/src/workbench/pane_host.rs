@@ -9,13 +9,12 @@ use crate::terminal_session::TerminalSessionKey;
 
 /// Product scope that owns a PaneGroup mounted by the Native host.
 ///
-/// A session tab and the right sidebar have different lifetimes: the former follows a tab, while
-/// the latter follows the workspace shell. Keeping the scope explicit prevents sidebar panes from
-/// being accidentally keyed as a Settings or Session tab input.
+/// Every visible product pane belongs to the active Session workbench group. Terminal startup and
+/// feature-specific view state remain Native-owned; this enum only keeps the host binding keyed to
+/// the logical tab that owns the pane tree.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum PaneHostScope {
     Tab(TabInputKey),
-    Sidebar,
 }
 
 type PaneBindingKey = (PaneHostScope, PaneId);

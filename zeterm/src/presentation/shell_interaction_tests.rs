@@ -82,10 +82,7 @@ fn session_identity_namespace_does_not_overlap_sidebar_part_elements() {
         SESSION_HEADER,
         session_tab_id(1),
     ];
-    let sidebar_part_ids = [
-        AGENT_FILE_SEARCH_INPUT,
-        zeta_agent_sidebar::AGENT_FILES_TOOLBAR,
-    ];
+    let sidebar_part_ids = [AGENT_FILE_SEARCH_INPUT, super::AGENT_FILES_TOOLBAR];
 
     assert!(
         session_ids
