@@ -28,3 +28,11 @@ pub use runtime::WindowOptions;
 
 pub(crate) use native::NativeWindow;
 pub(crate) use runtime::WindowRuntime;
+
+/// Internal ownership role used to keep framework-owned utility windows out of product
+/// lifecycle callbacks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WindowRole {
+    Product,
+    DevTools { owner: WindowId },
+}

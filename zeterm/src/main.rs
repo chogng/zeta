@@ -12,7 +12,6 @@ use keybindings::{KeybindingsResource, KeybindingsResourcePoll};
 use keyboard_shortcuts::KeyboardShortcutsState;
 use language_server_settings::LanguageServerSettingsState;
 use launch::ZetermLaunch;
-use layout_inspector::LayoutInspector;
 use native_event::NativeEvent;
 use remote_connection_cli::ZetermInvocation;
 use remote_connection_manager::RemoteConnectionManagerState;
@@ -47,9 +46,7 @@ use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
-use zeta_ui::layout::InspectorPane;
 use zeta_ui::layout::LogicalViewport;
-use zeta_ui::layout::RootLayout;
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;
@@ -128,7 +125,6 @@ mod launch_test_support;
 #[cfg(test)]
 #[path = "launch_tests.rs"]
 mod launch_tests;
-mod layout_inspector;
 mod native_event;
 mod remote_connection_cli;
 #[cfg(test)]
@@ -301,7 +297,6 @@ struct NativeApp {
     keyboard_shortcuts: KeyboardShortcutsState,
     language_server_settings: LanguageServerSettingsState,
     settings_section: SettingsPageSection,
-    layout_inspector: LayoutInspector,
     modifiers: ModifiersState,
     pending_focus: Option<ElementId>,
     physical_extent: PhysicalExtent,
@@ -402,7 +397,6 @@ impl NativeApp {
             keyboard_shortcuts: KeyboardShortcutsState::default(),
             language_server_settings: LanguageServerSettingsState::default(),
             settings_section: SettingsPageSection::default(),
-            layout_inspector: LayoutInspector::default(),
             modifiers: ModifiersState::default(),
             pending_focus: None,
             physical_extent: PhysicalExtent::new(0, 0),
@@ -503,8 +497,7 @@ impl NativeApp {
     }
 
     fn logical_viewport(&self) -> LogicalViewport {
-        self.layout_inspector
-            .content_viewport(self.window_viewport())
+        self.window_viewport()
     }
 
     fn active_screen(&self) -> ScreenBuffer {
@@ -575,17 +568,7 @@ impl NativeApp {
 
     fn rebuild_presentation(&mut self) {
         let _trace = session_switch_trace::Span::new(None, "rebuild_presentation");
-        let window_viewport = self.window_viewport();
         let viewport = self.logical_viewport();
-        let root_layout = RootLayout::for_viewports(
-            window_viewport,
-            viewport,
-            if self.layout_inspector.is_enabled() {
-                InspectorPane::visible(layout_inspector::PANEL_WIDTH)
-            } else {
-                InspectorPane::Hidden
-            },
-        );
         let active_screen = self.active_screen();
         let terminal_size = terminal_grid_size_for_viewport(
             viewport,
@@ -662,8 +645,6 @@ impl NativeApp {
                 },
             );
         }
-        self.layout_inspector
-            .compose(presentation.scene_mut(), root_layout, self.cursor_position);
         self.mount_shell_fragments(&mut presentation);
         self.presentation = Some(presentation);
         self.frame_scheduler.clear();
@@ -674,17 +655,7 @@ impl NativeApp {
     }
 
     fn rebuild_overlay_presentation(&mut self) {
-        let window_viewport = self.window_viewport();
         let viewport = self.logical_viewport();
-        let root_layout = RootLayout::for_viewports(
-            window_viewport,
-            viewport,
-            if self.layout_inspector.is_enabled() {
-                InspectorPane::visible(layout_inspector::PANEL_WIDTH)
-            } else {
-                InspectorPane::Hidden
-            },
-        );
         let window_control_insets = self
             .window
             .as_ref()
@@ -706,8 +677,6 @@ impl NativeApp {
             self.rebuild_presentation();
             return;
         }
-        self.layout_inspector
-            .compose(presentation.scene_mut(), root_layout, self.cursor_position);
         self.mount_shell_fragments(&mut presentation);
         self.presentation = Some(presentation);
         self.frame_scheduler.clear();
@@ -830,22 +799,7 @@ impl NativeApp {
                     .pointer_feedback(presentation.interaction_frame())
             })
             .unwrap_or_default();
-        let cursor = if self
-            .layout_inspector
-            .uses_inspection_cursor(self.cursor_position)
-        {
-            CursorIcon::Crosshair
-        } else if self
-            .layout_inspector
-            .uses_panel_action_cursor(self.cursor_position)
-        {
-            CursorIcon::Pointer
-        } else if self
-            .layout_inspector
-            .pointer_is_over_panel(self.cursor_position)
-        {
-            CursorIcon::Default
-        } else if self.session_sidebar.is_resizing() || self.agent_sidebar.is_resizing() {
+        let cursor = if self.session_sidebar.is_resizing() || self.agent_sidebar.is_resizing() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -970,9 +924,6 @@ impl NativeApp {
     fn pointer_moved(&mut self, physical_x: f64, physical_y: f64) {
         let point = self.logical_pointer_position(physical_x, physical_y);
         self.cursor_position = Some(point);
-        if self.route_layout_inspector_pointer_move() {
-            return;
-        }
         if self.route_remote_connection_manager_pointer_move(point) {
             return;
         }
@@ -1023,9 +974,6 @@ impl NativeApp {
     fn pointer_left(&mut self) {
         self.cursor_position = None;
         self.file_editor_input.cancel_pointer();
-        if self.route_layout_inspector_pointer_left() {
-            return;
-        }
         if self
             .agent_sidebar_workspace
             .leave_multi_diff_scrollbar(Instant::now())
@@ -1084,9 +1032,6 @@ impl NativeApp {
     }
 
     fn mouse_button_changed(&mut self, state: ElementState, button: MouseButton) {
-        if self.route_layout_inspector_button(state, button) {
-            return;
-        }
         if self.route_remote_connection_manager_button(state, button) {
             return;
         }
@@ -1436,7 +1381,6 @@ impl App<NativeEvent> for NativeApp {
             WindowEvent::Resized(size) => {
                 self.terminal_selection.clear();
                 self.physical_extent = PhysicalExtent::new(size.width, size.height);
-                self.layout_inspector.window_resized(self.window_viewport());
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -1465,11 +1409,7 @@ impl App<NativeEvent> for NativeApp {
                 self.modifiers = modifiers.state();
             }
             WindowEvent::KeyboardInput { event, .. } => self.keyboard_input(event),
-            WindowEvent::Ime(event) => {
-                if !self.layout_inspector.is_picking() {
-                    self.ime_input(event);
-                }
-            }
+            WindowEvent::Ime(event) => self.ime_input(event),
             WindowEvent::Focused(false) => {
                 self.modifiers = ModifiersState::default();
                 self.keybindings.cancel_chord();
@@ -1497,15 +1437,7 @@ impl App<NativeEvent> for NativeApp {
             WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_button_changed(state, button);
             }
-            WindowEvent::MouseWheel { delta, .. } => {
-                if !self.layout_inspector.is_picking()
-                    && !self
-                        .layout_inspector
-                        .pointer_is_over_panel(self.cursor_position)
-                {
-                    self.mouse_wheel(delta);
-                }
-            }
+            WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(delta),
             WindowEvent::Occluded(false) => {
                 // macOS can reject initial surface acquisition while the new window activates.
                 // The visible transition is the next reliable opportunity to present that frame.

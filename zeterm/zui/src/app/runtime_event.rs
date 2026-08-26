@@ -20,6 +20,7 @@ pub(crate) enum RuntimeEvent<T: 'static> {
     GlobalShortcut(GlobalShortcutEvent),
     OpenUrl(ProtocolUrl),
     Accessibility(accesskit_platform::Event),
+    DevToolsWake,
 }
 
 impl<T: 'static> From<accesskit_platform::Event> for RuntimeEvent<T> {
@@ -65,7 +66,8 @@ impl<T: 'static> AppProxy<T> {
                     | RuntimeEvent::Tray(_)
                     | RuntimeEvent::GlobalShortcut(_)
                     | RuntimeEvent::OpenUrl(_)
-                    | RuntimeEvent::Accessibility(_),
+                    | RuntimeEvent::Accessibility(_)
+                    | RuntimeEvent::DevToolsWake,
                 ) => unreachable!("product event delivery must retain the product event"),
             })
     }
@@ -83,7 +85,8 @@ impl<T: 'static> AppProxy<T> {
                     | RuntimeEvent::MenuAction(_)
                     | RuntimeEvent::Tray(_)
                     | RuntimeEvent::GlobalShortcut(_)
-                    | RuntimeEvent::Accessibility(_),
+                    | RuntimeEvent::Accessibility(_)
+                    | RuntimeEvent::DevToolsWake,
                 ) => unreachable!("application URL delivery must retain the URL"),
             })
     }

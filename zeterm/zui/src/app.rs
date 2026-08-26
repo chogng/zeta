@@ -8,7 +8,6 @@ pub use crate::accessibility::AccessibilityActionKind;
 use crate::devtools::DiagnosticEventKind;
 use crate::devtools::DiagnosticsHandle;
 use crate::devtools::DiagnosticsSink;
-use crate::devtools::SceneDiagnostics;
 use crate::render::RendererFactory;
 #[cfg(feature = "wgpu")]
 use crate::render::WgpuRendererFactory;

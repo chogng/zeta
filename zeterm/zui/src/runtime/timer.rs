@@ -178,6 +178,9 @@ impl<T: 'static> TimerScheduler<T> {
                 NativeEventLoopClosed(RuntimeEvent::Accessibility(_)) => {
                     unreachable!("timer scheduling cannot fail with an accessibility event")
                 }
+                NativeEventLoopClosed(RuntimeEvent::DevToolsWake) => {
+                    unreachable!("timer scheduling cannot fail with a DevTools wakeup")
+                }
             })?;
         let proxy = self.proxy.inner.clone();
         Ok(Timer {

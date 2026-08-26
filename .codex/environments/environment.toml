@@ -26,11 +26,6 @@ icon = "debug"
 command = "corepack pnpm dev:web:full:academic"
 
 [[actions]]
-name = "zeterm"
-icon = "debug"
-command = "just zeterm"
-
-[[actions]]
 name = "zeterm-dev"
 icon = "debug"
 command = "just zeterm-dev"
