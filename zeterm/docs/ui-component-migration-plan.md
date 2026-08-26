@@ -187,7 +187,7 @@ cargo test -p zeta-ui --lib
 cargo test -p zeta-keybinding --lib
 cargo test -p zeta-settings --lib
 cargo test -p zeta-agent-sidebar --lib
-cargo test --manifest-path Cargo.toml -p zeterm layout_inspector
+cargo test --manifest-path Cargo.toml -p zui --lib devtools
 cargo test --manifest-path Cargo.toml -p zeterm file_editor_pane
 cargo test --manifest-path Cargo.toml -p zeterm shell_scene
 ```

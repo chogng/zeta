@@ -112,7 +112,7 @@ composition API 已删除，后续不得在 Native 宿主重新引入平行输�
 | Element、Rect/image/icon/text scene、检查快照与字体测量 | `zui` backend-neutral modules | 委托；产品不接触具体 GPU API |
 | Shell product layout 与 scene composition | `zeta-ui::layout` + `zeta-composer` + `shell_scene` / `composer_panel` | 部分抽取；`zeta-ui::layout` 拥有 root/workspace pane geometry，`zeta-composer` 是 Composer 状态与几何的单一 owner，Native 仍拥有 scene composition |
 | Native frame assembly | `ShellPresentation::frame` | ✅；由单一 `zui::ui::UiFrame<InteractionFrame>` owner 管理 |
-| 原生布局检查模式、pointer 拦截与 highlight overlay | `layout_inspector::LayoutInspector` / `NativeApp` | ✅；Inspector Panel 是根 Grid leaf，只有产品节点高亮进入 overlay |
+| 原生布局检查模式、pointer 拦截与 highlight overlay | `zui::devtools::DevToolsHandle` / `zui::WindowContext` | ✅；ZUI 负责独立 DevTools 窗口、检查树、选取与产品节点高亮，zeterm 只提供快捷键接线 |
 | Sessions/Main 单轴约束与 Sash presentation geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 委托 |
 | Terminal Workspace 与 SidebarPart 递归 Pane geometry | `zeta-ui::layout::TerminalWorkspaceLayout` + `zui::GridLayout` | 委托；外层布局消费 host-owned Terminal PaneGroup geometry，并保留可选 SidebarPart Leaf |
 | Terminal/heterogeneous PaneGroup、PaneTree 与 active Pane | `zeterm/src/pane_group` + `zeterm/src/pane_input` | 本次先建立 type-agnostic PaneGroup 与 `PaneInput` host contract；Session Tab 选择主工作区 PaneGroup，SidebarPart 使用独立 workspace-scoped PaneGroup，Terminal Surface 内每个 TerminalPaneInput 绑定独立 terminal runtime，最后一个 Pane 不可关闭 |
@@ -281,10 +281,10 @@ main
           → InteractionFrame reverse-order hit-test
           → hover / press / capture / focus → presentation rebuild
           → UiIntent → window drag 或 product action
-      → Cmd/Ctrl+Shift+I → LayoutInspector
-          → InspectionFrame layer-aware reverse-order hit-test
-          → 原生窗口向右扩展 hierarchy panel；产品 content viewport 保持不变
-          → ancestor bounds + padding overlay；pointer 不再进入产品 UI
+      → Cmd/Ctrl+Shift+I → zui DevTools
+          → 独立 DevTools 窗口读取产品最近提交的 InspectionFrame
+          → 检查树执行 layer-aware reverse-order hit-test
+          → ancestor bounds + padding overlay；选取期间 pointer 不再进入产品 UI
       → current Session Tab secondary click
           → SessionContextMenuState → ContextMenu → ContextView overlay
           → pointer / Up / Down / Tab / Enter / Space
@@ -422,23 +422,15 @@ accessibility projection；只有 `UiScene` 被传给 `Renderer`，因此 GPU ba
 command dispatch 或 accessibility ownership。新增组件组合必须使用 `UiFrame::draw_component`，不能
 重新引入 `ShellPresentation` 的平行输出字段。
 
-`layout_inspector::LayoutInspector` 是独立的检查工具 presentation state。`Cmd/Ctrl+Shift+I` 开启后，
-Native 先保存当前产品 content width，再通过 `NativeWindow::request_inner_logical_size` 向右扩展
-`360px`；Shell、Terminal grid 与产品 hit testing 继续使用保存的 content viewport，因此检查面板不会
-挤压或重排被观察布局。`zeta_ui::layout::RootLayout` 把保存的 Product viewport 和新增宽度交给
-`GridLayout` 解析为两个真实 sibling leaf；`InspectorPanel` 在 Inspector leaf 的 layer 0 内组合
-`InspectorToolbar` 与 `InspectorContent`，不再作为 scene overlay。Toolbar 与产品 Titlebar 同高，左侧
-cursor action 显式开关选取，右侧 close action 关闭面板并恢复原窗口宽度；Content 只拥有层级行、
-指标与节点切换。面板打开时默认不进入选取状态，产品 content 继续接收正常 pointer、keyboard 和
-cursor feedback。选取期间 Native 才截获产品输入，按当前
-`UiScene::inspection` 反向选择最深节点；左键释放后锁定当前链并自动退出选取，保留检查结果。Escape
-先停止选取，再次按下才关闭面板并请求恢复原窗口宽度。Inspector 用橙色显示 padding、青绿色显示组件
-上报的实际 gap 区域、蓝色显示当前
-bounds、紫色显示 ancestor bounds，并在右侧面板按真实 parent chain 显示每层的组件名、size、
-padding、gap、radius、scene layer 与源码位置。只有这些产品节点的 outline/padding highlight 使用 overlay。
-层级行可以直接重定向当前目标；面板保留完整 path，左侧只
-强调所选节点及其祖先，因此可在 parent 与原 descendant 之间反复切换。它不复用 `InteractionFrame`
-推断样式，因为交互树不覆盖纯视觉组件；也不修改组件 style 或产品 reducer。
+`zui::devtools` 是由 ZUI 拥有的独立检查工具 capability。`Cmd/Ctrl+Shift+I` 通过
+`WindowContext::toggle_devtools` 打开或关闭独立的 DevTools 原生窗口；ZUI 保存产品窗口最近提交的
+`InspectionFrame`，默认视图在该窗口中组合工具栏、层级树和 computed details，不改动产品布局，也不复制
+产品 reducer 或交互树。DevTools 打开时默认不进入选取状态，产品继续接收正常 pointer、keyboard 和
+cursor feedback；选取期间 ZUI 才截获产品 pointer，按当前 `InspectionFrame` 反向选择最深节点，左键
+释放后锁定当前 parent path 并自动退出选取，保留检查结果。Escape 先停止选取，再次按下才关闭 DevTools
+窗口。检查视图显示组件名、size、padding、gap、radius、scene layer 与源码位置，并在产品 scene 中绘制
+当前节点及其祖先的 bounds/padding highlight；层级行可以直接重定向当前目标，因此可在 parent 与原
+descendant 之间反复切换。它不修改组件 style 或产品 reducer。
 每个组件通过 `Component::element` 声明布局，由 `UiScene::draw_component` 解析一次
 `ComputedElement` 并自动建立 parent chain。`SessionSidebar`、`ComposerPanel` 这类非组件 composition
 函数以及 `ContextView::draw` 这类 content-closure surface 使用 `UiScene::with_element` 进入相同管线；
