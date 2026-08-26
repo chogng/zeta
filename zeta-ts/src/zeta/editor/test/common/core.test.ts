@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { BugIndicatingError } from "../../../base/common/errors.js";
+import { Rect } from "../../common/core/2d/rect.js";
 import { TextPosition } from "../../common/core/position.js";
 import { TextRange } from "../../common/core/range.js";
 import { StringEdit, StringReplacement } from "../../common/core/edits/stringEdit.js";
@@ -13,6 +15,11 @@ import { StringText } from "../../common/core/text/abstractText.js";
 import { TextChange } from "../../common/core/textChange.js";
 
 const position = TextPosition.at;
+
+test("rect rejects unordered edges as a bug-indicating error", () => {
+	assert.throws(() => new Rect(3, 0, 2, 1), BugIndicatingError);
+	assert.throws(() => new Rect(0, 3, 1, 2), BugIndicatingError);
+});
 
 test("core converts UTF-16 positions and text lengths", () => {
 	const transformer = new PositionOffsetTransformer("A😀\nbeta");

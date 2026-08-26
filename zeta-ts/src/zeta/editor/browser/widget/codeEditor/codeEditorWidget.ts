@@ -4,9 +4,9 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorViewport, type EditorViewportOptions } from "../../view/editorViewport.js";
-import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../input/keyboardNavigationController.js";
-import { PointerSelectionController, type PointerSelectionControllerOptions } from "../../input/pointerSelectionController.js";
-import { TextInputController, type TextInputControllerOptions } from "../../input/textInputController.js";
+import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
+import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
+import { EditorInputController, type InputControllerOptions } from "../../controller/inputController.js";
 import { InstantiationService, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 
@@ -26,9 +26,9 @@ export interface CodeEditorWidgetOptions {
 	readonly instantiationService?: IInstantiationService;
 	readonly onContributionError?: (error: unknown) => void;
 	readonly viewport?: CodeEditorWidgetViewportOptions;
-	readonly textInput?: Omit<TextInputControllerOptions, "ariaLabel">;
+	readonly input?: Omit<InputControllerOptions, "ariaLabel">;
 	readonly keyboardNavigation?: KeyboardNavigationControllerOptions;
-	readonly pointerSelection?: PointerSelectionControllerOptions;
+	readonly mouseHandler?: MouseHandlerOptions;
 }
 
 /**
@@ -40,7 +40,7 @@ export interface CodeEditorWidgetOptions {
  */
 export class CodeEditorWidget extends DisposableOwner {
 	readonly viewport: EditorViewport;
-	readonly textInput: TextInputController;
+	readonly input: EditorInputController;
 	readonly contributions: CodeEditorContributions;
 
 	constructor(options: CodeEditorWidgetOptions) {
@@ -55,8 +55,8 @@ export class CodeEditorWidget extends DisposableOwner {
 				ariaLabel: options.ariaLabel,
 				selectionController: options.selectionController,
 			}));
-			this.textInput = this.own(new TextInputController(this.viewport, options.selectionController, {
-				...options.textInput,
+			this.input = this.own(new EditorInputController(this.viewport, options.selectionController, {
+				...options.input,
 				ariaLabel: options.ariaLabel,
 			}));
 			this.contributions = this.own(new CodeEditorContributions());
@@ -64,11 +64,11 @@ export class CodeEditorWidget extends DisposableOwner {
 				model: options.model,
 				selectionController: options.selectionController,
 				viewport: this.viewport,
-				textInput: this.textInput,
+				input: this.input,
 				placeholder: options.placeholder,
 			}, options.instantiationService ?? new InstantiationService(), options.contributions, options.onContributionError);
 			this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
-			this.own(new PointerSelectionController(this.viewport, options.selectionController, options.pointerSelection));
+			this.own(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -84,7 +84,7 @@ export class CodeEditorWidget extends DisposableOwner {
 	}
 
 	focus(): void {
-		this.textInput.focus();
+		this.input.focus();
 	}
 }
 

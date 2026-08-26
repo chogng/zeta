@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { TokenizationController } from "./tokenizationController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { createStanzaSemanticTokenSource, createOverlaySemanticTokenSource } from "../../semanticTokens/browser/semanticTokenPresentation.js";

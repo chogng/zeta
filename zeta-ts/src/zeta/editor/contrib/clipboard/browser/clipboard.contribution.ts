@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { ClipboardController } from "./clipboardController.js";
 import { UriListPasteProvider } from "./clipboardPasteProvider.js";
@@ -7,9 +7,9 @@ registerEditorContribution({
 	id: "editor.contrib.clipboard",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new ClipboardController(context.textInput.element, context.viewport, context.selections, {
+		context.own(new ClipboardController(context.input.editContext, context.viewport, context.selections, {
 			semanticTokens: context.getOptionalCapability(TextEditorCapability.semanticTokenSource),
-			isEditingAllowed: () => !context.textInput.compositionController.composing,
+			isEditingAllowed: () => !context.input.compositionController.composing,
 			pasteProviders: [UriListPasteProvider],
 		}));
 	},

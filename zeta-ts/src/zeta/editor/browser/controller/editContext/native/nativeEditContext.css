@@ -1,0 +1,65 @@
+.stanza-editor .stanza-native-edit-context {
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  overflow-y: scroll;
+  scrollbar-width: none;
+  z-index: -10;
+  white-space: pre-wrap;
+}
+
+.stanza-editor .stanza-native-edit-context.ime-input {
+  width: 2px;
+}
+
+.stanza-editor .stanza-native-ime-text-area {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  outline: none !important;
+  resize: none;
+  border: none;
+  overflow: hidden;
+  color: transparent;
+  background-color: transparent;
+  z-index: -10;
+}
+
+.stanza-editor .stanza-native-screen-reader-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow-y: scroll;
+  scrollbar-width: none;
+  pointer-events: none;
+  white-space: pre-wrap;
+  user-select: text;
+  opacity: 0;
+}
+
+.stanza-editor .stanza-native-edit-context.stanza-native-screen-reader-content-active {
+  overflow: visible;
+}
+
+.stanza-editor .stanza-native-screen-reader-content > span[data-line-index] {
+  display: block;
+}
+
+.stanza-editor .stanza-native-screen-reader-content .stanza-editor-token {
+  display: inline;
+}
+
+.stanza-editor .edit-context-composition-none {
+  background-color: transparent;
+  border-bottom: none;
+}
+
+.stanza-editor .edit-context-composition-secondary {
+  border-bottom: 1px solid var(--zeta-editor-composition-border, currentColor);
+}
+
+.stanza-editor .edit-context-composition-primary {
+  border-bottom: 2px solid var(--zeta-editor-composition-border, currentColor);
+}

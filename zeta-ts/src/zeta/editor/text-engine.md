@@ -1,6 +1,6 @@
 # Stanza Text Engine
 
-> 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
+> 本文是行式文本编辑器的 canonical 设计规范，拥有同步文本内核、视图架构、输入边界、Contribution 规则、当前状态和修改契约。Editor 总体目录与模式装配见 [`README.md`](./README.md)，文本几何与浏览器渲染后端的长期目标见 [`text-engine-geometry.md`](./text-engine-geometry.md)（中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md)），跨 Workbench、文件、语言服务与 App Server 的系统边界见 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md)，浏览器实现细节见 [`browser/README.md`](./browser/README.md)。
 >
 > 状态：Current + Proposed。未明确标为 Proposed 的内容都描述当前实现。
 
@@ -160,10 +160,11 @@ this.viewParts.render(context);
 
 Browser controller 的职责是把一个 DOM event 解析成一个 editor intent，然后调用 common command 或 selection transition。它不得重新实现事务、range mapping 或 model history。
 
-- `TextInputController`：hidden textarea、`beforeinput`、focus mirror 和普通输入路由。
+- `EditContext`：browser input contract；`NativeEditContext` 使用浏览器原生 EditContext，`TextAreaEditContext` 是 textarea fallback；`EditorInputController` 负责选择实现并装配 composition、command、completion 与 textarea accessibility controller；language-aware typing 通过显式 `InputLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
-- `PointerSelectionController`：hit target 到 selection intent；auto-scroll 和 multi-cursor 使用独立 owner。
+- `PointerHandler`：pointer dispatch、drag session 和 native capture 的 browser adapter。
+- `MouseHandler`：把 mouse/pointer hit target 转换为 selection intent；`DragScrolling` 保持拖选期间的边缘滚动，纯 multi-cursor policy 位于 `common/cursor/pointerMultiCursor.ts`。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。
@@ -237,7 +238,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `browser/view/editorViewport.ts` | 当前 view host 和 scheduler | Part order、DOM topology、measurement、scroll |
 | `browser/viewparts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
-| `browser/editorContribution.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |
+| `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |
 
 ## 验证与修改影响
 

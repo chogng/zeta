@@ -8,6 +8,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/common/numbers.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
+import { applyEditorFontInfo } from "../../config/domFontInfo.js";
 import { DiffOverviewRuler } from "./diffOverviewRuler.js";
 import { createDiffEditorRow } from "./diffEditorRows.js";
 
@@ -75,9 +76,11 @@ export class DiffEditorWidget extends DisposableOwner {
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.element.className = "stanza-diff-editor";
 		this.element.classList.toggle("hide-line-numbers", options.showLineNumbers === false);
-		if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
-		if (options.fontSize !== undefined) this.element.style.fontSize = `${options.fontSize}px`;
-		this.element.style.fontVariantLigatures = options.fontLigatures ? "normal" : "none";
+		applyEditorFontInfo(this.element, {
+			fontFamily: options.fontFamily,
+			fontSize: options.fontSize,
+			fontLigatures: options.fontLigatures ?? false,
+		});
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
 		this.element.setAttribute("aria-label", `Side-by-side diff editor. Original: ${options.originalAriaLabel ?? "Original"}. Modified: ${options.modifiedAriaLabel ?? "Modified"}.`);

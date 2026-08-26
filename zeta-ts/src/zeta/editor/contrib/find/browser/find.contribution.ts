@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
@@ -13,6 +13,6 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new FindController(context.textInput.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
+		context.own(new FindController(context.input.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
 	},
 });

@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { isCancellationError } from "../../../../base/common/cancellation.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type RustSyntaxFactsService } from "../../../browser/services/rustSyntaxFactsService.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -15,7 +15,7 @@ export class SmartSelectController extends DisposableOwner {
 	private readonly history: TextSelectionSet[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly syntaxFacts: RustSyntaxFactsService | undefined, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly syntaxFacts: RustSyntaxFactsService | undefined, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -76,6 +76,6 @@ registerEditorContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new SmartSelectController(context.textInput.element, context.viewport, context.selections, context.languageId, context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts), () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+		context.own(new SmartSelectController(context.input.element, context.viewport, context.selections, context.languageId, context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts), () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 	},
 });

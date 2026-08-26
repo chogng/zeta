@@ -1,4 +1,5 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
+import { type IReadableClipboardData } from "../../../browser/controller/editContext/clipboardUtils.js";
 
 /** Immutable textual snapshot captured synchronously from one native clipboard event. */
 export interface ClipboardTextTransfer {
@@ -14,7 +15,7 @@ export interface ClipboardPasteProvider {
 }
 
 /** Creates a transferable-safe snapshot before a clipboard event returns to the browser. */
-export function captureStanzaClipboardTextTransfer(clipboardData: DataTransfer): ClipboardTextTransfer {
+export function captureStanzaClipboardTextTransfer(clipboardData: Pick<IReadableClipboardData, "types" | "getData"> | Pick<DataTransfer, "types" | "getData">): ClipboardTextTransfer {
 	const values = new Map<string, string>();
 	const types = [...clipboardData.types].filter(type => typeof type === "string" && type.length > 0);
 	for (const type of types) {

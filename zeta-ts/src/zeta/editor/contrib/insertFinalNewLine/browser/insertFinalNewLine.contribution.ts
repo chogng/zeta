@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { InsertFinalNewLineController } from "./insertFinalNewLineController.js";
 
 registerEditorContribution({ id: "editor.contrib.insertFinalNewLine", install: context => {

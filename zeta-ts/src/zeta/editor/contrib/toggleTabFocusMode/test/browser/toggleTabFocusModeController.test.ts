@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -20,6 +20,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { ToggleTabFocusModeController } = await import("../../browser/toggleTabFocusModeController.js");
+const { TabFocus } = await import("../../../../browser/config/tabFocus.js");
 
 test("Tab focus mode exposes state through Stanza-owned data and an accessibility announcement", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -28,7 +29,8 @@ test("Tab focus mode exposes state through Stanza-owned data and an accessibilit
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new ToggleTabFocusModeController(input, viewport);
+	using tabFocus = new TabFocus();
+	using controller = new ToggleTabFocusModeController(input, viewport, tabFocus);
 
 	assert.equal(viewport.element.getAttribute("role"), "region");
 	assert.equal(viewport.element.hasAttribute("aria-pressed"), false);
@@ -39,9 +41,11 @@ test("Tab focus mode exposes state through Stanza-owned data and an accessibilit
 	assert.equal(toggle.defaultPrevented, true);
 	assert.equal(controller.isEnabled, true);
 	assert.equal(viewport.element.dataset.tabFocusMode, "true");
-	assert.equal(viewport.element.classList.contains("tab-focus-mode"), true);
 	assert.equal(viewport.element.querySelector(".stanza-editor-accessibility-status")?.textContent, "Tab moves focus out of the editor");
 	assert.equal(viewport.element.hasAttribute("aria-pressed"), false);
+	tabFocus.setEnabled(false);
+	assert.equal(controller.isEnabled, false);
+	assert.equal(viewport.element.dataset.tabFocusMode, "false");
 	dom.window.close();
 });
 

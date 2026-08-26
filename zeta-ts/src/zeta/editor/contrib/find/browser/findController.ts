@@ -50,7 +50,7 @@ export class FindController extends DisposableOwner {
 	private readonly loop: boolean;
 
 	constructor(
-		private readonly editorInput: HTMLTextAreaElement,
+		private readonly editorInput: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly decorations: TextDecorationCollection<void>,

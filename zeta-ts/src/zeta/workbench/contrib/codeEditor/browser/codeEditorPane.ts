@@ -27,6 +27,7 @@ import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorSelectionController } from "../../../../editor/common/cursor/editorSelectionController.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 
 export interface EditorPanePart extends IDisposable {
 	readonly onDidChange?: Event<void>;
@@ -51,6 +52,7 @@ export interface EditorPanePartOptions extends EditorBrowserOptions {
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly diffApi?: EditorBrowserOptions["diffApi"];
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
+	readonly accessibilityService?: IAccessibilityService;
 }
 
 export interface EditorPaneOptions {
@@ -63,6 +65,7 @@ export interface EditorPaneOptions {
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly diffApi?: EditorBrowserOptions["diffApi"];
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
+	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly fontFamily?: string;
 	readonly fontSize?: number;
@@ -165,6 +168,7 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				diffApi: this.options.diffApi,
 				instantiationService: this.options.instantiationService,
+				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
 				fontFamily: this.options.fontFamily,
 				fontSize: this.options.fontSize,

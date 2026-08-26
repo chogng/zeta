@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageBracketMatcher } from "../../common/bracketMatching.js";

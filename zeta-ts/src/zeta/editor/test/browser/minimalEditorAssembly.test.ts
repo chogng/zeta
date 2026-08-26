@@ -16,7 +16,6 @@ for (const [name, value] of Object.entries({
 	InputEvent: browserEnvironment.window.InputEvent,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-await import("../../contrib/codeEditorPart.contribution.js");
 const { EditorBrowser } = await import("../../browser/editorBrowser.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -45,7 +44,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	assert.equal(container.querySelector(".stanza-editor-placeholder-text"), null);
 
 	const copy = new dom.window.Event("copy", { bubbles: true, cancelable: true });
-	editor.textInput.element.dispatchEvent(copy);
+	editor.input.element.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, false);
 
 	editor.dispose();

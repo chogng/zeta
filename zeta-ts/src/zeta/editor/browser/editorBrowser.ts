@@ -12,7 +12,7 @@ import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxServi
 import { type ILanguageFeaturesService } from "../common/services/languageService.js";
 import { type TextModelReference } from "../common/services/textModelService.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
-import { type TextInputController } from "./input/textInputController.js";
+import { type EditorInputController } from "./controller/inputController.js";
 import { type CodeEditorWidget } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
 import { type EditorActiveLineHighlight, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorViewport, type EditorViewportPresentation } from "./view/editorViewport.js";
@@ -24,6 +24,9 @@ import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDe
 import { type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
+import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
+import { type TabFocus } from "./config/tabFocus.js";
+import { EditorBrowserRuntime } from "./editorBrowserRuntime.js";
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;
@@ -75,6 +78,8 @@ export interface EditorBrowserOptions {
 	readonly container: HTMLElement;
 	readonly input: EditorResourceInput;
 	readonly languageId: string;
+	/** Optional host-scoped Tab-focus state shared by multiple editor instances. */
+	readonly tabFocus?: TabFocus;
 	/** Optional shared language registrations and providers for this editor host. */
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	/** Optional Rust-backed syntax facts used for parser-grade fold ranges. */
@@ -83,6 +88,12 @@ export interface EditorBrowserOptions {
 	readonly diffApi?: IDiffApi;
 	/** Window-scoped constructor service for runtime editor contributions. */
 	readonly instantiationService?: IInstantiationService;
+	/** Optional accessibility policy used by native screen-reader content. */
+	readonly accessibilityService?: IAccessibilityService;
+	/** Chooses line-structured content for native screen-reader projection. */
+	readonly renderRichScreenReaderContent?: boolean;
+	/** Controls how many logical lines one native screen-reader page exposes. */
+	readonly accessibilityPageSize?: number;
 	/** Optional host service that synchronizes open models and supplies push diagnostics. */
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly modelReference: TextModelReference;
@@ -144,7 +155,7 @@ export interface IEditorBrowserRuntime extends IDisposable {
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
-	readonly textInput: TextInputController;
+	readonly input: EditorInputController;
 	announceAccessibilityStatus(message: string): void;
 	layout(dimension: IDimension): void;
 	focus(): void;
@@ -159,41 +170,24 @@ export interface IEditorBrowserRuntime extends IDisposable {
 	revert(): Promise<void>;
 }
 
-/** Creates one line-editor runtime from the contributions selected by a Workbench mode bundle. */
-export type EditorBrowserFactory = (options: EditorBrowserOptions) => IEditorBrowserRuntime;
-
-let editorBrowserFactory: EditorBrowserFactory | undefined;
-
-/** Installs the canonical line-editor composition before a product registers its pane. */
-export function registerEditorBrowserFactory(factory: EditorBrowserFactory): void {
-	if (typeof factory !== "function") throw new TypeError("Editor browser factory must be a function");
-	if (editorBrowserFactory && editorBrowserFactory !== factory) throw new Error("Editor browser factory is already registered");
-	editorBrowserFactory = factory;
-}
-
-/** Product-neutral editor browser that delegates feature assembly to the selected bundle. */
+/** Browser composition root for the line editor. */
 export class EditorBrowser extends DisposableOwner implements IEditorBrowserRuntime {
 	private readonly runtime: IEditorBrowserRuntime;
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
 	readonly selections: EditorSelectionController;
-	readonly textInput: TextInputController;
+	readonly input: EditorInputController;
 
 	constructor(options: EditorBrowserOptions) {
 		super();
-		const factory = editorBrowserFactory;
-		if (!factory) {
-			this.dispose();
-			throw new Error("No editor browser contributions are registered; import a product editor bundle first");
-		}
 		try {
-			this.runtime = this.own(factory(options));
+			this.runtime = this.own(new EditorBrowserRuntime(options));
 			this.onDidChange = this.runtime.onDidChange;
 			this.codeEditor = this.runtime.codeEditor;
 			this.viewport = this.runtime.viewport;
 			this.selections = this.runtime.selections;
-			this.textInput = this.runtime.textInput;
+			this.input = this.runtime.input;
 		} catch (error) {
 			this.dispose();
 			throw error;

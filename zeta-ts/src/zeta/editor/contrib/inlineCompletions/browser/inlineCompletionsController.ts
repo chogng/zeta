@@ -1,5 +1,5 @@
 import "./media/inlineCompletions.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -14,7 +14,7 @@ export class InlineCompletionsController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
@@ -89,5 +89,5 @@ export class InlineCompletionsController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || context.options.inlineCompletions === false) return;
 	const service = context.own(context.languageFeaturesService.createInlineCompletionsService(context.model));
-	context.own(new InlineCompletionsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	context.own(new InlineCompletionsController(context.input.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

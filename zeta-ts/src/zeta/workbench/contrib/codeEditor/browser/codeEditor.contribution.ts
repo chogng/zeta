@@ -27,6 +27,7 @@ registerEditorPane({
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			diffApi: options.diffApi,
 			instantiationService: options.instantiationService,
+			accessibilityService: options.accessibilityService,
 			workingCopyService: options.workingCopyService,
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),

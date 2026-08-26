@@ -54,7 +54,7 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	assert.equal(container.querySelectorAll(".stanza-editor-decoration.warning-underline").length > 0, true);
 	assert.deepEqual(errors, []);
 
-	editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
+	editorPart.input.element.dispatchEvent(new dom.window.InputEvent("beforeinput", {
 		bubbles: true,
 		cancelable: true,
 		data: "x",
@@ -159,7 +159,7 @@ test("Stanza editor browser honors a read-only input without disabling selection
 		modelReference: reference,
 	});
 
-	const input = editorPart.textInput.element;
+	const input = editorPart.input.textArea!;
 	assert.equal(input.readOnly, true);
 	assert.equal(input.getAttribute("aria-readonly"), "true");
 	const edit = new dom.window.InputEvent("beforeinput", {
@@ -277,7 +277,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 		assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
 		assert.equal(container.querySelectorAll(".stanza-editor-token").length, 0, "background tokens");
 		assert.equal(container.querySelectorAll(".stanza-editor-fold-toggle:not([hidden])").length, 0, "folding scan");
-		editorPart.textInput.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
+		editorPart.input.element.dispatchEvent(new dom.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, data: "x", inputType: "insertText" }));
 		assert.equal(editorPart.getValue().startsWith("xlet value = 1;\n"), true, "basic editing");
 	} finally {
 		editorPart.dispose();
@@ -287,7 +287,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 
 test("constructor-backed editor contributions receive editor context and window services", async () => {
 	const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, InstantiationService, ServiceCollection, SyncDescriptor }] = await Promise.all([
-		import("../../browser/editorContribution.js"),
+		import("../../browser/editorExtensions.js"),
 		import("../../../platform/instantiation/common/instantiation.js"),
 	]);
 	const IService = createServiceIdentifier<{ readonly value: string }>("editorRuntimeContributionTestService");

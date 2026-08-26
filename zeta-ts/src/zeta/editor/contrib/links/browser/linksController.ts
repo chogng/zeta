@@ -1,5 +1,5 @@
 import "./media/links.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type LinkService, type LanguageLink } from "../common/links.js";

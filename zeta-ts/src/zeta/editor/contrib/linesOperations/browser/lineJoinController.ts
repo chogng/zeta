@@ -12,7 +12,7 @@ export interface LineJoinControllerOptions {
 /** Routes the platform join-lines chord to Stanza's DOM-free command semantics. */
 export class LineJoinController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: LineJoinControllerOptions = {},

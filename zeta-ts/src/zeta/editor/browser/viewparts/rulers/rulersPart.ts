@@ -3,7 +3,7 @@ import { h, reset, fragment as createFragment } from "../../../../base/browser/d
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
-import { type TextMeasurer } from "../../measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../config/fontMeasurements.js";
 import { type EditorViewPart } from "../viewPart.js";
 
 /** One 1-based editor column at which a vertical guide is rendered. */

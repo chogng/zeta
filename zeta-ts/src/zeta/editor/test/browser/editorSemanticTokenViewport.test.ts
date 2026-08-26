@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { SemanticTokenPresentation, createStanzaSemanticTokenSource } from "../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";

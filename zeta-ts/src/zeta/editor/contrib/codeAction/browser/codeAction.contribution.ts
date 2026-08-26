@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { CodeActionController } from "./codeActionController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
@@ -8,5 +8,5 @@ registerEditorContribution({ id: "editor.contrib.codeAction", install: context =
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createCodeActionService(context.model, context.options.input.resource));
 	const diagnostics = context.getOptionalCapability(TextEditorCapability.diagnosticDecorations) ?? context.own(new TextDecorationCollection<LanguageDiagnostic>(context.model));
-	context.own(new CodeActionController(context.textInput.element, context.viewport, context.selections, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.own(new CodeActionController(context.input.element, context.viewport, context.selections, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

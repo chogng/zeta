@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
@@ -9,7 +9,7 @@ import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createL
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import "../../browser/suggestWidget.js";
+import { CompletionWidget } from "../../browser/suggestWidget.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -29,7 +29,8 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { TextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
+const completionViewFactory = (element: HTMLElement, viewport: InstanceType<typeof EditorViewport>, selections: EditorSelectionController, session: object) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController);
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -46,8 +47,8 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	using input = new TextInputController(viewport, selections, {
-		completion: { session },
+	using input = new EditorInputController(viewport, selections, {
+		completion: { session, viewFactory: completionViewFactory },
 	});
 	input.focus();
 	accept(store, model, 1, [
@@ -229,12 +230,12 @@ test("Completion widget validates ownership and restores input ARIA on disposal"
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	assert.throws(() => new TextInputController(viewport, selections, {
-		completion: { session: otherSession },
+	assert.throws(() => new EditorInputController(viewport, selections, {
+		completion: { session: otherSession, viewFactory: completionViewFactory },
 	}), /must share one text model/);
 
-	const input = new TextInputController(viewport, selections, {
-		completion: { session },
+	const input = new EditorInputController(viewport, selections, {
+		completion: { session, viewFactory: completionViewFactory },
 	});
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "none");
 	input.dispose();
@@ -305,7 +306,7 @@ interface CompletionFixture extends Disposable {
 	readonly store: ReturnType<typeof createLanguageCompletionStore>;
 	readonly session: LanguageCompletionSessionController;
 	readonly viewport: InstanceType<typeof EditorViewport>;
-	readonly input: InstanceType<typeof TextInputController>;
+	readonly input: InstanceType<typeof EditorInputController>;
 }
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
@@ -322,8 +323,8 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const input = new TextInputController(viewport, selections, {
-		completion: { session },
+	const input = new EditorInputController(viewport, selections, {
+		completion: { session, viewFactory: completionViewFactory },
 	});
 	input.focus();
 	return {

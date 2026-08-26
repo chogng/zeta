@@ -5,7 +5,7 @@ import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/editorViewportModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
-import { type TextMeasurer } from "../../measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../config/fontMeasurements.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
 import { type EditorViewPart } from "../viewPart.js";
 import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";

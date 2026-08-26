@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -15,7 +15,7 @@ export class FormatController extends DisposableOwner {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: FormatControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: FormatControllerOptions = {}) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
@@ -41,7 +41,7 @@ export class FormatController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createFormatService(context.model, context.options.input.resource));
-	const controller = context.own(new FormatController(context.textInput.element, context.viewport, context.selections, service, context.languageId, {
+	const controller = context.own(new FormatController(context.input.element, context.viewport, context.selections, service, context.languageId, {
 		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
 		onError: context.onLanguageError,
 	}));

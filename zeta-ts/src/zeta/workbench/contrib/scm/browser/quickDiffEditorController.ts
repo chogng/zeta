@@ -2,7 +2,7 @@ import './media/quickDiff.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
 import { DisposableOwner, DisposableSlot, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
-import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorContribution.js';
+import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { TextPosition } from '../../../../editor/common/core/text.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekViewWidget.js';

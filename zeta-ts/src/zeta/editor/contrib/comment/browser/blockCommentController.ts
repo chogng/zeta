@@ -15,7 +15,7 @@ export interface BlockCommentControllerOptions {
 /** Routes the platform block-comment shortcut through Stanza's local command model. */
 export class BlockCommentController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly options: BlockCommentControllerOptions,

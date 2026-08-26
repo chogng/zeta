@@ -43,11 +43,37 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
 test("Flat editor layout keeps one TextModel owner and both mode bundles", () => {
 	const requiredFiles = [
 		"browser/editorBrowser.ts",
+		"browser/editorBrowserRuntime.ts",
 		"browser/editorDom.ts",
+		"browser/editorExtensions.ts",
+		"browser/coreCommands.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/editorViewport.ts",
-		"browser/input/textInputController.ts",
+		"browser/controller/compositionController.ts",
+		"browser/controller/inputController.ts",
+		"browser/controller/inputCommandController.ts",
+		"browser/controller/inputCompletionController.ts",
+		"browser/controller/inputContracts.ts",
+		"browser/controller/editContext/clipboardUtils.ts",
+		"browser/controller/editContext/editContext.ts",
+		"browser/controller/editContext/factory.ts",
+		"browser/controller/editContext/screenReaderUtils.ts",
+		"browser/controller/editContext/textArea/textAreaEditContext.ts",
+		"browser/controller/editContext/textArea/textAreaEditContextInput.ts",
+		"browser/controller/editContext/textArea/textAreaEditContextRegistry.ts",
+		"browser/controller/editContext/textArea/textAreaEditContextState.ts",
+		"browser/controller/editContext/textArea/textAreaAccessibilityController.ts",
+		"browser/controller/editContext/native/nativeEditContext.ts",
+		"browser/controller/editContext/native/nativeEditContextUtils.ts",
+		"browser/controller/editContext/native/nativeEditContextRegistry.ts",
+		"browser/controller/editContext/native/editContextFactory.ts",
+		"browser/controller/editContext/native/nativeEditContext.css",
+		"browser/controller/editContext/native/debugEditContext.ts",
+		"browser/controller/editContext/native/screenReaderSupport.ts",
+		"browser/controller/editContext/native/screenReaderContentSimple.ts",
+		"browser/controller/editContext/native/screenReaderContentRich.ts",
+		"browser/controller/editContext/native/screenReaderUtils.ts",
 		"browser/services/rustDiffComputationService.ts",
 		"common/core/position.ts",
 		"common/model/decorationCollection.ts",
@@ -73,7 +99,12 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/selections/selectionsPart.ts",
 		"browser/viewparts/viewCursors/viewCursorsPart.ts",
 		"browser/viewparts/minimap/gpuMinimapRenderer.ts",
-		"browser/measurement/fontMetrics.ts",
+		"browser/config/fontMeasurements.ts",
+		"browser/config/charWidthReader.ts",
+		"browser/config/editorConfiguration.ts",
+		"browser/config/domFontInfo.ts",
+		"browser/config/elementSizeObserver.ts",
+		"browser/config/tabFocus.ts",
 		"browser/measurement/lineWidthIndex.ts",
 		"browser/viewModel/visualLineProjection.ts",
 		"browser/viewModel/visibleLineProjection.ts",
@@ -114,6 +145,22 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 	for (const file of requiredFiles) assert.equal(statSafe(join(editorRoot, file)), true, file);
 
 	const removedLegacyNames = [
+		"browser/input/textInputController.ts",
+		"browser/input/textInputCommandController.ts",
+		"browser/input/textInputCompletionController.ts",
+		"browser/input/textInputContracts.ts",
+		"browser/controller/textInputController.ts",
+		"browser/controller/textInputCommandController.ts",
+		"browser/controller/textInputCompletionController.ts",
+		"browser/controller/textInputContracts.ts",
+		"browser/controller/editContext/editContextController.ts",
+		"browser/controller/editContext/editContextCommandController.ts",
+		"browser/controller/editContext/editContextCompletionController.ts",
+		"browser/controller/editContext/editContextContracts.ts",
+		"browser/controller/editContext/editContextFactory.ts",
+		"browser/controller/editContext/compositionController.ts",
+		"browser/controller/textAreaInput.ts",
+		"browser/controller/textAreaAccessibilityController.ts",
 		"browser/editorSession.ts",
 		"browser/browserEditorSession.ts",
 		"common/model/decoration.ts",
@@ -157,6 +204,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"contrib/academic/browser/academicCodeBlockEditor.ts",
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
+	assert.equal(existsSync(join(editorRoot, "browser/input")), false, "legacy browser input directory");
 	assert.equal(existsSync(join(editorRoot, "alpha")), false, "alpha directory");
 	assert.equal(existsSync(join(editorRoot, "gama")), false, "gama directory");
 });
@@ -219,7 +267,8 @@ test("Window modes select independent Stanza feature implementations behind the 
 	assert.doesNotMatch(academicBundle, /editor\.all/u);
 	assert.match(academicBundle, /contrib\/documentEditor\.contribution/u);
 	assert.doesNotMatch(academicBundle, /workbench|academicEditor\.contribution/u);
-	assert.match(standardBundle, /contrib\/codeEditorPart\.contribution/u);
+	assert.match(standardBundle, /browser\/coreCommands/u);
+	assert.doesNotMatch(standardBundle, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(standardBundle, /editor\.(?:code|academic)\.all/u);
 
 	const browserEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
@@ -291,7 +340,8 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 
 test("Editor engines delegate optional feature composition to mode bundles", () => {
 	const textHost = readFileSync(join(editorRoot, "browser/editorBrowser.ts"), "utf8");
-	const textContribution = readFileSync(join(editorRoot, "contrib/codeEditorPart.contribution.ts"), "utf8");
+	const runtimeSource = readFileSync(join(editorRoot, "browser/editorBrowserRuntime.ts"), "utf8");
+	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
 	const documentHost = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
@@ -302,20 +352,23 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const academicBundle = readFileSync(join(editorRoot, "editor.academic.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
-	const editorContributionRegistry = readFileSync(join(editorRoot, "browser/editorContribution.ts"), "utf8");
+	const editorExtensionRegistry = readFileSync(join(editorRoot, "browser/editorExtensions.ts"), "utf8");
 	const optionalControllerPattern = /(?:AnchorSelect|BlockComment|BracketEditing|BracketMatch|BracketNavigation|CodeAction|CodeLens|ColorPicker|ContextMenu|CursorUndo|DiagnosticHover|DiagnosticNavigation|EditorState|Folding|FontZoom|Format|GotoLine|GotoSymbol|Hover|InPlaceReplace|InlayHints|InlineCompletions|InlineProgress|LineComment|LineJoin|LineOperations|LinkedEditing|Links|Message|MiddleScroll|MultiCursor|OccurrenceHighlight|OccurrenceSelection|ParameterHints|ReadOnlyMessage|Rename|SectionHeaders|SmartSelect|StickyScroll|SymbolIcons|TextDrop|ToggleTabFocusMode|Tokenization|Transpose|UnicodeHighlighter|UnusualLineTerminators|WordWrap)Controller/u;
 	assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
-	assert.match(textHost, /registerEditorBrowserFactory/u);
-	assert.match(textContribution, /registerEditorBrowserFactory/u);
-	assert.doesNotMatch(textContribution, /FindController/u);
-	assert.doesNotMatch(textContribution, optionalControllerPattern);
-	assert.match(textContribution, /EditingCommandController/u);
-	assert.doesNotMatch(textContribution, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
-	const textInput = readFileSync(join(editorRoot, "browser/input/textInputController.ts"), "utf8");
+	assert.match(textHost, /EditorBrowserRuntime/u);
+	assert.doesNotMatch(textHost, /registerEditorBrowserFactory|EditorBrowserFactory/u);
+	assert.match(runtimeSource, /getEditorContributions/u);
+	assert.doesNotMatch(runtimeSource, /from\s+["'][^"']*\/contrib\//u);
+	assert.doesNotMatch(runtimeSource, optionalControllerPattern);
+	assert.doesNotMatch(runtimeSource, /EditingCommandController/u);
+	assert.match(coreCommands, /editor\.action\.selectAll/u);
+	assert.match(coreCommands, /registerEditorContribution/u);
+	assert.doesNotMatch(runtimeSource, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
+	const input = readFileSync(join(editorRoot, "browser/controller/inputController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
-	assert.doesNotMatch(textInput, /from\s+["'][^"']*\/contrib\//u);
+	assert.doesNotMatch(input, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
-	assert.doesNotMatch(editorContributionRegistry, /from\s+["'][^"']*\/contrib\//u);
+	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
 	assert.match(findContribution, /registerEditorContribution/u);
 	assert.match(quickAccessContribution, /registerEditorContribution/u);
 	assert.match(standardBundle, /find\/browser\/find\.contribution/u);
@@ -342,7 +395,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex|TextModelBlockTree/u);
 	assert.match(documentHost, /case "codeBlock":[\s\S]*appendEditableText/u);
 	assert.doesNotMatch(documentHost, /new TextModel|TextModel\.createStructured/u);
-	assert.match(standardBundle, /codeEditorPart\.contribution/u);
+	assert.doesNotMatch(standardBundle, /codeEditorPart\.contribution/u);
 	assert.match(academicBundle, /documentEditor\.contribution/u);
 });
 

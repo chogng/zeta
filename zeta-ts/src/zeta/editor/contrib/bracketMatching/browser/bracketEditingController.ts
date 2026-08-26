@@ -8,7 +8,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 /** Routes the VS Code remove-brackets chord through Stanza's lexical bracket matcher. */
 export class BracketEditingController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly matcher: LanguageBracketMatcher,

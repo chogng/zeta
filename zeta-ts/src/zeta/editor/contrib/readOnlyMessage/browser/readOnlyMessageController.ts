@@ -1,5 +1,5 @@
 import "./media/readOnlyMessage.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -17,7 +17,7 @@ export class ReadOnlyMessageController extends DisposableOwner {
 	private readonly hideTimer = this.own(new DisposableSlot<IDisposable>());
 
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		options: ReadOnlyMessageControllerOptions = {},
 	) {
@@ -97,5 +97,5 @@ function isMutationInput(event: InputEvent): boolean {
 
 registerEditorContribution({ id: "editor.contrib.readOnlyMessage", install: context => {
 	if (context.kind !== "text" || !context.options.input.readOnly) return;
-	context.own(new ReadOnlyMessageController(context.textInput.element, context.viewport));
+	context.own(new ReadOnlyMessageController(context.input.element, context.viewport));
 } });

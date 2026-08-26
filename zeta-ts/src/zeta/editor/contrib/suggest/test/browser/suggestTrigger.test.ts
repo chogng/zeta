@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
@@ -12,8 +12,8 @@ import { LanguageCompletionItemKind } from "../../../../common/languages/complet
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import "../../browser/suggestWidget.js";
-import "../../../bracketMatching/browser/languageEditingAdapter.js";
+import { CompletionWidget } from "../../browser/suggestWidget.js";
+import { LanguageEditingAdapter } from "../../../bracketMatching/browser/languageEditingAdapter.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -33,7 +33,8 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
-const { TextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
+const completionViewFactory = (element: HTMLElement, viewport: InstanceType<typeof EditorViewport>, selections: EditorSelectionController, session: object) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController);
 
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
@@ -175,9 +176,10 @@ test("Completion request wiring rejects a same-model session from another servic
 		selectionController: selections,
 	});
 
-	assert.throws(() => new TextInputController(viewport, selections, {
+	assert.throws(() => new EditorInputController(viewport, selections, {
 		completion: {
 			session,
+			viewFactory: completionViewFactory,
 			requests: {
 				service: secondService,
 				languageId: "typescript",
@@ -186,13 +188,14 @@ test("Completion request wiring rejects a same-model session from another servic
 	}), /must share one text model and completion result store/);
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	assert.throws(() => new TextInputController(viewport, selections, {
+	assert.throws(() => new EditorInputController(viewport, selections, {
 		language: {
 			languageId: "json",
 			configurations,
 		},
 		completion: {
 			session,
+			viewFactory: completionViewFactory,
 			requests: {
 				service: firstService,
 				languageId: "typescript",
@@ -207,7 +210,7 @@ interface TriggerFixture extends Disposable {
 	readonly model: TextModel;
 	readonly service: LanguageCompletionService;
 	readonly session: LanguageCompletionSessionController;
-	readonly input: InstanceType<typeof TextInputController>;
+	readonly input: InstanceType<typeof EditorInputController>;
 }
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
@@ -228,13 +231,15 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		selectionController: selections,
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const input = new TextInputController(viewport, selections, {
+	const input = new EditorInputController(viewport, selections, {
 		language: {
 			languageId: "typescript",
 			configurations,
 		},
+		languageEditing: new LanguageEditingAdapter(model, selections, "typescript", configurations),
 		completion: {
 			session,
+			viewFactory: completionViewFactory,
 			requests: {
 				service,
 				languageId: "typescript",

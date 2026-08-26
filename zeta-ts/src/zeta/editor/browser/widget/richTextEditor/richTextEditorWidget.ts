@@ -20,7 +20,7 @@ import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializ
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type TextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../editorDom.js';
-import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorContribution.js';
+import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
 import { createDocumentFragmentFromHtml } from '../../../contrib/clipboard/browser/htmlDocumentFragment.js';
@@ -532,7 +532,7 @@ export class RichTextEditorWidget extends DisposableOwner {
 			createdEditor.addEventListener("copy", event => this.handleRichTextClipboard(event, model, false));
 			createdEditor.addEventListener("cut", event => this.handleRichTextClipboard(event, model, true));
 			createdEditor.addEventListener("keydown", event => this.handleRichTextKeydown(event, node, model, createdEditor));
-			createdEditor.addEventListener("input", () => this.handleRichTextInput(createdEditor, model));
+			createdEditor.addEventListener("input", () => this.handleRichEditContext(createdEditor, model));
 			createdEditor.addEventListener("focus", () => this.syncRichTextSelection(createdEditor, model));
 			createdEditor.addEventListener("keyup", () => this.syncRichTextSelection(createdEditor, model));
 			createdEditor.addEventListener("mouseup", () => this.syncRichTextSelection(createdEditor, model, true));
@@ -615,7 +615,7 @@ export class RichTextEditorWidget extends DisposableOwner {
 		editor.replaceChildren(fragment);
 	}
 
-	private handleRichTextInput(editor: HTMLDivElement, model: TextModel): void {
+	private handleRichEditContext(editor: HTMLDivElement, model: TextModel): void {
 		if (this.modelReferenceSlot.value?.model !== model) return;
 		if (this.isReadOnly() || !this.requireContainer().contains(editor) || this.composition?.element === editor) return;
 		const blockId = editor.dataset.blockId;

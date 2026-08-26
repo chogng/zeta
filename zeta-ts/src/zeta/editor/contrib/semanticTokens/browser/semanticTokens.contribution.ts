@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { LanguageTokenLineIndex } from "../../../common/tokens/languageTokenLineIndex.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { SemanticTokensController } from "./semanticTokensController.js";

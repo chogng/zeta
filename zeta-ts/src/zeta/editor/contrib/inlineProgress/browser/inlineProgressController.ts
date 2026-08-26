@@ -1,5 +1,5 @@
 import "./media/inlineProgress.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { observableValue } from "../../../../base/common/observable.js";

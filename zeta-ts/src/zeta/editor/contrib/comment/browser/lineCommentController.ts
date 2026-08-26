@@ -16,7 +16,7 @@ export interface LineCommentControllerOptions {
 /** Routes the platform line-comment shortcut through Stanza's local command model. */
 export class LineCommentController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly options: LineCommentControllerOptions,

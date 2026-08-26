@@ -1,5 +1,5 @@
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
-import { registerTextInputLanguageEditingFactory, type TextInputIndentationOptions, type TextInputLanguageEditingAdapter, type TextInputLanguageOptions, type TextInputLanguageTypeCommand } from "../../../browser/input/textInputController.js";
+import { type InputLanguageEditingAdapter, type InputLanguageTypeCommand } from "../../../browser/controller/inputContracts.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
@@ -15,11 +15,11 @@ import { createLanguageEnterCommand } from "../common/enter.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../common/pairEditing.js";
 
 /** Language-aware typing adapter selected by the bracket-matching contribution. */
-export class LanguageEditingAdapter extends DisposableOwner implements TextInputLanguageEditingAdapter {
+export class LanguageEditingAdapter extends DisposableOwner implements InputLanguageEditingAdapter {
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;
 
-	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined, private readonly indentation: EditorIndentationOptions | undefined) {
+	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
 		super();
 		assertLanguageId(languageId);
 		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
@@ -29,7 +29,7 @@ export class LanguageEditingAdapter extends DisposableOwner implements TextInput
 		this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
 	}
 
-	createTypeCommand(selections: TextSelectionSet, text: string): TextInputLanguageTypeCommand | undefined {
+	createTypeCommand(selections: TextSelectionSet, text: string): InputLanguageTypeCommand | undefined {
 		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
 		if (!result) return undefined;
 		return Object.freeze({
@@ -53,5 +53,3 @@ export class LanguageEditingAdapter extends DisposableOwner implements TextInput
 		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
 	}
 }
-
-registerTextInputLanguageEditingFactory((model, selections, language: TextInputLanguageOptions, indentation: TextInputIndentationOptions | undefined) => new LanguageEditingAdapter(model, selections, language.languageId, language.configurations, language.lexicalContext, indentation as EditorIndentationOptions | undefined));

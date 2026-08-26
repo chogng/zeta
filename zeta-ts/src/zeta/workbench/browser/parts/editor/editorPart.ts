@@ -24,6 +24,7 @@ import { type ITextMateService } from "../../../services/textMate/common/textMat
 import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -113,6 +114,7 @@ export interface IEditorPartOptions {
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffApi?: IDiffApi;
 	readonly instantiationService?: IInstantiationService;
+	readonly accessibilityService?: IAccessibilityService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
@@ -177,6 +179,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			languageResolver: options.languageResolver,
 			diffApi: options.diffApi,
 			instantiationService: options.instantiationService,
+			accessibilityService: options.accessibilityService,
 			syntaxApi: options.syntaxApi,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			documentCollaborationApi: options.documentCollaborationApi,
@@ -224,6 +227,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				languageFeaturesService: options.languageFeaturesService,
 				diffApi: options.diffApi,
 				instantiationService: options.instantiationService,
+				accessibilityService: options.accessibilityService,
 				syntaxApi: options.syntaxApi,
 				languageDiagnosticsService: options.languageDiagnosticsService,
 				documentCollaborationApi: options.documentCollaborationApi,

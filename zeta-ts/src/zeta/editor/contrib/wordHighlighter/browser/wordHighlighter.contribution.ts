@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { OccurrenceHighlightController } from "./wordHighlighterController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";

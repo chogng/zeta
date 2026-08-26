@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { BracketEditingController } from "./bracketEditingController.js";
 import { BracketMatchController } from "./bracketMatchController.js";
 import { BracketNavigationController } from "./bracketNavigationController.js";
@@ -26,11 +26,11 @@ registerEditorContribution({ id: "editor.contrib.bracketMatching", configure: co
 		const colorizations = context.own(new LanguageBracketColorizationIndex(context.model, lexicalContext));
 		context.setBracketColorizationSource(new BracketColorizationSource(colorizations));
 	}
-	context.setTextInputLanguageEditing(new LanguageEditingAdapter(context.model, context.selections, context.languageId, context.configurations, lexicalContext, context.options.indentation));
+		context.setInputLanguageEditing(new LanguageEditingAdapter(context.model, context.selections, context.languageId, context.configurations, lexicalContext, context.options.indentation));
 }, install: context => {
 	if (context.kind !== "text") return;
 	const matcher = context.getCapability(TextEditorCapability.bracketMatcher);
 	context.own(new BracketMatchController(context.selections, matcher, context.getCapability(TextEditorCapability.bracketDecorations)));
-	context.own(new BracketNavigationController(context.textInput.element, context.viewport, context.selections, matcher));
-	context.own(new BracketEditingController(context.textInput.element, context.viewport, context.selections, matcher));
+	context.own(new BracketNavigationController(context.input.element, context.viewport, context.selections, matcher));
+	context.own(new BracketEditingController(context.input.element, context.viewport, context.selections, matcher));
 } });

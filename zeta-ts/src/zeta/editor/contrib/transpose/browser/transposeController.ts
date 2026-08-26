@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
@@ -15,7 +15,7 @@ export class TransposeController extends DisposableOwner {
 	private readonly targetOperatingSystem: OperatingSystem;
 
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: TransposeControllerOptions = {},
@@ -46,7 +46,7 @@ export class TransposeController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.transpose", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new TransposeController(context.textInput.element, context.viewport, context.selections));
+	context.own(new TransposeController(context.input.element, context.viewport, context.selections));
 } });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {

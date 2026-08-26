@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -8,7 +8,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Replaces the current selection with the next or previous matching occurrence. */
 export class InPlaceReplaceController extends DisposableOwner {
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza in-place replace dependencies must share a text model");
 		this.own(addDisposableListener(input, "keydown", event => {
@@ -42,7 +42,7 @@ registerEditorContribution({
 	id: "editor.contrib.inPlaceReplace",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new InPlaceReplaceController(context.textInput.element, context.viewport, context.selections));
+		context.own(new InPlaceReplaceController(context.input.element, context.viewport, context.selections));
 	},
 });
 

@@ -4,7 +4,7 @@ import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { SyncDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorContribution.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { registerEditorDecorationSourceFactory } from '../../../browser/parts/editor/editorDecorations.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';

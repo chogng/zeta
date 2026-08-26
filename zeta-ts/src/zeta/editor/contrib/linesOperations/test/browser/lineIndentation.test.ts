@@ -6,7 +6,7 @@ import { EditorSelectionController } from "../../../../common/cursor/editorSelec
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { type TextMeasurer } from "../../../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorViewport } = await import("../../../../browser/view/editorViewport.js");
 const { LineOperationsController } = await import("../../browser/lineOperationsController.js");
-const { TextInputController } = await import("../../../../browser/input/textInputController.js");
+const { EditorInputController } = await import("../../../../browser/controller/inputController.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -41,7 +41,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 		selectionController: selections,
 	});
 	viewport.layout({ width: 400, height: 100 });
-	using input = new TextInputController(viewport, selections);
+	using input = new EditorInputController(viewport, selections);
 	using controller = new LineOperationsController(input.element, viewport, selections, {
 		indentation: { kind: EditorIndentationKind.Spaces, tabSize: 2 },
 	});

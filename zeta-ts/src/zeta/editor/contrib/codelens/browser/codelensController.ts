@@ -1,5 +1,5 @@
 import "./media/codelens.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";

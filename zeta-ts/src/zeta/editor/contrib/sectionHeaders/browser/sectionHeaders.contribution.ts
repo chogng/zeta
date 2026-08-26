@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SectionHeadersController } from "./sectionHeadersController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 

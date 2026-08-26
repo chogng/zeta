@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { FoldingController } from "./folding.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
@@ -59,6 +59,6 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-		context.own(new FoldingController(context.textInput.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
+		context.own(new FoldingController(context.input.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
 	},
 });

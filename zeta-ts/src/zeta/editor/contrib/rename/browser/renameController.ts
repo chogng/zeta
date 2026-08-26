@@ -1,5 +1,5 @@
 import "./media/rename.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -16,7 +16,7 @@ export class RenameController extends DisposableOwner {
 	private readonly status: HTMLSpanElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error)) {
+	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza rename dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
@@ -117,5 +117,5 @@ export class RenameController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.rename", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
-	context.own(new RenameController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.own(new RenameController(context.input.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

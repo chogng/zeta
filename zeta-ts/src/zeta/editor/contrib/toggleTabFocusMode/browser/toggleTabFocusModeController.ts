@@ -1,40 +1,36 @@
-import "./media/toggleTabFocusMode.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { type TabFocus } from "../../../browser/config/tabFocus.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 
 /** Controls whether Tab is routed to editor text insertion or browser focus traversal. */
 export class ToggleTabFocusModeController extends DisposableOwner {
-	private enabled = false;
-
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly tabFocus: TabFocus) {
 		super();
+		this.own(this.tabFocus.onDidChange(() => this.updateState()));
 		this.own(addDisposableListener(input, "keydown", event => this.handleToggle(event), true));
 		this.own(addDisposableListener(input, "keydown", event => {
-			if (this.enabled && !event.defaultPrevented && !event.isComposing && event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+			if (this.tabFocus.isEnabled && !event.defaultPrevented && !event.isComposing && event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
 				event.stopImmediatePropagation();
-				this.viewport.element.classList.add("tab-focus-mode-active");
 			}
 		}, true));
-		this.own(addDisposableListener(input, "blur", () => this.viewport.element.classList.remove("tab-focus-mode-active")));
 		this.updateState();
 	}
 
-	get isEnabled(): boolean { return this.enabled; }
+	get isEnabled(): boolean { return this.tabFocus.isEnabled; }
 
-	setEnabled(enabled: boolean): void { this.enabled = Boolean(enabled); this.updateState(); }
+	setEnabled(enabled: boolean): void { this.tabFocus.setEnabled(enabled); }
 
 	private handleToggle(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.key.toLowerCase() !== "m" || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
 		stopEvent(event, { immediate: true });
-		this.setEnabled(!this.enabled);
-		this.viewport.announceAccessibilityStatus(this.enabled ? "Tab moves focus out of the editor" : "Tab inserts indentation");
+		const enabled = this.tabFocus.toggle();
+		this.viewport.announceAccessibilityStatus(enabled ? "Tab moves focus out of the editor" : "Tab inserts indentation");
 	}
 
 	private updateState(): void {
-		this.viewport.element.classList.toggle("tab-focus-mode", this.enabled);
-		this.viewport.element.dataset.tabFocusMode = String(this.enabled);
+		this.viewport.element.dataset.tabFocusMode = String(this.tabFocus.isEnabled);
 	}
 }
 
@@ -42,6 +38,6 @@ registerEditorContribution({
 	id: "editor.contrib.toggleTabFocusMode",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new ToggleTabFocusModeController(context.textInput.element, context.viewport));
+		context.own(new ToggleTabFocusModeController(context.input.element, context.viewport, context.tabFocus));
 	},
 });

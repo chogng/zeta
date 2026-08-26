@@ -20,7 +20,7 @@ export class CodeActionController extends DisposableOwner {
 	private actionRange: TextRange | undefined;
 	private actionDiagnostics: readonly LanguageDiagnostic[] = [];
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: CodeActionService, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor code action failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) throw new TypeError("Stanza code action dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;

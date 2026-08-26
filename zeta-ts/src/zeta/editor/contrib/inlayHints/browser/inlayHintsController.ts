@@ -1,5 +1,5 @@
 import "./media/inlayHints.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";

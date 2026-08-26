@@ -33,6 +33,7 @@ import type { IContextKeyService } from "../../../../platform/contextkey/common/
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { Event } from "../../../../base/common/event.js";
+import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 
 export enum EditorPaneVisibility {
 	Hidden,
@@ -118,6 +119,7 @@ export interface EditorPaneCreationOptions {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly diffApi?: IDiffApi;
 	readonly instantiationService?: IInstantiationService;
+	readonly accessibilityService?: IAccessibilityService;
 	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;

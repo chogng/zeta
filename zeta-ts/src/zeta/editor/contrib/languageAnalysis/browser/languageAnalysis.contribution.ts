@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { RustSyntaxDocumentSymbolProvider, RustSyntaxFactsService, RustSyntaxWorker } from "../../../browser/services/rustSyntaxFactsService.js";
 import { LanguageTokenLineIndex } from "../../../common/tokens/languageTokenLineIndex.js";
 import { LanguageDiagnosticDecorationBridge, LanguageDiagnosticPublisherBridge } from "../../gotoError/common/diagnosticDecorations.js";

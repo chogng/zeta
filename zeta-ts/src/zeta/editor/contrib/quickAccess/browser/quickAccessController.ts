@@ -1,5 +1,5 @@
 import "./media/gotoLineWidget.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
@@ -21,7 +21,7 @@ export class GotoLineController extends DisposableOwner {
 	private initialScrollPosition: EditorScrollPosition | undefined;
 
 	constructor(
-		private readonly editorInput: HTMLTextAreaElement,
+		private readonly editorInput: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: GotoLineControllerOptions = {},
@@ -138,7 +138,7 @@ registerEditorContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new GotoLineController(context.textInput.element, context.viewport, context.selections));
+		context.own(new GotoLineController(context.input.element, context.viewport, context.selections));
 	},
 });
 

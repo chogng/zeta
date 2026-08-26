@@ -30,7 +30,7 @@ export class FoldingController extends DisposableOwner {
 	private awaitingChord = false;
 
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly folding: EditorFoldingModel,

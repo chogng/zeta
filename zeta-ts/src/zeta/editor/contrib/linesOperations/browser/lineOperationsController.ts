@@ -18,7 +18,7 @@ export class LineOperationsController extends DisposableOwner {
 	private readonly indentation: ResolvedEditorIndentationOptions;
 
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: LineOperationsControllerOptions = {},

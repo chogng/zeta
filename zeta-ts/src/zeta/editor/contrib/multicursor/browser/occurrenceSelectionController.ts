@@ -11,7 +11,7 @@ export interface OccurrenceSelectionControllerOptions {
 /** Routes VS Code-compatible occurrence-selection shortcuts through Stanza's common model. */
 export class OccurrenceSelectionController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: OccurrenceSelectionControllerOptions = {},

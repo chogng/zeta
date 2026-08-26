@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorHitTarget } from "../../../common/viewModel/pointerHitTest.js";

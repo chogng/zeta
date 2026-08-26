@@ -22,6 +22,7 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | --- | --- | --- |
 | [`README.md`](./README.md) | 扁平目录、单一 TextModel、依赖方向和 Workbench 模式装配 | 单套功能实现的完整行为和实现台账 |
 | [`text-engine.md`](./text-engine.md) | 行式文本内核、view 架构、input、Contribution、当前状态和演进 | Workbench pane、文件协议和 App Server transport |
+| [`text-engine-geometry.md`](./text-engine-geometry.md) | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
 | [`document-engine.md`](./document-engine.md) | Schema-backed Block、transaction、browser projection、profile 和 collaboration | TextBuffer 语义和产品 pane 生命周期 |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
@@ -52,7 +53,7 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 ### 行式文本 engine
 
-`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 提供 Code browser runtime seam；`browser/editorDom.ts` 提供稳定 DOM root 与布局；`contrib/codeEditorPart.contribution.ts` 建立 Code 功能实现的 runtime 与 typed capability map。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
+`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，`browser/editorBrowserRuntime.ts` 负责组装 widget、EditContext 和 typed capability map；`browser/editorDom.ts` 提供稳定 DOM root 与布局。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
 
 ### 富文档 engine
 
@@ -75,7 +76,7 @@ Contribution 必须满足以下条件：
 ## 入口与调用路径
 
 ```text
-Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/input/action registration
+Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/controller/action registration
 Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
                        └→ workbench/contrib/codeEditor ────────────────→ code/diff pane + input registration
 Academic build mode ───┬→ editor.academic.all.ts → document contribution only

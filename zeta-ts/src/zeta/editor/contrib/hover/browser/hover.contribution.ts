@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DiagnosticHoverController } from "./diagnosticHoverController.js";
 import { HoverController } from "./hoverController.js";
 

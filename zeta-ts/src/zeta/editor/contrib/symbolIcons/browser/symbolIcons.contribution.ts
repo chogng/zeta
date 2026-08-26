@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SymbolIconsController } from "./symbolIconsController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 

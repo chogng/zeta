@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -13,7 +13,7 @@ export interface CursorUndoControllerOptions {
 export class CursorUndoController extends DisposableOwner {
 	private readonly targetOperatingSystem: OperatingSystem;
 
-	constructor(input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, options: CursorUndoControllerOptions = {}) {
+	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, options: CursorUndoControllerOptions = {}) {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
@@ -36,7 +36,7 @@ export class CursorUndoController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.cursorUndo", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new CursorUndoController(context.textInput.element, context.viewport, context.selections));
+	context.own(new CursorUndoController(context.input.element, context.viewport, context.selections));
 } });
 
 /** Resolves Stanza's cursor-only undo shortcut without accepting unrelated modifiers. */

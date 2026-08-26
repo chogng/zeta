@@ -1,5 +1,5 @@
 import "./media/fontZoom.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view/editorViewport.js";
@@ -12,7 +12,7 @@ export class FontZoomController extends DisposableOwner {
 	private readonly baseFontSize: number | undefined;
 	private scale: number;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
 		super();
 		this.baseLineHeight = readPositive(options.baseLineHeight ?? viewport.viewportLayout.lineHeight, "baseLineHeight");
 		this.baseFontSize = options.baseFontSize === undefined ? undefined : readPositive(options.baseFontSize, "baseFontSize");
@@ -51,6 +51,6 @@ registerEditorContribution({
 	id: "editor.contrib.fontZoom",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new FontZoomController(context.textInput.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
+		context.own(new FontZoomController(context.input.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
 	},
 });

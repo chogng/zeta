@@ -2,7 +2,6 @@ import "../media/editorViewport.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import { FastDomNode } from "../../../base/browser/fastDomNode.js";
 import { getClientArea } from "../../../base/browser/geometry.js";
-import { observeResize } from "../../../base/browser/observer.js";
 import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
 import { type Event } from "../../../base/common/event.js";
 import { type ISize } from "../../../base/common/layout.js";
@@ -16,7 +15,9 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, EditorViewportModel } from "../../common/viewLayout/editorViewportModel.js";
 import { type DecorationSource } from "../viewparts/decorations/decorationPresentation.js";
-import { DomTextMeasurer, type TextMeasurer } from "../measurement/fontMetrics.js";
+import { applyEditorFontInfo } from "../config/domFontInfo.js";
+import { ElementSizeObserver } from "../config/elementSizeObserver.js";
+import { DomTextMeasurer, type TextMeasurer } from "../config/fontMeasurements.js";
 import { LineWidthIndex } from "../measurement/lineWidthIndex.js";
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
 import { getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint } from "../viewparts/viewportOverlay/domTextGeometry.js";
@@ -151,6 +152,7 @@ export class EditorViewport extends DisposableOwner {
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimap;
 	private readonly textDirection: EditorTextDirection;
+	private readonly elementSizeObserver: ElementSizeObserver;
 	private softWrapping: boolean;
 
 	get currentLayout(): EditorViewportLayout {
@@ -162,6 +164,7 @@ export class EditorViewport extends DisposableOwner {
 		const ownerDocument = options.container.ownerDocument;
 		this.model = options.model;
 		this.element = h(ownerDocument, "div");
+		this.elementSizeObserver = this.own(new ElementSizeObserver(this.element));
 		this.contentElement = h(ownerDocument, "div");
 		this.contentNode = new FastDomNode(this.contentElement);
 		this.textMetricsElement = h(ownerDocument, "span");
@@ -211,9 +214,11 @@ export class EditorViewport extends DisposableOwner {
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.element.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.element.classList.toggle("hide-line-numbers", !this.showLineNumbers);
-		if (options.fontFamily) this.element.style.fontFamily = options.fontFamily;
-		if (options.fontSize !== undefined) this.element.style.fontSize = `${options.fontSize}px`;
-		this.element.style.fontVariantLigatures = options.fontLigatures ? "normal" : "none";
+		applyEditorFontInfo(this.element, {
+			fontFamily: options.fontFamily,
+			fontSize: options.fontSize,
+			fontLigatures: options.fontLigatures ?? false,
+		});
 		this.element.style.tabSize = String(this.indentation.tabSize);
 		this.element.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
 		this.element.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
@@ -409,10 +414,11 @@ export class EditorViewport extends DisposableOwner {
 			}));
 		}
 
-		this.own(observeResize(this.element, () => this.layout()));
+		this.own(this.elementSizeObserver.onDidChange(() => this.layout()));
+		this.elementSizeObserver.startObserving();
 
 		this.project(viewport.layout);
-		this.layout();
+		this.elementSizeObserver.observeNow();
 	}
 
 	get viewportLayout(): EditorViewportLayout {

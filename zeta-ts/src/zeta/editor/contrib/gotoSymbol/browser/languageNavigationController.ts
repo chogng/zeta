@@ -15,7 +15,7 @@ export class LanguageNavigationController extends DisposableOwner {
 	private readonly peek = this.own(new ResettableDisposableGroup());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
 		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));

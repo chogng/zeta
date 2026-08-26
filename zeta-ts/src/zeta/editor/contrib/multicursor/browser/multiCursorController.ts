@@ -14,7 +14,7 @@ export class MultiCursorController extends DisposableOwner {
 	private readonly targetOperatingSystem: OperatingSystem;
 
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: MultiCursorControllerOptions = {},

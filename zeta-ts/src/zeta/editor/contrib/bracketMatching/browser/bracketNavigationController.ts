@@ -8,7 +8,7 @@ import { type EditorViewport } from "../../../browser/view/editorViewport.js";
 /** Routes the VS Code go-to-bracket shortcut through Stanza's lexical matcher. */
 export class BracketNavigationController extends DisposableOwner {
 	constructor(
-		input: HTMLTextAreaElement,
+		input: HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly matcher: LanguageBracketMatcher,

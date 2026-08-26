@@ -15,7 +15,7 @@ export class GotoSymbolController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
 		super();
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");

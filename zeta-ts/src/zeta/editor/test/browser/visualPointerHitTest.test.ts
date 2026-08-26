@@ -4,7 +4,7 @@ import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { hitTestStanzaVisualEditorPoint, EditorHitTargetKind } from "../../common/viewModel/pointerHitTest.js";
-import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 
 test("visual hit testing maps wrapped visual coordinates back to logical UTF-16 positions", () => {
 	using model = new TextModel("abcdef\ngh");

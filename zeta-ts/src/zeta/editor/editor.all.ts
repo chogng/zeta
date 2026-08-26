@@ -1,5 +1,5 @@
 // Complete Code line-editor feature implementation. Academic owns a separate bundle.
-import "./contrib/codeEditorPart.contribution.js";
+import "./browser/coreCommands.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";
 import "./contrib/anchorSelect/browser/anchorSelectController.js";
 import "./contrib/bracketMatching/browser/bracketMatching.contribution.js";

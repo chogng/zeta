@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { type TextMeasurer } from "../../browser/measurement/fontMetrics.js";
+import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaSelectionGeometry } from "../../common/viewModel/selectionGeometry.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";

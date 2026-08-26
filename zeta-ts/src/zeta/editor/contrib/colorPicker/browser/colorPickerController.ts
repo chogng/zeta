@@ -1,5 +1,5 @@
 import "./media/colorPicker.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
@@ -15,7 +15,7 @@ export class ColorPickerController extends DisposableOwner {
 	private request: AbortController | undefined;
 	private colors: readonly LanguageColorInformation[] = [];
 
-	constructor(private readonly editorInput: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza color picker failed", error)) {
+	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ColorService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza color picker failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza color picker dependencies must share a text model");
 		const document = viewport.element.ownerDocument;
@@ -85,5 +85,5 @@ function hexToRgb(value: string): RGBA8 { const normalized = value.replace(/^#/,
 registerEditorContribution({ id: "editor.contrib.colorPicker", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.own(context.languageFeaturesService.createColorService(context.model, context.options.input.resource));
-	context.own(new ColorPickerController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	context.own(new ColorPickerController(context.input.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

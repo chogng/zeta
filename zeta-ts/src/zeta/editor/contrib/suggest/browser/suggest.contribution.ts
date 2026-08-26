@@ -1,7 +1,7 @@
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { type EditorResourceInput } from "../../../common/editorResource.js";
 import { LanguageCompletionSessionController } from "../common/suggestModel.js";
-import "./suggestWidget.js";
+import { CompletionWidget } from "./suggestWidget.js";
 
 registerEditorContribution({
 	id: "editor.contrib.suggest",
@@ -17,8 +17,9 @@ registerEditorContribution({
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
-		context.setTextInputCompletion({
+		context.setInputCompletion({
 			session,
+			viewFactory: (element, viewport, selections, candidate) => new CompletionWidget(element, viewport, selections, candidate as LanguageCompletionSessionController),
 			requests: {
 				service: completions,
 				languageId: context.languageId,

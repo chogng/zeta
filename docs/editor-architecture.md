@@ -440,7 +440,7 @@ Tab、clipboard、composition DOM event 或平台辅助功能命令。
 前拒绝；相邻删除使 caret 汇聚时，完全相同的结果会合并并重映射 primary。
 undo 仍恢复命令前的原多 selection，redo 恢复合并后的结果。
 
-`StanzaTextInputController` 创建并拥有一个不可见 textarea。Viewport root
+`EditorInputController` 创建并拥有一个不可见 textarea。Viewport root
 获得焦点时转移到该 textarea；focus 状态通过稳定的 `.input-focused` 类投影，
 视觉规则由 Stanza component CSS 持有。非 composition `beforeinput` 将
 `insertText`、replacement text、Enter、Backspace、Delete、history undo/redo
@@ -700,7 +700,7 @@ range/insertText，生成一个 isolated `EditorEditCommand`，并把 caret 放�
 store invalidation 在 accept 期间由 session 协调，最终只发布一次
 `Accepted` close；undo 通过既有 selection history 同时恢复文本与触发 caret。
 
-browser 的 `CompletionWidget` 由 `StanzaTextInputController` 可选托管。
+browser 的 `CompletionWidget` 由 `EditorInputController` 可选托管。
 widget 使用 viewport 的 content coordinates 锚定在触发 caret 下方，以
 `.visible`、`.focused` 状态类同步 listbox/option ARIA。上下键循环 focus，
 Enter/Tab 接受，Escape 本地取消；活跃 session 才截获这些键，其余事件继续
@@ -734,7 +734,7 @@ discriminated context，避免用 boolean 或可歧义的 optional 参数表达�
 第一个 preselect，并对 `isIncomplete` 做 OR。`LanguageCompletionService`
 拥有 coordinator、host 和 result store，但不拥有 registry 或 model。
 
-browser 输入层通过 `StanzaTextInputControllerOptions.completion.requests`
+browser 输入层通过 `InputControllerOptions.completion.requests`
 显式接入 service 和 language ID。Ctrl+Space 发送 `Invoke`；已注册的 trigger
 character 在文本事务完成后，以新的 model version 和 caret 发送请求；当前
 结果为 incomplete 时，普通输入发送 `IncompleteRefresh`。请求只发生在单一
@@ -835,7 +835,7 @@ registry catalog。`requestTriggerCharacter` 捕获当前 model version，启动
 重建 Worker，等待首次 catalog，再只对真实匹配 provider 发请求。等待期间模型
 变化会丢弃该 trigger，而不是用旧位置请求新版本。
 
-`StanzaTextInputController` 使用该异步 trigger API。若 catalog 证明字符不受
+`EditorInputController` 使用该异步 trigger API。若 catalog 证明字符不受
 支持，且先前 result 是 incomplete，它只在 model version、单一 collapsed
 selection 和 caret 都未变化时回退到 `IncompleteRefresh`。Worker terminal
 failure 或 disposal 会先发布 empty catalog；下一次 trigger 让 coordinator
@@ -1139,7 +1139,7 @@ editor-common 事务构造器。`createLanguagePairTypeCommand` 在这一边界�
 - `createLanguagePairBackspaceCommand` 删除空 pair 两侧，同时让同一多光标事务中的
   其他 selection 保持普通 Backspace 语义。
 
-`StanzaTextInputControllerOptions.language` 显式接收 concrete language ID 与
+`InputControllerOptions.language` 显式接收 concrete language ID 与
 caller-owned `LanguageConfigurationSource`。每次相关 `beforeinput` 都读取当前 resolved
 revision，因此配置贡献变化无需重建 View。若同时接入 completion requests，两条路径
 必须使用相同 language ID。DOM 层只做事件适配；pair 决策、事务、selection 映射与
@@ -1166,7 +1166,7 @@ model 的 `EditorSelectionController`：
 | --- | --- | --- |
 | tracked-range 映射算法 | `TextModel` / Stanza text core | ✅ 复用，不建立第二套 decoration |
 | “由自动闭合产生”的身份 | `LanguageAutoClosingTracker` | editor-instance 状态，不进入共享 model |
-| DOM `beforeinput` 与 tracker 生命周期 | `StanzaTextInputController` | browser 只适配事件和记录提交回执 |
+| DOM `beforeinput` 与 tracker 生命周期 | `EditorInputController` | browser 只适配事件和记录提交回执 |
 | language pair 配置 | `LanguageConfigurationRegistry` | 继续由 caller-owned registry 提供 |
 | URI、文件保存、TextMate runtime | 各自 platform/adapter service | ❌ 不与自动闭合来源耦合 |
 | 通用 `base` | domain-neutral primitives | ❌ 不新增 editor identity 或反向依赖 |
@@ -1255,7 +1255,7 @@ overtype 仍先由 `LanguageAutoClosingTracker` 决定，不会被 `notIn` 破�
 | 生命周期/能力 | 当前所有者 | 结论 |
 | --- | --- | --- |
 | 行 scanner 编译与 lazy state cache | `LanguageLexicalContextIndex` | Stanza common、可共享注入 |
-| 默认 input context | `StanzaTextInputController` | controller 创建并销毁本地 index |
+| 默认 input context | `EditorInputController` | controller 创建并销毁本地 index |
 | document-level 共享 | future composition root | 可直接注入 source，无需改 command |
 | full token/diagnostic analysis | Analysis Worker | 继续异步，不阻塞按键 |
 | lifecycle/event primitives | `base/common` | ✅ 复用 |

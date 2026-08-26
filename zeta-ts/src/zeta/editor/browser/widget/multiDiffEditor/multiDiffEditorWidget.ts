@@ -10,6 +10,7 @@ import { DisposableOwner, type IDisposable } from '../../../../base/common/lifec
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
+import { applyEditorFontInfo } from '../../config/domFontInfo.js';
 import { createDiffEditorRow } from '../diffEditor/diffEditorRows.js';
 
 const DEFAULT_LINE_HEIGHT = 20;
@@ -84,9 +85,11 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 		this.domNode = h(ownerDocument, 'div');
 		this.domNode.className = 'stanza-multi-diff-editor';
 		this.domNode.classList.toggle('hide-line-numbers', options.showLineNumbers === false);
-		if (options.fontFamily) this.domNode.style.fontFamily = options.fontFamily;
-		if (options.fontSize !== undefined) this.domNode.style.fontSize = `${options.fontSize}px`;
-		this.domNode.style.fontVariantLigatures = options.fontLigatures ? 'normal' : 'none';
+		applyEditorFontInfo(this.domNode, {
+			fontFamily: options.fontFamily,
+			fontSize: options.fontSize,
+			fontLigatures: options.fontLigatures ?? false,
+		});
 		this.domNode.tabIndex = 0;
 		this.domNode.setAttribute('role', 'region');
 		this.domNode.setAttribute('aria-label', options.ariaLabel ?? `Multi-file diff editor with ${this.items.length} files`);

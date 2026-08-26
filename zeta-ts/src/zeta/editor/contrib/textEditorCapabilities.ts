@@ -1,4 +1,4 @@
-import { type EditorCapability } from "../browser/editorContribution.js";
+import { type EditorCapability } from "../browser/editorExtensions.js";
 import { type LanguageDiagnostic } from "../common/languages/languageResults.js";
 import { type TextDecorationCollection } from "../common/model/decorationCollection.js";
 import { type LanguageBracketMatcher } from "./bracketMatching/common/bracketMatching.js";

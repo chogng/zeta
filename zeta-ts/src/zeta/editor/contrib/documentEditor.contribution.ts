@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../browser/editorContribution.js";
+import { registerEditorContribution } from "../browser/editorExtensions.js";
 import { CollaborationContribution } from "./collaboration/browser/collaborationContribution.js";
 import { FormattingContribution } from "./formatting/browser/formattingContribution.js";
 

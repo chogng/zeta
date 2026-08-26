@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { createPasteTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";

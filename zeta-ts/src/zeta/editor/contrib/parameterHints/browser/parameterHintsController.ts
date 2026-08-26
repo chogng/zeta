@@ -1,5 +1,5 @@
 import "./media/parameterHints.css";
-import { registerEditorContribution } from "../../../browser/editorContribution.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { DisposableOwner } from "../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
@@ -11,7 +11,7 @@ export class ParameterHintsController extends DisposableOwner {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
 		this.element.className = "stanza-editor-parameter-hints";
@@ -101,5 +101,5 @@ export class ParameterHintsController extends DisposableOwner {
 registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || context.options.parameterHints === false) return;
 	const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model, context.options.input.resource));
-	context.own(new ParameterHintsController(context.textInput.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	context.own(new ParameterHintsController(context.input.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

@@ -8,7 +8,7 @@ import { EditorSelectionController } from "../../../../../editor/common/cursor/e
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/suggestModel.js";
-import "../../../../../editor/contrib/suggest/browser/suggestWidget.js";
+import { CompletionWidget } from "../../../../../editor/contrib/suggest/browser/suggestWidget.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderTextController.js";
 import { TextSelection, TextSelectionSet } from "../../../../../editor/common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
@@ -57,9 +57,10 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 				padding: CHAT_INPUT_EDITOR_PADDING,
 				lineWrapping: EditorLineWrapping.On,
 			},
-			textInput: {
+			input: {
 				completion: {
 					session: completionSession,
+					viewFactory: (element, viewport, selections, session) => new CompletionWidget(element, viewport, selections, session as LanguageCompletionSessionController),
 					requests: {
 						service: completions,
 						languageId: CHAT_INPUT_LANGUAGE_ID,
@@ -67,13 +68,13 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 				},
 			},
 		}));
-		const completionWidget = this.editor.textInput.completionWidget;
+		const completionWidget = this.editor.input.completionWidget;
 		if (completionWidget) this.element.append(completionWidget.element);
 		this.own(this.model.onDidChange(() => {
 			this.syncHeight();
 			this._onDidChange.fire(this.value);
 		}));
-		this.own(addDisposableListener(this.editor.textInput.element, "keydown", event => {
+		this.own(addDisposableListener(this.editor.input.element, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
 			stopEvent(event);
 			this._onDidSubmit.fire();

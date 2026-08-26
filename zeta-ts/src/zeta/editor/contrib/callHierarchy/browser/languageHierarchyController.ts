@@ -23,7 +23,7 @@ export class LanguageHierarchyController extends DisposableOwner {
 	private readonly peek = this.own(new ResettableDisposableGroup());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLTextAreaElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
 		super();
 		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this.own(viewport.textModel.onDidChange(() => this.closePeek()));

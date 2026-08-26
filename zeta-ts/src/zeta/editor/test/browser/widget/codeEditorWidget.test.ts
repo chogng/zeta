@@ -41,7 +41,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 
 	assert.equal(editor.element.parentElement, container);
 	assert.equal(editor.element.getAttribute("aria-label"), "Code");
-	assert.equal(editor.textInput.element.getAttribute("aria-label"), "Code");
+	assert.equal(editor.input.element.getAttribute("aria-label"), "Code");
 	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
 
 	editor.dispose();
