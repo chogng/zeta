@@ -1,8 +1,13 @@
+//! Product workbench actions shared by the titlebar, tabs, panes, and settings surfaces.
+
 use crate::NativeApp;
+
+#[path = "workbench/terminal_workspace.rs"]
+pub(crate) mod terminal_workspace;
 
 impl NativeApp {
     /// Selects the singleton Settings workbench item and prepares its feature-owned state.
-    pub(crate) fn activate_settings_tab(&mut self) {
+    pub(super) fn activate_settings_tab(&mut self) {
         if !self.tab_inputs.is_settings() {
             self.settings_section = zeta_settings::SettingsPageSection::LanguageServers;
         }
@@ -20,7 +25,7 @@ impl NativeApp {
     }
 
     /// Returns to the last selected session without fabricating a session for Settings.
-    pub(crate) fn activate_session_workbench_tab(&mut self) {
+    pub(super) fn activate_session_workbench_tab(&mut self) {
         let _ = self.tab_inputs.activate_last_session();
         if let Some(session_id) = self.tab_inputs.selected_session().cloned() {
             let _ = self.activate_terminal_for_session(&session_id);
@@ -34,7 +39,7 @@ impl NativeApp {
         });
     }
 
-    pub(crate) fn close_settings_tab(&mut self) {
+    pub(super) fn close_settings_tab(&mut self) {
         self.activate_session_workbench_tab();
     }
 }

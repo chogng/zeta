@@ -354,5 +354,5 @@ fn child_bounds(
 }
 
 #[cfg(test)]
-#[path = "pane_group_tests.rs"]
+#[path = "pane_group/tests.rs"]
 mod tests;

@@ -1,5 +1,5 @@
 use super::Titlebar;
-use crate::session_sidebar::SessionSidebarState;
+use crate::session::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     AGENT_SIDEBAR_TOGGLE, LANGUAGE_SERVER_SETTINGS_TOGGLE, SESSION_SIDEBAR_TOGGLE, TITLEBAR,
 };

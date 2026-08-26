@@ -7,9 +7,9 @@ use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 use zui::app::AppProxy;
 
-use crate::agent_session_target::AgentSessionTarget;
+use crate::app_server::AppServerHost;
 use crate::native_event::NativeEvent;
-use crate::session_switch_trace;
+use crate::session::session_switch_trace;
 use crate::terminal_session::TerminalSession;
 use crate::terminal_session::TerminalSessionEvent;
 use crate::terminal_session::TerminalSessionKey;
@@ -22,7 +22,7 @@ use crate::terminal_session::TerminalSessionReady;
 /// It keeps inactive PTYs alive while the host renders another Session Tab.
 pub(crate) struct TerminalWorkspace {
     event_proxy: AppProxy<NativeEvent>,
-    target: AgentSessionTarget,
+    target: AppServerHost,
     state: TerminalWorkspaceState,
     active: Option<(TerminalSessionKey, TerminalSession)>,
     inactive: HashMap<TerminalSessionKey, TerminalSession>,
@@ -239,7 +239,7 @@ pub(crate) enum TerminalReadyOutcome {
 }
 
 impl TerminalWorkspace {
-    pub(crate) fn new(event_proxy: AppProxy<NativeEvent>, target: AgentSessionTarget) -> Self {
+    pub(crate) fn new(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Self {
         Self {
             event_proxy,
             target,

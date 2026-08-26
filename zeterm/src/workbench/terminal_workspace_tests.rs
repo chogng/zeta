@@ -1,3 +1,5 @@
+//! Terminal workspace and pane-adoption contract tests.
+
 use super::{
     ActivationDecision, EnsureReservation, PendingTerminalReservation, TerminalReadyPlacement,
     TerminalWorkspaceState,

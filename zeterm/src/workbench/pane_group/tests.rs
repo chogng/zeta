@@ -1,3 +1,5 @@
+//! Pane group tree and split-layout contract tests.
+
 use super::{PaneGroup, PaneId, PaneSplitDirection};
 use zeta_ui::Rect;
 
