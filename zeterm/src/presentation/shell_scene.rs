@@ -34,13 +34,13 @@ use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_manager_view::RemoteTunnelManager;
-use crate::session_canvas::SessionCanvasLayout;
-use crate::session_canvas::SessionHeader;
-use crate::session_context_menu::{SessionContextMenu, SessionContextMenuState};
-use crate::session_search::SessionSearch;
-use crate::session_sidebar::SessionSidebarState;
-use crate::session_sidebar_toolbar::SessionSidebarToolbar;
-use crate::session_tab_list::{WorkbenchTab, WorkbenchTabList, tab_input_element_id};
+use crate::session::session_canvas::SessionCanvasLayout;
+use crate::session::session_canvas::SessionHeader;
+use crate::session::session_context_menu::{SessionContextMenu, SessionContextMenuState};
+use crate::session::session_search::SessionSearch;
+use crate::session::session_sidebar::SessionSidebarState;
+use crate::session::session_sidebar_toolbar::SessionSidebarToolbar;
+use crate::session::session_tab_list::{WorkbenchTab, WorkbenchTabList, tab_input_element_id};
 use crate::settings_sections::SettingsSectionPane;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, AGENT_FILE_SEARCH_INPUT, AGENT_SIDEBAR, AGENT_SIDEBAR_RESIZE_HANDLE,

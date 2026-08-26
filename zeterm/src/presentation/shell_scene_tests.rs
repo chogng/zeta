@@ -15,9 +15,9 @@ use crate::pane_input::{PaneBinding, PaneInput};
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
-use crate::session_context_menu::SessionContextMenuState;
-use crate::session_search::SessionSearch;
-use crate::session_sidebar::SessionSidebarState;
+use crate::session::session_context_menu::SessionContextMenuState;
+use crate::session::session_search::SessionSearch;
+use crate::session::session_sidebar::SessionSidebarState;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE,
     AGENT_FILES, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_SIDEBAR, AGENT_SIDEBAR_NAVIGATION,
