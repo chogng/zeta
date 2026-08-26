@@ -211,11 +211,19 @@ where
             }
             WindowEvent::RedrawRequested => self.render_devtools_window(window, owner, event_loop),
             WindowEvent::CursorMoved { position } => {
-                self.cursor_positions
-                    .insert(window, self.logical_point(window, *position));
+                let point = self.logical_point(window, *position);
+                self.cursor_positions.insert(window, point);
+                self.update_devtools_tree_hover(window, owner, point);
             }
             WindowEvent::CursorLeft => {
                 self.cursor_positions.remove(&window);
+                if let Some(runtime) = self.windows.get(&owner) {
+                    let devtools = runtime.handle().devtools();
+                    if devtools.set_hovered_tree_node(None) {
+                        runtime.handle().request_redraw();
+                        self.request_devtools_redraw(owner);
+                    }
+                }
             }
             WindowEvent::KeyboardInput { event } => {
                 if event.state == ElementState::Pressed
@@ -293,6 +301,7 @@ where
                 match crate::devtools::view::tree_hit_at(bounds, point, &frame, &devtools) {
                     Some(crate::devtools::view::TreeHit::Toggle(id)) => {
                         devtools.toggle_node_expansion(id);
+                        owner_runtime.handle().request_redraw();
                         if let Some(runtime) = self.windows.get(&window) {
                             runtime.handle().request_redraw();
                         }
@@ -311,6 +320,32 @@ where
                     None => {}
                 }
             }
+        }
+    }
+
+    fn update_devtools_tree_hover(&self, window: WindowId, owner: WindowId, point: Point) {
+        let Some(size) = self
+            .windows
+            .get(&window)
+            .map(|runtime| runtime.metrics().logical_size())
+        else {
+            return;
+        };
+        let bounds = Rect::from_xywh(0.0, 0.0, size.width, size.height);
+        let Some(owner_runtime) = self.windows.get(&owner) else {
+            return;
+        };
+        let devtools = owner_runtime.handle().devtools();
+        let hovered = devtools.inspection().as_ref().and_then(|frame| {
+            crate::devtools::view::tree_hit_at(bounds, point, frame, &devtools).map(|hit| match hit
+            {
+                crate::devtools::view::TreeHit::Toggle(id)
+                | crate::devtools::view::TreeHit::Select(id) => id,
+            })
+        });
+        if devtools.set_hovered_tree_node(hovered) {
+            owner_runtime.handle().request_redraw();
+            self.request_devtools_redraw(owner);
         }
     }
 

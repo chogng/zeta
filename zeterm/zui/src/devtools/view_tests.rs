@@ -12,6 +12,7 @@ use super::tree_rows;
 use crate::devtools::DevToolsHandle;
 use crate::devtools::InspectionSelection;
 use crate::ui::Color;
+use crate::ui::Edges;
 use crate::ui::Element;
 use crate::ui::InspectionFrame;
 use crate::ui::InspectionNode;
@@ -28,6 +29,7 @@ fn default_view_paints_title_and_selection_metadata() {
         |scene, _| {
             scene.with_element(
                 Element::leaf("Button")
+                    .padding(Edges::new(1.0, 2.0, 3.0, 4.0))
                     .in_bounds(Rect::from_xywh(10.0, 10.0, 80.0, 30.0))
                     .with_inspection_label("Run"),
                 |_, _| {},
@@ -68,6 +70,11 @@ fn default_view_paints_title_and_selection_metadata() {
     assert!(texts.iter().any(|text| text.contains("Box model")));
     assert!(texts.iter().any(|text| text.contains("padding-top")));
     assert!(texts.iter().any(|text| text.contains("padding-bottom")));
+    assert!(texts.contains(&"margin"));
+    assert!(texts.contains(&"border"));
+    assert!(texts.contains(&"padding"));
+    assert!(texts.contains(&"content"));
+    assert!(texts.contains(&"74 × 26"));
     let icons = scene
         .icons()
         .iter()
@@ -127,6 +134,16 @@ fn default_view_hit_tests_toolbar_and_full_tree_rows() {
     assert_eq!(
         tree_hit_at(
             bounds,
+            Point::new(200.0, TOOLBAR_HEIGHT + 10.0),
+            &frame,
+            &handle,
+        ),
+        Some(TreeHit::Select(root))
+    );
+    handle.set_hovered_tree_node(Some(root));
+    assert_eq!(
+        tree_hit_at(
+            bounds,
             Point::new(45.0, TOOLBAR_HEIGHT + ROW_HEIGHT + 10.0),
             &frame,
             &handle,
@@ -141,6 +158,12 @@ fn default_view_hit_tests_toolbar_and_full_tree_rows() {
         .collect::<Vec<_>>();
     assert!(text.iter().any(|value| value.contains("Panel")));
     assert!(text.iter().any(|value| value.contains("Button")));
+    assert!(
+        scene
+            .rects()
+            .iter()
+            .any(|rect| rect.fill() == Color::rgb(237, 237, 241))
+    );
 
     handle.toggle_node_expansion(root);
     assert_eq!(tree_rows(&frame, &handle).len(), 1);
@@ -289,4 +312,57 @@ fn hover_and_locked_selection_decorate_the_product_scene() {
     handle.select(Some(selection));
     let locked = decorate_product_scene(&source, &handle).expect("selection should decorate");
     assert!(locked.rects().len() > source.rects().len());
+}
+
+#[test]
+fn tree_hover_decorates_the_corresponding_product_node_without_locking_it() {
+    let mut source = UiScene::new(Color::TRANSPARENT);
+    source.with_element(
+        Element::column("Panel").in_bounds(Rect::from_xywh(0.0, 0.0, 100.0, 100.0)),
+        |scene, _| {
+            scene.with_element(
+                Element::leaf("First").in_bounds(Rect::from_xywh(0.0, 0.0, 40.0, 30.0)),
+                |_, _| {},
+            );
+            scene.with_element(
+                Element::leaf("Second").in_bounds(Rect::from_xywh(0.0, 50.0, 40.0, 30.0)),
+                |_, _| {},
+            );
+        },
+    );
+    let frame = source.inspection().clone();
+    let first = frame.nodes()[1].id();
+    let second = frame.nodes()[2].id();
+    let second_bounds = frame.node(second).expect("second node").bounds();
+    let handle = DevToolsHandle::new();
+    handle.open();
+    handle.set_inspection(frame.clone());
+    handle.select(Some(
+        InspectionSelection::from_node(&frame, first).expect("first node should be selectable"),
+    ));
+
+    handle.set_hovered_tree_node(Some(second));
+
+    let hovered = decorate_product_scene(&source, &handle).expect("hover should decorate");
+    assert!(
+        hovered
+            .rects()
+            .iter()
+            .any(|rect| rect.bounds() == second_bounds)
+    );
+    assert_eq!(
+        handle
+            .selection()
+            .and_then(|selection| selection.target().map(|node| node.id())),
+        Some(first)
+    );
+
+    handle.set_hovered_tree_node(None);
+    let restored = decorate_product_scene(&source, &handle).expect("locked selection should stay");
+    assert!(
+        !restored
+            .rects()
+            .iter()
+            .any(|rect| rect.bounds() == second_bounds)
+    );
 }

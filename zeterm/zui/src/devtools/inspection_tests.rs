@@ -64,6 +64,39 @@ fn inspector_state_separates_hovering_from_locked_selection() {
 }
 
 #[test]
+fn toggling_node_expansion_selects_the_toggled_node() {
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+    scene.with_element(
+        Element::column("Parent").in_bounds(Rect::from_xywh(0.0, 0.0, 100.0, 80.0)),
+        |scene, _| {
+            scene.with_element(
+                Element::leaf("Child").in_bounds(Rect::from_xywh(10.0, 10.0, 40.0, 30.0)),
+                |_, _| {},
+            );
+        },
+    );
+    let frame = scene.inspection().clone();
+    let parent = frame.nodes()[0].id();
+    let child = frame.nodes()[1].id();
+    let handle = DevToolsHandle::new();
+    handle.open();
+    handle.set_inspection(frame.clone());
+    handle.select(Some(
+        InspectionSelection::from_node(&frame, child).expect("child should be selectable"),
+    ));
+
+    handle.toggle_node_expansion(parent);
+
+    assert!(handle.is_collapsed(parent));
+    assert_eq!(
+        handle
+            .selection()
+            .and_then(|selection| selection.target().map(|node| node.id())),
+        Some(parent)
+    );
+}
+
+#[test]
 fn devtools_handle_provides_one_shared_session_for_window_capabilities() {
     let first = DevToolsHandle::new();
     let second = first.clone();

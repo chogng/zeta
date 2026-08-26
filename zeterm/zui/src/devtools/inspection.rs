@@ -410,7 +410,29 @@ impl DevToolsHandle {
     }
 
     pub(crate) fn toggle_node_expansion(&self, id: InspectionNodeId) {
+        if let Some(frame) = self.inspection()
+            && let Some(selection) = InspectionSelection::from_node(&frame, id)
+        {
+            self.select(Some(selection));
+        }
         self.view.lock().expect("devtools view lock").toggle(id);
+    }
+
+    pub(crate) fn hovered_tree_node(&self) -> Option<InspectionNodeId> {
+        self.view.lock().expect("devtools view lock").hovered_node()
+    }
+
+    pub(crate) fn set_hovered_tree_node(&self, id: Option<InspectionNodeId>) -> bool {
+        self.view
+            .lock()
+            .expect("devtools view lock")
+            .set_hovered_node(id)
+    }
+
+    pub(crate) fn hovered_tree_selection(&self) -> Option<InspectionSelection> {
+        let id = self.hovered_tree_node()?;
+        let frame = self.inspection()?;
+        InspectionSelection::from_node(&frame, id)
     }
 
     pub(crate) fn scroll_offset(&self) -> f32 {

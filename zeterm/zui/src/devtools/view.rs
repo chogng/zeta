@@ -30,6 +30,7 @@ const FOREGROUND: Color = Color::rgb(35, 35, 42);
 const MUTED: Color = Color::rgb(105, 105, 116);
 const ACCENT: Color = Color::rgb(35, 131, 226);
 const ROW_BACKGROUND: Color = Color::rgba(35, 131, 226, 24);
+const HOVER_ROW_BACKGROUND: Color = Color::rgb(237, 237, 241);
 const CONTENT_PADDING: f32 = 16.0;
 const ACTION_WIDTH: f32 = 74.0;
 const ACTION_HEIGHT: f32 = 28.0;
@@ -114,6 +115,7 @@ pub(crate) fn compose(
         let selected_id = selection
             .as_ref()
             .and_then(|selection| selection.target().map(|node| node.id()));
+        let hovered_id = devtools.hovered_tree_node();
         if let Some(index) =
             selected_id.and_then(|id| rows.iter().position(|tree_row| tree_row.id == id))
         {
@@ -135,6 +137,9 @@ pub(crate) fn compose(
             }
             let row = Rect::from_xywh(tree.origin.x, y, tree.size.width, ROW_HEIGHT);
             let selected = selected_id == Some(tree_row.id);
+            if hovered_id == Some(tree_row.id) && !selected {
+                scene.draw_rect(PaintRect::new(row, HOVER_ROW_BACKGROUND));
+            }
             if selected {
                 scene.draw_rect(PaintRect::new(row, ROW_BACKGROUND));
                 scene.draw_rect(PaintRect::new(
@@ -177,7 +182,9 @@ pub(crate) fn decorate_product_scene(
     scene: &UiScene,
     devtools: &DevToolsHandle,
 ) -> Option<UiScene> {
-    let selection = devtools.selection()?;
+    let selection = devtools
+        .hovered_tree_selection()
+        .or_else(|| devtools.selection())?;
     let mut decorated = scene.clone();
     decorated.with_overlay(|scene| paint_selection(scene, &selection));
     Some(decorated)

@@ -6,12 +6,14 @@ use super::InspectionSelection;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct DevToolsViewState {
     collapsed: Vec<InspectionNodeId>,
+    hovered_node: Option<InspectionNodeId>,
     pub(crate) scroll_offset: f32,
 }
 
 impl DevToolsViewState {
     pub(crate) fn reset(&mut self) {
         self.collapsed.clear();
+        self.hovered_node = None;
         self.scroll_offset = 0.0;
     }
 
@@ -29,6 +31,21 @@ impl DevToolsViewState {
 
     pub(crate) fn retain_nodes(&mut self, frame: &InspectionFrame) {
         self.collapsed.retain(|id| frame.node(*id).is_some());
+        if self.hovered_node.is_some_and(|id| frame.node(id).is_none()) {
+            self.hovered_node = None;
+        }
+    }
+
+    pub(crate) fn hovered_node(&self) -> Option<InspectionNodeId> {
+        self.hovered_node
+    }
+
+    pub(crate) fn set_hovered_node(&mut self, id: Option<InspectionNodeId>) -> bool {
+        if self.hovered_node == id {
+            return false;
+        }
+        self.hovered_node = id;
+        true
     }
 
     pub(crate) fn reveal_selection(&mut self, selection: Option<&InspectionSelection>) {
