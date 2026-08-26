@@ -27,6 +27,10 @@ const {
 	"../../../platform/workspace/common/workspace.js"
 );
 const {
+	errorHandler,
+	setUnexpectedErrorHandler,
+} = await import("../../../base/common/errors.js");
+const {
 	WorkbenchWindow,
 } = await import("../../../workbench/browser/window.js");
 
@@ -96,3 +100,31 @@ test(
 		);
 	},
 );
+
+test("WorkbenchWindow forwards secondary runtime errors to the central error handler", () => {
+	const secondaryEnvironment = new JSDOM(
+		"<!doctype html><html><body><main></main></body></html>",
+	);
+	const root = secondaryEnvironment.window.document.querySelector("main");
+	assert.ok(root);
+	const workbenchWindow = new WorkbenchWindow({
+		root,
+		modeId: "academic",
+		workbenchState: WorkbenchState.FOLDER,
+	});
+	const previousHandler = errorHandler.getUnexpectedErrorHandler();
+	const reported: unknown[] = [];
+	setUnexpectedErrorHandler(error => reported.push(error));
+
+	try {
+		const error = new Error("secondary render failed");
+		secondaryEnvironment.window.dispatchEvent(new secondaryEnvironment.window.ErrorEvent("error", {
+			error,
+			message: error.message,
+		}));
+		assert.deepEqual(reported, [error]);
+	} finally {
+		setUnexpectedErrorHandler(previousHandler);
+		workbenchWindow.dispose();
+	}
+});

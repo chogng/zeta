@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getErrorMessage, toError } from '../../common/errors.js';
+import { CancellationError } from '../../common/cancellation.js';
+import { BugIndicatingError, ErrorHandler, errorHandler, getErrorMessage, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
 
 test('toError preserves Error instances', () => {
 	const error = new TypeError('failure');
@@ -17,4 +18,39 @@ test('getErrorMessage reads messages, stack headers, and fallback values', () =>
 	assert.equal(getErrorMessage('failure'), 'failure');
 	assert.equal(getErrorMessage({ stack: 'Failure\nsecond line' }), 'Failure');
 	assert.equal(getErrorMessage(undefined), 'Error');
+});
+
+test('ErrorHandler dispatches unexpected errors and supports listener removal', () => {
+	const handler = new ErrorHandler();
+	const reported: unknown[] = [];
+	const observed: unknown[] = [];
+	const unbind = handler.addListener(error => observed.push(error));
+	const error = new Error('failure');
+
+	handler.setUnexpectedErrorHandler(value => reported.push(value));
+	handler.onUnexpectedError(error);
+	unbind();
+	handler.onUnexpectedError(error);
+
+	assert.deepEqual(reported, [error, error]);
+	assert.deepEqual(observed, [error]);
+});
+
+test('unexpected error helpers ignore cancellation and preserve bug intent', () => {
+	const previousHandler = errorHandler.getUnexpectedErrorHandler();
+	const reported: unknown[] = [];
+	const normalError = new Error('failure');
+	const bug = new BugIndicatingError('invariant failed');
+	setUnexpectedErrorHandler(error => reported.push(error));
+
+	try {
+		onUnexpectedError(new CancellationError());
+		onUnexpectedError(normalError);
+		onBugIndicatingError(bug);
+	} finally {
+		setUnexpectedErrorHandler(previousHandler);
+	}
+
+	assert.deepEqual(reported, [normalError, bug]);
+	assert.equal(bug instanceof BugIndicatingError, true);
 });

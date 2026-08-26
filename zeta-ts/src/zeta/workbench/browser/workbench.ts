@@ -2,10 +2,12 @@ import "./style.js";
 import type { FsChanged } from "../../../../generated/app-server/types.js";
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
+import { mainWindow } from "../../base/browser/window.js";
 import {
 	type IDisposable,
 	DisposableOwner,
 } from "../../base/common/lifecycle.js";
+import { getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
 import { assertDefined } from "../../base/common/types.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import { CancellationError } from "../../base/common/cancellation.js";
@@ -303,6 +305,7 @@ export class Workbench extends DisposableOwner {
 	private readonly ownerWindow: Window;
 	private restoreActiveViewContainers: (() => void) | undefined;
 	private workspaceSwitchQueue: Promise<void> = Promise.resolve();
+	private previousUnexpectedError: { message: string | undefined; time: number } = { message: undefined, time: 0 };
 
 	constructor(
 		modeId: WorkbenchModeId,
@@ -326,6 +329,7 @@ export class Workbench extends DisposableOwner {
 		const instantiationService = new InstantiationService(services);
 		const logService = this.own(new LogService({ sinks: [new ConsoleLogSink()] }));
 		this.logService = logService;
+		this.registerErrorHandler(logService);
 		services.set(ILogService, logService);
 		services.set(IExtensionHostApi, api.extensionHost);
 		services.set(ISymbolIndexApi, api.symbolIndex);
@@ -475,7 +479,7 @@ export class Workbench extends DisposableOwner {
 		}));
 		const outputService = this.own(new OutputService({ storageService: storage }));
 		services.set(IOutputService, outputService);
-		const systemOutputService = this.own(new SystemOutputService(outputService, api.appServer, workbenchWindow));
+		const systemOutputService = this.own(new SystemOutputService(outputService, api.appServer));
 		this.own(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
 		installWorkbenchServiceContributions({ services, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
@@ -895,6 +899,24 @@ export class Workbench extends DisposableOwner {
 		contributions.advance(WorkbenchPhase.BlockRestore);
 		layoutService.layout();
 		this.whenRestored = this.completeStartupRestoration([extensionReady, ...serviceContributionReady], workingCopyBackups, editor, contributions);
+	}
+
+	private registerErrorHandler(logService: ILogService): void {
+		mainWindow.addEventListener("unhandledrejection", event => {
+			onUnexpectedError(event.reason);
+			event.preventDefault();
+		});
+		setUnexpectedErrorHandler(error => this.handleUnexpectedError(error, logService));
+	}
+
+	private handleUnexpectedError(error: unknown, logService: ILogService): void {
+		const message = error instanceof Error ? error.stack || error.message : getErrorMessage(error);
+		if (!message) return;
+
+		const now = Date.now();
+		if (message === this.previousUnexpectedError.message && now - this.previousUnexpectedError.time <= 1_000) return;
+		this.previousUnexpectedError = { message, time: now };
+		logService.error("runtime", message);
 	}
 
 	shutdown(reason: ShutdownReason): Promise<void> {

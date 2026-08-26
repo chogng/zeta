@@ -4,7 +4,7 @@ import {
 	mainWindow,
 	registerWindow,
 } from "../../base/browser/window.js";
-import { Emitter } from "../../base/common/event.js";
+import { onUnexpectedError } from "../../base/common/errors.js";
 import { DisposableOwner } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
@@ -31,8 +31,6 @@ export class WorkbenchWindow
 	readonly root: HTMLElement;
 	readonly ownerDocument: Document;
 	readonly targetWindow: Window | null;
-	private readonly errorEmitter = this.own(new Emitter<{ readonly kind: "runtimeError" | "unhandledRejection"; readonly message: string; readonly source: string | undefined }>());
-	readonly onDidError = this.errorEmitter.event;
 
 	constructor(options: WorkbenchWindowOptions) {
 		super();
@@ -67,13 +65,20 @@ export class WorkbenchWindow
 			));
 		}
 		if (this.targetWindow) {
-			const onError = (event: ErrorEvent): void => this.errorEmitter.fire({ kind: "runtimeError", message: event.message || errorMessage(event.error), source: event.filename ? `${event.filename}:${event.lineno}:${event.colno}` : undefined });
-			const onUnhandledRejection = (event: PromiseRejectionEvent): void => this.errorEmitter.fire({ kind: "unhandledRejection", message: errorMessage(event.reason), source: undefined });
+			const onError = (event: ErrorEvent): void => {
+				const source = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : "";
+				onUnexpectedError(event.error ?? new Error(`${event.message || "Unexpected browser error"}${source}`));
+				event.preventDefault();
+			};
+			const onUnhandledRejection = (event: PromiseRejectionEvent): void => {
+				onUnexpectedError(event.reason);
+				event.preventDefault();
+			};
 			this.targetWindow.addEventListener("error", onError);
-			this.targetWindow.addEventListener("unhandledrejection", onUnhandledRejection);
+			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener("unhandledrejection", onUnhandledRejection);
 			this.defer(() => {
 				this.targetWindow?.removeEventListener("error", onError);
-				this.targetWindow?.removeEventListener("unhandledrejection", onUnhandledRejection);
+				if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener("unhandledrejection", onUnhandledRejection);
 			});
 		}
 	}
@@ -95,9 +100,4 @@ export class WorkbenchWindow
 			workbenchStateToString(state),
 		);
 	}
-}
-
-function errorMessage(error: unknown): string {
-	if (error instanceof Error) return error.stack || error.message;
-	return String(error);
 }

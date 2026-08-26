@@ -1,6 +1,7 @@
 import type { Event } from "./event.js";
 import { Emitter } from "./event.js";
 import { DisposableMap, DisposableOwner, ResettableDisposableGroup, type IDisposable, toDisposable } from "./lifecycle.js";
+import { onUnexpectedError } from "./errors.js";
 
 /** Reads an observable while recording it as a dependency of the current computation. */
 export interface IReader {
@@ -305,13 +306,7 @@ class ObservableReaction extends DisposableOwner implements IReaderWithStore {
 		try {
 			this.run();
 		} catch (error) {
-			if (typeof globalThis.reportError === "function") {
-				globalThis.reportError(error);
-			} else {
-				queueMicrotask(() => {
-					throw error;
-				});
-			}
+			onUnexpectedError(error);
 		}
 	}
 }

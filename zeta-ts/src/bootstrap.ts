@@ -1,4 +1,5 @@
 import { app } from "electron/main";
+import { onUnexpectedError, setUnexpectedErrorHandler } from "./zeta/base/common/errors.js";
 
 let didBootstrap = false;
 
@@ -13,4 +14,11 @@ export function bootstrapElectronMain(): void {
 
 	Error.stackTraceLimit = 100;
 	app.enableSandbox();
+	registerProcessErrorHandlers();
+}
+
+function registerProcessErrorHandlers(): void {
+	process.on("uncaughtException", error => onUnexpectedError(error));
+	process.on("unhandledRejection", reason => onUnexpectedError(reason));
+	setUnexpectedErrorHandler(error => console.error("Unexpected error in Electron main process", error));
 }

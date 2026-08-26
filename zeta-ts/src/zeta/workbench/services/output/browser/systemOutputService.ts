@@ -1,7 +1,6 @@
 import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IAppServerApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ILogSink, LogEntry } from "../../../../platform/log/common/logService.js";
-import type { IWorkbenchHostService } from "../../host/common/workbenchHostService.js";
 import type { IOutputChannel, IOutputService } from "../common/outputService.js";
 
 /** Owns built-in Window and App Server diagnostic Output channels. */
@@ -9,11 +8,10 @@ export class SystemOutputService extends DisposableOwner implements ILogSink {
 	private readonly windowChannel: IOutputChannel;
 	private readonly appServerChannel: IOutputChannel;
 
-	constructor(output: IOutputService, appServer: IAppServerApi, hostService: IWorkbenchHostService) {
+	constructor(output: IOutputService, appServer: IAppServerApi) {
 		super();
 		this.windowChannel = this.own(output.createChannel({ id: "window", label: "Window", kind: "log", source: "core" }));
 		this.appServerChannel = this.own(output.createChannel({ id: "app-server", label: "App Server", kind: "log", source: "core" }));
-		this.own(hostService.onDidError(error => this.windowChannel.appendLine({ severity: "error", category: "runtime", text: `${error.kind === "unhandledRejection" ? "Unhandled promise rejection: " : ""}${bounded(error.message)}${error.source ? ` (${error.source})` : ""}` })));
 		const connection = appServer.onConnectionState(state => this.appServerChannel.appendLine({ severity: state === "crashed" ? "error" : state === "restarting" ? "warning" : "information", category: "connection", text: `App Server connection is ${state}.` }));
 		this.own(toDisposable(() => connection.dispose()));
 		void appServer.getConnectionState().then(state => {

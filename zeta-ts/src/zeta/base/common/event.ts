@@ -4,6 +4,7 @@ import {
 	noneDisposable,
 	toDisposable,
 } from "./lifecycle.js";
+import { onUnexpectedError } from "./errors.js";
 
 /** A function that subscribes a listener and returns its registration. */
 export interface Event<T> {
@@ -119,7 +120,7 @@ export class Emitter<T> extends AbstractDisposable {
 		this.onWillAddFirstListener = options.onWillAddFirstListener;
 		this.onDidRemoveLastListener = options.onDidRemoveLastListener;
 		this.onListenerError =
-			options.onListenerError ?? reportListenerError;
+			options.onListenerError ?? onUnexpectedError;
 	}
 
 	fire(event: T): void {
@@ -166,16 +167,7 @@ export class Emitter<T> extends AbstractDisposable {
 		try {
 			this.onListenerError(error);
 		} catch (reportingError) {
-			reportListenerError(error);
-			reportListenerError(reportingError);
+			console.error("Unexpected error while reporting an event listener error", error, reportingError);
 		}
 	}
-}
-
-function reportListenerError(error: unknown): void {
-	if (typeof globalThis.reportError === "function") {
-		globalThis.reportError(error);
-		return;
-	}
-	console.error("Unexpected error in event listener", error);
 }

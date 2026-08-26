@@ -1,3 +1,4 @@
+import { BugIndicatingError } from "../../../../base/common/errors.js";
 import { OffsetRange } from "../ranges/offsetRange.js";
 import { Point } from "./point.js";
 import { Size2D } from "./size.js";
@@ -21,7 +22,8 @@ export class Rect {
 		readonly right: number,
 		readonly bottom: number,
 	) {
-		if (left > right || top > bottom) throw new RangeError("Rect edges must be ordered");
+		if (left > right) throw new BugIndicatingError("Invalid arguments: Horizontally offset by " + (left - right));
+		if (top > bottom) throw new BugIndicatingError("Invalid arguments: Vertically offset by " + (top - bottom));
 	}
 
 	get width(): number { return this.right - this.left; }
