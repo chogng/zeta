@@ -16,32 +16,39 @@ use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::SshAppServerConnectionOptions;
 
-/// Product-selected App Server location for one zeterm Agent session.
+/// Product-owned App Server host context shared by Agent, Language, and Terminal adapters.
 ///
-/// The native host decides whether a session uses the profile-scoped local authority or a remote
-/// authority before the UI obtains an App Server client. Neither the renderer nor the remote
-/// runtime receives local SSH credentials.
+/// The host exposes one horizontal application backend contract. `Local` and `Remote` describe
+/// how the App Server is reached; they do not create separate product APIs. Window state, panes,
+/// commands, and Remote picker state remain owned by `zeterm` outside this context.
 #[derive(Clone, Debug)]
-pub(crate) enum AgentSessionTarget {
+pub(crate) struct AppServerHost {
+    backend: AppServerBackend,
+}
+
+#[derive(Clone, Debug)]
+enum AppServerBackend {
     Local {
         workspace_root: PathBuf,
     },
-    Ssh {
+    Remote {
         connection: SshAppServerConnectionOptions,
         workspace_root: PathBuf,
     },
 }
 
-impl AgentSessionTarget {
-    /// Selects the profile-scoped App Server authority for one local Workspace.
+impl AppServerHost {
+    /// Selects the profile-scoped local App Server authority for one Workspace.
     pub(crate) fn local(workspace_root: impl Into<PathBuf>) -> Self {
-        Self::Local {
-            workspace_root: workspace_root.into(),
+        Self {
+            backend: AppServerBackend::Local {
+                workspace_root: workspace_root.into(),
+            },
         }
     }
 
     /// Selects an SSH-hosted App Server and an optional product-provided OpenSSH executable.
-    pub(crate) fn ssh_with_executable(
+    pub(crate) fn remote_with_executable(
         profile: RemoteProfile,
         ssh_executable: Option<&Path>,
     ) -> Self {
@@ -50,29 +57,32 @@ impl AgentSessionTarget {
         if let Some(ssh_executable) = ssh_executable {
             connection = connection.with_ssh_executable(ssh_executable);
         }
-        Self::Ssh {
-            connection,
-            workspace_root,
+        Self {
+            backend: AppServerBackend::Remote {
+                connection,
+                workspace_root,
+            },
         }
     }
 
-    /// Returns whether this target delegates filesystem and terminal authority to an SSH host.
+    /// Returns whether the host delegates its App Server authority to SSH.
     pub(crate) const fn is_remote(&self) -> bool {
-        matches!(self, Self::Ssh { .. })
+        matches!(&self.backend, AppServerBackend::Remote { .. })
     }
 
-    /// Returns the authoritative Workspace path used in Session titles and App Server requests.
+    /// Returns the authoritative Workspace path used in App Server requests and UI context.
     pub(crate) fn workspace_root(&self) -> &Path {
-        match self {
-            Self::Local { workspace_root } | Self::Ssh { workspace_root, .. } => workspace_root,
+        match &self.backend {
+            AppServerBackend::Local { workspace_root }
+            | AppServerBackend::Remote { workspace_root, .. } => workspace_root,
         }
     }
 
-    /// Retargets the same local Profile or SSH host/runtime to another Workspace authority.
+    /// Retargets the same local profile or SSH host/runtime to another Workspace authority.
     pub(crate) fn with_workspace_root(&self, root: &Path) -> Result<Self> {
-        match self {
-            Self::Local { .. } => Ok(Self::local(root)),
-            Self::Ssh { connection, .. } => {
+        match &self.backend {
+            AppServerBackend::Local { .. } => Ok(Self::local(root)),
+            AppServerBackend::Remote { connection, .. } => {
                 let root = root
                     .to_str()
                     .ok_or_else(|| anyhow!("Remote Workspace path is not valid UTF-8"))?;
@@ -80,7 +90,7 @@ impl AgentSessionTarget {
                     connection.profile().target().host().clone(),
                     RemoteWorkspacePath::parse(root).map_err(|error| anyhow!(error.to_string()))?,
                 );
-                Ok(Self::ssh_with_executable(
+                Ok(Self::remote_with_executable(
                     RemoteProfile::new(target, connection.profile().runtime().clone()),
                     Some(connection.ssh_executable()),
                 ))
@@ -90,23 +100,31 @@ impl AgentSessionTarget {
 
     /// Returns the host-owned SSH inputs reusable by sibling native Remote capabilities.
     pub(crate) fn ssh_transport(&self) -> Option<(&SshHost, &Path)> {
-        match self {
-            Self::Local { .. } => None,
-            Self::Ssh { connection, .. } => Some((
+        match &self.backend {
+            AppServerBackend::Local { .. } => None,
+            AppServerBackend::Remote { connection, .. } => Some((
                 connection.profile().target().host(),
                 connection.ssh_executable(),
             )),
         }
     }
 
-    /// Opens the target and performs the canonical initialize/schema handshake.
+    /// Returns the Remote App Server connection backend when this host is remote.
+    pub(crate) fn remote_connection(&self) -> Option<&SshAppServerConnectionOptions> {
+        match &self.backend {
+            AppServerBackend::Local { .. } => None,
+            AppServerBackend::Remote { connection, .. } => Some(connection),
+        }
+    }
+
+    /// Opens the selected backend and performs the canonical initialize/schema handshake.
     pub(crate) fn start(&self) -> Result<AppServerSession> {
         let client_info = ClientInfo {
             name: "zeterm".into(),
             version: env!("CARGO_PKG_VERSION").into(),
         };
-        match self {
-            Self::Local { workspace_root } => {
+        match &self.backend {
+            AppServerBackend::Local { workspace_root } => {
                 let executable = std::env::current_exe()
                     .map_err(|error| anyhow!("could not resolve zeterm executable: {error}"))?;
                 let daemon_executable = development_daemon_executable(&executable);
@@ -119,14 +137,14 @@ impl AgentSessionTarget {
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
                     .map_err(|error| anyhow!(error.to_string()))
             }
-            Self::Ssh { connection, .. } => connection
+            AppServerBackend::Remote { connection, .. } => connection
                 .connect(client_info, ClientCapabilities::default())
                 .map_err(|error| anyhow!(error.to_string())),
         }
     }
 }
 
-pub(super) fn local_app_server_command(
+pub(crate) fn local_app_server_command(
     executable: PathBuf,
     profile_root: PathBuf,
     workspace_root: &Path,
