@@ -10,9 +10,13 @@ use crate::internal::ControlFlow;
 use crate::render::RenderOutcome;
 use crate::render::RendererError;
 use crate::runtime::AccessibilityNode;
+use crate::runtime::InteractionFrame;
+use crate::runtime::UiDispatch;
+use crate::ui::presentation::UiFrame;
 use crate::ui::presentation::UiScene;
 use crate::window::WindowHandle;
 use crate::window::WindowId;
+use crate::window::WindowOperationError;
 
 use super::AppProxy;
 use super::ApplicationError;
@@ -28,6 +32,7 @@ use super::TaskSpawnError;
 use super::Timer;
 use super::TimerScheduleError;
 use super::TimerScheduler;
+use super::WindowFramePresentation;
 use super::WindowMetrics;
 use super::WindowOptions;
 use super::lifecycle::WindowCommand;
@@ -129,10 +134,14 @@ impl<'a, T: 'static> AppContext<'a, T> {
     }
 
     /// Requests another frame for a runtime-owned window.
-    pub fn request_redraw(&self, id: WindowId) {
-        if let Some(window) = self.windows.get(&id) {
-            window.handle().request_redraw();
-        }
+    pub fn request_redraw(&self, id: WindowId) -> Result<(), WindowOperationError> {
+        let Some(window) = self.windows.get(&id) else {
+            return Err(WindowOperationError::Closed {
+                window: id,
+                operation: "redraw request",
+            });
+        };
+        window.handle().request_redraw()
     }
 
     /// Returns the application-wide text clipboard capability.
@@ -262,17 +271,17 @@ impl<'a, T: 'static> WindowContext<'a, T> {
     }
 
     /// Opens the default zui DevTools window for this window and schedules a frame.
-    pub fn open_devtools(&self) {
-        self.runtime.handle().open_devtools();
+    pub fn open_devtools(&self) -> Result<(), WindowOperationError> {
+        self.runtime.handle().open_devtools()
     }
 
     /// Closes the default zui DevTools window for this window and schedules a frame.
-    pub fn close_devtools(&self) {
-        self.runtime.handle().close_devtools();
+    pub fn close_devtools(&self) -> Result<(), WindowOperationError> {
+        self.runtime.handle().close_devtools()
     }
 
     /// Toggles DevTools for this window and returns whether it is now open.
-    pub fn toggle_devtools(&self) -> bool {
+    pub fn toggle_devtools(&self) -> Result<bool, WindowOperationError> {
         self.runtime.handle().toggle_devtools()
     }
 
@@ -282,8 +291,8 @@ impl<'a, T: 'static> WindowContext<'a, T> {
     }
 
     /// Schedules another frame for this window.
-    pub fn request_redraw(&self) {
-        self.runtime.handle().request_redraw();
+    pub fn request_redraw(&self) -> Result<(), WindowOperationError> {
+        self.runtime.handle().request_redraw()
     }
 
     /// Returns the application-wide text clipboard capability.
@@ -301,27 +310,21 @@ impl<'a, T: 'static> WindowContext<'a, T> {
         self.diagnostics.clone()
     }
 
-    /// Submits one immutable UI scene through this window's renderer.
-    pub fn render_scene(&mut self, scene: &UiScene) -> Result<RenderOutcome, RendererError> {
-        let devtools = self.runtime.handle().devtools();
-        devtools.set_inspection(scene.inspection().clone());
-        let decorated = devtools
-            .is_open()
-            .then(|| crate::devtools::view::decorate_product_scene(scene, &devtools))
-            .flatten();
-        let scene = decorated.as_ref().unwrap_or(scene);
-        let outcome = self.runtime.render_scene(scene)?;
-        self.diagnostics.present(
-            self.id(),
-            self.metrics(),
-            self.diagnostics.scene_diagnostics(scene, 0),
-            outcome,
-        );
-        Ok(outcome)
+    /// Resolves and presents one complete UI frame.
+    ///
+    /// The scene, inspection hierarchy, interaction tree, focus state, and accessibility snapshot
+    /// are taken from the same frame boundary. Callers cannot submit an independently cached
+    /// accessibility projection that has drifted from the painted scene.
+    pub fn present_frame(
+        &mut self,
+        frame: &UiFrame<InteractionFrame>,
+        dispatch: &UiDispatch,
+    ) -> Result<RenderOutcome, RendererError> {
+        let presentation = WindowFramePresentation::resolve(frame, dispatch);
+        self.present_outputs(presentation.scene(), presentation.accessibility())
     }
 
-    /// Synchronizes the operating-system accessibility tree and renders one immutable scene.
-    pub fn present_scene(
+    fn present_outputs(
         &mut self,
         scene: &UiScene,
         accessibility: &[AccessibilityNode],

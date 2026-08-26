@@ -73,12 +73,7 @@ impl NativeApp {
         {
             return false;
         }
-        let Some(bounds) = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == THREAD_TIMELINE)
-            .map(|node| node.bounds)
-        else {
+        let Some(bounds) = presentation.element_bounds(THREAD_TIMELINE) else {
             return false;
         };
         let limit = line_count(&self.thread_projection).saturating_sub(line_capacity(bounds));
@@ -93,12 +88,7 @@ impl NativeApp {
         let Some(presentation) = self.presentation.as_ref() else {
             return 0;
         };
-        let Some(bounds) = presentation
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == THREAD_TIMELINE)
-            .map(|node| node.bounds)
-        else {
+        let Some(bounds) = presentation.element_bounds(THREAD_TIMELINE) else {
             return 0;
         };
         line_count(&self.thread_projection).saturating_sub(line_capacity(bounds))

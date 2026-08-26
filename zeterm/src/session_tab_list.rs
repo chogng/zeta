@@ -1,9 +1,4 @@
-use std::path::Path;
-use std::path::PathBuf;
-
 use zeta_icons::icons;
-use zeta_protocol::Session;
-use zeta_protocol::SessionId;
 use zeta_ui::{
     Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,
     FontWeight, InteractionRegion, PaintIcon, PaintRect, Rect, Size, Tab, TabBackgrounds, TabList,
@@ -15,8 +10,12 @@ use zui::ui::{
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
 };
 
-use crate::shell_interaction::{SESSION_SIDEBAR, SESSION_TAB_LIST, session_tab_id};
+use crate::shell_interaction::{
+    SESSION_SIDEBAR, SESSION_TAB_LIST, SETTINGS_WORKBENCH_TAB, session_tab_id,
+};
 use crate::shell_style::ShellPalette;
+use crate::tab_input::TabInput;
+use crate::tab_input::TabInputKey;
 
 const TAB_HEIGHT: f32 = 52.0;
 const TAB_CONTENT_PADDING: f32 = 8.0;
@@ -39,194 +38,44 @@ pub(crate) struct WorkbenchTab<'a> {
     status_label: &'a str,
 }
 
-/// Product-owned presentation record for one App Server session tab.
-///
-/// The record keeps only the tab identity and labels needed by the shell projection. Session
-/// lifecycle and Thread state remain owned by the App Server session adapter.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SessionTabState {
-    id: ElementId,
-    session_id: SessionId,
-    title: String,
-    workspace: String,
-    workspace_root: Option<PathBuf>,
-    status_label: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SessionTabUpsert {
-    Added(ElementId),
-    Updated(ElementId),
-}
-
-impl SessionTabState {
-    pub(crate) fn new(
-        id: ElementId,
-        session_id: SessionId,
-        title: impl Into<String>,
-        workspace: impl Into<String>,
-        status_label: impl Into<String>,
-    ) -> Self {
-        Self {
-            id,
-            session_id,
-            title: title.into(),
-            workspace: workspace.into(),
-            workspace_root: None,
-            status_label: status_label.into(),
+/// Resolves the UI identity for the selected TabInput without making that UI identity part of the
+/// product selection state. A missing input still points at the bootstrap row used before the
+/// authoritative catalog arrives.
+pub(crate) fn tab_input_element_id(
+    inputs: &[TabInput],
+    selected: Option<&TabInputKey>,
+) -> ElementId {
+    let mut session_index = 0;
+    for input in inputs {
+        let id = if input.is_settings() {
+            SETTINGS_WORKBENCH_TAB
+        } else {
+            session_tab_id(session_index)
+        };
+        if selected.is_some_and(|selected| input.key() == selected) {
+            return id;
+        }
+        if input.is_session() {
+            session_index += 1;
         }
     }
-
-    pub(crate) const fn id(&self) -> ElementId {
-        self.id
-    }
-
-    pub(crate) fn session_id(&self) -> &SessionId {
-        &self.session_id
-    }
-
-    pub(crate) fn title(&self) -> &str {
-        &self.title
-    }
-
-    pub(crate) fn workspace(&self) -> &str {
-        &self.workspace
-    }
-
-    pub(crate) fn workspace_root(&self) -> Option<&Path> {
-        self.workspace_root.as_deref()
-    }
-
-    pub(crate) fn status_label(&self) -> &str {
-        &self.status_label
-    }
-
-    pub(crate) fn update_labels(
-        &mut self,
-        title: impl Into<String>,
-        workspace: impl Into<String>,
-        status_label: impl Into<String>,
-    ) {
-        self.title = title.into();
-        self.workspace = workspace.into();
-        self.status_label = status_label.into();
-    }
-
-    pub(crate) fn update_status(&mut self, status_label: impl Into<String>) {
-        self.status_label = status_label.into();
-    }
-
-    fn update_workspace_root(&mut self, workspace_root: Option<PathBuf>) {
-        self.workspace_root = workspace_root;
-    }
-}
-
-/// Adds or updates the product-owned tab projection for one authoritative App Server Session.
-///
-/// The selected tab is updated together with the projection because a Session snapshot is only
-/// published after the Agent worker has made that Session the active subscription. Terminal pane
-/// allocation remains owned by [`crate::terminal_workspace::TerminalWorkspace`], so this helper
-/// only establishes the stable UI identity that the pane can bind to.
-pub(crate) fn upsert_session_tab(
-    tabs: &mut Vec<SessionTabState>,
-    selected: &mut ElementId,
-    session: &Session,
-    workspace: &str,
-) -> SessionTabUpsert {
-    if let Some(tab) = tabs
-        .iter_mut()
-        .find(|tab| tab.session_id() == &session.session_id)
-    {
-        let tab_id = tab.id();
-        tab.update_labels(
-            session.title.clone(),
-            workspace_label(session, workspace),
-            "Active",
-        );
-        tab.update_workspace_root(
-            session
-                .workspace
-                .as_ref()
-                .map(|binding| binding.root.clone()),
-        );
-        *selected = tab_id;
-        return SessionTabUpsert::Updated(tab_id);
-    }
-
-    let tab_id = session_tab_id(tabs.len());
-    let mut tab = SessionTabState::new(
-        tab_id,
-        session.session_id.clone(),
-        session.title.clone(),
-        workspace_label(session, workspace),
-        "Active",
-    );
-    tab.update_workspace_root(
-        session
-            .workspace
-            .as_ref()
-            .map(|binding| binding.root.clone()),
-    );
-    tabs.push(tab);
-    *selected = tab_id;
-    SessionTabUpsert::Added(tab_id)
-}
-
-/// Adds or updates one catalog entry without changing the active tab selection.
-pub(crate) fn upsert_session_catalog_tab(
-    tabs: &mut Vec<SessionTabState>,
-    session: &Session,
-    workspace: &str,
-) -> SessionTabUpsert {
-    if let Some(tab) = tabs
-        .iter_mut()
-        .find(|tab| tab.session_id() == &session.session_id)
-    {
-        let tab_id = tab.id();
-        tab.update_labels(
-            session.title.clone(),
-            workspace_label(session, workspace),
-            "Active",
-        );
-        tab.update_workspace_root(
-            session
-                .workspace
-                .as_ref()
-                .map(|binding| binding.root.clone()),
-        );
-        return SessionTabUpsert::Updated(tab_id);
-    }
-
-    let tab_id = session_tab_id(tabs.len());
-    let mut tab = SessionTabState::new(
-        tab_id,
-        session.session_id.clone(),
-        session.title.clone(),
-        workspace_label(session, workspace),
-        "Active",
-    );
-    tab.update_workspace_root(
-        session
-            .workspace
-            .as_ref()
-            .map(|binding| binding.root.clone()),
-    );
-    tabs.push(tab);
-    SessionTabUpsert::Added(tab_id)
-}
-
-fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
-    session
-        .workspace
-        .as_ref()
-        .and_then(|binding| binding.root.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| fallback.to_owned())
+    crate::shell_interaction::ACTIVE_SESSION_TAB
 }
 
 impl<'a> WorkbenchTab<'a> {
+    pub(crate) fn from_input(index: usize, input: &'a TabInput) -> Self {
+        if input.is_settings() {
+            Self::settings(SETTINGS_WORKBENCH_TAB)
+        } else {
+            Self::new(
+                session_tab_id(index),
+                input.title(),
+                input.workspace(),
+                input.status_label(),
+            )
+        }
+    }
+
     pub(crate) const fn new(
         id: ElementId,
         name: &'a str,
@@ -366,6 +215,14 @@ impl<'a> WorkbenchTabList<'a> {
                 STATUS_CONTAINER_SIZE,
                 STATUS_CONTAINER_SIZE,
             );
+
+            // Every workbench item shares the same large circular background. The item-specific
+            // conversation/Agent state or destination icon is painted inside this stable frame.
+            scene.draw_rect(
+                PaintRect::new(status_bounds, self.palette.surface)
+                    .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
+            );
+
             if tab.kind == WorkbenchTabKind::Settings {
                 let icon_size = 18.0;
                 let icon_bounds = Rect::from_xywh(
@@ -379,15 +236,6 @@ impl<'a> WorkbenchTabList<'a> {
                     icon_bounds,
                     self.palette.text_muted,
                 ));
-            } else {
-                // Keep this white status container independent from Session lifecycle data.
-                // Planning, Thinking, Editing, and any later Session states can project their own
-                // SVG inside it once the App Server exposes an authoritative typed activity
-                // status.
-                scene.draw_rect(
-                    PaintRect::new(status_bounds, self.palette.surface)
-                        .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
-                );
             }
 
             let text_x = status_bounds.right() + STATUS_CONTENT_GAP;

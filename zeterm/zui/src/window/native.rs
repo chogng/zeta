@@ -1,14 +1,10 @@
-use std::error::Error;
-use std::fmt;
 use std::sync::Arc;
-use std::sync::Weak;
 
 use raw_window_handle::DisplayHandle;
 use raw_window_handle::HandleError;
 use raw_window_handle::HasDisplayHandle;
 use raw_window_handle::HasWindowHandle;
 use raw_window_handle::WindowHandle as RawWindowHandle;
-use winit::dpi::LogicalPosition;
 use winit::event_loop::ActiveEventLoop;
 #[cfg(feature = "wgpu")]
 use winit::event_loop::OwnedDisplayHandle;
@@ -18,11 +14,10 @@ use winit::window::WindowAttributes;
 use crate::devtools::DevToolsHandle;
 use crate::devtools::DevToolsRequestSender;
 
-use super::Theme;
 use super::WindowChrome;
-use super::WindowControlInsets;
+use super::WindowHandle;
+use super::WindowOptions;
 use super::chrome::apply_window_chrome;
-use super::chrome::window_control_insets;
 
 /// Logical dimensions used to configure and resize native windows.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -34,6 +29,11 @@ pub struct LogicalSize {
 impl LogicalSize {
     pub const fn new(width: f64, height: f64) -> Self {
         Self { width, height }
+    }
+
+    /// Returns whether both dimensions are finite and strictly positive.
+    pub fn is_valid(self) -> bool {
+        self.width.is_finite() && self.width > 0.0 && self.height.is_finite() && self.height > 0.0
     }
 
     pub(crate) const fn into_native(self) -> winit::dpi::LogicalSize<f64> {
@@ -102,7 +102,7 @@ pub enum CursorIcon {
 }
 
 impl CursorIcon {
-    const fn into_native(self) -> winit::window::CursorIcon {
+    pub(crate) const fn into_native(self) -> winit::window::CursorIcon {
         match self {
             Self::Default => winit::window::CursorIcon::Default,
             Self::ContextMenu => winit::window::CursorIcon::ContextMenu,
@@ -139,25 +139,6 @@ impl CursorIcon {
             Self::ZoomIn => winit::window::CursorIcon::ZoomIn,
             Self::ZoomOut => winit::window::CursorIcon::ZoomOut,
         }
-    }
-}
-
-/// Failure while applying a live native-window operation.
-#[derive(Debug)]
-pub struct WindowOperationError {
-    operation: &'static str,
-    source: Box<dyn Error + Send + Sync>,
-}
-
-impl fmt::Display for WindowOperationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{} failed: {}", self.operation, self.source)
-    }
-}
-
-impl Error for WindowOperationError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.source.as_ref())
     }
 }
 
@@ -208,171 +189,40 @@ pub(crate) struct NativeWindow {
     devtools: DevToolsHandle,
 }
 
-/// Non-owning platform capability for updating a live native window.
-///
-/// Application runtimes retain canonical window ownership. Product state may keep this handle to
-/// request redraws or forward UI decisions without extending the native window lifecycle.
-#[derive(Clone)]
-pub struct WindowHandle {
-    window: Weak<Window>,
-    chrome: WindowChrome,
-    devtools: DevToolsHandle,
-}
-
-impl WindowHandle {
-    /// Returns the stable identity of the live window, if it still exists.
-    pub fn id(&self) -> Option<WindowId> {
-        self.window
-            .upgrade()
-            .map(|window| WindowId::from_native(window.id()))
-    }
-
-    /// Schedules a redraw when the runtime still owns the window.
-    pub fn request_redraw(&self) {
-        if let Some(window) = self.window.upgrade() {
-            window.request_redraw();
-        }
-    }
-
-    /// Returns the shared DevTools session capability for this window.
-    pub fn devtools(&self) -> DevToolsHandle {
-        self.devtools.clone()
-    }
-
-    /// Opens the default zui DevTools window for this window and schedules a frame.
-    pub fn open_devtools(&self) {
-        self.devtools.open();
-        self.request_redraw();
-    }
-
-    /// Closes the default zui DevTools window for this window and schedules a frame.
-    pub fn close_devtools(&self) {
-        self.devtools.close();
-        self.request_redraw();
-    }
-
-    /// Toggles DevTools for this window and returns whether it is now open.
-    pub fn toggle_devtools(&self) -> bool {
-        let is_open = self.devtools.toggle();
-        self.request_redraw();
-        is_open
-    }
-
-    /// Returns whether DevTools is currently open for this window.
-    pub fn is_devtools_open(&self) -> bool {
-        self.devtools.is_open()
-    }
-
-    /// Begins a platform window drag when the runtime still owns the window.
-    pub fn start_window_drag(&self) -> Result<(), WindowOperationError> {
-        if let Some(window) = self.window.upgrade() {
-            window
-                .drag_window()
-                .map_err(|source| WindowOperationError {
-                    operation: "window drag",
-                    source: Box::new(source),
-                })?;
-        }
-        Ok(())
-    }
-
-    /// Updates the pointer cursor when the runtime still owns the window.
-    pub fn set_cursor(&self, cursor: CursorIcon) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_cursor(cursor.into_native());
-        }
-    }
-
-    /// Updates the platform window title when the runtime still owns the window.
-    pub fn set_title(&self, title: &str) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_title(title);
-        }
-    }
-
-    /// Requests a new logical inner size when the runtime still owns the window.
-    pub fn request_inner_logical_size(&self, size: LogicalSize) {
-        if let Some(window) = self.window.upgrade() {
-            let _ = window.request_inner_size(size.into_native());
-        }
-    }
-
-    /// Returns the current platform theme preference for a live window.
-    pub fn theme(&self) -> Option<Theme> {
-        self.window
-            .upgrade()
-            .and_then(|window| window.theme())
-            .map(Theme::from_native)
-    }
-
-    /// Applies an explicit platform theme to a live window.
-    pub fn set_theme(&self, theme: Option<Theme>) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_theme(theme.map(Theme::into_native));
-        }
-    }
-
-    /// Enables platform text input when the runtime still owns the window.
-    pub fn enable_ime(&self) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_ime_allowed(true);
-        }
-    }
-
-    /// Disables platform text input when the runtime still owns the window.
-    pub fn disable_ime(&self) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_ime_allowed(false);
-        }
-    }
-
-    /// Updates the IME candidate area when the runtime still owns the window.
-    pub fn set_ime_cursor_area(&self, area: ImeCursorArea) {
-        if let Some(window) = self.window.upgrade() {
-            window.set_ime_cursor_area(
-                LogicalPosition::new(area.x, area.y),
-                winit::dpi::LogicalSize::new(area.width, area.height),
-            );
-        }
-    }
-
-    /// Returns logical insets occupied by native controls for this window's chrome policy.
-    pub fn window_control_insets(&self) -> WindowControlInsets {
-        window_control_insets(self.chrome)
-    }
-
-    #[cfg(target_os = "windows")]
-    pub(crate) fn native_hwnd(&self) -> Option<isize> {
-        let window = self.window.upgrade()?;
-        let handle = window.window_handle().ok()?;
-        match handle.as_raw() {
-            raw_window_handle::RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
-            _ => None,
-        }
-    }
-}
-
 impl NativeWindow {
     /// Creates a native window from ZUI-owned options and a named chrome policy.
     pub(crate) fn create(
         event_loop: &ActiveEventLoop,
-        title: String,
-        inner_size: Option<LogicalSize>,
-        chrome: WindowChrome,
+        options: WindowOptions,
         request_sender: DevToolsRequestSender,
     ) -> Result<Self, winit::error::OsError> {
-        let mut attributes = WindowAttributes::default().with_title(title);
-        if let Some(inner_size) = inner_size {
+        let mut attributes = WindowAttributes::default()
+            .with_title(options.title)
+            .with_active(options.active)
+            .with_resizable(options.resizable)
+            .with_maximized(options.maximized)
+            .with_fullscreen(
+                options
+                    .fullscreen
+                    .then_some(winit::window::Fullscreen::Borderless(None)),
+            );
+        if let Some(inner_size) = options.inner_size {
             attributes = attributes.with_inner_size(inner_size.into_native());
         }
-        let attributes = apply_window_chrome(attributes, chrome).with_visible(false);
+        if let Some(min_inner_size) = options.min_inner_size {
+            attributes = attributes.with_min_inner_size(min_inner_size.into_native());
+        }
+        if let Some(max_inner_size) = options.max_inner_size {
+            attributes = attributes.with_max_inner_size(max_inner_size.into_native());
+        }
+        let attributes = apply_window_chrome(attributes, options.chrome).with_visible(false);
         let window = Arc::new(event_loop.create_window(attributes)?);
         let owner = WindowId::from_native(window.id());
         Ok(Self {
             window,
             #[cfg(feature = "wgpu")]
             display_handle: event_loop.owned_display_handle(),
-            chrome,
+            chrome: options.chrome,
             devtools: DevToolsHandle::with_request(owner, request_sender),
         })
     }
@@ -384,11 +234,12 @@ impl NativeWindow {
 
     /// Creates a non-owning product capability without sharing window lifecycle ownership.
     pub(crate) fn handle(&self) -> WindowHandle {
-        WindowHandle {
-            window: Arc::downgrade(&self.window),
-            chrome: self.chrome,
-            devtools: self.devtools.clone(),
-        }
+        WindowHandle::new(
+            self.id(),
+            Arc::downgrade(&self.window),
+            self.chrome,
+            self.devtools.clone(),
+        )
     }
 
     /// Returns the current physical pixel extent.

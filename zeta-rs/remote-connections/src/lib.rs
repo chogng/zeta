@@ -1,8 +1,10 @@
-//! Host-side Remote connection orchestration.
+//! Reusable Remote transport and persistence primitives.
 //!
-//! The crate starts the local OpenSSH client and binds its stdio stream to an App Server session.
-//! It deliberately owns no credentials, Renderer state, or Remote server installation policy.
-//! Desktop products call it from their own main process; a remote runtime never initiates SSH.
+//! The crate starts the local OpenSSH client, binds its stdio stream to an App Server session, and
+//! owns the catalog/profile and runtime installation primitives. It deliberately owns no
+//! credentials, Renderer state, lifecycle recovery policy, or Remote server installation policy.
+//! Product-neutral lifecycle coordination is provided by `zeta-remote-host`; a remote runtime
+//! never initiates SSH.
 
 mod catalog;
 mod connection_catalog;

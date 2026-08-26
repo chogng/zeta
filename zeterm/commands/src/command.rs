@@ -30,11 +30,16 @@ pub enum ZetermCommandId {
     PickWorkingDirectory,
     PickGitBranch,
     ShowWorkspaceDiff,
+    SplitTerminalHorizontal,
+    SplitTerminalVertical,
+    FocusNextPane,
+    FocusPreviousPane,
+    ClosePane,
 }
 
 impl ZetermCommandId {
     /// Commands that can currently be assigned a user keybinding.
-    pub const BINDABLE: [Self; 14] = [
+    pub const BINDABLE: [Self; 19] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -49,10 +54,15 @@ impl ZetermCommandId {
         Self::ShowAgentFiles,
         Self::RefreshAgentFiles,
         Self::ToggleAgentFileSearch,
+        Self::SplitTerminalHorizontal,
+        Self::SplitTerminalVertical,
+        Self::FocusNextPane,
+        Self::FocusPreviousPane,
+        Self::ClosePane,
     ];
 
     /// Every command known to the product command catalog.
-    pub const ALL: [Self; 23] = [
+    pub const ALL: [Self; 28] = [
         Self::Copy,
         Self::Paste,
         Self::Save,
@@ -76,6 +86,11 @@ impl ZetermCommandId {
         Self::PickWorkingDirectory,
         Self::PickGitBranch,
         Self::ShowWorkspaceDiff,
+        Self::SplitTerminalHorizontal,
+        Self::SplitTerminalVertical,
+        Self::FocusNextPane,
+        Self::FocusPreviousPane,
+        Self::ClosePane,
     ];
 
     /// Returns the stable configuration and command-palette identifier.
@@ -104,6 +119,11 @@ impl ZetermCommandId {
             Self::PickWorkingDirectory => "workbench.action.pickWorkingDirectory",
             Self::PickGitBranch => "workbench.action.pickGitBranch",
             Self::ShowWorkspaceDiff => "workbench.action.showWorkspaceDiff",
+            Self::SplitTerminalHorizontal => "workbench.action.splitTerminalHorizontal",
+            Self::SplitTerminalVertical => "workbench.action.splitTerminalVertical",
+            Self::FocusNextPane => "workbench.action.focusNextPane",
+            Self::FocusPreviousPane => "workbench.action.focusPreviousPane",
+            Self::ClosePane => "workbench.action.closePane",
         }
     }
 
@@ -133,6 +153,11 @@ impl ZetermCommandId {
             Self::PickWorkingDirectory => "Pick working directory",
             Self::PickGitBranch => "Pick Git branch",
             Self::ShowWorkspaceDiff => "Show workspace diff",
+            Self::SplitTerminalHorizontal => "Split terminal horizontally",
+            Self::SplitTerminalVertical => "Split terminal vertically",
+            Self::FocusNextPane => "Focus next Pane",
+            Self::FocusPreviousPane => "Focus previous Pane",
+            Self::ClosePane => "Close Pane",
         }
     }
 

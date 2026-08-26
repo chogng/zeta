@@ -24,6 +24,7 @@ use crate::remote_tunnel_manager::REMOTE_TUNNEL_OPEN;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::remote_tunnel_manager::is_remote_tunnel_manager_element;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
+use crate::remote_tunnel_process::RemoteTunnelId;
 use crate::terminal_input::text_input_command;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
@@ -269,7 +270,7 @@ impl NativeApp {
         self.remote_tunnel_manager_changed();
     }
 
-    fn stop_remote_tunnel(&mut self, tunnel_id: u32) {
+    fn stop_remote_tunnel(&mut self, tunnel_id: RemoteTunnelId) {
         if !self.remote_tunnel_manager.stop_request(tunnel_id) {
             return;
         }

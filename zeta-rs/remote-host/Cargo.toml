@@ -1,0 +1,21 @@
+[package]
+name = "zeta-remote-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_remote_host"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-remote = { workspace = true }
+zeta-remote-connections = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

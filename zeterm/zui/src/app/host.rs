@@ -216,7 +216,7 @@ where
                             && let Some(runtime) = self.windows.get(&owner)
                         {
                             runtime.handle().devtools().close_local();
-                            runtime.handle().request_redraw();
+                            runtime.request_redraw();
                         }
                     }
                 }

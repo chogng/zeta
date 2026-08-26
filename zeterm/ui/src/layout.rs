@@ -3,6 +3,7 @@
 //! The layout types resolve structural Part/Pane geometry only. Product hosts retain content,
 //! identity, focus semantics, event routing, and runtime state.
 
+mod pane_group;
 mod root;
 mod session_workspace;
 mod terminal_workspace;
@@ -18,6 +19,7 @@ pub enum SidebarVisibility {
     Expanded,
 }
 
+pub use pane_group::PaneGroupLayout;
 pub use root::InspectorPane;
 pub use root::LogicalViewport;
 pub use root::RootLayout;

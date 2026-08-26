@@ -52,7 +52,13 @@ impl App<DemoEvent> for DemoApp {
             match context.open_window(options) {
                 Ok(opened) => {
                     let window = opened.handle();
-                    window.request_redraw();
+                    if let Err(error) = window.request_redraw() {
+                        context.exit_with_error(ApplicationError::product(
+                            "initial demo redraw",
+                            error,
+                        ));
+                        return;
+                    }
                     self.windows.push(window);
                 }
                 Err(error) => {
@@ -93,7 +99,7 @@ impl App<DemoEvent> for DemoApp {
                 GlobalShortcutId::new("demo.ready").unwrap(),
                 ShortcutAccelerator::parse("CommandOrControl+Shift+KeyD").unwrap(),
             ));
-        if let Some(window) = self.windows.first().and_then(WindowHandle::id) {
+        if let Some(window) = self.windows.first().map(WindowHandle::id) {
             match context
                 .schedule_after(Duration::from_millis(250), DemoEvent::RenameWindow(window))
             {
@@ -112,7 +118,12 @@ impl App<DemoEvent> for DemoApp {
             WindowEvent::CloseRequested => context.close(),
             WindowEvent::FileDropped(path) => {
                 let title = format!("zui app demo · dropped {}", path.display());
-                context.window_handle().set_title(&title);
+                if let Err(error) = context.window_handle().set_title(&title) {
+                    context.exit_with_error(ApplicationError::product(
+                        "dropped-file title update",
+                        error,
+                    ));
+                }
             }
             _ => {}
         }
@@ -120,15 +131,19 @@ impl App<DemoEvent> for DemoApp {
 
     fn redraw(&mut self, context: &mut WindowContext<'_, DemoEvent>) {
         if self.background_ready {
-            context
+            if let Err(error) = context
                 .window_handle()
-                .set_title("zui app demo · background ready");
+                .set_title("zui app demo · background ready")
+            {
+                context.exit_with_error(ApplicationError::product(
+                    "background-ready title update",
+                    error,
+                ));
+                return;
+            }
         }
         let frame = zui_demo::build_demo_frame();
-        let accessibility = frame
-            .interaction()
-            .accessibility_nodes(&zui::ui::UiDispatch::default());
-        if let Err(error) = context.present_scene(frame.scene(), &accessibility) {
+        if let Err(error) = context.present_frame(&frame, &zui::ui::UiDispatch::default()) {
             context.exit_with_error(ApplicationError::product("demo frame rendering", error));
         }
     }
@@ -137,7 +152,7 @@ impl App<DemoEvent> for DemoApp {
         if action.as_str() == "demo.ready" {
             self.background_ready = true;
             for window in &self.windows {
-                window.request_redraw();
+                let _ = window.request_redraw();
             }
         }
     }
@@ -146,7 +161,7 @@ impl App<DemoEvent> for DemoApp {
         if matches!(event.kind, TrayEventKind::Click { .. }) {
             self.background_ready = true;
             for window in &self.windows {
-                window.request_redraw();
+                let _ = window.request_redraw();
             }
         }
     }
@@ -158,14 +173,14 @@ impl App<DemoEvent> for DemoApp {
     ) {
         self.background_ready = true;
         for window in &self.windows {
-            window.request_redraw();
+            let _ = window.request_redraw();
         }
     }
 
     fn open_url(&mut self, _context: &mut AppContext<'_, DemoEvent>, _url: ProtocolUrl) {
         self.background_ready = true;
         for window in &self.windows {
-            window.request_redraw();
+            let _ = window.request_redraw();
         }
     }
 
@@ -175,18 +190,18 @@ impl App<DemoEvent> for DemoApp {
                 self.background_ready = true;
             }
             DemoEvent::RenameWindow(target) => {
-                if let Some(window) = self
-                    .windows
-                    .iter()
-                    .find(|window| window.id() == Some(target))
-                {
-                    window.set_title("zui app demo · timer fired");
+                if let Some(window) = self.windows.iter().find(|window| window.id() == target) {
+                    let _ = window.set_title("zui app demo · timer fired");
                 }
             }
         }
         for window in &self.windows {
-            window.request_redraw();
+            let _ = window.request_redraw();
         }
+    }
+
+    fn window_closed(&mut self, _context: &mut AppContext<'_, DemoEvent>, window: WindowId) {
+        self.windows.retain(|handle| handle.id() != window);
     }
 
     fn about_to_wait(&mut self, context: &mut AppContext<'_, DemoEvent>) {

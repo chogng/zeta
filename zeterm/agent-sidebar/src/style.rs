@@ -6,7 +6,7 @@ use zeta_ui::Edges;
 use zeta_ui::SearchBoxStyle;
 use zeta_ui::TextStyle;
 
-/// Theme projection shared by the Agent Sidebar's toolbar and pane navigation.
+/// Theme projection shared by SidebarPart's toolbar and pane navigation.
 #[derive(Clone)]
 pub struct AgentSidebarStyle {
     pub surface: Color,

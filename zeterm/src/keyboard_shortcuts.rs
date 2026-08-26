@@ -63,7 +63,7 @@ impl NativeApp {
             self.keyboard_shortcuts.close();
         } else if let Some(command) = command_for_row(id) {
             if !self.keyboard_shortcuts.is_visible() {
-                if !self.workbench_item.is_settings()
+                if !self.tab_inputs.is_settings()
                     || self.settings_section != SettingsPageSection::Keybindings
                 {
                     return false;

@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::AgentSidebarWorkspace;
+use super::SidebarPaneWorkspace;
 use crate::workspace_context::WorkspaceContext;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_ui::Size;
@@ -28,7 +28,7 @@ fn replacing_workspace_rebuilds_the_files_root() {
     second_context
         .switch_working_directory(second.clone())
         .unwrap();
-    let mut workspace = AgentSidebarWorkspace::new(&first_context);
+    let mut workspace = SidebarPaneWorkspace::new(&first_context);
 
     workspace.replace_workspace(&second_context);
     workspace.refresh_files(vec![file("second.txt")]);
@@ -58,7 +58,7 @@ fn file_list_retains_pixel_scroll_and_resets_it_when_files_refresh() {
     }
     let mut context = WorkspaceContext::capture_current();
     context.switch_working_directory(fixture.clone()).unwrap();
-    let mut workspace = AgentSidebarWorkspace::new(&context);
+    let mut workspace = SidebarPaneWorkspace::new(&context);
     workspace.refresh_files(
         (0..20)
             .map(|index| file(&format!("file-{index:02}.txt")))

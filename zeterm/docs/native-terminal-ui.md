@@ -24,7 +24,7 @@ Terminal session 是 `zeterm` 主窗口的执行上下文和交互基座，但 P
 | 切换多个会话 | 在同一垂直 TabList 选择另一个 App Server Session | 已实现；每个 Session Tab 绑定并保留一个独立本地 PTY | [当前实现](#4-当前实现) |
 | 在 macOS 使用 Top Bar | 左侧 action 避开系统红绿灯占位并保留组件间距 | 70px host 占位 + 8px Titlebar 间距已实现 | [尺寸语义](#5-尺寸语义) |
 | 调整窗口尺寸 | 从同一 viewport 重算 rows/columns，并同步 resize grid 与 PTY | 已实现 | [尺寸语义](#5-尺寸语义) |
-| 拆分终端 | 只在 Terminal Workspace 内拆成多个 Pane，并调整 Pane 比例 | Grid 几何入口已完成；多 Pane runtime 尚未实现 | [Terminal Pane 分屏](#62-terminal-pane-分屏) |
+| 拆分终端 | 只在当前 `SessionTab` 的 `PaneGroup` 内拆成多个 Pane，并调整 Pane 比例 | 已实现；支持 Pane Tree、独立 runtime、active Pane、Sash 比例调整、焦点切换和关闭 | [TabInput 与 PaneGroup](#22-tabinput-与-panegroup)、[Terminal Pane 分屏](#62-terminal-pane-分屏) |
 
 ## 1. 产品命名
 
@@ -48,27 +48,26 @@ zeterm
 ├─ TopBar
 │  ├─ window drag region
 │  ├─ session sidebar toggle ActionBar
-│  └─ agent sidebar toggle ActionBar
+│  └─ SidebarPart toggle ActionBar
 ├─ WorkbenchNavigator (collapsible)
 │  └─ WorkbenchTabList
 │     ├─ SessionTab
 │     │  ├─ App Server Session → active Thread
-│     │  └─ TerminalSession → dedicated PTY
+│     │  └─ PaneGroup → PaneTree → Pane → PaneInput → content/runtime
 │     └─ SettingsTab
 │        └─ SettingsPage → feature-owned settings sections
 ├─ SessionContextMenu (transient overlay)
 │  └─ Pin / Close / Rename / Fork
 ├─ TerminalWorkspace
-│  └─ active TerminalSession
-│     ├─ BlockOutputViewport → BlockList
-│     └─ CommandInputEditor (fixed bottom)
-└─ AgentSidebar (collapsible)
-   ├─ Pane ActionBar: Changes / Files
-   └─ Active Pane
-      ├─ Files: toolbar + file tree / fuzzy search
-      └─ Changes: MultiDiffEditor
-         ├─ file A section → DiffEditor
-         └─ file B section → DiffEditor
+│  └─ active SessionTab.PaneGroup
+│     ├─ Pane → TerminalPaneInput → TerminalSession → dedicated PTY
+│     ├─ Pane → TerminalPaneInput → TerminalSession → dedicated PTY
+│     └─ active Pane → BlockOutputViewport / CommandInputEditor
+└─ SidebarPart (collapsible)
+   ├─ NavBar: Changes / Files
+   └─ SidebarPaneHost → PaneGroup
+      ├─ PaneInput::Files → FilesPane
+      └─ PaneInput::Diff → EditorPane → MultiDiffEditor
 ```
 
 primary screen 的结构固定为“上方输出、底部输入”。键盘、IME 和 paste 先进入
@@ -81,25 +80,97 @@ alternate screen 是协议兼容的明确例外：`vim`、`top` 等程序请求 
 composer。这个切换不能改变 primary screen 的 Block 输入语义。
 
 Top Bar 不是独立工作区，也不拥有终端 Session。它只提供窗口拖动、会话入口和少量全局操作。
-Workbench Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度的垂直 TabList，但不构成可注册任意区域的通用 Sidebar Part。TabList 投影 App Server Session/Thread；Terminal Workspace 呈现当前 Session Tab 对应的独立本地 PTY compatibility surface；Settings Tab 则把中心区域切换到 `zeta-settings::SettingsPage`，不创建或切换 App Server Session。
+Workbench Navigation 当前使用可折叠、可通过右边界 Sash 调整宽度的垂直 TabList，但不构成可注册任意区域的通用 Sidebar Part。TabList 投影 App Server Session/Thread；Terminal Workspace 呈现当前 Session Tab 对应的独立本地 PTY compatibility surface；Settings Tab 则把中心区域切换到 `zeta-settings::SettingsPage`，不创建或切换 App Server Session。右侧 `SidebarPart` 保留独立的显隐和宽度生命周期，内部内容通过自己的 `PaneGroup`/`PaneHost` 挂载；后续横向和纵向导航可以共享 `NavBar` presentation shell，但这不会把 Titlebar、Sidebar 或 Workbench 变成可注册任意区域的通用 Part 系统。
+
+### 2.1 NavBar 导航容器
+
+`NavBar` 是计划中的导航容器，而不是新的状态层。它统一描述横向或纵向的导航排列、可选的 leading/trailing slot、滚动或 overflow 几何，以及与宿主布局的连接；它不识别 Session、Settings、Agent 或其他具体内容。
+
+```text
+Titlebar
+└─ NavBar(horizontal)
+   └─ TabList
+      └─ TabInputView
+
+Sidebar
+└─ NavBar(vertical)
+   └─ TabList
+      └─ TabInputView
+```
+
+| 层 | 责任 | 当前 owner / 状态 |
+| --- | --- | --- |
+| `NavBar` | 横向/纵向容器、slot、滚动或 overflow 的 presentation geometry | 计划由 `zeta-ui` 提供 presentation-only contract；尚未作为独立 public component 实现 |
+| `TabList` | Tab surface 的排列、item bounds 和状态绘制 | `zeta-ui::TabList`；不拥有 identity、active transition、关闭动作或 tabpanel |
+| `TabInput` | 一个可被 Workbench 导航的逻辑内容输入，例如 Session 或 Settings | `zeterm::tab_input::{TabInput,TabInputModel}`；不分配 UI identity、不绘制、不直接执行激活副作用 |
+| Tab projection | 将 `TabInput` 映射为标题、状态、图标、`ElementId` 和 accessibility node | `zeterm::session_tab_list::WorkbenchTabList`；只在挂载的 UI frame 中建立投影 |
+| Controller / provider | 处理选择后的 Session、Settings、Agent 或外部资源行为 | 当前由 `zeterm` host 和各自 feature crate 负责；尚无通用 Provider API |
+
+这里的 `TabInput` 采用 VS Code `EditorInput` 类似的含义，表示“被打开的内容”，不是文本输入框。搜索或创建入口继续使用 `SearchBox`、`InputBox` 等 UI 组件，避免与逻辑 `TabInput` 混淆。
+
+当前不抽取新的导航 crate。`NavBar` 若形成稳定的 presentation contract，应进入已有的 `zeta-ui`；`TabInputModel` 仍依赖 `zeta_protocol::Session`/`SessionId` 和 `zeterm` 的 Settings/activation 语义，应继续留在 `zeterm`；`WorkbenchTabList` 还依赖 Native 的 `ElementId`、interaction、accessibility 和产品 palette，也不适合下沉。只有在第二个独立 host 需要复用同一套不带 `zeta-ui` 和 Native activation 依赖的逻辑导航模型时，才重新评估拆出 `zeta-workbench` 或类似 crate。
+
+### 2.2 TabInput 与 PaneGroup
+
+`TabInput` 是可被导航和激活的逻辑内容身份；它不等于一个 `Part`、一个视觉 Tab，也不直接等于一个 Pane。主工作区中每个 `TabInput` 关联一个 host-owned `PaneGroup`，选择 TabInput 时切换整个主工作区 group，split、close、focus 和 ratio 调整只作用于当前 group；右侧 `SidebarPart` 则拥有独立的 workspace-scoped PaneGroup。PaneGroup 是布局和焦点容器，不限定所有 Pane 必须是同一种内容，因此同一个 group 可以组合 Terminal、Agent、Files 或 Diff Pane；允许哪些组合由 product host 决定。
+
+```text
+WorkbenchPart
+├─ NavBar
+│  └─ TabList → TabInput
+└─ PaneHost
+   └─ PaneGroup
+      └─ PaneTree
+         ├─ Leaf(Pane → PaneInput)
+         └─ Split(axis, ratio)
+            ├─ Leaf(Pane → PaneInput)
+            └─ Leaf(Pane → PaneInput)
+```
+
+| 层 | 责任 | 当前 owner / 状态 |
+| --- | --- | --- |
+| `TabInput` | 描述“打开了什么”，保存稳定逻辑 identity、标题和状态摘要 | `zeterm::tab_input`；不保存 Pane geometry 或 runtime handle |
+| `PaneGroup` | 保存一个 TabInput 的 Pane Tree、active Pane、split/close/focus transition 与 Pane 顺序 | `zeterm` host model；本次实现建立最小可用模型，不下沉到 `zeta-ui` |
+| `Pane` | 描述一个内容承载位置；`PaneId` 是布局实例 identity，不等于内容类型 | `zeterm` host model；通过 binding 关联一个 `PaneInput` 和可丢弃 view state |
+| `PaneInput` | 描述 Pane 当前承载的内容类型与逻辑 identity，不是 UI widget，也不保存 geometry | `zeterm::pane_input`；当前定义 `Terminal`、`Agent`、`Files`、`Diff`、`Settings` descriptor，具体 payload 由对应 feature owner 解释 |
+| `PaneInputKind` | 供 host 做能力路由和组合策略判断的稳定内容类型 | `zeterm::pane_input`；`Agent-1`、`Agent-2`、`Agent-3` 是同一 kind 下的不同 thread/session identity，不是三种 Pane type |
+| `Pane binding` | 把 `(PaneHostScope, PaneId)` 映射到 `PaneInput`，再连接到具体 runtime/view state | `zeterm` host；Session Tab 使用 `PaneHostScope::Tab`，SidebarPart 使用独立的 `PaneHostScope::Sidebar` |
+| `PaneView` | 按 PaneInput 绘制内容并消费 feature-owned state 的 view contract | 各自 feature crate / Native host；不要求所有内容共用 TerminalSession |
+| `PaneGroup` layout projection | 把 host-owned PaneTree 投影为 leaf bounds、owning split 和 sash geometry | `zeta-ui::layout` 组合 `zui::GridLayout`；只返回几何，不修改 PaneTree |
+| `PaneHost` | 按 Pane bounds 组装具体内容并路由 keyboard、pointer、resize 与 accessibility | `zeterm/src/pane_host`；按 `PaneHostScope` 和 `PaneInputKind` 产生 frame mount，主 Terminal Pane 与 SidebarPart 的 Files/Diff Pane 已接入 |
+
+分屏的边界是“一个 TabInput 对应一个 PaneGroup”，而不是“一个 Tab 对应一个 Part”。`Part` 仍然是 Workbench 的大区块；Pane 是该区块内可并列、可聚焦、可独立 resize 的内容叶子。Settings 可以暂时只有一个 Pane，但不需要为它建立另一套 Tab/Part 模型。
+
+`PaneTree` 的几何输入由 `zeta-ui` layout adapter 消费，`zui::GridLayout` 负责递归计算 SplitView bounds；PaneTree mutation、TabInput 到 PaneGroup 的 binding、Pane 到 PaneInput 的 binding、PaneInput 到 Session/PTY 或其他 feature runtime 的 binding，以及每个 Pane 的 scroll、selection、input 和 runtime 状态，都留在 `zeterm` 或具体内容 crate。
+
+本次实现先建立异构 `PaneInput` 的 host contract，并让 `TerminalPaneInput` 接入现有 Terminal Surface：split 创建独立 terminal Pane，active Pane 接收输入，Pane 各自 resize、绘制和保存 view state。右侧 `SidebarPart` 现在拥有独立的 `PaneGroup` 和 `PaneHostScope::Sidebar`，Changes/Files 选择会更新 `PaneInput::Diff`/`PaneInput::Files`，并通过现有 feature-owned `EditorPane`/`FilesPane` 绘制。Sidebar 内部目前仍保持单个 root Pane，后续再增加 sidebar split 和每个 Pane 的独立 feature state；Agent/Settings descriptor 仍需各自接入。
+
+选择 `PaneInput` 而不是 `EditorInput`，是因为 Terminal、Agent、Files、Diff 和 Settings 并不都是 editor。`PaneInput` 表示“要在这个 Pane 位置打开什么”；`Pane` 表示“这个内容当前位于哪一个布局叶子”；`PaneView` 才负责把输入投影成具体 UI。一个 `PaneGroup` 可以有多个 `PaneInput` kind，但一个可见 Pane 只绑定一个 PaneInput；同一个逻辑 input 若需要同时打开多次，应由不同的 PaneId 或 feature instance identity 区分。
+
+PaneGroup 不直接拥有 PaneInput payload，也不通过类型参数把自己固定成 TerminalGroup。host 可以使用 `PaneInputKind` 做允许组合、快捷键和输入路由判断，再把内容绘制委托给对应 crate；`zeta-ui` 只接收 PaneTree 的几何 spec，不识别这些 kind。
+
+PaneGroup 不另起 crate。PaneTree 目前同时依赖 `TabInputKey`、Native command、terminal runtime 和 scene lifecycle，拆到独立 crate 只会把产品 binding 变成跨 crate glue；稳定的通用递归几何继续复用已有 `zui`，产品 PaneGroup model 放在 `zeterm`，待第二个 host 真正需要无产品依赖的模型时再评估 `zeta-workbench`。
 
 ## 3. 所有权
 
 | 能力 | 最终 owner | 职责边界 |
 | --- | --- | --- |
 | Window、Top Bar 与 Terminal Workspace 外部布局 | `zeterm/zeterm` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
-| 单轴 Pane 尺寸约束、Sash track 与 feedback geometry | `zui::SplitViewLayout` / `zeta-ui::Sash` | 不持有产品显隐、preferred width、pointer capture 或持久化 |
+| 单轴 Pane 尺寸约束、Sash track、feedback geometry 与通用 resize snapshot drag | `zui::SplitViewLayout` / `zeta-ui::{Sash,SashController,Resizable}` | 不持有产品显隐、preferred width、pointer capture 或持久化；`Resizable` 只负责通用 drag 计算 |
 | 递归 Pane geometry 与 owning-split Sash 路由 | `zui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
-| Terminal Pane Tree、Pane-to-Session binding 与 Pane 状态 | 后续 native Terminal Workspace model | 已确认是终端分屏必需边界；当前尚未完成。当前 Session Tab 到 Terminal PTY 的一对一 binding 已完成 |
-| Workbench Navigation 显隐、preferred width 与 resize gesture | `zeterm/src/session_sidebar` | 使用通用 Split/Sash geometry；不拥有 Session lifecycle |
-| Agent Sidebar 显隐、preferred width 与 resize gesture | `zeterm/src/agent_sidebar` | 使用通用 Split/Sash geometry，宽度限制为 240–560px，并为 main Pane 保留至少 240px；不拥有内部 Pane、文件或 diff model |
-| Agent Sidebar 内部 Pane composition | [`zeta-agent-sidebar`](../agent-sidebar/README.md) 的 `AgentSidebar` / `AgentSidebarNavigation` | 只组合跨功能切换；Files/SCM 功能布局分别由各自子模块拥有，zeterm 仅提供 shell slot |
+| Product PaneGroup topology、PaneTree 与 Pane 状态 | `zeterm` native host | 主工作区保存 TabInput → PaneGroup、PaneTree、active Pane、ratio 与逐 Pane view/runtime binding；SidebarPart 保存独立 workspace-scoped PaneGroup；不进入 `zeta-ui` |
+| PaneInput descriptor 与 Pane binding | `zeterm/src/pane_input` + `zeterm/src/pane_host` | 区分 Pane layout identity、Terminal/Agent/Files/Diff/Settings content kind 与可选 runtime；`PaneHostScope` 区分 Session Tab 和 SidebarPart，当前 Terminal 与 Files/Diff 已挂载 |
+| PaneGroup 的递归叶子 bounds 与 owning-split sash | `zeta-ui::layout` + `zui::GridLayout` | 消费 host 提供的 PaneTree geometry spec；只计算 bounds/sash，不拥有 PaneTree mutation 或 active Pane |
+| Workbench Navigation 显隐与 preferred width；产品 resize gesture | `zeterm/src/session_sidebar` | 使用通用 Split/Sash geometry；hover/drag base 委托给 `zeta-ui`，host 保留产品状态、命中 identity 与 pointer capture；不拥有 Session lifecycle |
+| SidebarPart 显隐与 preferred width；产品 resize gesture | `zeterm/src/sidebar_part::SidebarPartState` | 使用通用 Split/Sash geometry；hover/drag base 委托给 `zeta-ui`，host 保留 Part 状态、命中 identity 与 pointer capture；宽度限制为 240–560px，并为 main Pane 保留至少 240px；不拥有 Files/Diff feature state |
+| SidebarPart 内部 Pane composition | `zeterm/src/pane_host` + [`zeta-agent-sidebar`](../agent-sidebar/README.md) 的 `AgentSidebarNavigation` / `FilesPane` / `EditorPane` | Native host 按 `PaneInputKind` 挂载 Sidebar Pane；feature crate 只拥有 Files/SCM state 与具体 view，不拥有外层 Part geometry |
 | Files 树、模糊搜索与领先/落后显示 | [`zeta-agent-sidebar`](../agent-sidebar/README.md) / `zeta-file-search` / `zeta-git` | `zeta-agent-sidebar::files::FilesState` 保存可丢弃 UI 状态；zeterm 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
-| 多文件差异内容与视口 binding | `zeta-agent-sidebar::EditorPane` / `zeta-editor::MultiDiffEditor` | Agent Sidebar 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
+| 多文件差异内容与视口 binding | `zeta-agent-sidebar::EditorPane` / `zeta-editor::MultiDiffEditor` | SCM feature 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
 | 通用 UI 滚动 geometry、交互映射与状态 transition | `zeta-ui::ScrollView` / `ScrollState` / `ScrollbarController` | MultiDiff 复用完整 logical-pixel 状态和交互映射；BlockOutputViewport 通过 Native adapter 复用 clip、内容坐标和 scrollbar paint；Terminal 仍保留底部相对行锚定与输出增长策略 |
 | Top Bar 内部 action 排列 | `zeta-ui::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
 | 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 只拥有 presentation state、item size/gap、surface paint 和同源 bounds；不拥有 product content 或 tabpanel |
-| Workbench Tabs 与活动 Session/Settings presentation | Native `workbench::WorkbenchItem` + `session_tab_list::WorkbenchTabList` | 消费权威 Session projection；Settings 是 host-owned singleton，不复制 Session lifecycle |
+| NavBar 导航容器 | 计划中的 `zeta-ui` presentation contract | 尚未实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有产品 identity 或状态 |
+| Workbench Tabs 与活动 Session/Settings presentation | Native `tab_input::{TabInput,TabInputModel}` + `session_tab_list::WorkbenchTabList` + `workbench` activation helpers | `TabInputModel` 统一维护逻辑输入和 active selection；`ElementId` 只在 presentation projection 中分配，Settings 不复制 Session lifecycle |
 | 锚点浮层定位、viewport 约束与 layer 合成 | `zeta-ui::ContextView` | 不拥有显示生命周期、输入路由或产品 action |
 | 无边框下拉 surface、可选 header、纵向 item geometry 与默认选择 | `zeta-ui::Dropdown` | 组合 ContextView/ActionBar；不拥有产品查询、选择 identity、关闭或 command |
 | 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
@@ -137,9 +208,10 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `session_tab_list::WorkbenchTabList` | 组合 `zeta-ui::TabList` 的无边框 4px 圆角 surface；Session 绘制与两行信息块等高的白色状态容器，Settings 绘制 gear icon，并注册共享 Workbench Tab 语义 | 通用 TabList 已支持 6px 间隔的多项布局；App Server Session projection/switching 与 singleton Settings selection 已接入，每个 Session Tab 绑定独立 Terminal PTY |
 | `session_context_menu::SessionContextMenu` | 右键当前真实 Session Tab 后，用通用 `ContextMenu` 基座绘制 Pin、Close、Rename、Fork；基座提供 renderer 柔和阴影、2px padding 与 4px radius，默认选择 Pin；菜单子树打开时成为 modal interaction scope，hover 同步 roving focus 并在移出后保留最后一项，同时支持菜单外点击、Escape、上下键、Tab、Enter/Space 与焦点恢复 | 下层控件在菜单打开期间不接收 pointer、focus 或 activation；四项已映射为稳定 product action，单 Session runtime 尚不执行真实 pin/close/rename/fork transition |
 | `ShellLayout` | 组合扁平 titlebar、可选 Sessions sidebar，并把剩余区域交给 `TerminalWorkspaceLayout` | primary screen 窗口外层布局 |
-| `zeta-ui::layout::TerminalWorkspaceLayout` / `zui::GridLayout` | 把活动 Terminal 与可选 Agent Sidebar 投影为递归 Grid Leaf；alternate screen 使用完整活动 Terminal Leaf | Agent Sidebar 已接入；多 Terminal Pane runtime 尚未完成 |
-| `SessionSidebarState` / `Sash` | 保存 preferred width 和 drag-start snapshot；从同一 track 生成 8px 命中区与 2px hover/active feedback | 侧栏宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
-| `AgentSidebarState` / `Sash` | 保存右栏显隐、preferred width 与 drag-start snapshot；从同一 track 生成 8px 命中区和 2px hover/active feedback | 宽度限制为 240–560px，并始终为 main Pane 保留至少 240px；内部内容由 `zeta-agent-sidebar::AgentSidebar` 拥有 |
+| `zeta-ui::layout::PaneGroupLayout` / `zui::GridLayout` | 把 host-owned Terminal PaneGroup 投影为递归 Grid Leaf 和 owning-split Sash；alternate screen 使用每个 Pane 自己的完整 Leaf | Terminal PaneGroup 的 host model、逐 Pane runtime、焦点路由、Sash 比例调整和逐 Pane resize 已接入 |
+| `pane_input::{PaneInput,PaneInputKind,PaneBinding}` / `pane_host::{PaneHost,PaneHostScope}` | 把 Pane leaf 映射到 Terminal、Agent、Files、Diff 或 Settings descriptor，并在 frame 组装阶段产生 view mount | Session Tab 的 TerminalPaneInput 和 SidebarPart 的 Files/Diff Pane 已挂载；Agent/Settings 仍待具体 view/state 接入 |
+| `SessionSidebarState` / `zeta-ui::Resizable + Sash` | host 保存 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 侧栏宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
+| `SidebarPartState` / `zeta-ui::Resizable + Sash` | host 保存 Part 的 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 宽度限制为 240–560px，并始终为 main Pane 保留至少 240px；内部 Pane 由 `PaneHost` 按 scope 挂载 |
 | `zeta-agent-sidebar::AgentSidebarNavigation` | 跨功能 Changes/Files ActionBar 与导航语义 | 不拥有 Files/SCM 功能布局 |
 | `zeta-agent-sidebar::files::FilesLayout` / `FilesToolbar` / `FilesPane` / `zeta-file-search` | Files 自己拥有 36px 功能 toolbar、根目录文件树与工作区路径模糊匹配结果 | Search 输入已接键盘、剪贴板和 IME；目录展开、滚动和文件打开动作已由 Native adapter 接线 |
 | `zeta-agent-sidebar::scm::ScmLayout` / `EditorPaneState` / `zeta-editor::MultiDiffEditor` | SCM 自己拥有 Changes toolbar slot 与整体纵向视口；Native 将 `zeta-git` snapshot 映射为 `ScmDiff` | 启动、Refresh 与 command completion 更新；binary、非 UTF-8 或单侧超过 2 MiB 的文件跳过 |
@@ -165,7 +237,8 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | `ActionBar` / `Button` | presentation-only action 与 icon button | 保持通用 primitive，不接收 terminal domain state |
 | `TabList` / `Tab` | presentation-only Tab 排列与 surface | 当前用于 Session navigation；changed-file diff 不再使用 Tab |
 | 完整 DEC/query/mouse family、跨重启历史持久化 | 尚未实现 | 后续 terminal compatibility / Session durability 纵切 |
-| session restoration、split panes | 尚未实现 | 后续产品能力；Terminal Tabs 已通过 Session Tab + 独立 PTY 实现 |
+| Session restoration | 尚未实现 | 后续产品能力；Terminal PaneGroup 的当前内存状态不跨重启持久化 |
+| Terminal PaneGroup / split panes | 本次实现 | 当前只在 Terminal Surface 内提供产品 split；每个 Pane 有独立 terminal runtime，Agent/Settings 仍可保持单 Pane |
 
 ### 4.1 用户快捷键资源
 
@@ -215,7 +288,9 @@ Config/Session/Thread authority。每条规则必须包含 `key` 和 `command`�
 - `workbench.action.showAgentChanges`、`workbench.action.showAgentFiles`；
 - `workbench.action.refreshAgentFiles`、`workbench.action.toggleAgentFileSearch`；
 - `workbench.action.pickExecutionLocation`、`workbench.action.manageRemoteTunnels`；
-- `workbench.action.openKeyboardShortcuts`。
+- `workbench.action.openKeyboardShortcuts`；
+- `workbench.action.splitTerminalHorizontal`、`workbench.action.splitTerminalVertical`、
+  `workbench.action.focusNextPane`、`workbench.action.focusPreviousPane`、`workbench.action.closePane`。
 
 当前“terminal core 纵切完成”指以下端到端路径已经同时成立：
 
@@ -238,12 +313,13 @@ Session Tab 到 PTY 的创建不在 native event loop 内同步等待：`Termina
 事件投递的竞态把首批输出丢掉。切换到仍在创建中的 Session 会立即返回，完成顺序不决定最终
 active tab，最终选择由最近一次 activation request 决定。
 
-这一定义不把“完整 xterm compatibility”、跨重启 Session durability 或 split
-panes 伪装成本阶段能力；它们仍是表中单独列出的后续纵切。
+这一定义不把“完整 xterm compatibility”或跨重启 Session durability 伪装成本阶段能力；Terminal
+Pane split 已在当前内存生命周期内接通，但 PaneGroup、Pane view state 与 Session binding 尚未跨
+zeterm 重启恢复。
 
 当前 Top Bar 会显示左右两个 sidebar toggle。左侧展开后投影 App Server Session/Thread 列表，
 新增 Session 通过 worker 创建并在 snapshot 到达后加入同一垂直 TabList；切换 tab 重新订阅对应
-Thread。右侧展开后包含 Changes / Files ActionBar、Files-only toolbar 与单一 active pane。
+Thread。右侧展开后显示 SidebarPart 的 Changes / Files NavBar、Files-only toolbar 与单一 root Pane。
 Files 默认投影工作区
 根目录，Search 使用模糊路径索引；Changes 把当前 Git 状态快照的全部文本变更作为
 `MultiDiffEditorItem` 放入同一个滚动文档，每项保留独立的 DiffEditor viewport。没有文件或
@@ -258,13 +334,13 @@ command identity。相应 mutation 仍必须通过 App Server 的权威 Session 
 1. `NativeApp` 接收 physical extent 与 scale factor；
 2. `NativeApp` 从 `NativeWindow` 读取窗口控件左右占位，product layout 计算 logical Top Bar、
    可选 Session Sidebar 与剩余 Workspace；`SplitViewLayout` 约束外部 effective width，
-   `GridLayout` 把剩余区域投影为活动 Terminal 与可选 Agent Sidebar Leaf，Titlebar action
-   在占位外另加 8px 组件间距；
-3. primary screen 用 output viewport 计算 rows/columns，固定底部 composer 不计入输出行数；
-   alternate screen 用完整 Terminal Workspace 计算 rows/columns；
-4. `TerminalWorkspace::resize_all` 让每个绑定的 `TerminalSession::resize` 更新
-   primary/alternate grid，并把 active screen 的相同 rows/columns 发送给对应 PTY；
-5. host 从同一份 terminal state 构造下一帧 scene。
+   `PaneGroupLayout` 再把 PaneGroup 的每个叶子和 owning-split Sash 投影为 Grid bounds，
+   Titlebar action 在占位外另加 8px 组件间距；
+3. 每个 terminal Pane 用自己的 output viewport 计算 rows/columns，固定底部 composer 不计入
+   primary screen 的输出行数；alternate screen 用该 Pane 的完整 bounds；
+4. `TerminalWorkspace` 逐 Pane 调用 `TerminalSession::resize`，同步对应 grid、PTY 和 view state，
+   不再把一个活动 Session 的尺寸广播给所有 Pane；
+5. host 从同一份 PaneTree geometry 与各 Pane runtime state 构造下一帧 scene。
 
 Session Sidebar 默认宽度为 200 logical pixels，可在 160–480px 范围内调整，并始终为
 Terminal Workspace 保留至少 240px。`SessionSidebarState` 保存 preferred width；窗口临时变窄
@@ -273,7 +349,7 @@ Terminal Workspace 保留至少 240px。`SessionSidebarState` 保存 preferred w
 composer 共享调整后的 workspace。当前不增加 `PanelHeight`、任意区域拖拽或通用 Workbench
 Part 系统。
 
-Agent Sidebar 默认宽度为 320 logical pixels，可在 240–560px 范围内调整；剩余区域不足
+SidebarPart 默认宽度为 320 logical pixels，可在 240–560px 范围内调整；剩余区域不足
 480px 时，即使显隐状态为展开也会临时隐藏。右侧 Sash 拖动触发同一条 Shell bounds →
 terminal grid → PTY resize 链路，不能绕过这条 Terminal Workspace 最小宽度约束。
 
@@ -306,34 +382,34 @@ geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩�
 
 ### 6.2 Terminal Pane 分屏
 
-Terminal Workspace 已确认需要 Pane 分屏。当前先完成通用 `GridLayout` 递归几何，并让现有
-活动终端作为单 Leaf 接入；下一阶段由 native Terminal Workspace 增加产品 Pane Tree：
+Terminal Workspace 的分屏模型是 `TabInput → PaneGroup → PaneTree → Pane`。Session Tab
+切换的是整个 PaneGroup；split 不创建新的 Workbench Tab，也不把 Tab 拆成多个 Part。
 
 ```text
-TerminalWorkspace
-└─ PaneNode
-   ├─ Leaf(TerminalSessionId)
-   └─ Split {
-        axis,
-        ratio,
-        first,
-        second
-      }
+TabInput(Session)
+└─ PaneGroup
+   └─ PaneTree
+      ├─ Leaf(PaneId → PaneBinding(TerminalPaneInput → TerminalSessionKey))
+      └─ Split {
+           axis,
+           ratio,
+           first,
+           second
+         }
 ```
 
-Terminal Pane Splitter 复用当前 `GridLayout`、`SplitViewLayout` 与 `Sash` geometry，但
-Pane Tree、Pane-to-Session binding、active Pane、ratio、逐 Pane scroll/selection/composer
-和 Terminal Session lifecycle 仍只属于 Terminal Workspace。通用 presentation primitive
-不等于可以注册任意产品区域的 Workbench Part/Sash 系统。
+Terminal Pane Splitter 复用当前 `GridLayout`、`SplitViewLayout` 与 `Sash` geometry，但 PaneTree、PaneInput binding、active Pane、ratio、逐 Pane scroll/selection/input 和 Terminal Session lifecycle 仍只属于各自的 PaneGroup owner。当前 command surface 包括 split horizontal、split vertical、focus next/previous Pane 和 close Pane；Sash 拖动会把受约束的尺寸写回对应 split ratio，最后一个 Pane 不能被关闭。当前每个 TerminalPaneInput 都绑定一个独立 TerminalSession runtime；SidebarPart 的 root Pane 已使用同一套 PaneHost binding 机制，未来可在其独立 PaneGroup 中增加 Files/Diff split 和 Agent/Settings Pane。
+通用 presentation primitive 不等于可以注册任意产品区域的 Workbench Part/Sash 系统。
 
 ## 7. 明确不做什么
 
-- 不构建 VS Code 风格的通用 Workbench Part、Panel、Auxiliary Bar 或区域注册系统；当前只保留 Native host-owned 的显式 Session/Settings Workbench item contract；
+- 不构建 VS Code 风格的通用 Workbench Part、Panel、Auxiliary Bar 或区域注册系统；当前只保留 Native host-owned 的显式 `TabInput` contract；
 - 不让每个视觉区域都具有可拖拽尺寸；
 - 不把当前 immutable `GridLayout` 扩张成持有产品状态的 retained Workbench Grid，也不增加
   动态 Part 注册或任意区域 resize；
 - 不用静态 session fixture 冒充真实 Block 输出；composer 必须提交到真实 PTY；
 - 不把 terminal grid、PTY、scrollback 或 Session 生命周期放入 renderer；
+- 不让一个视觉 Tab 同时承担 TabInput、PaneGroup、Pane runtime 和 Part topology 的全部职责；
 - 不把当前静态 transcript/message fixture 描述成真实 terminal output；
 - 不把当前基础 ANSI subset 描述成完整 xterm/VT compatibility；
 - 不因 alternate screen 和基础 direct input 已接通，就声称完整支持 `vim`、`top` 等交互式 TUI；
@@ -350,6 +426,8 @@ Pane Tree、Pane-to-Session binding、active Pane、ratio、逐 Pane scroll/sele
   同一个 `ElementId`，不能由各组件建立彼此不一致的状态表；
 - terminal viewport、grid rows/columns 和 PTY size 必须来自同一条尺寸链路；
 - Workbench Navigation 不拥有 Session lifecycle 或 durable output；
-- Terminal Pane Tree 只属于 Terminal Workspace 内部；通用 Grid/Split/Sash geometry 不拥有
-  该产品拓扑；
+- 主工作区和 SidebarPart 都可以使用 PaneGroup；每个可见 Pane 只绑定一个 PaneInput，`PaneHostScope` 区分其 owner；PaneInput 不拥有 Pane geometry、view state 或 runtime；
+- PaneGroup topology 属于各自的 owning host；Terminal Workspace 当前拥有主工作区 PaneGroup，
+  SidebarPart 也可以拥有独立 PaneGroup；通用 Grid/Split/Sash geometry 不拥有产品内容拓扑；
+- 不让 PaneGroup 为了复用而直接依赖 `zui` 的 UI identity、pointer capture 或 renderer；
 - 当前实现、计划迁移和潜在能力必须在文档中保持明确分离。

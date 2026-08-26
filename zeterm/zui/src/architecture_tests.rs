@@ -238,6 +238,7 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 "app/native_host.rs",
                 "input/keyboard.rs",
                 "internal.rs",
+                "window/capability.rs",
                 "window/chrome.rs",
                 "window/event.rs",
                 "window/native.rs",

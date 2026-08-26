@@ -49,10 +49,10 @@ where
         if owner_runtime.role() != WindowRole::Product {
             return;
         }
-        owner_runtime.handle().request_redraw();
+        owner_runtime.request_redraw();
         if let Some(window) = self.devtools_window_for(owner) {
             if let Some(runtime) = self.windows.get(&window) {
-                runtime.handle().request_redraw();
+                runtime.request_redraw();
             }
             return;
         }
@@ -79,7 +79,7 @@ where
         };
         let id = runtime.id();
         let metrics = runtime.metrics();
-        runtime.handle().request_redraw();
+        runtime.request_redraw();
         self.windows.insert(id, runtime);
         self.diagnostics.open_window(id, metrics);
     }
@@ -87,7 +87,7 @@ where
     pub(super) fn close_devtools_windows(&mut self, owner: WindowId) {
         if let Some(runtime) = self.windows.get(&owner) {
             runtime.handle().devtools().close_local();
-            runtime.handle().request_redraw();
+            runtime.request_redraw();
         }
         let ids = self
             .windows
@@ -113,7 +113,7 @@ where
         if let Some(window) = self.devtools_window_for(owner)
             && let Some(runtime) = self.windows.get(&window)
         {
-            runtime.handle().request_redraw();
+            runtime.request_redraw();
         }
     }
 
@@ -153,7 +153,7 @@ where
                 self.cursor_positions.insert(window, point);
                 if devtools.is_picking() {
                     devtools.hover_at(point);
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                     self.request_devtools_redraw(window);
                     return true;
                 }
@@ -162,7 +162,7 @@ where
                 self.cursor_positions.remove(&window);
                 if devtools.is_picking() {
                     devtools.set_hovered(None);
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                     self.request_devtools_redraw(window);
                     return true;
                 }
@@ -173,7 +173,7 @@ where
             } if devtools.is_picking() => {
                 if *state == ElementState::Released {
                     devtools.select_hovered();
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                 }
                 self.request_devtools_redraw(window);
                 return true;
@@ -183,7 +183,7 @@ where
                     && event.logical_key == Key::Named(NamedKey::Escape)
                 {
                     devtools.stop_picking_or_close();
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                     self.request_devtools_redraw(window);
                     return true;
                 }
@@ -205,7 +205,7 @@ where
             WindowEvent::CloseRequested | WindowEvent::Destroyed => {
                 if let Some(runtime) = self.windows.get(&owner) {
                     runtime.handle().devtools().close_local();
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                 }
                 self.commands.push(WindowCommand::Close(window));
             }
@@ -220,7 +220,7 @@ where
                 if let Some(runtime) = self.windows.get(&owner) {
                     let devtools = runtime.handle().devtools();
                     if devtools.set_hovered_tree_node(None) {
-                        runtime.handle().request_redraw();
+                        runtime.request_redraw();
                         self.request_devtools_redraw(owner);
                     }
                 }
@@ -231,7 +231,7 @@ where
                 {
                     if let Some(runtime) = self.windows.get(&owner) {
                         runtime.handle().devtools().close_local();
-                        runtime.handle().request_redraw();
+                        runtime.request_redraw();
                     }
                     self.commands.push(WindowCommand::Close(window));
                 }
@@ -252,12 +252,12 @@ where
                 };
                 owner_runtime.handle().devtools().scroll_by(-amount);
                 if let Some(runtime) = self.windows.get(&window) {
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                 }
             }
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                 if let Some(runtime) = self.windows.get(&window) {
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                 }
             }
             _ => {}
@@ -284,14 +284,14 @@ where
         match crate::devtools::view::toolbar_action_at(bounds, point) {
             Some(crate::devtools::view::ToolbarAction::Pick) => {
                 devtools.toggle_picking();
-                owner_runtime.handle().request_redraw();
+                owner_runtime.request_redraw();
                 if let Some(runtime) = self.windows.get(&window) {
-                    runtime.handle().request_redraw();
+                    runtime.request_redraw();
                 }
             }
             Some(crate::devtools::view::ToolbarAction::Close) => {
                 devtools.close_local();
-                owner_runtime.handle().request_redraw();
+                owner_runtime.request_redraw();
                 self.commands.push(WindowCommand::Close(window));
             }
             None => {
@@ -301,9 +301,9 @@ where
                 match crate::devtools::view::tree_hit_at(bounds, point, &frame, &devtools) {
                     Some(crate::devtools::view::TreeHit::Toggle(id)) => {
                         devtools.toggle_node_expansion(id);
-                        owner_runtime.handle().request_redraw();
+                        owner_runtime.request_redraw();
                         if let Some(runtime) = self.windows.get(&window) {
-                            runtime.handle().request_redraw();
+                            runtime.request_redraw();
                         }
                     }
                     Some(crate::devtools::view::TreeHit::Select(id)) => {
@@ -311,9 +311,9 @@ where
                             crate::devtools::InspectionSelection::from_node(&frame, id)
                         {
                             devtools.select(Some(selection));
-                            owner_runtime.handle().request_redraw();
+                            owner_runtime.request_redraw();
                             if let Some(runtime) = self.windows.get(&window) {
-                                runtime.handle().request_redraw();
+                                runtime.request_redraw();
                             }
                         }
                     }
@@ -344,7 +344,7 @@ where
             })
         });
         if devtools.set_hovered_tree_node(hovered) {
-            owner_runtime.handle().request_redraw();
+            owner_runtime.request_redraw();
             self.request_devtools_redraw(owner);
         }
     }

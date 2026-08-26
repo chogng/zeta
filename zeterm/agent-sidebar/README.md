@@ -1,15 +1,16 @@
 # `zeta-agent-sidebar`
 
-`zeta-agent-sidebar` owns the retained product state for the Agent Sidebar's
-Files and source-control-management (SCM) panes. It is the canonical
-implementation-level contract for this surface; the cross-runtime product
-architecture remains documented in [`docs/native-terminal-ui.md`](../docs/native-terminal-ui.md).
+`zeta-agent-sidebar` owns the retained product state and concrete views for the
+Sidebar Part's Files and source-control-management (SCM) panes. It does not own
+the outer Part's visibility, width, PaneGroup, or active Pane binding; the
+cross-runtime product architecture remains documented in
+[`docs/native-terminal-ui.md`](../docs/native-terminal-ui.md).
 
 ## Ownership
 
 | Concern | Owner | Boundary |
 | --- | --- | --- |
-| Active Files/Changes pane and retained pane state | `AgentSidebar` | Does not know windows, app-server clients, or platform events. |
+| Files/Changes feature state | `AgentSidebar` → `FilesState` / `ScmState` | Does not own which Pane is active; it does not know windows, app-server clients, or platform events. |
 | Cross-pane selection and navigation | `AgentSidebarNavigation` | Owns only the Changes/Files switcher; it does not place Files or SCM controls. |
 | Hierarchical entries, expansion, search query, and list scrolling | `files::FilesState` | Receives host-projected `DirectoryEntry` values, never protocol DTOs. |
 | Files functional toolbar and tree/search geometry | `files::FilesLayout` / `files::FilesToolbar` / `files::FilesPane` | Owns Refresh, ahead/behind, Search, and the Files content bounds. |
@@ -24,6 +25,8 @@ window backend, or a Git transport implementation.
 ## Contract and execution path
 
 `AgentSidebar::files_mut()` exposes the Files model to its presentation owner.
+The Native host owns the selected `PaneInput` and maps it to `AgentSidebarView`
+only when composing the navigation presentation.
 `FilesState::activate`, `navigate_right`, and `navigate_left` return an
 `AgentSidebarAction`; `OpenFile` and `LoadChildren` are host obligations rather
 than in-crate side effects. The host maps an authoritative directory response

@@ -39,7 +39,8 @@ runtime exists; those are connection and installation concerns.
 ## Extension direction
 
 Add another target transport only when it has a distinct authority contract. Keep product labels,
-credentials, SSH process options, installer state, and tunnel lifecycle outside this crate.
+credentials, SSH process options, installer state, and tunnel lifecycle outside this crate; shared
+local Tunnel lifecycle coordination belongs to `zeta-remote-host`.
 
 ## Verification
 

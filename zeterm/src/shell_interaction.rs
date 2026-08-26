@@ -1,6 +1,8 @@
 use std::ops::Range;
 use zui::ui::ElementId;
 
+use crate::pane_group::PaneId;
+
 #[cfg(test)]
 pub(crate) use zeta_agent_sidebar::AGENT_CHANGES;
 #[cfg(test)]
@@ -23,6 +25,7 @@ pub(crate) use zeta_agent_sidebar::MULTI_DIFF_EDITOR;
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
 const SESSION_SCOPE: u32 = 14;
+const TERMINAL_PANE_SCOPE: u32 = 15;
 
 pub(crate) const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
 pub(crate) const TITLEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2);
@@ -75,6 +78,8 @@ const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACT
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
 const FIRST_SESSION_TAB: u32 = 100;
+const FIRST_TERMINAL_PANE: u32 = 100;
+const FIRST_TERMINAL_PANE_SASH: u32 = 1;
 const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 const FIRST_FILE_EDITOR_TAB: u32 = 200;
 const FIRST_FILE_EDITOR_FOLD: u32 = 1_000;
@@ -104,6 +109,22 @@ pub(crate) fn session_tab_id(index: usize) -> ElementId {
 
 pub(crate) fn session_tab_index(id: ElementId, mut mounted: Range<usize>) -> Option<usize> {
     mounted.find(|index| session_tab_id(*index) == id)
+}
+
+pub(crate) fn terminal_pane_id(pane: PaneId) -> ElementId {
+    let local = u32::try_from(pane.value())
+        .ok()
+        .and_then(|value| FIRST_TERMINAL_PANE.checked_add(value))
+        .expect("terminal pane identity must fit its element scope");
+    ElementId::scoped(TERMINAL_PANE_SCOPE, local)
+}
+
+pub(crate) fn terminal_pane_sash_id(split: crate::pane_group::PaneSplitId) -> ElementId {
+    let local = u32::try_from(split.value())
+        .ok()
+        .and_then(|value| FIRST_TERMINAL_PANE_SASH.checked_add(value))
+        .expect("terminal pane split identity must fit its element scope");
+    ElementId::scoped(TERMINAL_PANE_SCOPE, local)
 }
 
 pub(crate) fn file_editor_tab_id(index: usize) -> ElementId {

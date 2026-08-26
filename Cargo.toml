@@ -76,6 +76,7 @@ members = [
     "zeta-rs/protocol",
     "zeta-rs/remote",
     "zeta-rs/remote-connections",
+    "zeta-rs/remote-host",
     "zeta-rs/remote-server",
     "zeta-rs/rollout",
     "zeta-rs/rollout-trace",
@@ -321,6 +322,7 @@ zeta-prompts = { path = "zeta-rs/prompts" }
 zeta-protocol = { path = "zeta-rs/protocol" }
 zeta-remote = { path = "zeta-rs/remote" }
 zeta-remote-connections = { path = "zeta-rs/remote-connections" }
+zeta-remote-host = { path = "zeta-rs/remote-host" }
 zeta-remote-server = { path = "zeta-rs/remote-server" }
 zeta-rollout = { path = "zeta-rs/rollout" }
 zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }

@@ -526,7 +526,7 @@ impl NativeApp {
         if let Some(index) = file_editor_tab_index(id, 0..self.file_editor_host.tabs().len()) {
             self.file_editor_host.select(index);
             self.file_editor_input.dismiss_prompt();
-            self.agent_sidebar.expand();
+            self.sidebar_part.expand();
             self.workspace_surface.show_editor();
             self.file_editor_input.fractional_rows = 0.0;
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
@@ -695,10 +695,7 @@ impl NativeApp {
         let bounds = self
             .presentation
             .as_ref()?
-            .accessibility_nodes
-            .iter()
-            .find(|node| node.id == FILE_EDITOR_PANE)?
-            .bounds;
+            .element_bounds(FILE_EDITOR_PANE)?;
         Some(
             FileEditorPane::new(
                 bounds,

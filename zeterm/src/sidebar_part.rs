@@ -1,7 +1,12 @@
 use crate::NativeApp;
 use crate::shell_interaction::AGENT_SIDEBAR_RESIZE_HANDLE;
-use crate::shell_scene::agent_sidebar_resize_snapshot_for_viewport;
+use crate::shell_scene::sidebar_resize_snapshot_for_viewport;
+use std::time::Instant;
 use zeta_ui::Point;
+use zeta_ui::Resizable;
+use zeta_ui::SashOrientation;
+use zeta_ui::SashPointerPresence;
+use zeta_ui::SashState;
 use zeta_ui::SplitViewResizeSnapshot;
 use zeta_ui::layout::SidebarLayoutSpec;
 use zeta_ui::layout::SidebarVisibility;
@@ -14,52 +19,45 @@ const MAXIMUM_WIDTH: f32 = 800.0;
 const MINIMUM_MAIN_WIDTH: f32 = 400.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-enum AgentSidebarVisibility {
+enum SidebarPartVisibility {
     #[default]
     Collapsed,
     Expanded,
 }
 
-/// Runtime visibility and layout state for the Agent sidebar container.
+/// Runtime visibility and layout state for the right Sidebar Part.
 ///
-/// Files and SCM content are owned by `zeta_agent_sidebar::AgentSidebar`; this
-/// type only controls whether their shared host participates in shell layout.
+/// Files and SCM feature content are owned by `zeta_agent_sidebar`; this type
+/// only controls whether the SidebarPart participates in shell layout.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct AgentSidebarState {
-    visibility: AgentSidebarVisibility,
+pub(crate) struct SidebarPartState {
+    visibility: SidebarPartVisibility,
     preferred_width: f32,
-    resize: Option<AgentSidebarResize>,
+    resizable: Resizable,
 }
 
-impl Default for AgentSidebarState {
+impl Default for SidebarPartState {
     fn default() -> Self {
         Self {
-            visibility: AgentSidebarVisibility::Collapsed,
+            visibility: SidebarPartVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
-            resize: None,
+            resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct AgentSidebarResize {
-    pointer_origin: f32,
-    snapshot: SplitViewResizeSnapshot,
-    current_size: f32,
-}
-
-impl AgentSidebarState {
+impl SidebarPartState {
     #[cfg(test)]
     pub(crate) const fn expanded() -> Self {
         Self {
-            visibility: AgentSidebarVisibility::Expanded,
+            visibility: SidebarPartVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
-            resize: None,
+            resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 
     pub(crate) const fn is_expanded(self) -> bool {
-        matches!(self.visibility, AgentSidebarVisibility::Expanded)
+        matches!(self.visibility, SidebarPartVisibility::Expanded)
     }
 
     /// Projects product visibility and persisted sizing into the host-neutral workspace layout
@@ -80,69 +78,74 @@ impl AgentSidebarState {
     }
 
     pub(crate) const fn is_resizing(self) -> bool {
-        self.resize.is_some()
+        self.resizable.is_dragging()
+    }
+
+    pub(crate) fn sash_pointer_presence(
+        &mut self,
+        presence: SashPointerPresence,
+        now: Instant,
+    ) -> bool {
+        self.resizable.pointer_presence(presence, now)
+    }
+
+    pub(crate) fn advance_sash(&mut self, now: Instant) -> bool {
+        self.resizable.advance(now)
+    }
+
+    pub(crate) const fn sash_state(self) -> SashState {
+        self.resizable.presentation()
+    }
+
+    pub(crate) const fn sash_deadline(self) -> Option<Instant> {
+        self.resizable.next_deadline()
     }
 
     pub(crate) fn toggle(&mut self) {
         self.visibility = match self.visibility {
-            AgentSidebarVisibility::Collapsed => AgentSidebarVisibility::Expanded,
-            AgentSidebarVisibility::Expanded => AgentSidebarVisibility::Collapsed,
+            SidebarPartVisibility::Collapsed => SidebarPartVisibility::Expanded,
+            SidebarPartVisibility::Expanded => SidebarPartVisibility::Collapsed,
         };
-        self.resize = None;
+        self.resizable.cancel();
     }
 
     pub(crate) fn expand(&mut self) {
-        self.visibility = AgentSidebarVisibility::Expanded;
+        self.visibility = SidebarPartVisibility::Expanded;
+        self.resizable.cancel();
     }
 
     pub(crate) fn start_resizing(
         &mut self,
         snapshot: SplitViewResizeSnapshot,
-        pointer_x: f32,
+        pointer: Point,
+        now: Instant,
     ) -> bool {
-        if self.resize.is_some() {
-            return false;
-        }
-        let current_size = snapshot.resize(0.0).next_size();
-        self.resize = Some(AgentSidebarResize {
-            pointer_origin: pointer_x,
-            snapshot,
-            current_size,
-        });
-        true
+        self.resizable.begin_drag(snapshot, pointer, now)
     }
 
-    pub(crate) fn resize_to(&mut self, pointer_x: f32) -> bool {
-        let Some(mut resize) = self.resize else {
+    pub(crate) fn resize_to(&mut self, pointer: Point) -> bool {
+        let Some(next) = self.resizable.resize_to(pointer) else {
             return false;
         };
-        let next = resize.snapshot.resize(pointer_x - resize.pointer_origin);
-        debug_assert_eq!(next.previous_index(), 0);
-        debug_assert_eq!(next.next_index(), 1);
-        if next.next_size() == resize.current_size {
-            return false;
-        }
-        resize.current_size = next.next_size();
-        self.resize = Some(resize);
         self.preferred_width = next.next_size();
         true
     }
 
-    pub(crate) fn finish_resizing(&mut self) -> bool {
-        if self.resize.is_none() {
-            return false;
-        }
-        self.resize = None;
-        true
+    pub(crate) fn finish_resizing(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+        self.resizable.end_drag(presence, now)
+    }
+
+    pub(crate) fn cancel_resizing(&mut self) -> bool {
+        self.resizable.cancel()
     }
 }
 
 impl NativeApp {
-    pub(super) fn route_agent_sidebar_resize_move(&mut self, point: Point) -> bool {
-        if !self.agent_sidebar.is_resizing() {
+    pub(super) fn route_sidebar_resize_move(&mut self, point: Point) -> bool {
+        if !self.sidebar_part.is_resizing() {
             return false;
         }
-        if self.agent_sidebar.resize_to(point.x) {
+        if self.sidebar_part.resize_to(point) {
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -151,7 +154,8 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn route_agent_sidebar_resize_button(&mut self, state: ElementState) -> bool {
+    pub(super) fn route_sidebar_resize_button(&mut self, state: ElementState) -> bool {
+        let now = Instant::now();
         match state {
             ElementState::Pressed => {
                 let Some(point) = self.cursor_position else {
@@ -161,19 +165,20 @@ impl NativeApp {
                     presentation.interaction_frame().target_at(point)
                         == Some(AGENT_SIDEBAR_RESIZE_HANDLE)
                 });
-                let Some(snapshot) = agent_sidebar_resize_snapshot_for_viewport(
+                let Some(snapshot) = sidebar_resize_snapshot_for_viewport(
                     self.logical_viewport(),
                     self.session_sidebar,
-                    self.agent_sidebar,
+                    self.sidebar_part,
                 ) else {
                     return false;
                 };
-                if !over_handle || !self.agent_sidebar.start_resizing(snapshot, point.x) {
+                if !over_handle || !self.sidebar_part.start_resizing(snapshot, point, now) {
                     return false;
                 }
             }
             ElementState::Released => {
-                if !self.agent_sidebar.finish_resizing() {
+                let presence = self.sash_pointer_presence(AGENT_SIDEBAR_RESIZE_HANDLE);
+                if !self.sidebar_part.finish_resizing(presence, now) {
                     return false;
                 }
             }
@@ -196,8 +201,8 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn cancel_agent_sidebar_resize(&mut self) {
-        if self.agent_sidebar.finish_resizing() {
+    pub(super) fn cancel_sidebar_resize(&mut self) {
+        if self.sidebar_part.cancel_resizing() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();
@@ -206,5 +211,5 @@ impl NativeApp {
 }
 
 #[cfg(test)]
-#[path = "agent_sidebar_tests.rs"]
+#[path = "sidebar_part_tests.rs"]
 mod tests;

@@ -1,8 +1,12 @@
 use crate::NativeApp;
 use crate::shell_interaction::SESSION_SIDEBAR_RESIZE_HANDLE;
+use std::time::Instant;
 use zeta_ui::Point;
 use zeta_ui::Rect;
-use zeta_ui::SplitViewResizeSnapshot;
+use zeta_ui::Resizable;
+use zeta_ui::SashOrientation;
+use zeta_ui::SashPointerPresence;
+use zeta_ui::SashState;
 use zeta_ui::layout::SessionSidebarLayout;
 use zeta_ui::layout::SessionSidebarLayoutSpec;
 use zeta_ui::layout::SidebarVisibility;
@@ -13,8 +17,6 @@ const DEFAULT_WIDTH: f32 = 200.0;
 const MINIMUM_WIDTH: f32 = 160.0;
 const MAXIMUM_WIDTH: f32 = 480.0;
 const MINIMUM_MAIN_WIDTH: f32 = 240.0;
-const SESSION_PANE_INDEX: usize = 0;
-const MAIN_PANE_INDEX: usize = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SessionSidebarVisibility {
@@ -31,14 +33,7 @@ enum SessionSidebarVisibility {
 pub(crate) struct SessionSidebarState {
     visibility: SessionSidebarVisibility,
     preferred_width: f32,
-    resize: Option<SessionSidebarResize>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct SessionSidebarResize {
-    pointer_origin: f32,
-    snapshot: SplitViewResizeSnapshot,
-    current_size: f32,
+    resizable: Resizable,
 }
 
 impl Default for SessionSidebarState {
@@ -46,7 +41,7 @@ impl Default for SessionSidebarState {
         Self {
             visibility: SessionSidebarVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
-            resize: None,
+            resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 }
@@ -57,7 +52,7 @@ impl SessionSidebarState {
         Self {
             visibility: SessionSidebarVisibility::Expanded,
             preferred_width: DEFAULT_WIDTH,
-            resize: None,
+            resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 
@@ -66,7 +61,7 @@ impl SessionSidebarState {
         Self {
             visibility: SessionSidebarVisibility::Collapsed,
             preferred_width: DEFAULT_WIDTH,
-            resize: None,
+            resizable: Resizable::new(SashOrientation::Vertical),
         }
     }
 
@@ -75,7 +70,27 @@ impl SessionSidebarState {
     }
 
     pub(crate) const fn is_resizing(self) -> bool {
-        self.resize.is_some()
+        self.resizable.is_dragging()
+    }
+
+    pub(crate) fn sash_pointer_presence(
+        &mut self,
+        presence: SashPointerPresence,
+        now: Instant,
+    ) -> bool {
+        self.resizable.pointer_presence(presence, now)
+    }
+
+    pub(crate) fn advance_sash(&mut self, now: Instant) -> bool {
+        self.resizable.advance(now)
+    }
+
+    pub(crate) const fn sash_state(self) -> SashState {
+        self.resizable.presentation()
+    }
+
+    pub(crate) const fn sash_deadline(self) -> Option<Instant> {
+        self.resizable.next_deadline()
     }
 
     pub(crate) fn toggle(&mut self) {
@@ -83,7 +98,7 @@ impl SessionSidebarState {
             SessionSidebarVisibility::Collapsed => SessionSidebarVisibility::Expanded,
             SessionSidebarVisibility::Expanded => SessionSidebarVisibility::Collapsed,
         };
-        self.resize = None;
+        self.resizable.cancel();
     }
 
     #[cfg(test)]
@@ -98,7 +113,7 @@ impl SessionSidebarState {
         self.layout_spec().for_bounds(bounds)
     }
 
-    fn layout_spec(self) -> SessionSidebarLayoutSpec {
+    pub(crate) fn layout_spec(self) -> SessionSidebarLayoutSpec {
         SessionSidebarLayoutSpec::new(
             if self.is_expanded() {
                 SidebarVisibility::Expanded
@@ -112,44 +127,28 @@ impl SessionSidebarState {
         )
     }
 
-    fn start_resizing(&mut self, viewport_width: f32, pointer_x: f32) -> bool {
-        if self.resize.is_some() {
-            return false;
-        }
+    fn start_resizing(&mut self, viewport_width: f32, pointer: Point, now: Instant) -> bool {
         let layout = self.layout(Rect::from_xywh(0.0, 0.0, viewport_width, 1.0));
         let Some(snapshot) = layout.resize_snapshot() else {
             return false;
         };
-        self.resize = Some(SessionSidebarResize {
-            pointer_origin: pointer_x,
-            snapshot,
-            current_size: snapshot.resize(0.0).previous_size(),
-        });
-        true
+        self.resizable.begin_drag(snapshot, pointer, now)
     }
 
-    fn resize_to(&mut self, pointer_x: f32) -> bool {
-        let Some(mut resize) = self.resize else {
+    fn resize_to(&mut self, pointer: Point) -> bool {
+        let Some(next) = self.resizable.resize_to(pointer) else {
             return false;
         };
-        let next = resize.snapshot.resize(pointer_x - resize.pointer_origin);
-        debug_assert_eq!(next.previous_index(), SESSION_PANE_INDEX);
-        debug_assert_eq!(next.next_index(), MAIN_PANE_INDEX);
-        if next.previous_size() == resize.current_size {
-            return false;
-        }
-        resize.current_size = next.previous_size();
-        self.resize = Some(resize);
         self.preferred_width = next.previous_size();
         true
     }
 
-    fn finish_resizing(&mut self) -> bool {
-        if self.resize.is_none() {
-            return false;
-        }
-        self.resize = None;
-        true
+    fn finish_resizing(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+        self.resizable.end_drag(presence, now)
+    }
+
+    fn cancel_resizing(&mut self) -> bool {
+        self.resizable.cancel()
     }
 }
 
@@ -158,7 +157,7 @@ impl NativeApp {
         if !self.session_sidebar.is_resizing() {
             return false;
         }
-        if self.session_sidebar.resize_to(point.x) {
+        if self.session_sidebar.resize_to(point) {
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -168,6 +167,7 @@ impl NativeApp {
     }
 
     pub(super) fn route_session_sidebar_resize_button(&mut self, state: ElementState) -> bool {
+        let now = Instant::now();
         match state {
             ElementState::Pressed => {
                 let Some(point) = self.cursor_position else {
@@ -178,15 +178,18 @@ impl NativeApp {
                         == Some(SESSION_SIDEBAR_RESIZE_HANDLE)
                 });
                 if !over_handle
-                    || !self
-                        .session_sidebar
-                        .start_resizing(self.logical_viewport().width, point.x)
+                    || !self.session_sidebar.start_resizing(
+                        self.logical_viewport().width,
+                        point,
+                        now,
+                    )
                 {
                     return false;
                 }
             }
             ElementState::Released => {
-                if !self.session_sidebar.finish_resizing() {
+                let presence = self.sash_pointer_presence(SESSION_SIDEBAR_RESIZE_HANDLE);
+                if !self.session_sidebar.finish_resizing(presence, now) {
                     return false;
                 }
             }
@@ -210,7 +213,7 @@ impl NativeApp {
     }
 
     pub(super) fn cancel_session_sidebar_resize(&mut self) {
-        if self.session_sidebar.finish_resizing() {
+        if self.session_sidebar.cancel_resizing() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();

@@ -46,6 +46,7 @@ use thiserror::Error;
 
 mod builder;
 mod context;
+mod frame;
 mod host;
 mod lifecycle;
 pub(crate) mod native_host;
@@ -57,9 +58,12 @@ pub use context::AppContext;
 use context::AppContextParts;
 pub use context::WindowContext;
 use context::WindowContextParts;
+pub(crate) use frame::WindowFramePresentation;
+pub use lifecycle::ApplicationExitReason;
+pub use lifecycle::ApplicationPhase;
 pub use lifecycle::ExitPolicy;
-use lifecycle::WindowCommand;
-use lifecycle::WindowCommandQueue;
+pub(crate) use lifecycle::LifecycleCore;
+pub(crate) use lifecycle::WindowCommand;
 pub use native_host::ApplicationRunError;
 pub use native_host::ControlFlow;
 pub use protocol::ProtocolScheme;
@@ -87,6 +91,13 @@ impl ApplicationError {
         }
     }
 
+    pub(crate) fn window_options(source: impl Error + Send + Sync + 'static) -> Self {
+        Self {
+            operation: "native window configuration",
+            source: Box::new(source),
+        }
+    }
+
     pub(crate) fn renderer(source: impl Error + Send + Sync + 'static) -> Self {
         Self {
             operation: "renderer initialization",
@@ -108,8 +119,11 @@ impl ApplicationError {
 /// Implementations retain domain state and build UI frames. The runtime owns native windows,
 /// renderer instances, platform resize synchronization, and event-loop dispatch.
 pub trait App<T: 'static> {
-    /// Creates initial windows and starts product resources after the native loop resumes.
-    fn resumed(&mut self, context: &mut AppContext<'_, T>);
+    /// Creates initial windows and starts product resources on the first native resume.
+    fn ready(&mut self, _context: &mut AppContext<'_, T>) {}
+
+    /// Observes every platform resume, including the first resume after [`App::ready`].
+    fn resumed(&mut self, _context: &mut AppContext<'_, T>) {}
 
     /// Observes platform suspension after the runtime has stopped receiving active window work.
     fn suspended(&mut self, _context: &mut AppContext<'_, T>) {}
@@ -129,6 +143,9 @@ pub trait App<T: 'static> {
 
     /// Observes a window after its renderer and native resources leave the runtime registry.
     fn window_closed(&mut self, _context: &mut AppContext<'_, T>, _window: WindowId) {}
+
+    /// Observes the transition from one live product window to none.
+    fn window_all_closed(&mut self, _context: &mut AppContext<'_, T>) {}
 
     /// Handles an action selected from the application menu.
     fn menu_action(&mut self, _context: &mut AppContext<'_, T>, _action: MenuItemId) {}
@@ -164,6 +181,7 @@ pub trait App<T: 'static> {
 pub struct ApplicationExit<A> {
     app: A,
     error: Option<ApplicationError>,
+    reason: ApplicationExitReason,
 }
 
 impl<A> ApplicationExit<A> {
@@ -177,9 +195,14 @@ impl<A> ApplicationExit<A> {
         self.error.as_ref()
     }
 
+    /// Returns why the reusable application host began exiting.
+    pub const fn reason(&self) -> ApplicationExitReason {
+        self.reason
+    }
+
     /// Consumes the exit report and returns the final product state and runtime failure.
-    pub fn into_parts(self) -> (A, Option<ApplicationError>) {
-        (self.app, self.error)
+    pub fn into_parts(self) -> (A, Option<ApplicationError>, ApplicationExitReason) {
+        (self.app, self.error, self.reason)
     }
 }
 

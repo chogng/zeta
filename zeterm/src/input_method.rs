@@ -150,7 +150,7 @@ impl NativeApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.agent_sidebar_workspace
+                self.sidebar_pane_workspace
                     .apply_file_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -277,7 +277,7 @@ impl NativeApp {
             return;
         };
         if let Some(window) = self.window.as_ref() {
-            window.set_ime_cursor_area(ImeCursorArea::new(
+            let _ = window.set_ime_cursor_area(ImeCursorArea::new(
                 bounds.origin.x as f64,
                 bounds.origin.y as f64,
                 bounds.size.width as f64,
@@ -317,8 +317,7 @@ impl NativeApp {
             self.session_search.cancel_composition();
         }
         if target != InputMethodTarget::FileSearch {
-            self.agent_sidebar_workspace
-                .cancel_file_search_composition();
+            self.sidebar_pane_workspace.cancel_file_search_composition();
         }
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_context_menu.cancel_search_composition();
@@ -352,9 +351,9 @@ impl NativeApp {
         }
         if let Some(window) = self.window.as_ref() {
             if target.is_enabled() {
-                window.enable_ime();
+                let _ = window.enable_ime();
             } else {
-                window.disable_ime();
+                let _ = window.disable_ime();
             }
         }
     }

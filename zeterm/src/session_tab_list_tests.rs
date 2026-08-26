@@ -1,12 +1,12 @@
-use super::SessionTabUpsert;
 use super::WorkbenchTab;
 use super::WorkbenchTabList;
-use super::upsert_session_catalog_tab;
-use super::upsert_session_tab;
+use super::tab_input_element_id;
 use crate::shell_interaction::{
     ACTIVE_SESSION_TAB, SESSION_TAB_LIST, SETTINGS_WORKBENCH_TAB, session_tab_id,
 };
 use crate::shell_style::SHELL_PALETTE;
+use crate::tab_input::TabInputKey;
+use crate::tab_input::TabInputModel;
 use zeta_icons::icons;
 use zeta_protocol::{Session, SessionId, SessionStatus};
 use zeta_ui::{Color, Component, CornerRadii, FontWeight, Point, Rect, UiScene};
@@ -31,51 +31,32 @@ fn session(id: &str, title: &str) -> Session {
 }
 
 #[test]
-fn add_session_snapshots_create_independent_tabs_and_select_the_newest() {
+fn selected_tab_input_resolves_to_a_ui_element_only_at_the_presentation_boundary() {
     let first = session("session-1", "First terminal");
     let second = session("session-2", "Second terminal");
-    let mut tabs = Vec::new();
-    let mut selected = ACTIVE_SESSION_TAB;
+    let first_key = TabInputKey::session(first.session_id.clone());
+    let second_key = TabInputKey::session(second.session_id.clone());
+    let mut model = TabInputModel::default();
+
+    model.upsert_session(&first, "~/first");
+    model.upsert_session(&second, "~/second");
 
     assert_eq!(
-        upsert_session_tab(&mut tabs, &mut selected, &first, "~/first"),
-        SessionTabUpsert::Added(ACTIVE_SESSION_TAB)
+        tab_input_element_id(model.inputs(), Some(&first_key)),
+        ACTIVE_SESSION_TAB
     );
     assert_eq!(
-        upsert_session_tab(&mut tabs, &mut selected, &second, "~/second"),
-        SessionTabUpsert::Added(session_tab_id(1))
+        tab_input_element_id(model.inputs(), Some(&second_key)),
+        session_tab_id(1)
     );
-    assert_eq!(tabs.len(), 2);
-    assert_eq!(selected, session_tab_id(1));
-    assert_eq!(tabs[0].session_id(), &first.session_id);
-    assert_eq!(tabs[1].session_id(), &second.session_id);
-    assert_ne!(tabs[0].id(), tabs[1].id());
-
-    let mut renamed_first = first.clone();
-    renamed_first.title = "First terminal renamed".to_owned();
     assert_eq!(
-        upsert_session_tab(&mut tabs, &mut selected, &renamed_first, "~/first"),
-        SessionTabUpsert::Updated(ACTIVE_SESSION_TAB)
+        tab_input_element_id(model.inputs(), Some(&TabInputKey::Settings),),
+        SETTINGS_WORKBENCH_TAB
     );
-    assert_eq!(tabs.len(), 2);
-    assert_eq!(selected, ACTIVE_SESSION_TAB);
-    assert_eq!(tabs[0].title(), "First terminal renamed");
-}
-
-#[test]
-fn catalog_upsert_does_not_change_the_selected_tab() {
-    let mut tabs = Vec::new();
-    let mut selected = ACTIVE_SESSION_TAB;
-    let active = session("session-active", "Active");
-    let saved = session("session-saved", "Saved");
-    upsert_session_tab(&mut tabs, &mut selected, &active, "~/zeta");
-    let selected_before_catalog = selected;
-
     assert_eq!(
-        upsert_session_catalog_tab(&mut tabs, &saved, "~/zeta"),
-        SessionTabUpsert::Added(session_tab_id(1))
+        tab_input_element_id(model.inputs(), None),
+        ACTIVE_SESSION_TAB
     );
-    assert_eq!(selected, selected_before_catalog);
 }
 
 #[test]
@@ -245,6 +226,11 @@ fn settings_workbench_tab_renders_as_a_selectable_gear_item() {
     frame.draw_component(&list);
 
     assert_eq!(frame.scene().icons()[0].icon(), icons::GEAR);
+    assert_eq!(frame.scene().rects()[1].fill(), SHELL_PALETTE.surface);
+    assert_eq!(
+        frame.scene().rects()[1].corner_radii(),
+        CornerRadii::uniform(18.0)
+    );
     let node = frame
         .interaction()
         .accessibility_nodes(&dispatch)
