@@ -1,3 +1,7 @@
+use super::super::view_tree::ROW_HEIGHT;
+use super::super::view_tree::TOOLBAR_HEIGHT;
+use super::super::view_tree::computed_bounds;
+use super::super::view_tree::tree_bounds;
 use super::ToolbarAction;
 use super::TreeHit;
 use super::compose;
@@ -48,9 +52,22 @@ fn default_view_paints_title_and_selection_metadata() {
         .iter()
         .map(|block| block.text())
         .collect::<Vec<_>>();
-    assert!(texts.contains(&"ZUI DevTools"));
+    assert!(!texts.contains(&"ZUI DevTools"));
+    assert!(texts.contains(&"Styles"));
+    assert!(texts.contains(&"Elements"));
+    assert!(texts.contains(&"Computed"));
+    assert!(!texts.iter().any(|text| text.contains("Select Pick")));
+    assert!(
+        !texts
+            .iter()
+            .any(|text| text.contains("nodes in the latest frame"))
+    );
     assert!(texts.iter().any(|text| text.contains("Button")));
     assert!(texts.iter().any(|text| text.contains("size 80 × 30")));
+    assert!(texts.iter().any(|text| text.contains("position 10, 10")));
+    assert!(texts.iter().any(|text| text.contains("Box model")));
+    assert!(texts.iter().any(|text| text.contains("padding-top")));
+    assert!(texts.iter().any(|text| text.contains("padding-bottom")));
     let icons = scene
         .icons()
         .iter()
@@ -81,7 +98,7 @@ fn default_view_hit_tests_toolbar_and_full_tree_rows() {
     let child = frame.nodes()[1].id();
     let bounds = Rect::from_xywh(0.0, 0.0, 420.0, 520.0);
     assert_eq!(
-        toolbar_action_at(bounds, Point::new(300.0, 23.0)),
+        toolbar_action_at(bounds, Point::new(45.0, 23.0)),
         Some(ToolbarAction::Pick)
     );
     assert_eq!(
@@ -90,15 +107,30 @@ fn default_view_hit_tests_toolbar_and_full_tree_rows() {
     );
     assert_eq!(tree_rows(&frame, &handle).len(), 2);
     assert_eq!(
-        tree_hit_at(bounds, Point::new(20.0, 104.0), &frame, &handle),
+        tree_hit_at(
+            bounds,
+            Point::new(20.0, TOOLBAR_HEIGHT + 10.0),
+            &frame,
+            &handle,
+        ),
         Some(TreeHit::Toggle(root))
     );
     assert_eq!(
-        tree_hit_at(bounds, Point::new(45.0, 104.0), &frame, &handle),
+        tree_hit_at(
+            bounds,
+            Point::new(45.0, TOOLBAR_HEIGHT + 10.0),
+            &frame,
+            &handle,
+        ),
         Some(TreeHit::Select(root))
     );
     assert_eq!(
-        tree_hit_at(bounds, Point::new(45.0, 194.0), &frame, &handle),
+        tree_hit_at(
+            bounds,
+            Point::new(45.0, TOOLBAR_HEIGHT + ROW_HEIGHT + 10.0),
+            &frame,
+            &handle,
+        ),
         Some(TreeHit::Select(child))
     );
     let scene = compose(Size::new(420.0, 520.0), Some(&frame), &handle);
@@ -113,9 +145,25 @@ fn default_view_hit_tests_toolbar_and_full_tree_rows() {
     handle.toggle_node_expansion(root);
     assert_eq!(tree_rows(&frame, &handle).len(), 1);
     assert_eq!(
-        tree_hit_at(bounds, Point::new(20.0, 104.0), &frame, &handle),
+        tree_hit_at(
+            bounds,
+            Point::new(20.0, TOOLBAR_HEIGHT + 10.0),
+            &frame,
+            &handle,
+        ),
         Some(TreeHit::Toggle(root))
     );
+}
+
+#[test]
+fn default_view_splits_elements_tree_from_computed_panel() {
+    let content = Rect::from_xywh(0.0, TOOLBAR_HEIGHT, 900.0, 640.0);
+    let tree = tree_bounds(content);
+    let computed = computed_bounds(content);
+
+    assert_eq!(computed.size.width, 320.0);
+    assert_eq!(computed.origin.x, tree.right() + 1.0);
+    assert!(tree.size.width > computed.size.width);
 }
 
 #[test]

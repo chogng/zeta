@@ -1,6 +1,5 @@
 use crate::ui::Border;
 use crate::ui::Color;
-use crate::ui::FontFamily;
 use crate::ui::FontWeight;
 use crate::ui::InspectionFrame;
 use crate::ui::PaintIcon;
@@ -13,14 +12,14 @@ use crate::ui::UiScene;
 
 use super::DevToolsHandle;
 use super::assets;
-use super::view_text::metrics;
+use super::view_text::paint_computed;
 use super::view_text::paint_message;
 use super::view_text::paint_text;
-use super::view_text::source;
-use super::view_tree::ROW_HEIGHT;
+pub(crate) use super::view_tree::ROW_HEIGHT;
 use super::view_tree::TOOLBAR_HEIGHT;
 pub(crate) use super::view_tree::TreeHit;
 use super::view_tree::clamped_scroll;
+use super::view_tree::computed_bounds;
 use super::view_tree::tree_bounds;
 pub(crate) use super::view_tree::tree_hit_at;
 pub(crate) use super::view_tree::tree_rows;
@@ -67,15 +66,6 @@ pub(crate) fn compose(
             BORDER,
         )),
     );
-    paint_text(
-        &mut scene,
-        "ZUI DevTools",
-        Point::new(toolbar.origin.x + CONTENT_PADDING, toolbar.origin.y + 14.0),
-        150.0,
-        TextStyle::new(14.0, FOREGROUND)
-            .with_weight(FontWeight::Bold)
-            .with_line_height(18.0),
-    );
     paint_button(
         &mut scene,
         action_bounds(toolbar, ToolbarAction::Pick),
@@ -87,6 +77,7 @@ pub(crate) fn compose(
         },
         devtools.is_picking(),
     );
+    paint_toolbar_tab(&mut scene, elements_tab_bounds(toolbar), "Elements", true);
     paint_button(
         &mut scene,
         action_bounds(toolbar, ToolbarAction::Close),
@@ -107,37 +98,21 @@ pub(crate) fn compose(
             );
             return;
         };
-        let message = if devtools.is_picking() {
-            "Move over the application window and click an element to inspect it."
-        } else {
-            "Select Pick, then move over the application window to inspect it."
-        };
-        paint_text(
-            scene,
-            message,
-            Point::new(
-                content.origin.x + CONTENT_PADDING,
-                content.origin.y + CONTENT_PADDING,
-            ),
-            (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
-            TextStyle::new(12.0, MUTED).with_line_height(18.0),
-        );
-        paint_text(
-            scene,
-            &format!("{} nodes in the latest frame", frame.nodes().len()),
-            Point::new(
-                content.origin.x + CONTENT_PADDING,
-                content.origin.y + CONTENT_PADDING + 22.0,
-            ),
-            (content.size.width - CONTENT_PADDING * 2.0).max(0.0),
-            TextStyle::new(11.0, MUTED)
-                .with_family(FontFamily::Monospace)
-                .with_line_height(15.0),
-        );
         let tree = tree_bounds(content);
+        let computed = computed_bounds(content);
+        if !computed.is_empty() {
+            scene.draw_rect(PaintRect::new(computed, Color::WHITE));
+        }
+        if computed.origin.x > tree.right() {
+            scene.draw_rect(PaintRect::new(
+                Rect::from_xywh(tree.right(), content.origin.y, 1.0, content.size.height),
+                BORDER,
+            ));
+        }
         let rows = tree_rows(frame, devtools);
-        let selected_id = devtools
-            .selection()
+        let selection = devtools.selection();
+        let selected_id = selection
+            .as_ref()
             .and_then(|selection| selection.target().map(|node| node.id()));
         if let Some(index) =
             selected_id.and_then(|id| rows.iter().position(|tree_row| tree_row.id == id))
@@ -189,6 +164,11 @@ pub(crate) fn compose(
                 BORDER,
             ));
         }
+        paint_computed(
+            scene,
+            computed,
+            selection.as_ref().and_then(|selection| selection.target()),
+        );
     });
     scene
 }
@@ -224,7 +204,7 @@ fn content_bounds(bounds: Rect) -> Rect {
 
 fn action_bounds(toolbar: Rect, action: ToolbarAction) -> Rect {
     let x = match action {
-        ToolbarAction::Pick => toolbar.right() - ACTION_WIDTH * 2.0 - CONTENT_PADDING,
+        ToolbarAction::Pick => toolbar.origin.x + CONTENT_PADDING,
         ToolbarAction::Close => toolbar.right() - ACTION_WIDTH - CONTENT_PADDING,
     };
     Rect::from_xywh(
@@ -232,6 +212,16 @@ fn action_bounds(toolbar: Rect, action: ToolbarAction) -> Rect {
         toolbar.origin.y + (toolbar.size.height - ACTION_HEIGHT) * 0.5,
         ACTION_WIDTH - 6.0,
         ACTION_HEIGHT,
+    )
+}
+
+fn elements_tab_bounds(toolbar: Rect) -> Rect {
+    let pick = action_bounds(toolbar, ToolbarAction::Pick);
+    Rect::from_xywh(
+        pick.right() + CONTENT_PADDING,
+        toolbar.origin.y,
+        88.0,
+        toolbar.size.height,
     )
 }
 
@@ -275,6 +265,30 @@ fn paint_button(
     );
 }
 
+fn paint_toolbar_tab(scene: &mut UiScene, bounds: Rect, label: &str, selected: bool) {
+    let color = if selected { ACCENT } else { MUTED };
+    paint_text(
+        scene,
+        label,
+        Point::new(bounds.origin.x + 12.0, bounds.origin.y + 14.0),
+        (bounds.size.width - 24.0).max(0.0),
+        TextStyle::new(12.0, color)
+            .with_weight(FontWeight::Bold)
+            .with_line_height(18.0),
+    );
+    if selected {
+        scene.draw_rect(PaintRect::new(
+            Rect::from_xywh(
+                bounds.origin.x,
+                bounds.bottom() - 2.0,
+                bounds.size.width,
+                2.0,
+            ),
+            ACCENT,
+        ));
+    }
+}
+
 fn paint_row(
     scene: &mut UiScene,
     row: Rect,
@@ -310,24 +324,6 @@ fn paint_row(
         TextStyle::new(12.0, if selected { ACCENT } else { FOREGROUND })
             .with_weight(FontWeight::Bold)
             .with_line_height(16.0),
-    );
-    paint_text(
-        scene,
-        &metrics(node),
-        Point::new(label_origin.x, row.origin.y + 28.0),
-        (width - 18.0).max(0.0),
-        TextStyle::new(11.0, FOREGROUND)
-            .with_family(FontFamily::Monospace)
-            .with_line_height(15.0),
-    );
-    paint_text(
-        scene,
-        &source(node),
-        Point::new(label_origin.x, row.origin.y + 48.0),
-        (width - 18.0).max(0.0),
-        TextStyle::new(10.0, MUTED)
-            .with_family(FontFamily::Monospace)
-            .with_line_height(14.0),
     );
 }
 

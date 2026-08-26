@@ -5,11 +5,13 @@ use crate::ui::Rect;
 
 use super::DevToolsHandle;
 
-pub(crate) const ROW_HEIGHT: f32 = 90.0;
-pub(crate) const TREE_HEADER_HEIGHT: f32 = 48.0;
-pub(crate) const TOOLBAR_HEIGHT: f32 = 46.0;
+pub(crate) const ROW_HEIGHT: f32 = 32.0;
+pub(crate) const TOOLBAR_HEIGHT: f32 = 48.0;
+pub(crate) const COMPUTED_PANEL_WIDTH: f32 = 320.0;
 
 const CONTENT_PADDING: f32 = 16.0;
+const TREE_MIN_WIDTH: f32 = 240.0;
+const PANEL_DIVIDER_WIDTH: f32 = 1.0;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TreeRow {
@@ -83,12 +85,11 @@ pub(crate) fn tree_hit_at(
 }
 
 pub(crate) fn tree_bounds(content: Rect) -> Rect {
-    Rect::from_xywh(
-        content.origin.x,
-        content.origin.y + TREE_HEADER_HEIGHT,
-        content.size.width,
-        (content.size.height - TREE_HEADER_HEIGHT).max(0.0),
-    )
+    split_bounds(content).0
+}
+
+pub(crate) fn computed_bounds(content: Rect) -> Rect {
+    split_bounds(content).1
 }
 
 pub(crate) fn clamped_scroll(offset: f32, row_count: usize, viewport_height: f32) -> f32 {
@@ -129,4 +130,28 @@ fn append_tree_rows(
 fn disclosure_bounds(row: Rect, depth: usize) -> Rect {
     let x = row.origin.x + CONTENT_PADDING + depth as f32 * 12.0;
     Rect::from_xywh(x, row.origin.y + 4.0, 18.0, 20.0)
+}
+
+fn split_bounds(content: Rect) -> (Rect, Rect) {
+    let divider = PANEL_DIVIDER_WIDTH.min(content.size.width.max(0.0));
+    let available = (content.size.width - divider).max(0.0);
+    let computed_width = if available >= TREE_MIN_WIDTH + COMPUTED_PANEL_WIDTH {
+        COMPUTED_PANEL_WIDTH
+    } else {
+        (available * 0.42).max(0.0).min(available)
+    };
+    let tree_width = (available - computed_width).max(0.0);
+    let tree = Rect::from_xywh(
+        content.origin.x,
+        content.origin.y,
+        tree_width,
+        content.size.height,
+    );
+    let computed = Rect::from_xywh(
+        tree.right() + divider,
+        content.origin.y,
+        computed_width,
+        content.size.height,
+    );
+    (tree, computed)
 }

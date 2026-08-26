@@ -57,8 +57,8 @@ where
             return;
         }
 
-        let options = WindowOptions::new("ZUI DevTools")
-            .with_inner_size(crate::window::LogicalSize::new(440.0, 720.0))
+        let options = WindowOptions::new("Developer Tools")
+            .with_inner_size(crate::window::LogicalSize::new(900.0, 720.0))
             .with_chrome(WindowChrome::Native);
         let runtime = match WindowRuntime::open(
             event_loop,
@@ -234,7 +234,9 @@ where
             } => self.handle_devtools_click(window, owner),
             WindowEvent::MouseWheel { delta } => {
                 let amount = match delta {
-                    MouseScrollDelta::LineDelta(_, y) => *y * 0.5 * 90.0,
+                    MouseScrollDelta::LineDelta(_, y) => {
+                        *y * 0.5 * crate::devtools::view::ROW_HEIGHT
+                    }
                     MouseScrollDelta::PixelDelta(position) => position.y as f32,
                 };
                 let Some(owner_runtime) = self.windows.get(&owner) else {

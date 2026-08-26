@@ -12,6 +12,7 @@ use crate::window::WindowId;
 use crate::window::WindowMetrics;
 
 pub(crate) mod assets;
+mod computed_contract;
 mod inspection;
 pub(crate) mod view;
 mod view_state;
