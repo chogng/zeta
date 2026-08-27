@@ -31,8 +31,16 @@ pub(crate) struct SelectionItem {
     id: Option<SelectionItemId>,
     label: String,
     description: Option<String>,
+    columns: Option<SelectionItemColumns>,
     selection_foreground: Option<Color>,
     preview: Option<SelectionPreview>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct SelectionItemColumns {
+    pub(super) leading: String,
+    pub(super) middle: String,
+    pub(super) trailing: String,
 }
 
 impl SelectionItem {
@@ -41,6 +49,7 @@ impl SelectionItem {
             id: None,
             label: label.into(),
             description: None,
+            columns: None,
             selection_foreground: None,
             preview: None,
         }
@@ -53,6 +62,22 @@ impl SelectionItem {
 
     pub(crate) fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    pub(crate) fn with_columns(
+        mut self,
+        leading: impl Into<String>,
+        middle: impl Into<String>,
+        trailing: impl Into<String>,
+    ) -> Self {
+        let columns = SelectionItemColumns {
+            leading: leading.into(),
+            middle: middle.into(),
+            trailing: trailing.into(),
+        };
+        self.description = Some(format!("{} {}", columns.middle, columns.trailing));
+        self.columns = Some(columns);
         self
     }
 
@@ -72,6 +97,10 @@ impl SelectionItem {
 
     pub(crate) fn description(&self) -> Option<&str> {
         self.description.as_deref()
+    }
+
+    pub(super) fn columns(&self) -> Option<&SelectionItemColumns> {
+        self.columns.as_ref()
     }
 
     pub(crate) fn id(&self) -> Option<&SelectionItemId> {

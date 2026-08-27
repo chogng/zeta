@@ -338,13 +338,13 @@ impl App {
                     .push(SelectionActions::ShortcutCapture(capture));
                 None
             }
-            ShortcutAction::ClearCustom {
+            ShortcutAction::ClearUser {
                 command_id,
                 revision,
             } => Some(AppCommand::EditShortcut(ShortcutEdit {
                 expected_revision: revision,
                 command_id,
-                kind: ShortcutEditKind::ClearCustom,
+                kind: ShortcutEditKind::ClearUser,
             })),
         }
     }

@@ -101,7 +101,7 @@ all clients ── semantic command only ──→ App Server
 - 设置 UI、快捷键提示样式和诊断展示；
 - 用户配置的产品命令 catalog、资源路径和设置 UI。
 
-Zeta Code 把根级运行时结构称为 `AppKeymap`，不称为 `GlobalKeymap`。用户规则没有 `when` 时表示“在本产品所有上下文中适用”，这是规则作用域，不是另一个运行时对象。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有。单键先交给当前 component，只有未消费事件进入应用级 fallback；多段 Chord prefix 则先经过应用级 matcher，避免首段被文本组件吞掉。应用级内建声明同时生成 Resolver 注册和 `/shortcuts` 可配置项，固定 component 操作也由该 feature 汇总展示；附加 Shift、Alt、Meta 或 Hyper 不会匹配只声明 Control 的组合。
+Zeta Code 把根级运行时结构称为 `AppKeymap`，不称为 `GlobalKeymap`。用户规则没有 `when` 时表示“在本产品所有上下文中适用”，这是规则作用域，不是另一个运行时对象。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有。单键先交给当前 component，只有未消费事件进入应用级 fallback；多段 Chord prefix 则先经过应用级 matcher，避免首段被文本组件吞掉。应用级 default 声明同时生成 Resolver 注册和 `/shortcuts` 可配置项，固定 component 操作也由该 feature 汇总展示；附加 Shift、Alt、Meta 或 Hyper 不会匹配只声明 Control 的组合。
 
 `AppKeymap` 已拥有一至四段 Chord 的 pending sequence、1 秒超时、上下文变化取消、Esc 取消、错误后续键透传和 footer 提示。当前内建应用级绑定仍都是单段；以后增加多段声明不再需要建立第二套状态机。`Esc Esc` rewind 保留为根界面的专用交互：普通 Esc 在 Chord pending 时只负责取消，不同时推进 rewind。
 
@@ -183,14 +183,14 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 
 共享 `zeta-keybinding` 只编译 bytes，不读文件、不知道 profile 路径；文件大小限制、轮询、诊断呈现和写入由产品 host 拥有。
 
-`/shortcuts` 只新增、替换或清除目标 command 的字符串规则；固定操作项只读。“替换自定义项”不会删除 Builtin 默认键，也不会改写 `command: null` blocker。需要禁用默认键、添加 `when` 或设置平台覆盖时继续直接编辑 JSON。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续使用 JSON。
+`/shortcuts` 只新增、替换或清除目标 command 的 User 字符串规则；固定操作项只读。“替换 User 项”不会删除 default 键位，也不会改写 `command: null` blocker。需要禁用 default 键位、添加 `when` 或设置平台覆盖时继续直接编辑 JSON。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续使用 JSON。
 
 ### 6.4 设置界面与后续边界
 
 | 阶段 | 状态 | 退出条件 |
 | --- | --- | --- |
 | 严格资源 schema、User 覆盖/blocker、平台覆盖、`when`、Chord 与热重载 | Current | Zeta Code、App 和共享 core 测试持续覆盖原子替换 |
-| Zeta Code 可搜索的 Keyboard Shortcuts Pane | Current | `/shortcuts` 汇总固定操作键，并展示 command、默认/用户键位、来源、诊断和资源路径；可配置项只消费 `AppKeymap` snapshot |
+| Zeta Code 可搜索的 Keyboard Shortcuts Pane | Current | `/shortcuts` 以“快捷键、职责、default/user 来源”三列汇总 default 与 User 键位，不展示内部 command ID；诊断和资源路径仍然可见，可配置项只消费 `AppKeymap` snapshot |
 | Zeta Code 录制与原子保存 | Current | 单键/两段 Chord 录制只在临时 Pane 中截获输入；revision 过期时拒绝保存，完整编译成功后才原子替换文件和运行时规则 |
 | Profile 切换 | Planned boundary | host 先切换 active profile，再给端侧资源 owner 一个新 generation；旧 watcher 不得覆盖新 profile |
 | Settings Sync/导入导出 | Deferred | 先定义 profile 同步 authority、冲突格式和隐私边界 |

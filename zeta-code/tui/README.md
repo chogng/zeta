@@ -431,7 +431,7 @@ transient 永远不决定 completed/failed/interrupted。
 
 `AppKeymap` 支持一至四段 Chord，pending 后在 footer 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是独立的根级状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
 
-用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 同时展示固定操作键，以及应用级绑定的默认与自定义来源、command ID、诊断和资源路径；选择可配置 action 后可替换该 action 的自定义项、追加单键或两段 Chord、清除自定义项，但不会移除 Builtin 默认键或 `command: null` blocker。直接编辑 JSON 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的资源 revision，再完整编译临时规则并原子替换文件与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
+用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 以“快捷键、职责、default/user 来源”三列展示固定操作键和应用级绑定，内部 command ID 不进入界面；选择可配置 action 后可替换该 action 的 User 项、追加单键或两段 Chord、清除 User 项，但不会移除 default 键位或 `command: null` blocker。直接编辑 JSON 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的资源 revision，再完整编译临时规则并原子替换文件与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 
 ```text
 Ready / Error

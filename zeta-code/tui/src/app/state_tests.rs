@@ -503,7 +503,7 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
                 command_id: "zetaCode.action.cycleApprovalMode".into(),
                 kind: ShortcutEditKind::Set {
                     key: "ctrl+y".into(),
-                    intent: ShortcutEditIntent::ReplaceCustom,
+                    intent: ShortcutEditIntent::ReplaceUser,
                 },
             }
         ))

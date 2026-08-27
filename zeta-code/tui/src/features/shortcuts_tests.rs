@@ -119,7 +119,7 @@ fn shortcut_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
         .apply_edit(&edit, &mut keymap, started + Duration::from_millis(10))
         .unwrap();
 
-    assert!(notice.contains("Added `ctrl+y`"));
+    assert_eq!(notice, "Added user shortcut `ctrl+y`.");
     let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     assert_eq!(saved.as_array().unwrap().len(), 2);
     assert_eq!(

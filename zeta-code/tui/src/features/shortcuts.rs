@@ -40,7 +40,7 @@ pub(crate) enum ShortcutCaptureMode {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ShortcutEditIntent {
-    ReplaceCustom,
+    ReplaceUser,
     AddAlternate,
 }
 
@@ -50,7 +50,7 @@ pub(crate) enum ShortcutEditKind {
         key: String,
         intent: ShortcutEditIntent,
     },
-    ClearCustom,
+    ClearUser,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -198,7 +198,7 @@ fn edited_document(
 
     let notice = match &edit.kind {
         ShortcutEditKind::Set { key, intent } => {
-            if matches!(intent, ShortcutEditIntent::ReplaceCustom) {
+            if matches!(intent, ShortcutEditIntent::ReplaceUser) {
                 entries.retain(|entry| !command_matches(entry));
             } else if entries.iter().any(|entry| {
                 command_matches(entry)
@@ -215,27 +215,22 @@ fn edited_document(
                 "command": edit.command_id,
             }));
             match intent {
-                ShortcutEditIntent::ReplaceCustom => {
-                    format!(
-                        "Set the custom shortcut for `{}` to `{key}`.",
-                        edit.command_id
-                    )
-                }
+                ShortcutEditIntent::ReplaceUser => format!("Set user shortcut to `{key}`."),
                 ShortcutEditIntent::AddAlternate => {
-                    format!("Added `{key}` to `{}`.", edit.command_id)
+                    format!("Added user shortcut `{key}`.")
                 }
             }
         }
-        ShortcutEditKind::ClearCustom => {
+        ShortcutEditKind::ClearUser => {
             let before = entries.len();
             entries.retain(|entry| !command_matches(entry));
             if entries.len() == before {
                 return Ok((
                     snapshot_contents(snapshot),
-                    format!("No change: `{}` has no custom shortcuts.", edit.command_id),
+                    "No change: this action has no user shortcuts.".to_owned(),
                 ));
             }
-            format!("Cleared custom shortcuts for `{}`.", edit.command_id)
+            "Cleared user shortcuts.".to_owned()
         }
     };
 

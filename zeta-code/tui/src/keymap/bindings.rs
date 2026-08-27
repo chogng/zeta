@@ -69,22 +69,10 @@ impl AppKeymapAction {
             Self::Suspend => "Suspend Zeta",
         }
     }
-
-    const fn description(self) -> &'static str {
-        match self {
-            Self::CycleApprovalMode => "Cycle the approval mode used by the next turn.",
-            Self::RootEscape => "Handle the root Escape sequence.",
-            Self::OpenRewind => "Open rewind checkpoints without simulating Escape twice.",
-            Self::ReadClipboardImage => "Attach an image from the system clipboard.",
-            Self::InterruptOrQuit => "Interrupt an active turn or exit while idle.",
-            Self::CopyLastResponse => "Copy the latest Zeta response.",
-            Self::Suspend => "Suspend Zeta on Unix and restore it after foregrounding.",
-        }
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct KeymapCustomBindingSnapshot {
+pub(crate) struct KeymapUserBindingSnapshot {
     pub(crate) key: String,
     pub(crate) when: Option<String>,
 }
@@ -93,9 +81,8 @@ pub(crate) struct KeymapCustomBindingSnapshot {
 pub(crate) struct KeymapActionSnapshot {
     pub(crate) command_id: &'static str,
     pub(crate) label: &'static str,
-    pub(crate) description: &'static str,
     pub(crate) default_bindings: Vec<String>,
-    pub(crate) custom_bindings: Vec<KeymapCustomBindingSnapshot>,
+    pub(crate) user_bindings: Vec<KeymapUserBindingSnapshot>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -281,7 +268,6 @@ impl AppKeymap {
                     .command_id()
                     .expect("a user-bindable TUI action has a command ID"),
                 label: action.label(),
-                description: action.description(),
                 default_bindings: APP_KEYBINDINGS
                     .iter()
                     .filter(|binding| binding.action == action)
@@ -291,12 +277,12 @@ impl AppKeymap {
                             .expect("fixed TUI binding must use portable keybinding syntax")
                     })
                     .collect(),
-                custom_bindings: self
+                user_bindings: self
                     .user_bindings
                     .iter()
                     .filter_map(|binding| match binding.target {
                         UserBindingTarget::Command(candidate) if candidate == action => {
-                            Some(KeymapCustomBindingSnapshot {
+                            Some(KeymapUserBindingSnapshot {
                                 key: serialize_key_sequence(&binding.keybinding),
                                 when: binding.when_source.clone(),
                             })

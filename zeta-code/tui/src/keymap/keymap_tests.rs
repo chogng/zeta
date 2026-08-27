@@ -346,7 +346,7 @@ fn user_resource_rejects_unknown_commands_and_context_keys() {
 }
 
 #[test]
-fn setup_snapshot_separates_default_and_custom_bindings() {
+fn setup_snapshot_separates_default_and_user_bindings() {
     let rules = compile_app_user_bindings(
         br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
         HostPlatform::Linux,
@@ -362,9 +362,9 @@ fn setup_snapshot_separates_default_and_custom_bindings() {
         .unwrap();
 
     assert_eq!(copy.default_bindings, vec!["ctrl+o"]);
-    assert_eq!(copy.custom_bindings.len(), 1);
-    assert_eq!(copy.custom_bindings[0].key, "ctrl+y");
-    assert_eq!(copy.custom_bindings[0].when, None);
+    assert_eq!(copy.user_bindings.len(), 1);
+    assert_eq!(copy.user_bindings[0].key, "ctrl+y");
+    assert_eq!(copy.user_bindings[0].when, None);
 }
 
 #[test]

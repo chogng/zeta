@@ -33,7 +33,7 @@ pub(crate) enum ShortcutAction {
         intent: ShortcutEditIntent,
         mode: ShortcutCaptureMode,
     },
-    ClearCustom {
+    ClearUser {
         command_id: String,
         revision: u64,
     },
@@ -51,19 +51,28 @@ pub(crate) fn shortcut_view(
     revision: u64,
 ) -> ShortcutView {
     let mut item_actions = BTreeMap::new();
-    let all_items = actions
-        .iter()
-        .cloned()
-        .map(|action| action_item(action, revision, &mut item_actions))
-        .chain(fixed_shortcut_items())
-        .collect();
-    let customized = actions
-        .iter()
-        .filter(|action| !action.custom_bindings.is_empty())
-        .cloned()
-        .map(|action| action_item(action, revision, &mut item_actions))
-        .collect::<Vec<_>>();
-    let customized = non_empty(customized, "No customized shortcuts");
+    let mut all_items = Vec::new();
+    let mut user_items = Vec::new();
+    for action in actions {
+        append_action_items(
+            &mut all_items,
+            action.clone(),
+            revision,
+            true,
+            true,
+            &mut item_actions,
+        );
+        append_action_items(
+            &mut user_items,
+            action,
+            revision,
+            false,
+            true,
+            &mut item_actions,
+        );
+    }
+    all_items.extend(fixed_shortcut_items());
+    let user_items = non_empty(user_items, "No user shortcuts");
     let diagnostic_items = non_empty(
         diagnostics
             .iter()
@@ -81,7 +90,7 @@ pub(crate) fn shortcut_view(
                 "Shortcuts",
                 vec![
                     SelectionTab::new("All", all_items),
-                    SelectionTab::new("Customized", customized),
+                    SelectionTab::new("User", user_items),
                     SelectionTab::new("Diagnostics", diagnostic_items),
                 ],
             )
@@ -99,22 +108,22 @@ pub(crate) fn action_menu(action: KeymapActionSnapshot, revision: u64) -> Shortc
     push_action(
         &mut items,
         &mut actions,
-        "Replace custom shortcut with a key",
+        "Replace user shortcut with a key",
         ShortcutAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::ReplaceCustom,
+            intent: ShortcutEditIntent::ReplaceUser,
             mode: ShortcutCaptureMode::SingleKey,
         },
     );
     push_action(
         &mut items,
         &mut actions,
-        "Replace custom shortcut with a chord",
+        "Replace user shortcut with a chord",
         ShortcutAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::ReplaceCustom,
+            intent: ShortcutEditIntent::ReplaceUser,
             mode: ShortcutCaptureMode::Chord,
         },
     );
@@ -140,12 +149,12 @@ pub(crate) fn action_menu(action: KeymapActionSnapshot, revision: u64) -> Shortc
             mode: ShortcutCaptureMode::Chord,
         },
     );
-    if !action.custom_bindings.is_empty() {
+    if !action.user_bindings.is_empty() {
         push_action(
             &mut items,
             &mut actions,
-            "Clear custom shortcuts",
-            ShortcutAction::ClearCustom {
+            "Clear user shortcuts",
+            ShortcutAction::ClearUser {
                 command_id: action.command_id.to_owned(),
                 revision,
             },
@@ -267,22 +276,76 @@ impl ShortcutCaptureState {
     }
 }
 
-fn action_item(
+fn append_action_items(
+    items: &mut Vec<SelectionItem>,
     action: KeymapActionSnapshot,
     revision: u64,
+    include_default: bool,
+    include_user: bool,
     actions: &mut BTreeMap<SelectionItemId, ShortcutAction>,
-) -> SelectionItem {
-    let item_id = SelectionItemId::new(action.command_id);
-    let item = SelectionItem::new(action.label)
-        .with_id(item_id.clone())
-        .with_description(format!(
-            "{}  ·  {}  ·  {}",
-            binding_summary(&action),
-            action.command_id,
-            action.description
-        ));
-    actions.insert(item_id, ShortcutAction::OpenAction { action, revision });
-    item
+) {
+    let default_bindings = if action.default_bindings.is_empty() {
+        vec!["unbound".to_owned()]
+    } else {
+        action.default_bindings.clone()
+    };
+    if include_default {
+        for (index, binding) in default_bindings.into_iter().enumerate() {
+            push_action_item(
+                items,
+                actions,
+                &action,
+                revision,
+                binding,
+                action.label.to_owned(),
+                "default",
+                format!("default-{index}"),
+            );
+        }
+    }
+    if include_user {
+        for (index, binding) in action.user_bindings.iter().enumerate() {
+            let responsibility = match &binding.when {
+                Some(condition) => format!("{}  when {condition}", action.label),
+                None => action.label.to_owned(),
+            };
+            push_action_item(
+                items,
+                actions,
+                &action,
+                revision,
+                binding.key.clone(),
+                responsibility,
+                "user",
+                format!("user-{index}"),
+            );
+        }
+    }
+}
+
+fn push_action_item(
+    items: &mut Vec<SelectionItem>,
+    actions: &mut BTreeMap<SelectionItemId, ShortcutAction>,
+    action: &KeymapActionSnapshot,
+    revision: u64,
+    key: String,
+    responsibility: String,
+    source: &'static str,
+    suffix: String,
+) {
+    let item_id = SelectionItemId::new(format!("{}-{suffix}", action.command_id));
+    items.push(
+        SelectionItem::new(&key)
+            .with_id(item_id.clone())
+            .with_columns(key, responsibility, source),
+    );
+    actions.insert(
+        item_id,
+        ShortcutAction::OpenAction {
+            action: action.clone(),
+            revision,
+        },
+    );
 }
 
 fn binding_summary(action: &KeymapActionSnapshot) -> String {
@@ -291,11 +354,11 @@ fn binding_summary(action: &KeymapActionSnapshot) -> String {
     } else {
         action.default_bindings.join(", ")
     };
-    if action.custom_bindings.is_empty() {
-        return format!("Default: {defaults}");
+    if action.user_bindings.is_empty() {
+        return format!("default: {defaults}");
     }
-    let custom = action
-        .custom_bindings
+    let user = action
+        .user_bindings
         .iter()
         .map(|binding| match &binding.when {
             Some(condition) => format!("{} when {condition}", binding.key),
@@ -303,7 +366,7 @@ fn binding_summary(action: &KeymapActionSnapshot) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ");
-    format!("Default: {defaults}  ·  Custom: {custom}")
+    format!("default: {defaults}  ·  user: {user}")
 }
 
 fn push_action(
@@ -351,9 +414,7 @@ fn fixed_shortcut_items() -> impl Iterator<Item = SelectionItem> {
         ),
     ]
     .into_iter()
-    .map(|(key, description)| {
-        SelectionItem::new(key).with_description(format!("Built in  ·  {description}"))
-    })
+    .map(|(key, description)| SelectionItem::new(key).with_columns(key, description, "default"))
 }
 
 fn is_cancel(key: KeyEvent) -> bool {
