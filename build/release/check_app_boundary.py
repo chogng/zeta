@@ -18,8 +18,7 @@ EXPECTED_APP_MEMBERS = {
     "app/keybindings",
     "app/settings",
     "app/terminal-workspace",
-    "app/ui",
-    "app/workbench-controller",
+    "app/workbench",
     "app/zui",
     "app/zui-demo",
 }

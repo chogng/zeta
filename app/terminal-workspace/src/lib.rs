@@ -9,6 +9,10 @@ use anyhow::Result;
 use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 
+mod pane_binding;
+
+pub use pane_binding::PaneBinding;
+
 /// Process-local identity for one terminal runtime.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TerminalSessionKey(u64);

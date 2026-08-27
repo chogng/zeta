@@ -90,7 +90,7 @@ zeta-rs/
 ├── tool-executor/         # target local process execution boundary
 ```
 
-产品宿主不属于共享后端：`app` 的 `zui`、`zeta-ui-components`、`zeta-workbench-ui`、renderer、`wgpu` 和 `winit` 位于
+产品宿主不属于共享后端：`app` 的 `zui`、`zeta-ui-components`、`zeta-workbench`、renderer、`wgpu` 和 `winit` 位于
 `app/` 的直接子 crate；`zeta-code` 的 `zeta-cli` 与 `zeta-tui` 位于 `zeta-code/`。它们仍加入同一个
 根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 

@@ -45,14 +45,13 @@ use zeta_editor::CodeEditorStyle;
 use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
+use zeta_terminal_workspace::PaneBinding;
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui_components::{Resizable, SashOrientation, SashPointerPresence};
-use zeta_workbench_controller::{
-    InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneHostScope, PaneInput,
-    PaneInputKind, PaneSplitDirection, PaneSplitId, TabInputKey, WorkbenchController,
+use zeta_workbench::{
+    InspectorPartState, LogicalViewport, PaneGroupId as PaneId, PaneHostScope, PaneInput,
+    PaneInputKind, PaneSplitDirection, PaneSplitId, TabContainerState, TabInputKey, WorkbenchHost,
 };
-use zeta_workbench_layout::LogicalViewport;
-use zeta_workbench_ui::TabContainerState;
 use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
 

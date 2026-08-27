@@ -2,12 +2,12 @@ use super::PaneHost;
 use super::PaneHostScope;
 use super::PaneKey;
 use super::WorkbenchHost;
-use zeta_workbench::PaneGroupId;
-use zeta_workbench::PaneInput;
-use zeta_workbench::PanePart;
-use zeta_workbench::PaneSplitDirection;
-use zeta_workbench::TabInputKey;
-use zeta_workbench_layout::LogicalViewport;
+use crate::LogicalViewport;
+use crate::PaneGroupId;
+use crate::PaneInput;
+use crate::PanePart;
+use crate::PaneSplitDirection;
+use crate::TabInputKey;
 
 #[test]
 fn pane_host_mounts_a_product_neutral_binding() {
@@ -25,7 +25,7 @@ fn pane_host_mounts_a_product_neutral_binding() {
         )
         .expect("bound pane should mount");
 
-    assert_eq!(mount.kind(), zeta_workbench::PaneInputKind::Settings);
+    assert_eq!(mount.kind(), crate::PaneInputKind::Settings);
     assert_eq!(mount.binding_id(), binding_id);
     assert_eq!(*mount.binding(), "settings");
     assert_eq!(mount.input(), &PaneInput::settings());
@@ -69,17 +69,17 @@ fn workbench_host_delegates_layout_without_mutating_model() {
     let host = WorkbenchHost::<()>::new();
     let before = host.workbench().clone();
     let layout = host.layout(
-        zeta_workbench_layout::WorkbenchLayoutSpec::new(
+        crate::WorkbenchLayoutSpec::new(
             32.0,
-            zeta_workbench_layout::TabContainerLayoutSpec::new(
-                zeta_workbench_layout::PartVisibility::Collapsed,
+            crate::TabContainerLayoutSpec::new(
+                crate::PartVisibility::Collapsed,
                 200.0,
                 160.0,
                 480.0,
                 240.0,
             ),
-            zeta_workbench_layout::InspectorLayoutSpec::new(
-                zeta_workbench_layout::PartVisibility::Collapsed,
+            crate::InspectorLayoutSpec::new(
+                crate::PartVisibility::Collapsed,
                 320.0,
                 240.0,
                 560.0,
@@ -101,14 +101,13 @@ fn closing_a_workbench_tab_cleans_up_its_bindings() {
     let mut host = WorkbenchHost::<&'static str>::new();
     let session_id = zeta_protocol::SessionId::new("session-1").expect("valid session id");
     host.workbench_mut().upsert_session_input(
-        zeta_workbench::TabInput::session(
+        crate::TabInput::session(
             session_id.clone(),
-            zeta_workbench::TabInputMetadata::new("Session", "/workspace")
-                .with_status_label("Active"),
+            crate::TabInputMetadata::new("Session", "/workspace").with_status_label("Active"),
         ),
-        zeta_workbench::PaneInput::terminal(session_id.clone()),
+        crate::PaneInput::terminal(session_id.clone()),
     );
-    let tab_key = zeta_workbench::TabInputKey::session(session_id);
+    let tab_key = crate::TabInputKey::session(session_id);
     let pane = host
         .workbench()
         .pane_container(&tab_key)
@@ -120,10 +119,7 @@ fn closing_a_workbench_tab_cleans_up_its_bindings() {
 
     let (closed, bindings) = host.close_tab(&tab_key).expect("session tab should close");
 
-    assert_eq!(
-        closed.active_tab(),
-        Some(&zeta_workbench::TabInputKey::Settings)
-    );
+    assert_eq!(closed.active_tab(), Some(&crate::TabInputKey::Settings));
     assert_eq!(bindings, vec!["runtime"]);
     assert!(host.pane_host().binding(&key).is_none());
 }

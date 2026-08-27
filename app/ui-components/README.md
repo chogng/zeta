@@ -23,12 +23,12 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 | Tab surface 状态与横/纵 TabList 排列 | `zeta-ui-components::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
 | NavBar 导航容器 | 计划中的 `zeta-ui-components` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
 | 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
-| Terminal/heterogeneous PaneGroup geometry projection | [`zeta-workbench-layout`](../workbench-layout/README.md) + `zui::GridLayout` | 委托；布局 crate 消费 host-owned `PaneNode`，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput、runtime 或 active Pane |
-| Workbench 的 Titlebar、Sessions、Main、Inspector 结构几何 | [`zeta-workbench-layout`](../workbench-layout/README.md) | 委托；本 crate 不拥有 Workbench 拓扑、TabInput state 或产品布局 |
-| Workbench Titlebar、TabContainer、Toolbar、交互标识和界面状态 | [`zeta-workbench-ui`](../workbench-ui/README.md) | 委托；本 crate 只提供被其组合的通用控件 |
-| Workbench 模型与 Pane binding | [`zeta-workbench`](../workbench/README.md) + [`zeta-workbench-host`](../workbench-host/README.md) | 委托；本 crate 不拥有业务状态或 runtime |
+| Terminal/heterogeneous PaneGroup geometry projection | [`zeta-workbench`](../workbench/README.md) + `zui::GridLayout` | 委托；Workbench 消费 `PaneNode`，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput 对应的具体 runtime |
+| Workbench 的 Titlebar、Sessions、Main、Inspector 结构几何 | [`zeta-workbench`](../workbench/README.md) | 委托；本 crate 不拥有 Workbench 拓扑、TabInput state 或产品布局 |
+| Workbench Titlebar、TabContainer、Toolbar、交互标识和界面状态 | [`zeta-workbench`](../workbench/README.md) | 委托；本 crate 只提供被其组合的通用控件 |
+| Workbench 模型与 Pane binding | [`zeta-workbench`](../workbench/README.md) | 委托；本 crate 不拥有业务状态或 runtime |
 | Workbench TabPart、TabGroup、TabInput 的逻辑身份、分组和 active selection | `zeta-workbench` + product host | 委托；模型不含方向和 `ElementId`，横向/纵向 Tab surface 与具体内容由 host 的 projection/scene 负责 |
-| PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` + `zeta-workbench-host` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
+| PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
 | Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `app/src/features/workspace` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui-components` |
 | Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
 | 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
@@ -52,7 +52,7 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 依赖方向：
 
 ```text
-product host → zeta-workbench-host → zeta-workbench-layout → zui
+product host → zeta-workbench → zui
 product host → zeta-ui-components → zui
 product → zui public facade → private framework modules
 
@@ -68,7 +68,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 不需要依赖 app 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
-导航和 Pane 组合的跨 crate contract 由 [`LAYOUT.md`](../LAYOUT.md) 维护。当前 `zeta-ui-components` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 结构布局位于 [`zeta-workbench-layout`](../workbench-layout/README.md)，模型和 binding 位于 [`zeta-workbench`](../workbench/README.md) 与 [`zeta-workbench-host`](../workbench-host/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
+导航和 Pane 组合的跨 crate contract 由 [`LAYOUT.md`](../LAYOUT.md) 维护。当前 `zeta-ui-components` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 模型、结构布局、外壳 UI 和 binding 都位于 [`zeta-workbench`](../workbench/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
 
 ## 2. 文件与接口地图
 
@@ -109,9 +109,9 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::keycap::{Keycap, KeycapSequence, KeycapStyle}` | public | 绘制 caller 提供 label 的按键块，并区分同一 Chord 内按键间距与多段 Chord 间距；不解析快捷键或选择平台 label |
 | `components::input_box::InputBox` | public | 组合 base layout 与 input-box chrome/style，并实现 `Component` |
 | `components::search_box::{SearchBox, SearchBoxStyle}` | public | 复用 `InputBox` 的 chrome/text layout，在组件内拥有左侧 search icon 占位与几何 |
-| `zeta-workbench-layout::{TabContainerLayoutSpec,TabContainerLayout}` | external crate | 解析 Tab Container 与 main Part 的 split geometry；不进入本组件库 |
-| `zeta-workbench-layout::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | external crate | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不进入本组件库 |
-| `zeta-workbench-layout::PaneGroupLayout` | external crate | 将 `PaneNode` 投影为 leaf bounds 和 split sash；不进入本组件库 |
+| `zeta-workbench::{TabContainerLayoutSpec,TabContainerLayout}` | external crate | 解析 Tab Container 与 main Part 的 split geometry；不进入本组件库 |
+| `zeta-workbench::{WorkbenchLayoutSpec,WorkbenchLayout,WorkbenchPart}` | external crate | 组装 Titlebar、Sessions、Main、Inspector 的结构 geometry；不进入本组件库 |
+| `zeta-workbench::PaneGroupLayout` | external crate | 将 `PaneNode` 投影为 leaf bounds 和 split sash；不进入本组件库 |
 | `zeta-workbench::{TabPart,TabGroup,TabInput}` | external crate | 保存 Workbench 逻辑状态；不进入本组件库 |
 | `zeta-workbench::{PanePart,PaneGroup,PaneInput}` | external crate | 保存 Pane 内容描述与递归 split topology；不进入本组件库 |
 

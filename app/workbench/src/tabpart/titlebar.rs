@@ -9,9 +9,9 @@ use crate::{
 use super::identity::{TAB_CONTAINER_TOGGLE, TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE};
 use super::tabs::TabContainer;
 use super::tabs::TabContainerPlacement;
-use zeta_workbench::PaneInputKind;
-use zeta_workbench::TabInputKey;
-use zeta_workbench::TabPart;
+use crate::PaneInputKind;
+use crate::TabInputKey;
+use crate::TabPart;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
 
 pub const TITLEBAR_HEIGHT: f32 = 32.0;

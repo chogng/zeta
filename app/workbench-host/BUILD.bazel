@@ -1,9 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "workbench-host",
-    crate_name = "zeta_workbench_host",
-    package_name = "app/workbench-host",
-    source_files = ["README.md"],
-    unit_tests = True,
-)

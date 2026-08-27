@@ -134,10 +134,6 @@ members = [
     "app/terminal-workspace",
     "app/ui-components",
     "app/workbench",
-    "app/workbench-controller",
-    "app/workbench-layout",
-    "app/workbench-host",
-    "app/workbench-ui",
     "app/workspace-ui",
     "app/zui",
     "app/zui-demo",
@@ -396,10 +392,6 @@ zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui-components = { path = "app/ui-components" }
 zeta-workbench = { path = "app/workbench" }
-zeta-workbench-controller = { path = "app/workbench-controller" }
-zeta-workbench-host = { path = "app/workbench-host" }
-zeta-workbench-layout = { path = "app/workbench-layout" }
-zeta-workbench-ui = { path = "app/workbench-ui" }
 zeta-workspace-ui = { path = "app/workspace-ui" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-output-truncation = { path = "zeta-rs/utils/output-truncation" }

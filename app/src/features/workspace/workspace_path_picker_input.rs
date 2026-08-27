@@ -117,10 +117,7 @@ impl NativeApp {
         self.workspace_surface.show_agent();
         if !matches!(
             self.active_workspace_pane_kind(),
-            Some(
-                zeta_workbench_controller::PaneInputKind::Files
-                    | zeta_workbench_controller::PaneInputKind::Diff,
-            )
+            Some(zeta_workbench::PaneInputKind::Files | zeta_workbench::PaneInputKind::Diff,)
         ) {
             let _ = self.bind_agent_pane();
         }

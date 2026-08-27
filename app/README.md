@@ -11,11 +11,11 @@
 | `app` crate | 进程入口、启动参数、窗口生命周期、产品事件含义、能力接线、界面组装 | 通用 UI 框架、可复用组件、后端领域状态机 |
 | [`zui`](zui/README.md) | 应用与窗口生命周期、输入、布局、绘制、渲染和平台能力 | 产品状态和业务交互 |
 | [`zeta-ui-components`](ui-components/README.md) | 可复用 UI 组件 | 产品窗口结构和领域状态 |
-| [`zeta-workbench-ui`](workbench-ui/README.md) | Workbench 标题栏、Tab 导航、交互标识和可丢弃界面状态 | Workbench 逻辑模型、Session 生命周期和产品命令执行 |
+| [`zeta-workbench`](workbench/README.md) | Workbench Tab/Pane 状态、布局、外壳 UI、binding 和生命周期边界 | Session、Terminal、Settings、Editor 等具体内容状态与 UI |
 | 能力 crate | 编辑器、会话、工作区、远程连接、终端和 Workbench 等独立能力 | 产品级组合 |
 | `zeta-rs` | App Server、协议、存储、终端语义、远程执行等共享后端能力 | `app` 的窗口和界面实现 |
 
-依赖只能从产品宿主指向能力 crate 和共享后端。`zeta-rs`、`zui`、`zeta-ui-components`、`zeta-workbench-ui` 及其他能力 crate 不得依赖 `app`。`app` 也不得执行或依赖 `zeta-code`、`zeta-cli` 或 `zeta-tui` 的产品入口。
+依赖只能从产品宿主指向能力 crate 和共享后端。`zeta-rs`、`zui`、`zeta-ui-components`、`zeta-workbench` 及其他能力 crate 不得依赖 `app`。`app` 也不得执行或依赖 `zeta-code`、`zeta-cli` 或 `zeta-tui` 的产品入口。
 
 `app/src` 是现有产品组合层，不得继续加入能力实现。新增状态、后台任务、布局算法或交互行为必须由对应能力 crate 单独拥有，`app` 只保留必要接线；修改现有文件时优先迁移、删除或缩小职责。
 
@@ -68,8 +68,7 @@ src/session/            Session 搜索、菜单和画布接线
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
 | Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |
 | Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |
-| Workbench | [`zeta-workbench`](workbench/README.md)、[`zeta-workbench-layout`](workbench-layout/README.md)、[`zeta-workbench-host`](workbench-host/README.md)、[`zeta-workbench-controller`](workbench-controller/README.md) |
-| Workbench UI | [`zeta-workbench-ui`](workbench-ui/README.md) |
+| Workbench | [`zeta-workbench`](workbench/README.md) |
 | 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)、[`app-keybinding-ui`](keybinding-ui/README.md) |
 
 修改能力内部行为时，先读对应 README；不要把能力状态或算法复制回产品宿主。

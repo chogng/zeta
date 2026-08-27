@@ -1,6 +1,6 @@
 # Native UI：编写与样式契约
 
-> 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench-ui`、`zeta-workbench-layout` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md)、[`zeta-workbench-ui` README](../workbench-ui/README.md) 和 [`zeta-workbench-layout` README](../workbench-layout/README.md) 维护。
+> 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md) 和 [`zeta-workbench` README](../workbench/README.md) 维护。
 
 ## 快速理解
 
@@ -55,7 +55,7 @@ Native UI 当前明确不提供以下能力：
 | --- | --- | --- | --- |
 | `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
 | `zeta-ui-components` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui_components::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
-| `zeta-workbench-ui` | Workbench Titlebar、TabContainer、Toolbar、interaction identity 与 presentation state | `zeta_workbench_ui::{Titlebar,TabContainer,TabContainerState,...}` | Session 生命周期、持久模型、产品命令执行 |
+| `zeta-workbench` | Workbench Titlebar、TabContainer、Toolbar、interaction identity、layout 与 presentation state | `zeta_workbench::{Titlebar,TabContainer,TabContainerState,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
 | Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`ShellPalette` 及领域 style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
 | Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`features/workspace`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
@@ -120,7 +120,7 @@ let button_style = ButtonStyle::new(
 
 ### 4.2 外部布局与组件内部布局分开
 
-`zeta-workbench-layout` 负责 Workbench/Pane 的外部结构几何，并使用 `zui::ui::{SplitViewLayout,GridLayout}` 计算通用约束；它们不替代 `Element`，也不持有产品 Pane state。`zeta-ui-components` 只负责组件内部的 Button、Tab、scrollbar、input chrome 和浮层布局。
+`zeta-workbench` 负责 Workbench/Pane 的外部结构几何，并使用 `zui::ui::{SplitViewLayout,GridLayout}` 计算通用约束；它不替代 `Element`，也不持有具体内容的 Pane state。`zeta-ui-components` 只负责组件内部的 Button、Tab、scrollbar、input chrome 和浮层布局。
 
 组件内部的 Button content、Tab item、scrollbar、input chrome 和浮层 content 由对应 `zeta-ui-components` 组件 style 与 Element tree 负责。产品 host 只提供外部 bounds、数据投影和 interaction identity。
 

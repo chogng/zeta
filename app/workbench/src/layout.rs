@@ -3,7 +3,6 @@
 //! The layout types resolve structural Part/Pane geometry only. Product hosts retain content,
 //! identity, focus semantics, event routing, and runtime state.
 
-mod pane_group;
 mod tab_container;
 mod workbench;
 mod workspace;
@@ -42,7 +41,6 @@ pub enum PartVisibility {
     Expanded,
 }
 
-pub use pane_group::PaneGroupLayout;
 pub use tab_container::TabContainerLayout;
 pub use tab_container::TabContainerLayoutSpec;
 pub use workbench::WorkbenchLayout;

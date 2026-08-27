@@ -1,9 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "workbench-layout",
-    crate_name = "zeta_workbench_layout",
-    package_name = "app/workbench-layout",
-    source_files = ["README.md"],
-    unit_tests = True,
-)

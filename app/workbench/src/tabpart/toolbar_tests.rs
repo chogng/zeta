@@ -1,8 +1,8 @@
 //! Body-mounted Workbench toolbar tests.
 
 use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
-use crate::workbench::identity::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
-use crate::workbench::test_style;
+use crate::tabpart::identity::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
+use crate::tabpart::test_style;
 use crate::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 

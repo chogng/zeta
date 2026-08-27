@@ -53,10 +53,7 @@ zeta-theme = { workspace = true }
 zeta-commands = { workspace = true }
 zeta-composer = { workspace = true }
 zeta-ui-components = { workspace = true }
-zeta-workbench-host = { workspace = true }
-zeta-workbench-controller = { workspace = true }
-zeta-workbench-layout = { workspace = true }
-zeta-workbench-ui = { workspace = true }
+zeta-workbench = { workspace = true }
 zeta-workspace-ui = { workspace = true }
 zeta-utils-path = { workspace = true }
 zeta-utils-pty = { workspace = true }

@@ -1,6 +1,6 @@
 # `app` 布局
 
-> 状态：Proposed。本文是 `app` 窗口结构、Tab/Pane 层级和响应式布局的唯一说明。Workbench 状态转换见 [`zeta-workbench`](workbench/README.md)，界面接线见 [`zeta-workbench-ui`](workbench-ui/README.md)，Zeta Agent 行为见 [`Agent 工作区`](docs/native-agent-console.md)，外部 AI CLI 与终端边界见 [`TERMINAL.md`](TERMINAL.md)。
+> 状态：Proposed。本文是 `app` 窗口结构、Tab/Pane 层级和响应式布局的唯一说明。Workbench 状态、布局、外壳 UI 和生命周期边界见 [`zeta-workbench`](workbench/README.md)，Zeta Agent 行为见 [`Agent 工作区`](docs/native-agent-console.md)，外部 AI CLI 与终端边界见 [`TERMINAL.md`](TERMINAL.md)。
 
 ## 快速理解
 

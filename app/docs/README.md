@@ -12,7 +12,7 @@
 | 你要理解什么 | 先读哪份文档 | canonical owner |
 | --- | --- | --- |
 | Agent 开发能力、机器反馈、人类观测、功能准入与 Thread/Composer 语义 | [`native-agent-console.md`](native-agent-console.md) | `app` 产品宿主 + App Server contract |
-| 主窗口 Tab/Pane 层级、PaneInput 与响应式布局 | [`LAYOUT.md`](../LAYOUT.md) | `app` product presentation + `zeta-workbench-layout` geometry contract |
+| 主窗口 Tab/Pane 层级、PaneInput 与响应式布局 | [`LAYOUT.md`](../LAYOUT.md) | `zeta-workbench` model/layout contract + `app` product presentation |
 | 外部 AI CLI、Terminal Pane、PTY、grid 与兼容性 | [`TERMINAL.md`](../TERMINAL.md) | AI CLI adapter + `zeta-terminal` + `app` terminal host |
 | 键盘、IME、caret 与输入路由 | [`native-text-input.md`](native-text-input.md) | `zui` / `zeta-ui-components` / `app` adapter |
 | 稳定产品命令身份、请求与注册式执行 | [`zeta-commands`](../commands/README.md) | `AppCommandId` + `CommandRequest` + `CommandRegistry` |
@@ -20,9 +20,9 @@
 | Native UI 编写、布局、样式与主题投影边界 | [`native-ui-authoring.md`](native-ui-authoring.md) | `zui` / `zeta-ui-components` / `app` host |
 | 通用 application/window、renderer 与平台能力 | [`zui`](../zui/README.md) | 单一 `zui` crate，内部按 `app/window/input/ui/runtime/render/services` 能力目录隔离 |
 | 通用 icon asset 与产品 icon catalog 的边界 | [`rendering-architecture.md`](rendering-architecture.md) + [`zui`](../zui/README.md) | `zui::Icon` contract + optional `zeta-icons` catalog |
-| Workbench 模型、布局与 Pane binding | [`zeta-workbench`](../workbench/README.md)、[`zeta-workbench-layout`](../workbench-layout/README.md)、[`zeta-workbench-host`](../workbench-host/README.md) | 三个独立 crate；产品 host 负责 runtime 与 scene |
+| Workbench 模型、布局、外壳 UI 与 Pane binding | [`zeta-workbench`](../workbench/README.md) | 一个 Workbench crate；产品能力 crate 负责各自内容 runtime 与 scene |
 | 可复用 UI 组件与样式边界 | [`zeta-ui-components`](../ui-components/README.md) | `zeta-ui-components` → `zui`；不包含 Workbench 布局或业务状态 |
-| Workbench 导航与标题栏界面 | [`zeta-workbench-ui`](../workbench-ui/README.md) | `zeta-workbench-ui` → `zeta-ui-components` / `zeta-workbench` / `zeta-workbench-layout` |
+| Workbench 导航与标题栏界面 | [`zeta-workbench`](../workbench/README.md) | `zeta-workbench` → `zeta-ui-components` / `zui` |
 | Composer state、input、routing、interaction 与 panel/list geometry | [`zeta-composer`](../composer/README.md) | `zeta-composer` + Native product/scene adapter |
 | 通用 UI 脱离产品宿主的最小验证 | [`zui-demo`](../zui-demo/README.md) | `zui` / `zeta-ui-components` |
 | 从旧 Native workspace 的迁移状态 | [`app-migration-plan.md`](app-migration-plan.md) | `app/` + root Cargo workspace |

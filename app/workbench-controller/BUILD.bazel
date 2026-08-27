@@ -1,8 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "workbench-controller",
-    crate_name = "zeta_workbench_controller",
-    package_name = "app/workbench-controller",
-    unit_tests = True,
-)

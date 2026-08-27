@@ -55,10 +55,7 @@ impl NativeApp {
             !matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff)
         }) {
             if let Some(current) = current {
-                let _ = self
-                    .workbench
-                    .workbench_mut()
-                    .remember_workspace_return(&tab_key, current);
+                self.workspace_returns.insert(tab_key.clone(), current);
             }
         }
         let input = match view {
@@ -123,10 +120,7 @@ impl NativeApp {
         self.workbench
             .pane_host_mut()
             .insert(host_key, PaneBinding::new());
-        let _ = self
-            .workbench
-            .workbench_mut()
-            .clear_workspace_return(&tab_key);
+        self.workspace_returns.remove(&tab_key);
         self.activate_pane_context(tab_key, pane)
     }
 
@@ -150,11 +144,7 @@ impl NativeApp {
             self.show_agent_pane();
             return;
         };
-        let Some(input) = self
-            .workbench
-            .workbench_mut()
-            .take_workspace_return(&tab_key)
-        else {
+        let Some(input) = self.workspace_returns.remove(&tab_key) else {
             let _ = self.bind_agent_pane();
             return;
         };

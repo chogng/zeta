@@ -13,8 +13,11 @@ use crate::session::session_switch_trace;
 use crate::session::session_switch_trace::SwitchId;
 use crate::thread_projection::ThreadProjectionUpdate;
 use crate::workspace_pane_host::WorkspacePaneView;
-use zeta_workbench_controller::TabInputChange;
-use zeta_workbench_controller::TabInputKey;
+use zeta_workbench::PaneInput;
+use zeta_workbench::TabInput;
+use zeta_workbench::TabInputChange;
+use zeta_workbench::TabInputKey;
+use zeta_workbench::TabInputMetadata;
 
 pub(crate) use zeta_agent_session::AgentSession;
 pub(crate) use zeta_agent_session::AgentSessionEvent;
@@ -180,10 +183,10 @@ impl NativeApp {
 
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
-        let result = self
-            .workbench
-            .workbench_mut()
-            .upsert_session(session, &workspace);
+        let result = self.workbench.workbench_mut().upsert_session_input(
+            session_tab_input(session, &workspace),
+            PaneInput::terminal(session.session_id.clone()),
+        );
         let (label, input_key) = match result {
             TabInputChange::Added(input_key) => ("session-tab-added", input_key),
             TabInputChange::Updated(input_key) => ("session-tab-updated", input_key),
@@ -202,9 +205,10 @@ impl NativeApp {
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
-            self.workbench
-                .workbench_mut()
-                .upsert_catalog_session(session, &workspace);
+            self.workbench.workbench_mut().upsert_catalog_session_input(
+                session_tab_input(session, &workspace),
+                PaneInput::terminal(session.session_id.clone()),
+            );
         }
     }
 
@@ -316,6 +320,25 @@ impl NativeApp {
     }
 }
 
+fn session_tab_input(session: &Session, workspace_label: &str) -> TabInput {
+    let workspace = session
+        .workspace
+        .as_ref()
+        .and_then(|binding| binding.root.file_name())
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(workspace_label);
+    let mut metadata = TabInputMetadata::new(&session.title, workspace).with_status_label("Active");
+    if let Some(workspace_root) = session
+        .workspace
+        .as_ref()
+        .map(|binding| binding.root.clone())
+    {
+        metadata = metadata.with_workspace_root(workspace_root);
+    }
+    TabInput::session(session.session_id.clone(), metadata)
+}
+
 fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
     match changed {
         FsChanged::RescanRequired { .. } => true,
@@ -345,10 +368,8 @@ impl NativeApp {
             .workspace_pane_host
             .replace_workspace(&self.workspace_context);
         let view = match pane_kind {
-            Some(zeta_workbench_controller::PaneInputKind::Diff) => {
-                Some(WorkspacePaneView::Changes)
-            }
-            Some(zeta_workbench_controller::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
+            Some(zeta_workbench::PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
+            Some(zeta_workbench::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
             _ => None,
         };
         if let Some(view) = view {

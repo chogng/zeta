@@ -64,14 +64,12 @@ use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
-use zeta_workbench_controller::{
-    InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart,
-    PaneSplitId, TabGroupId, TabInput, TabInputKey, TabPart,
-};
-use zeta_workbench_ui::{
+use zeta_terminal_workspace::PaneBinding;
+use zeta_workbench::{
+    InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PaneSplitId,
     TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState, TabContainerToolbar,
-    Titlebar, TitlebarInsets, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
-    workbench_tab_groups,
+    TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets, WorkbenchTab,
+    WorkbenchTabGroup, tab_input_element_id, workbench_tab_groups,
 };
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
@@ -80,11 +78,11 @@ use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
 use zeta_settings::SettingsPageMode;
 use zeta_settings::SettingsPageSection;
-use zeta_workbench_layout::InspectorLayoutSpec;
-use zeta_workbench_layout::PaneGroupLayout;
-use zeta_workbench_layout::PartVisibility;
-use zeta_workbench_layout::WorkbenchLayout;
-use zeta_workbench_layout::WorkbenchLayoutSpec;
+use zeta_workbench::InspectorLayoutSpec;
+use zeta_workbench::PaneGroupLayout;
+use zeta_workbench::PartVisibility;
+use zeta_workbench::WorkbenchLayout;
+use zeta_workbench::WorkbenchLayoutSpec;
 use zui::ui::{
     AccessibilityRole, ComponentContext, CursorFeedback, ElementId, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiFrame,
@@ -96,7 +94,7 @@ const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
 
-pub(crate) use zeta_workbench_layout::LogicalViewport;
+pub(crate) use zeta_workbench::LogicalViewport;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
@@ -1691,7 +1689,7 @@ fn draw_terminal_in_bounds(
 
 fn draw_terminal_pane_sashes(
     context: &mut ComponentContext<'_, '_>,
-    layout: &zeta_workbench_layout::PaneGroupLayout<PaneId, PaneSplitId>,
+    layout: &zeta_workbench::PaneGroupLayout<PaneId, PaneSplitId>,
     palette: ShellPalette,
     dispatch: &UiDispatch,
     active_split: Option<PaneSplitId>,

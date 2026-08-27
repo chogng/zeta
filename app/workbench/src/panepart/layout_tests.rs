@@ -1,7 +1,7 @@
 use super::PaneGroupLayout;
-use zeta_workbench::PaneGroupId;
-use zeta_workbench::PanePart;
-use zeta_workbench::PaneSplitDirection;
+use crate::PaneGroupId;
+use crate::PanePart;
+use crate::PaneSplitDirection;
 use zui::ui::Rect;
 
 #[test]
@@ -22,8 +22,8 @@ fn pane_tree_projection_uses_the_model_ratio() {
     let mut pane_part = PanePart::new();
     pane_part.split_active(PaneSplitDirection::Horizontal);
     let split_id = match pane_part.tree() {
-        zeta_workbench::PaneNode::Leaf(_) => panic!("split should create a split node"),
-        zeta_workbench::PaneNode::Split { id, .. } => *id,
+        crate::PaneNode::Leaf(_) => panic!("split should create a split node"),
+        crate::PaneNode::Split { id, .. } => *id,
     };
     assert!(pane_part.set_split_ratio(split_id, 0.75));
 

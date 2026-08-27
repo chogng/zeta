@@ -1,4 +1,4 @@
-use zeta_workbench::TabGroupId;
+use crate::TabGroupId;
 use zui::ui::ElementId;
 
 const SHELL_SCOPE: u32 = 1;

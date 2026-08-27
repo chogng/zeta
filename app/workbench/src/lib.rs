@@ -1,25 +1,33 @@
-//! State and layout contracts for app's reusable workbench.
+//! The Workbench owns the app's tab/pane model, structural layout, chrome UI, and content boundary.
 //!
-//! The public [`Workbench`] is composed of an orientation-neutral [`TabPart`] and one
-//! [`PaneContainer`] per tab input. Each container owns a [`PanePart`], each Pane Part owns its
-//! [`PaneGroup`] leaves, and each group owns one or more pane inputs. The crate deliberately has no
-//! product process runtime, agent connection, renderer node, or event loop dependency; product
-//! hosts bind these contracts to feature-specific content and side effects.
+//! Feature crates own the state and UI of the content mounted into Workbench panes. This crate
+//! owns the shell around that content and the ordering of logical changes and bindings.
 
-mod pane_container;
-mod pane_group;
-mod pane_input;
-mod pane_part;
-mod tab_group;
-mod tab_input;
-mod tab_part;
+use zeta_ui_components::*;
+use zui::ui::*;
+
+mod host;
+mod layout;
+mod panepart;
+mod tabpart;
 mod workbench;
 
-pub use pane_container::PaneContainer;
-pub use pane_group::{PaneGroup, PaneInputId};
-pub use pane_input::{PaneInput, PaneInputKind};
-pub use pane_part::{Pane, PaneGroupId, PaneNode, PanePart, PaneSplitDirection, PaneSplitId};
-pub use tab_group::{TabGroup, TabGroupId};
-pub use tab_input::{TabInput, TabInputChange, TabInputKey, TabInputMetadata};
-pub use tab_part::TabPart;
+pub use host::{PaneBindingId, PaneHost, PaneHostScope, PaneKey, PaneMount, WorkbenchHost};
+pub use layout::{
+    InspectorLayoutSpec, LogicalViewport, PartVisibility, TabContainerLayout,
+    TabContainerLayoutSpec, WorkbenchLayout, WorkbenchLayoutSpec, WorkbenchPart, WorkspaceLayout,
+};
+pub use panepart::PaneGroupLayout;
+pub use panepart::{
+    Pane, PaneContainer, PaneGroup, PaneGroupId, PaneInput, PaneInputId, PaneInputKind, PaneNode,
+    PanePart, PaneSplitDirection, PaneSplitId,
+};
+pub use tabpart::*;
+pub use tabpart::{
+    TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey, TabInputMetadata, TabPart,
+};
 pub use workbench::{ClosedTab, Workbench};
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod host_tests;

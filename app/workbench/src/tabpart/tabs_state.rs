@@ -1,15 +1,15 @@
 //! Layout state and resize controller for body-mounted Workbench tabs.
 
+use crate::PartVisibility;
 use crate::Point;
 use crate::Rect;
 use crate::Resizable;
 use crate::SashOrientation;
 use crate::SashPointerPresence;
 use crate::SashState;
+use crate::TabContainerLayout;
+use crate::TabContainerLayoutSpec;
 use std::time::Instant;
-use zeta_workbench_layout::PartVisibility;
-use zeta_workbench_layout::TabContainerLayout;
-use zeta_workbench_layout::TabContainerLayoutSpec;
 
 const DEFAULT_WIDTH: f32 = 200.0;
 const MINIMUM_WIDTH: f32 = 160.0;

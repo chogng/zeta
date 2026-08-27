@@ -16,8 +16,8 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
 use super::WorkbenchUiStyle;
-use zeta_workbench::TabInputKey;
-use zeta_workbench::TabPart;
+use crate::TabInputKey;
+use crate::TabPart;
 
 #[path = "tabs/model.rs"]
 mod model;

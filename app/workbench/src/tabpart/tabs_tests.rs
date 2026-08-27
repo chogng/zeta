@@ -7,19 +7,19 @@ use crate::Color;
 use crate::FontWeight;
 use crate::Point;
 use crate::Rect;
-use crate::workbench::identity::{
+use crate::TabGroupId;
+use crate::TabInput;
+use crate::TabInputKey;
+use crate::TabInputMetadata;
+use crate::TabPart;
+use crate::tabpart::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_TAB,
     TITLEBAR_SETTINGS_TAB, session_tab_id, tab_group_list_id, titlebar_session_tab_id,
 };
-use crate::workbench::test_style;
+use crate::tabpart::test_style;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
-use zeta_workbench::TabGroupId;
-use zeta_workbench::TabInput;
-use zeta_workbench::TabInputKey;
-use zeta_workbench::TabInputMetadata;
-use zeta_workbench::TabPart;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::InteractionFrame;

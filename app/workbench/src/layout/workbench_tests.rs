@@ -2,8 +2,7 @@ use super::InspectorLayoutSpec;
 use super::TabContainerLayoutSpec;
 use super::WorkbenchLayoutSpec;
 use super::WorkbenchPart;
-use crate::layout::LogicalViewport;
-use crate::layout::PartVisibility;
+use crate::{LogicalViewport, PartVisibility};
 use zui::ui::Rect;
 
 fn tab_container(visibility: PartVisibility) -> TabContainerLayoutSpec {

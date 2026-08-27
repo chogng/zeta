@@ -7,10 +7,10 @@ use zui::ui::Rect;
 use zui::ui::SplitViewOrientation;
 use zui::ui::SplitViewPane;
 
-use zeta_workbench::PaneGroupId;
-use zeta_workbench::PaneNode;
-use zeta_workbench::PaneSplitDirection;
-use zeta_workbench::PaneSplitId;
+use crate::PaneGroupId;
+use crate::PaneNode;
+use crate::PaneSplitDirection;
+use crate::PaneSplitId;
 
 /// Geometry projection for a host-owned recursive pane layout.
 ///
@@ -58,7 +58,7 @@ impl PaneGroupLayout<PaneGroupId, PaneSplitId> {
 }
 
 #[cfg(test)]
-#[path = "pane_group_tests.rs"]
+#[path = "layout_tests.rs"]
 mod tests;
 
 fn grid_node(node: &PaneNode, bounds: Rect) -> GridNode<PaneGroupId, PaneSplitId> {

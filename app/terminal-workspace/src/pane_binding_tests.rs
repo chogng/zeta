@@ -1,6 +1,6 @@
 use super::{PaneBinding, PaneInput};
+use crate::TerminalSessionKey;
 use zeta_protocol::SessionId;
-use zeta_terminal_workspace::TerminalSessionKey;
 
 fn session(value: &str) -> SessionId {
     SessionId::new(value).expect("test session ID is non-empty")

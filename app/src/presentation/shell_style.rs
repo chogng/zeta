@@ -16,7 +16,7 @@ use zeta_ui_components::ButtonStyle;
 use zeta_ui_components::{
     InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle, SearchBoxStyle,
 };
-use zeta_workbench_ui::WorkbenchUiStyle;
+use zeta_workbench::WorkbenchUiStyle;
 use zui::ui::Border;
 use zui::ui::{Color, CornerRadii, Edges, FontFamily, FontWeight, TextStyle};
 

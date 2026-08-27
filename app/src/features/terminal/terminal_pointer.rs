@@ -10,7 +10,7 @@ use crate::shell_scene::{
     terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
 };
 use crate::terminal_session::TerminalSession;
-use zeta_workbench_controller::PaneGroupId as PaneId;
+use zeta_workbench::PaneGroupId as PaneId;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum PointerInput {

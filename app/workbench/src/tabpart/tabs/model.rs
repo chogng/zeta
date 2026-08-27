@@ -9,7 +9,7 @@ use super::super::identity::{
     TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW,
     session_tab_id, tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
-use zeta_workbench::{TabGroupId, TabInput, TabInputKey, TabPart};
+use crate::{TabGroupId, TabInput, TabInputKey, TabPart};
 
 /// UI mount that projects the same logical Tab Part into a concrete Workbench location.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

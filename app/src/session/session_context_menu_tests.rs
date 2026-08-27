@@ -4,7 +4,7 @@ use super::{SessionContextMenu, SessionContextMenuState, update_session_context_
 use crate::shell_interaction::{COMPOSER, SESSION_CONTEXT_MENU, SessionContextMenuAction};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_protocol::SessionId;
-use zeta_workbench_controller::TabInputKey;
+use zeta_workbench::TabInputKey;
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     UiDispatch, UiFrame, UiNode,

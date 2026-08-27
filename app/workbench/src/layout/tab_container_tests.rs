@@ -1,5 +1,5 @@
 use super::TabContainerLayoutSpec;
-use crate::layout::PartVisibility;
+use crate::PartVisibility;
 use zui::ui::Rect;
 
 fn expanded_spec() -> TabContainerLayoutSpec {

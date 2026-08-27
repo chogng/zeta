@@ -32,13 +32,14 @@ use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
+use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui_components::ScrollbarPresentation;
-use zeta_workbench_controller::{
-    InspectorPartState, PaneBinding, PaneHost, PaneHostScope, PaneInput, PanePart,
-    PaneSplitDirection, TabInputKey, TabPart,
+use zeta_workbench::TabContainerState;
+use zeta_workbench::{
+    InspectorPartState, PaneHost, PaneHostScope, PaneInput, PanePart, PaneSplitDirection,
+    TabInputKey, TabPart,
 };
-use zeta_workbench_ui::TabContainerState;
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
 use zui::ui::{

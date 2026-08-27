@@ -1,12 +1,17 @@
-//! Reusable Workbench tabs, titlebar, and their stable interaction identity.
+//! TabPart's model, chrome UI, presentation state, and stable interaction identities.
 
 mod identity;
 mod inspector_state;
+mod model;
 mod style;
 mod tabs;
 mod tabs_state;
 mod titlebar;
 mod toolbar;
+
+pub use model::{
+    TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey, TabInputMetadata, TabPart,
+};
 
 pub use identity::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_SEARCH_INPUT,

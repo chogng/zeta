@@ -1,7 +1,7 @@
-use zeta_terminal_workspace::TerminalSessionKey;
+use crate::TerminalSessionKey;
 use zeta_workbench::{PaneInput, PaneInputKind};
 
-/// Runtime currently attached to a Workbench pane by the product controller.
+/// Terminal runtime currently attached to a Workbench pane.
 ///
 /// This mapping is deliberately product-local. The workbench description stays free of PTY and
 /// terminal-session handles while app resolves a Session into its runtime key here.
@@ -55,5 +55,5 @@ impl PaneBinding {
 }
 
 #[cfg(test)]
-#[path = "binding_tests.rs"]
+#[path = "pane_binding_tests.rs"]
 mod tests;

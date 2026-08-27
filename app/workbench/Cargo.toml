@@ -11,7 +11,12 @@ name = "zeta_workbench"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-ui-components = { workspace = true }
 zeta-protocol = { workspace = true }
+zui = { workspace = true, default-features = false }
+
+[dev-dependencies]
+zeta-icons = { workspace = true }
 
 [lints]
 workspace = true

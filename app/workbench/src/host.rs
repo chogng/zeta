@@ -1,4 +1,4 @@
-//! Product-neutral coordination for a Workbench model and its content bindings.
+//! Workbench content binding and lifecycle coordination.
 //!
 //! This crate owns the boundary between logical Workbench state and product runtime bindings. It
 //! does not know which runtime is attached to a pane and does not own rendering, interaction
@@ -6,29 +6,14 @@
 
 use std::collections::HashMap;
 
-pub use zeta_workbench::ClosedTab;
-pub use zeta_workbench::Pane;
-pub use zeta_workbench::PaneContainer;
-pub use zeta_workbench::PaneGroup;
-pub use zeta_workbench::PaneGroupId;
-pub use zeta_workbench::PaneInput;
-pub use zeta_workbench::PaneInputId;
-pub use zeta_workbench::PaneInputKind;
-pub use zeta_workbench::PaneNode;
-pub use zeta_workbench::PanePart;
-pub use zeta_workbench::PaneSplitDirection;
-pub use zeta_workbench::PaneSplitId;
-pub use zeta_workbench::TabGroup;
-pub use zeta_workbench::TabGroupId;
-pub use zeta_workbench::TabInput;
-pub use zeta_workbench::TabInputChange;
-pub use zeta_workbench::TabInputKey;
-pub use zeta_workbench::TabInputMetadata;
-pub use zeta_workbench::TabPart;
-pub use zeta_workbench::Workbench;
-use zeta_workbench_layout::LogicalViewport;
-use zeta_workbench_layout::WorkbenchLayout;
-use zeta_workbench_layout::WorkbenchLayoutSpec;
+use crate::ClosedTab;
+use crate::PaneGroupId;
+use crate::PaneInput;
+use crate::PaneInputKind;
+use crate::PanePart;
+use crate::TabInputKey;
+use crate::Workbench;
+use crate::{LogicalViewport, WorkbenchLayout, WorkbenchLayoutSpec};
 
 /// Product scope that owns a mounted pane tree.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -275,7 +260,3 @@ impl<B> WorkbenchHost<B> {
         spec.for_viewport(viewport)
     }
 }
-
-#[cfg(test)]
-#[path = "tests.rs"]
-mod tests;

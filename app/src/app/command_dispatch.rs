@@ -8,7 +8,7 @@ use crate::session::session_switch_trace;
 use crate::shell_interaction::{
     self, ContextAction, SessionContextMenuAction, WorkspacePaneSelection,
 };
-use zeta_workbench_controller::PaneSplitDirection;
+use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
 
@@ -293,8 +293,9 @@ fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest)
         return;
     }
     match app.active_workspace_pane_kind() {
-        Some(zeta_workbench_controller::PaneInputKind::Files)
-        | Some(zeta_workbench_controller::PaneInputKind::Diff) => app.show_agent_pane(),
+        Some(zeta_workbench::PaneInputKind::Files) | Some(zeta_workbench::PaneInputKind::Diff) => {
+            app.show_agent_pane()
+        }
         _ => app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files),
     }
 }

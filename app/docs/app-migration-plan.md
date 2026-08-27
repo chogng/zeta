@@ -16,7 +16,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | --- | --- | --- | --- |
 | `app` binary 与产品事件语义 | `zeta-rs/native` | `app/` | 已实现 `zui::App` |
 | 通用 application/window runtime | `zeta-rs/native` 的历史宿主 glue | public `app/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离 |
-| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench-layout` + `zeta-workbench-ui` + `app/composer` + `app/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
+| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench` + `app/composer` + `app/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
 | 通用 icon asset contract | 旧 Native icon types | `app/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `app/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `app/zui` | app-owned crates in root workspace | 已迁入 app |
 | Button、Tree、List、Editor/Workspace pane presentation | `app/ui-components`、`editor`、`features/workspace` | app-owned modules and crates in root workspace | 已迁入 app |
@@ -43,8 +43,7 @@ zeta/
 │   ├── zui-demo/               # product-independent framework smoke host
 │   ├── ui/                     # reusable UI components
 │   ├── workbench/              # pure Tab/Pane Workbench model
-│   ├── workbench-layout/       # Workbench structural geometry
-│   ├── workbench-host/         # generic Workbench and Pane binding coordination
+│   ├── workbench/              # Workbench model, layout, chrome UI and binding boundary
 │   └── ...                     # other presentation crates
 ├── zeta-rs/
 │   ├── ...                     # shared Rust backend crates
@@ -135,10 +134,10 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 
 - [x] 将 `IconId`、SVG definition 和 rendering mode 收入 `zui` 通用 contract；`zeta-icons`
       只保留可选的 app product catalog，`zui`/`zeta-ui-components` 不依赖该 catalog；
-- [x] 将 Workbench/Pane 的结构布局迁移到 `zeta-workbench-layout`，并让 `zeta-ui-components` 只保留可复用组件；
+- [x] 将 Workbench/Pane 的结构布局收回 `zeta-workbench`，并让 `zeta-ui-components` 只保留可复用组件；
 - [x] 将 `zeta-workbench` 纯化为不依赖 UI 的 Tab/Pane 模型，公开 `PaneNode` 和 ratio contract；
 - [x] 将通用 `WorkbenchHost`、`PaneHost`、`PaneBindingId` 和 Tab binding 清理迁移到
-      `zeta-workbench-host`，具体 runtime 仍由 app 产品宿主负责；
+      `zeta-workbench`，具体 runtime 仍由各能力 crate 负责；
 - [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui-components`，以 recording backend 验证通用
       组件可脱离 app product host 组合；
 - [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list

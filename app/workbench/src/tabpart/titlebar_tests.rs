@@ -2,16 +2,16 @@ use super::Titlebar;
 use super::TitlebarInsets;
 use crate::Color;
 use crate::Component;
+use crate::PaneInputKind;
 use crate::Point;
 use crate::Rect;
+use crate::TabPart;
 use crate::UiScene;
-use crate::workbench::identity::{
+use crate::tabpart::identity::{
     TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_TAB, WORKSPACE_PANE_TOGGLE,
 };
-use crate::workbench::test_style;
+use crate::tabpart::test_style;
 use zeta_icons::icons;
-use zeta_workbench::PaneInputKind;
-use zeta_workbench::TabPart;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;

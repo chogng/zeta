@@ -17,6 +17,7 @@ impl NativeApp {
         let Some((closed, bindings)) = self.workbench.close_tab(tab_key) else {
             return false;
         };
+        self.workspace_returns.remove(tab_key);
 
         for binding in bindings {
             if let Some(terminal_key) = binding.terminal_key() {
@@ -114,10 +115,7 @@ impl NativeApp {
             .is_some_and(|input| matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff))
         {
             if let Some(current) = current {
-                let _ = self
-                    .workbench
-                    .workbench_mut()
-                    .remember_workspace_return(&tab_key, current);
+                self.workspace_returns.insert(tab_key.clone(), current);
             }
         }
         let Some(terminal_key) = self
@@ -222,8 +220,7 @@ impl NativeApp {
         };
         self.workbench
             .workbench_mut()
-            .tab_part_mut()
-            .update_status(&session_id, status);
+            .update_session_status(&session_id, status);
     }
 
     pub(super) fn active_terminal(&self) -> Option<&TerminalSession> {
@@ -481,11 +478,7 @@ impl NativeApp {
     /// Returns to the last selected session without fabricating a session for Settings.
     pub(super) fn activate_session_workbench_tab(&mut self) {
         let was_terminal = self.workspace_surface.is_terminal();
-        let _ = self
-            .workbench
-            .workbench_mut()
-            .tab_part_mut()
-            .activate_last_session();
+        let _ = self.workbench.workbench_mut().activate_last_session();
         if let Some(session_id) = self
             .workbench
             .workbench()
