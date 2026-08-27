@@ -617,6 +617,15 @@ impl App {
         self.accepts_input() && self.interaction_pane.select_mention(index)
     }
 
+    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
+        self.interaction_pane.select_visible_item(index)
+    }
+
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<AppCommand> {
+        let outcome = self.interaction_pane.activate_visible_item(index)?;
+        self.handle_interaction_pane_outcome(outcome)
+    }
+
     pub(crate) fn mention_query(&self) -> Option<&str> {
         self.interaction_pane.mention_query()
     }

@@ -139,6 +139,9 @@ impl InteractionPane {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
+        if let Some(InteractionView::Selection(view)) = self.views.last() {
+            return view.body().mouse_mode();
+        }
         if self.slash_popup().is_some() || self.mention_popup().is_some() {
             MouseMode::UiClick
         } else {
@@ -182,6 +185,22 @@ impl InteractionPane {
 
     pub(crate) fn select_mention(&mut self, index: usize) -> bool {
         self.views.is_empty() && self.composer.select_mention(index)
+    }
+
+    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
+        match self.views.last_mut() {
+            Some(InteractionView::Selection(view)) => view.body_mut().select_visible_item(index),
+            None => false,
+        }
+    }
+
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<InteractionPaneOutcome> {
+        let Some(InteractionView::Selection(view)) = self.views.last_mut() else {
+            return None;
+        };
+        view.body_mut()
+            .activate_visible_item(index)
+            .map(InteractionPaneOutcome::ActivateSelectionItem)
     }
 
     pub(crate) fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {

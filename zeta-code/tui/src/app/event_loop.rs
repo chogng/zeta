@@ -21,6 +21,7 @@ use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
+use crate::components::pane;
 use crate::features::config;
 use crate::features::interactions;
 use crate::features::mcp;
@@ -171,20 +172,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         if mouse.kind == MouseEventKind::Down(MouseButton::Left) =>
                     {
                         let terminal_area = terminal.area()?;
-                        if let Some(index) =
-                            frame::mention_index_at(&app, terminal_area, mouse.column, mouse.row)
-                        {
-                            app.activate_mention(index);
-                            None
-                        } else {
-                            frame::slash_command_index_at(
-                                &app,
-                                terminal_area,
-                                mouse.column,
-                                mouse.row,
-                            )
-                            .and_then(|index| app.activate_slash_command(index))
-                        }
+                        activate_pointer_item(&mut app, terminal_area, mouse.column, mouse.row)
                     }
                     Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
                         let terminal_area = terminal.area()?;
@@ -816,12 +804,50 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     }
 }
 
+fn activate_pointer_item(
+    app: &mut App,
+    area: ratatui::layout::Rect,
+    column: u16,
+    row: u16,
+) -> Option<AppCommand> {
+    if let Some(index) = selection_item_index_at(app, area, column, row) {
+        return app.activate_visible_item(index);
+    }
+    if let Some(index) = frame::mention_index_at(app, area, column, row) {
+        app.activate_mention(index);
+        return None;
+    }
+    frame::slash_command_index_at(app, area, column, row)
+        .and_then(|index| app.activate_slash_command(index))
+}
+
 fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
+    if let Some(index) = selection_item_index_at(app, area, column, row) {
+        app.select_visible_item(index);
+        return;
+    }
     if let Some(index) = frame::mention_index_at(app, area, column, row) {
         app.select_mention(index);
     } else if let Some(index) = frame::slash_command_index_at(app, area, column, row) {
         app.select_slash_command(index);
     }
+}
+
+fn selection_item_index_at(
+    app: &App,
+    area: ratatui::layout::Rect,
+    column: u16,
+    row: u16,
+) -> Option<usize> {
+    let view = app.selection_pane()?;
+    let frame_areas = ui::frame_areas(
+        area,
+        ui::InteractionLayout::Expanded {
+            desired_height: pane::desired_height(view.body().desired_height(area.width)),
+        },
+    );
+    let pane_areas = pane::areas(frame_areas.interaction);
+    view.body().item_index_at(pane_areas.body, column, row)
 }
 
 fn draw_terminal(

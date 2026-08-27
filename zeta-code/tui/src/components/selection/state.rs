@@ -10,6 +10,7 @@ use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
+use crate::mouse::MouseMode;
 
 const TAB_GAP: usize = 2;
 const MAX_VISIBLE_ROWS: usize = 12;
@@ -346,6 +347,38 @@ impl SelectionViewState {
 
     pub(crate) fn selected_visible_index(&self) -> Option<usize> {
         self.selected_visible
+    }
+
+    pub(crate) fn mouse_mode(&self) -> MouseMode {
+        if self.model.selection_enabled
+            && self
+                .visible_items()
+                .into_iter()
+                .any(|item| item.id().is_some())
+        {
+            MouseMode::UiClick
+        } else {
+            MouseMode::TerminalSelection
+        }
+    }
+
+    pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
+        let selectable = self.model.selection_enabled
+            && self
+                .visible_items()
+                .get(index)
+                .is_some_and(|item| item.id().is_some());
+        if !selectable {
+            return false;
+        }
+        self.selected_visible = Some(index);
+        true
+    }
+
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<SelectionItemId> {
+        self.select_visible_item(index)
+            .then(|| self.selected_item_id())
+            .flatten()
     }
 
     pub(crate) fn first_rendered_row(&self, visible_rows: usize) -> usize {

@@ -1,6 +1,7 @@
 use super::SelectionTab;
 use super::SelectionViewState;
 use super::state::SelectionItem;
+use super::state::tab_row_count;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::ui::horizontal_margin;
@@ -18,6 +19,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use std::rc::Rc;
 use unicode_width::UnicodeWidthStr;
 
 const TAB_GAP: usize = 2;
@@ -32,14 +34,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
             .border_style(Style::default().fg(presentation_highlight)),
         area,
     );
-    let content = horizontal_margin(
-        Rect {
-            y: area.y.saturating_add(1),
-            height: area.height.saturating_sub(1),
-            ..area
-        },
-        2,
-    );
+    let content = content_area(area);
     if content.is_empty() {
         return;
     }
@@ -55,27 +50,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         Vec::new()
     };
     let tab_height = tab_lines.len().min(u16::MAX as usize) as u16;
-    let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
-    let preview_height = view
-        .selected_item()
-        .and_then(|item| item.preview())
-        .map(|preview| preview.desired_height())
-        .unwrap_or_default()
-        .min(u16::MAX as usize) as u16;
-    let title_top_margin = view.title_top_margin().min(u16::MAX as usize) as u16;
-    let title_bottom_margin = view.title_bottom_margin().min(u16::MAX as usize) as u16;
-    let areas = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(title_top_margin),
-            Constraint::Length(1),
-            Constraint::Length(title_bottom_margin),
-            Constraint::Length(tab_height),
-            Constraint::Length(search_height),
-            Constraint::Min(1),
-            Constraint::Length(preview_height),
-        ])
-        .split(content);
+    let areas = selection_areas(content, view, tab_height);
 
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
@@ -179,6 +154,68 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
             frame.render_widget(Paragraph::new(caption.clone()), preview_areas[4]);
         }
     }
+}
+
+impl SelectionViewState {
+    pub(crate) fn item_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        let content = content_area(area);
+        if content.is_empty() {
+            return None;
+        }
+        let tab_height = if self.show_tabs() {
+            tab_row_count(self.tabs(), content.width)
+        } else {
+            0
+        };
+        let areas = selection_areas(content, self, tab_height);
+        let visible_items = self.visible_items();
+        let rendered_rows = usize::from(areas[5].height).min(visible_items.len());
+        let first_row = self.first_rendered_row(rendered_rows);
+        if column < areas[5].x
+            || column >= areas[5].right()
+            || row < areas[5].y
+            || row >= areas[5].y.saturating_add(rendered_rows as u16)
+        {
+            return None;
+        }
+        let index = first_row.saturating_add(usize::from(row - areas[5].y));
+        (index < visible_items.len()).then_some(index)
+    }
+}
+
+fn content_area(area: Rect) -> Rect {
+    horizontal_margin(
+        Rect {
+            y: area.y.saturating_add(1),
+            height: area.height.saturating_sub(1),
+            ..area
+        },
+        2,
+    )
+}
+
+fn selection_areas(content: Rect, view: &SelectionViewState, tab_height: u16) -> Rc<[Rect]> {
+    let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
+    let preview_height = view
+        .selected_item()
+        .and_then(|item| item.preview())
+        .map(|preview| preview.desired_height())
+        .unwrap_or_default()
+        .min(u16::MAX as usize) as u16;
+    let title_top_margin = view.title_top_margin().min(u16::MAX as usize) as u16;
+    let title_bottom_margin = view.title_bottom_margin().min(u16::MAX as usize) as u16;
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(title_top_margin),
+            Constraint::Length(1),
+            Constraint::Length(title_bottom_margin),
+            Constraint::Length(tab_height),
+            Constraint::Length(search_height),
+            Constraint::Min(1),
+            Constraint::Length(preview_height),
+        ])
+        .split(content)
 }
 
 #[derive(Clone, Copy)]

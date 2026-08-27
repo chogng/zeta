@@ -94,7 +94,7 @@ Tool、approval policy 或 persistence。
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
 - Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
-- raw mode、alternate screen、bracketed paste 与 cursor cleanup；鼠标捕获只在 slash/file-mention popup 可见时启用，popup 关闭后立即释放，使终端恢复拖拽文本选择；
+- raw mode、alternate screen、bracketed paste 与 cursor cleanup；鼠标捕获只在 slash/file-mention popup 或包含可执行候选项的 Selection Pane 可见时启用，相关界面关闭后立即释放，使终端恢复拖拽文本选择；
 - 启动时通过 `zeta-theme` 读取共享用户主题；chrome 投影 accent/error/success/warning/muted/highlight，
   Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
   Monochrome 能力确定性降级；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
@@ -110,8 +110,7 @@ Tool、approval policy 或 persistence。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support
-只服务 slash/file-mention popup 的必要左键命中；完整 pointer/selection 交互属于 Native UI。
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。任意屏幕文本框选仍由终端负责。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
 TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
@@ -242,7 +241,7 @@ src/
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
-| `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航 | 不执行 action、不依赖产品 ID 或 App Server |
+| `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航，并统一提供可执行候选项的鼠标模式、命中与选中 API | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
 | `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
@@ -311,10 +310,11 @@ run(session, options)
       │  ├─ Quit → return
       │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
-      ├─ left mouse down → app::frame::{mention_index_at,slash_command_index_at}
+      ├─ left mouse down → generic Selection / mention / slash hit testing
+      │  ├─ Selection item hit → App::activate_visible_item → existing feature action mapping
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
-      ├─ mouse moved → app::frame hit testing → App::{select_mention,select_slash_command}
+      ├─ mouse moved → same hit testing → existing selected item
       └─ Paste → App::handle_paste → InteractionPane
          ├─ active searchable selection view in search mode → search query
          └─ no active view → ChatComposer

@@ -95,6 +95,25 @@ fn selected_theme_closes_the_theme_pane_after_success() {
 }
 
 #[test]
+fn pointer_activation_uses_the_feature_pane_action_mapping() {
+    let mut app = App::new();
+    app.update(AppEvent::ThemeViewOpened(theme_selection_view(
+        &theme_catalog(),
+    )));
+
+    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+    assert!(app.select_visible_item(1));
+    assert_eq!(
+        app.selection_view().unwrap().selected_visible_index(),
+        Some(1)
+    );
+    assert_eq!(
+        app.activate_visible_item(1),
+        Some(AppCommand::OpenCustomThemePane)
+    );
+}
+
+#[test]
 fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
     let catalog = theme_catalog();
     let mut app = App::new();

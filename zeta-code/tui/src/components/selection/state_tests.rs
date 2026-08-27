@@ -7,9 +7,11 @@ use super::SelectionViewModel;
 use super::SelectionViewState;
 use super::tab_row_count;
 use crate::components::search_box::SearchBoxModel;
+use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
+use ratatui::layout::Rect;
 
 fn state() -> SelectionViewState {
     SelectionViewState::new(
@@ -42,6 +44,51 @@ fn key(code: KeyCode) -> KeyEvent {
 
 fn active_tab_label(state: &SelectionViewState) -> &str {
     state.tabs()[state.active_tab_index()].label()
+}
+
+#[test]
+fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
+    let first_id = SelectionItemId::new("first");
+    let second_id = SelectionItemId::new("second");
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Items",
+            vec![SelectionTab::new(
+                "All",
+                vec![
+                    SelectionItem::new("First").with_id(first_id),
+                    SelectionItem::new("Second").with_id(second_id.clone()),
+                ],
+            )],
+        )
+        .without_tab_bar(),
+    );
+    let area = Rect::new(0, 0, 80, 10);
+
+    assert_eq!(state.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(state.item_index_at(area, 2, 2), Some(0));
+    assert_eq!(state.item_index_at(area, 2, 3), Some(1));
+    assert_eq!(state.item_index_at(area, 1, 3), None);
+    assert_eq!(state.activate_visible_item(1), Some(second_id));
+    assert_eq!(state.selected_visible_index(), Some(1));
+}
+
+#[test]
+fn read_only_rows_leave_drag_selection_to_the_terminal() {
+    let mut state = SelectionViewState::new(
+        SelectionViewModel::new(
+            "Status",
+            vec![SelectionTab::new(
+                "Details",
+                vec![SelectionItem::new("Read only")],
+            )],
+        )
+        .without_selection(),
+    );
+
+    assert_eq!(state.mouse_mode(), MouseMode::TerminalSelection);
+    assert!(!state.select_visible_item(0));
+    assert_eq!(state.activate_visible_item(0), None);
 }
 
 #[test]
