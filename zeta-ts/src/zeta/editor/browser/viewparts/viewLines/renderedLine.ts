@@ -1,12 +1,10 @@
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { type EditorLineGutterRenderer } from "../margin/lineGutterDecoration.js";
 
 /** DOM nodes shared by the line renderer and row-level visual parts. */
 export interface RenderedLine {
 	readonly domNode: FastDomNode<HTMLDivElement>;
 	readonly numberDomNode: FastDomNode<HTMLSpanElement>;
-	readonly featureGutterElement: HTMLElement;
 	readonly diagnosticDomNode: FastDomNode<HTMLSpanElement>;
 	readonly textElement: HTMLSpanElement;
 	readonly indentationElement: HTMLDivElement;
@@ -18,11 +16,9 @@ export interface RenderedLine {
 }
 
 /** Creates one reusable virtual-line DOM subtree owned by the ViewLines part. */
-export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: number, gutterRenderer: EditorLineGutterRenderer | undefined): RenderedLine {
+export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: number): RenderedLine {
 	const domNode = new FastDomNode(h(ownerDocument, "div"));
 	const numberDomNode = new FastDomNode(h(ownerDocument, "span"));
-	const featureGutterElement = gutterRenderer?.create(ownerDocument) ?? h(ownerDocument, "span");
-	if (!gutterRenderer) featureGutterElement.hidden = true;
 	const diagnosticDomNode = new FastDomNode(h(ownerDocument, "span"));
 	const textElement = h(ownerDocument, "span");
 	const indentationElement = h(ownerDocument, "div");
@@ -51,11 +47,10 @@ export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: num
 	cursorElement.setAttribute("aria-hidden", "true");
 	compositionElement.className = "stanza-editor-line-composition";
 	compositionElement.setAttribute("aria-hidden", "true");
-	domNode.domNode.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, featureGutterElement, diagnosticDomNode.domNode, numberDomNode.domNode, textElement);
+	domNode.domNode.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, diagnosticDomNode.domNode, numberDomNode.domNode, textElement);
 	return {
 		domNode,
 		numberDomNode,
-		featureGutterElement,
 		diagnosticDomNode,
 		textElement,
 		indentationElement,

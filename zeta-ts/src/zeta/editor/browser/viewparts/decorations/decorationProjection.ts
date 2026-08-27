@@ -1,12 +1,13 @@
 import { h, reset } from "../../../../base/browser/dom.js";
-import { createStanzaVisualDecorationRectangles, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
+import { createStanzaVisualDecorationRectangles, DecorationPresentation, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
 import { type ViewportOverlayContext, createStanzaDomRangeRectangles } from "../viewportOverlay/viewportOverlayPresentation.js";
 
 /** Projects visible inline decorations into rows. */
 export function projectStanzaDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
-	const rectangles = createStanzaVisualDecorationRectangles(context.model, decorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const inlineDecorations = decorations.filter(decoration => decoration.presentation !== DecorationPresentation.GlyphMargin);
+	const rectangles = createStanzaVisualDecorationRectangles(context.model, inlineDecorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	const domRectangles = context.useDomTextGeometry
-		? new Map(decorations.map(decoration => [decoration.id, createStanzaDomRangeRectangles(context, decoration.range)] as const))
+		? new Map(inlineDecorations.map(decoration => [decoration.id, createStanzaDomRangeRectangles(context, decoration.range)] as const))
 		: undefined;
 	for (const line of context.renderedLines.values()) reset(line.decorationElement);
 	const ownerDocument = context.ownerDocument;
@@ -23,7 +24,7 @@ export function projectStanzaDecorationOverlays(context: ViewportOverlayContext,
 		element.style.width = `${rectangle.width}px`;
 		line.decorationElement.append(element);
 	}
-	for (const decoration of decorations) {
+	for (const decoration of inlineDecorations) {
 		const geometry = domRectangles?.get(decoration.id);
 		if (!geometry) continue;
 		for (const rectangle of geometry) {

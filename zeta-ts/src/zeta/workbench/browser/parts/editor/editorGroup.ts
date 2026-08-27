@@ -32,7 +32,6 @@ import { EditorTitleControl, type EditorTitleActions } from "./editorTitleContro
 import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
@@ -106,7 +105,6 @@ export interface EditorGroupOptions {
 	readonly onWillCloseEditor?: (group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly titleActions?: EditorTitleActions;
 	readonly welcome?: EditorWelcomeOptions;
@@ -158,7 +156,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly onWillCloseEditor: ((group: IEditorGroup, input: EditorInput, pane: IEditorPane) => Promise<boolean>) | undefined;
 	private readonly onOpenLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined;
 	private readonly onApplyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined;
-	private readonly createLineGutterDecorations: ((resource: URI) => readonly EditorLineGutterDecoration[]) | undefined;
 	private readonly createDecorationSources: ((resource: URI, model: TextModel) => readonly OwnedDecorationSource[]) | undefined;
 	private readonly titleActions: EditorTitleActions | undefined;
 	private readonly titleControl: EditorTitleControl;
@@ -202,7 +199,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.onWillCloseEditor = options.onWillCloseEditor;
 		this.onOpenLocation = options.onOpenLocation;
 		this.onApplyWorkspaceEdit = options.onApplyWorkspaceEdit;
-		this.createLineGutterDecorations = options.createLineGutterDecorations;
 		this.createDecorationSources = options.createDecorationSources;
 		this.titleActions = options.titleActions;
 		this.domNode = h(ownerDocument, "section");
@@ -408,7 +404,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				workingCopyService: this.workingCopyService,
 				onOpenLocation: this.onOpenLocation,
 				onApplyWorkspaceEdit: this.onApplyWorkspaceEdit,
-				createLineGutterDecorations: this.createLineGutterDecorations,
 				createDecorationSources: this.createDecorationSources,
 				...(this.onSave ? {
 					onSave: () => {

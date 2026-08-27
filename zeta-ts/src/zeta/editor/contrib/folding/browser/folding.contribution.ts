@@ -1,4 +1,4 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { EditorContributionInstantiation, registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { FoldingController } from "./folding.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
@@ -8,6 +8,7 @@ import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
 import { FoldingDecorationProvider } from "./foldingDecorations.js";
 import { RustSyntaxFoldingService } from "../../../browser/services/rustSyntaxFoldingService.js";
+import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 
 registerEditorContribution({
 	id: "editor.contrib.folding",
@@ -54,11 +55,11 @@ registerEditorContribution({
 		context.provideCapability(TextEditorCapability.folding, folding);
 		if (hiddenRanges) {
 			context.setLineProjection({ visibilitySource: hiddenRanges });
-			context.addLineGutterDecoration(new FoldingDecorationProvider(folding));
+			context.addDecorationSource(context.register(new FoldingDecorationProvider(folding)));
 		}
 	},
-	install: context => {
-		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new FoldingController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.folding)));
+	runtime: {
+		descriptor: new SyncDescriptor(FoldingController),
+		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

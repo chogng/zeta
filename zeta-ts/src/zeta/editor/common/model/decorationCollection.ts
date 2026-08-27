@@ -139,24 +139,37 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	replaceAll(
 		specs: readonly TextDecorationSpec<TMetadata>[],
 	): readonly TextDecorationId[] {
+		return this.deltaDecorations([...this.entries.keys()], specs);
+	}
+
+	/** Atomically replaces one caller-owned decoration list while retaining reusable IDs. */
+	deltaDecorations(previousIds: readonly TextDecorationId[], specs: readonly TextDecorationSpec<TMetadata>[]): readonly TextDecorationId[] {
 		this.assertNotDisposed();
 		for (const spec of specs) this.validateSpec(spec);
-		if (specs.length === 0 && this.entries.size === 0) {
-			return Object.freeze([]);
-		}
+		const previousEntries = previousIds.map(id => {
+			const entry = this.entries.get(id);
+			if (!entry) throw new RangeError(`Unknown text decoration ${id}`);
+			return entry;
+		});
+		if (new Set(previousIds).size !== previousIds.length) throw new RangeError("Text decoration delta contains duplicate IDs");
+		if (previousIds.length === 0 && specs.length === 0) return Object.freeze([]);
 
 		const staged: DecorationEntry<TMetadata>[] = [];
 		try {
-			for (const spec of specs) staged.push(this.createEntry(spec));
+			for (let index = 0; index < specs.length; index += 1) {
+				const spec = specs[index]!;
+				const previous = previousEntries[index];
+				staged.push(previous ? this.createEntryWithId(previous.id, spec) : this.createEntry(spec));
+			}
 		} catch (error) {
 			for (const entry of staged) entry.trackedRange.dispose();
 			throw error;
 		}
 
-		for (const entry of this.entries.values()) {
+		for (const entry of previousEntries) {
+			this.entries.delete(entry.id);
 			entry.trackedRange.dispose();
 		}
-		this.entries.clear();
 		for (const entry of staged) this.entries.set(entry.id, entry);
 		this.emitChange(TextDecorationChangeReason.Content);
 		return Object.freeze(staged.map(entry => entry.id));
@@ -171,6 +184,10 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	): DecorationEntry<TMetadata> {
 		const id = nextTextDecorationId as TextDecorationId;
 		nextTextDecorationId += 1;
+		return this.createEntryWithId(id, spec);
+	}
+
+	private createEntryWithId(id: TextDecorationId, spec: TextDecorationSpec<TMetadata>): DecorationEntry<TMetadata> {
 		return {
 			id,
 			trackedRange: this.model.trackRange(

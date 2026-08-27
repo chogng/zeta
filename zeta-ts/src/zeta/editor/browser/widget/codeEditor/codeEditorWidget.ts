@@ -87,7 +87,7 @@ export class CodeEditorWidget extends Disposable {
 			this.viewport = this.view.viewport;
 			this.userInputEvents = this.view.userInputEvents;
 			this.contributions = this._register(new CodeEditorContributions());
-			const instantiationService = options.instantiationService ?? this._register(new ServiceContainer());
+			const instantiationService = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
 			this.contributions.initialize({
 				model: options.model,
 				selectionController: options.selectionController,

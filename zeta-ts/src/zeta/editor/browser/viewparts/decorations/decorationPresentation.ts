@@ -1,5 +1,6 @@
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type Icon } from "../../../../base/common/icon.js";
 import { type TextDecorationCollection, type TextDecorationId, type TextDecorationSnapshot } from "../../../common/model/decorationCollection.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -22,6 +23,34 @@ export enum DecorationPresentation {
 	DiffAdded = "diff-added",
 	DiffModified = "diff-modified",
 	DiffDeleted = "diff-deleted",
+	GlyphMargin = "glyph-margin",
+}
+
+export enum GlyphMarginLane {
+	Left = "left",
+	Center = "center",
+	Right = "right",
+}
+
+export interface DecorationGlyphMarginPresentation {
+	readonly owner: string;
+	readonly lane: GlyphMarginLane;
+	readonly icon?: Icon;
+	readonly className?: string;
+	readonly ariaLabel: string;
+	readonly title?: string;
+	readonly expanded?: boolean;
+	readonly pressed?: boolean;
+	readonly zIndex?: number;
+}
+
+export interface DecorationGlyphMarginLane {
+	readonly owner: string;
+	readonly lane: GlyphMarginLane;
+}
+
+export interface DecorationSourceOptions {
+	readonly glyphMarginLanes?: readonly DecorationGlyphMarginLane[];
 }
 
 /** Describes an optional class projected into the editor's line-side decoration lane. */
@@ -44,6 +73,7 @@ export interface DecorationPresentationResolution {
 	readonly presentation: DecorationPresentation;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
+	readonly glyphMargin?: DecorationGlyphMarginPresentation;
 	readonly overviewRuler?: boolean;
 	readonly minimap?: boolean;
 }
@@ -55,6 +85,7 @@ export interface ResolvedDecoration {
 	readonly hoverText?: string;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
+	readonly glyphMargin?: DecorationGlyphMarginPresentation;
 	readonly overviewRuler?: boolean;
 	readonly minimap?: boolean;
 }
@@ -62,6 +93,7 @@ export interface ResolvedDecoration {
 export interface DecorationSource {
 	readonly onDidChange: Event<void>;
 	readonly decorations: readonly ResolvedDecoration[];
+	readonly glyphMarginLanes: readonly DecorationGlyphMarginLane[];
 }
 
 /** A host-created decoration source whose lifetime transfers to one editor part. */
@@ -98,12 +130,15 @@ export function createStanzaDecorationSource<TMetadata>(
 		decoration: TextDecorationSnapshot<TMetadata>,
 	) => DecorationPresentation | DecorationPresentationResolution | undefined,
 	resolveHoverText?: (decoration: TextDecorationSnapshot<TMetadata>) => string | undefined,
+	options: DecorationSourceOptions = {},
 ): DecorationSource {
+	const glyphMarginLanes = normalizeGlyphMarginLanes(options.glyphMarginLanes);
 	const onDidChange: Event<void> = listener => {
 		return collection.onDidChange(() => listener());
 	};
 	return Object.freeze({
 		onDidChange,
+		glyphMarginLanes,
 		get decorations(): readonly ResolvedDecoration[] {
 			const resolved: ResolvedDecoration[] = [];
 			for (const decoration of collection.decorations) {
@@ -120,6 +155,7 @@ export function createStanzaDecorationSource<TMetadata>(
 				}
 				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration);
 				const blockDecoration = normalizeBlockPresentation(details?.blockDecoration);
+				const glyphMargin = normalizeGlyphMarginPresentation(details?.glyphMargin, glyphMarginLanes);
 				const overviewRuler = normalizeOptionalBoolean(details?.overviewRuler, "overview ruler visibility");
 				const minimap = normalizeOptionalBoolean(details?.minimap, "minimap visibility");
 				if (blockDecoration?.isAfterEnd && !decoration.range.empty) {
@@ -132,6 +168,7 @@ export function createStanzaDecorationSource<TMetadata>(
 					...(hoverText === undefined ? {} : { hoverText }),
 					...(linesDecoration === undefined ? {} : { linesDecoration }),
 					...(blockDecoration === undefined ? {} : { blockDecoration }),
+					...(glyphMargin === undefined ? {} : { glyphMargin }),
 					...(overviewRuler === undefined ? {} : { overviewRuler }),
 					...(minimap === undefined ? {} : { minimap }),
 				}));
@@ -208,6 +245,7 @@ function validatePresentation(
 		&& presentation !== DecorationPresentation.DiffAdded
 		&& presentation !== DecorationPresentation.DiffModified
 		&& presentation !== DecorationPresentation.DiffDeleted
+		&& presentation !== DecorationPresentation.GlyphMargin
 	) {
 		throw new TypeError(`Unknown Stanza decoration presentation '${presentation}'`);
 	}
@@ -277,6 +315,55 @@ function normalizeOptionalText(value: string | undefined, name: string): string 
 		throw new TypeError(`Stanza ${name} must be non-empty text`);
 	}
 	return value;
+}
+
+function normalizeGlyphMarginLanes(lanes: readonly DecorationGlyphMarginLane[] | undefined): readonly DecorationGlyphMarginLane[] {
+	if (lanes === undefined) return Object.freeze([]);
+	if (!Array.isArray(lanes)) throw new TypeError("Stanza glyph margin lanes must be an array");
+	const seenOwners = new Set<string>();
+	return Object.freeze(lanes.map(definition => {
+		if (!definition || typeof definition !== "object") throw new TypeError("Stanza glyph margin lane must be an object");
+		const owner = normalizeOptionalText(definition.owner, "glyph margin owner");
+		if (!owner) throw new TypeError("Stanza glyph margin owner must be non-empty text");
+		if (seenOwners.has(owner)) throw new RangeError(`Duplicate glyph margin owner '${owner}'`);
+		seenOwners.add(owner);
+		validateGlyphMarginLane(definition.lane);
+		return Object.freeze({ owner, lane: definition.lane });
+	}));
+}
+
+function normalizeGlyphMarginPresentation(presentation: DecorationGlyphMarginPresentation | undefined, lanes: readonly DecorationGlyphMarginLane[]): DecorationGlyphMarginPresentation | undefined {
+	if (presentation === undefined) return undefined;
+	if (!presentation || typeof presentation !== "object") throw new TypeError("Stanza glyph margin presentation must be an object");
+	const owner = normalizeOptionalText(presentation.owner, "glyph margin owner");
+	if (!owner) throw new TypeError("Stanza glyph margin owner must be non-empty text");
+	validateGlyphMarginLane(presentation.lane);
+	if (!lanes.some(definition => definition.owner === owner && definition.lane === presentation.lane)) {
+		throw new RangeError(`Glyph margin owner '${owner}' did not declare lane '${presentation.lane}'`);
+	}
+	if (presentation.icon !== undefined && (typeof presentation.icon.id !== "string" || presentation.icon.id.length === 0)) throw new TypeError("Stanza glyph margin icon is invalid");
+	const className = normalizeClassName(presentation.className, "glyph margin className");
+	const ariaLabel = normalizeOptionalText(presentation.ariaLabel, "glyph margin aria label");
+	if (!ariaLabel) throw new TypeError("Stanza glyph margin aria label must be non-empty text");
+	const title = normalizeOptionalText(presentation.title, "glyph margin title");
+	const expanded = normalizeOptionalBoolean(presentation.expanded, "glyph margin expanded state");
+	const pressed = normalizeOptionalBoolean(presentation.pressed, "glyph margin pressed state");
+	if (presentation.zIndex !== undefined && !Number.isSafeInteger(presentation.zIndex)) throw new RangeError("Stanza glyph margin zIndex must be a safe integer");
+	return Object.freeze({
+		owner,
+		lane: presentation.lane,
+		...(presentation.icon === undefined ? {} : { icon: presentation.icon }),
+		...(className === undefined ? {} : { className }),
+		ariaLabel,
+		...(title === undefined ? {} : { title }),
+		...(expanded === undefined ? {} : { expanded }),
+		...(pressed === undefined ? {} : { pressed }),
+		...(presentation.zIndex === undefined ? {} : { zIndex: presentation.zIndex }),
+	});
+}
+
+function validateGlyphMarginLane(lane: GlyphMarginLane): void {
+	if (lane !== GlyphMarginLane.Left && lane !== GlyphMarginLane.Center && lane !== GlyphMarginLane.Right) throw new TypeError(`Unknown Stanza glyph margin lane '${lane}'`);
 }
 
 function normalizeOptionalBoolean(value: boolean | undefined, name: string): boolean | undefined {

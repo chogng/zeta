@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
-const { createServiceIdentifier, ServiceContainer, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { createServiceIdentifier, IInstantiationService, ServiceContainer, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -91,7 +91,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	const services = new ServiceContainer();
 	services.registerInstance(serviceId, service);
 	const instantiationService = services;
-	const state = { events, model, service };
+	const state = { events, instantiationService, model, service };
 	using editor = new CodeEditorWidget({
 		container,
 		model,
@@ -102,12 +102,12 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 			{
 				id: "test.eager",
 				instantiation: CodeEditorContributionInstantiation.Eager,
-				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId] }),
+				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "eager"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 			{
 				id: "test.lazy",
 				instantiation: CodeEditorContributionInstantiation.Lazy,
-				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId] }),
+				descriptor: new SyncDescriptor(TestCodeEditorContribution, { staticArguments: [state, "lazy"], serviceDependencies: [serviceId, IInstantiationService] }),
 			},
 		],
 	});
@@ -122,14 +122,17 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 
 class TestCodeEditorContribution extends Disposable {
 	constructor(
-		private readonly state: { readonly events: string[]; readonly model: TextModel; readonly service: { readonly kind: string } },
+		private readonly state: { readonly events: string[]; readonly instantiationService: InstanceType<typeof ServiceContainer>; readonly model: TextModel; readonly service: { readonly kind: string } },
 		private readonly id: string,
 		context: CodeEditorContributionContext,
 		service: { readonly kind: string },
+		instantiationService: InstanceType<typeof ServiceContainer>,
 	) {
 		super();
 		assert.equal(context.model, state.model);
 		assert.equal(service, state.service);
+		assert.notEqual(instantiationService, state.instantiationService);
+		assert.equal(instantiationService.get(IInstantiationService), instantiationService);
 		state.events.push(`${id}:create`);
 		this._register(toDisposable(() => state.events.push(`${id}:dispose`)));
 	}

@@ -1,0 +1,55 @@
+.stanza-editor-glyph-margin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.stanza-editor-glyph-margin-lane {
+  position: absolute;
+  top: 0;
+  width: 20px;
+  pointer-events: auto;
+}
+
+.stanza-editor-glyph-margin-decoration {
+  position: absolute;
+  left: 0;
+  display: flex;
+  width: 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--zeta-description-foreground);
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.stanza-editor-glyph-margin-decoration > .zeta-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.stanza-editor-glyph-margin-decoration > .zeta-icon [stroke] {
+  stroke: currentColor;
+}
+
+.stanza-editor-glyph-margin-decoration > .zeta-icon [fill]:not([fill='none']) {
+  fill: currentColor;
+}
+
+.stanza-editor-glyph-margin-decoration:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
+@media (forced-colors: active) {
+  .stanza-editor-glyph-margin-decoration:focus-visible {
+    outline-color: Highlight;
+  }
+}

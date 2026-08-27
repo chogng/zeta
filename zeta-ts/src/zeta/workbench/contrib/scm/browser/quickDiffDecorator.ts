@@ -19,6 +19,7 @@ interface QuickDiffDecorationMetadata {
 
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
 export class QuickDiffDecorator extends Disposable implements OwnedDecorationSource {
+	readonly glyphMarginLanes = Object.freeze([]);
 	private readonly collection: TextDecorationCollection<QuickDiffDecorationMetadata>;
 	private readonly source: DecorationSource;
 	readonly onDidChange: Event<void>;

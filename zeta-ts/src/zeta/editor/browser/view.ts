@@ -34,8 +34,8 @@ import { getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint } from '
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/semanticTokens/semanticTokenPresentation.js';
 import { type ActiveLineHighlight, type ViewportOverlayContext } from './viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
-import { type EditorLineGutterDecoration, EditorLineGutterRenderer } from './viewparts/margin/lineGutterDecoration.js';
 import { MarginPart } from './viewparts/margin/marginPart.js';
+import { GlyphMarginPart } from './viewparts/glyphMargin/glyphMarginPart.js';
 import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
 import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
 import { LineNumbersPart } from './viewparts/lineNumbers/lineNumbersPart.js';
@@ -364,7 +364,6 @@ export interface EditorViewportOptions {
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
 	readonly lineVisibilitySource?: EditorLineVisibilitySource;
-	readonly lineGutterDecorations?: readonly EditorLineGutterDecoration[];
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
@@ -416,7 +415,6 @@ export class View extends Disposable {
 	private readonly textMeasurer: TextMeasurer;
 	private readonly lineWidths: LineWidthIndex;
 	private readonly viewModelLines: ViewModelLines;
-	private readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
@@ -486,13 +484,6 @@ export class View extends Disposable {
 			this.dispose();
 			throw error;
 		}
-		this.lineGutterRenderer = options.lineGutterDecorations && options.lineGutterDecorations.length > 0
-			? this._register(new EditorLineGutterRenderer(
-				this.element,
-				Object.freeze([...options.lineGutterDecorations]),
-				() => this.project(this.viewport.layout),
-			))
-			: undefined;
 		this.element.className = "stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
@@ -574,7 +565,6 @@ export class View extends Disposable {
 			readProjectionRevision: () => this.viewModelLines.revision,
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
-			lineGutterRenderer: this.lineGutterRenderer,
 			textDirection: this.textDirection,
 		}));
 		this.viewLinesGpu = options.experimentalGpuAcceleration === 'on'
@@ -592,6 +582,22 @@ export class View extends Disposable {
 				fontLigatures: options.fontLigatures ?? false,
 			}))
 			: undefined;
+		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
+		const glyphMarginSources = this.presentation === 'document' ? decorationSources : Object.freeze([]);
+		this.viewOverlays = this._register(new ViewOverlays(this.viewContext, {
+			contentElement: this.contentElement,
+			model: this.model,
+			selectionController: this.selectionController,
+			decorationSources,
+			showIndentationGuides: this.showIndentationGuides,
+			indentationTabSize: this.indentation.tabSize,
+		}));
+		const glyphMarginPart = this.viewParts.register(new GlyphMarginPart({
+			host: this.contentElement,
+			sources: glyphMarginSources,
+			decorationsPart: this.viewOverlays.decorationsPart,
+			readVisualLines: () => this.visualProjection,
+		}));
 		this.marginPart = this.viewParts.register(new MarginPart({
 			host: this.element,
 			contentElement: this.contentElement,
@@ -599,22 +605,12 @@ export class View extends Disposable {
 			textMeasurer: this.textMeasurer,
 			presentation: this.presentation,
 			showLineNumbers: this.showLineNumbers,
-			lineGutterRenderer: this.lineGutterRenderer,
-			readVisualProjection: () => this.visualProjection,
-			readRenderedLines: () => this.viewLinesPart.renderedLines,
+			glyphMarginWidth: glyphMarginPart.width,
 		}));
 		this.viewParts.register(new LineNumbersPart({
 			showLineNumbers: this.showLineNumbers,
 			readVisualProjection: () => this.visualProjection,
 			readRenderedLines: () => this.viewLinesPart.renderedLines,
-		}));
-		this.viewOverlays = this._register(new ViewOverlays(this.viewContext, {
-			contentElement: this.contentElement,
-			model: this.model,
-			selectionController: this.selectionController,
-			decorationSources: options.decorationSources ?? [],
-			showIndentationGuides: this.showIndentationGuides,
-			indentationTabSize: this.indentation.tabSize,
 		}));
 		const rulersPart = this.viewParts.register(new RulersPart({
 			host: this.contentElement,
@@ -650,6 +646,7 @@ export class View extends Disposable {
 		this.contentElement.append(
 			this.viewLinesPart.domNode,
 			this.marginPart.domNode,
+			glyphMarginPart.domNode,
 			this.viewOverlays.blockDecorationsPart.domNode,
 			rulersPart.domNode,
 		);

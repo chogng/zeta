@@ -28,7 +28,21 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	};
 
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-line-number")))?.kind, MouseTargetKind.LineNumber);
-	assert.equal(factory.create(mouseEvent(node("stanza-editor-feature-gutter-slot")))?.kind, MouseTargetKind.GutterDecoration);
+	const glyphLane = node("stanza-editor-glyph-margin-lane");
+	glyphLane.dataset.glyphMarginLane = "center";
+	const glyph = dom.window.document.createElement("button");
+	glyph.className = "stanza-editor-glyph-margin-decoration";
+	glyph.dataset.decorationId = "7";
+	glyph.dataset.decorationOwner = "folding";
+	glyphLane.append(glyph);
+	assert.deepEqual(factory.create(mouseEvent(glyph)), {
+		kind: MouseTargetKind.GutterDecoration,
+		editorTarget,
+		element: glyph,
+		decorationId: 7,
+		decorationOwner: "folding",
+		glyphMarginLane: "center",
+	});
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-scrollbar-track stanza-editor-scrollbar-track-vertical")))?.kind, MouseTargetKind.Scrollbar);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-zone-widget")))?.kind, MouseTargetKind.ViewZone);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-content-widget")))?.kind, MouseTargetKind.Widget);

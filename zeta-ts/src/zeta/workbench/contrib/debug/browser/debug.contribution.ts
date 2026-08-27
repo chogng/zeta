@@ -7,9 +7,10 @@ import { IDebugConsoleService } from "../../../services/debug/common/debugConsol
 import { DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID } from "../common/debug.js";
 import { DebugViewPane } from "./debugViewPane.js";
 import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
-import { registerEditorLineGutterDecorationFactory } from "../../../browser/parts/editor/editorGutterDecorations.js";
-import { DebugBreakpointDecorationProvider } from "./debugBreakpointDecorations.js";
+import { registerEditorDecorationSourceFactory } from "../../../browser/parts/editor/editorDecorations.js";
+import { DebugBreakpointController, DebugBreakpointDecorationProvider } from "./debugBreakpointDecorations.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
+import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
 import "./debugActions.js";
 import "./media/debug.css";
 
@@ -21,4 +22,11 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 }
 
 registerDebugView();
-registerEditorLineGutterDecorationFactory((resource, accessor) => resource.scheme === "file" || isRemoteResource(resource) ? new DebugBreakpointDecorationProvider(accessor.get(IDebugService), resource) : undefined);
+registerEditorDecorationSourceFactory(({ resource, model, accessor }) => resource.scheme === "file" || isRemoteResource(resource) ? new DebugBreakpointDecorationProvider(accessor.get(IDebugService), resource, model) : undefined);
+registerEditorContribution({
+	id: 'workbench.contrib.debugBreakpointController',
+	runtime: {
+		descriptor: new SyncDescriptor(DebugBreakpointController, { serviceDependencies: [IDebugService] }),
+		instantiation: EditorContributionInstantiation.Eager,
+	},
+});

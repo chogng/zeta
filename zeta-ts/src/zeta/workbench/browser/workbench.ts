@@ -219,7 +219,6 @@ import { BrowserEditorService } from "../services/editor/browser/browserEditorSe
 import { IEditorService } from "../services/editor/common/editorService.js";
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
-import { createEditorLineGutterDecorations } from "./parts/editor/editorGutterDecorations.js";
 import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
 import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
@@ -647,7 +646,6 @@ export class Workbench extends Disposable {
 			workingCopyService,
 			dialogService,
 			bulkEditService,
-			createLineGutterDecorations: resource => createEditorLineGutterDecorations(resource, services),
 			createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, diffApi: api.diff, model, resource }),
 			saveAsResource: nativeHostApi
 				? async (defaultName) => {

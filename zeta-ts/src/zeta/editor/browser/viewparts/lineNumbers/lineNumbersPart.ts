@@ -9,7 +9,7 @@ export interface LineNumbersPartOptions {
 	readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
 }
 
-/** Projects line numbers into virtual rows; MarginPart owns feature-gutter slots. */
+/** Projects line numbers into virtual rows. */
 export class LineNumbersPart extends EditorViewPart {
 	private readonly showLineNumbers: boolean;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;

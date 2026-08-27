@@ -38,7 +38,6 @@ import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../contrib/bulkEdit/common/bulkEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import type { OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
@@ -122,7 +121,6 @@ export interface IEditorPartOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly dialogService?: IDialogService;
 	readonly bulkEditService?: IBulkEditService;
-	readonly createLineGutterDecorations?: (resource: URI) => readonly EditorLineGutterDecoration[];
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly registry?: EditorPaneRegistry;
 	readonly titleActions?: {
@@ -188,7 +186,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			onWillCloseEditor: (group, input, pane) => this.confirmEditorClose(group, input, pane),
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
 			onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
-			createLineGutterDecorations: options.createLineGutterDecorations,
 			createDecorationSources: options.createDecorationSources,
 			titleActions: options.titleActions,
 			welcome: options.welcome,
@@ -235,7 +232,6 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				workingCopyService: options.workingCopyService,
 				onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range }).then(() => undefined),
 				onApplyWorkspaceEdit: options.bulkEditService ? edit => options.bulkEditService!.apply(edit).then(() => undefined) : undefined,
-				createLineGutterDecorations: options.createLineGutterDecorations,
 				createDecorationSources: options.createDecorationSources,
 				...(options.titleActions ? {
 					actionServices: {

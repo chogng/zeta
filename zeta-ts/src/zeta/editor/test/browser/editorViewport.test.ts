@@ -542,17 +542,18 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
+	using decorations = new FoldingDecorationProvider(folding);
 	using viewport = new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		lineVisibilitySource: hiddenRanges,
-		lineGutterDecorations: [new FoldingDecorationProvider(folding)],
+		decorationSources: [decorations],
 	});
 	viewport.layout({ width: 300, height: 20 });
 	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-width"), "24px");
-	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-feature-gutter-width"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-glyph-margin-width"), "20px");
 	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "44px");
 	const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(initialToggle.getAttribute("aria-expanded"), "true");

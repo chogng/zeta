@@ -2,26 +2,7 @@
   color: var(--zeta-error-foreground);
 }
 
-.zeta-debug-breakpoint-gutter::before {
-  display: block;
-  width: 10px;
-  height: 10px;
-  margin: auto;
-  content: "";
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 50%;
-}
-
-.zeta-debug-breakpoint-gutter:hover::before {
-  background: color-mix(in srgb, var(--zeta-error-foreground) 45%, transparent);
-}
-
-.zeta-debug-breakpoint-gutter.checked::before {
-  background: var(--zeta-error-foreground);
-  border-color: var(--zeta-error-foreground);
-}
-
-.zeta-debug-breakpoint-gutter.checked:not(.verified)::before {
-  background: transparent;
+.zeta-debug-breakpoint-gutter.unverified,
+.zeta-debug-breakpoint-gutter.disabled {
+  opacity: 0.55;
 }

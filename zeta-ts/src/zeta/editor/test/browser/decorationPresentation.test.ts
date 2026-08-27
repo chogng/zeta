@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DecorationPresentation, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
+import { DecorationPresentation, GlyphMarginLane, createStanzaDecorationRectangles, createStanzaDecorationSource } from "../../browser/viewparts/decorations/decorationPresentation.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
@@ -132,6 +132,36 @@ test("Decoration geometry presents an empty diagnostic at its text position", ()
 		left: 58,
 		width: 10,
 	}]);
+});
+
+test("Decoration sources declare and validate glyph-margin ownership", () => {
+	using model = new TextModel("abc");
+	using collection = new TextDecorationCollection<string>(model);
+	const id = collection.add({
+		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		metadata: "folding",
+	});
+	const source = createStanzaDecorationSource(collection, () => ({
+		presentation: DecorationPresentation.GlyphMargin,
+		glyphMargin: { owner: "folding", lane: GlyphMarginLane.Center, ariaLabel: "Collapse lines", expanded: true },
+	}), undefined, {
+		glyphMarginLanes: [{ owner: "folding", lane: GlyphMarginLane.Center }],
+	});
+
+	assert.deepEqual(source.glyphMarginLanes, [{ owner: "folding", lane: GlyphMarginLane.Center }]);
+	assert.deepEqual(source.decorations, [{
+		id,
+		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		presentation: DecorationPresentation.GlyphMargin,
+		glyphMargin: { owner: "folding", lane: GlyphMarginLane.Center, ariaLabel: "Collapse lines", expanded: true },
+	}]);
+
+	const undeclared = createStanzaDecorationSource(collection, () => ({
+		presentation: DecorationPresentation.GlyphMargin,
+		glyphMargin: { owner: "debug", lane: GlyphMarginLane.Left, ariaLabel: "Add breakpoint" },
+	}));
+	assert.throws(() => undeclared.decorations, /did not declare lane/);
 });
 
 interface DecorationMetadata {

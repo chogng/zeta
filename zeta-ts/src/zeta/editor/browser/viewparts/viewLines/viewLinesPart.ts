@@ -5,7 +5,6 @@ import { type EditorLineRange } from '../../../common/viewModel.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectStanzaSemanticTokenLine } from '../semanticTokens/semanticTokenPresentation.js';
-import { type EditorLineGutterRenderer } from '../margin/lineGutterDecoration.js';
 import { createStanzaRenderedLine, type RenderedLine } from './renderedLine.js';
 import { ViewLayer } from '../../view/viewLayer.js';
 
@@ -18,7 +17,6 @@ export interface ViewLinesPartOptions {
 	readonly readProjectionRevision: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	readonly textDirection: ViewLinesTextDirection;
 }
 
@@ -29,7 +27,6 @@ export class ViewLinesPart extends Disposable {
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	private readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	private readonly textDirection: ViewLinesTextDirection;
 	private readonly layer: ViewLayer<RenderedLine>;
 
@@ -39,14 +36,13 @@ export class ViewLinesPart extends Disposable {
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
 		this.bracketColorizationSource = options.bracketColorizationSource;
-		this.lineGutterRenderer = options.lineGutterRenderer;
 		this.textDirection = options.textDirection;
 		this.layer = this._register(new ViewLayer<RenderedLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,
 			lineRenderer: {
-				createLine: visualLineIndex => createStanzaRenderedLine(this.domNode.ownerDocument, visualLineIndex, this.lineGutterRenderer),
+				createLine: visualLineIndex => createStanzaRenderedLine(this.domNode.ownerDocument, visualLineIndex),
 				getDomNode: line => line.domNode.domNode,
 					renderLine: (line, visualLine) => {
 						line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);

@@ -7,6 +7,9 @@ import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
+import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
+import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 export enum FoldingCommand {
 	Collapse = "collapse",
@@ -27,23 +30,29 @@ export interface FoldingControllerOptions {
 /** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
 export class FoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
+	private readonly viewport: EditorViewport;
+	private readonly selections: EditorSelectionController;
+	private readonly folding: EditorFoldingModel;
+	private readonly mouseTargets: MouseTargetFactory;
 	private awaitingChord = false;
 
 	constructor(
-		input: HTMLElement,
-		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
-		private readonly folding: EditorFoldingModel,
+		context: TextEditorContributionContext,
 		options: FoldingControllerOptions = {},
 	) {
 		super();
+		this.viewport = context.viewport;
+		this.selections = context.selections;
+		this.folding = context.getCapability(TextEditorCapability.folding);
+		this.mouseTargets = new MouseTargetFactory(this.viewport);
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
-			if (viewport.textModel !== selections.textModel || viewport.textModel !== folding.model) {
+			if (this.viewport.textModel !== this.selections.textModel || this.viewport.textModel !== this.folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
-			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-			this._register(addDisposableListener(viewport.element, "pointerdown", event => this.handleGutterPointerDown(event)));
+			if (context.model.largeFile.tooLargeForTokenization) return;
+			this._register(addDisposableListener(context.view.element, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(this.viewport.element, "pointerdown", event => this.handleGutterPointerDown(event), true));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -81,11 +90,10 @@ export class FoldingController extends Disposable {
 	}
 
 	private handleGutterPointerDown(event: PointerEvent): void {
-		const target = event.target as { closest?: <T extends Element>(selector: string) => T | null } | null;
-		const button = target?.closest?.<HTMLButtonElement>(".stanza-editor-fold-toggle");
-		if (!button || !this.viewport.element.contains(button)) return;
-		const lineIndex = Number(button.dataset.logicalLineIndex);
-		if (!Number.isSafeInteger(lineIndex)) return;
+		const target = this.mouseTargets.create(event);
+		if (target?.kind !== MouseTargetKind.GutterDecoration || target.decorationOwner !== "folding") return;
+		const lineIndex = target.editorTarget?.position.lineIndex;
+		if (lineIndex === undefined) return;
 		event.preventDefault();
 		event.stopPropagation();
 		this.viewport.element.focus({ preventScroll: true });

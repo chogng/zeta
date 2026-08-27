@@ -13,7 +13,6 @@ import { type EditorBrowserOptions } from "./editorBrowser.js";
 import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
 import { type EditorViewport } from "./view.js";
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
-import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
@@ -40,8 +39,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
 	readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
 	readonly addDecorationSource: (source: DecorationSource) => void;
-	readonly addLineGutterDecoration: (decoration: EditorLineGutterDecoration) => void;
-	readonly setLineProjection: (projection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration }) => void;
+	readonly setLineProjection: (projection: { readonly visibilitySource: EditorLineVisibilitySource }) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
 	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;

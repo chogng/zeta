@@ -91,7 +91,6 @@ export interface EditorPaneOptions {
 	readonly onExecuteEditorCommand?: EditorBrowserOptions["onExecuteEditorCommand"];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
-	readonly createLineGutterDecorations?: (resource: URI) => NonNullable<EditorBrowserOptions["lineGutterDecorations"]>;
 	readonly createDecorationSources?: (resource: URI, model: TextModel) => readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
@@ -196,7 +195,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				onExecuteEditorCommand: this.options.onExecuteEditorCommand,
 				onOpenLocation: this.options.onOpenLocation,
 				onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
-				lineGutterDecorations: this.options.createLineGutterDecorations?.(input.resource),
 				decorationSources: this.options.createDecorationSources?.(input.resource, modelReference.model),
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,

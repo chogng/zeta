@@ -1,33 +1,96 @@
-import "./media/debugBreakpointDecorations.css";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { type EditorLineGutterDecoration, type EditorLineGutterItem } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
-import { type IDebugService } from "../../../services/debug/common/debugService.js";
+import './media/debugBreakpointDecorations.css';
+import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { register } from '../../../../base/common/icon.js';
+import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { MouseTargetFactory, MouseTargetKind } from '../../../../editor/browser/controller/mouseTarget.js';
+import { type TextEditorContributionContext } from '../../../../editor/browser/editorExtensions.js';
+import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane, type DecorationPresentationResolution, type DecorationSource, type OwnedDecorationSource } from '../../../../editor/browser/viewparts/decorations/decorationPresentation.js';
+import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
+import { TextDecorationCollection, type TextDecorationId } from '../../../../editor/common/model/decorationCollection.js';
+import { type TextModel } from '../../../../editor/common/model/textModel.js';
+import { TrackedRangeStickiness } from '../../../../editor/common/model/trackedRange.js';
+import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
+import { type IDebugBreakpoint, type IDebugService } from '../../../services/debug/common/debugService.js';
 
-/** Supplies Debug breakpoint state to the editor's shared gutter renderer. */
-export class DebugBreakpointDecorationProvider extends Disposable implements EditorLineGutterDecoration {
-	private readonly changeEmitter = this._register(new Emitter<void>());
-	readonly onDidChange: Event<void> = this.changeEmitter.event;
+const DEBUG_BREAKPOINT_OWNER = 'debug-breakpoint';
+const breakpointIcon = register('breakpoint', lxiconsLibrary.target);
 
-	constructor(private readonly debug: IDebugService, private readonly resource: URI) {
+/** Owns breakpoint model decorations while the shared glyph-margin part owns their DOM. */
+export class DebugBreakpointDecorationProvider extends Disposable implements OwnedDecorationSource {
+	private readonly collection: TextDecorationCollection<IDebugBreakpoint>;
+	private readonly source: DecorationSource;
+	private decorationIds: readonly TextDecorationId[] = Object.freeze([]);
+
+	public readonly onDidChange;
+	public readonly glyphMarginLanes;
+
+	constructor(private readonly debug: IDebugService, private readonly resource: URI, model: TextModel) {
 		super();
-		this._register(debug.onDidChangeBreakpoints(() => this.changeEmitter.fire()));
+		this.collection = this._register(new TextDecorationCollection(model));
+		this.source = createStanzaDecorationSource(
+			this.collection,
+			decoration => breakpointDecoration(decoration.metadata),
+			undefined,
+			{ glyphMarginLanes: [{ owner: DEBUG_BREAKPOINT_OWNER, lane: GlyphMarginLane.Left }] },
+		);
+		this.onDidChange = this.source.onDidChange;
+		this.glyphMarginLanes = this.source.glyphMarginLanes;
+		this.updateDecorations();
+		this._register(debug.onDidChangeBreakpoints(() => this.updateDecorations()));
 	}
 
-	getDecoration(logicalLineIndex: number, firstForLogicalLine: boolean): EditorLineGutterItem | undefined {
-		if (!firstForLogicalLine) return undefined;
-		const breakpoint = this.debug.breakpoints.find(candidate => candidate.resource.toString() === this.resource.toString() && candidate.lineNumber === logicalLineIndex + 1);
-		const label = breakpoint ? `Remove breakpoint at line ${logicalLineIndex + 1}` : `Add breakpoint at line ${logicalLineIndex + 1}`;
-		return {
-			className: ["zeta-debug-breakpoint-gutter", breakpoint ? "checked" : "", breakpoint?.verified === true ? "verified" : ""].filter(Boolean).join(" "),
-			label,
-			title: label,
-			pressed: Boolean(breakpoint),
-		};
+	public get decorations() {
+		return this.source.decorations;
 	}
 
-	activate(logicalLineIndex: number): void {
-		this.debug.toggleBreakpoint(this.resource, logicalLineIndex + 1);
+	private updateDecorations(): void {
+		const model = this.collection.textModel;
+		const breakpoints = this.debug.breakpoints.filter(candidate => candidate.resource.toString() === this.resource.toString() && candidate.lineNumber >= 1 && candidate.lineNumber <= model.lineCount);
+		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, breakpoints.map(breakpoint => ({
+			range: TextRange.emptyAt(TextPosition.at(breakpoint.lineNumber - 1, 0)),
+			stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+			metadata: breakpoint,
+		})));
 	}
+}
+
+/** Routes empty-lane and existing-breakpoint pointer targets to Debug state. */
+export class DebugBreakpointController extends Disposable {
+	private readonly mouseTargets: MouseTargetFactory;
+
+	constructor(context: TextEditorContributionContext, private readonly debug: IDebugService) {
+		super();
+		this.mouseTargets = new MouseTargetFactory(context.viewport);
+		const resource = context.options.input.resource;
+		if (resource.scheme !== 'file' && !isRemoteResource(resource)) return;
+		this._register(addDisposableListener(context.viewport.element, 'pointerdown', event => {
+			const target = this.mouseTargets.create(event);
+			if (target?.kind !== MouseTargetKind.GutterDecoration || target.glyphMarginLane !== GlyphMarginLane.Left) return;
+			const lineIndex = target.editorTarget?.position.lineIndex;
+			if (lineIndex === undefined) return;
+			stopEvent(event);
+			context.viewport.element.focus({ preventScroll: true });
+			this.debug.toggleBreakpoint(resource, lineIndex + 1);
+		}, true));
+	}
+}
+
+function breakpointDecoration(breakpoint: IDebugBreakpoint): DecorationPresentationResolution {
+	const label = `Remove breakpoint at line ${breakpoint.lineNumber}`;
+	return Object.freeze({
+		presentation: DecorationPresentation.GlyphMargin,
+		glyphMargin: {
+			owner: DEBUG_BREAKPOINT_OWNER,
+			lane: GlyphMarginLane.Left,
+			icon: breakpointIcon,
+			className: ['zeta-debug-breakpoint-gutter', breakpoint.enabled ? 'enabled' : 'disabled', breakpoint.verified ? 'verified' : 'unverified'].join(' '),
+			ariaLabel: label,
+			title: breakpoint.message ?? label,
+			pressed: true,
+		},
+		overviewRuler: false,
+		minimap: false,
+	});
 }

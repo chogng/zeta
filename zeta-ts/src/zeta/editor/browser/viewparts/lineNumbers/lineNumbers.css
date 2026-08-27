@@ -5,7 +5,7 @@
   display: inline-block;
   box-sizing: border-box;
   width: var(--stanza-editor-gutter-width);
-  padding: 0 calc(var(--stanza-editor-feature-gutter-width, 0px) + 8px) 0 8px;
+  padding: 0 8px 0 calc(var(--stanza-editor-glyph-margin-width, 0px) + 8px);
   color: var(--zeta-description-foreground);
   font-variant-numeric: tabular-nums;
   text-align: right;

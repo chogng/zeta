@@ -20,7 +20,6 @@ import { type EditorLineWrapping, type IEditorOptions, type WrappingIndent } fro
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
-import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
@@ -133,7 +132,6 @@ export interface EditorBrowserOptions {
 	/** Host-owned multi-resource edit transaction. */
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	/** Host-contributed gutter presentation; feature semantics remain outside the editor core. */
-	readonly lineGutterDecorations?: readonly EditorLineGutterDecoration[];
 	/** Host-created decoration sources whose lifetime transfers to this editor part. */
 	readonly decorationSources?: readonly OwnedDecorationSource[];
 	readonly placeholder?: string;
@@ -199,8 +197,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			};
 			const decorationSources: DecorationSource[] = [];
 			for (const source of options.decorationSources ?? []) decorationSources.push(this._register(source));
-			const lineGutterDecorations: EditorLineGutterDecoration[] = [...(options.lineGutterDecorations ?? [])];
-			let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration } | undefined;
+			let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource } | undefined;
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
@@ -221,7 +218,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					getOptionalCapability,
 					provideCapability,
 					addDecorationSource: source => decorationSources.push(source),
-					addLineGutterDecoration: decoration => lineGutterDecorations.push(decoration),
 					setLineProjection: projection => {
 						if (lineProjection) throw new Error("Text editor line projection is already configured");
 						lineProjection = projection;
@@ -257,7 +253,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				onContributionError: onLanguageError,
 				viewport: {
 					lineVisibilitySource: lineProjection?.visibilitySource,
-					lineGutterDecorations: [...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : []), ...lineGutterDecorations],
 					decorationSources,
 					semanticTokenSource,
 					bracketColorizationSource,
@@ -323,7 +318,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				instantiation: contribution.runtime.instantiation,
 			}] : []);
 			if (runtimeContributions.length > 0) {
-				if (!options.instantiationService) throw new Error("Runtime editor contributions require an instantiation service");
 				this.codeEditor.contributions.add(installContext, runtimeContributions);
 			}
 		} catch (error) {

@@ -158,10 +158,29 @@ test("TextDecorationCollection validates replaceAll atomically", () => {
 	}, {
 		idCount: 2,
 		uniqueIds: 2,
-		replacedOriginal: false,
+		replacedOriginal: true,
 		size: 2,
 		eventCount: 1,
 	});
+});
+
+test("TextDecorationCollection applies a delta in one event and retains reusable IDs", () => {
+	using model = new TextModel("abc");
+	using decorations = new TextDecorationCollection<string>(model);
+	const first = decorations.add({ range: range(0, 1), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: "first" });
+	const second = decorations.add({ range: range(1, 2), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: "second" });
+	let eventCount = 0;
+	using listener = decorations.onDidChange(() => eventCount += 1);
+
+	const ids = decorations.deltaDecorations([first, second], [{
+		range: range(2, 3),
+		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		metadata: "updated",
+	}]);
+
+	assert.deepEqual(ids, [first]);
+	assert.deepEqual(decorations.decorations, [{ id: first, range: range(2, 3), metadata: "updated" }]);
+	assert.equal(eventCount, 1);
 });
 
 test("Decoration owners remain independent over a shared model", () => {
