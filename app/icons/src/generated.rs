@@ -104,6 +104,7 @@ mod artwork {
     pub(crate) const IMAGE_FILLED: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/image-filled.svg"));
     pub(crate) const INFO: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/info.svg"));
     pub(crate) const ITALICS: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/italics.svg"));
+    pub(crate) const KEBAB_VERTICAL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/kebab-vertical.svg"));
     pub(crate) const LAYOUT: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout.svg"));
     pub(crate) const LAYOUT_PANEL: IconDefinition = IconDefinition::symbolic(include_bytes!("../../../resources/icons/layout-panel.svg"));
     pub(crate) const LAYOUT_PANEL_OFF: IconDefinition = IconDefinition::multicolor(include_bytes!("../../../resources/icons/layout-panel-off.svg"));
@@ -294,6 +295,7 @@ pub mod icons {
     pub const IMAGE_FILLED: Icon = Icon::new(IconId::new("image-filled"), artwork::IMAGE_FILLED);
     pub const INFO: Icon = Icon::new(IconId::new("info"), artwork::INFO);
     pub const ITALICS: Icon = Icon::new(IconId::new("italics"), artwork::ITALICS);
+    pub const KEBAB_VERTICAL: Icon = Icon::new(IconId::new("kebab-vertical"), artwork::KEBAB_VERTICAL);
     pub const LAYOUT: Icon = Icon::new(IconId::new("layout"), artwork::LAYOUT);
     pub const LAYOUT_PANEL: Icon = Icon::new(IconId::new("layout-panel"), artwork::LAYOUT_PANEL);
     pub const LAYOUT_PANEL_OFF: Icon = Icon::new(IconId::new("layout-panel-off"), artwork::LAYOUT_PANEL_OFF);
@@ -480,6 +482,7 @@ pub const ALL_ICONS: &[Icon] = &[
     icons::IMAGE_FILLED,
     icons::INFO,
     icons::ITALICS,
+    icons::KEBAB_VERTICAL,
     icons::LAYOUT,
     icons::LAYOUT_PANEL,
     icons::LAYOUT_PANEL_OFF,
@@ -667,6 +670,7 @@ pub(crate) const ALL_ARTWORK: &[(&str, IconDefinition)] = &[
     ("image-filled", artwork::IMAGE_FILLED),
     ("info", artwork::INFO),
     ("italics", artwork::ITALICS),
+    ("kebab-vertical", artwork::KEBAB_VERTICAL),
     ("layout", artwork::LAYOUT),
     ("layout-panel", artwork::LAYOUT_PANEL),
     ("layout-panel-off", artwork::LAYOUT_PANEL_OFF),

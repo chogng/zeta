@@ -482,6 +482,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "kebab-vertical",
+      "file": "kebab-vertical.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "layout",
       "file": "layout.svg",
       "rendering": "symbolic"
