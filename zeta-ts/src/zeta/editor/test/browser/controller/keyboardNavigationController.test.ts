@@ -227,6 +227,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,

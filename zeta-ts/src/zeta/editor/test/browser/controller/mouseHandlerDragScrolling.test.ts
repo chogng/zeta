@@ -92,6 +92,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,

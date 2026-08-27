@@ -42,6 +42,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -54,7 +55,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	viewport.layout({ width: 240, height: 40 });
 
 	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".bracket-match")].map(element => ({
-		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
 		width: element.style.width,
 	})), [{

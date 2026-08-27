@@ -51,6 +51,7 @@ test("Alt pointer gestures add, toggle, drag, and track multiple selections", ()
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -145,6 +146,7 @@ test("Control-or-Meta mode is explicit and leaves Alt as a normal click", () => 
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,

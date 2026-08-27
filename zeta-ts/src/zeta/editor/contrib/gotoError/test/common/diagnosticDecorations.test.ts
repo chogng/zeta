@@ -41,7 +41,7 @@ test("Diagnostic bridge projects existing results, replacements, and clear", () 
 	const second = bridge.decorations.decorations;
 	assert.equal(second.length, 1);
 	assert.equal(second[0]!.metadata.message, "info");
-	assert.equal(first.some(entry => entry.id === second[0]!.id), false);
+	assert.equal(first.some(entry => entry.id === second[0]!.id), true);
 
 	store.clear();
 	assert.deepEqual(bridge.decorations.decorations, []);

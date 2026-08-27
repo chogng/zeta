@@ -26,7 +26,7 @@ test("Word-wrap shortcut switches Stanza's visual projection without editing tex
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("abcdef");
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using viewport = new EditorViewport({ container, model, glyphMargin: false, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	viewport.layout({ width: 70, height: 40 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

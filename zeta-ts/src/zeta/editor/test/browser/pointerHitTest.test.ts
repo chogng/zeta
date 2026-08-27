@@ -155,6 +155,7 @@ test("Viewport maps client coordinates through its bounds and scroll state", () 
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});

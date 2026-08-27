@@ -192,6 +192,7 @@ test("Stanza editor browser mounts text drop as an optional full-editor contribu
 		input: { resource, label: "drop.txt" },
 		languageId: "plaintext",
 		model,
+		glyphMargin: false,
 	});
 	editorPart.layout({ width: 120, height: 20 });
 	editorPart.viewport.element.getBoundingClientRect = () => rectangle(120, 20);

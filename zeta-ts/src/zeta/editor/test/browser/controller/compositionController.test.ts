@@ -52,6 +52,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -148,6 +149,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -208,6 +210,7 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -249,6 +252,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,

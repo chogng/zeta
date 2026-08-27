@@ -44,6 +44,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,

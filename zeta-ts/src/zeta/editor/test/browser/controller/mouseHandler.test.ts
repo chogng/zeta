@@ -56,6 +56,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -294,6 +295,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -346,6 +348,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
