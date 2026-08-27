@@ -84,13 +84,13 @@ impl InputContextToolbar {
         let items = vec![
             item(
                 ContextAction::ALL[0].element_id(),
-                icons::LOCAL,
+                icons::TERMINAL,
                 labels[0].clone(),
                 0,
             ),
             item(
                 ContextAction::ALL[1].element_id(),
-                icons::WORKING_DIRECTORY,
+                icons::NEW_FOLDER,
                 labels[1].clone(),
                 1,
             ),

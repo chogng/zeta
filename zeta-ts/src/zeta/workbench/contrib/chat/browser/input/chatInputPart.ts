@@ -514,7 +514,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 		button.setAttribute("aria-expanded", "false");
 		const indicator = h(container.ownerDocument, "span");
 		indicator.className = "zeta-dropdown-menu-indicator zeta-chat-input-mode-indicator";
-		appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
+		appendIcon(lxiconsLibrary.chevronDown, indicator);
 		button.append(indicator);
 		this.contextView = this._register(new ContextView(this.contextViewService.container));
 		this._register(addDisposableListener(button, "keydown", (event) => {

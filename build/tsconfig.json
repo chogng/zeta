@@ -13,6 +13,6 @@
     "verbatimModuleSyntax": true,
     "types": ["node"]
   },
-  "include": ["*.ts", "desktop/**/*.ts", "docs/**/*.ts", "download/**/*.ts", "lib/**/*.ts", "vite/**/*.ts", "app/**/*.ts"],
+  "include": ["*.ts", "desktop/**/*.ts", "docs/**/*.ts", "download/**/*.ts", "lib/**/*.ts", "vite/**/*.ts", "app/**/*.ts", "resources/**/*.ts"],
   "exclude": ["desktop/resources/designTokenCompiler.ts", "vite/stanza/**/*.ts"]
 }

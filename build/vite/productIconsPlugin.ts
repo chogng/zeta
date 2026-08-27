@@ -1,6 +1,6 @@
 import { dirname, extname, resolve } from "node:path";
 import type { Plugin } from "vite";
-import { syncProductIcons } from "../desktop/resources/syncProductIcons.ts";
+import { generateIcons } from "../resources/icons/generate.ts";
 
 const watchedEvents = new Set(["add", "change", "unlink"]);
 
@@ -29,7 +29,7 @@ export type ZetaProductIconsPlugin = Omit<Plugin, "configureServer"> & {
  */
 export function productIconsPlugin(options: ProductIconsPluginOptions = {}): ZetaProductIconsPlugin {
   const sourceDirectory = resolve(options.sourceDirectory ?? resolve(import.meta.dirname, "../../resources/icons"));
-  const outputFile = options.outputFile;
+  const outputFile = resolve(options.outputFile ?? resolve(import.meta.dirname, "../../zeta-ts/generated/product-icons.ts"));
   const debounceMilliseconds = options.debounceMilliseconds ?? 50;
   let timer: NodeJS.Timeout | undefined;
   let pending: Promise<unknown> = Promise.resolve();
@@ -46,7 +46,11 @@ export function productIconsPlugin(options: ProductIconsPluginOptions = {}): Zet
         timer = setTimeout(() => {
           pending = pending
             .catch(() => undefined)
-            .then(() => syncProductIcons({ sourceDirectory, outputFile, sourceHandling: "ignore" }))
+            .then(() => generateIcons({
+              outputs: { typescriptFile: outputFile },
+              sourceDirectory,
+              sourceHandling: "ignore",
+            }))
             .then((report) => {
               if (report.outputChanged) {
                 server.ws.send({ type: "full-reload" });

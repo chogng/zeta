@@ -145,7 +145,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		this.button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "zeta-submenu-indicator";
-		appendIcon(lxiconsLibrary.submenuIndicator, indicator);
+		appendIcon(lxiconsLibrary.chevronRight, indicator);
 		this.button.domNode.append(indicator);
 	}
 

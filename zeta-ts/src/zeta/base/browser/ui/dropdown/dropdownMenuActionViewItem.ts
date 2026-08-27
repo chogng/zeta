@@ -57,7 +57,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		button.domNode.setAttribute("aria-expanded", "false");
 		const indicator = h(container.ownerDocument, "span");
 		indicator.className = "zeta-dropdown-menu-indicator";
-		appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
+		appendIcon(lxiconsLibrary.chevronDown, indicator);
 		button.domNode.append(indicator);
 		this._register(addDisposableListener(button.domNode, "keydown", (event) => {
 			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;

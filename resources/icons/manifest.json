@@ -1,0 +1,915 @@
+{
+  "version": 1,
+  "icons": [
+    {
+      "id": "account",
+      "file": "account.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "add",
+      "file": "add.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "add-small",
+      "file": "add-small.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "agent",
+      "file": "agent.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "agent-filled",
+      "file": "agent-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "align-center",
+      "file": "align-center.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "align-justified",
+      "file": "align-justified.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "align-left",
+      "file": "align-left.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "align-right",
+      "file": "align-right.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "appearance",
+      "file": "appearance.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "archive",
+      "file": "archive.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "arrow-down",
+      "file": "arrow-down.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "arrow-left",
+      "file": "arrow-left.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "arrow-right",
+      "file": "arrow-right.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "arrow-up",
+      "file": "arrow-up.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bell",
+      "file": "bell.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bell-dot",
+      "file": "bell-dot.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "bell-slash",
+      "file": "bell-slash.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "bold",
+      "file": "bold.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "book",
+      "file": "book.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "books",
+      "file": "books.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "browser-explore",
+      "file": "browser-explore.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "browser-web",
+      "file": "browser-web.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "calendar",
+      "file": "calendar.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chart",
+      "file": "chart.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat",
+      "file": "chat.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chat-filled",
+      "file": "chat-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "check",
+      "file": "check.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chevron-down",
+      "file": "chevron-down.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chevron-left",
+      "file": "chevron-left.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chevron-right",
+      "file": "chevron-right.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "chevron-up",
+      "file": "chevron-up.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "claude",
+      "file": "claude.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "close",
+      "file": "close.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "cloud",
+      "file": "cloud.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "code",
+      "file": "code.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "code-review",
+      "file": "code-review.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "colab",
+      "file": "colab.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "command",
+      "file": "command.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "copy",
+      "file": "copy.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "copy-code",
+      "file": "copy-code.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "csv",
+      "file": "csv.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "csv-filled",
+      "file": "csv-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "csv-green",
+      "file": "csv-green.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "csv-letter",
+      "file": "csv-letter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "csv-letter-filled",
+      "file": "csv-letter-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "cursor",
+      "file": "cursor.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "cursor-filled",
+      "file": "cursor-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "customize",
+      "file": "customize.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "customize-filled",
+      "file": "customize-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "database",
+      "file": "database.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "database-flat",
+      "file": "database-flat.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "debug",
+      "file": "debug.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diagnostics",
+      "file": "diagnostics.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "diff",
+      "file": "diff.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "discard",
+      "file": "discard.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "docx",
+      "file": "docx.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "docx-blue",
+      "file": "docx-blue.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "docx-filled",
+      "file": "docx-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "download",
+      "file": "download.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "download-box",
+      "file": "download-box.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "download-tray",
+      "file": "download-tray.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "edit",
+      "file": "edit.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "edit-write",
+      "file": "edit-write.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "ellipsis",
+      "file": "ellipsis.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "enter",
+      "file": "enter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "eraser",
+      "file": "eraser.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "error",
+      "file": "error.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "export",
+      "file": "export.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "export-tray",
+      "file": "export-tray.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "eye",
+      "file": "eye.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "eye-filled",
+      "file": "eye-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "file",
+      "file": "file.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "file-downloaded",
+      "file": "file-downloaded.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "file-text",
+      "file": "file-text.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "files",
+      "file": "files.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "filter",
+      "file": "filter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "fold",
+      "file": "fold.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "folder-downloaded",
+      "file": "folder-downloaded.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "folders",
+      "file": "folders.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "gear",
+      "file": "gear.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git",
+      "file": "git.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-branch",
+      "file": "git-branch.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-commit",
+      "file": "git-commit.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "github",
+      "file": "github.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "h1",
+      "file": "h1.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "h2",
+      "file": "h2.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "h3",
+      "file": "h3.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "h4",
+      "file": "h4.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "h5",
+      "file": "h5.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "history",
+      "file": "history.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "home",
+      "file": "home.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "image",
+      "file": "image.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "image-filled",
+      "file": "image-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "info",
+      "file": "info.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "italics",
+      "file": "italics.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout",
+      "file": "layout.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-panel",
+      "file": "layout-panel.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-panel-off",
+      "file": "layout-panel-off.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "layout-sidebar-left",
+      "file": "layout-sidebar-left.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-left-off",
+      "file": "layout-sidebar-left-off.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "layout-sidebar-left-off-empty",
+      "file": "layout-sidebar-left-off-empty.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-right",
+      "file": "layout-sidebar-right.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "layout-sidebar-right-off",
+      "file": "layout-sidebar-right-off.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "layout-sidebar-right-off-empty",
+      "file": "layout-sidebar-right-off-empty.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "legend",
+      "file": "legend.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "letter-b",
+      "file": "letter-b.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "letter-h",
+      "file": "letter-h.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "letter-t",
+      "file": "letter-t.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "library",
+      "file": "library.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "lightning",
+      "file": "lightning.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "lightning-filled",
+      "file": "lightning-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "link-external",
+      "file": "link-external.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "list-filter",
+      "file": "list-filter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "list-unordered",
+      "file": "list-unordered.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "menu",
+      "file": "menu.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "model",
+      "file": "model.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "model-filled",
+      "file": "model-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "new-file",
+      "file": "new-file.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "new-folder",
+      "file": "new-folder.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "openai",
+      "file": "openai.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "origin",
+      "file": "origin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "paperclip",
+      "file": "paperclip.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "parameters",
+      "file": "parameters.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pass",
+      "file": "pass.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pass-filled",
+      "file": "pass-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pause",
+      "file": "pause.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pdf",
+      "file": "pdf.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "pdf-filled",
+      "file": "pdf-filled.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "pdf-red",
+      "file": "pdf-red.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "pinned",
+      "file": "pinned.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "plan",
+      "file": "plan.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "preview",
+      "file": "preview.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "projects",
+      "file": "projects.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "projects-filled",
+      "file": "projects-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "quote",
+      "file": "quote.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "quotes",
+      "file": "quotes.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "refresh",
+      "file": "refresh.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "remote",
+      "file": "remote.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "remove",
+      "file": "remove.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "remove-small",
+      "file": "remove-small.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "repo-fetch",
+      "file": "repo-fetch.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "repo-pull",
+      "file": "repo-pull.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "repo-push",
+      "file": "repo-push.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "rss",
+      "file": "rss.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sandbox",
+      "file": "sandbox.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "save",
+      "file": "save.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "screen-full",
+      "file": "screen-full.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "screen-normal",
+      "file": "screen-normal.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "search",
+      "file": "search.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "settings",
+      "file": "settings.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "split-horizontal",
+      "file": "split-horizontal.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "split-page",
+      "file": "split-page.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "split-vertical",
+      "file": "split-vertical.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "star",
+      "file": "star.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "star-filled",
+      "file": "star-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "start",
+      "file": "start.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "summary",
+      "file": "summary.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sync",
+      "file": "sync.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "table",
+      "file": "table.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "target",
+      "file": "target.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "terminal",
+      "file": "terminal.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "terminal-cmd",
+      "file": "terminal-cmd.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "terminal-git-bash",
+      "file": "terminal-git-bash.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "text",
+      "file": "text.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "translate",
+      "file": "translate.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "trash",
+      "file": "trash.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "trash-flat",
+      "file": "trash-flat.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "txt-letter",
+      "file": "txt-letter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "txt-letter-filled",
+      "file": "txt-letter-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "typography",
+      "file": "typography.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "underline",
+      "file": "underline.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "unfold",
+      "file": "unfold.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "unlimited",
+      "file": "unlimited.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "unpin",
+      "file": "unpin.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "warning",
+      "file": "warning.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "write",
+      "file": "write.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "xls-green",
+      "file": "xls-green.svg",
+      "rendering": "multicolor"
+    },
+    {
+      "id": "xls-letter",
+      "file": "xls-letter.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "xls-letter-filled",
+      "file": "xls-letter-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "zoom-in",
+      "file": "zoom-in.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "zoom-out",
+      "file": "zoom-out.svg",
+      "rendering": "symbolic"
+    }
+  ]
+}

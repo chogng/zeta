@@ -72,7 +72,7 @@ export class Dropdown extends Disposable {
 		label.textContent = options.label;
 		const indicator = h(ownerDocument, "span");
 		indicator.className = "zeta-dropdown-indicator";
-		appendIcon(options.indicator ?? lxiconsLibrary.dropdownIndicator, indicator);
+		appendIcon(options.indicator ?? lxiconsLibrary.chevronDown, indicator);
 		setAriaAttribute(indicator, "hidden", true);
 		button.append(label, indicator);
 		element.append(button);

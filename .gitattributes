@@ -3,3 +3,6 @@
 
 # Keep product icon sources canonical across platforms.
 /resources/icons/*.svg text eol=lf
+/resources/icons/manifest.json text eol=lf
+/app/icons/src/generated.rs text eol=lf
+/zeta-ts/generated/product-icons.ts text eol=lf

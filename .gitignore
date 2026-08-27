@@ -31,7 +31,6 @@ node_modules/
 .pnpm-store/
 zeta-ts/generated/app-server/
 zeta-ts/generated/file-icons/
-zeta-ts/generated/product-icons.ts
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

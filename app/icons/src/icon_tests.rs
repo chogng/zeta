@@ -11,14 +11,11 @@ fn semantic_library_is_sorted_and_has_unique_ids() {
 }
 
 #[test]
-fn catalog_resolves_semantic_ids_without_exposing_filenames() {
+fn catalog_resolves_generated_icon_ids() {
     assert_eq!(icon_by_id("files"), Some(icons::FILES));
     assert_eq!(icon_by_id("file-text"), Some(icons::FILE_TEXT));
     assert_eq!(icon_by_id("git-branch"), Some(icons::GIT_BRANCH));
-    assert_eq!(
-        icon_by_id("working-directory"),
-        Some(icons::WORKING_DIRECTORY)
-    );
+    assert_eq!(icon_by_id("new-folder"), Some(icons::NEW_FOLDER));
     assert_eq!(icon_by_id("refresh"), Some(icons::REFRESH));
     assert_eq!(icon_by_id("missing"), None);
 }
@@ -52,21 +49,14 @@ fn sidebar_toggle_icons_preserve_their_rendering_contracts() {
 }
 
 #[test]
-fn semantic_aliases_have_stable_ids_and_shared_artwork() {
+fn generated_icons_use_their_svg_filename_as_the_id() {
     assert_eq!(icons::HISTORY.id().as_str(), "history");
-    assert_eq!(
-        icons::HISTORY.definition(),
-        super::generated::artwork::REFRESH
-    );
-    assert_eq!(
-        icons::DROPDOWN_INDICATOR.definition(),
-        icons::CHEVRON_DOWN.definition()
-    );
-    assert_ne!(icons::DROPDOWN_INDICATOR.id(), icons::CHEVRON_DOWN.id());
+    assert_eq!(icons::DIFF.id().as_str(), "diff");
+    assert_ne!(icons::HISTORY.definition(), icons::REFRESH.definition());
 }
 
 #[test]
-fn every_generated_artwork_contains_one_svg_document() {
+fn every_generated_icon_contains_one_svg_document() {
     assert!(!ALL_ARTWORK.is_empty());
     assert!(
         ALL_ARTWORK
