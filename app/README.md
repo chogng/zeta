@@ -60,9 +60,8 @@ src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识
 
 | 能力 | 实现契约 |
 | --- | --- |
-| Agent Session | [`zeta-agent-session`](agent-session/README.md) |
 | Editor | [`zeta-editor`](editor/README.md)、[`zeta-editor-host`](editor-host/README.md) |
-| Session Pane 与 Composer | [`zeta-session`](session/README.md) |
+| Session Pane、Composer 与 App Server Session 运行时 | [`zeta-session`](session/README.md) |
 | Settings | [`zeta-settings`](settings/README.md) |
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
 | Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |

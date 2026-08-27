@@ -43,7 +43,6 @@ filegroup(
         "//app/ui-components:ui-components_sources",
         "//app/workbench:workbench_sources",
         "//app/workspace-ui:workspace-ui_sources",
-        "//app/agent-session:agent-session_sources",
         "//app/zui:zui_sources",
         "//app/zui-demo:zui_demo_sources",
     ],

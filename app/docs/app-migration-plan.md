@@ -149,25 +149,24 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 
 ### `app/src` 拆分审计（2026-08-27）
 
-Agent Session 的完整 App Server 执行链已经进入 `zeta-agent-session`；`app/src` 不再持有它的 worker、订阅、文件、Git 或配置请求。`zeta-session` 拥有单个 Session Pane 的 Thread、时间线与 Composer；`zeta-editor`、`zeta-workbench`、`zeta-ui-components`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品 effect、样式、窗口事件和输入路由。
+App Server Session 的连接 worker、订阅、命令队列和重连策略已经与 Session Pane 统一进入 `zeta-session`；文件、Git 和配置请求仍由产品宿主持有连接句柄执行。`zeta-session` 同时拥有单个 Session Pane 的 Thread、时间线与 Composer；`zeta-editor`、`zeta-workbench`、`zeta-ui-components`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品 effect、样式、窗口事件和输入路由。
 
 新增的 app-side crate 如下：
 
 | crate | 进入的职责 | 留在 `app/src` 的职责 |
 | --- | --- | --- |
-| `zeta-agent-session` | App Server Session client、worker、订阅、文件/Git 请求、配置快照事件、typed 命令/事件、队列和重连策略 | Local/Remote 连接目标、窗口事件投递和 UI reducer |
-| `zeta-session` | 单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | transcript 拼装、App Server 订阅、提交 effect 和平台事件接线 |
+| `zeta-session` | App Server Session client、worker、订阅、命令/事件队列和重连策略；单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | Local/Remote 连接目标、文件/Git/配置请求、提交 effect 和平台事件接线 |
 | `zeta-terminal-workspace` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
 | `zeta-workspace-ui` | Files/Changes pane、目录树、文件搜索、分支菜单和路径选择器 | DTO 转换以及打开文件、加载目录、切换分支 |
 | `zeta-editor-host` | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动 | 文件与 LSP 请求、平台输入转发 |
 | `zeta-settings` | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action | 配置与快捷键持久化、主题映射和平台事件转发 |
 | `zeta-remote-ui` | 连接列表、picker、连接管理和 Tunnel 状态/视图 | SSH/runtime/子进程启动、profile 和窗口事件 |
 
-所有新 crate 都在 `app/`，不进入 `zeta-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；Agent Session 直接持有自己的 App Server 请求和 worker。`shell_style` 只负责把产品主题映射为各 crate 的样式；稳定交互 ID 由对应能力 crate 自己拥有，避免反向依赖组合根。
+所有新 crate 都在 `app/`，不进入 `zeta-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；`zeta-session` 直接持有 Session/Thread 的 App Server 请求和 worker。`shell_style` 只负责把产品主题映射为各 crate 的样式；稳定交互 ID 由对应能力 crate 自己拥有，避免反向依赖组合根。
 
 已清理的重复实现包括 Workspace pane、Session UI 辅助状态、Editor 辅助状态、Terminal Pane 视图状态、Settings UI/草稿/快捷键录制和 Agent Session App Server worker；相应测试随实现迁移到所属 crate。平台输入、命令执行、进程适配和组合层继续保留产品协调职责。
 
-Agent Session 的验证入口由 [`zeta-agent-session` README](../agent-session/README.md#验证) 维护；协议 fixture 必须与当前 `goal`、`transcript` 和 `tool_mode` contract 同步。
+App Server Session 运行时由 `just test zeta-session` 验证；协议 fixture 必须与当前 `goal`、`transcript` 和 `tool_mode` contract 同步。
 
 ### 当前审计结论（2026-08-03）
 

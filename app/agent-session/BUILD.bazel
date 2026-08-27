@@ -1,9 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "agent-session",
-    crate_name = "zeta_agent_session",
-    package_name = "app/agent-session",
-    source_files = ["README.md"],
-    unit_tests = True,
-)

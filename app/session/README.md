@@ -1,5 +1,5 @@
 # zeta-session
 
-1. Owns one Agent Session Pane: canonical Thread metadata, backend-assembled transcript entries, timeline scroll, Composer state, and their synchronization.
-2. Owns that Pane's layout, painting, input context toolbar, accessibility nodes, and internal interactions.
-3. Mechanically applies transcript changes and accepts catalogs, styles, and host effects; transcript assembly, Tabs, Tab search, Tab context menus, Tab switching, windows, and App Server transport remain outside this crate.
+1. Owns the App Server Session runtime: connection worker, Session/Thread requests and subscriptions, bounded command queue, remote reconnect policy, and backend-assembled transcript delivery.
+2. Owns one Agent Session Pane: Thread metadata, transcript state, timeline scroll, Composer state, layout, painting, accessibility, and internal interactions.
+3. Accepts connection targets, styles, and host effects; files, Git, configuration, Tabs, windows, and product event routing remain with their domain crates or the product host.

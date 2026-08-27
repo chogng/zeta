@@ -294,7 +294,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "unicode-width 0.2.0",
- "zeta-agent-session",
  "zeta-app-server-client",
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
@@ -10818,17 +10817,6 @@ version = "0.1.0"
 dependencies = [
  "tempfile",
  "zeta-utils-path",
-]
-
-[[package]]
-name = "zeta-agent-session"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "zeta-app-server-client",
- "zeta-app-server-protocol",
- "zeta-protocol",
- "zeta-text-file",
 ]
 
 [[package]]

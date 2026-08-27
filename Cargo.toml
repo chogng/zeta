@@ -119,7 +119,6 @@ members = [
     "zeta-rs/zeta-client",
     "zeta-rs/otel",
     "app",
-    "app/agent-session",
     "app/commands",
     "app/editor",
     "app/editor-host",
@@ -278,7 +277,6 @@ zeta-app-server-daemon = { path = "zeta-rs/app-server-daemon" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
-zeta-agent-session = { path = "app/agent-session" }
 zeta-collaboration = { path = "zeta-rs/collaboration" }
 zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
 zeta-code-index = { path = "zeta-rs/code-index" }

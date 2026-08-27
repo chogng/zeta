@@ -24,7 +24,6 @@ unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-daemon = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
-zeta-agent-session = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-editor = { workspace = true }
 zeta-editor-host = { workspace = true }
