@@ -1,8 +1,9 @@
-import { reset, h, fragment as createFragment, text as createText } from "../../../../base/browser/dom.js";
+import { reset, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { type Event } from "../../../../base/common/event.js";
 import { combinedDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageToken } from "../../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import { CharacterMapping } from '../../../common/viewLayout/viewLineRenderer.js';
 
 export enum SemanticTokenPresentation {
 	Comment = "token-comment",
@@ -146,38 +147,44 @@ export function projectStanzaSemanticTokenLine(
 	lineText: string,
 	tokens: readonly ResolvedSemanticToken[],
 	brackets: readonly BracketColorizationSpan[] = [],
-): void {
+	tabSize = 4,
+): CharacterMapping {
 	validateLineTokens(lineText, tokens);
 	validateBracketColorizations(lineText, brackets);
-	if (tokens.length === 0 && brackets.length === 0) {
-		element.textContent = lineText;
-		return;
-	}
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
+	const characterMapping = new CharacterMapping(lineText.length + 1);
 	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn])])].sort((left, right) => left - right);
+	let visibleColumn = 0;
+	if (lineText.length === 0) {
+		fragment.append(h(ownerDocument, 'span'));
+		characterMapping.setColumnInfo(1, 0, 0, 0);
+	}
 	for (let index = 0; index + 1 < boundaries.length; index += 1) {
 		const startColumn = boundaries[index]!;
 		const endColumn = boundaries[index + 1]!;
 		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
 		const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
-		if (!token && !bracket) {
-			fragment.append(createText(ownerDocument, lineText.slice(startColumn, endColumn)));
-			continue;
-		}
 		const tokenElement = h(ownerDocument, "span");
-		tokenElement.className = "stanza-editor-token";
+		if (token || bracket) tokenElement.className = "stanza-editor-token";
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
 		if (bracket) tokenElement.classList.add(`stanza-editor-bracket-level-${bracket.level}`);
 		tokenElement.textContent = lineText.slice(startColumn, endColumn);
+		for (let offset = startColumn; offset < endColumn; offset += 1) {
+			characterMapping.setColumnInfo(offset + 1, index, offset - startColumn, visibleColumn);
+			visibleColumn += lineText.charCodeAt(offset) === 9 ? tabSize - visibleColumn % tabSize : 1;
+		}
+		if (endColumn === lineText.length) characterMapping.setColumnInfo(lineText.length + 1, index, endColumn - startColumn, visibleColumn);
 		fragment.append(tokenElement);
 	}
 	if (fragment.textContent !== lineText) {
 		throw new Error("Stanza semantic token projection changed line text");
 	}
 	reset(element, fragment);
+	return characterMapping;
 }
 
 function validateBracketColorizations(lineText: string, brackets: readonly BracketColorizationSpan[]): void {

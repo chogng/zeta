@@ -10,6 +10,7 @@ export function projectStanzaLinesDecorations(
 	decorations: readonly ResolvedDecoration[],
 	lanes: ReadonlyMap<string, LinesDecorationLaneLayout>,
 	scrollLeft: number,
+	rows: ReadonlyMap<number, HTMLElement>,
 ): void {
 	const decorationsByLogicalLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
@@ -25,8 +26,8 @@ export function projectStanzaLinesDecorations(
 		}
 	}
 
-	for (const line of context.renderedLines.values()) reset(line.linesDecorationElement);
-	for (const [visualLineIndex, line] of context.renderedLines) {
+	for (const row of rows.values()) reset(row);
+	for (const [visualLineIndex, row] of rows) {
 		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
 		if (!visualLine || !visualLine.firstForLogicalLine) continue;
 		for (const decoration of decorationsByLogicalLine.get(visualLine.logicalLineIndex) ?? []) {
@@ -64,7 +65,7 @@ export function projectStanzaLinesDecorations(
 				appendIcon(presentation.icon, element);
 				element.dataset.iconId = presentation.icon.id;
 			}
-			line.linesDecorationElement.append(element);
+			row.append(element);
 		}
 	}
 }

@@ -15,6 +15,17 @@ export interface EditorRenderingContext {
 	readonly overlay: ViewportOverlayContext | undefined;
 }
 
+export class FloatHorizontalRange {
+	constructor(
+		public left: number,
+		public width: number,
+	) {}
+
+	public static compare(left: FloatHorizontalRange, right: FloatHorizontalRange): number {
+		return left.left - right.left;
+	}
+}
+
 /** Creates the version-bound context used by one render pass. */
 export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: ViewportOverlayContext, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
 	return Object.freeze({

@@ -5,7 +5,7 @@ import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
-import { clamp, isFiniteNumber, isNonNegativeSafeInteger } from '../../base/common/numbers.js';
+import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { type EditorSelectionController } from '../common/cursor/editorSelectionController.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/editorIndentation.js';
@@ -30,7 +30,6 @@ import { ElementSizeObserver } from './config/elementSizeObserver.js';
 import { DomTextMeasurer, type TextMeasurer } from './config/fontMeasurements.js';
 import { LineWidthIndex } from './measurement/lineWidthIndex.js';
 import { type DecorationSource } from './viewparts/decorations/decorationPresentation.js';
-import { getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint } from './viewparts/viewportOverlay/domTextGeometry.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/semanticTokens/semanticTokenPresentation.js';
 import { type ActiveLineHighlight, type ViewportOverlayContext } from './viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
@@ -45,6 +44,7 @@ import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorat
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { ViewLines } from './viewparts/viewLines/viewLines.js';
+import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
 import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorationsPart.js';
 import { createEditorRenderingContext, createEditorViewportData, type EditorRenderingContext } from './view/renderingContext.js';
@@ -346,11 +346,7 @@ export enum EditorMinimap {
 export type { EditorRuler } from "./viewparts/rulers/rulersPart.js";
 
 /** Controls the browser paragraph direction used to shape Stanza's rendered text. */
-export enum EditorTextDirection {
-	Auto = "auto",
-	LeftToRight = "ltr",
-	RightToLeft = "rtl",
-}
+export { EditorTextDirection };
 
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
@@ -427,7 +423,7 @@ export class View extends Disposable {
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimap;
-	private readonly textDirection: EditorTextDirection;
+	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private softWrapping: boolean;
 
@@ -454,15 +450,18 @@ export class View extends Disposable {
 		this.showIndentationGuides = options.showIndentationGuides ?? this.presentation !== "embedded";
 		this.padding = resolveEditorViewportPadding(options.padding);
 		this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
-		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
+			this.viewLineOptions = new ViewLineOptions({
+				textDirection: options.textDirection ?? EditorTextDirection.Auto,
+				fontLigatures: options.fontLigatures ?? false,
+				useGpu: options.experimentalGpuAcceleration === 'on',
+				lineHeight: options.lineHeight,
+				tabSize: this.indentation.tabSize,
+			});
 			if (!Object.values(EditorMinimap).includes(this.minimap)) {
 				throw new TypeError("Unknown Stanza editor minimap mode");
-			}
-			if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
-				throw new TypeError("Unknown Stanza editor text direction");
 			}
 			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
 				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
@@ -491,17 +490,17 @@ export class View extends Disposable {
 		this.element.className = "stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
-		this.element.classList.add(`stanza-editor-direction-${this.textDirection}`);
+		this.element.classList.add(`stanza-editor-direction-${this.viewLineOptions.textDirection}`);
 		this.element.classList.toggle("hide-line-numbers", !this.showLineNumbers);
 		applyEditorFontInfo(this.element, {
 			fontFamily: options.fontFamily,
 			fontSize: options.fontSize,
-			fontLigatures: options.fontLigatures ?? false,
+			fontLigatures: this.viewLineOptions.fontLigatures,
 		});
 		this.element.style.tabSize = String(this.indentation.tabSize);
 		this.element.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
 		this.element.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
-		this.element.dir = this.textDirection;
+		this.element.dir = this.viewLineOptions.textDirection;
 		this.element.classList.toggle("word-wrapped", this.softWrapping);
 		this.element.tabIndex = 0;
 		this.element.setAttribute("role", "region");
@@ -569,17 +568,16 @@ export class View extends Disposable {
 			readProjectionRevision: () => this.viewModelLines.revision,
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
-			textDirection: this.textDirection,
+			viewLineOptions: this.viewLineOptions,
 		}));
-		this.viewLinesGpu = options.experimentalGpuAcceleration === 'on'
+		this.viewLinesGpu = this.viewLineOptions.useGpu
 			? this._register(new ViewLinesGpu({
 				host: this.element,
 				model: this.model,
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
 				paddingTop: this.padding.top,
-				textDirection: this.textDirection,
-				fontLigatures: options.fontLigatures ?? false,
+				viewLineOptions: this.viewLineOptions,
 			}))
 			: undefined;
 		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
@@ -612,10 +610,11 @@ export class View extends Disposable {
 			readLeft: () => this.marginPart.glyphMarginLeft,
 			readLaneWidth: () => this.marginPart.glyphMarginLaneWidth,
 		}));
-		this.viewParts.register(new LineNumbersPart({
+		const lineNumbersPart = this.viewParts.register(new LineNumbersPart({
+			host: this.contentElement,
 			showLineNumbers: this.showLineNumbers,
+			selectionController: this.selectionController,
 			readVisualProjection: () => this.visualProjection,
-			readRenderedLines: () => this.viewLines.renderedLines,
 		}));
 		const rulersPart = this.viewParts.register(new RulersPart({
 			host: this.contentElement,
@@ -650,6 +649,8 @@ export class View extends Disposable {
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(
 			this.viewLines.domNode,
+			...this.viewOverlays.domNodes,
+			lineNumbersPart.domNode,
 			this.marginPart.domNode,
 			glyphMarginPart.domNode,
 			this.viewOverlays.blockDecorationsPart.domNode,
@@ -684,6 +685,7 @@ export class View extends Disposable {
 		if (this.selectionController) {
 			this._register(this.selectionController.onDidChange(() => {
 				const context = this.createRenderingContext(viewport.layout);
+				lineNumbersPart.renderNow(context);
 				this.viewOverlays.renderSelection(context);
 				this.updateAccessibilityStatus();
 			}));
@@ -731,7 +733,7 @@ export class View extends Disposable {
 
 	/** Returns the browser paragraph direction used by the text projection. */
 	get editorTextDirection(): EditorTextDirection {
-		return this.textDirection;
+		return this.viewLineOptions.textDirection;
 	}
 
 	/** Changes only this viewport's visual row projection; document text is unaffected. */
@@ -872,7 +874,7 @@ export class View extends Disposable {
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
 	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): TextPosition | undefined {
 		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
-		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		if (!visualLine || !line) return undefined;
@@ -881,7 +883,7 @@ export class View extends Disposable {
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
 		for (const column of getTextGraphemeBoundaries(text)) {
-			const left = getStanzaDomTextCaretLeft(line.textElement, column, line.domNode.domNode);
+			const left = line.getCaretLeft(column);
 			if (left === undefined) return undefined;
 			const distance = Math.abs(left - horizontalOffset);
 			if (distance < nearestDistance) {
@@ -902,7 +904,7 @@ export class View extends Disposable {
 		point: ClientPoint,
 	): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.textDirection === EditorTextDirection.LeftToRight
+		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
 			? undefined
 			: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
@@ -915,7 +917,7 @@ export class View extends Disposable {
 
 	getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.textDirection === EditorTextDirection.LeftToRight
+		const domTarget = this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight
 			? undefined
 			: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
@@ -950,11 +952,7 @@ export class View extends Disposable {
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		for (const [visualLineIndex, renderedLine] of this.viewLines.renderedLines) {
-			const offset = getStanzaDomTextOffsetAtClientPoint(
-				renderedLine.textElement,
-				point.clientX,
-				point.clientY,
-			);
+			const offset = renderedLine.getOffsetAtClientPoint(point.clientX, point.clientY);
 			if (offset === undefined) continue;
 			const visualLine = this.visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
@@ -967,10 +965,10 @@ export class View extends Disposable {
 	}
 
 	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
-		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
+		if (this.viewLineOptions.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const line = this.viewLines.renderedLines.get(visualLineIndex);
-		return line && isNonNegativeSafeInteger(offset) && offset <= line.textElement.textContent?.length
-			? getStanzaDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
+		return line?.hasTextOffset(offset)
+			? line.getCaretLeft(offset)
 			: undefined;
 	}
 
@@ -1056,7 +1054,7 @@ export class View extends Disposable {
 			renderLines: layout.renderLines,
 			textLeft: this.textLeft,
 			textMeasurer: this.textMeasurer,
-			useDomTextGeometry: this.textDirection !== EditorTextDirection.LeftToRight,
+			useDomTextGeometry: this.viewLineOptions.textDirection !== EditorTextDirection.LeftToRight,
 			activeLineHighlight: this.activeLineHighlight,
 		};
 		return createEditorRenderingContext(layout, overlay, viewportData);

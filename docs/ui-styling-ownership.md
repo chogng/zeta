@@ -40,7 +40,7 @@
 
 ## Retained DOM 写入所有权
 
-`FastDomNode` 是 retained DOM 的局部写穿透缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 active wrapper；允许宿主投影根节点几何时，组件传递 canonical wrapper，不得让宿主重新包装同一节点。节点是刚创建还是从现有组件接收不产生两套 API：每个属性第一次通过 setter 写入时从当前 DOM 懒初始化，之后该属性及其等价入口只能继续通过同一 wrapper 修改。
+`FastDomNode` 是 retained DOM 的局部样式写缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 wrapper；允许宿主投影根节点几何时，组件传递这个 wrapper，不得让宿主重新包装同一节点。wrapper 从构造时开始拥有其缓存属性，不读取 DOM 猜测初值；同一属性之后只能继续通过这个 wrapper 修改。文本、子树、`hidden`、tab order 和 ARIA 仍由具体组件直接拥有，不进入样式缓存。
 
 `domNode` 保持公开，用于事件、测量、attributes、挂载和未缓存的样式。已经缓存的属性不得通过 `domNode.style`、对应 attribute 或其他别名绕过 wrapper；class 增删使用缓存感知的 `toggleClassName`。`setTextContent` 只用于子内容不再由其他代码分别维护的 retained leaf，容器节点继续由其 DOM owner 管理 children。
 

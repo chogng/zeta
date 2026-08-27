@@ -38,7 +38,7 @@ export class GlyphMarginPart extends EditorViewPart {
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName('stanza-editor-glyph-margin');
-		this.root.setHidden(options.lanes.length === 0);
+		this.domNode.hidden = options.lanes.length === 0;
 		this.laneDomNodes = new Map(options.lanes.map(lane => {
 			const domNode = h(this.domNode.ownerDocument, 'span');
 			domNode.className = 'stanza-editor-glyph-margin-lane';

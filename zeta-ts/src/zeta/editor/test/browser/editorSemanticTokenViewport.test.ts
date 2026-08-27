@@ -113,6 +113,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		semanticTokenSource: createStanzaSemanticTokenSource(index),

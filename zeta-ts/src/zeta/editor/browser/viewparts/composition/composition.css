@@ -1,6 +1,7 @@
 .stanza-editor-line-composition {
-  position: absolute;
-  inset: 0;
+	position: relative;
+	box-sizing: border-box;
+	min-width: 100%;
   z-index: 4;
   pointer-events: none;
 }

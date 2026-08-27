@@ -1,11 +1,11 @@
 import { type IDisposable } from '../../../base/common/lifecycle.js';
-import { type EditorTextDirection } from '../view.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewparts/semanticTokens/semanticTokenPresentation.js';
 import { type TextureAtlas } from './atlas/textureAtlas.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
+import { type ViewLineTextDirection } from '../viewparts/viewLines/viewLineOptions.js';
 
 export const enum BindingId {
 	GlyphInfo,
@@ -26,7 +26,7 @@ export interface GpuRenderStrategyInput {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly textLeft: number;
 	readonly paddingTop: number;
-	readonly textDirection: EditorTextDirection;
+	readonly textDirection: ViewLineTextDirection;
 	readonly fontLigatures: boolean;
 	readonly rootStyle: CSSStyleDeclaration;
 	readonly atlas: TextureAtlas;

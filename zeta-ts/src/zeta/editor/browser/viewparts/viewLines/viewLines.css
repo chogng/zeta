@@ -10,6 +10,7 @@
   position: relative;
   box-sizing: border-box;
   min-width: 100%;
+  padding-left: var(--stanza-editor-gutter-width);
   overflow: visible;
   white-space: pre;
 }
@@ -107,6 +108,15 @@
 
 .stanza-editor-bracket-level-6 {
   color: var(--zeta-editor-token-variable-foreground);
+}
+
+.stanza-editor-row-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-width: 100%;
+  pointer-events: none;
 }
 
 .stanza-editor-gpu-canvas {

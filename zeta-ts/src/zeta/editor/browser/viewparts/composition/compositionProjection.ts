@@ -4,19 +4,19 @@ import { createStanzaVisualRangeRectangles } from "../../../common/viewModel/vis
 import { createStanzaDomRangeRectangles, type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
 
 /** Projects the current IME range into the reusable row composition layers. */
-export function projectStanzaCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined): void {
-	for (const line of context.renderedLines.values()) reset(line.compositionElement);
+export function projectStanzaCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+	for (const row of rows.values()) reset(row);
 	if (!range) return;
 	const domRectangles = context.useDomTextGeometry ? createStanzaDomRangeRectangles(context, range) : undefined;
 	const rectangles = domRectangles ?? createStanzaVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	const ownerDocument = context.ownerDocument;
 	for (const rectangle of rectangles) {
-		const line = context.renderedLines.get(rectangle.visualLineIndex);
-		if (!line) continue;
+		const row = rows.get(rectangle.visualLineIndex);
+		if (!row) continue;
 		const element = h(ownerDocument, "div");
 		element.className = "stanza-editor-composition";
 		element.style.left = `${rectangle.left}px`;
 		element.style.width = `${rectangle.width}px`;
-		line.compositionElement.append(element);
+		row.append(element);
 	}
 }

@@ -97,10 +97,10 @@ export abstract class AbstractScrollbar extends Disposable {
 	): number | undefined;
 
 	render(metrics: ScrollbarAxisMetrics, rendered: boolean): void {
-		this.trackNode.setHidden(!rendered);
-		this.trackNode.setTabIndex(rendered && metrics.maximumPosition > 0
-			? 0
-			: -1);
+		const hidden = !rendered;
+		if (this.track.hidden !== hidden) this.track.hidden = hidden;
+		const tabIndex = rendered && metrics.maximumPosition > 0 ? 0 : -1;
+		if (this.track.tabIndex !== tabIndex) this.track.tabIndex = tabIndex;
 		this.track.setAttribute(
 			"aria-valuemax",
 			String(Math.round(metrics.maximumPosition)),

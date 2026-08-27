@@ -83,7 +83,7 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 
 ## 视图架构
 
-VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Stanza 采用这些边界，并在 retained view root、virtual row、line number、diagnostic marker、block、ruler、scrollbar track/thumb、diff viewport 以及 IME input geometry 上使用按当前调用者补全的 `FastDomNode` contract 去重 geometry、line height、transform、visibility、tab order、class 和短文本写入；临时重建的 projection DOM 保持原生写入，也不复制没有现实调用者的 setter、全部 `ViewEventHandler` 事件或其他历史抽象。
+VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效、DOM 装配和 Part 内部渲染。Stanza 采用这些边界，并让 `FastDomNode` 只缓存 retained node 的样式与 class 写入，包括 geometry、font、transform、display、color、contain 和 shadow。文本、子树、`hidden`、tab order 与 ARIA 由具体组件直接写入；临时重建的 projection DOM 也保持原生写入。
 
 ### Current：现有渲染链路
 
@@ -154,7 +154,7 @@ this.viewParts.render(context);
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短 leaf text 的节点；`ViewLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性。generic `SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且同步 scheduler 会重复写入相同样式的节点。`ViewLine` 只对文字行根节点使用 wrapper；line number、diagnostic marker、indent guide、decoration、selection、cursor 和 composition 由各自 Part 通过 `ViewPartRows` 拥有独立 DOM。`SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 projection DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 

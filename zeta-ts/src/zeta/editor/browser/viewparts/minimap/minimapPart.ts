@@ -57,7 +57,7 @@ export class MinimapPart extends EditorViewPart {
 		this.viewportElement = h(ownerDocument, "div");
 		this.viewportNode = new FastDomNode(this.viewportElement);
 		this.root.setClassName("stanza-editor-minimap");
-		this.root.setHidden(!options.enabled);
+		this.domNode.hidden = !options.enabled;
 		this.domNode.setAttribute("aria-hidden", "true");
 		this.canvas.className = "stanza-editor-minimap-gpu";
 		this.canvas.setAttribute("aria-hidden", "true");

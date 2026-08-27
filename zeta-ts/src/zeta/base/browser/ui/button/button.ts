@@ -102,7 +102,7 @@ export class Button extends Disposable {
 	}
 
 	set hidden(value: boolean) {
-		this.root.setHidden(value);
+		if (this.domNode.hidden !== value) this.domNode.hidden = value;
 		this.root.toggleClassName("hidden", value);
 	}
 

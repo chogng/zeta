@@ -101,7 +101,8 @@ export class MarginPart extends EditorViewPart {
 		const lineNumbersWidth = this.lineNumbersWidth;
 		this.root.setWidth(gutterWidth);
 		this.root.setHeight(layout.contentSize.height);
-		this.root.setHidden(gutterWidth === 0);
+		const hidden = gutterWidth === 0;
+		if (this.domNode.hidden !== hidden) this.domNode.hidden = hidden;
 		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
 		this.host.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
 		this.host.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);

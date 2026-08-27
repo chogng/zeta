@@ -3,19 +3,25 @@ import { h } from "../../../../base/browser/dom.js";
 import { createStanzaIndentationGuides } from "./indentationGuides.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
+import { ViewPartRows } from '../../view/viewPartRows.js';
 
 interface IndentGuidesPartOptions {
+	readonly host: HTMLElement;
 	readonly showIndentationGuides: boolean;
 	readonly tabSize: number;
 }
 
-/** Projects indentation guides into the reusable rows owned by ViewLayer. */
+/** Owns and projects the visible indentation-guide rows. */
 export class IndentGuidesPart extends DynamicViewOverlay {
+	public readonly domNode: HTMLElement;
 	private readonly showIndentationGuides: boolean;
 	private readonly tabSize: number;
+	private readonly rows: ViewPartRows;
 
 	constructor(context: EditorViewContext, options: IndentGuidesPartOptions) {
 		super(context);
+		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-indent-guides-layer', 'stanza-editor-line-indent-guides'));
+		this.domNode = this.rows.domNode;
 		this.showIndentationGuides = options.showIndentationGuides;
 		this.tabSize = options.tabSize;
 	}
@@ -25,8 +31,8 @@ export class IndentGuidesPart extends DynamicViewOverlay {
 		if (!overlay) {
 			return;
 		}
-		for (const [visualLineIndex, line] of overlay.renderedLines) {
-			line.indentationElement.replaceChildren();
+		for (const [visualLineIndex, row] of this.rows.render(context)) {
+			row.replaceChildren();
 			if (!this.showIndentationGuides) continue;
 			const visualLine = overlay.visualLineProjection.lineAt(visualLineIndex);
 			if (!visualLine?.firstForLogicalLine) continue;
@@ -36,7 +42,7 @@ export class IndentGuidesPart extends DynamicViewOverlay {
 				element.className = "stanza-editor-indent-guide";
 				element.dataset.indentLevel = String(guide.level);
 				element.style.left = `${overlay.textLeft + overlay.textMeasurer.measureLineWidth(text.slice(0, guide.columnIndex)) - 1}px`;
-				line.indentationElement.append(element);
+				row.append(element);
 			}
 		}
 	}

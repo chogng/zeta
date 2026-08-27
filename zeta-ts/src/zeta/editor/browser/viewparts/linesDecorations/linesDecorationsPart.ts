@@ -4,6 +4,7 @@ import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { projectStanzaLinesDecorations } from "./linesDecorationsProjection.js";
 import { type DecorationSource } from "../decorations/decorationPresentation.js";
+import { ViewPartRows } from '../../view/viewPartRows.js';
 
 export interface LinesDecorationLaneLayout {
 	readonly owner: string;
@@ -13,11 +14,15 @@ export interface LinesDecorationLaneLayout {
 
 /** Owns line-side decoration classes and tooltips for rendered logical lines. */
 export class LinesDecorationsPart extends DynamicViewOverlay {
+	public readonly domNode: HTMLElement;
 	private readonly decorations: DecorationsPart;
 	private readonly lanes: ReadonlyMap<string, LinesDecorationLaneLayout>;
+	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, decorations: DecorationsPart, sources: readonly DecorationSource[]) {
+	constructor(context: EditorViewContext, host: HTMLElement, decorations: DecorationsPart, sources: readonly DecorationSource[]) {
 		super(context);
+		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-lines-decorations-layer', 'stanza-editor-line-lines-decorations'));
+		this.domNode = this.rows.domNode;
 		this.decorations = decorations;
 		this.lanes = new Map(collectLinesDecorationLanes(sources).map(lane => [lane.owner, lane]));
 	}
@@ -32,6 +37,7 @@ export class LinesDecorationsPart extends DynamicViewOverlay {
 			this.decorations.visibleDecorations(overlay),
 			this.lanes,
 			context.layout.scrollPosition.left,
+			this.rows.render(context),
 		);
 	}
 }

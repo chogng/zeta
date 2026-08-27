@@ -9,7 +9,11 @@ const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentatio
 ]);
 
 /** Projects the highest-severity diagnostic marker for each visible logical line. */
-export function projectStanzaDiagnosticMarginDecorations(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
+export function projectStanzaDiagnosticMarginDecorations(
+	context: ViewportOverlayContext,
+	decorations: readonly ResolvedDecoration[],
+	rows: ReadonlyMap<number, HTMLElement>,
+): void {
 	const diagnosticsByLine = new Map<number, ResolvedDecoration[]>();
 	for (const decoration of decorations) {
 		if (!DIAGNOSTIC_PRESENTATION_PRIORITY.has(decoration.presentation)) continue;
@@ -23,31 +27,30 @@ export function projectStanzaDiagnosticMarginDecorations(context: ViewportOverla
 			diagnosticsByLine.set(lineIndex, lineDiagnostics);
 		}
 	}
-	for (const [visualLineIndex, line] of context.renderedLines) {
+	for (const [visualLineIndex, marker] of rows) {
 		const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
 		const diagnostics = visualLine?.firstForLogicalLine
 			? diagnosticsByLine.get(visualLine.logicalLineIndex) ?? []
 			: [];
-		const marker = line.diagnosticDomNode;
-		marker.setHidden(diagnostics.length === 0);
-		delete marker.domNode.dataset.diagnosticHoverText;
-		marker.domNode.removeAttribute("title");
+		marker.hidden = diagnostics.length === 0;
+		delete marker.dataset.diagnosticHoverText;
+		marker.removeAttribute("title");
 		if (diagnostics.length === 0) {
-			marker.setClassName("stanza-editor-diagnostic-marker");
-			marker.setTextContent("");
+			marker.className = "stanza-editor-diagnostic-marker";
+			marker.textContent = "";
 			continue;
 		}
 		const highest = diagnostics.reduce((current, candidate) =>
 			(DIAGNOSTIC_PRESENTATION_PRIORITY.get(candidate.presentation) ?? 0) > (DIAGNOSTIC_PRESENTATION_PRIORITY.get(current.presentation) ?? 0)
 				? candidate
 				: current);
-		marker.setClassName(`stanza-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`);
-		marker.setTextContent("●");
+		marker.className = `stanza-editor-diagnostic-marker ${diagnosticMarkerClass(highest.presentation)}`;
+		marker.textContent = "●";
 		const hoverTexts = [...new Set(diagnostics.flatMap(diagnostic => diagnostic.hoverText === undefined ? [] : [diagnostic.hoverText]))];
 		if (hoverTexts.length > 0) {
 			const hoverText = hoverTexts.join("\n");
-			marker.domNode.dataset.diagnosticHoverText = hoverText;
-			marker.domNode.title = hoverText;
+			marker.dataset.diagnosticHoverText = hoverText;
+			marker.title = hoverText;
 		}
 	}
 }

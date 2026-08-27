@@ -95,11 +95,14 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/services/languageService.ts",
 		"contrib/gotoError/browser/gotoError.ts",
 		"browser/view/viewPart.ts",
+		"browser/view/viewPartRows.ts",
 		"browser/viewparts/viewLines/viewLines.ts",
 		"browser/viewparts/viewLines/viewLine.ts",
 		"browser/viewparts/viewLinesGpu/viewLinesGpu.ts",
 		"contrib/folding/browser/foldingDecorations.ts",
 		"contrib/folding/browser/folding.css",
+		"contrib/symbolIcons/browser/symbolIcons.ts",
+		"contrib/symbolIcons/browser/symbolIcons.css",
 		"browser/viewparts/margin/marginPart.ts",
 		"browser/viewparts/glyphMargin/glyphMarginPart.ts",
 		"browser/viewparts/marginDecorations/marginDecorationsPart.ts",
@@ -133,7 +136,9 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/decorations/decorationPresentation.ts",
 		"browser/viewparts/semanticTokens/semanticTokenPresentation.ts",
 		"browser/viewparts/viewportOverlay/viewportOverlayPresentation.ts",
-		"browser/viewparts/viewportOverlay/domTextGeometry.ts",
+		"browser/viewparts/viewLines/domReadingContext.ts",
+		"browser/viewparts/viewLines/rangeUtil.ts",
+		"browser/viewparts/viewLines/viewLineOptions.ts",
 		"contrib/tokenization/common/tokenizationTextModelPart.ts",
 		"contrib/semanticTokens/common/semanticTokens.ts",
 		"common/editorResource.ts",
@@ -203,6 +208,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/view/renderedLine.ts",
 		"browser/viewparts/viewLines/renderedLine.ts",
 		"browser/viewparts/viewLines/viewLinesPart.ts",
+		"contrib/symbolIcons/browser/symbolIconsController.ts",
+		"contrib/symbolIcons/browser/media/symbolIcons.css",
 		"browser/viewparts/viewLinesGpu/viewLinesGpu.css",
 		"contrib/folding/browser/media/folding.css",
 		"browser/view/editorViewport.ts",
@@ -216,6 +223,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/view/diffOverviewMarkers.ts",
 		"browser/view/decorationPresentation.ts",
 		"browser/view/domTextGeometry.ts",
+		"browser/viewparts/viewportOverlay/domTextGeometry.ts",
 		"browser/view/fontMetrics.ts",
 		"browser/view/lineWidthIndex.ts",
 		"browser/view/pointerHitTest.ts",
@@ -256,6 +264,21 @@ test("Editor browser retires only the editor-layer EditorPart", () => {
 	assert.equal(statSafe(join(workbenchRoot, "browser/parts/editor/editorPart.ts")), true, "Workbench EditorPart");
 	assert.match(editorBrowser, /export class EditorBrowser/u);
 	assert.doesNotMatch(editorBrowser, /export class EditorPart/u);
+});
+
+test("ViewLine owns text rows while overlay Parts own their row DOM", () => {
+	const viewLine = readFileSync(join(editorRoot, "browser/viewparts/viewLines/viewLine.ts"), "utf8");
+	for (const foreignRow of ["line-number", "diagnostic-marker", "indent-guides", "decorations", "selections", "cursors", "composition"]) {
+		assert.doesNotMatch(viewLine, new RegExp(`stanza-editor-${foreignRow}`, "u"), foreignRow);
+	}
+	assert.match(viewLine, /stanza-editor-line-text/u);
+	for (const part of ["decorations/decorationsPart", "indentGuides/indentGuidesPart", "linesDecorations/linesDecorationsPart", "marginDecorations/marginDecorationsPart", "selections/selectionsPart", "viewCursors/viewCursorsPart", "composition/compositionPart", "lineNumbers/lineNumbersPart"]) {
+		const source = readFileSync(join(editorRoot, `browser/viewparts/${part}.ts`), "utf8");
+		assert.match(source, /new ViewPartRows/u, part);
+	}
+	const symbolIcons = readFileSync(join(editorRoot, "contrib/symbolIcons/browser/symbolIcons.ts"), "utf8");
+	assert.match(symbolIcons, /DecorationPresentation\.LineDecoration/u);
+	assert.doesNotMatch(symbolIcons, /querySelector|\bh\(/u);
 });
 
 test("Stanza owns its public protocol and DOM vocabulary without renaming the editor domain", () => {

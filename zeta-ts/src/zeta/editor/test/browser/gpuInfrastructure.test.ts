@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { TextModel } from '../../common/model/textModel.js';
 import { EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type EditorTextDirection } from '../../browser/view.js';
 import { BufferDirtyTracker } from '../../browser/gpu/bufferDirtyTracker.js';
 import { createContentSegmenter } from '../../browser/gpu/contentSegmenter.js';
 import { createObjectCollectionBuffer } from '../../browser/gpu/objectCollectionBuffer.js';
@@ -10,6 +9,7 @@ import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
 import { FullFileRenderStrategy } from '../../browser/gpu/renderStrategy/fullFileRenderStrategy.js';
 import { type GlyphRasterizer } from '../../browser/gpu/raster/glyphRasterizer.js';
 import { RectangleRenderer } from '../../browser/gpu/rectangleRenderer.js';
+import { ViewLineTextDirection } from '../../browser/viewparts/viewLines/viewLineOptions.js';
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
@@ -71,7 +71,7 @@ test('Full-file GPU rendering starts text at the canonical content coordinate', 
 		bracketColorizationSource: undefined,
 		textLeft: 44,
 		paddingTop: 0,
-		textDirection: 'ltr' as EditorTextDirection,
+		textDirection: ViewLineTextDirection.LeftToRight,
 		fontLigatures: false,
 		rootStyle: gpuRootStyle(),
 		atlas: fixedGlyphAtlas(),

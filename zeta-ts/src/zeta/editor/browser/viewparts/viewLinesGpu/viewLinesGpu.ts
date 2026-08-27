@@ -1,5 +1,4 @@
 import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
-import { type EditorTextDirection } from '../../view.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
 import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
@@ -8,6 +7,7 @@ import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../semanticTokens/semanticTokenPresentation.js';
 import { type ViewLine } from '../viewLines/viewLine.js';
+import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
 import { BindingId, type GpuRenderFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
@@ -19,8 +19,7 @@ export interface ViewLinesGpuOptions {
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly paddingTop: number;
-	readonly textDirection: EditorTextDirection;
-	readonly fontLigatures: boolean;
+	readonly viewLineOptions: ViewLineOptions;
 }
 
 interface PreparedGpuFrame {
@@ -190,8 +189,8 @@ export class ViewLinesGpu extends Disposable {
 			bracketColorizationSource: this.options.bracketColorizationSource,
 			textLeft: overlay.textLeft,
 			paddingTop: this.options.paddingTop,
-			textDirection: this.options.textDirection,
-			fontLigatures: this.options.fontLigatures,
+			textDirection: this.options.viewLineOptions.textDirection,
+			fontLigatures: this.options.viewLineOptions.fontLigatures,
 			rootStyle,
 			atlas: this.context.atlas,
 		});

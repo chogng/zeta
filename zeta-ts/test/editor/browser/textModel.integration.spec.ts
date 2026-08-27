@@ -41,6 +41,10 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
 	await expect(page.locator(".stanza-editor-diagnostic-marker.error")).toHaveCount(1);
+	const symbolIcon = page.locator(".stanza-editor-symbol-icon");
+	await expect(symbolIcon).toHaveCount(1);
+	await expect(symbolIcon).toHaveAttribute("data-decoration-owner", "symbol-icons");
+	await expect(symbolIcon.locator("xpath=..")).toHaveClass(/stanza-editor-line-lines-decorations/u);
 
 	const input = page.locator(".stanza-editor-input");
 	await input.focus();
@@ -55,10 +59,11 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	await expect(glyphMargin).toBeVisible();
 	await expect(foldingControl).toBeVisible();
 	const firstLine = page.locator(".stanza-editor-line[data-logical-line-index='0']");
-	await expect(firstLine.locator(".stanza-editor-line-number")).toHaveText("1");
+	const firstLineNumber = page.locator(".stanza-editor-line-margin[data-line-index='0'] .stanza-editor-line-number");
+	await expect(firstLineNumber).toHaveText("1");
 	const foldingBox = await foldingControl.boundingBox();
 	const glyphMarginBox = await glyphMargin.boundingBox();
-	const lineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
+	const lineNumberBox = await firstLineNumber.boundingBox();
 	const textBox = await firstLine.locator(".stanza-editor-line-text").boundingBox();
 	assertBox(foldingBox, "folding control");
 	assertBox(glyphMarginBox, "glyph margin");
@@ -83,7 +88,7 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	const editorBox = await editor.boundingBox();
 	const scrolledGlyphMarginBox = await glyphMargin.boundingBox();
 	const scrolledFoldingBox = await foldingControl.boundingBox();
-	const scrolledLineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
+	const scrolledLineNumberBox = await firstLineNumber.boundingBox();
 	assertBox(editorBox, "editor");
 	assertBox(scrolledGlyphMarginBox, "scrolled glyph margin");
 	assertBox(scrolledFoldingBox, "scrolled folding control");

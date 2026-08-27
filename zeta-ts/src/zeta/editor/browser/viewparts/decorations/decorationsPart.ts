@@ -11,22 +11,27 @@ import { projectStanzaDecorationOverlays } from "./decorationProjection.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
+import { ViewPartRows } from '../../view/viewPartRows.js';
 
 export type DecorationsPartMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 /** Owns decoration snapshots, visible-line lookup, inline DOM projection, and overview aggregation. */
 export class DecorationsPart extends DynamicViewOverlay {
+	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private decorationLineIndex = new DecorationLineIndex([]);
 	private markerRevision = 0;
+	private readonly rows: ViewPartRows;
 
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 
-	constructor(context: EditorViewContext, model: TextModel, decorationSources: readonly DecorationSource[]) {
+	constructor(context: EditorViewContext, host: HTMLElement, model: TextModel, decorationSources: readonly DecorationSource[]) {
 		super(context);
+		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-decorations-layer', 'stanza-editor-line-decorations'));
+		this.domNode = this.rows.domNode;
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
 		this._register(this.model.onDidChange(() => {
@@ -52,7 +57,7 @@ export class DecorationsPart extends DynamicViewOverlay {
 		if (!overlay) {
 			return;
 		}
-		projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay));
+		projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay), this.rows.render(context));
 	}
 
 	public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {

@@ -44,7 +44,7 @@ export class TextAreaEditContext extends EditContext implements ITextAreaWrapper
 		this.element = this.inputNode.domNode;
 		this.textArea = this.element;
 		this.inputNode.setClassName("stanza-editor-input");
-		this.inputNode.setTabIndex(-1);
+		this.inputNode.domNode.tabIndex = -1;
 		this.element.spellcheck = false;
 		this.element.readOnly = options.readOnly ?? false;
 		this.element.wrap = "off";

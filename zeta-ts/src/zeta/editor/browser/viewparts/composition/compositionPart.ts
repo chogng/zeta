@@ -6,14 +6,19 @@ import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model
 import { projectStanzaCompositionOverlay } from "./compositionProjection.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
+import { ViewPartRows } from '../../view/viewPartRows.js';
 
 /** Owns tracked IME range presentation while EditorView owns composition state. */
 export class CompositionPart extends DynamicViewOverlay {
+	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
+	private readonly rows: ViewPartRows;
 	private compositionRange: TrackedRange | undefined;
 
-	constructor(context: EditorViewContext, model: TextModel) {
+	constructor(context: EditorViewContext, host: HTMLElement, model: TextModel) {
 		super(context);
+		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-composition-layer', 'stanza-editor-line-composition'));
+		this.domNode = this.rows.domNode;
 		this.model = model;
 		this._register(toDisposable(() => this.compositionRange?.dispose()));
 	}
@@ -32,6 +37,6 @@ export class CompositionPart extends DynamicViewOverlay {
 		if (!overlay) {
 			return;
 		}
-		projectStanzaCompositionOverlay(overlay, this.compositionRange?.range);
+		projectStanzaCompositionOverlay(overlay, this.compositionRange?.range, this.rows.render(context));
 	}
 }

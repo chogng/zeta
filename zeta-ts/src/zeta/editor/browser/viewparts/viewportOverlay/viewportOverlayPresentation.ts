@@ -4,7 +4,6 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
 import { type EditorLineRange } from "../../../common/viewModel.js";
-import { getStanzaDomTextCaretLeft, getStanzaDomTextRangeRectangles } from "./domTextGeometry.js";
 import { type ViewLine } from "../viewLines/viewLine.js";
 
 /** Selects whether selection projection marks the cursor's logical line as active. */
@@ -64,12 +63,8 @@ export function createStanzaDomSelectionGeometry(context: ViewportOverlayContext
 		const renderedLine = context.renderedLines.get(visualLineIndex);
 		if (!visualLine || !renderedLine) continue;
 		const offset = selection.active.columnIndex - visualLine.startColumn;
-		if (!isCurrentDomTextOffset(renderedLine.textElement, offset)) continue;
-		const left = getStanzaDomTextCaretLeft(
-			renderedLine.textElement,
-			offset,
-			renderedLine.domNode.domNode,
-		);
+		if (!renderedLine.hasTextOffset(offset)) continue;
+		const left = renderedLine.getCaretLeft(offset);
 		if (left === undefined) continue;
 		caretIndexes.add(selectionIndex);
 		domCarets.push(Object.freeze({
@@ -111,13 +106,8 @@ export function createStanzaDomRangeRectangles(context: ViewportOverlayContext, 
 		intersectsRenderedLine = true;
 		const startOffset = startColumn - visualLine.startColumn;
 		const endOffset = endColumn - visualLine.startColumn;
-		if (!isCurrentDomTextOffset(renderedLine.textElement, startOffset) || !isCurrentDomTextOffset(renderedLine.textElement, endOffset)) return undefined;
-		const rectangles = getStanzaDomTextRangeRectangles(
-			renderedLine.textElement,
-			startOffset,
-			endOffset,
-			renderedLine.domNode.domNode,
-		);
+		if (!renderedLine.hasTextOffset(startOffset) || !renderedLine.hasTextOffset(endOffset)) return undefined;
+		const rectangles = renderedLine.getHorizontalRanges(startOffset, endOffset);
 		if (!rectangles) return undefined;
 		result.push(...rectangles.map(rectangle => Object.freeze({
 			visualLineIndex,
@@ -126,8 +116,4 @@ export function createStanzaDomRangeRectangles(context: ViewportOverlayContext, 
 		})));
 	}
 	return intersectsRenderedLine ? Object.freeze(result) : undefined;
-}
-
-function isCurrentDomTextOffset(element: HTMLElement, offset: number): boolean {
-	return Number.isSafeInteger(offset) && offset >= 0 && offset <= element.textContent?.length;
 }

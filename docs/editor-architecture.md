@@ -269,9 +269,12 @@ width 并夹紧横向滚动。字体加载完成或显式 `refreshFontMetrics()`
 
 ### Current 9：Gutter 与 selection/caret projection
 
-每个虚拟行现在由 sticky line-number gutter、文本节点和 overlay 组成。gutter
-宽度按当前总行数的数字位数测量，并计入横向 content width；滚动复用行节点
-时，行号、文本和 overlay 一起按 line index 更新。组件通过稳定的 `.active`
+`ViewLine` 只拥有单行文字、字符映射和文字几何。`LineNumbersPart`、
+`MarginDecorationsPart`、`IndentGuidesPart`、`DecorationsPart`、
+`SelectionsPart`、`ViewCursorsPart` 与 `CompositionPart` 分别拥有自己的可见行 DOM，
+共同复用 `ViewPartRows` 的窗口协调，不再把节点塞进文字行。gutter 宽度按当前总行数的
+数字位数测量，并计入横向 content width；各层滚动时按同一个 visual line index 更新。
+组件通过稳定的 `.active`
 类投影 primary selection 的活动行，状态样式由 Stanza 自己的 CSS 拥有，
 Workbench 不通过深层 selector 覆盖。
 
@@ -331,8 +334,8 @@ scroll，返回 `Gutter`、`Text`、`EmptyContent` 或 `AfterLines`。每个结�
 调用方从 column 猜测语义。
 
 固定行高、无 layout 的测试环境和普通 LTR 文本继续使用 `TextMeasurer`。
-当 viewport 为 `auto`/`rtl` 且浏览器提供布局时，`domTextGeometry.ts` 把跨
-semantic-token span 的 UTF-16 offset 映射到 DOM `Range`：selection/caret、
+当 viewport 为 `auto`/`rtl` 且浏览器提供布局时，`ViewLine` 先通过 `CharacterMapping` 定位跨
+semantic-token span 的 UTF-16 offset，再由 `RangeUtil` 和 `DomReadingContext` 读取 DOM `Range`：selection/caret、
 decoration、composition anchor、pointer hit-test 与 wrapped vertical navigation
 均改用浏览器视觉坐标。缺少 Range layout 时确定性回退到度量路径。inline advance
 decoration 与原生 browser-driven wrapping 尚未完成；pointer selection policy 见

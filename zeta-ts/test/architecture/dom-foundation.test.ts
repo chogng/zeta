@@ -167,7 +167,7 @@ function fastDomNodeMutation(node: ts.PropertyAccessExpression, checker: ts.Type
 	if (!ts.isPropertyAccessExpression(member) || member.expression !== node) {
 		return undefined;
 	}
-	if (["className", "textContent", "hidden", "tabIndex"].includes(member.name.text) && isAssignmentTarget(member)) {
+	if (member.name.text === "className" && isAssignmentTarget(member)) {
 		return member.name.text;
 	}
 	if (member.name.text === "classList") {
@@ -232,7 +232,7 @@ const managedStyleProperties = new Set([
 	"transform",
 	"width",
 ]);
-const managedAttributes = new Set(["class", "hidden", "style", "tabindex"]);
+const managedAttributes = new Set(["class", "style"]);
 
 function isFastDomNodeType(type: ts.Type): boolean {
 	if ((type.aliasSymbol ?? type.getSymbol())?.getName() === "FastDomNode") {

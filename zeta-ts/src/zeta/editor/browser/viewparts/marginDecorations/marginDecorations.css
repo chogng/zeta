@@ -1,7 +1,7 @@
 .stanza-editor-diagnostic-marker {
-  position: absolute;
-  top: 0;
-  left: max(20px, var(--stanza-editor-glyph-margin-width, 0px));
+	position: relative;
+	box-sizing: border-box;
+	left: max(20px, var(--stanza-editor-glyph-margin-width, 0px));
   z-index: 5;
   width: 20px;
   height: 100%;

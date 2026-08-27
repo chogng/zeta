@@ -67,6 +67,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	const viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		decorationSources: [matchSource, diagnosticSource],
@@ -78,7 +79,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.deepEqual(decorationElements(viewport.element).map(element => ({
 		id: element.dataset.decorationId,
 		presentation: element.classList[1],
-		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
 		width: element.style.width,
 	})), [{
@@ -101,8 +102,8 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 		width: "20px",
 	}]);
 	const errorMarker = requiredElement<HTMLElement>(
-		requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="2"]'),
-		".stanza-editor-diagnostic-marker",
+		viewport.element,
+		'.stanza-editor-diagnostic-marker[data-line-index="2"]',
 	);
 	assert.equal(errorMarker.hidden, false);
 	assert.equal(errorMarker.classList.contains("error"), true);
@@ -125,12 +126,12 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 		warning.classList.contains(DecorationPresentation.WarningUnderline),
 		true,
 	);
-	assert.equal(warning.parentElement?.parentElement?.dataset.lineIndex, "1");
+	assert.equal(warning.parentElement?.dataset.lineIndex, "1");
 	assert.equal(warning.style.left, "48px");
 	assert.equal(warning.style.width, "20px");
 	const warningMarker = requiredElement<HTMLElement>(
-		requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="1"]'),
-		".stanza-editor-diagnostic-marker",
+		viewport.element,
+		'.stanza-editor-diagnostic-marker[data-line-index="1"]',
 	);
 	assert.equal(warningMarker.hidden, false);
 	assert.equal(warningMarker.classList.contains("warning"), true);
@@ -151,7 +152,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	);
 	assert.deepEqual(
 		trackedMatch.map(
-			element => element.parentElement?.parentElement?.dataset.lineIndex,
+			element => element.parentElement?.dataset.lineIndex,
 		),
 		["1", "2"],
 	);
@@ -203,15 +204,16 @@ test("Line and block decoration parts project source presentation details", () =
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		decorationSources: [source],
 	});
 	viewport.layout({ width: 200, height: 60 });
 
-	const firstLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="0"]');
-	const secondLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="1"]');
-	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line[data-logical-line-index="2"]');
+	const firstLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="0"]');
+	const secondLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="1"]');
+	const thirdLine = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-line-lines-decorations[data-line-index="2"]');
 	const firstMarker = requiredElement<HTMLElement>(firstLine, ".stanza-editor-line-decoration");
 	const secondMarker = requiredElement<HTMLElement>(secondLine, ".stanza-editor-line-decoration");
 	assert.equal(firstMarker.classList.contains("stanza-test-line-marker"), true);
@@ -270,6 +272,18 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 test("Decoration overlays use browser range rectangles for RTL text", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
+	const createRange = dom.window.document.createRange.bind(dom.window.document);
+	Object.defineProperty(dom.window.document, "createRange", {
+		configurable: true,
+		value: () => {
+			const range = createRange();
+			Object.defineProperty(range, "getClientRects", {
+				configurable: true,
+				value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
+			});
+			return range;
+		},
+	});
 	using model = new TextModel("abc אבג");
 	using decorations = new TextDecorationCollection<void>(model);
 	const id = decorations.add({
@@ -291,18 +305,6 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 		configurable: true,
 		value: () => testRectangle(100, 0, 200),
 	});
-	const createRange = dom.window.document.createRange.bind(dom.window.document);
-	Object.defineProperty(dom.window.document, "createRange", {
-		configurable: true,
-		value: () => {
-			const range = createRange();
-			Object.defineProperty(range, "getClientRects", {
-				configurable: true,
-				value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
-			});
-			return range;
-		},
-	});
 	decorations.update(id, {
 		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 3)),
 		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
@@ -310,8 +312,8 @@ test("Decoration overlays use browser range rectangles for RTL text", () => {
 	});
 
 	assert.deepEqual(decorationElements(viewport.element).map(element => ({ left: element.style.left, width: element.style.width })), [
-		{ left: "50px", width: "20px" },
 		{ left: "20px", width: "15px" },
+		{ left: "50px", width: "20px" },
 	]);
 	dom.window.close();
 });
@@ -329,6 +331,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	using viewport = new EditorViewport({
 		container,
 		model,
+		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		decorationSources: [createStanzaDecorationSource(
@@ -340,7 +343,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 	viewport.layout({ width: 70, height: 60 });
 
 	assert.deepEqual(decorationElements(viewport.element).map(element => ({
-		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+		lineIndex: element.parentElement?.dataset.lineIndex,
 		left: element.style.left,
 		width: element.style.width,
 	})), [{
@@ -409,7 +412,7 @@ test("Versioned diagnostics project named severity underlines and invalidate", (
 
 	assert.deepEqual(decorationElements(viewport.element).map(element => ({
 		presentation: element.classList[1],
-		lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+		lineIndex: element.parentElement?.dataset.lineIndex,
 		title: element.title,
 	})), [{
 		presentation: DecorationPresentation.ErrorUnderline,

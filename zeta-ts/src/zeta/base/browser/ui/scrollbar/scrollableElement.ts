@@ -428,7 +428,8 @@ export class ScrollableElement extends Disposable {
 		);
 		this.horizontal.trackNode.setRight(verticalRendered ? this.options.scrollbarSize : 0);
 		this.vertical.trackNode.setBottom(horizontalRendered ? this.options.scrollbarSize : 0);
-		this.cornerNode.setHidden(!(horizontalRendered && verticalRendered));
+		const cornerHidden = !(horizontalRendered && verticalRendered);
+		if (this.corner.hidden !== cornerHidden) this.corner.hidden = cornerHidden;
 		const horizontalTrackSize = Math.max(
 			0,
 			this._state.width -

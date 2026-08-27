@@ -26,6 +26,7 @@ export interface ViewOverlaysOptions {
 
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
 export class ViewOverlays extends Disposable {
+	readonly domNodes: readonly HTMLElement[];
 	readonly blockDecorationsPart: BlockDecorationsPart;
 	readonly decorationsPart: DecorationsPart;
 	readonly onDidChangeDecorations: Event<void>;
@@ -39,24 +40,35 @@ export class ViewOverlays extends Disposable {
 		super();
 		this.decorationsPart = this.register(new DecorationsPart(
 			context,
+			options.contentElement,
 			options.model,
 			options.decorationSources,
 		));
 		this.onDidChangeDecorations = this.decorationsPart.onDidChange;
-		this.register(new LinesDecorationsPart(context, this.decorationsPart, options.decorationSources));
+		const linesDecorationsPart = this.register(new LinesDecorationsPart(context, options.contentElement, this.decorationsPart, options.decorationSources));
 		this.blockDecorationsPart = this.register(new BlockDecorationsPart(
 			context,
 			this.decorationsPart,
 			options.contentElement,
 		));
-		this.register(new MarginDecorationsPart(context, this.decorationsPart));
-		this.register(new IndentGuidesPart(context, {
+		const marginDecorationsPart = this.register(new MarginDecorationsPart(context, options.contentElement, this.decorationsPart));
+		const indentGuidesPart = this.register(new IndentGuidesPart(context, {
+			host: options.contentElement,
 			showIndentationGuides: options.showIndentationGuides,
 			tabSize: options.indentationTabSize,
 		}));
-		this.selectionsPart = this.register(new SelectionsPart(context, options.selectionController));
-		this.viewCursorsPart = this.register(new ViewCursorsPart(context, options.selectionController));
-		this.compositionPart = this.register(new CompositionPart(context, options.model));
+		this.selectionsPart = this.register(new SelectionsPart(context, options.contentElement, options.selectionController));
+		this.viewCursorsPart = this.register(new ViewCursorsPart(context, options.contentElement, options.selectionController));
+		this.compositionPart = this.register(new CompositionPart(context, options.contentElement, options.model));
+		this.domNodes = Object.freeze([
+			indentGuidesPart.domNode,
+			this.decorationsPart.domNode,
+			this.selectionsPart.domNode,
+			this.compositionPart.domNode,
+			this.viewCursorsPart.domNode,
+			linesDecorationsPart.domNode,
+			marginDecorationsPart.domNode,
+		]);
 	}
 
 	prepareRender(context: EditorRenderingContext): void {

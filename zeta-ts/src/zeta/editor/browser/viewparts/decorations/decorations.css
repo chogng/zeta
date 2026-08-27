@@ -1,6 +1,7 @@
 .stanza-editor-line-decorations {
-  position: absolute;
-  inset: 0;
+	position: relative;
+	box-sizing: border-box;
+	min-width: 100%;
   z-index: 1;
   pointer-events: none;
 }

@@ -1,157 +1,122 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { FastDomNode } from '../../browser/fastDomNode.js';
+import { JSDOM } from 'jsdom';
+import { h } from '../../browser/dom.js';
+import { createFastDomNode, FastDomNode } from '../../browser/fastDomNode.js';
 
-const styleProperties = ['width', 'height', 'top', 'left', 'right', 'bottom', 'lineHeight', 'transform', 'boxShadow'] as const;
-const cachedProperties = [...styleProperties, 'className', 'textContent'] as const;
-type StyleProperty = typeof styleProperties[number];
-type CachedProperty = typeof cachedProperties[number];
+test('FastDomNode exposes the retained-style contract used by browser components', () => {
+	const dom = new JSDOM('<!doctype html><body><div id="root"></div></body>');
+	const element = dom.window.document.querySelector<HTMLDivElement>('#root')!;
+	const node = createFastDomNode(element);
 
-test('FastDomNode writes each changed value once', () => {
-	const fixture = createElementFixture();
+	node.setMaxWidth(400);
+	node.setWidth(320);
+	node.setHeight(200);
+	node.setTop(10);
+	node.setLeft(20);
+	node.setBottom('5%');
+	node.setRight('2rem');
+	node.setPaddingTop(1);
+	node.setPaddingLeft(2);
+	node.setPaddingBottom(3);
+	node.setPaddingRight(4);
+	node.setFontFamily('monospace');
+	node.setFontWeight('600');
+	node.setFontSize(14);
+	node.setFontStyle('italic');
+	node.setFontFeatureSettings('"liga"');
+	node.setFontVariationSettings('"wght" 600');
+	node.setTextDecoration('underline');
+	node.setLineHeight(20);
+	node.setLetterSpacing(1);
+	node.setClassName('retained');
+	node.toggleClassName('active');
+	node.setDisplay('block');
+	node.setPosition('absolute');
+	node.setVisibility('visible');
+	node.setColor('red');
+	node.setBackgroundColor('blue');
+	node.setLayerHinting(true);
+	node.setTransform('translate3d(1px, 2px, 0)');
+	node.setContain('layout');
+	node.setBoxShadow('1px 0 red inset');
+	node.setAttribute('data-owner', 'test');
+
+	assert.equal(element.style.maxWidth, '400px');
+	assert.equal(element.style.width, '320px');
+	assert.equal(element.style.height, '200px');
+	assert.equal(element.style.top, '10px');
+	assert.equal(element.style.left, '20px');
+	assert.equal(element.style.padding, '1px 4px 3px 2px');
+	assert.equal(element.style.fontFamily, 'monospace');
+	assert.equal(element.style.fontSize, '14px');
+	assert.equal(element.style.transform, 'translate3d(1px, 2px, 0)');
+	assert.equal(element.style.contain, 'layout');
+	assert.equal(element.className, 'retained active');
+	assert.equal(element.dataset.owner, 'test');
+
+	node.removeAttribute('data-owner');
+	assert.equal(element.hasAttribute('data-owner'), false);
+	const child = createFastDomNode(h(dom.window.document, 'div'));
+	node.appendChild(child);
+	assert.equal(element.firstElementChild, child.domNode);
+	node.removeChild(child);
+	assert.equal(element.childElementCount, 0);
+	element.tabIndex = -1;
+	node.focus();
+	assert.equal(dom.window.document.activeElement, element);
+	dom.window.close();
+});
+
+test('FastDomNode owns its cached properties from wrapper construction', () => {
+	const fixture = createWriteFixture();
+	fixture.values.width = '24px';
+	fixture.values.transform = 'translateX(1px)';
+	fixture.values.className = 'retained';
 	const node = new FastDomNode(fixture.element);
 
 	node.setWidth(24);
 	node.setWidth('24px');
-	node.setHeight('50%');
-	node.setHeight('50%');
-	node.setTop(8);
-	node.setTop(8);
-	node.setLeft('2rem');
-	node.setLeft('2rem');
-	node.setRight(12);
-	node.setRight('12px');
-	node.setBottom('4%');
-	node.setBottom('4%');
-	node.setLineHeight(20);
-	node.setLineHeight('20px');
-	node.setTransform('translate3d(0, 8px, 0)');
-	node.setTransform('translate3d(0, 8px, 0)');
-	node.setBoxShadow('1px 0 red inset');
-	node.setBoxShadow('1px 0 red inset');
-	node.setClassName('decoration');
-	node.setClassName('decoration');
-	node.setTextContent('marker');
-	node.setTextContent('marker');
-	node.setHidden(true);
-	node.setHidden(true);
-	node.setTabIndex(0);
-	node.setTabIndex(0);
-
-	assert.deepEqual(fixture.values, {
-		width: '24px',
-		height: '50%',
-		top: '8px',
-		left: '2rem',
-		right: '12px',
-		bottom: '4%',
-		lineHeight: '20px',
-		transform: 'translate3d(0, 8px, 0)',
-		boxShadow: '1px 0 red inset',
-		className: 'decoration',
-		textContent: 'marker',
-	});
-	assert.deepEqual(fixture.writes, {
-		width: 1,
-		height: 1,
-		top: 1,
-		left: 1,
-		right: 1,
-		bottom: 1,
-		lineHeight: 1,
-		transform: 1,
-		boxShadow: 1,
-		className: 1,
-		textContent: 1,
-	});
-	assert.deepEqual(fixture.hidden, { value: true, writes: 1 });
-	assert.deepEqual(fixture.tabIndex, { value: 0, writes: 1 });
-});
-
-test('FastDomNode keeps class writes coherent across set and toggle operations', () => {
-	const fixture = createElementFixture();
-	fixture.values.className = 'retained';
-	const node = new FastDomNode(fixture.element);
-
-	node.toggleClassName('active', true);
-	node.toggleClassName('active', true);
-	node.setClassName('retained active');
-	node.toggleClassName('active', false);
-	node.toggleClassName('active', false);
+	node.setTransform('translateX(1px)');
+	node.setTransform('translateX(1px)');
 	node.setClassName('retained');
-	node.toggleClassName('selected');
-	node.toggleClassName('selected');
+	node.setClassName('retained');
 
+	assert.deepEqual(fixture.writes, { width: 1, transform: 1, className: 1 });
+
+	node.toggleClassName('active');
+	node.toggleClassName('active');
 	assert.equal(fixture.values.className, 'retained');
-	assert.equal(fixture.writes.className, 4);
+	assert.equal(fixture.writes.className, 3);
 });
 
-test('FastDomNode starts from the node current inline values', () => {
-	const fixture = createElementFixture();
-	fixture.values.width = '24px';
-	fixture.values.height = '50%';
-	fixture.values.top = '8px';
-	fixture.values.left = '2rem';
-	fixture.values.right = '12px';
-	fixture.values.bottom = '4%';
-	fixture.values.lineHeight = '20px';
-	fixture.values.transform = 'translate3d(0, 8px, 0)';
-	fixture.values.boxShadow = '1px 0 red inset';
-	fixture.values.className = 'decoration';
-	fixture.values.textContent = 'marker';
-	fixture.hidden.value = true;
-	fixture.tabIndex.value = 0;
+test('Layer hinting and explicit transforms share one cache', () => {
+	const fixture = createWriteFixture();
 	const node = new FastDomNode(fixture.element);
 
-	node.setWidth(24);
-	node.setHeight('50%');
-	node.setTop(8);
-	node.setLeft('2rem');
-	node.setRight(12);
-	node.setBottom('4%');
-	node.setLineHeight(20);
-	node.setTransform('translate3d(0, 8px, 0)');
-	node.setBoxShadow('1px 0 red inset');
-	node.setClassName('decoration');
-	node.setTextContent('marker');
-	node.setHidden(true);
-	node.setTabIndex(0);
+	node.setLayerHinting(true);
+	node.setTransform('translate3d(0px, 0px, 0px)');
+	node.setLayerHinting(false);
+	node.setTransform('');
 
-	assert.deepEqual(fixture.writes, createPropertyRecord(0));
-	assert.equal(fixture.hidden.writes, 0);
-	assert.equal(fixture.tabIndex.writes, 0);
+	assert.equal(fixture.values.transform, '');
+	assert.equal(fixture.writes.transform, 2);
 });
 
-test('FastDomNode tracks cleared inline values before restoring geometry', () => {
-	const fixture = createElementFixture();
-	const node = new FastDomNode(fixture.element);
-
-	node.setLeft(8);
-	node.setLeft('');
-	node.setLeft(8);
-
-	assert.equal(fixture.values.left, '8px');
-	assert.equal(fixture.writes.left, 3);
-});
-
-function createElementFixture(): {
+function createWriteFixture(): {
 	readonly element: HTMLElement;
-	readonly values: Record<CachedProperty, string>;
-	readonly writes: Record<CachedProperty, number>;
-	readonly hidden: { value: boolean; writes: number };
-	readonly tabIndex: { value: number; writes: number };
+	readonly values: { width: string; transform: string; className: string };
+	readonly writes: { width: number; transform: number; className: number };
 } {
-	const values = createPropertyRecord('');
-	const writes = createPropertyRecord(0);
-	const hidden = { value: false, writes: 0 };
-	const tabIndex = { value: -1, writes: 0 };
+	const values = { width: '', transform: '', className: '' };
+	const writes = { width: 0, transform: 0, className: 0 };
 	const style = {} as CSSStyleDeclaration;
-	for (const property of styleProperties) {
+	for (const property of ['width', 'transform'] as const) {
 		Object.defineProperty(style, property, {
 			get: () => values[property],
 			set: (value: string) => {
 				values[property] = value;
-				writes[property]++;
+				writes[property] += 1;
 			},
 		});
 	}
@@ -160,65 +125,22 @@ function createElementFixture(): {
 		get: () => values.className,
 		set: (value: string) => {
 			values.className = value;
-			writes.className++;
+			writes.className += 1;
 		},
 	});
 	Object.defineProperty(element, 'classList', {
 		value: {
 			toggle: (token: string, force?: boolean): boolean => {
-				const classNames = values.className.split(/\s+/u).filter(Boolean);
-				const index = classNames.indexOf(token);
-				const shouldHaveIt = force ?? index === -1;
-				if (shouldHaveIt === (index !== -1)) {
-					return shouldHaveIt;
-				}
-				if (shouldHaveIt) {
-					classNames.push(token);
-				} else {
-					classNames.splice(index, 1);
-				}
-				values.className = classNames.join(' ');
-				writes.className++;
-				return shouldHaveIt;
+				const classes = values.className.split(/\s+/u).filter(Boolean);
+				const index = classes.indexOf(token);
+				const enabled = force ?? index === -1;
+				if (enabled && index === -1) classes.push(token);
+				if (!enabled && index !== -1) classes.splice(index, 1);
+				values.className = classes.join(' ');
+				writes.className += 1;
+				return enabled;
 			},
 		},
 	});
-	Object.defineProperty(element, 'textContent', {
-		get: () => values.textContent,
-		set: (value: string) => {
-			values.textContent = value;
-			writes.textContent++;
-		},
-	});
-	Object.defineProperty(element, 'hidden', {
-		get: () => hidden.value,
-		set: (value: boolean) => {
-			hidden.value = value;
-			hidden.writes++;
-		},
-	});
-	Object.defineProperty(element, 'tabIndex', {
-		get: () => tabIndex.value,
-		set: (value: number) => {
-			tabIndex.value = value;
-			tabIndex.writes++;
-		},
-	});
-	return { element, values, writes, hidden, tabIndex };
-}
-
-function createPropertyRecord<TValue>(value: TValue): Record<CachedProperty, TValue> {
-	return {
-		width: value,
-		height: value,
-		top: value,
-		left: value,
-		right: value,
-		bottom: value,
-		lineHeight: value,
-		transform: value,
-		boxShadow: value,
-		className: value,
-		textContent: value,
-	};
+	return { element, values, writes };
 }

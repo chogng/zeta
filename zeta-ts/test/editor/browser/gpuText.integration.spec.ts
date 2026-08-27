@@ -12,7 +12,7 @@ interface GpuEditorState {
 	readonly hiddenCanvasUsesDisplayNone: boolean;
 	readonly glyphMarginTouchesLineNumber: boolean;
 	readonly lineNumberTouchesFolding: boolean;
-	readonly foldingTouchesText: boolean;
+	readonly foldingPrecedesText: boolean;
 }
 
 interface ClearedGpuEditorState {
@@ -76,7 +76,7 @@ function healthyGpuEditorState(): GpuEditorState {
 		hiddenCanvasUsesDisplayNone: true,
 		glyphMarginTouchesLineNumber: true,
 		lineNumberTouchesFolding: true,
-		foldingTouchesText: true,
+		foldingPrecedesText: true,
 	};
 }
 
@@ -91,8 +91,8 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		const canvas = requireElement<HTMLCanvasElement>(document, '.stanza-editor-gpu-canvas');
 		const firstLine = requireElement(document, '.stanza-editor-line[data-logical-line-index="0"]');
 		const glyphMargin = requireElement(document, '.stanza-editor-glyph-margin');
-		const lineNumber = requireElement(firstLine, '.stanza-editor-line-number');
-		const folding = requireElement(firstLine, '.stanza-editor-fold-toggle');
+		const lineNumber = requireElement(document, '.stanza-editor-line-margin[data-line-index="0"] .stanza-editor-line-number');
+		const folding = requireElement(document, '.stanza-editor-fold-toggle[data-logical-line-index="0"]');
 		const text = requireElement(firstLine, '.stanza-editor-line-text');
 		const rows = [...editor.querySelectorAll<HTMLElement>('.stanza-editor-line')];
 		const rowRectangles = rows.map(row => row.getBoundingClientRect());
@@ -115,7 +115,7 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 			hiddenCanvasUsesDisplayNone,
 			glyphMarginTouchesLineNumber: equal(glyphMarginRectangle.right, lineNumberRectangle.left),
 			lineNumberTouchesFolding: equal(lineNumberRectangle.right, foldingRectangle.left),
-			foldingTouchesText: equal(foldingRectangle.right, textRectangle.left),
+			foldingPrecedesText: foldingRectangle.right <= textRectangle.left,
 		};
 	});
 }

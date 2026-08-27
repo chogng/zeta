@@ -135,6 +135,24 @@ test("EditorViewport projects configured column rulers through the margin coordi
 test("EditorViewport uses browser range geometry for RTL selections and carets", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
+	const createRange = dom.window.document.createRange.bind(dom.window.document);
+	Object.defineProperty(dom.window.document, "createRange", {
+		configurable: true,
+		value: () => {
+			const range = createRange();
+			Object.defineProperty(range, "getClientRects", {
+				configurable: true,
+				value: () => range.collapsed
+					? [testRectangle(135, 0, 0)]
+					: [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
+			});
+			Object.defineProperty(range, "getBoundingClientRect", {
+				configurable: true,
+				value: () => testRectangle(135, 0, 0),
+			});
+			return range;
+		},
+	});
 	using model = new TextModel("abc אבג");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
@@ -151,30 +169,15 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		configurable: true,
 		value: () => testRectangle(100, 0, 300),
 	});
-	const createRange = dom.window.document.createRange.bind(dom.window.document);
-	Object.defineProperty(dom.window.document, "createRange", {
-		configurable: true,
-		value: () => {
-			const range = createRange();
-			Object.defineProperty(range, "getClientRects", {
-				configurable: true,
-				value: () => [testRectangle(150, 0, 20), testRectangle(120, 0, 15)],
-			});
-			Object.defineProperty(range, "getBoundingClientRect", {
-				configurable: true,
-				value: () => testRectangle(135, 0, 0),
-			});
-			return range;
-		},
-	});
 	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 3))));
 
-	const selectionElements = [...line.querySelectorAll<HTMLElement>(".stanza-editor-selection")];
+	const selectionRow = requiredPartRow(viewport.element, "stanza-editor-line-selections", 0);
+	const selectionElements = [...selectionRow.querySelectorAll<HTMLElement>(".stanza-editor-selection")];
 	assert.deepEqual(selectionElements.map(element => ({ left: element.style.left, width: element.style.width })), [
-		{ left: "50px", width: "20px" },
 		{ left: "20px", width: "15px" },
+		{ left: "50px", width: "20px" },
 	]);
-	assert.equal(requiredElement<HTMLElement>(line, ".stanza-editor-caret").style.left, "35px");
+	assert.equal(requiredElement<HTMLElement>(requiredPartRow(viewport.element, "stanza-editor-line-cursors", 0), ".stanza-editor-caret").style.left, "35px");
 	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
 	dom.window.close();
 });
@@ -192,10 +195,11 @@ test("EditorViewport resolves RTL pointer hits from the browser caret position",
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const text = lineText(requiredLine(viewport.element, 0));
-	assert.ok(text.firstChild);
+	const textNode = text.firstElementChild?.firstChild;
+	assert.ok(textNode);
 	Object.defineProperty(dom.window.document, "caretPositionFromPoint", {
 		configurable: true,
-		value: () => ({ offsetNode: text.firstChild, offset: 5 }),
+		value: () => ({ offsetNode: textNode, offset: 5 }),
 	});
 
 	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 170, clientY: 10 }), {
@@ -249,12 +253,12 @@ test("EditorViewport projects indentation guides for visible logical rows only",
 		indentation: { tabSize: 2 },
 	});
 	viewport.layout({ width: 300, height: 40 });
-	const firstGuides = requiredLine(viewport.element, 0).querySelectorAll<HTMLElement>(".stanza-editor-indent-guide");
+	const firstGuides = requiredPartRow(viewport.element, "stanza-editor-line-indent-guides", 0).querySelectorAll<HTMLElement>(".stanza-editor-indent-guide");
 	assert.deepEqual([...firstGuides].map(guide => ({ level: guide.dataset.indentLevel, left: guide.style.left })), [
 		{ level: "1", left: "77px" },
 		{ level: "2", left: "97px" },
 	]);
-	assert.equal(requiredLine(viewport.element, 1).querySelectorAll(".stanza-editor-indent-guide").length, 1);
+	assert.equal(requiredPartRow(viewport.element, "stanza-editor-line-indent-guides", 1).querySelectorAll(".stanza-editor-indent-guide").length, 1);
 	dom.window.close();
 });
 
@@ -749,7 +753,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	];
 	assert.deepEqual(
 		selectionElements.map(element => ({
-			lineIndex: element.parentElement?.parentElement?.dataset.lineIndex,
+			lineIndex: element.parentElement?.dataset.lineIndex,
 			left: element.style.left,
 			width: element.style.width,
 		})),
@@ -785,7 +789,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		0,
 	);
 	assert.equal(
-		requiredLine(viewport.element, 1)
+		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 1)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
 		"78px",
@@ -795,7 +799,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 			.classList.contains("active"),
 		true,
 	);
-	assert.equal(requiredLine(viewport.element, 1).classList.contains("active"), true);
+	assert.equal(requiredPartRow(viewport.element, "stanza-editor-line-selections", 1).classList.contains("active"), true);
 
 	model.applyEdits([{
 		range: TextRange.emptyAt(TextPosition.at(0, 0)),
@@ -804,7 +808,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 
 	assert.equal(controller.selections.primary.active.lineIndex, 2);
 	assert.equal(
-		requiredLine(viewport.element, 2)
+		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 2)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
 		"78px",
@@ -974,10 +978,16 @@ function lineText(line: Element | undefined): HTMLSpanElement {
 
 function lineNumber(line: Element | undefined): HTMLSpanElement {
 	assert.ok(line);
+	const editor = line.closest(".stanza-editor");
+	assert.ok(editor);
 	return requiredElement<HTMLSpanElement>(
-		line,
-		".stanza-editor-line-number",
+		editor,
+		`.stanza-editor-line-margin[data-line-index="${line.getAttribute("data-line-index")}"] .stanza-editor-line-number`,
 	);
+}
+
+function requiredPartRow(container: ParentNode, className: string, lineIndex: number): HTMLElement {
+	return requiredElement<HTMLElement>(container, `.${className}[data-line-index="${lineIndex}"]`);
 }
 
 function lines(count: number): string[] {
