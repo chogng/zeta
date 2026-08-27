@@ -15,6 +15,7 @@ use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolExecutionOutput;
 use zeta_protocol::ToolOutputStream;
 use zeta_protocol::TurnId;
+use zeta_tools::DEFAULT_TOOL_OUTPUT_MAX_BYTES;
 use zeta_tools::ToolBinding;
 use zeta_tools::ToolContent;
 use zeta_tools::ToolEnvironmentId;
@@ -24,6 +25,7 @@ use zeta_tools::ToolExecutor;
 use zeta_tools::ToolOperationId;
 use zeta_tools::ToolOutput;
 use zeta_tools::ToolOutputStatus;
+use zeta_tools::ToolOutputTruncationPolicy;
 use zeta_tools::ToolPayload;
 use zeta_tools::ToolRuntimeAuthority;
 
@@ -190,6 +192,19 @@ fn returned_output(
     output: ToolOutput,
     sink: &mut dyn ToolOutputSink,
 ) -> Result<ToolExecutionOutput, CoreError> {
+    returned_output_with_policy(
+        output,
+        sink,
+        ToolOutputTruncationPolicy::Bytes(DEFAULT_TOOL_OUTPUT_MAX_BYTES),
+    )
+}
+
+fn returned_output_with_policy(
+    output: ToolOutput,
+    sink: &mut dyn ToolOutputSink,
+    policy: ToolOutputTruncationPolicy,
+) -> Result<ToolExecutionOutput, CoreError> {
+    let output = output.truncate_text(policy);
     let content = output
         .content()
         .iter()

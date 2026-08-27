@@ -95,10 +95,12 @@ members = [
     "zeta-rs/text-file",
     "zeta-rs/theme",
     "zeta-rs/thread-store",
+    "zeta-rs/thread-transcript",
     "zeta-rs/tools",
     "zeta-rs/uds",
     "zeta-code/tui",
     "zeta-rs/utils/image",
+    "zeta-rs/utils/output-truncation",
     "zeta-rs/utils/path-uri",
     "zeta-rs/utils/path-utils",
     "zeta-rs/utils/pdf",
@@ -111,19 +113,26 @@ members = [
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
+    "zeta-rs/otel",
     "app",
+    "app/agent-session",
     "app/commands",
     "app/composer",
     "app/editor",
+    "app/editor-host",
     "app/icons",
     "app/keybinding-ui",
     "app/markdown",
     "app/native-keybindings",
+    "app/remote-ui",
+    "app/session-ui",
     "app/settings",
+    "app/terminal-host",
     "app/ui",
     "app/workbench",
     "app/workbench-layout",
     "app/workbench-host",
+    "app/workspace-ui",
     "app/zui",
     "app/zui-demo",
 ]
@@ -181,6 +190,8 @@ nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faa
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 pollster = "1.0.1"
 open = "5.4.1"
+opentelemetry = "0.31.0"
+opentelemetry_sdk = "0.31.0"
 portable-pty = "0.9.0"
 pkg-config = "0.3"
 pretty_assertions = "1"
@@ -265,6 +276,7 @@ zeta-app-server-daemon = { path = "zeta-rs/app-server-daemon" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
 zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
+zeta-agent-session = { path = "app/agent-session" }
 zeta-collaboration = { path = "zeta-rs/collaboration" }
 zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
 zeta-code-index = { path = "zeta-rs/code-index" }
@@ -278,6 +290,7 @@ zeta-auto-review = { path = "zeta-rs/auto-review" }
 zeta-bwrap = { path = "zeta-rs/bwrap" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
+zeta-otel = { path = "zeta-rs/otel" }
 zeta-config = { path = "zeta-rs/config" }
 zeta-connectors = { path = "zeta-rs/connectors" }
 zeta-context-engine = { path = "zeta-rs/context-engine" }
@@ -285,6 +298,7 @@ zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
 zeta-debug-adapter = { path = "zeta-rs/debug-adapter" }
 zeta-editor = { path = "app/editor" }
+zeta-editor-host = { path = "app/editor-host" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
 zeta-connectors-extension = { path = "zeta-rs/ext/connectors" }
@@ -338,6 +352,7 @@ zeta-protocol = { path = "zeta-rs/protocol" }
 zeta-remote = { path = "zeta-rs/remote" }
 zeta-remote-connections = { path = "zeta-rs/remote-connections" }
 zeta-remote-host = { path = "zeta-rs/remote-host" }
+zeta-remote-ui = { path = "app/remote-ui" }
 zeta-remote-server = { path = "zeta-rs/remote-server" }
 zeta-rollout = { path = "zeta-rs/rollout" }
 zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
@@ -347,6 +362,7 @@ zeta-search = { path = "zeta-rs/search" }
 zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
+zeta-session-ui = { path = "app/session-ui" }
 zeta-settings = { path = "app/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
 zeta-shell-completion = { path = "zeta-rs/shell-completion" }
@@ -357,10 +373,12 @@ zeta-storage = { path = "zeta-rs/storage" }
 zeta-symbol-index = { path = "zeta-rs/symbol-index" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
+zeta-terminal-host = { path = "app/terminal-host" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
 zeta-text-file = { path = "zeta-rs/text-file" }
 zeta-theme = { path = "zeta-rs/theme" }
 zeta-thread-store = { path = "zeta-rs/thread-store" }
+zeta-thread-transcript = { path = "zeta-rs/thread-transcript" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
@@ -368,7 +386,9 @@ zeta-ui = { path = "app/ui" }
 zeta-workbench = { path = "app/workbench" }
 zeta-workbench-host = { path = "app/workbench-host" }
 zeta-workbench-layout = { path = "app/workbench-layout" }
+zeta-workspace-ui = { path = "app/workspace-ui" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
+zeta-utils-output-truncation = { path = "zeta-rs/utils/output-truncation" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
 zeta-utils-stream-parser = { path = "zeta-rs/utils/stream-parser" }

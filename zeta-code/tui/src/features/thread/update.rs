@@ -1,12 +1,11 @@
-use zeta_protocol::Thread;
-use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 
 /// A presentation-level fact consumed by the active Thread feature.
 pub(crate) enum ThreadPresentationEvent {
-    SnapshotReceived(Thread),
-    HistoryPageReceived(Thread),
-    TransientStreamReset,
-    TransientUpdateReceived(Box<ThreadUpdateEnvelope>),
+    TranscriptSnapshotReceived(ThreadTranscriptSnapshot),
+    TranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
+    TranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
     UserSubmitted(String),
     CommandStarted(String),
     CommandCompleted { command: String, result: String },

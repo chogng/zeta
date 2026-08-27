@@ -295,6 +295,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "unicode-width 0.2.0",
+ "zeta-agent-session",
  "zeta-app-server-client",
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
@@ -302,6 +303,7 @@ dependencies = [
  "zeta-composer",
  "zeta-diff",
  "zeta-editor",
+ "zeta-editor-host",
  "zeta-file-search",
  "zeta-icons",
  "zeta-input-classifier",
@@ -314,10 +316,13 @@ dependencies = [
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-host",
+ "zeta-remote-ui",
  "zeta-server-host",
+ "zeta-session-ui",
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
+ "zeta-terminal-host",
  "zeta-text-file",
  "zeta-theme",
  "zeta-ui",
@@ -326,6 +331,7 @@ dependencies = [
  "zeta-workbench-host",
  "zeta-workbench-layout",
  "zeta-workspace",
+ "zeta-workspace-ui",
  "zui",
 ]
 
@@ -5188,6 +5194,37 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "opentelemetry"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b84bcd6ae87133e903af7ef497404dda70c60d0ea14895fc8a5e6722754fc2a0"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "js-sys",
+ "pin-project-lite",
+ "thiserror 2.0.19",
+ "tracing",
+]
+
+[[package]]
+name = "opentelemetry_sdk"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e14ae4f5991976fd48df6d843de219ca6d31b01daaab2dad5af2badeded372bd"
+dependencies = [
+ "futures-channel",
+ "futures-executor",
+ "futures-util",
+ "opentelemetry",
+ "percent-encoding",
+ "rand 0.9.5",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-stream",
+]
 
 [[package]]
 name = "option-ext"
@@ -10540,6 +10577,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-agent-session"
+version = "0.1.0"
+dependencies = [
+ "zeta-app-server-protocol",
+ "zeta-protocol",
+ "zeta-text-file",
+]
+
+[[package]]
 name = "zeta-agents"
 version = "0.1.0"
 dependencies = [
@@ -10646,6 +10692,7 @@ dependencies = [
  "zeta-slash-commands",
  "zeta-symbol-index",
  "zeta-syntax",
+ "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
  "zeta-typst",
@@ -10706,6 +10753,7 @@ dependencies = [
  "zeroize",
  "zeta-collaboration",
  "zeta-protocol",
+ "zeta-thread-transcript",
 ]
 
 [[package]]
@@ -11024,6 +11072,16 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "zeta-editor-host"
+version = "0.1.0"
+dependencies = [
+ "zeta-editor",
+ "zeta-lsp-manager",
+ "zeta-ui",
+ "zui",
 ]
 
 [[package]]
@@ -11468,6 +11526,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-otel"
+version = "0.1.0"
+dependencies = [
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "zeta-client",
+ "zeta-http-client",
+]
+
+[[package]]
 name = "zeta-pdf"
 version = "0.1.0"
 dependencies = [
@@ -11548,6 +11618,18 @@ dependencies = [
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+]
+
+[[package]]
+name = "zeta-remote-ui"
+version = "0.1.0"
+dependencies = [
+ "zeta-icons",
+ "zeta-remote",
+ "zeta-remote-connections",
+ "zeta-remote-host",
+ "zeta-ui",
+ "zui",
 ]
 
 [[package]]
@@ -11632,6 +11714,17 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-session-ui"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-protocol",
+ "zeta-ui",
+ "zeta-workbench",
+ "zui",
 ]
 
 [[package]]
@@ -11767,6 +11860,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-terminal-host"
+version = "0.1.0"
+dependencies = [
+ "unicode-width 0.2.0",
+ "zeta-terminal",
+ "zeta-ui",
+ "zui",
+]
+
+[[package]]
 name = "zeta-text-file"
 version = "0.1.0"
 
@@ -11785,6 +11888,16 @@ name = "zeta-thread-store"
 version = "0.1.0"
 dependencies = [
  "zeta-history",
+ "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-thread-transcript"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "ts-rs",
  "zeta-protocol",
 ]
 
@@ -11809,6 +11922,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-utils-output-truncation",
 ]
 
 [[package]]
@@ -11874,6 +11988,10 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.19",
 ]
+
+[[package]]
+name = "zeta-utils-output-truncation"
+version = "0.1.0"
 
 [[package]]
 name = "zeta-utils-path"
@@ -11998,6 +12116,18 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+]
+
+[[package]]
+name = "zeta-workspace-ui"
+version = "0.1.0"
+dependencies = [
+ "zeta-diff",
+ "zeta-editor",
+ "zeta-file-search",
+ "zeta-icons",
+ "zeta-ui",
+ "zui",
 ]
 
 [[package]]

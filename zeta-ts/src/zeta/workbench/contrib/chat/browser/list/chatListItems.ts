@@ -1,4 +1,4 @@
-import type { ThreadItem, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
+import type { PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from "../../../../services/chat/common/chatService.js";
 
 export type ChatTurnErrorAction =
 	| { readonly type: "retry"; readonly label: string; readonly turnId: string }
@@ -10,7 +10,7 @@ interface ChatTurnErrorListItemOptions {
 	readonly actionsEnabled?: boolean;
 }
 
-/** Render-ready projection of one committed or transient Thread item. */
+/** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem["type"] | "turnError";
@@ -26,7 +26,11 @@ export interface IChatListItem {
 /** Projects the canonical durable plan owned by a Turn. */
 export function chatPlanListItem(turn: Turn): IChatListItem | undefined {
 	if (!turn.plan) return undefined;
-	const steps = turn.plan.steps.map((step) => {
+	return chatPlanUpdateListItem(turn.turnId, turn.plan);
+}
+
+function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem {
+	const steps = plan.steps.map((step) => {
 		switch (step.status) {
 			case "completed": return `- [x] ${step.step}`;
 			case "inProgress": return `- [ ] **In progress:** ${step.step}`;
@@ -34,11 +38,45 @@ export function chatPlanListItem(turn: Turn): IChatListItem | undefined {
 		}
 	});
 	return {
-		id: `turn-plan:${turn.turnId}`,
+		id: `turn-plan:${turnId}`,
 		type: "plan",
-		text: [turn.plan.explanation, ...steps].filter((value): value is string => Boolean(value)).join("\n\n"),
+		text: [plan.explanation, ...steps].filter((value): value is string => Boolean(value)).join("\n\n"),
 		transient: false,
 	};
+}
+
+/** Maps one backend-assembled transcript entry to Chat presentation. */
+export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
+	switch (entry.type) {
+		case "item": return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
+		case "turnPlan": return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
+		case "turnError": {
+			const presentation = turnErrorPresentation(entry.turnId, entry.error);
+			return {
+				id: entry.entryId,
+				type: "turnError",
+				text: entry.error.message,
+				transient: false,
+				isError: true,
+				label: presentation.label,
+				detail: presentation.detail,
+				errorCode: entry.error.code,
+				action: options.actionsEnabled === false ? undefined : presentation.action,
+			};
+		}
+		case "toolOutput": return {
+			id: entry.entryId,
+			type: "toolResult",
+			text: entry.text,
+			transient: true,
+			isError: entry.stream === "stderr",
+			label: entry.stream === "stderr" ? "Tool stderr" : "Tool stdout",
+		};
+	}
+}
+
+interface TranscriptListItemOptions {
+	readonly actionsEnabled?: boolean;
 }
 
 /** Projects one durable Turn failure as a conversation item. */

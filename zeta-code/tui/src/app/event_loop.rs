@@ -91,7 +91,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         None => ActiveConversation::start(&mut client, thread_title)?,
     };
     let mut active_turn = None;
-    let (mut thread_subscription, initial_thread) = ThreadSubscription::start(
+    let (mut thread_subscription, initial_thread, initial_transcript) = ThreadSubscription::start(
         &mut client,
         conversation.session_id(),
         conversation.thread_id(),
@@ -108,7 +108,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut keybindings_resource =
         keybindings_path.map(|path| AppKeybindingsResource::new(path, now));
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
-    apply_thread_snapshot(&mut app, &mut active_turn, initial_thread);
+    apply_thread_snapshot(
+        &mut app,
+        &mut active_turn,
+        initial_thread,
+        initial_transcript,
+    );
     poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
     if let Ok(config) = client.read_config() {
         app.update(AppEvent::PreferredModelReceived(config.preferred_model));
@@ -884,28 +889,20 @@ fn refresh_server_event(
         }
         client::ClientEvent::ThreadUpdated(update) => {
             match thread_subscription.classify_update(&update) {
-                ThreadUpdateDisposition::ApplyTransient => {
-                    app.update(AppEvent::TransientThreadUpdateReceived(update));
-                    ServerRefresh::default()
-                }
-                ThreadUpdateDisposition::ApplyTransientAfterReset => {
-                    app.update(AppEvent::TransientThreadStreamReset);
-                    app.update(AppEvent::TransientThreadUpdateReceived(update));
-                    ServerRefresh::default()
-                }
                 ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
                 ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
                     thread: true,
                     ..ServerRefresh::default()
                 },
-                ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot => {
-                    app.update(AppEvent::TransientThreadStreamReset);
-                    ServerRefresh {
-                        thread: true,
-                        ..ServerRefresh::default()
-                    }
-                }
             }
+        }
+        client::ClientEvent::ThreadTranscriptUpdated(update) => {
+            if update.session_id == *conversation.session_id()
+                && update.thread_id == *conversation.thread_id()
+            {
+                app.update(AppEvent::ThreadTranscriptUpdateReceived(update));
+            }
+            ServerRefresh::default()
         }
     }
 }

@@ -17,6 +17,7 @@ use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
@@ -193,6 +194,7 @@ where
 
 pub(crate) struct LatestThreadSnapshot {
     pub(crate) thread: Thread,
+    pub(crate) transcript: ThreadTranscriptSnapshot,
     pub(crate) boundary: ThreadHistoryBoundary,
 }
 
@@ -213,12 +215,14 @@ where
     let boundary = require_history_boundary(result.history)?;
     Ok(LatestThreadSnapshot {
         thread: result.thread,
+        transcript: result.transcript,
         boundary,
     })
 }
 
 pub(crate) struct OlderThreadHistoryPage {
     pub(crate) thread: Thread,
+    pub(crate) transcript: ThreadTranscriptSnapshot,
     pub(crate) boundary: ThreadHistoryBoundary,
 }
 
@@ -242,6 +246,7 @@ where
     let boundary = require_history_boundary(result.history)?;
     Ok(OlderThreadHistoryPage {
         thread: result.thread,
+        transcript: result.transcript,
         boundary,
     })
 }

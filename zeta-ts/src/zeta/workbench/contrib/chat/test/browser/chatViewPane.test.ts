@@ -6,7 +6,7 @@ import { toDisposable, type IDisposable } from "../../../../../base/common/lifec
 import type { IMenu, IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
+import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
@@ -118,6 +118,7 @@ function unavailableChatService(): IChatService {
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => {});
 	return {
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
+		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
 		onDidUpdateGoal: neverEvent<import("../../../../services/chat/common/chatService.js").ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
@@ -129,7 +130,7 @@ function unavailableChatService(): IChatService {
 		setModelVisible: () => pending as Promise<void>,
 		listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
 		listSkillCommands: () => pending as Promise<readonly SkillCommandDefinition[]>,
-		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<Thread>,
+		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,
 		startTurn: () => pending as Promise<void>,

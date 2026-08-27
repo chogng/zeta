@@ -18911,6 +18911,22 @@
         {
           "properties": {
             "method": {
+              "const": "session/thread/transcript/update",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadTranscriptUpdateEnvelope"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "thread/goal/updated",
               "type": "string"
             },
@@ -19927,6 +19943,9 @@
         "thread": {
           "$ref": "#/$defs/Thread"
         },
+        "transcript": {
+          "$ref": "#/$defs/ThreadTranscriptSnapshot"
+        },
         "updates": {
           "items": {
             "$ref": "#/$defs/ThreadUpdateEnvelope"
@@ -19936,6 +19955,7 @@
       },
       "required": [
         "thread",
+        "transcript",
         "updates"
       ],
       "type": "object"
@@ -19980,10 +20000,14 @@
         },
         "thread": {
           "$ref": "#/$defs/Thread"
+        },
+        "transcript": {
+          "$ref": "#/$defs/ThreadTranscriptSnapshot"
         }
       },
       "required": [
-        "thread"
+        "thread",
+        "transcript"
       ],
       "type": "object"
     },
@@ -20057,6 +20081,9 @@
         "thread": {
           "$ref": "#/$defs/Thread"
         },
+        "transcript": {
+          "$ref": "#/$defs/ThreadTranscriptSnapshot"
+        },
         "updates": {
           "items": {
             "$ref": "#/$defs/ThreadUpdateEnvelope"
@@ -20066,6 +20093,7 @@
       },
       "required": [
         "thread",
+        "transcript",
         "updates"
       ],
       "type": "object"
@@ -23212,6 +23240,239 @@
         "archived"
       ],
       "type": "string"
+    },
+    "ThreadTranscriptChange": {
+      "description": "Mechanical list mutation applied by transcript consumers before rendering.",
+      "oneOf": [
+        {
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/ThreadTranscriptEntry"
+            },
+            "type": {
+              "const": "upsert",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entry"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "entryIds": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "remove",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entryIds"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "clearTransient",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ThreadTranscriptEntry": {
+      "description": "One complete, render-neutral entry in a Thread transcript.",
+      "oneOf": [
+        {
+          "properties": {
+            "entryId": {
+              "type": "string"
+            },
+            "item": {
+              "$ref": "#/$defs/ThreadItem"
+            },
+            "transient": {
+              "type": "boolean"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "item",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entryId",
+            "turnId",
+            "item",
+            "transient"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "entryId": {
+              "type": "string"
+            },
+            "plan": {
+              "$ref": "#/$defs/PlanUpdate"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "turnPlan",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entryId",
+            "turnId",
+            "plan"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "entryId": {
+              "type": "string"
+            },
+            "error": {
+              "$ref": "#/$defs/StableTurnError"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "turnError",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entryId",
+            "turnId",
+            "error"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "entryId": {
+              "type": "string"
+            },
+            "stream": {
+              "$ref": "#/$defs/ToolOutputStream"
+            },
+            "text": {
+              "type": "string"
+            },
+            "toolCallId": {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "toolOutput",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "entryId",
+            "turnId",
+            "toolCallId",
+            "stream",
+            "text"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ThreadTranscriptSnapshot": {
+      "description": "Initial or resynchronized transcript derived from one canonical Thread snapshot.",
+      "properties": {
+        "durableSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ThreadTranscriptEntry"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "durableSequence",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "ThreadTranscriptUpdateEnvelope": {
+      "description": "One backend-assembled transcript update delivered through App Server.",
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ThreadTranscriptChange"
+          },
+          "type": "array"
+        },
+        "durableSequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "streamCursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StreamCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "durableSequence",
+        "changes"
+      ],
+      "type": "object"
     },
     "ThreadUpdate": {
       "description": "Consumer-facing update for one Thread.\n\n`Committed` carries a durable fact. The remaining variants are low-latency projections and\nmay be dropped; a later committed Item snapshot remains authoritative.",

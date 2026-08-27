@@ -48,6 +48,7 @@ fn git_status_adds_branch_and_dirty_state_without_displacing_the_model_first() {
     let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
     status_line.apply_git_status(&GitStatusResult {
+        repository_id: "repository-1".into(),
         stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
         revision: 3,
         workspace_path: String::new(),

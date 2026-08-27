@@ -78,6 +78,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
 fn git_status_change_updates_tui_owned_status_projection() {
     let changed = GitStatusChanged {
         status: GitStatusResult {
+            repository_id: "repository-1".into(),
             stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
             revision: 1,
             workspace_path: String::new(),

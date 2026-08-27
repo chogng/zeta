@@ -178,11 +178,6 @@ use crate::protocol::fs::{
     FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams,
     FsWriteFileResult,
 };
-use crate::protocol::goal::{
-    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
-    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
-    ThreadGoalUpdatedNotification,
-};
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeFileComparisonDto,
     GitChangeFileParams, GitChangeFileResult, GitChangeStatusDto, GitCommitChangeDto,
@@ -193,6 +188,11 @@ use crate::protocol::git::{
     GitRemoteProviderDto, GitRepositoriesResult, GitRepositoryChangeDto, GitRepositoryDto,
     GitRepositoryIdentityDto, GitRepositoryParams, GitStatusChanged, GitStatusResult,
     GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
+};
+use crate::protocol::goal::{
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ThreadGoalUpdatedNotification,
 };
 use crate::protocol::initialize::{
     CapabilityContract, InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
@@ -285,7 +285,9 @@ use crate::protocol::mcp::McpServerRuntimeStateDto;
 use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
 use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
-use crate::protocol::notification::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
+use crate::protocol::notification::{
+    SessionUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope,
+};
 use crate::protocol::plugins::PluginCommandDispositionDto;
 use crate::protocol::plugins::PluginCommandResultDto;
 use crate::protocol::plugins::PluginListResult;
@@ -357,6 +359,9 @@ use crate::protocol::terminal::TerminalReadResult;
 use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 use crate::protocol::terminal::TerminalWriteParams;
+use crate::protocol::transcript::{
+    ThreadTranscriptChange, ThreadTranscriptEntry, ThreadTranscriptSnapshot,
+};
 use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
@@ -407,16 +412,16 @@ use zeta_protocol::{
     DelegationArtifactRef, DelegationId, DelegationResult, DelegationResultDigest,
     DelegationResultStatus, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
     ForkedAgentContext, FrozenAgentDefinitionRef, FrozenSkillActivation, InteractionCancelReason,
-    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelUsage,
-    ModelUsageSummary, ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
+    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelUsage, ModelUsageSummary,
+    ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
     ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
     SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
     SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
-    ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus, ThreadUpdate,
-    ThreadGoal, ThreadGoalStatus, ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot,
-    ToolReplaySafety, Turn, TurnExecutionBinding, TurnInteraction, TurnStatus, UserInputAnswer,
-    UserInputOption, UserInputQuestion,
+    ThreadGoal, ThreadGoalStatus, ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus,
+    ThreadUpdate, ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot, ToolReplaySafety,
+    Turn, TurnExecutionBinding, TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption,
+    UserInputQuestion,
 };
 
 /// Selects whether equal scheduling keys exclude or share execution.
@@ -1846,6 +1851,9 @@ server_notifications! {
         params: ThreadUpdateEnvelope,
         storage: boxed,
     },
+    SessionThreadTranscriptUpdate => "session/thread/transcript/update" {
+        params: ThreadTranscriptUpdateEnvelope,
+    },
     ThreadGoalUpdated => "thread/goal/updated" {
         params: ThreadGoalUpdatedNotification,
     },
@@ -2313,6 +2321,10 @@ typescript_bindings! {
     ItemDelta,
     ThreadUpdate,
     ThreadUpdateEnvelope,
+    ThreadTranscriptEntry,
+    ThreadTranscriptSnapshot,
+    ThreadTranscriptChange,
+    ThreadTranscriptUpdateEnvelope,
     InputItem,
     TurnStartResult,
     TurnSteerResult,

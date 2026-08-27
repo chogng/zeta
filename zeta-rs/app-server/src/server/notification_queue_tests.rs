@@ -26,6 +26,35 @@ fn transient_backlog_is_bounded_without_losing_control_messages() {
 }
 
 #[test]
+fn assembled_transcript_stream_updates_are_droppable() {
+    let queue = NotificationQueue::default();
+    for sequence in 1..=MAX_NOTIFICATION_QUEUE_LEN {
+        queue.push(serde_json::json!({
+            "jsonrpc":"2.0",
+            "method":"session/thread/transcript/update",
+            "params":{
+                "sessionId":"session-1",
+                "threadId":"thread-1",
+                "durableSequence":0,
+                "streamCursor":{"streamInstanceId":"stream-1","sequence":sequence},
+                "changes":[{"type":"upsert"}]
+            }
+        }));
+    }
+    queue.push(serde_json::json!({
+        "jsonrpc":"2.0",
+        "method":"config/changed",
+        "params":{"revision":1,"generation":1}
+    }));
+
+    let values = queue.drain();
+    assert_eq!(values.len(), 2);
+    assert_eq!(values[0]["method"], "session/thread/transcript/update");
+    assert_eq!(values[0]["params"]["changes"][0]["type"], "clearTransient");
+    assert_eq!(values[1]["method"], "config/changed");
+}
+
+#[test]
 fn control_overflow_closes_instead_of_dropping_existing_messages() {
     let queue = NotificationQueue::default();
     for sequence in 0..MAX_NOTIFICATION_QUEUE_LEN {

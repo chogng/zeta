@@ -13,9 +13,9 @@ use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSelectionView;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_file_search::PathSearchSnapshot;
-use zeta_protocol::Thread;
-use zeta_protocol::ThreadUpdateEnvelope;
 
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
@@ -45,10 +45,9 @@ pub(crate) enum AppEvent {
     SkillsViewReplaced(SkillSelectionView),
     ThemeViewClosed,
     ThemeViewOpened(ThemeSelectionView),
-    ThreadSnapshotReceived(Thread),
-    ThreadHistoryPageReceived(Thread),
-    TransientThreadStreamReset,
-    TransientThreadUpdateReceived(Box<ThreadUpdateEnvelope>),
+    ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),
+    ThreadTranscriptHistoryPageReceived(ThreadTranscriptSnapshot),
+    ThreadTranscriptUpdateReceived(Box<ThreadTranscriptUpdateEnvelope>),
     TranscriptCleared,
     TurnActivityChanged(TurnActivity),
     TurnCompleted,

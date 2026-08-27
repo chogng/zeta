@@ -324,7 +324,11 @@ fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);
     }
-    app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
+            &snapshot,
+        ),
+    ));
     app.update(AppEvent::ProductNotice(change.notice));
 }
 

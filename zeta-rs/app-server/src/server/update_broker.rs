@@ -41,6 +41,9 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_thread_transcript::ThreadTranscriptUpdateEnvelope;
+use zeta_thread_transcript::TranscriptAccumulator;
+use zeta_thread_transcript::TranscriptApplyResult;
 
 pub(super) fn unix_time_millis() -> u64 {
     std::time::SystemTime::now()
@@ -52,6 +55,7 @@ pub(super) fn unix_time_millis() -> u64 {
 
 pub(crate) struct UpdateBroker {
     state: Arc<Mutex<BrokerState>>,
+    transcripts: Arc<Mutex<BTreeMap<(SessionId, ThreadId), TranscriptAccumulator>>>,
     next_connection_id: Arc<AtomicU64>,
     next_scope_id: Arc<AtomicU64>,
     marketplace_instance_id: Arc<str>,
@@ -88,6 +92,7 @@ impl Default for UpdateBroker {
     fn default() -> Self {
         Self {
             state: Arc::new(Mutex::new(BrokerState::default())),
+            transcripts: Arc::new(Mutex::new(BTreeMap::new())),
             next_connection_id: Arc::new(AtomicU64::new(1)),
             next_scope_id: Arc::new(AtomicU64::new(2)),
             marketplace_instance_id: Arc::from(new_marketplace_instance_id()),
@@ -103,6 +108,7 @@ impl UpdateBroker {
     pub(crate) fn fork_scope(&self) -> Self {
         Self {
             state: Arc::clone(&self.state),
+            transcripts: Arc::clone(&self.transcripts),
             next_connection_id: Arc::clone(&self.next_connection_id),
             next_scope_id: Arc::clone(&self.next_scope_id),
             marketplace_instance_id: Arc::clone(&self.marketplace_instance_id),
@@ -327,15 +333,17 @@ impl UpdateBroker {
         session_id: SessionId,
         thread_id: ThreadId,
         sequence: u64,
-    ) {
+    ) -> bool {
         if let Ok(mut state) = self.state.lock()
             && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
         {
             let subscription = subscriber.threads.entry(thread_id).or_default();
             subscription.sequence = subscription.sequence.max(sequence);
-            subscription.session_owners.insert(session_id);
+            let inserted = subscription.session_owners.insert(session_id);
             reconcile_interaction_assignments(&mut state);
+            return inserted;
         }
+        false
     }
 
     pub(super) fn unsubscribe_session_thread(
@@ -367,6 +375,17 @@ impl UpdateBroker {
         session_id: &SessionId,
         updates: &[SessionUpdateEnvelope],
     ) {
+        if let Ok(mut transcripts) = self.transcripts.lock() {
+            for update in updates {
+                let SessionUpdate::Committed {
+                    event: SessionEvent::ThreadArchived { thread_id, .. },
+                } = &update.update
+                else {
+                    continue;
+                };
+                transcripts.remove(&(session_id.clone(), thread_id.clone()));
+            }
+        }
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -479,7 +498,8 @@ impl UpdateBroker {
     }
 
     pub(super) fn publish_thread_update(&self, update: ThreadUpdateEnvelope) {
-        match update.update {
+        let transcript = self.assemble_transcript_update(&update);
+        match &update.update {
             ThreadUpdate::Committed { .. } => {
                 self.publish_thread(&update.thread_id, std::slice::from_ref(&update));
             }
@@ -487,6 +507,65 @@ impl UpdateBroker {
             | ThreadUpdate::ItemDelta { .. }
             | ThreadUpdate::ToolOutputDelta { .. } => self.publish_thread_transient(&update),
         }
+        if let Some(transcript) = transcript {
+            self.publish_thread_transcript(&transcript);
+        }
+    }
+
+    fn assemble_transcript_update(
+        &self,
+        update: &ThreadUpdateEnvelope,
+    ) -> Option<ThreadTranscriptUpdateEnvelope> {
+        let Ok(mut transcripts) = self.transcripts.lock() else {
+            return None;
+        };
+        let accumulator = transcripts
+            .entry((update.session_id.clone(), update.thread_id.clone()))
+            .or_insert_with(|| {
+                TranscriptAccumulator::new(update.session_id.clone(), update.thread_id.clone())
+            });
+        let result = accumulator.apply(update);
+        match result {
+            TranscriptApplyResult::Applied(update) => Some(update),
+            TranscriptApplyResult::Ignored => None,
+        }
+    }
+
+    pub(super) fn thread_transcript_snapshot(
+        &self,
+        thread: &zeta_protocol::Thread,
+        include_transient: bool,
+    ) -> zeta_thread_transcript::ThreadTranscriptSnapshot {
+        if include_transient
+            && let Ok(transcripts) = self.transcripts.lock()
+            && let Some(accumulator) =
+                transcripts.get(&(thread.session_id.clone(), thread.thread_id.clone()))
+            && let Some(snapshot) = accumulator.snapshot(thread)
+        {
+            return snapshot;
+        }
+        zeta_thread_transcript::ThreadTranscriptSnapshot::from_thread(thread)
+    }
+
+    fn publish_thread_transcript(&self, update: &ThreadTranscriptUpdateEnvelope) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            let Some(subscription) = subscriber.threads.get(&update.thread_id) else {
+                return true;
+            };
+            if !subscription.session_owners.is_empty() {
+                queue.push(notification(
+                    ServerNotificationMethod::SessionThreadTranscriptUpdate,
+                    update,
+                ));
+            }
+            true
+        });
     }
 
     pub(super) fn publish_thread_goal_updated(&self, updated: ThreadGoalUpdatedNotification) {
