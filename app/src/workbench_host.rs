@@ -5,12 +5,13 @@ use crate::NativeApp;
 pub(crate) use pane_input::PaneBinding;
 pub(crate) use tab_container_state::TabContainerState;
 pub(crate) use terminal_workspace::{TerminalReadyOutcome, TerminalWorkspace};
+pub(crate) use zeta_workbench_host::PaneHostScope;
 pub(crate) use zeta_workbench_host::{
     InspectorPartState, PaneGroupId as PaneId, PaneInput, PaneInputKind, PanePart,
     PaneSplitDirection, PaneSplitId, TabGroupId, TabInput, TabInputChange, TabInputKey, TabPart,
 };
-pub(crate) use zeta_workbench_host::PaneHostScope;
 
+#[cfg(test)]
 pub(crate) type PaneHost = zeta_workbench_host::PaneHost<PaneBinding>;
 pub(crate) type PaneViewMount<'a> = zeta_workbench_host::PaneMount<'a, PaneBinding>;
 pub(crate) type WorkbenchHost = zeta_workbench_host::WorkbenchHost<PaneBinding>;

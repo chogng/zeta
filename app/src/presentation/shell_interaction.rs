@@ -3,11 +3,17 @@ use zui::ui::ElementId;
 
 use crate::workbench_host::{PaneId, TabGroupId};
 
-pub(crate) use zeta_session_ui::interaction::{SESSION_CONTEXT_MENU, SessionContextMenuAction};
+#[cfg(test)]
+pub(crate) use zeta_session_ui::interaction::SESSION_CONTEXT_MENU;
+pub(crate) use zeta_session_ui::interaction::SessionContextMenuAction;
+#[cfg(test)]
 pub(crate) use zeta_workspace_ui::interaction::{
-    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, AGENT_FILES,
-    AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_FILES_TOOLBAR,
-    MULTI_DIFF_EDITOR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
+    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_TOOLBAR,
+    WORKSPACE_PANE_NAVIGATION,
+};
+pub(crate) use zeta_workspace_ui::interaction::{
+    AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
+    MULTI_DIFF_EDITOR, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
 };
 
 pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
@@ -16,6 +22,7 @@ const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
 const TAB_CONTAINER_SCOPE: u32 = 14;
 const TERMINAL_PANE_SCOPE: u32 = 15;
+#[cfg(test)]
 const SESSION_CONTENT_SCOPE: u32 = 16;
 const TITLEBAR_TAB_SCOPE: u32 = 17;
 const TAB_CONTAINER_GROUP_SCOPE: u32 = 18;
@@ -58,6 +65,7 @@ pub(crate) const FILE_EDITOR_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE
 pub(crate) const FILE_EDITOR_FIND_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 47);
 pub(crate) const FILE_EDITOR_REPLACE_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 48);
 pub(crate) const FILE_EDITOR_SEARCH_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 49);
+#[cfg(test)]
 pub(crate) const SESSION_HEADER: ElementId = ElementId::scoped(SESSION_CONTENT_SCOPE, 1);
 pub(crate) const FILE_EDITOR_NOTICE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 1);
 const FILE_EDITOR_RELOAD: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 2);
