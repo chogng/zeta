@@ -132,7 +132,7 @@ The following facts describe the current Zeta implementation; they do not redefi
 | Virtualized visible rows | Current | `browser/viewparts/viewLines/viewLinesPart.ts` owns rendered row DOM and semantic text projection; text-bearing roots use ordinary layout positioning instead of permanent transform promotion |
 | Browser-shaped visible geometry | Current, partial | `browser/viewparts/viewportOverlay/domTextGeometry.ts` provides `Range` rectangles, caret positions, and DOM hit-testing where the rendered line is available |
 | Unified renderer-aware geometry contract | Proposed | Caret, selection, composition, pointer, decoration, and input consumers should use one explicit provider with exact/fallback state |
-| Selectable DOM/WebGPU text renderer | Current, experimental | `browser/gpu` owns device, DPR, glyph rasterization, and atlas resources; `browser/viewparts/viewLinesGpu` draws eligible visible rows when `experimentalGpuAcceleration` is `on`. DOM rows remain the geometry and accessibility surface, and rows outside the GPU eligibility contract remain DOM-painted. |
+| Selectable DOM/WebGPU text renderer | Current, experimental | `browser/gpu` owns device, DPR, glyph rasterization, paged atlas allocation, rectangle buffers, and bounded full-file/viewport strategies; `browser/viewparts/viewLinesGpu` coordinates upload and drawing when `experimentalGpuAcceleration` is `on`. DOM rows remain the geometry and accessibility surface, and rows outside the GPU eligibility contract remain DOM-painted. |
 
 Current behavior must not be described as complete merely because a fallback exists. A fallback is a contract only when its precision, invalidation, and degraded behavior are explicit.
 

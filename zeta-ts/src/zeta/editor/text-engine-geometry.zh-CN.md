@@ -132,7 +132,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | 可见行虚拟化 | Current / 已实现 | `browser/viewparts/viewLines/viewLinesPart.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
 | 浏览器 shaping 后的可见几何 | Current / 部分具备 | `browser/viewparts/viewportOverlay/domTextGeometry.ts` 在渲染行可用时提供 `Range` 矩形、光标位置和 DOM 命中测试 |
 | 统一的渲染器感知几何契约 | Proposed / 计划设计 | 光标、选区、composition、pointer、decoration 和输入消费者应使用一个显式提供者，并携带精确/fallback 状态 |
-| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization 和 atlas 资源；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewparts/viewLinesGpu` 绘制符合条件的可见行。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
+| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization、分页 atlas 分配、矩形缓冲区，以及有界的整文件/可见区域策略；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewparts/viewLinesGpu` 协调上传与绘制。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
 
 不能因为存在 fallback 就把当前行为描述为完整。只有当 fallback 的精度、失效和降级行为明确时，它才是有效契约。
 

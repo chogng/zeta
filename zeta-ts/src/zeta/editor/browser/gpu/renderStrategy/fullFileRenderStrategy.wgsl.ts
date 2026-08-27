@@ -1,7 +1,10 @@
-export const VIEW_LINES_GPU_SHADER = /* wgsl */ `
-struct Dimensions {
+import { BindingId } from '../gpu.js';
+
+export const fullFileRenderStrategyWgsl = /* wgsl */ `
+struct LayoutInfo {
   viewport: vec2f,
   atlas: vec2f,
+  scrollOffset: vec2f,
 }
 
 struct VertexOutput {
@@ -10,9 +13,9 @@ struct VertexOutput {
   @location(1) page: f32,
 }
 
-@group(0) @binding(0) var atlasTexture: texture_2d_array<f32>;
-@group(0) @binding(1) var atlasSampler: sampler;
-@group(0) @binding(2) var<uniform> dimensions: Dimensions;
+@group(0) @binding(${BindingId.Texture}) var atlasTexture: texture_2d_array<f32>;
+@group(0) @binding(${BindingId.TextureSampler}) var atlasSampler: sampler;
+@group(0) @binding(${BindingId.LayoutInfoUniform}) var<uniform> layoutInfo: LayoutInfo;
 
 @vertex
 fn vertexMain(
@@ -21,9 +24,10 @@ fn vertexMain(
   @location(2) page: f32,
 ) -> VertexOutput {
   var output: VertexOutput;
-  let normalized = position / dimensions.viewport;
+  let viewportPosition = position - layoutInfo.scrollOffset;
+  let normalized = viewportPosition / layoutInfo.viewport;
   output.position = vec4f(normalized.x * 2.0 - 1.0, 1.0 - normalized.y * 2.0, 0.0, 1.0);
-  output.uv = atlasPosition / dimensions.atlas;
+  output.uv = atlasPosition / layoutInfo.atlas;
   output.page = page;
   return output;
 }

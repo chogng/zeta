@@ -13,7 +13,7 @@ import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
-import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { EditorLineWrapping, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController } from './controller/compositionController.js';
@@ -351,9 +351,6 @@ export enum EditorTextDirection {
 	RightToLeft = "rtl",
 }
 
-/** Selects the VS Code-aligned browser text rendering backend. */
-export type EditorGpuAcceleration = 'on' | 'off';
-
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
@@ -385,8 +382,7 @@ export interface EditorViewportOptions {
 	readonly indentation?: EditorIndentationOptions;
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
-	readonly experimentalGpuAcceleration?: EditorGpuAcceleration;
-	readonly onGpuError?: (error: Error) => void;
+	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 }
 
 export interface EditorContentPosition {
@@ -594,7 +590,6 @@ export class View extends Disposable {
 				paddingTop: this.padding.top,
 				textDirection: this.textDirection,
 				fontLigatures: options.fontLigatures ?? false,
-				onError: options.onGpuError ?? (error => console.error('Stanza WebGPU text renderer failed', error)),
 			}))
 			: undefined;
 		this.marginPart = this.viewParts.register(new MarginPart({

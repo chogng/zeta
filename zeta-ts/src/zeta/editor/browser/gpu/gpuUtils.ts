@@ -1,7 +1,21 @@
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 
+export const quadVertices = new Float32Array([
+	1, 0,
+	1, 1,
+	0, 1,
+	0, 0,
+	0, 1,
+	1, 0,
+]);
+
+export function ensureNonNullable<T>(value: T | null): T {
+	if (value === null) throw new Error('Value cannot be null');
+	return value;
+}
+
 /** Observes the physical canvas size without rounding through CSS pixels. */
-export function observeDevicePixelDimensions(element: HTMLCanvasElement, ownerWindow: Window, callback: (width: number, height: number) => void): IDisposable {
+export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: Window, callback: (width: number, height: number) => void): IDisposable {
 	const ResizeObserverConstructor = (ownerWindow as Window & { readonly ResizeObserver?: typeof ResizeObserver }).ResizeObserver;
 	if (!ResizeObserverConstructor) throw new Error('WebGPU text rendering requires ResizeObserver');
 	const observer = new ResizeObserverConstructor((entries: ResizeObserverEntry[]) => {

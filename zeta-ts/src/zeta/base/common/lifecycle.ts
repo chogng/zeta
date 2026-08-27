@@ -8,6 +8,11 @@ export interface IDisposable extends globalThis.Disposable {
 	dispose(): void;
 }
 
+/** Owns one disposable value while exposing the value to its consumer. */
+export interface IReference<T> extends IDisposable {
+	readonly object: T;
+}
+
 /**
  * A project resource that supports both explicit `.disposeAsync()` calls and
  * the ECMAScript `await using` protocol.

@@ -392,7 +392,6 @@ test("EditorViewport rejects an unknown GPU acceleration mode", () => {
 test("EditorViewport keeps DOM text visible when WebGPU initialization is unavailable", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
-	const errors: Error[] = [];
 	using model = new TextModel("alpha");
 	using viewport = new EditorViewport({
 		container,
@@ -400,7 +399,6 @@ test("EditorViewport keeps DOM text visible when WebGPU initialization is unavai
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		experimentalGpuAcceleration: "on",
-		onGpuError: error => errors.push(error),
 	});
 	viewport.layout({ width: 300, height: 40 });
 
@@ -408,7 +406,6 @@ test("EditorViewport keeps DOM text visible when WebGPU initialization is unavai
 	assert.equal(canvas.hidden, true);
 	assert.equal(lineText(requiredLine(viewport.element, 0)).textContent, "alpha");
 	assert.equal(requiredLine(viewport.element, 0).classList.contains("gpu-rendered"), false);
-	assert.match(errors[0]?.message ?? "", /ResizeObserver/);
 	dom.window.close();
 });
 

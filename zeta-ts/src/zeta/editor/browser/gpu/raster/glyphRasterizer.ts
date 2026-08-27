@@ -1,48 +1,34 @@
-export interface GpuGlyphStyle {
-	readonly color: string;
-	readonly fontFamily: string;
-	readonly fontSize: number;
-	readonly fontStyle: string;
-	readonly fontVariant: string;
-	readonly fontWeight: string;
-	readonly letterSpacing: number;
-}
-
-export interface RasterizedGlyph {
-	readonly source: HTMLCanvasElement;
-	readonly width: number;
-	readonly height: number;
-	readonly offsetX: number;
-	readonly offsetY: number;
-	readonly advance: number;
-	readonly fontAscent: number;
-	readonly fontDescent: number;
-}
+import { type IGlyphRasterizer, type IGpuGlyphStyle, type IRasterizedGlyph } from './raster.js';
 
 let nextId = 0;
 
 /** Rasterizes one grapheme using the browser canvas font stack selected by the editor. */
-export class GlyphRasterizer {
+export class GlyphRasterizer implements IGlyphRasterizer {
 	public readonly id = nextId++;
+	public readonly cacheKey: string;
 	private readonly canvas: HTMLCanvasElement;
 	private readonly context: CanvasRenderingContext2D;
 
 	constructor(ownerDocument: Document, public readonly devicePixelRatio: number) {
+		this.cacheKey = String(devicePixelRatio);
 		this.canvas = ownerDocument.createElement('canvas');
 		const context = this.canvas.getContext('2d', { alpha: true, willReadFrequently: false });
 		if (!context) throw new Error('WebGPU glyph rasterization requires a 2D canvas context');
 		this.context = context;
 	}
 
-	public styleKey(style: GpuGlyphStyle): string {
+	public styleKey(style: IGpuGlyphStyle): string {
 		return [style.color, style.fontFamily, style.fontSize, style.fontStyle, style.fontVariant, style.fontWeight, style.letterSpacing, this.devicePixelRatio].join('|');
 	}
 
-	public rasterizeGlyph(chars: string, style: GpuGlyphStyle, subPixelX: number): RasterizedGlyph {
+	public getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics {
+		this.applyFont(style);
+		return this.context.measureText(text);
+	}
+
+	public rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): IRasterizedGlyph {
 		if (!chars) throw new TypeError('WebGPU glyph text must not be empty');
-		const fontSize = Math.ceil(style.fontSize * this.devicePixelRatio);
-		const font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
-		this.context.font = font;
+		this.applyFont(style);
 		const metrics = this.context.measureText(chars);
 		const actualAscent = Math.max(0, metrics.actualBoundingBoxAscent);
 		const actualDescent = Math.max(0, metrics.actualBoundingBoxDescent);
@@ -56,7 +42,7 @@ export class GlyphRasterizer {
 			this.canvas.height = height;
 		}
 		this.context.clearRect(0, 0, width, height);
-		this.context.font = font;
+		this.applyFont(style);
 		this.context.textBaseline = 'alphabetic';
 		this.context.fillStyle = style.color;
 		this.context.fillText(chars, padding + actualLeft + subPixelX, padding + actualAscent);
@@ -64,13 +50,16 @@ export class GlyphRasterizer {
 		const fontDescent = Math.max(actualDescent, metrics.fontBoundingBoxDescent || 0);
 		return Object.freeze({
 			source: this.canvas,
-			width,
-			height,
-			offsetX: -actualLeft - padding,
-			offsetY: -actualAscent - padding,
+			boundingBox: Object.freeze({ left: 0, top: 0, right: width - 1, bottom: height - 1 }),
+			originOffset: Object.freeze({ x: -actualLeft - padding, y: -actualAscent - padding }),
 			advance: metrics.width + style.letterSpacing * this.devicePixelRatio,
-			fontAscent,
-			fontDescent,
+			fontBoundingBoxAscent: fontAscent,
+			fontBoundingBoxDescent: fontDescent,
 		});
+	}
+
+	private applyFont(style: IGpuGlyphStyle): void {
+		const fontSize = Math.ceil(style.fontSize * this.devicePixelRatio);
+		this.context.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
 	}
 }

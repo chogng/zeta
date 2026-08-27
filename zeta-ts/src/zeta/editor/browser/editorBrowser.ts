@@ -16,7 +16,7 @@ import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
-import { type EditorLineWrapping, type WrappingIndent } from "../common/config/editorOptions.js";
+import { type EditorLineWrapping, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
@@ -120,8 +120,7 @@ export interface EditorBrowserOptions {
 	readonly insertFinalNewLine?: boolean;
 	/** Browser paragraph direction for this editor browser's DOM projection. */
 	readonly textDirection?: EditorTextDirection;
-	readonly experimentalGpuAcceleration?: 'on' | 'off';
-	readonly onGpuError?: (error: Error) => void;
+	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly presentation?: EditorViewportPresentation;
 	/** Host-owned link opening callback; the editor never opens external targets directly. */
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
@@ -274,7 +273,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					activeLineHighlight: options.activeLineHighlight,
 					textDirection: options.textDirection,
 					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
-					onGpuError: options.onGpuError,
 					presentation: options.presentation,
 					indentation: options.indentation,
 				},

@@ -1,23 +1,25 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IReference } from '../../../base/common/lifecycle.js';
 import { TextureAtlas } from './atlas/textureAtlas.js';
-import { GpuLifecycle, type GpuDeviceReference } from './gpuDisposable.js';
+import { GPULifecycle } from './gpuDisposable.js';
 import { observeDevicePixelDimensions, validatedDevicePixelRatio } from './gpuUtils.js';
+import { DecorationCssRuleExtractor } from './css/decorationCssRuleExtractor.js';
+import { DecorationStyleCache } from './css/decorationStyleCache.js';
 
-export type ViewGpuStatus = 'initializing' | 'ready' | 'unavailable';
+type ViewGpuStatus = 'initializing' | 'ready' | 'unavailable';
 
-export interface ViewGpuContextOptions {
+interface ViewGpuContextOptions {
 	readonly host: HTMLElement;
-	readonly onError: (error: Error) => void;
 }
 
-const sharedDevices = new WeakMap<Window, Promise<GpuDeviceReference>>();
+const sharedDevices = new WeakMap<Window, Promise<IReference<GPUDevice>>>();
 
 /** Owns the VS Code-aligned WebGPU canvas, device state, DPR, and shared glyph pages for one editor view. */
 export class ViewGpuContext extends Disposable {
 	public readonly canvas: HTMLCanvasElement;
+	public readonly decorationCssRuleExtractor: DecorationCssRuleExtractor;
+	public readonly decorationStyleCache = new DecorationStyleCache();
 	private readonly ownerWindow: Window;
-	private readonly onError: (error: Error) => void;
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 	private canvasContext: GPUCanvasContext | undefined;
@@ -28,13 +30,14 @@ export class ViewGpuContext extends Disposable {
 	private physicalWidth = 1;
 	private physicalHeight = 1;
 	private atlasRevision = 0;
+	private unavailableReason: Error | undefined;
 
 	constructor(options: ViewGpuContextOptions) {
 		super();
-		this.onError = options.onError;
 		const ownerWindow = options.host.ownerDocument.defaultView;
 		if (!ownerWindow) throw new ReferenceError('WebGPU editor rendering requires a browser window');
 		this.ownerWindow = ownerWindow;
+		this.decorationCssRuleExtractor = this._register(new DecorationCssRuleExtractor(options.host.ownerDocument));
 		this.currentDevicePixelRatio = validatedDevicePixelRatio(ownerWindow);
 		this.canvas = options.host.ownerDocument.createElement('canvas');
 		this.canvas.className = 'stanza-editor-gpu-canvas';
@@ -82,6 +85,10 @@ export class ViewGpuContext extends Disposable {
 		return this.atlasRevision;
 	}
 
+	public get failure(): Error | undefined {
+		return this.unavailableReason;
+	}
+
 	public layout(width: number, height: number, left: number, top: number): void {
 		if (![width, height, left, top].every(Number.isFinite) || width < 0 || height < 0 || left < 0 || top < 0) {
 			throw new RangeError('WebGPU editor layout values must be finite and non-negative');
@@ -100,6 +107,7 @@ export class ViewGpuContext extends Disposable {
 
 	public clearAtlas(): void {
 		if (!this.currentAtlas) return;
+		this.decorationCssRuleExtractor.clear();
 		this.currentAtlas.clear();
 		this.atlasRevision += 1;
 		this.changeEmitter.fire();
@@ -108,8 +116,8 @@ export class ViewGpuContext extends Disposable {
 	public markUnavailable(error: Error): void {
 		if (this.currentStatus === 'unavailable') return;
 		this.currentStatus = 'unavailable';
+		this.unavailableReason = error;
 		this.canvas.hidden = true;
-		this.onError(error);
 		this.changeEmitter.fire();
 	}
 
@@ -117,7 +125,7 @@ export class ViewGpuContext extends Disposable {
 		try {
 			let devicePromise = sharedDevices.get(this.ownerWindow);
 			if (!devicePromise) {
-				devicePromise = GpuLifecycle.requestDevice(this.ownerWindow);
+				devicePromise = GPULifecycle.requestDevice(this.ownerWindow);
 				sharedDevices.set(this.ownerWindow, devicePromise);
 				this.ownerWindow.addEventListener('pagehide', () => void devicePromise?.then(reference => reference.dispose()), { once: true });
 			}
@@ -125,17 +133,17 @@ export class ViewGpuContext extends Disposable {
 			if (this.isDisposed) return;
 			const canvasContext = this.canvas.getContext('webgpu');
 			if (!canvasContext) throw new Error('This browser cannot create a WebGPU canvas context');
-			this.currentDevice = reference.device;
+			this.currentDevice = reference.object;
 			this.canvasContext = canvasContext;
 			canvasContext.configure({
-				device: reference.device,
+				device: reference.object,
 				format: this.ownerWindow.navigator.gpu.getPreferredCanvasFormat(),
 				alphaMode: 'premultiplied',
 			});
 			this.createAtlas();
 			this.currentStatus = 'ready';
 			this.canvas.hidden = false;
-			void reference.device.lost.then(info => this.markUnavailable(new Error(`WebGPU device lost: ${info.message || info.reason}`)));
+			void reference.object.lost.then(info => this.markUnavailable(new Error(`WebGPU device lost: ${info.message || info.reason}`)));
 			this.changeEmitter.fire();
 		} catch (error) {
 			if (!this.isDisposed) this.markUnavailable(asError(error));
@@ -145,6 +153,7 @@ export class ViewGpuContext extends Disposable {
 	private createAtlas(): void {
 		const maximumTextureSize = this.device.limits.maxTextureDimension2D;
 		const pageSize = Math.min(maximumTextureSize, 1024 * Math.max(1, Math.floor(this.currentDevicePixelRatio)));
+		this.currentAtlas?.dispose();
 		this.currentAtlas = new TextureAtlas(this.canvas.ownerDocument, pageSize);
 		this.atlasRevision += 1;
 	}
