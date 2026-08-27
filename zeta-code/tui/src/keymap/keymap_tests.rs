@@ -7,6 +7,8 @@ use super::AppKeymapContext;
 use super::KEY_CHORD_TIMEOUT;
 use super::app_keybinding_help_items;
 use super::compile_app_user_bindings;
+use super::compose_config_chord;
+use super::key_event_to_config_key;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -14,6 +16,8 @@ use crossterm::event::KeyModifiers;
 use std::time::Duration;
 use std::time::Instant;
 use zeta_keybinding::HostPlatform;
+use zeta_keybinding::format_key_sequence;
+use zeta_keybinding::parse_key_sequence;
 
 fn context() -> AppKeymapContext {
     AppKeymapContext {
@@ -168,7 +172,14 @@ fn app_chord_tracks_prefix_and_dispatches_the_existing_action() {
         keymap.route_chord(&control('k'), context(), started),
         AppChordMatch::Pending
     );
-    assert_eq!(keymap.pending_chord_label().as_deref(), Some("Ctrl+K"));
+    let expected_prefix = format_key_sequence(
+        &parse_key_sequence("ctrl+k").unwrap(),
+        HostPlatform::current(),
+    );
+    assert_eq!(
+        keymap.pending_chord_label().as_deref(),
+        Some(expected_prefix.as_str())
+    );
     assert_eq!(
         keymap.route_chord(
             &control('o'),
@@ -359,4 +370,38 @@ fn user_resource_rejects_unknown_commands_and_context_keys() {
 
     assert!(unknown_command.contains("unknown command"));
     assert!(unknown_context.contains("unknown context key"));
+}
+
+#[test]
+fn setup_snapshot_separates_default_and_custom_bindings() {
+    let rules = compile_app_user_bindings(
+        br#"[{"key":"ctrl+y","command":"zetaCode.action.copyLastResponse"}]"#,
+        HostPlatform::Linux,
+    )
+    .unwrap();
+    let mut keymap = AppKeymap::default();
+    keymap.replace_user_bindings(rules).unwrap();
+
+    let copy = keymap
+        .setup_actions()
+        .into_iter()
+        .find(|action| action.command_id == "zetaCode.action.copyLastResponse")
+        .unwrap();
+
+    assert_eq!(copy.default_bindings, vec!["ctrl+o"]);
+    assert_eq!(copy.custom_bindings.len(), 1);
+    assert_eq!(copy.custom_bindings[0].key, "ctrl+y");
+    assert_eq!(copy.custom_bindings[0].when, None);
+}
+
+#[test]
+fn captured_terminal_keys_use_portable_keybinding_syntax() {
+    let first = key_event_to_config_key(&control('k')).unwrap();
+    let second = key_event_to_config_key(&control('y')).unwrap();
+
+    assert_eq!(first, "ctrl+k");
+    assert_eq!(
+        compose_config_chord(&first, &second).unwrap(),
+        "ctrl+k ctrl+y"
+    );
 }

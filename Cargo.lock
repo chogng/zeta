@@ -12245,6 +12245,7 @@ dependencies = [
  "zeta-terminal-detection",
  "zeta-theme",
  "zeta-utils-image",
+ "zeta-utils-path",
 ]
 
 [[package]]

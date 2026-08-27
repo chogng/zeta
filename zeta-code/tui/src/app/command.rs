@@ -1,6 +1,7 @@
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandInvocation;
 use crate::features::interactions::InteractionResponse;
+use crate::keymap_setup::KeymapEdit;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
@@ -17,6 +18,8 @@ pub(crate) enum AppCommand {
     Interrupt,
     Suspend,
     CopyLastResponse,
+    OpenKeymapPane,
+    EditKeymap(KeymapEdit),
     ConnectConnectorDeviceOAuth {
         connector_id: String,
         connection_generation: u64,

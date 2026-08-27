@@ -2,7 +2,7 @@
 
 > 文档所有权：本文是 Zeta、App 与 Zeta Code 共享快捷键语义、端侧输入边界和演进顺序的 canonical 架构文档。
 > 实现细节分别由 [`zeta-keybinding`](../zeta-rs/keybinding/README.md)、[`zeta-keybindings-host`](../app/keybindings/README.md)、[`zeta-code` TUI](../zeta-code/tui/README.md) 和 [Zeta 浏览器基础](../zeta-ts/docs/browser-foundation.md)维护。
-> 状态：共享 Rust 核心与用户资源编译器、Zeta Code `AppKeymap`/用户资源、App、Zeta TypeScript 输入链路和跨语言 conformance 向量均为 Current。
+> 状态：共享 Rust 核心与用户资源编译器、Zeta Code `AppKeymap`/`/keymap` 设置界面、App、Zeta TypeScript 输入链路和跨语言 conformance 向量均为 Current。
 
 ## 快速理解
 
@@ -13,7 +13,7 @@
 | 输入普通文字 | 浏览器、IME 与编辑器处理 | 窗口输入法或终端面板处理 | 终端与 Crossterm 处理 |
 | 触发快捷键 | TypeScript Resolver 根据焦点和 ContextKey 解析 | Rust Resolver 根据 Native context 解析 | 精简 Rust Keymap 根据 TUI 焦点解析 |
 | 系统键盘布局变化 | 重新加载系统布局和 Mapper | `winit` 提供标准化逻辑键与物理键 | 不检测；终端已经完成布局转换 |
-| 修改快捷键 | profile `keybindings.json` | profile `keybindings.json` 和设置浮层 | profile `zeta-code/keybindings.json`；当前手工编辑、自动热重载 |
+| 修改快捷键 | profile `keybindings.json` | profile `keybindings.json` 和设置浮层 | `/keymap` 录制并原子保存到 profile `zeta-code/keybindings.json`；也可手工编辑并自动热重载 |
 | 执行命令 | Renderer 内执行命令或产生编辑意图 | Native host 执行 `AppCommandId` | TUI 主循环执行 `AppCommand` 或局部 component intent |
 
 后续章节依次说明[一次按键的流程](#2-端到端流程)、[所有权](#3-所有权与依赖方向)、[一致性边界](#5-跨语言一致性)和[当前状态与演进](#8-当前状态与演进)。
@@ -183,13 +183,15 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 
 共享 `zeta-keybinding` 只编译 bytes，不读文件、不知道 profile 路径；文件大小限制、轮询、诊断呈现和写入由产品 host 拥有。
 
-### 6.4 已接受的后续计划
+`/keymap` 只新增、替换或清除目标 command 的字符串规则；“替换自定义项”不会删除 Builtin 默认键，也不会改写 `command: null` blocker。需要禁用默认键、添加 `when` 或设置平台覆盖时继续直接编辑 JSON。录制结果写入 portable `key`，因此适用于所有平台；单键和两段 Chord 可在 Pane 中录制，三至四段 Chord 继续使用 JSON。
+
+### 6.4 设置界面与后续边界
 
 | 阶段 | 状态 | 退出条件 |
 | --- | --- | --- |
 | 严格资源 schema、User 覆盖/blocker、平台覆盖、`when`、Chord 与热重载 | Current | Zeta Code、App 和共享 core 测试持续覆盖原子替换 |
-| Zeta Code 可搜索的 Keyboard Shortcuts Pane | Accepted next | 展示 command、默认/用户键位、来源、冲突和资源路径；只消费 `AppKeymap` snapshot |
-| Zeta Code 录制与原子保存 | Accepted next | 录制不吞普通 composer 输入；写入使用 revision/CAS 或原子替换；保存失败不改变运行时规则 |
+| Zeta Code 可搜索的 Keyboard Shortcuts Pane | Current | `/keymap` 展示 command、默认/用户键位、来源、诊断和资源路径；只消费 `AppKeymap` snapshot |
+| Zeta Code 录制与原子保存 | Current | 单键/两段 Chord 录制只在临时 Pane 中截获输入；revision 过期时拒绝保存，完整编译成功后才原子替换文件和运行时规则 |
 | Profile 切换 | Planned boundary | host 先切换 active profile，再给端侧资源 owner 一个新 generation；旧 watcher 不得覆盖新 profile |
 | Settings Sync/导入导出 | Deferred | 先定义 profile 同步 authority、冲突格式和隐私边界 |
 | Workspace 级键位 | Not accepted | 默认不信任仓库控制的按键重映射；如需支持必须先定义 Workspace Trust 与显式启用 |
@@ -214,7 +216,7 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 | TS/Rust parser conformance fixtures | Current | 两个实现读取同一 fixture 并通过 |
 | TS/Rust Resolver precedence fixtures | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture |
 | Zeta Code 用户可配置 Keymap | Current | profile 资源、User precedence/blocker、`when`、平台覆盖、Chord、热重载和坏更新恢复持续通过测试 |
-| Zeta Code Keyboard Shortcuts Pane 与录制保存 | Accepted next | 可搜索、来源/冲突可见，原子保存后由同一资源热重载，不建立第二套 Resolver |
+| Zeta Code Keyboard Shortcuts Pane 与录制保存 | Current | 可搜索、来源/诊断可见；原子保存直接安装同一份已校验规则，不建立第二套 Resolver |
 
 迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，App UI 已拆出，Zeta Code 根级 Keymap 已接入，旧 `app/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
 

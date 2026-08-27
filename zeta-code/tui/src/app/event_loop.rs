@@ -6,8 +6,6 @@ use super::Status;
 use super::TuiSlashCommandRegistry;
 use super::dispatch::execute_product_command;
 use super::frame;
-use super::keybindings_resource::AppKeybindingsResource;
-use super::keybindings_resource::AppKeybindingsResourcePoll;
 use super::request_completion::RequestCompletion;
 use super::request_completion::apply_request_completion;
 use super::request_completion::apply_thread_snapshot;
@@ -37,6 +35,8 @@ use crate::features::thread::read_older_thread_history;
 use crate::features::thread::read_thread_history;
 use crate::features::workspace_files::FileSearchManager;
 use crate::host;
+use crate::keymap_setup::KeymapSetupResource;
+use crate::keymap_setup::KeymapSetupResourcePoll;
 use crate::terminal;
 use crate::ui;
 use crossterm::event::Event;
@@ -105,8 +105,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         slash_registry.catalog.clone(),
     );
     let now = Instant::now();
-    let mut keybindings_resource =
-        keybindings_path.map(|path| AppKeybindingsResource::new(path, now));
+    let mut keybindings_resource = keybindings_path.map(|path| KeymapSetupResource::new(path, now));
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(
         &mut app,
@@ -321,6 +320,37 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             });
                         app.update(AppEvent::HostOperationCompleted(result));
                     }
+                    AppCommand::OpenKeymapPane => match keybindings_resource.as_ref() {
+                        Some(resource) => {
+                            app.update(AppEvent::KeymapViewOpened(
+                                resource.setup_view(&app.app_keymap),
+                            ));
+                        }
+                        None => app.update(AppEvent::FailureReported(
+                            "keymap setup is unavailable because no active profile root was configured"
+                                .to_owned(),
+                        )),
+                    },
+                    AppCommand::EditKeymap(edit) => match keybindings_resource.as_mut() {
+                        Some(resource) => match resource.apply_edit(
+                            &edit,
+                            &mut app.app_keymap,
+                            Instant::now(),
+                        ) {
+                            Ok(notice) => {
+                                app.update(AppEvent::KeymapViewsClosed);
+                                app.update(AppEvent::KeymapViewOpened(
+                                    resource.setup_view(&app.app_keymap),
+                                ));
+                                app.update(AppEvent::HostOperationCompleted(Ok(notice)));
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        },
+                        None => app.update(AppEvent::FailureReported(
+                            "keymap setup is unavailable because no active profile root was configured"
+                                .to_owned(),
+                        )),
+                    },
                     AppCommand::ExportTranscript { requested_path } => {
                         let markdown = app.transcript_markdown();
                         let result = if markdown.is_empty() {
@@ -782,7 +812,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
 }
 
 fn poll_keybindings_resource(
-    resource: &mut Option<AppKeybindingsResource>,
+    resource: &mut Option<KeymapSetupResource>,
     app: &mut App,
     now: Instant,
 ) {
@@ -790,13 +820,13 @@ fn poll_keybindings_resource(
         return;
     };
     match resource.poll(now, &mut app.app_keymap) {
-        AppKeybindingsResourcePoll::Unchanged => {}
-        AppKeybindingsResourcePoll::Updated => {
+        KeymapSetupResourcePoll::Unchanged => {}
+        KeymapSetupResourcePoll::Updated => {
             for diagnostic in resource.diagnostics().to_vec() {
                 app.report_keybinding_diagnostic(diagnostic);
             }
         }
-        AppKeybindingsResourcePoll::Rejected(diagnostic) => {
+        KeymapSetupResourcePoll::Rejected(diagnostic) => {
             app.report_keybinding_diagnostic(diagnostic);
         }
     }
@@ -832,6 +862,8 @@ fn uses_request_task(action: &AppCommand) -> bool {
         AppCommand::Quit
             | AppCommand::Suspend
             | AppCommand::CopyLastResponse
+            | AppCommand::OpenKeymapPane
+            | AppCommand::EditKeymap(_)
             | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage
             | AppCommand::OpenCustomThemePane

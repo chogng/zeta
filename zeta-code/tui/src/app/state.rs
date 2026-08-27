@@ -1,9 +1,5 @@
 use super::command::AppCommand;
 use super::event::AppEvent;
-use super::keymap::AppChordMatch;
-use super::keymap::AppKeymap;
-use super::keymap::AppKeymapAction;
-use super::keymap::AppKeymapContext;
 use crate::components::composer::ComposerInput;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
@@ -38,6 +34,18 @@ use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSelectionAction;
 use crate::features::workspace_files::FileSelectionView;
+use crate::keymap::AppChordMatch;
+use crate::keymap::AppKeymap;
+use crate::keymap::AppKeymapAction;
+use crate::keymap::AppKeymapContext;
+use crate::keymap_setup::KeymapCaptureOutcome;
+use crate::keymap_setup::KeymapCaptureState;
+use crate::keymap_setup::KeymapEdit;
+use crate::keymap_setup::KeymapEditKind;
+use crate::keymap_setup::KeymapSetupAction;
+use crate::keymap_setup::KeymapSetupView;
+use crate::keymap_setup::action_menu;
+use crate::keymap_setup::capture_view;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -87,6 +95,8 @@ enum SelectionActions {
     Threads(BTreeMap<SelectionItemId, ThreadSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
+    Keymap(BTreeMap<SelectionItemId, KeymapSetupAction>),
+    KeymapCapture(KeymapCaptureState),
 }
 
 impl App {
@@ -135,6 +145,26 @@ impl App {
     }
 
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
+        if matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::KeymapCapture(_))
+        ) {
+            let outcome = match self.selection_actions.last_mut() {
+                Some(SelectionActions::KeymapCapture(capture)) => capture.handle_key(key),
+                _ => unreachable!("the keymap capture state was checked above"),
+            };
+            return match outcome {
+                KeymapCaptureOutcome::Pending(model) => {
+                    self.interaction_pane.replace_selection_view(model);
+                    None
+                }
+                KeymapCaptureOutcome::Cancelled => {
+                    self.close_selection_view();
+                    None
+                }
+                KeymapCaptureOutcome::Edit(edit) => Some(AppCommand::EditKeymap(edit)),
+            };
+        }
         let temporary_interaction_active = self.selection_view().is_some()
             || self.slash_popup().is_some()
             || self.mention_popup().is_some();
@@ -198,6 +228,10 @@ impl App {
         if let Some(SelectionActions::Interaction(state)) = self.selection_actions.last_mut() {
             let outcome = state.activate_item(item_id)?;
             return self.apply_interaction_selection_outcome(outcome);
+        }
+        if let Some(SelectionActions::Keymap(actions)) = self.selection_actions.last() {
+            let action = actions.get(item_id)?.clone();
+            return self.apply_keymap_setup_action(action);
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
@@ -282,6 +316,36 @@ impl App {
                 }
                 ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
             },
+            SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_) => None,
+        }
+    }
+
+    fn apply_keymap_setup_action(&mut self, action: KeymapSetupAction) -> Option<AppCommand> {
+        match action {
+            KeymapSetupAction::OpenAction { action, revision } => {
+                self.show_keymap_view(action_menu(action, revision));
+                None
+            }
+            KeymapSetupAction::BeginCapture {
+                action,
+                revision,
+                intent,
+                mode,
+            } => {
+                let (model, capture) = capture_view(action, revision, intent, mode);
+                self.interaction_pane.show_selection_view(model);
+                self.selection_actions
+                    .push(SelectionActions::KeymapCapture(capture));
+                None
+            }
+            KeymapSetupAction::ClearCustom {
+                command_id,
+                revision,
+            } => Some(AppCommand::EditKeymap(KeymapEdit {
+                expected_revision: revision,
+                command_id,
+                kind: KeymapEditKind::ClearCustom,
+            })),
         }
     }
 
@@ -495,6 +559,22 @@ impl App {
             .push(SelectionActions::Theme(view.actions));
     }
 
+    fn show_keymap_view(&mut self, view: KeymapSetupView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::Keymap(view.actions));
+    }
+
+    fn close_keymap_views(&mut self) {
+        while matches!(
+            self.selection_actions.last(),
+            Some(SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_))
+        ) {
+            self.interaction_pane.pop_selection_view();
+            self.selection_actions.pop();
+        }
+    }
+
     fn close_theme_views(&mut self) {
         while matches!(
             self.selection_actions.last(),
@@ -613,6 +693,8 @@ impl App {
                 self.status = Status::Ready;
             }
             AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
+            AppEvent::KeymapViewOpened(view) => self.show_keymap_view(view),
+            AppEvent::KeymapViewsClosed => self.close_keymap_views(),
             AppEvent::ConnectorViewOpened(view) => self.show_connector_view(view),
             AppEvent::ConnectorViewReplaced(view) => self.replace_connector_view(view),
             AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
@@ -781,6 +863,11 @@ impl App {
                 let requested_path = (!invocation.display_arguments.trim().is_empty())
                     .then(|| PathBuf::from(invocation.display_arguments.trim()));
                 Some(AppCommand::ExportTranscript { requested_path })
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Keymap))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::OpenKeymapPane)
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();

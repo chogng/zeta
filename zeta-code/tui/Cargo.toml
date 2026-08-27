@@ -28,6 +28,7 @@ zeta-protocol = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-terminal-detection = { workspace = true }
 zeta-theme = { workspace = true }
+zeta-utils-path = { workspace = true }
 zeta-utils-image = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

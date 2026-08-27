@@ -20,6 +20,7 @@ fn builtins_follow_enum_presentation_order() {
             ("files", TuiSlashCommandAction::Files),
             ("fork", TuiSlashCommandAction::Fork),
             ("help", TuiSlashCommandAction::Help),
+            ("keymap", TuiSlashCommandAction::Keymap),
             ("copy", TuiSlashCommandAction::Copy),
             ("export", TuiSlashCommandAction::Export),
             ("model", TuiSlashCommandAction::Model),
@@ -29,7 +30,7 @@ fn builtins_follow_enum_presentation_order() {
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 21);
+    assert_eq!(built_in_slash_command_definitions().len(), 22);
 }
 
 #[test]

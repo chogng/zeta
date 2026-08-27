@@ -15,6 +15,10 @@ use crate::features::theme::custom_theme_selection_view;
 use crate::features::theme::theme_selection_view;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
+use crate::keymap::AppKeymap;
+use crate::keymap_setup::KeymapEditIntent;
+use crate::keymap_setup::KeymapEditKind;
+use crate::keymap_setup::keymap_picker;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -455,6 +459,53 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
     assert!(invocation.arguments.is_empty());
     assert_eq!(app.status(), &Status::Ready);
     assert!(app.messages().is_empty());
+}
+
+#[test]
+fn keymap_slash_command_is_owned_by_the_local_host() {
+    let mut app = App::new();
+    app.insert_text("/keymap");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, Some(AppCommand::OpenKeymapPane));
+    assert!(app.messages().is_empty());
+}
+
+#[test]
+fn keymap_capture_emits_a_revision_bound_edit() {
+    let mut app = App::new();
+    app.update(AppEvent::KeymapViewOpened(keymap_picker(
+        AppKeymap::default().setup_actions(),
+        Path::new("/profile/zeta-code/keybindings.json"),
+        &[],
+        7,
+    )));
+
+    assert_eq!(app.selection_view().unwrap().title(), "Keymap");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Cycle approval mode");
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Record shortcut");
+
+    let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
+    assert_eq!(
+        edit,
+        Some(AppCommand::EditKeymap(crate::keymap_setup::KeymapEdit {
+            expected_revision: 7,
+            command_id: "zetaCode.action.cycleApprovalMode".into(),
+            kind: KeymapEditKind::Set {
+                key: "ctrl+y".into(),
+                intent: KeymapEditIntent::ReplaceCustom,
+            },
+        }))
+    );
 }
 
 #[test]

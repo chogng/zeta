@@ -5,8 +5,6 @@ mod event;
 mod event_loop;
 mod frame;
 mod help;
-mod keybindings_resource;
-mod keymap;
 mod recovery;
 mod request_completion;
 mod state;
