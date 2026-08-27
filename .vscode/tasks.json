@@ -2,9 +2,9 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "Run app (watch)",
+			"label": "Run app",
 			"type": "shell",
-			"command": "just app-dev",
+			"command": "just app",
 			"isBackground": true,
 			"options": {
 				"cwd": "${workspaceFolder}"

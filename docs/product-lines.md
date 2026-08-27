@@ -72,7 +72,6 @@ Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的
 | `just zeta` | `zeta code` | 从 Rust workspace 启动 TUI，并接收 CLI 参数 |
 | `just zeta-desktop` | `zeta` | 启动 Electron Desktop 开发环境 |
 | `just app` | `app` | 启动纯 Rust Desktop |
-| `just app-dev` | `app` | 监听 Rust/shader 源码并重启 Native Desktop |
 
 产品线命令是唯一的公开 `just` 命令面；不要重新添加以 `tui` 或 `native` 为名的实现层别名。
 

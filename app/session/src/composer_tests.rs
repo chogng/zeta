@@ -42,15 +42,15 @@ fn classifier_routes_a_just_task_to_shell_submission() {
         NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("Justfile"), "app-dev:\n    cargo run\n").unwrap();
+    std::fs::write(root.join("Justfile"), "app:\n    cargo run\n").unwrap();
     let mut composer = Composer::for_working_directory(&root);
 
-    composer.apply(CodeEditorCommand::Insert("just app-dev".to_owned()));
+    composer.apply(CodeEditorCommand::Insert("just app".to_owned()));
 
     assert_eq!(composer.route(), ComposerRoute::Shell);
     assert!(matches!(
         composer.submission(),
-        Some(ComposerSubmission::ShellCommand(command)) if command == "just app-dev"
+        Some(ComposerSubmission::ShellCommand(command)) if command == "just app"
     ));
 
     std::fs::remove_dir_all(root).unwrap();

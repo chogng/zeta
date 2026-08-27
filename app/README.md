@@ -77,7 +77,6 @@ src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识
 
 ```bash
 just app
-just app-dev
 just app-check
 just app-test
 ```

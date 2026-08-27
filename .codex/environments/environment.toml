@@ -26,9 +26,9 @@ icon = "debug"
 command = "corepack pnpm dev:web:full:academic"
 
 [[actions]]
-name = "app-dev"
+name = "app"
 icon = "debug"
-command = "just app-dev"
+command = "just app"
 
 [[actions]]
 name = "electron-code"

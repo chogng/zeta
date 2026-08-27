@@ -13,10 +13,10 @@
 			}
 		},
 		{
-			"name": "Run app (watch)",
+			"name": "Run app",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just app-dev",
+			"command": "just app",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "app",

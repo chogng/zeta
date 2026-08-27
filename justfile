@@ -21,10 +21,6 @@ zeta-desktop:
 app:
     python3 -B build/cargo_with_v8.py run -p app
 
-# Rebuild and restart the app Desktop product when Rust or shader sources change.
-app-dev:
-    watchexec --restart --exts rs,toml,wgsl -- python3 -B build/cargo_with_v8.py run -p app
-
 # Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.
 app-check:
     python3 -B build/cargo_with_v8.py check -p app --all-targets
