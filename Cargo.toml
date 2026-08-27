@@ -112,6 +112,7 @@ members = [
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
+    "zeta-rs/otel",
     "app",
     "app/commands",
     "app/composer",
@@ -182,6 +183,8 @@ nucleo = { git = "https://github.com/helix-editor/nucleo.git", rev = "4253de9faa
 pdfium-render = { version = "0.9.3", default-features = false, features = ["pdfium_7763", "thread_safe"] }
 pollster = "1.0.1"
 open = "5.4.1"
+opentelemetry = "0.31.0"
+opentelemetry_sdk = "0.31.0"
 portable-pty = "0.9.0"
 pkg-config = "0.3"
 pretty_assertions = "1"
@@ -279,6 +282,7 @@ zeta-auto-review = { path = "zeta-rs/auto-review" }
 zeta-bwrap = { path = "zeta-rs/bwrap" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
+zeta-otel = { path = "zeta-rs/otel" }
 zeta-config = { path = "zeta-rs/config" }
 zeta-connectors = { path = "zeta-rs/connectors" }
 zeta-context-engine = { path = "zeta-rs/context-engine" }
