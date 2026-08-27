@@ -3,20 +3,12 @@ use zui::ui::ElementId;
 
 use crate::workbench_host::{PaneId, TabGroupId};
 
-pub(crate) const WORKSPACE_PANE: ElementId = ElementId::scoped(1, 23);
-pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
-pub(crate) const AGENT_EDITOR_PANE: ElementId = ElementId::scoped(1, 29);
-pub(crate) const MULTI_DIFF_EDITOR: ElementId = ElementId::scoped(1, 30);
-pub(crate) const MULTI_DIFF_SCROLLBAR: ElementId = ElementId::scoped(1, 31);
-pub(crate) const WORKSPACE_PANE_NAVIGATION: ElementId = ElementId::scoped(1, 32);
-pub(crate) const AGENT_CHANGES: ElementId = ElementId::scoped(1, 33);
-pub(crate) const AGENT_FILES: ElementId = ElementId::scoped(1, 34);
-pub(crate) const WORKSPACE_PANE_TOOLBAR: ElementId = ElementId::scoped(1, 35);
-pub(crate) const AGENT_FILES_ACTION_BAR: ElementId = ElementId::scoped(1, 36);
-pub(crate) const AGENT_FILES_REFRESH: ElementId = ElementId::scoped(1, 37);
-pub(crate) const AGENT_FILES_SEARCH: ElementId = ElementId::scoped(1, 38);
-pub(crate) const AGENT_FILE_SEARCH_INPUT: ElementId = ElementId::scoped(1, 39);
-pub(crate) const AGENT_FILES_TOOLBAR: ElementId = ElementId::scoped(1, 52);
+pub(crate) use zeta_session_ui::interaction::{SESSION_CONTEXT_MENU, SessionContextMenuAction};
+pub(crate) use zeta_workspace_ui::interaction::{
+    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, AGENT_FILES,
+    AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, AGENT_FILES_TOOLBAR,
+    MULTI_DIFF_EDITOR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
+};
 
 pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
@@ -51,11 +43,6 @@ pub(crate) const TITLEBAR_TAB_LIST: ElementId = ElementId::scoped(TITLEBAR_TAB_G
 pub(crate) const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
 pub(crate) const TITLEBAR_SETTINGS_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 4);
 pub(crate) const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
-pub(crate) const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(SHELL_SCOPE, 17);
-const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(SHELL_SCOPE, 18);
-const SESSION_CONTEXT_MENU_CLOSE: ElementId = ElementId::scoped(SHELL_SCOPE, 19);
-const SESSION_CONTEXT_MENU_RENAME: ElementId = ElementId::scoped(SHELL_SCOPE, 20);
-const SESSION_CONTEXT_MENU_FORK: ElementId = ElementId::scoped(SHELL_SCOPE, 21);
 pub(crate) const WORKSPACE_PANE_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
 pub(crate) const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 51);
 pub(crate) const TAB_CONTAINER_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
@@ -316,50 +303,6 @@ impl ContextAction {
             CONTEXT_DIFF => Some(Self::Diff),
             _ => None,
         }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SessionContextMenuAction {
-    Pin,
-    Close,
-    Rename,
-    Fork,
-}
-
-impl SessionContextMenuAction {
-    pub(crate) const ALL: [Self; 4] = [Self::Pin, Self::Close, Self::Rename, Self::Fork];
-
-    pub(crate) const fn element_id(self) -> ElementId {
-        match self {
-            Self::Pin => SESSION_CONTEXT_MENU_PIN,
-            Self::Close => SESSION_CONTEXT_MENU_CLOSE,
-            Self::Rename => SESSION_CONTEXT_MENU_RENAME,
-            Self::Fork => SESSION_CONTEXT_MENU_FORK,
-        }
-    }
-
-    pub(crate) const fn label(self) -> &'static str {
-        match self {
-            Self::Pin => "Pin",
-            Self::Close => "Close",
-            Self::Rename => "Rename",
-            Self::Fork => "Fork",
-        }
-    }
-
-    pub(crate) const fn from_element_id(id: ElementId) -> Option<Self> {
-        match id {
-            SESSION_CONTEXT_MENU_PIN => Some(Self::Pin),
-            SESSION_CONTEXT_MENU_CLOSE => Some(Self::Close),
-            SESSION_CONTEXT_MENU_RENAME => Some(Self::Rename),
-            SESSION_CONTEXT_MENU_FORK => Some(Self::Fork),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn is_menu_element(id: ElementId) -> bool {
-        id == SESSION_CONTEXT_MENU || Self::from_element_id(id).is_some()
     }
 }
 

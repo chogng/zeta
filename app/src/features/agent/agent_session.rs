@@ -14,9 +14,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use zeta_app_server_protocol::protocol::common::CommandId;
+use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::config::{
-    ConfigCommandResult, ConfigReadResult, LanguageServerConfigDto, LanguageServerConfigureParams,
-    LanguageServerRemoveParams,
+    LanguageServerConfigDto, LanguageServerConfigureParams, LanguageServerRemoveParams,
 };
 use zeta_app_server_protocol::protocol::fs::{
     FsChanged, FsGetMetadataParams, FsGetMetadataResult, FsReadDirectoryEntry,
@@ -25,18 +25,13 @@ use zeta_app_server_protocol::protocol::fs::{
 use zeta_app_server_protocol::protocol::git::{
     GitBranchDto, GitBranchSwitchParams, GitTextDiffResult,
 };
-use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionReadParams, SessionRequest, SessionRequestParams,
     SessionRequestResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
     SessionUnsubscribeParams,
 };
-use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::turn::InputItem;
-use zeta_protocol::{
-    ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, Thread, ThreadId,
-    ThreadUpdateEnvelope,
-};
+use zeta_protocol::{ModelRef, Session, SessionId, SessionStatus, SessionThreadStatus, ThreadId};
 use zeta_text_file::{
     TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSaveRequest, TextFileSnapshot,
 };
@@ -55,15 +50,17 @@ use crate::session::session_switch_trace::{self, SwitchId};
 use crate::thread_projection::ThreadProjectionUpdate;
 use crate::workbench_host::{TabInputChange, TabInputKey};
 use crate::workspace_pane_host::WorkspacePaneView;
+use zeta_agent_session::SessionSwitchId;
+pub(crate) use zeta_agent_session::{
+    AgentSessionCommand, AgentSessionEvent, WorkspaceSwitchResult,
+};
 
 #[path = "agent_session/remote.rs"]
 mod remote;
 
-const COMMAND_QUEUE_CAPACITY: usize = 32;
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
 const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
-pub(super) const AGENT_UNAVAILABLE_COMMAND_ERROR: &str =
-    "Agent session is not connected; the command was not sent";
+pub(super) use zeta_agent_session::AGENT_UNAVAILABLE_COMMAND_ERROR;
 
 pub(super) struct AgentSessionFailure {
     pub(super) error: anyhow::Error,
@@ -126,82 +123,6 @@ impl fmt::Display for AgentSessionReconnect {
 
 impl std::error::Error for AgentSessionReconnect {}
 
-#[derive(Debug)]
-pub(crate) enum AgentSessionEvent {
-    Catalog {
-        slash_commands: Vec<SlashCommandDefinition>,
-        models: Vec<ModelCatalogEntry>,
-    },
-    Configuration(ConfigReadResult),
-    SessionCatalog(Vec<Session>),
-    Snapshot {
-        session: Session,
-        thread: Thread,
-        switch_id: Option<SwitchId>,
-    },
-    Update(Box<ThreadUpdateEnvelope>),
-    GitProjection(Option<GitTextDiffResult>),
-    FilesChanged(FsChanged),
-    Error(String),
-    Closed,
-}
-
-enum AgentSessionCommand {
-    CreateSession,
-    StopSession {
-        session_id: SessionId,
-        response: SyncSender<std::result::Result<(), String>>,
-    },
-    ActivateSession {
-        session_id: SessionId,
-        switch_id: SwitchId,
-        response: SyncSender<std::result::Result<Option<WorkspaceSwitchProjection>, String>>,
-    },
-    SubmitAgentMessage(String),
-    SubmitShellCommand(String),
-    SelectModel(ModelRef),
-    Refresh,
-    RefreshGit,
-    ReadDirectory {
-        path: PathBuf,
-        response: SyncSender<std::result::Result<Vec<FsReadDirectoryEntry>, String>>,
-    },
-    ReadFile {
-        path: PathBuf,
-        response: SyncSender<std::result::Result<TextFileSnapshot, String>>,
-    },
-    WriteFile {
-        request: TextFileSaveRequest,
-        response: SyncSender<std::result::Result<TextFileDiskVersion, String>>,
-    },
-    ListGitBranches(SyncSender<std::result::Result<Vec<GitBranchDto>, String>>),
-    SwitchGitBranch {
-        name: String,
-        response: SyncSender<std::result::Result<GitTextDiffResult, String>>,
-    },
-    SwitchWorkspace {
-        root: PathBuf,
-        response: SyncSender<std::result::Result<WorkspaceSwitchProjection, String>>,
-    },
-    ConfigureLanguageServer {
-        expected_revision: u64,
-        server_id: String,
-        config: LanguageServerConfigDto,
-        response: SyncSender<std::result::Result<ConfigCommandResult, String>>,
-    },
-    RemoveLanguageServerConfiguration {
-        expected_revision: u64,
-        server_id: String,
-        response: SyncSender<std::result::Result<ConfigCommandResult, String>>,
-    },
-    Shutdown,
-}
-
-pub(crate) struct WorkspaceSwitchProjection {
-    pub(crate) root: PathBuf,
-    pub(crate) git: Option<GitTextDiffResult>,
-}
-
 pub(crate) struct AgentSession {
     available: Arc<AtomicBool>,
     commands: SyncSender<AgentSessionCommand>,
@@ -210,7 +131,7 @@ pub(crate) struct AgentSession {
 
 impl AgentSession {
     pub(crate) fn spawn(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Result<Self> {
-        let (commands, command_receiver) = mpsc::sync_channel(COMMAND_QUEUE_CAPACITY);
+        let (commands, command_receiver) = zeta_agent_session::command_channel();
         let available = Arc::new(AtomicBool::new(false));
         let worker_availability = Arc::clone(&available);
         let worker = thread::Builder::new()
@@ -259,12 +180,12 @@ impl AgentSession {
         &self,
         session_id: SessionId,
         switch_id: SwitchId,
-    ) -> Result<Option<WorkspaceSwitchProjection>> {
+    ) -> Result<Option<WorkspaceSwitchResult>> {
         let (response, result) = mpsc::sync_channel(1);
         self.try_send(
             AgentSessionCommand::ActivateSession {
                 session_id,
-                switch_id,
+                switch_id: SessionSwitchId::new(switch_id.get()),
                 response,
             },
             "Agent session activation queue is unavailable",
@@ -363,7 +284,7 @@ impl AgentSession {
             .map_err(anyhow::Error::msg)
     }
 
-    pub(crate) fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchProjection> {
+    pub(crate) fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchResult> {
         let (response, result) = mpsc::sync_channel(1);
         self.try_send(
             AgentSessionCommand::SwitchWorkspace { root, response },
@@ -508,7 +429,7 @@ fn run_agent_session_connection(
     )
     .map_err(AgentSessionFailure::fatal)?;
     publish_configuration(event_proxy, &mut client).map_err(AgentSessionFailure::connection)?;
-    publish_git_projection(event_proxy, &mut client).map_err(AgentSessionFailure::connection)?;
+    publish_git_snapshot(event_proxy, &mut client).map_err(AgentSessionFailure::connection)?;
     let events = session
         .take_events()
         .map_err(|error| AgentSessionFailure::connection(anyhow!(error.to_string())))?;
@@ -612,6 +533,7 @@ fn drive_agent_session(
                     switch_id,
                     response,
                 }) => {
+                    let switch_id = SwitchId::new(switch_id.get());
                     let _trace = session_switch_trace::Span::new(
                         Some(switch_id),
                         "app-server-activate-session",
@@ -699,7 +621,7 @@ fn drive_agent_session(
                     )?;
                 }
                 Ok(AgentSessionCommand::RefreshGit) => {
-                    if let Err(error) = publish_git_projection(event_proxy, client) {
+                    if let Err(error) = publish_git_snapshot(event_proxy, client) {
                         send_event(event_proxy, AgentSessionEvent::Error(error.to_string()))?;
                     }
                 }
@@ -797,7 +719,7 @@ fn drive_agent_session(
                 }
             }
             Ok(AppServerEvent::Notification(ServerNotification::GitStatusChanged(_))) => {
-                publish_git_projection(event_proxy, client)?;
+                publish_git_snapshot(event_proxy, client)?;
             }
             Ok(AppServerEvent::Notification(ServerNotification::FsChanged(changed))) => {
                 send_event(event_proxy, AgentSessionEvent::FilesChanged(changed))?;
@@ -1180,7 +1102,7 @@ fn snapshot_event_from_subscription(
     Ok(AgentSessionEvent::Snapshot {
         session: subscription.session.clone(),
         thread: thread.thread.clone(),
-        switch_id,
+        switch_id: switch_id.map(|switch_id| SessionSwitchId::new(switch_id.get())),
     })
 }
 
@@ -1276,31 +1198,31 @@ fn switch_git_branch(
             name,
         })
         .map_err(client_error)?;
-    read_git_projection(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
+    read_git_snapshot(client)?.ok_or_else(|| anyhow!("Git repository became unavailable"))
 }
 
 fn prepare_workspace_reconnect(
     target: &AppServerHost,
     root: PathBuf,
-) -> Result<WorkspaceSwitchProjection> {
+) -> Result<WorkspaceSwitchResult> {
     let session = target.with_workspace_root(&root)?.start()?;
     let mut client = session.client();
-    let git = read_git_projection(&mut client);
+    let git = read_git_snapshot(&mut client);
     let shutdown = session
         .shutdown()
         .map_err(|error| anyhow!(error.to_string()));
-    let projection = WorkspaceSwitchProjection { root, git: git? };
+    let result = WorkspaceSwitchResult { root, git: git? };
     shutdown?;
-    Ok(projection)
+    Ok(result)
 }
 
-fn publish_git_projection(
+fn publish_git_snapshot(
     event_proxy: &AppProxy<NativeEvent>,
     client: &mut AppServerRequestHandle,
 ) -> Result<()> {
     send_event(
         event_proxy,
-        AgentSessionEvent::GitProjection(read_git_projection(client)?),
+        AgentSessionEvent::GitSnapshot(read_git_snapshot(client)?),
     )
 }
 
@@ -1312,7 +1234,7 @@ fn publish_configuration(
     send_event(event_proxy, AgentSessionEvent::Configuration(configuration))
 }
 
-fn read_git_projection(client: &mut AppServerRequestHandle) -> Result<Option<GitTextDiffResult>> {
+fn read_git_snapshot(client: &mut AppServerRequestHandle) -> Result<Option<GitTextDiffResult>> {
     match client.git_text_diff() {
         Ok(projection) => Ok(Some(projection)),
         Err(error) if git_is_unavailable(&error) => Ok(None),
@@ -1376,12 +1298,15 @@ impl NativeApp {
     /// Session tab. The Workbench selection is already updated, so the normal already-selected
     /// guard must be bypassed once.
     pub(crate) fn activate_session_tab_after_close(&mut self, tab_key: &TabInputKey) {
-        let Some(index) = (0..self.workbench_host.tab_part().session_count()).find(|index| {
-            self.workbench_host
-                .tab_part()
-                .session_input_at(*index)
-                .is_some_and(|input| input.key() == tab_key)
-        }) else {
+        let Some(index) =
+            (0..self.workbench_host.workbench().tab_part().session_count()).find(|index| {
+                self.workbench_host
+                    .workbench()
+                    .tab_part()
+                    .session_input_at(*index)
+                    .is_some_and(|input| input.key() == tab_key)
+            })
+        else {
             return;
         };
         self.activate_session_tab_at(index, true);
@@ -1389,7 +1314,12 @@ impl NativeApp {
 
     fn activate_session_tab_at(&mut self, index: usize, force: bool) {
         let switch_id = session_switch_trace::SwitchId::next();
-        let Some(tab) = self.workbench_host.tab_part().session_input_at(index) else {
+        let Some(tab) = self
+            .workbench_host
+            .workbench()
+            .tab_part()
+            .session_input_at(index)
+        else {
             session_switch_trace::event(
                 Some(switch_id),
                 "activation-rejected",
@@ -1411,8 +1341,15 @@ impl NativeApp {
             "activation-request",
             format_args!("index={index} session_id={session_id}"),
         );
-        if !force && self.workbench_host.tab_part().selected_session() == Some(&session_id) {
-            if self.workbench_host.tab_part().is_settings() {
+        if !force
+            && self
+                .workbench_host
+                .workbench()
+                .tab_part()
+                .selected_session()
+                == Some(&session_id)
+        {
+            if self.workbench_host.workbench().tab_part().is_settings() {
                 self.activate_session_workbench_tab();
                 self.rebuild_presentation_on_next_redraw();
             } else {
@@ -1472,12 +1409,14 @@ impl NativeApp {
                 return;
             }
         };
-        if let Some(projection) = workspace_switch
-            && !self.apply_workspace_switch_projection(projection)
+        if let Some(result) = workspace_switch
+            && !self.apply_workspace_switch_result(result)
         {
             return;
         }
-        self.workbench_host.activate_session(&session_id);
+        self.workbench_host
+            .workbench_mut()
+            .activate_session(&session_id);
         self.activate_session_workbench_tab();
         let terminal_activated = self.activate_terminal_for_session(&session_id);
         if !was_terminal {
@@ -1501,7 +1440,10 @@ impl NativeApp {
 
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
-        let result = self.workbench_host.upsert_session(session, &workspace);
+        let result = self
+            .workbench_host
+            .workbench_mut()
+            .upsert_session(session, &workspace);
         let (label, input_key) = match result {
             TabInputChange::Added(input_key) => ("session-tab-added", input_key),
             TabInputChange::Updated(input_key) => ("session-tab-updated", input_key),
@@ -1512,7 +1454,7 @@ impl NativeApp {
             format_args!(
                 "session_id={} input={input_key:?} tab_count={}",
                 session.session_id,
-                self.workbench_host.tab_part().session_count()
+                self.workbench_host.workbench().tab_part().session_count()
             ),
         );
     }
@@ -1521,6 +1463,7 @@ impl NativeApp {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
             self.workbench_host
+                .workbench_mut()
                 .upsert_catalog_session(session, &workspace);
         }
     }
@@ -1566,6 +1509,7 @@ impl NativeApp {
                 thread,
                 switch_id,
             } => {
+                let switch_id = switch_id.map(|switch_id| SwitchId::new(switch_id.get()));
                 session_switch_trace::event(
                     switch_id,
                     "snapshot-received",
@@ -1598,9 +1542,9 @@ impl NativeApp {
                     eprintln!("could not refresh Agent Thread projection: {error}");
                 }
             }
-            AgentSessionEvent::GitProjection(projection) => {
+            AgentSessionEvent::GitSnapshot(snapshot) => {
                 self.workspace_context
-                    .apply_git_projection(projection.as_ref());
+                    .apply_git_projection(snapshot.as_ref());
                 self.sync_workspace_pane_repository();
                 self.refresh_files_from_app_server();
             }

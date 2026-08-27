@@ -47,8 +47,7 @@ use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::thread_projection::ThreadProjection;
-use crate::thread_timeline::ThreadTimeline;
-use crate::workbench_host::inspector_part::inspector_layout_spec;
+use crate::thread_timeline::{ThreadTimeline, thread_timeline_style};
 use crate::workbench_host::tab_container::TabContainer;
 use crate::workbench_host::tab_container::TabContainerPlacement;
 use crate::workbench_host::tab_container::WorkbenchTab;
@@ -79,7 +78,9 @@ use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
 use zeta_settings::SettingsPageMode;
 use zeta_settings::SettingsPageSection;
+use zeta_workbench_layout::InspectorLayoutSpec;
 use zeta_workbench_layout::PaneGroupLayout;
+use zeta_workbench_layout::PartVisibility;
 use zeta_workbench_layout::WorkbenchLayout;
 use zeta_workbench_layout::WorkbenchLayoutSpec;
 use zui::ui::{
@@ -177,7 +178,17 @@ impl ShellLayout {
         let workbench = WorkbenchLayoutSpec::new(
             TITLEBAR_HEIGHT,
             tab_container.layout_spec(),
-            inspector_layout_spec(inspector_part),
+            InspectorLayoutSpec::new(
+                if inspector_part.is_expanded() {
+                    PartVisibility::Expanded
+                } else {
+                    PartVisibility::Collapsed
+                },
+                inspector_part.preferred_width(),
+                360.0,
+                800.0,
+                400.0,
+            ),
         )
         .for_viewport(viewport)?;
         let main = workbench.main();
@@ -811,9 +822,10 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_connection_picker,
         model.caret_visibility,
-        palette,
+        palette.remote_ui_style(),
         text_layout,
         model.dispatch,
+        WINDOW,
     ) {
         remote_connection_picker_scroll_metrics = connection_picker.scroll_metrics();
         remote_connection_picker_item_viewport = Some(connection_picker.item_viewport_bounds());
@@ -829,9 +841,10 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_connection_manager,
         model.caret_visibility,
-        palette,
+        palette.remote_ui_style(),
         text_layout,
         model.dispatch,
+        WINDOW,
     ) {
         remote_connection_manager_scroll_metrics = Some(connection_manager.list_scroll_metrics());
         remote_connection_manager_list_viewport = Some(connection_manager.list_viewport_bounds());
@@ -850,9 +863,10 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_tunnel_manager,
         model.caret_visibility,
-        palette,
+        palette.remote_ui_style(),
         text_layout,
         model.dispatch,
+        WINDOW,
     ) {
         remote_tunnel_manager_scroll_metrics = Some(tunnel_manager.list_scroll_metrics());
         remote_tunnel_manager_list_viewport = Some(tunnel_manager.list_viewport_bounds());
@@ -1494,7 +1508,7 @@ fn draw_main(
                                     layout.thread_timeline,
                                     view.thread_projection,
                                     view.thread_timeline_scroll_offset,
-                                    palette,
+                                    thread_timeline_style(palette),
                                 ));
                             });
                             ime_cursor_area = draw_composer_panel(

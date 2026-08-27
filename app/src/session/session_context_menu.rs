@@ -1,225 +1,70 @@
-//! Product actions and overlay state for a Session tab context menu.
-
-use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
-    ComputedElement, ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle,
-    ContextViewPlacement, CornerRadii, Edges, Element, InteractionRegion, Point, Rect, Size,
-    TextStyle, UiScene,
-};
-use zui::input::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
-use zui::ui::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, DispatchInvalidation,
-    DispatchOutcome, ElementId, FocusBehavior, FocusDirection, InteractionFrame, NavigationAxis,
-    NavigationGroupId, NodeAction, UiDispatch, UiNode,
-};
+//! Host event adapter for the Session UI context menu.
 
 use crate::NativeApp;
-use crate::shell_interaction::{
-    SESSION_CONTEXT_MENU, SessionContextMenuAction, WINDOW, session_tab_index,
-};
+use crate::shell_interaction::{SessionContextMenuAction, WINDOW, session_tab_index};
 use crate::shell_style::ShellPalette;
-use crate::workbench_host::TabInputKey;
+use zeta_ui::Component;
+use zeta_ui::ComponentContext;
+use zeta_ui::ComponentElement;
+use zeta_ui::ComputedElement;
+use zeta_ui::Point;
+use zeta_ui::UiScene;
+use zui::input::ElementState;
+use zui::input::Key;
+use zui::input::KeyEvent;
+use zui::input::MouseButton;
+use zui::input::NamedKey;
+use zui::ui::DispatchInvalidation;
+use zui::ui::DispatchOutcome;
+use zui::ui::FocusDirection;
+use zui::ui::InteractionFrame;
+use zui::ui::NavigationAxis;
+use zui::ui::UiDispatch;
+use zui::ui::UiNode;
 
-const MENU_CONTENT_WIDTH: f32 = 160.0;
-const MENU_ITEM_HEIGHT: f32 = 30.0;
-const MENU_VIEWPORT_MARGIN: f32 = 6.0;
-const MENU_ANCHOR_GAP: f32 = 2.0;
+pub(crate) use zeta_session_ui::SessionContextMenuState;
 
-#[derive(Clone, Debug, PartialEq)]
-struct OpenSessionContextMenu {
-    target_tab: TabInputKey,
-    anchor: Rect,
-    restore_focus: Option<ElementId>,
-}
-
-/// Product-owned transient state for the Session Tab context menu.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct SessionContextMenuState {
-    open: Option<OpenSessionContextMenu>,
-}
-
-impl SessionContextMenuState {
-    pub(crate) fn open(
-        &mut self,
-        target_tab: TabInputKey,
-        position: Point,
-        restore_focus: Option<ElementId>,
-    ) {
-        self.open = Some(OpenSessionContextMenu {
-            target_tab,
-            anchor: Rect::from_xywh(position.x, position.y, 1.0, 1.0),
-            restore_focus,
-        });
-    }
-
-    pub(crate) const fn is_open(&self) -> bool {
-        self.open.is_some()
-    }
-
-    pub(crate) fn dismiss(&mut self) -> Option<ElementId> {
-        self.open.take().and_then(|open| open.restore_focus)
-    }
-
-    pub(crate) fn target_tab(&self) -> Option<&TabInputKey> {
-        self.open.as_ref().map(|open| &open.target_tab)
-    }
-}
-
-/// Session-specific menu presentation composed from the shared ContextMenu.
+/// Adapts the product palette and host parent to the reusable Session UI menu.
 pub(crate) struct SessionContextMenu {
-    context_menu: ContextMenu,
+    inner: zeta_session_ui::SessionContextMenu,
 }
 
 impl SessionContextMenu {
     pub(crate) fn new(
-        viewport: Rect,
+        viewport: zeta_ui::Rect,
         state: &SessionContextMenuState,
         palette: ShellPalette,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
-        let open = state.open.as_ref()?;
-        let resting_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT);
-        let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
-            .with_hovered(palette.session_tab_highlight)
-            .with_focused(palette.session_tab_highlight)
-            .with_pressed(palette.border);
-        let button_style = ButtonStyle::new(
-            resting_backgrounds,
-            TextStyle::new(13.0, palette.text).with_line_height(18.0),
-        )
-        .with_selected_backgrounds(selected_backgrounds)
-        .with_corner_radii(CornerRadii::uniform(2.0))
-        .with_padding(Edges::new(0.0, 10.0, 0.0, 10.0));
-        let items = SessionContextMenuAction::ALL
-            .into_iter()
-            .map(|action| {
-                let id = action.element_id();
-                let state = if dispatch.is_pressed(id) {
-                    ButtonState::Pressed
-                } else if dispatch.is_focused(id) {
-                    ButtonState::Focused
-                } else if dispatch.is_hovered(id) {
-                    ButtonState::Hovered
-                } else {
-                    ButtonState::Resting
-                };
-                ContextMenuItem::new(action.label(), state)
-            })
-            .collect();
-        let selection = SessionContextMenuAction::ALL
-            .into_iter()
-            .position(|action| dispatch.is_pressed(action.element_id()))
-            .or_else(|| {
-                SessionContextMenuAction::ALL
-                    .into_iter()
-                    .position(|action| dispatch.is_hovered(action.element_id()))
-            })
-            .or_else(|| {
-                SessionContextMenuAction::ALL
-                    .into_iter()
-                    .position(|action| dispatch.is_focused(action.element_id()))
-            })
-            .map(ContextMenuSelection::Item)
-            .unwrap_or_default();
-        let context_menu = ContextMenu::new(
-            viewport,
-            open.anchor,
-            items,
-            ContextMenuStyle::new(
-                palette.surface,
-                button_style,
-                Size::new(MENU_CONTENT_WIDTH, MENU_ITEM_HEIGHT),
-            )
-            .with_placement(
-                ContextViewPlacement::new()
-                    .with_gap(MENU_ANCHOR_GAP)
-                    .with_viewport_margin(MENU_VIEWPORT_MARGIN),
-            ),
-        )
-        .with_selection(selection);
-        Some(Self { context_menu })
-    }
-
-    fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
-        let navigation_group = NavigationGroupId::new(SESSION_CONTEXT_MENU);
-        let mut regions = Vec::new();
-        for (index, action) in SessionContextMenuAction::ALL.into_iter().enumerate() {
-            let Some(bounds) = self
-                .context_menu
-                .interactive_item_bounds(index)
-                .filter(|bounds| !bounds.is_empty())
-            else {
-                continue;
-            };
-            regions.push(
-                InteractionRegion::new(
-                    "SessionContextMenuItem",
-                    action.element_id(),
-                    bounds,
-                    AccessibilityRole::MenuItem,
-                    action.label(),
-                )
-                .with_cursor(CursorFeedback::Pointer)
-                .with_focus(FocusBehavior::TabStop)
-                .with_action(NodeAction::Activate)
-                .with_navigation(navigation_group, NavigationAxis::Vertical)
-                .with_selection(
-                    if self.context_menu.selected_index() == Some(index) {
-                        AccessibilitySelection::Selected
-                    } else {
-                        AccessibilitySelection::Unselected
-                    },
-                ),
-            );
-        }
-        regions
-    }
-
-    #[cfg(test)]
-    pub(crate) fn bounds(&self) -> Rect {
-        self.context_menu.bounds()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn item_bounds(&self, index: usize) -> Option<Rect> {
-        self.context_menu.item_bounds(index)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn selected_index(&self) -> Option<usize> {
-        self.context_menu.selected_index()
+        let style = zeta_session_ui::SessionContextMenuStyle::new(
+            palette.surface,
+            palette.border,
+            palette.text,
+            palette.session_tab_highlight,
+        );
+        Some(Self {
+            inner: zeta_session_ui::SessionContextMenu::new(
+                viewport, state, style, WINDOW, dispatch,
+            )?,
+        })
     }
 }
 
 impl Component for SessionContextMenu {
     fn element(&self) -> ComponentElement {
-        Element::leaf("SessionContextMenu")
-            .in_bounds(self.context_menu.bounds())
-            .with_identity(SESSION_CONTEXT_MENU)
+        self.inner.element()
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        Some(
-            UiNode::new(
-                SESSION_CONTEXT_MENU,
-                element.bounds(),
-                AccessibilityRole::Menu,
-                "Session actions",
-            )
-            .with_parent(WINDOW),
-        )
+        self.inner.interaction_node(element)
     }
 
-    fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(SESSION_CONTEXT_MENU);
-        for region in self.child_interaction_regions() {
-            context.draw_component(&region);
-        }
-        context.draw_component(&self.context_menu);
+    fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
+        self.inner.compose(context, element)
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        scene.draw_component(&self.context_menu);
+        self.inner.paint(scene)
     }
 }
 
@@ -396,25 +241,5 @@ fn update_session_context_menu_pointer(
     point: Point,
     frame: &InteractionFrame,
 ) -> DispatchOutcome {
-    let pointer_outcome = dispatch.pointer_moved(point, frame);
-    let focus_outcome = frame
-        .target_at(point)
-        .filter(|target| SessionContextMenuAction::is_menu_element(*target))
-        .map(|target| dispatch.focus_element(frame, target))
-        .unwrap_or_default();
-    DispatchOutcome {
-        invalidation: if pointer_outcome.invalidation == DispatchInvalidation::Paint
-            || focus_outcome.invalidation == DispatchInvalidation::Paint
-        {
-            DispatchInvalidation::Paint
-        } else {
-            DispatchInvalidation::None
-        },
-        intent: None,
-        fragment: None,
-    }
+    zeta_session_ui::update_session_context_menu_pointer(dispatch, point, frame)
 }
-
-#[cfg(test)]
-#[path = "session_context_menu_tests.rs"]
-mod tests;

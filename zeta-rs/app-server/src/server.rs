@@ -69,6 +69,7 @@ mod fs_operations;
 mod fs_watcher;
 mod git_operations;
 mod git_runtime;
+pub(crate) mod goal_tool;
 mod interaction_runtime;
 mod language_document_features;
 mod language_operations;
@@ -104,7 +105,6 @@ mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
 pub(crate) mod update_broker;
-pub(crate) mod goal_tool;
 pub(crate) mod update_plan_tool;
 mod workspace_customizations;
 mod workspace_operations;
@@ -1978,12 +1978,8 @@ struct AppServerThreadUpdates {
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
         enum GoalNotification {
-            Updated(
-                zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification,
-            ),
-            Cleared(
-                zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification,
-            ),
+            Updated(zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification),
+            Cleared(zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification),
         }
 
         let goal_notification = match &update.update {

@@ -6,15 +6,14 @@ use std::time::Instant;
 
 use zui::app::AppProxy;
 
-use super::AGENT_UNAVAILABLE_COMMAND_ERROR;
 use super::AgentSessionCommand;
 use super::AgentSessionEvent;
 use super::NativeEvent;
 use crate::app_server::AppServerHost;
-
-const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
-const INITIAL_RECONNECT_DELAY: Duration = Duration::from_millis(250);
-const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
+use zeta_agent_session::{
+    AGENT_UNAVAILABLE_COMMAND_ERROR, RECONNECT_WINDOW, reconnect_delay_within_window,
+    reject_disconnected_command,
+};
 
 /// Runs one Remote Agent connection at a time and rebuilds its projection after a transport loss.
 ///
@@ -117,65 +116,3 @@ fn wait_for_reconnect(
         }
     }
 }
-
-fn reject_disconnected_command(command: AgentSessionCommand) -> bool {
-    match command {
-        AgentSessionCommand::Shutdown => return true,
-        AgentSessionCommand::ReadDirectory { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ReadFile { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::WriteFile { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ListGitBranches(response) => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::SwitchGitBranch { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::SwitchWorkspace { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ActivateSession { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::StopSession { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ConfigureLanguageServer { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::RemoveLanguageServerConfiguration { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::CreateSession
-        | AgentSessionCommand::SubmitAgentMessage(_)
-        | AgentSessionCommand::SubmitShellCommand(_)
-        | AgentSessionCommand::SelectModel(_)
-        | AgentSessionCommand::Refresh
-        | AgentSessionCommand::RefreshGit => {}
-    }
-    false
-}
-
-fn disconnected_command_error<T>() -> Result<T, String> {
-    Err(AGENT_UNAVAILABLE_COMMAND_ERROR.to_owned())
-}
-
-fn reconnect_delay_within_window(elapsed: Duration, attempt: usize) -> Option<Duration> {
-    let remaining = RECONNECT_WINDOW.checked_sub(elapsed)?;
-    let delay = reconnect_delay(attempt);
-    (delay <= remaining).then_some(delay)
-}
-
-fn reconnect_delay(attempt: usize) -> Duration {
-    let multiplier = 1_u32 << (attempt.min(31) as u32);
-    (INITIAL_RECONNECT_DELAY * multiplier).min(MAX_RECONNECT_DELAY)
-}
-
-#[cfg(test)]
-#[path = "remote_tests.rs"]
-mod tests;

@@ -129,6 +129,34 @@ impl ShellPalette {
             scroll_view: self.file_list_scroll_view_style(),
         }
     }
+
+    pub(crate) fn editor_overlay_style(self) -> zeta_editor_host::EditorOverlayStyle {
+        zeta_editor_host::EditorOverlayStyle::new(
+            self.surface_raised,
+            self.border,
+            self.text,
+            self.text_muted,
+            self.surface_hovered,
+        )
+    }
+
+    pub(crate) fn remote_ui_style(self) -> zeta_remote_ui::RemoteUiStyle {
+        zeta_remote_ui::RemoteUiStyle::new(
+            self.surface,
+            self.surface_raised,
+            self.surface_hovered,
+            self.border,
+            self.text,
+            self.text_muted,
+            self.accent,
+            self.error,
+            self.terminal_selection,
+            self.session_tab_highlight,
+            self.file_list_scroll_view_style(),
+            self.picker_scroll_view_style(),
+        )
+    }
+
     pub(crate) fn from_theme(theme: &ThemeSnapshot) -> Result<Self, ThemeError> {
         let mut terminal_colors = [Color::TRANSPARENT; 16];
         for (index, token) in tokens::TERMINAL_ANSI.iter().enumerate() {

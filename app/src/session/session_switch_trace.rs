@@ -35,8 +35,16 @@ pub(crate) fn frames_enabled() -> bool {
 pub(crate) struct SwitchId(u64);
 
 impl SwitchId {
+    pub(crate) const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
     pub(crate) fn next() -> Self {
         Self(NEXT_SWITCH_ID.fetch_add(1, Ordering::Relaxed))
+    }
+
+    pub(crate) const fn get(self) -> u64 {
+        self.0
     }
 }
 

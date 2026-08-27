@@ -85,7 +85,10 @@ impl GoalToolService {
                     .goal;
                 success(json!({"goal": goal}))
             }
-            _ => Err(CoreError::Policy(format!("tool is not available: {}", call.name))),
+            _ => Err(CoreError::Policy(format!(
+                "tool is not available: {}",
+                call.name
+            ))),
         }
     }
 }

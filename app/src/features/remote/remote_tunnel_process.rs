@@ -14,7 +14,6 @@ use crate::native_event::NativeEvent;
 
 pub(crate) use zeta_remote_host::RemoteTunnelEvent;
 pub(crate) use zeta_remote_host::RemoteTunnelId;
-pub(crate) use zeta_remote_host::RemoteTunnelUpdate;
 
 /// app-owned adapter around the shared Remote Tunnel supervisor.
 pub(crate) struct NativeRemoteTunnelHost {

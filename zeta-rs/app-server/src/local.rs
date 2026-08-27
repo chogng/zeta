@@ -44,9 +44,9 @@ use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_keyring_store::KeyringSecretStore;
 use zeta_kimi::KimiOAuth;
-use zeta_lsp_server_provider::ManagedNodeRuntime;
 use zeta_login::InteractiveLoginDriver;
 use zeta_login::LoginService;
+use zeta_lsp_server_provider::ManagedNodeRuntime;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
 use zeta_mcp_extension::McpCatalogUpdateSubscription;
 use zeta_mcp_extension::McpCatalogUpdates;
@@ -225,8 +225,7 @@ impl LocalAppServerOptions {
             mcp_oauth_providers: Vec::new(),
             marketplace_manager_client: None,
             local_marketplace_manager: None,
-            language_server_providers:
-                zeta_lsp_server_provider::LspServerProviders::new(),
+            language_server_providers: zeta_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             profile_runtime: None,
         }

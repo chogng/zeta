@@ -122,6 +122,24 @@ artifact，运行时再由共享 updater 直连公共 HTTPS、拒绝重定向/�
 interaction、animation、deadline 和 retained lifecycle 由 `zui` canonical owner 提供。跨 crate 的
 阶段、弃用范围和删除条件见 [`docs/app-migration-plan.md`](docs/app-migration-plan.md)。
 
+## app-side feature crates
+
+`app/src` 的拆分按“能力和依赖隔离”进行。新 crate 只接收宿主快照和已解析样式，返回 typed action；
+文件、网络、进程、窗口和平台输入仍由 `app/src` 执行。这样可以缩小组合根，同时不把产品状态
+下沉到共享 backend。
+
+| crate | 负责 | `app/src` 保留 |
+| --- | --- | --- |
+| [`zeta-agent-session`](agent-session) | Agent Session 命令/事件、队列和重连策略 | App Server worker、文件/Git/LSP 请求和事件循环 |
+| [`zeta-session-ui`](session-ui) | Thread 增量合并、时间线、滚动、Session 菜单和搜索 | 宿主快照、Session 切换和 action 执行 |
+| [`zeta-workspace-ui`](workspace-ui) | Files/Changes pane、目录树、搜索、分支和路径选择状态 | App Server DTO 转换、文件打开、目录加载和分支操作 |
+| [`zeta-editor-host`](editor-host) | Editor Tab 辅助状态、查找替换、诊断、补全和自动滚动 | 文档读写、保存冲突、LSP 请求和平台输入 |
+| [`zeta-remote-ui`](remote-ui) | Remote 连接选择器、连接管理和 Tunnel 面板状态/绘制 | SSH、runtime 启动、子进程、profile 和窗口事件 |
+
+这些 crate 都有独立单元测试和对应 Bazel source target。原有文件只有在新 crate 接管实现、测试和
+文档后才删除；组合层的 `app.rs`、平台输入、命令执行、Shell 绘制以及架构边界测试继续留在
+`app/src`。
+
 | 边界 | Native 当前状态 | 维护规则 |
 | --- | --- | --- |
 | 产品状态、平台事件、App Server/文件/Git/Session adapter | ✅ 当前 owner | 可以在 Native 演进，不迁入 `zui` |

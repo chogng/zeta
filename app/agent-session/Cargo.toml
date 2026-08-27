@@ -1,0 +1,19 @@
+[package]
+name = "zeta-agent-session"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_agent_session"
+path = "src/lib.rs"
+
+[dependencies]
+zeta-app-server-protocol = { workspace = true }
+zeta-protocol = { workspace = true }
+zeta-text-file = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,9 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "workspace-ui",
+    crate_name = "zeta_workspace_ui",
+    package_name = "app/workspace-ui",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

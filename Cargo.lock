@@ -322,7 +322,6 @@ dependencies = [
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
- "zeta-terminal-host",
  "zeta-text-file",
  "zeta-theme",
  "zeta-ui",
@@ -12155,16 +12154,6 @@ name = "zeta-terminal-detection"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
-]
-
-[[package]]
-name = "zeta-terminal-host"
-version = "0.1.0"
-dependencies = [
- "unicode-width 0.2.0",
- "zeta-terminal",
- "zeta-ui",
- "zui",
 ]
 
 [[package]]

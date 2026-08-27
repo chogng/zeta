@@ -132,7 +132,6 @@ members = [
     "app/remote-ui",
     "app/session-ui",
     "app/settings",
-    "app/terminal-host",
     "app/ui",
     "app/workbench",
     "app/workbench-layout",
@@ -385,7 +384,6 @@ zeta-storage = { path = "zeta-rs/storage" }
 zeta-symbol-index = { path = "zeta-rs/symbol-index" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
-zeta-terminal-host = { path = "app/terminal-host" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
 zeta-text-file = { path = "zeta-rs/text-file" }
 zeta-theme = { path = "zeta-rs/theme" }

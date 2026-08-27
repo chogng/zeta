@@ -3,32 +3,9 @@ use std::time::Instant;
 use crate::NativeApp;
 use crate::shell_interaction::INSPECTOR_RESIZE_HANDLE;
 use crate::shell_scene::inspector_resize_snapshot_for_viewport;
-use crate::workbench_host::InspectorPartState;
 use zeta_ui::Point;
-use zeta_workbench_layout::InspectorLayoutSpec;
-use zeta_workbench_layout::PartVisibility;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
-
-const MINIMUM_WIDTH: f32 = 360.0;
-const MAXIMUM_WIDTH: f32 = 800.0;
-const MINIMUM_MAIN_WIDTH: f32 = 400.0;
-
-pub(crate) fn inspector_layout_spec(
-    inspector: InspectorPartState,
-) -> InspectorLayoutSpec {
-    InspectorLayoutSpec::new(
-        if inspector.is_expanded() {
-            PartVisibility::Expanded
-        } else {
-            PartVisibility::Collapsed
-        },
-        inspector.preferred_width(),
-        MINIMUM_WIDTH,
-        MAXIMUM_WIDTH,
-        MINIMUM_MAIN_WIDTH,
-    )
-}
 
 impl NativeApp {
     pub(crate) fn route_inspector_resize_move(&mut self, point: Point) -> bool {

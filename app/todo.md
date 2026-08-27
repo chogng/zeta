@@ -3,3 +3,12 @@
 - 分为workbench-host, workbench, ui and 
 - 禁止native 概念在app这里
 - 设计理念为 agent-first, 一切功能都是为了提升agent的能力
+
+---------------------------------------------------
+- zeta-agent-session：会话命令、事件、队列、断线恢复策略
+- zeta-session-ui：Thread 状态、时间线、滚动、菜单、搜索
+- zeta-workspace-ui：Files/SCM、目录树、搜索、路径选择
+- zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
+- zeta-terminal-host：终端输出、滚动、选择、指针、Block (had delete)
+- zeta-remote-ui：连接管理、Picker、Tunnel 状态和 UI
+- workbentch-ui: 界面布局

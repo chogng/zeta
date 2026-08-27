@@ -1,0 +1,9 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "session-ui",
+    crate_name = "zeta_session_ui",
+    package_name = "app/session-ui",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

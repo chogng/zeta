@@ -8,7 +8,7 @@ use zui::ui::{
 };
 
 use crate::NativeApp;
-use crate::agent_session::WorkspaceSwitchProjection;
+use crate::agent_session::WorkspaceSwitchResult;
 use crate::file_editor_host::FileEditorCloseRequest;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
@@ -86,7 +86,7 @@ impl NativeApp {
                         return true;
                     }
                 };
-                if !self.apply_workspace_switch_projection(switched) {
+                if !self.apply_workspace_switch_result(switched) {
                     return true;
                 }
                 self.dismiss_workspace_path_picker();
@@ -95,9 +95,9 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn apply_workspace_switch_projection(
+    pub(crate) fn apply_workspace_switch_result(
         &mut self,
-        switched: WorkspaceSwitchProjection,
+        switched: WorkspaceSwitchResult,
     ) -> bool {
         if let Err(error) = self
             .workspace_context

@@ -1,8 +1,8 @@
 use super::CodeIndexSemanticModels;
 use super::code_index_runtime::CodeIndexRuntime;
 use super::fs_watcher::FileSystemWatcher;
-use super::goal_tool::GoalToolService;
 use super::git_runtime::{GitRuntime, GitWatcher};
+use super::goal_tool::GoalToolService;
 use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;

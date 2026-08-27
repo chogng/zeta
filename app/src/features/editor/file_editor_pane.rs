@@ -650,7 +650,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         diagnostic,
-                        self.palette,
+                        self.palette.editor_overlay_style(),
                     ));
                 } else if let (Some(point), Some(hover)) =
                     (self.pointer_position, self.language_hover)
@@ -659,7 +659,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         hover,
-                        self.palette,
+                        self.palette.editor_overlay_style(),
                     ));
                 }
                 if let (Some(caret), Some(completions)) =
@@ -670,7 +670,7 @@ impl Component for FileEditorPane<'_> {
                         zeta_ui::Point::new(caret.origin.x, caret.bottom()),
                         completions,
                         self.completion_selection,
-                        self.palette,
+                        self.palette.editor_overlay_style(),
                     ));
                 }
             },
