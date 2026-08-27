@@ -12,3 +12,5 @@
 - zeta-terminal-host：终端输出、滚动、选择、指针、Block (had delete)
 - zeta-remote-ui：连接管理、Picker、Tunnel 状态和 UI
 - workbentch-ui: 界面布局
+- 如果是 ui 界面， 那就在 <package-ui> 这样
+- 考虑是否单个的ui界面都塞到workspace-ui里管理
