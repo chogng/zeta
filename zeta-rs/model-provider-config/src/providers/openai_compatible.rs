@@ -1,5 +1,5 @@
 use super::configured_provider;
-use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
+use crate::{ApiKeyPolicy, ApiProfile, ProviderAdapter, ProviderDefinition};
 
 pub(super) fn definition() -> ProviderDefinition {
     configured_provider(
@@ -8,5 +8,6 @@ pub(super) fn definition() -> ProviderDefinition {
         ProviderAdapter::OpenAiCompatible,
         ApiProfile::OpenAiChatCompletions,
     )
+    .with_api_key_policy(ApiKeyPolicy::Optional)
     .with_native_streaming()
 }

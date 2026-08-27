@@ -17,10 +17,13 @@ pub(crate) fn draw(
     search: &SearchBoxState,
     active_color: Color,
 ) {
+    let rendered_query = search
+        .masked()
+        .then(|| "•".repeat(search.query().chars().count()));
     let text = if search.query().is_empty() {
         Span::styled(search.placeholder(), Style::default().fg(muted()))
     } else {
-        Span::raw(search.query())
+        Span::raw(rendered_query.as_deref().unwrap_or(search.query()))
     };
     let border_color = if search.input_active() {
         active_color
@@ -36,8 +39,9 @@ pub(crate) fn draw(
         area,
     );
     if search.input_active() && area.width > 2 && area.height > 2 {
-        let cursor_width = search
-            .query()
+        let cursor_width = rendered_query
+            .as_deref()
+            .unwrap_or(search.query())
             .width()
             .min(area.width.saturating_sub(3) as usize) as u16;
         frame.set_cursor_position((area.x + 1 + cursor_width, area.y + 1));

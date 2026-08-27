@@ -280,6 +280,29 @@ fn explicit_review_model_must_pass_the_static_catalog_gate() {
 }
 
 #[test]
+fn builtin_provider_api_key_policies_are_explicit() {
+    let registry = ProviderConfigRegistry::builtin();
+
+    assert_eq!(
+        registry.get(&provider_id("ollama")).unwrap().api_key_policy,
+        ApiKeyPolicy::Unsupported
+    );
+    assert_eq!(
+        registry
+            .get(&provider_id("openai-compatible"))
+            .unwrap()
+            .api_key_policy,
+        ApiKeyPolicy::Optional
+    );
+    assert!(
+        registry
+            .providers()
+            .filter(|provider| provider.id.as_str() != "ollama")
+            .any(|provider| provider.api_key_policy == ApiKeyPolicy::Required)
+    );
+}
+
+#[test]
 fn configured_endpoint_is_required_and_overrides_are_normalized() {
     let registry = ProviderConfigRegistry::from_definitions([definition(
         "custom",

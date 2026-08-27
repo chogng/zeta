@@ -87,6 +87,7 @@ use zeta_app_server_protocol::protocol::model::ModelListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginCommandResultDto;
 use zeta_app_server_protocol::protocol::plugins::PluginListResult;
 use zeta_app_server_protocol::protocol::plugins::PluginPackageCommandParams;
+use zeta_app_server_protocol::protocol::provider::{ProviderApiKeySetResult, ProviderListResult};
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
@@ -169,6 +170,43 @@ pub struct ConnectorApiTokenConnectRequest {
     pub account_id: String,
     pub account_display_name: String,
     api_token: Zeroizing<String>,
+}
+
+/// Client-owned provider API-key request whose secret and encoded wire buffer are cleared.
+pub struct ProviderApiKeySetRequest {
+    pub provider: String,
+    api_key: Zeroizing<String>,
+}
+
+impl ProviderApiKeySetRequest {
+    pub fn new(provider: String, api_key: String) -> Self {
+        Self {
+            provider,
+            api_key: Zeroizing::new(api_key),
+        }
+    }
+}
+
+impl fmt::Debug for ProviderApiKeySetRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderApiKeySetRequest")
+            .field("provider", &self.provider)
+            .field("api_key", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Serialize for ProviderApiKeySetRequest {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut request = serializer.serialize_struct("ProviderApiKeySetRequest", 2)?;
+        request.serialize_field("provider", &self.provider)?;
+        request.serialize_field("apiKey", self.api_key.as_str())?;
+        request.end()
+    }
 }
 
 impl ConnectorApiTokenConnectRequest {
@@ -737,6 +775,17 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn list_models(&mut self) -> Result<ModelListResult, ClientError> {
         self.call(ClientMethod::ModelList, EmptyParams {})
+    }
+
+    pub fn list_providers(&mut self) -> Result<ProviderListResult, ClientError> {
+        self.call(ClientMethod::ProviderList, EmptyParams {})
+    }
+
+    pub fn set_provider_api_key(
+        &mut self,
+        params: ProviderApiKeySetRequest,
+    ) -> Result<ProviderApiKeySetResult, ClientError> {
+        self.call_secret(ClientMethod::ProviderApiKeySet, params)
     }
 
     pub fn update_config(

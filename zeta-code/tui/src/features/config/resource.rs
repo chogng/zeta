@@ -57,6 +57,10 @@ impl ConfigResource {
         self.revision
     }
 
+    pub(crate) const fn settings(&self) -> TerminalSettings {
+        self.settings
+    }
+
     pub(crate) fn apply_edit(
         &mut self,
         edit: &TerminalSettingsEdit,

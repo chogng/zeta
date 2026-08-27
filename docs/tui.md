@@ -1051,7 +1051,7 @@ lib_tests.rs
   window 的 Markdown export。
   Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
-- Mouse 只覆盖 slash/file-mention popup 和可执行 Selection Pane 的左键命中与 hover。Config 的 Enhanced terminal 标签页可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
+- Mouse 只覆盖 slash/file-mention popup 和可执行 Selection Pane 的左键命中与 hover。Config 标签页中的 Mouse interactions item 可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
 - 当前入口通过 `AppServerSession` 消费 profile/Workspace-scoped local authority，不提供 remote
   selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
@@ -1061,7 +1061,7 @@ lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 保留 Overview、Provider 与 Language Server 服务端状态，并在 Enhanced terminal 标签页展示本地鼠标交互开关。该开关由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
+- Config surface 包含 Config、Providers 与 Language servers 三个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，列表只显示是否已配置，不返回密钥。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。

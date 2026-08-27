@@ -1092,7 +1092,10 @@ pub fn open_local_app_server_with_code_index_providers(
             client,
             Arc::clone(&profile_secrets),
         ),
-        None => ModelProviderRuntime::new(provider_configs.clone()),
+        None => ModelProviderRuntime::with_secrets(
+            provider_configs.clone(),
+            Arc::clone(&profile_secrets),
+        ),
     }
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
@@ -1113,7 +1116,7 @@ pub fn open_local_app_server_with_code_index_providers(
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let approval_model_provider: Arc<dyn ModelProvider> = model_provider.clone();
     let approval_review_model =
-        crate::ReviewModelResolver::new(provider_configs, approval_model_provider)
+        crate::ReviewModelResolver::new(provider_configs.clone(), approval_model_provider)
             .resolve(&runtime_config)
             .ok();
     let skill_config = Arc::new(LocalSkillConfigProvider {
@@ -1155,6 +1158,12 @@ pub fn open_local_app_server_with_code_index_providers(
         None => AppServer::new(sessions, model.clone()),
     }
     .with_model_catalog(direct_catalog)
+    .with_provider_credentials(Arc::new(
+        crate::provider_credentials::ProviderCredentialService::new(
+            provider_configs.clone(),
+            Arc::clone(&profile_secrets),
+        ),
+    ))
     .with_approval_review_model(approval_review_model)
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)

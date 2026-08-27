@@ -1,6 +1,7 @@
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandInvocation;
 use crate::features::config::ConfigEdit;
+use crate::features::config::ProviderApiKeyEdit;
 use crate::features::interactions::InteractionResponse;
 use crate::features::shortcuts::ShortcutEdit;
 use crate::features::status_line::StatusLineEdit;
@@ -25,6 +26,7 @@ pub(crate) enum AppCommand {
     OpenStatusLinePane,
     EditShortcut(ShortcutEdit),
     EditConfig(ConfigEdit),
+    SetProviderApiKey(ProviderApiKeyEdit),
     EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
         connector_id: String,

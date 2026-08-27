@@ -49,6 +49,7 @@ use zeta_protocol::{
     ToolExecutionOutput, ToolOutputStream, TurnStatus, UserInput,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_secrets::MemorySecretStore;
 use zeta_uds::UnixStream;
 use zeta_workspace::{
     TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
@@ -192,6 +193,56 @@ fn model_ref(model: &str) -> ModelRef {
         ProviderId::new("openai").unwrap(),
         ModelId::new(model).unwrap(),
     )
+}
+
+#[test]
+fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting_values() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    let server = server().with_provider_credentials(Arc::new(
+        crate::provider_credentials::ProviderCredentialService::new(
+            zeta_model_provider_config::ProviderConfigRegistry::builtin(),
+            secrets,
+        ),
+    ));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+
+    let initial = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"provider/list","params":{}
+        }),
+    );
+    assert_eq!(initial["result"]["providers"].as_array().unwrap().len(), 13);
+
+    let saved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"provider/apiKey/set",
+            "params":{"provider":"openai","apiKey":"secret-provider-key"}
+        }),
+    );
+    assert_eq!(saved["result"]["provider"], "openai");
+    assert!(!saved.to_string().contains("secret-provider-key"));
+
+    let updated = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"provider/list","params":{}
+        }),
+    );
+    assert!(
+        updated["result"]["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == true
+            )
+    );
 }
 
 fn call(

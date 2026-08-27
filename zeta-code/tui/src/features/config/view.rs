@@ -8,19 +8,63 @@ use crate::features::config::TerminalSettings;
 use crate::features::config::TerminalSettingsEdit;
 use crate::features::config::preferred_model;
 use std::collections::BTreeMap;
+use std::fmt;
+use zeroize::Zeroizing;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
+use zeta_app_server_protocol::protocol::provider::{
+    ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
     pub(crate) terminal: TerminalSettingsEdit,
     pub(crate) server_config: ConfigReadResult,
+    pub(crate) providers: ProviderListResult,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
     SetMouseInteractions(ConfigEdit),
+    OpenProviderApiKey {
+        provider: String,
+        display_name: String,
+    },
+    SetProviderApiKey {
+        provider: String,
+    },
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) struct ProviderApiKeyEdit {
+    provider: String,
+    api_key: Zeroizing<String>,
+}
+
+impl ProviderApiKeyEdit {
+    pub(crate) fn new(provider: String, api_key: String) -> Self {
+        Self {
+            provider,
+            api_key: Zeroizing::new(api_key),
+        }
+    }
+
+    pub(crate) fn into_parts(mut self) -> (String, String) {
+        let provider = std::mem::take(&mut self.provider);
+        let api_key = std::mem::take(&mut *self.api_key);
+        (provider, api_key)
+    }
+}
+
+impl fmt::Debug for ProviderApiKeyEdit {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProviderApiKeyEdit")
+            .field("provider", &self.provider)
+            .field("api_key", &"[REDACTED]")
+            .finish()
+    }
 }
 
 pub(crate) struct ConfigSelectionView {
@@ -30,6 +74,7 @@ pub(crate) struct ConfigSelectionView {
 
 pub(crate) fn config_view(
     config: &ConfigReadResult,
+    providers: &ProviderListResult,
     terminal: TerminalSettings,
     terminal_revision: u64,
 ) -> ConfigSelectionView {
@@ -44,9 +89,10 @@ pub(crate) fn config_view(
                 mouse_interactions: !mouse_enabled,
             },
             server_config: config.clone(),
+            providers: providers.clone(),
         }),
     );
-    let enhanced_terminal = vec![
+    let mut config_items = vec![
         SelectionItem::new("Mouse interactions")
             .with_id(mouse_id)
             .with_columns(
@@ -55,21 +101,48 @@ pub(crate) fn config_view(
                 mouse_enabled.to_string(),
             ),
     ];
+    config_items.extend(overview(config));
+    let provider_items = provider_items(config, providers, &mut actions);
 
     ConfigSelectionView {
         model: PaneViewModel::new(
             SelectionViewModel::new(
                 "Config",
                 vec![
-                    SelectionTab::new("Overview", overview(config)),
-                    SelectionTab::new("Enhanced terminal", enhanced_terminal),
-                    SelectionTab::new("Providers", providers(config)),
+                    SelectionTab::new("Config", config_items),
+                    SelectionTab::new("Providers", provider_items),
                     SelectionTab::new("Language servers", language_servers(config)),
                 ],
             )
             .with_search(SearchBoxModel::new("Search configuration"))
             .with_empty_message("No matching configuration"),
-            "Space search  ·  Enter toggle  ·  ←/→ tabs  ·  ↑/↓ inspect  ·  Esc back",
+            "Space search  ·  Enter select/toggle  ·  ←/→ tabs  ·  ↑/↓ inspect  ·  Esc back",
+        ),
+        actions,
+    }
+}
+
+pub(crate) fn provider_api_key_view(provider: String, display_name: String) -> ConfigSelectionView {
+    let submit_id = SelectionItemId::new(format!("provider-api-key-submit-{provider}"));
+    let actions = BTreeMap::from([(
+        submit_id.clone(),
+        ConfigSelectionAction::SetProviderApiKey { provider },
+    )]);
+    ConfigSelectionView {
+        model: PaneViewModel::new(
+            SelectionViewModel::new(
+                format!("{display_name} API key"),
+                vec![SelectionTab::new(
+                    "API key",
+                    vec![SelectionItem::new(
+                        "The key is hidden and stored in the profile secret store",
+                    )],
+                )],
+            )
+            .without_tab_bar()
+            .without_selection()
+            .with_secret_free_form("Enter API key", submit_id),
+            "Ctrl+Enter save  ·  Esc back",
         ),
         actions,
     }
@@ -95,22 +168,52 @@ fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
     ]
 }
 
-fn providers(config: &ConfigReadResult) -> Vec<SelectionItem> {
-    or_empty(
-        config
-            .providers
-            .values()
-            .map(|provider| {
-                let base_url = provider.base_url.as_deref().unwrap_or("default endpoint");
-                let tokens = provider
-                    .max_output_tokens
-                    .map(|value| format!("{value} max output tokens"))
-                    .unwrap_or_else(|| "default output limit".into());
-                detail(&provider.provider, format!("{base_url}  ·  {tokens}"))
-            })
-            .collect(),
-        "No providers configured",
-    )
+fn provider_items(
+    config: &ConfigReadResult,
+    catalog: &ProviderListResult,
+    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
+) -> Vec<SelectionItem> {
+    catalog
+        .providers
+        .iter()
+        .map(|provider| provider_item(config, provider, actions))
+        .collect()
+}
+
+fn provider_item(
+    config: &ConfigReadResult,
+    provider: &ProviderCatalogEntryDto,
+    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
+) -> SelectionItem {
+    let endpoint = config
+        .providers
+        .get(&provider.provider)
+        .and_then(|configured| configured.base_url.as_deref())
+        .unwrap_or("default endpoint");
+    let api_key = match provider.api_key_policy {
+        ProviderApiKeyPolicyDto::Unsupported => "No API key",
+        ProviderApiKeyPolicyDto::Optional if provider.api_key_configured => "API key saved",
+        ProviderApiKeyPolicyDto::Optional => "API key optional",
+        ProviderApiKeyPolicyDto::Required if provider.api_key_configured => "API key saved",
+        ProviderApiKeyPolicyDto::Required => "API key required",
+    };
+    let item = SelectionItem::new(&provider.display_name).with_columns(
+        &provider.display_name,
+        format!("{}  ·  {endpoint}", provider.provider),
+        api_key,
+    );
+    if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
+        return item;
+    }
+    let id = SelectionItemId::new(format!("provider-api-key-{}", provider.provider));
+    actions.insert(
+        id.clone(),
+        ConfigSelectionAction::OpenProviderApiKey {
+            provider: provider.provider.clone(),
+            display_name: provider.display_name.clone(),
+        },
+    );
+    item.with_id(id)
 }
 
 fn language_servers(config: &ConfigReadResult) -> Vec<SelectionItem> {

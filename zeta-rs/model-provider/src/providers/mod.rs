@@ -31,6 +31,27 @@ mod qwen;
 mod xai;
 mod zai;
 
+pub(crate) struct ProviderTarget {
+    target: ResolvedApiTarget,
+    supports_input_measurement: bool,
+}
+
+impl ProviderTarget {
+    pub(crate) fn subscription(target: ResolvedApiTarget) -> Self {
+        Self {
+            target,
+            supports_input_measurement: false,
+        }
+    }
+
+    pub(crate) fn provider_api(target: ResolvedApiTarget) -> Self {
+        Self {
+            target,
+            supports_input_measurement: true,
+        }
+    }
+}
+
 /// Converts one normalized provider configuration into provider-specific API requests.
 ///
 /// Implementations own the resolved endpoint and fixed provider headers for one immutable runtime
@@ -143,32 +164,80 @@ fn emit_final_response(
 pub(crate) fn instantiate(
     adapter: ProviderAdapterKind,
     config: &NormalizedModelProviderConfig,
-    target_override: Option<ResolvedApiTarget>,
+    target_override: Option<ProviderTarget>,
 ) -> Arc<dyn ProviderAdapter> {
     match adapter {
         ProviderAdapterKind::OpenAi => runtime_adapter(match target_override {
-            Some(target) => openai::OpenAiAdapter::with_target(config, target),
+            Some(target) => openai::OpenAiAdapter::with_target(
+                config,
+                target.target,
+                target.supports_input_measurement,
+            ),
             None => openai::OpenAiAdapter::new(config),
         }),
-        ProviderAdapterKind::OpenAiCompatible => {
-            runtime_adapter(openai_compatible::OpenAiCompatibleAdapter::new(config))
-        }
-        ProviderAdapterKind::Anthropic => runtime_adapter(anthropic::AnthropicAdapter::new(config)),
-        ProviderAdapterKind::Google => runtime_adapter(google::GoogleAdapter::new(config)),
-        ProviderAdapterKind::Xai => runtime_adapter(xai::XaiAdapter::new(config)),
-        ProviderAdapterKind::Qwen => runtime_adapter(qwen::QwenAdapter::new(config)),
+        ProviderAdapterKind::OpenAiCompatible => runtime_adapter(match target_override {
+            Some(target) => {
+                openai_compatible::OpenAiCompatibleAdapter::with_target(config, target.target)
+            }
+            None => openai_compatible::OpenAiCompatibleAdapter::new(config),
+        }),
+        ProviderAdapterKind::Anthropic => runtime_adapter(match target_override {
+            Some(target) => anthropic::AnthropicAdapter::with_target(
+                config,
+                target.target,
+                target.supports_input_measurement,
+            ),
+            None => anthropic::AnthropicAdapter::new(config),
+        }),
+        ProviderAdapterKind::Google => runtime_adapter(match target_override {
+            Some(target) => google::GoogleAdapter::with_target(
+                config,
+                target.target,
+                target.supports_input_measurement,
+            ),
+            None => google::GoogleAdapter::new(config),
+        }),
+        ProviderAdapterKind::Xai => runtime_adapter(match target_override {
+            Some(target) => xai::XaiAdapter::with_target(config, target.target),
+            None => xai::XaiAdapter::new(config),
+        }),
+        ProviderAdapterKind::Qwen => runtime_adapter(match target_override {
+            Some(target) => qwen::QwenAdapter::with_target(config, target.target),
+            None => qwen::QwenAdapter::new(config),
+        }),
         ProviderAdapterKind::Kimi => runtime_adapter(match target_override {
-            Some(target) => kimi::KimiAdapter::with_target(config, target),
+            Some(target) => kimi::KimiAdapter::with_target(
+                config,
+                target.target,
+                target.supports_input_measurement,
+            ),
             None => kimi::KimiAdapter::new(config),
         }),
-        ProviderAdapterKind::DeepSeek => runtime_adapter(deepseek::DeepSeekAdapter::new(config)),
+        ProviderAdapterKind::DeepSeek => runtime_adapter(match target_override {
+            Some(target) => deepseek::DeepSeekAdapter::with_target(config, target.target),
+            None => deepseek::DeepSeekAdapter::new(config),
+        }),
         ProviderAdapterKind::Ollama => runtime_adapter(ollama::OllamaAdapter::new(config)),
-        ProviderAdapterKind::HuggingFace => {
-            runtime_adapter(huggingface::HuggingFaceAdapter::new(config))
-        }
-        ProviderAdapterKind::Zai => runtime_adapter(zai::ZaiAdapter::new(config)),
-        ProviderAdapterKind::MiniMax => runtime_adapter(minimax::MiniMaxAdapter::new(config)),
-        ProviderAdapterKind::Mimo => runtime_adapter(mimo::MimoAdapter::new(config)),
+        ProviderAdapterKind::HuggingFace => runtime_adapter(match target_override {
+            Some(target) => huggingface::HuggingFaceAdapter::with_target(config, target.target),
+            None => huggingface::HuggingFaceAdapter::new(config),
+        }),
+        ProviderAdapterKind::Zai => runtime_adapter(match target_override {
+            Some(target) => zai::ZaiAdapter::with_target(
+                config,
+                target.target,
+                target.supports_input_measurement,
+            ),
+            None => zai::ZaiAdapter::new(config),
+        }),
+        ProviderAdapterKind::MiniMax => runtime_adapter(match target_override {
+            Some(target) => minimax::MiniMaxAdapter::with_target(config, target.target),
+            None => minimax::MiniMaxAdapter::new(config),
+        }),
+        ProviderAdapterKind::Mimo => runtime_adapter(match target_override {
+            Some(target) => mimo::MimoAdapter::with_target(config, target.target),
+            None => mimo::MimoAdapter::new(config),
+        }),
     }
 }
 

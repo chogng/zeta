@@ -295,6 +295,9 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type ModelContextConfigDto ="));
     assert!(typescript.contains("modelContext?: { [key in string]: ModelContextConfigDto }"));
     assert!(typescript.contains(r#""provider/configure": { method: "provider/configure" }"#));
+    assert!(typescript.contains(r#""provider/list": { method: "provider/list" }"#));
+    assert!(typescript.contains(r#""provider/apiKey/set": { method: "provider/apiKey/set" }"#));
+    assert!(typescript.contains("export type ProviderCatalogEntryDto ="));
     assert!(typescript.contains("export type McpServerConfigDto ="));
     assert!(typescript.contains("credentialRef: string"));
     assert!(typescript.contains("export type SkillSourceConfigDto ="));

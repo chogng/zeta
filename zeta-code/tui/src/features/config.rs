@@ -12,4 +12,6 @@ pub(crate) use settings::TerminalSettings;
 pub(crate) use view::ConfigEdit;
 pub(crate) use view::ConfigSelectionAction;
 pub(crate) use view::ConfigSelectionView;
+pub(crate) use view::ProviderApiKeyEdit;
 pub(crate) use view::config_view;
+pub(crate) use view::provider_api_key_view;

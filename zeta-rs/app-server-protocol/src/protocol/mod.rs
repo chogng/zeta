@@ -24,6 +24,7 @@ pub mod mcp;
 pub mod model;
 pub mod notification;
 pub mod plugins;
+pub mod provider;
 pub mod registry;
 pub mod resources;
 pub mod search;

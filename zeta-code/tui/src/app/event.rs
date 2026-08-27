@@ -26,10 +26,17 @@ use zeta_file_search::PathSearchSnapshot;
 pub(crate) enum AppEvent {
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
-    CommandCompleted { command: String, result: String },
+    CommandCompleted {
+        command: String,
+        result: String,
+    },
     ConfigSettingsReceived(TerminalSettings),
     ConfigViewOpened(ConfigSelectionView),
     ConfigViewReplaced(ConfigSelectionView),
+    ConfigApiKeySaved {
+        provider: String,
+        view: ConfigSelectionView,
+    },
     ConnectorViewOpened(ConnectorSelectionView),
     ConnectorViewReplaced(ConnectorSelectionView),
     PreferredModelReceived(Option<ModelRefDto>),

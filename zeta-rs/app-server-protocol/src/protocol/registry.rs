@@ -294,6 +294,10 @@ use crate::protocol::plugins::PluginListResult;
 use crate::protocol::plugins::PluginPackageCommandParams;
 use crate::protocol::plugins::PluginPackageDto;
 use crate::protocol::plugins::PluginsChanged;
+use crate::protocol::provider::{
+    ProviderApiKeyDto, ProviderApiKeyPolicyDto, ProviderApiKeySetParams, ProviderApiKeySetResult,
+    ProviderCatalogEntryDto, ProviderListResult,
+};
 use crate::protocol::resources::{
     ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
     ResourceReleaseParams,
@@ -974,6 +978,16 @@ client_methods! {
         params: EmptyParams,
         response: ModelListResult,
         serialization: GlobalSharedRead,
+    },
+    ProviderList => "provider/list" {
+        params: EmptyParams,
+        response: ProviderListResult,
+        serialization: GlobalSharedRead,
+    },
+    ProviderApiKeySet => "provider/apiKey/set" {
+        params: ProviderApiKeySetParams,
+        response: ProviderApiKeySetResult,
+        serialization: GlobalExclusive,
     },
     AccountRead => "account/read" {
         params: EmptyParams,
@@ -2262,6 +2276,12 @@ typescript_bindings! {
     Personality,
     ModelCatalogEntry,
     ModelListResult,
+    ProviderApiKeyDto,
+    ProviderApiKeyPolicyDto,
+    ProviderApiKeySetParams,
+    ProviderApiKeySetResult,
+    ProviderCatalogEntryDto,
+    ProviderListResult,
     StableTurnErrorCode,
     StableTurnError,
     ThreadStatus,

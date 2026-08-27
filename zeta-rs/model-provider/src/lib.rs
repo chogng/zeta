@@ -16,6 +16,7 @@ pub use provider::ModelProviderRuntime;
 pub use provider::ModelRuntimeRequest;
 pub use provider::Provider;
 pub use provider::UnavailableModel;
+pub use provider::provider_api_key_secret_key;
 pub use semantic_models::EmbeddingInvoker;
 pub use semantic_models::EmbeddingRequest;
 pub use semantic_models::EmbeddingResponse;

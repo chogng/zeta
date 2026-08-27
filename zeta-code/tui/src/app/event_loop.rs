@@ -345,6 +345,19 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::EditConfig(edit) => {
                         config_actions::edit_config(&mut config_resource, &edit, &mut app);
                     }
+                    AppCommand::SetProviderApiKey(edit) => {
+                        let terminal_snapshot = config_resource
+                            .as_ref()
+                            .map(|resource| (resource.settings(), resource.revision()))
+                            .unwrap_or((config::TerminalSettings::default(), 0));
+                        config_actions::set_provider_api_key(
+                            edit,
+                            terminal_snapshot,
+                            &client,
+                            &mut pending_request,
+                            &mut app,
+                        );
+                    }
                     AppCommand::OpenShortcutsPane => match keybindings_resource.as_ref() {
                         Some(resource) => {
                             app.update(AppEvent::ShortcutViewOpened(

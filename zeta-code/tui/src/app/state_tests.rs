@@ -34,6 +34,9 @@ use std::path::Path;
 use std::time::Duration;
 use std::time::Instant;
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeta_app_server_protocol::protocol::provider::{
+    ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
+};
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
@@ -514,10 +517,10 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
     let mut app = App::new();
     app.update(AppEvent::ConfigViewOpened(config_view(
         &config,
+        &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
         7,
     )));
-    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -526,6 +529,41 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         Some(AppCommand::EditConfig(edit))
             if edit.terminal.expected_revision == 7 && !edit.terminal.mouse_interactions
     ));
+}
+
+#[test]
+fn config_provider_selection_opens_a_masked_api_key_input_and_emits_a_secret_edit() {
+    let config = empty_config_snapshot();
+    let providers = ProviderListResult {
+        providers: vec![ProviderCatalogEntryDto {
+            provider: "openai".into(),
+            display_name: "OpenAI".into(),
+            api_key_policy: ProviderApiKeyPolicyDto::Required,
+            api_key_configured: false,
+        }],
+    };
+    let mut app = App::new();
+    app.update(AppEvent::ConfigViewOpened(config_view(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        7,
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+
+    let Some(AppCommand::SetProviderApiKey(edit)) = action else {
+        panic!("provider API key input must emit a typed secret edit");
+    };
+    assert!(!format!("{edit:?}").contains("api_key: \"sk\""));
+    assert_eq!(edit.into_parts(), ("openai".into(), "sk".into()));
 }
 
 #[test]

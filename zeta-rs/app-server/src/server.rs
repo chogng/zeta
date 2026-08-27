@@ -4,6 +4,7 @@ use crate::browser_host::BrowserHost;
 use crate::browser_tool::BrowserToolPolicy;
 use crate::browser_tool::BrowserToolService;
 use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
+use crate::provider_credentials::ProviderCredentialService;
 use crate::resource_store::{ResourceError, ResourceStore};
 use crate::review::ApprovalModeActionPolicyService;
 use crate::review::ProviderReviewModel;
@@ -94,6 +95,7 @@ mod plugin_extension_sources;
 mod plugin_operations;
 mod plugin_runtime;
 mod plugin_skill_sources;
+mod provider_operations;
 mod request_serialization;
 mod search_operations;
 mod semantic_index_job;
@@ -162,6 +164,7 @@ pub struct AppServer {
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
     pub(super) local_exec_policy_config: Arc<RwLock<crate::local_tools::LocalExecPolicyConfig>>,
     pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
     pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
@@ -436,6 +439,7 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
+            provider_credentials: None,
             local_exec_policy_config: Arc::new(RwLock::new(
                 crate::local_tools::LocalExecPolicyConfig::default(),
             )),
@@ -1044,6 +1048,14 @@ impl AppServer {
 
     pub(crate) fn with_model_catalog(mut self, model_catalog: Arc<dyn ModelCatalog>) -> Self {
         self.model_catalog = model_catalog;
+        self
+    }
+
+    pub(crate) fn with_provider_credentials(
+        mut self,
+        provider_credentials: Arc<ProviderCredentialService>,
+    ) -> Self {
+        self.provider_credentials = Some(provider_credentials);
         self
     }
 
@@ -1693,6 +1705,10 @@ impl AppServer {
             Some(ClientMethod::PluginRevokeGrant) => self.plugin_revoke_grant(&request.params),
             Some(ClientMethod::PluginUninstall) => self.plugin_uninstall(&request.params),
             Some(ClientMethod::ModelList) => self.model_list(),
+            Some(ClientMethod::ProviderList) => self.provider_list(),
+            Some(ClientMethod::ProviderApiKeySet) => {
+                self.provider_api_key_set(std::mem::take(&mut request.params))
+            }
             Some(ClientMethod::ConfigUpdate) => self.config_update(&request.params),
             Some(ClientMethod::ExecPolicyRuleUpsert) => {
                 self.exec_policy_rule_upsert(&request.params)

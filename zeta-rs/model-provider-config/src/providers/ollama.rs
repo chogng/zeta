@@ -1,5 +1,5 @@
 use super::default_provider;
-use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
+use crate::{ApiKeyPolicy, ApiProfile, ProviderAdapter, ProviderDefinition};
 
 pub(super) fn definition() -> ProviderDefinition {
     default_provider(
@@ -9,4 +9,5 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::OpenAiChatCompletions,
         "http://localhost:11434/v1",
     )
+    .with_api_key_policy(ApiKeyPolicy::Unsupported)
 }

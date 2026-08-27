@@ -565,6 +565,55 @@ fn openai_runtime_uses_the_responses_adapter_and_dynamic_endpoint() {
 }
 
 #[test]
+fn direct_provider_runtime_materializes_the_stored_api_key_as_a_header() {
+    let transport = Arc::new(CapturingTransport::new(responses_response("key accepted")));
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ProviderId::new("openai").unwrap()),
+            &SecretValue::new(b"sk-test".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        transport.clone(),
+        secrets,
+    );
+    let model = runtime
+        .build_model(&provider_config("openai"), &model_ref("openai", "gpt-5.6"))
+        .unwrap();
+
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    assert_eq!(invoke_text(model.as_ref(), "hello"), "key accepted");
+    let (_, headers, _) = transport.request.lock().unwrap().clone().unwrap();
+    assert!(
+        headers.iter().any(|header| {
+            header.name() == "Authorization" && header.value() == "Bearer sk-test"
+        })
+    );
+}
+
+#[test]
+fn direct_provider_runtime_rejects_a_missing_required_api_key() {
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(CapturingTransport::new(responses_response("unused"))),
+        Arc::new(MemorySecretStore::default()),
+    );
+
+    let error =
+        match runtime.build_model(&provider_config("openai"), &model_ref("openai", "gpt-5.6")) {
+            Ok(_) => panic!("missing required API key must reject the direct provider runtime"),
+            Err(error) => error,
+        };
+
+    assert!(matches!(error, ModelProviderError::Credential(message) if message.contains("openai")));
+}
+
+#[test]
 fn chatgpt_subscription_runtime_uses_local_oauth_and_zeta_agent_loop() {
     let transport = Arc::new(CapturingTransport::new(responses_response(
         "Hello from ChatGPT",

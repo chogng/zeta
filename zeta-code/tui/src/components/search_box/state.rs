@@ -1,6 +1,7 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
+use std::fmt;
 
 pub(crate) const SEARCH_BOX_HEIGHT: u16 = 3;
 
@@ -8,6 +9,7 @@ pub(crate) const SEARCH_BOX_HEIGHT: u16 = 3;
 pub(crate) struct SearchBoxModel {
     placeholder: String,
     initially_active: bool,
+    masked: bool,
 }
 
 impl SearchBoxModel {
@@ -15,11 +17,17 @@ impl SearchBoxModel {
         Self {
             placeholder: placeholder.into(),
             initially_active: false,
+            masked: false,
         }
     }
 
     pub(crate) fn initially_active(mut self) -> Self {
         self.initially_active = true;
+        self
+    }
+
+    pub(crate) fn masked(mut self) -> Self {
+        self.masked = true;
         self
     }
 }
@@ -31,7 +39,7 @@ pub(crate) enum SearchBoxInputOutcome {
     QueryChanged,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub(crate) struct SearchBoxState {
     model: SearchBoxModel,
     query: String,
@@ -61,6 +69,10 @@ impl SearchBoxState {
 
     pub(crate) fn input_active(&self) -> bool {
         self.input_active
+    }
+
+    pub(crate) fn masked(&self) -> bool {
+        self.model.masked
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SearchBoxInputOutcome {
@@ -100,6 +112,24 @@ impl SearchBoxState {
         let normalized = pasted.split_whitespace().collect::<Vec<_>>().join(" ");
         self.query.push_str(&normalized);
         SearchBoxInputOutcome::QueryChanged
+    }
+}
+
+impl fmt::Debug for SearchBoxState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("SearchBoxState")
+            .field("model", &self.model)
+            .field(
+                "query",
+                &if self.masked() {
+                    "[REDACTED]"
+                } else {
+                    self.query.as_str()
+                },
+            )
+            .field("input_active", &self.input_active)
+            .finish()
     }
 }
 

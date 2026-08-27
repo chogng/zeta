@@ -69,6 +69,8 @@ pub enum AppServerErrorName {
     DebugAdapterOperationFailed,
     ConfigUnavailable,
     ConfigRevisionConflict,
+    ProviderCredentialsUnavailable,
+    ProviderCredentialOperationFailed,
     McpRuntimeUnavailable,
     McpServerNotFound,
     McpOAuthUnavailable,

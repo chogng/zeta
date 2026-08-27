@@ -248,6 +248,17 @@ impl SelectionViewModel {
         self
     }
 
+    pub(crate) fn with_secret_free_form(
+        mut self,
+        placeholder: impl Into<String>,
+        action: SelectionItemId,
+    ) -> Self {
+        self.presentation.search =
+            Some(SearchBoxModel::new(placeholder).initially_active().masked());
+        self.presentation.free_form_action = Some(action);
+        self
+    }
+
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
         self.presentation.empty_message = message.into();
         self

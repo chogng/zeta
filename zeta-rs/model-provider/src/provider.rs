@@ -2,6 +2,7 @@ use crate::ModelProviderError;
 use crate::lazy_client::LazyOperationClient;
 use crate::providers;
 use crate::providers::ProviderAdapter;
+use crate::providers::ProviderTarget;
 use std::sync::Arc;
 use zeta_api::ApiProtocol;
 use zeta_api::ContentPart;
@@ -20,12 +21,15 @@ use zeta_client::ResolvedApiTarget;
 use zeta_client::ZetaClient;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
+use zeta_http_client::HttpHeader;
 use zeta_http_client::UreqHttpClient;
 use zeta_kimi::KimiOAuth;
+use zeta_model_provider_config::ApiKeyPolicy;
 use zeta_model_provider_config::Model;
 use zeta_model_provider_config::ModelId;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
+use zeta_model_provider_config::ProviderAdapter as ProviderAdapterKind;
 use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::ProviderDefinition;
@@ -40,8 +44,14 @@ use zeta_models_manager::ModelsManagerError;
 use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
+use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
 use zeta_secrets::UnavailableSecretStore;
+
+pub fn provider_api_key_secret_key(provider: &ProviderId) -> SecretKey {
+    SecretKey::new(format!("provider/{provider}/default/api-key"))
+        .expect("validated provider IDs produce valid secret keys")
+}
 
 #[derive(Clone)]
 pub struct Provider {
@@ -60,7 +70,7 @@ impl Provider {
         models: ModelsManager,
         client: Arc<dyn OperationClient>,
         local_tokenizers: Arc<dyn LocalTokenizerService>,
-        adapter_target: Option<ResolvedApiTarget>,
+        adapter_target: Option<ProviderTarget>,
     ) -> Result<Self, ModelProviderError> {
         if definition.id != config.provider {
             return Err(ProviderConfigError::ProviderMismatch {
@@ -227,6 +237,7 @@ pub struct ModelProviderRuntime {
     models: ModelsManager,
     client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
+    enforce_api_keys: bool,
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
@@ -247,10 +258,19 @@ impl ModelProviderRuntime {
             models,
             client,
             secrets: Arc::new(UnavailableSecretStore),
+            enforce_api_keys: false,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
         }
+    }
+
+    pub fn with_secrets(configs: ProviderConfigRegistry, secrets: Arc<dyn SecretStore>) -> Self {
+        Self::with_client_and_secrets(
+            configs,
+            Arc::new(LazyOperationClient::new(production_client)),
+            secrets,
+        )
     }
 
     pub fn with_client_and_secrets(
@@ -264,6 +284,7 @@ impl ModelProviderRuntime {
             models,
             client,
             secrets,
+            enforce_api_keys: true,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
@@ -321,7 +342,7 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let adapter_target = self.adapter_target(model_ref)?;
+        let adapter_target = self.adapter_target(&normalized, model_ref)?;
         self.instantiate_normalized_with_target(normalized, adapter_target)?
             .build_model(&model_ref.model)
     }
@@ -333,7 +354,7 @@ impl ModelProviderRuntime {
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let adapter_target = self.adapter_target(model_ref)?;
+        let adapter_target = self.adapter_target(&normalized, model_ref)?;
         self.instantiate_normalized_with_target(normalized, adapter_target)?
             .complete(&model_ref.model, request)
     }
@@ -348,7 +369,7 @@ impl ModelProviderRuntime {
     fn instantiate_normalized_with_target(
         &self,
         normalized: NormalizedModelProviderConfig,
-        adapter_target: Option<ResolvedApiTarget>,
+        adapter_target: Option<ProviderTarget>,
     ) -> Result<Provider, ModelProviderError> {
         let definition = self
             .configs
@@ -367,8 +388,9 @@ impl ModelProviderRuntime {
 
     fn adapter_target(
         &self,
+        config: &NormalizedModelProviderConfig,
         model: &ModelRef,
-    ) -> Result<Option<ResolvedApiTarget>, ModelProviderError> {
+    ) -> Result<Option<ProviderTarget>, ModelProviderError> {
         match find_static_model(model).map(|spec| spec.runtime) {
             Some(StaticModelRuntime::KimiCode) => self
                 .kimi_oauth
@@ -377,7 +399,7 @@ impl ModelProviderRuntime {
                     ModelProviderError::Credential("Kimi Code OAuth is unavailable".into())
                 })?
                 .api_target()
-                .map(Some)
+                .map(|target| Some(ProviderTarget::subscription(target)))
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Some(StaticModelRuntime::ChatGptSubscription) => self
                 .chatgpt_oauth
@@ -386,10 +408,65 @@ impl ModelProviderRuntime {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
                 })?
                 .api_target()
-                .map(Some)
+                .map(|target| Some(ProviderTarget::subscription(target)))
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            Some(StaticModelRuntime::ProviderApi) | None => Ok(None),
+            Some(StaticModelRuntime::ProviderApi) | None => self.provider_api_target(config),
         }
+    }
+
+    fn provider_api_target(
+        &self,
+        config: &NormalizedModelProviderConfig,
+    ) -> Result<Option<ProviderTarget>, ModelProviderError> {
+        if !self.enforce_api_keys {
+            return Ok(None);
+        }
+        let definition = self
+            .configs
+            .get(&config.provider)
+            .expect("normalized provider is registered");
+        if definition.api_key_policy == ApiKeyPolicy::Unsupported {
+            return Ok(None);
+        }
+        let secret = self
+            .secrets
+            .load(&provider_api_key_secret_key(&config.provider))?;
+        let Some(secret) = secret else {
+            return match definition.api_key_policy {
+                ApiKeyPolicy::Optional => Ok(None),
+                ApiKeyPolicy::Required => Err(ModelProviderError::Credential(format!(
+                    "no API key is stored for provider '{}'",
+                    config.provider
+                ))),
+                ApiKeyPolicy::Unsupported => unreachable!("handled above"),
+            };
+        };
+        let value = std::str::from_utf8(secret.expose())
+            .map_err(|_| ModelProviderError::Credential("stored API key is not UTF-8".into()))?;
+        if value.is_empty() || value.chars().any(char::is_control) {
+            return Err(ModelProviderError::Credential(
+                "stored API key is invalid".into(),
+            ));
+        }
+        let mut headers = match definition.adapter {
+            ProviderAdapterKind::Google => {
+                vec![HttpHeader::new("x-goog-api-client", "zeta/0.1")]
+            }
+            ProviderAdapterKind::Zai => {
+                vec![HttpHeader::new("Accept-Language", "en-US,en")]
+            }
+            _ => Vec::new(),
+        };
+        headers.push(match definition.adapter {
+            ProviderAdapterKind::Anthropic => HttpHeader::new("x-api-key", value),
+            ProviderAdapterKind::Google => HttpHeader::new("x-goog-api-key", value),
+            ProviderAdapterKind::Ollama => unreachable!("Ollama rejects API-key storage"),
+            _ => HttpHeader::new("Authorization", format!("Bearer {value}")),
+        });
+        Ok(Some(ProviderTarget::provider_api(ResolvedApiTarget::new(
+            config.base_url.clone(),
+            headers,
+        ))))
     }
 }
 

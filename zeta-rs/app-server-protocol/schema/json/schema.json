@@ -1393,6 +1393,8 @@
         "DebugAdapterOperationFailed",
         "ConfigUnavailable",
         "ConfigRevisionConflict",
+        "ProviderCredentialsUnavailable",
+        "ProviderCredentialOperationFailed",
         "McpRuntimeUnavailable",
         "McpServerNotFound",
         "McpOAuthUnavailable",
@@ -2981,6 +2983,38 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/apiKey/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ProviderApiKeySetParams"
             }
           },
           "required": [
@@ -6057,6 +6091,38 @@
             },
             "result": {
               "$ref": "#/$defs/ModelListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProviderListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "provider/apiKey/set",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ProviderApiKeySetResult"
             }
           },
           "required": [
@@ -18186,6 +18252,71 @@
       ],
       "type": "object"
     },
+    "ProviderApiKeyDto": {
+      "description": "Inbound-only provider API key that redacts diagnostics and clears its allocation on drop.",
+      "type": "string"
+    },
+    "ProviderApiKeyPolicyDto": {
+      "enum": [
+        "unsupported",
+        "optional",
+        "required"
+      ],
+      "type": "string"
+    },
+    "ProviderApiKeySetParams": {
+      "properties": {
+        "apiKey": {
+          "$ref": "#/$defs/ProviderApiKeyDto"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "apiKey"
+      ],
+      "type": "object"
+    },
+    "ProviderApiKeySetResult": {
+      "properties": {
+        "apiKeyConfigured": {
+          "type": "boolean"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "apiKeyConfigured"
+      ],
+      "type": "object"
+    },
+    "ProviderCatalogEntryDto": {
+      "properties": {
+        "apiKeyConfigured": {
+          "type": "boolean"
+        },
+        "apiKeyPolicy": {
+          "$ref": "#/$defs/ProviderApiKeyPolicyDto"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "displayName",
+        "apiKeyPolicy",
+        "apiKeyConfigured"
+      ],
+      "type": "object"
+    },
     "ProviderConfigDto": {
       "description": "Non-secret declarative provider settings exposed through the App Server contract.",
       "properties": {
@@ -18243,6 +18374,20 @@
     },
     "ProviderId": {
       "type": "string"
+    },
+    "ProviderListResult": {
+      "properties": {
+        "providers": {
+          "items": {
+            "$ref": "#/$defs/ProviderCatalogEntryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "providers"
+      ],
+      "type": "object"
     },
     "ProviderRemoveParams": {
       "description": "Removes one provider entry from the user configuration authority.",

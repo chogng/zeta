@@ -26,3 +26,24 @@ fn active_search_places_the_terminal_cursor_after_the_query() {
         .backend_mut()
         .assert_cursor_position(Position::new(4, 1));
 }
+
+#[test]
+fn masked_search_renders_bullets_without_exposing_the_query() {
+    let mut search =
+        SearchBoxState::new(SearchBoxModel::new("API key").initially_active().masked());
+    search.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    search.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+    let backend = TestBackend::new(20, 3);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal
+        .draw(|frame| draw(frame, frame.area(), &search, Color::Blue))
+        .unwrap();
+
+    let rendered = terminal.backend().to_string();
+    assert!(rendered.contains("••"));
+    assert!(!rendered.contains("sk"));
+    let debug = format!("{search:?}");
+    assert!(debug.contains("[REDACTED]"));
+    assert!(!debug.contains("query: \"sk\""));
+}

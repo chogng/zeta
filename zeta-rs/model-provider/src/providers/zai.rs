@@ -34,6 +34,27 @@ impl ZaiAdapter {
             endpoint: api_endpoint(config.api_profile),
         }
     }
+
+    pub(crate) fn with_target(
+        config: &NormalizedModelProviderConfig,
+        target: ResolvedApiTarget,
+        supports_input_measurement: bool,
+    ) -> Self {
+        let token_counter = supports_input_measurement
+            .then(|| {
+                super::measurement::ProviderInputTokenCounter::from_config(
+                    config,
+                    target.headers.clone(),
+                    InputTokenCountProfile::ZaiChatCompletions,
+                )
+            })
+            .flatten();
+        Self {
+            target,
+            token_counter,
+            endpoint: api_endpoint(config.api_profile),
+        }
+    }
 }
 
 impl ProviderAdapter for ZaiAdapter {

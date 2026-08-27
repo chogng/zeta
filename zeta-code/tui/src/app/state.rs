@@ -252,10 +252,21 @@ impl App {
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
-            SelectionActions::Config(actions) => match actions.get(item_id)? {
+            SelectionActions::Config(actions) => match actions.get(item_id)?.clone() {
                 ConfigSelectionAction::SetMouseInteractions(edit) => {
-                    Some(AppCommand::EditConfig(edit.clone()))
+                    Some(AppCommand::EditConfig(edit))
                 }
+                ConfigSelectionAction::OpenProviderApiKey {
+                    provider,
+                    display_name,
+                } => {
+                    self.show_config_view(crate::features::config::provider_api_key_view(
+                        provider,
+                        display_name,
+                    ));
+                    None
+                }
+                ConfigSelectionAction::SetProviderApiKey { .. } => None,
             },
             SelectionActions::Interaction(_) => None,
             SelectionActions::Connectors(actions) => match actions.get(item_id)? {
@@ -381,6 +392,15 @@ impl App {
         item_id: &SelectionItemId,
         value: String,
     ) -> Option<AppCommand> {
+        if let Some(SelectionActions::Config(actions)) = self.selection_actions.last() {
+            let ConfigSelectionAction::SetProviderApiKey { provider } = actions.get(item_id)?
+            else {
+                return None;
+            };
+            return Some(AppCommand::SetProviderApiKey(
+                crate::features::config::ProviderApiKeyEdit::new(provider.clone(), value),
+            ));
+        }
         let Some(SelectionActions::Interaction(state)) = self.selection_actions.last_mut() else {
             return None;
         };
@@ -725,6 +745,15 @@ impl App {
             AppEvent::ConfigSettingsReceived(settings) => self.terminal_settings = settings,
             AppEvent::ConfigViewOpened(view) => self.show_config_view(view),
             AppEvent::ConfigViewReplaced(view) => self.replace_config_view(view),
+            AppEvent::ConfigApiKeySaved { provider, view } => {
+                self.close_selection_view();
+                self.replace_config_view(view);
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(format!(
+                        "Saved API key for {provider}"
+                    )));
+                self.status = Status::Ready;
+            }
             AppEvent::PreferredModelReceived(model) => {
                 self.status_line.apply_preferred_model(model.as_ref())
             }

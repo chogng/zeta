@@ -174,8 +174,8 @@ Trusted Workspace 同时获得 built-in read-only `search_code` 工具。它只�
 `workspace-code-index-read-only` exact grant，调用 canonical `CodeRetrievalService`，并返回 bounded、
 current-source-verified excerpts 与 degradation；未配置 semantic 时自然退回 lexical。semantic grant
 精确绑定 Workspace、model selection 与 provider config，provider URL 或模型变化会卸载旧 runtime 并
-要求重新授权。Desktop 当前可配置 Ollama/unauthenticated OpenAI-compatible endpoint；OpenAI API key
-仍需 host 注入 secure `SecretStore`，尚无产品 credential UI。
+要求重新授权。`provider/list` 从同一个 built-in provider registry 投影供应商名称、API key 策略与
+是否已配置；`provider/apiKey/set` 只把入站密钥写入 profile `SecretStore`，不写普通配置、响应或日志。
 
 Tool Search 拥有独立的 `toolSearch.embeddingModel`，不复用 CodeIndex 的模型选择。只有 User Config
 明确设置 `toolSearch.mode = "hybridEmbedding"` 才会调用；默认 `lexical` 不产生 embedding 请求。
@@ -455,6 +455,8 @@ ChatGPT 账户或 upstream model catalog 做健康检查。`session/request::Set
 产品目录再提交 Session command；配置、认证、entitlement、rate limit 和调用错误由实际 Turn backend
 处理并持久化为 Turn failure。App Server 不维护第二份模型清单。全局
 `preferredModel` 只作为新 Session 和历史无模型 Session 的默认值，不承担当前 Session 的模型切换。
+`provider/list` 独立投影 provider registry，因此也覆盖没有静态 model row 的 Ollama、Hugging Face 与
+OpenAI-compatible；它不从 `model/list` 反推供应商目录。
 
 `session/request::ResolveInteraction` 使用 exact durable
 `RequestId`，且只接受 `UpdateBroker` 选出的、声明该 kind 并订阅 scope 的 connection；full request

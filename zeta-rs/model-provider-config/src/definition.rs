@@ -72,6 +72,15 @@ pub enum ModelCatalogPolicy {
     AllowUnlisted,
 }
 
+/// Declares whether direct provider API calls accept an API key from the host secret store.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ApiKeyPolicy {
+    Unsupported,
+    Optional,
+    Required,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BaseUrlNormalization {
@@ -114,6 +123,7 @@ pub struct ProviderDefinition {
     pub api_profile: ApiProfile,
     pub endpoint: EndpointPolicy,
     pub model_catalog_policy: ModelCatalogPolicy,
+    pub api_key_policy: ApiKeyPolicy,
     #[serde(default)]
     pub output_transport: ModelOutputTransport,
     #[serde(default)]
@@ -144,6 +154,7 @@ impl ProviderDefinition {
             api_profile,
             endpoint,
             model_catalog_policy,
+            api_key_policy: ApiKeyPolicy::Required,
             output_transport: ModelOutputTransport::Unary,
             websocket_api_profile: WebSocketApiProfile::Unavailable,
             models: Vec::new(),
@@ -160,6 +171,11 @@ impl ProviderDefinition {
 
     pub fn with_native_streaming(mut self) -> Self {
         self.output_transport = ModelOutputTransport::NativeStreaming;
+        self
+    }
+
+    pub fn with_api_key_policy(mut self, policy: ApiKeyPolicy) -> Self {
+        self.api_key_policy = policy;
         self
     }
 

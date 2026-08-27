@@ -17,6 +17,16 @@ impl MimoAdapter {
             endpoint: api_endpoint(config.api_profile),
         }
     }
+
+    pub(crate) fn with_target(
+        config: &NormalizedModelProviderConfig,
+        target: ResolvedApiTarget,
+    ) -> Self {
+        Self {
+            target,
+            endpoint: api_endpoint(config.api_profile),
+        }
+    }
 }
 
 impl ProviderAdapter for MimoAdapter {

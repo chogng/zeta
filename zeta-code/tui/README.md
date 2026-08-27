@@ -55,7 +55,7 @@ Tool、approval policy 或 persistence。
   切换 subscription；
 - `/files` 只通过 App Server `fs/readDirectory`/`fs/readFile` 浏览 workspace，目录优先、支持父目录
   和 UTF-8 preview；preview 限 64 KiB/200 行，不直接访问宿主 filesystem；
-- `/config` 异步调用 `config/read` 展示服务端快照，并把本地增强终端设置合并为独立标签页；`/model` 使用 expected revision 更新 preferred model；
+- `/config` 异步调用 `config/read` 与 `provider/list`；Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -109,7 +109,7 @@ Tool、approval policy 或 persistence。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。Config 的 Enhanced terminal 标签页可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。Config 标签页中的 Mouse interactions item 可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
 TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
@@ -121,7 +121,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Overview、Enhanced terminal、Provider 与 Language Server，其中鼠标交互开关保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
+`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
 
 从 repository root 启动当前 TUI：
 
@@ -573,7 +573,7 @@ workspace directory/preview 和 interaction deadline。
 `ConfigReadResult` 新字段在 App Server 或消费该字段的 feature 中被静默忽略。相反，直接构造
 `ThreadItem` variant 的测试必须明确填写其全部字段，因为这些字段属于被测试对象本身的领域语义。
 
-生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 的 Overview、Provider、Language Server 页面；Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过本地 `StatusLineResource` 接收显示开关。新增 Tool Search 或 CodeIndex 配置字段不会扩散到这些不拥有该能力的展示组件。
+生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 的 Config、Providers、Language servers 页面；`provider/list` 只投影供应商名、API key 策略与是否已配置，不返回密钥。Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过本地 `StatusLineResource` 接收显示开关。新增 Tool Search 或 CodeIndex 配置字段不会扩散到这些不拥有该能力的展示组件。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`
